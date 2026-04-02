@@ -1,0 +1,34 @@
+[package]
+name = "clarity-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core engine for Project Clarity - AI agent framework with tool registry"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+glob = { workspace = true }
+chrono = { workspace = true }
+
+# MCP (Model Context Protocol)
+rmcp = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.9"
+
+[features]
+default = []
+mcp = ["dep:rmcp"]

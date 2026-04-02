@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clarity Gateway - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+            color: white;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card h2 .icon {
+            font-size: 1.4rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .tool-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tool-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .tool-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .tool-desc {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .endpoint-list {
+            list-style: none;
+        }
+
+        .endpoint-list li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .endpoint-method {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            color: #333;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #5a67d8;
+        }
+
+        .error-msg {
+            color: #dc3545;
+            padding: 12px;
+            background: #f8d7da;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Clarity Gateway</h1>
+            <p>Project Clarity 网关服务管理面板</p>
+        </header>
+
+        <div class="grid">
+            <!-- 系统状态卡片 -->
+            <div class="card">
+                <h2><span class="icon">📊</span> 系统状态</h2>
+                <div id="system-status">
+                    <span class="status-badge status-online">● 运行中</span>
+                    <div class="stat-label" style="margin-top: 12px;">网关服务正常</div>
+                </div>
+            </div>
+
+            <!-- 活跃会话卡片 -->
+            <div class="card">
+                <h2>
+                    <span class="icon">👥</span> 活跃会话
+                    <button class="refresh-btn" onclick="loadStats()" style="margin-left: auto;">刷新</button>
+                </h2>
+                <div id="sessions-loading" class="loading" style="display: none;"></div>
+                <div id="sessions-content">
+                    <div class="stat-value" id="active-sessions">-</div>
+                    <div class="stat-label">当前活跃 WebSocket 连接数</div>
+                </div>
+            </div>
+
+            <!-- 请求统计卡片 -->
+            <div class="card">
+                <h2><span class="icon">📈</span> 请求统计</h2>
+                <div id="stats-loading" class="loading" style="display: none;"></div>
+                <div id="stats-content">
+                    <div class="stat-value" id="total-requests">-</div>
+                    <div class="stat-label">总请求数</div>
+                    <div style="margin-top: 12px; font-size: 0.9rem; color: #666;">
+                        运行时间: <span id="uptime">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工具列表卡片 -->
+            <div class="card" style="grid-column: span 2;">
+                <h2>
+                    <span class="icon">🛠️</span> 已加载工具
+                    <button class="refresh-btn" onclick="loadTools()" style="margin-left: auto;">刷新</button>
+                </h2>
+                <div id="tools-loading" class="loading" style="display: none;"></div>
+                <div id="tools-content">
+                    <div id="tools-list"></div>
+                </div>
+            </div>
+
+            <!-- API 端点卡片 -->
+            <div class="card">
+                <h2><span class="icon">🔗</span> API 端点</h2>
+                <ul class="endpoint-list">
+                    <li>
+                        <span class="endpoint-method">GET</span>
+                        <span class="endpoint-path">/health</span>
+                    </li>
+                    <li>
+                        <span class="endpoint-method">POST</span>
+                        <span class="endpoint-path">/v1/chat/completions</span>
+                    </li>
+                    <li>
+                        <span class="endpoint-method">GET</span>
+                        <span class="endpoint-path">/ws</span>
+                    </li>
+                </ul>
+                <div style="margin-top: 16px; font-size: 0.85rem; color: #666;">
+                    端口: <strong>18790</strong>
+                </div>
+            </div>
+
+            <!-- 配置信息卡片 -->
+            <div class="card">
+                <h2><span class="icon">⚙️</span> 配置</h2>
+                <div style="font-size: 0.9rem; color: #555; line-height: 1.6;">
+                    <p><strong>API 端口:</strong> 18790</p>
+                    <p><strong>Admin 端口:</strong> 18800</p>
+                    <p><strong>框架:</strong> Axum 0.7</p>
+                    <p><strong>运行时:</strong> Tokio</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Clarity Gateway v0.1.0 | Built with Rust 🦀</p>
+        </footer>
+    </div>
+
+    <script>
+        // 格式化秒数为可读格式
+        function formatDuration(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (days > 0) return `${days}天 ${hours}小时`;
+            if (hours > 0) return `${hours}小时 ${minutes}分`;
+            if (minutes > 0) return `${minutes}分 ${secs}秒`;
+            return `${secs}秒`;
+        }
+
+        // 加载统计数据
+        async function loadStats() {
+            const loadingEl = document.getElementById('sessions-loading');
+            const contentEl = document.getElementById('sessions-content');
+            const statsLoadingEl = document.getElementById('stats-loading');
+            const statsContentEl = document.getElementById('stats-content');
+
+            loadingEl.style.display = 'inline-block';
+            contentEl.style.display = 'none';
+            statsLoadingEl.style.display = 'inline-block';
+            statsContentEl.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/stats');
+                if (!response.ok) throw new Error('Failed to fetch stats');
+                
+                const data = await response.json();
+                document.getElementById('active-sessions').textContent = data.active_sessions;
+                document.getElementById('total-requests').textContent = data.total_requests.toLocaleString();
+                document.getElementById('uptime').textContent = formatDuration(data.uptime_seconds);
+            } catch (error) {
+                document.getElementById('active-sessions').textContent = 'Error';
+                document.getElementById('total-requests').textContent = 'Error';
+                console.error('Failed to load stats:', error);
+            } finally {
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                statsLoadingEl.style.display = 'none';
+                statsContentEl.style.display = 'block';
+            }
+        }
+
+        // 加载工具列表
+        async function loadTools() {
+            const loadingEl = document.getElementById('tools-loading');
+            const contentEl = document.getElementById('tools-content');
+
+            loadingEl.style.display = 'inline-block';
+            contentEl.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/tools');
+                if (!response.ok) throw new Error('Failed to fetch tools');
+                
+                const data = await response.json();
+                const toolsList = document.getElementById('tools-list');
+                
+                if (data.tools.length === 0) {
+                    toolsList.innerHTML = '<p style="color: #666;">暂无加载的工具</p>';
+                } else {
+                    toolsList.innerHTML = data.tools.map(tool => `
+                        <div class="tool-item">
+                            <div>
+                                <div class="tool-name">${tool.name}</div>
+                                <div class="tool-desc">${tool.description}</div>
+                            </div>
+                            <span class="status-badge ${tool.enabled ? 'status-online' : 'status-offline'}">
+                                ${tool.enabled ? '启用' : '禁用'}
+                            </span>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                document.getElementById('tools-list').innerHTML = `
+                    <div class="error-msg">加载工具列表失败: ${error.message}</div>
+                `;
+                console.error('Failed to load tools:', error);
+            } finally {
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+            }
+        }
+
+        // 页面加载时自动获取数据
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadTools();
+            
+            // 每 30 秒自动刷新
+            setInterval(loadStats, 30000);
+        });
+    </script>
+</body>
+</html>

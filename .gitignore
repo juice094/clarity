@@ -1,0 +1,8 @@
+/target
+*.db
+*.db-journal
+sessions/
+agents/
+.DS_Store
+*.log
+config.yaml

@@ -1,0 +1,31 @@
+[package]
+name = "clarity-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OpenHanako-style memory system for Clarity"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Memory-specific dependencies
+rusqlite = { version = "0.34", features = ["bundled-full"] }
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
