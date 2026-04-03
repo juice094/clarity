@@ -173,6 +173,7 @@ impl From<SessionRecord> for Option<Message> {
 /// Errors that can occur in the memory system
 #[derive(thiserror::Error, Debug)]
 pub enum MemoryError {
+    #[cfg(feature = "sqlite")]
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
 
@@ -193,6 +194,9 @@ pub enum MemoryError {
 
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    #[error("Storage error: {0}")]
+    Storage(String),
 }
 
 pub type Result<T> = std::result::Result<T, MemoryError>;

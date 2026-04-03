@@ -4,10 +4,15 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
+
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::server::AppState;
+
+use clarity_core::agent::{Agent, AgentConfig};
+use clarity_core::llm::LlmFactory;
+
 
 // ==================== 健康检查 ====================
 
@@ -30,6 +35,7 @@ pub async fn health_check() -> impl IntoResponse {
 
 // ==================== Chat Completions ====================
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ChatCompletionRequest {
     pub model: String,
@@ -82,32 +88,91 @@ pub async fn chat_completions(
     );
     debug!("Request messages: {:?}", req.messages);
 
-    // TODO: 集成 clarity-core 进行实际处理
-    // 目前返回模拟响应
+    state.session_manager.read().await.record_request();
 
-    let response = ChatCompletionResponse {
-        id: format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
-        object: "chat.completion".to_string(),
-        created: chrono::Utc::now().timestamp(),
-        model: req.model,
-        choices: vec![Choice {
-            index: 0,
-            message: Message {
-                role: "assistant".to_string(),
-                content: "Hello! This is a placeholder response from Clarity Gateway. \
-                    Integration with clarity-core is pending."
-                    .to_string(),
-            },
-            finish_reason: "stop".to_string(),
-        }],
-        usage: Usage {
-            prompt_tokens: 10,
-            completion_tokens: 20,
-            total_tokens: 30,
-        },
+    // Extract the last user message
+    let user_message = req
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.clone());
+
+    let user_message = match user_message {
+        Some(content) => content,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "No user message found in request"
+                })),
+            )
+                .into_response();
+        }
     };
 
-    (StatusCode::OK, Json(response))
+    // Create LLM provider (try Kimi first)
+    let llm = match LlmFactory::kimi() {
+        Ok(llm) => llm,
+        Err(e) => {
+            error!("Failed to create LLM provider: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("LLM configuration error: {}", e)
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // Build agent with the shared tool registry
+    let config = AgentConfig::new()
+        .with_max_iterations(5)
+        .with_read_only(false);
+
+    let agent = Agent::with_config(state.tool_registry.clone(), config)
+        .with_llm(Arc::from(llm));
+
+    // Run the agent
+    match agent.run(&user_message).await {
+        Ok(content) => {
+            let prompt_tokens = user_message.len() as u32 / 4;
+            let completion_tokens = content.len() as u32 / 4;
+
+            let response = ChatCompletionResponse {
+                id: format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+                object: "chat.completion".to_string(),
+                created: chrono::Utc::now().timestamp(),
+                model: req.model,
+                choices: vec![Choice {
+                    index: 0,
+                    message: Message {
+                        role: "assistant".to_string(),
+                        content,
+                    },
+                    finish_reason: "stop".to_string(),
+                }],
+                usage: Usage {
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens: prompt_tokens + completion_tokens,
+                },
+            };
+
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            error!("Agent execution error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("Agent execution error: {}", e)
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 // ==================== Admin API ====================
@@ -141,21 +206,31 @@ pub struct ToolInfo {
     pub enabled: bool,
 }
 
-pub async fn admin_tools() -> impl IntoResponse {
-    // TODO: 从 clarity-core 获取实际工具列表
-    let tools = ToolsResponse {
-        tools: vec![
-            ToolInfo {
-                name: "search".to_string(),
-                description: "Web search capability".to_string(),
-                enabled: true,
-            },
-            ToolInfo {
-                name: "code_execution".to_string(),
-                description: "Execute code in sandbox".to_string(),
-                enabled: false,
-            },
-        ],
+pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let tools = match state.tool_registry.get_tool_schemas() {
+        Ok(schemas) => {
+            if let Some(functions) = schemas.as_array() {
+                functions
+                    .iter()
+                    .filter_map(|f| {
+                        let name = f.get("function")?.get("name")?.as_str()?.to_string();
+                        let description = f.get("function")?.get("description")?.as_str()?.to_string();
+                        Some(ToolInfo {
+                            name,
+                            description,
+                            enabled: true,
+                        })
+                    })
+                    .collect()
+            } else {
+                vec![]
+            }
+        }
+        Err(e) => {
+            error!("Failed to get tool schemas: {}", e);
+            vec![]
+        }
     };
-    (StatusCode::OK, Json(tools))
+
+    (StatusCode::OK, Json(ToolsResponse { tools }))
 }

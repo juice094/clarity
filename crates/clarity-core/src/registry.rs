@@ -10,7 +10,7 @@ use crate::tools::{SharedTool, Tool, ToolContext, ToolResult};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 /// A registry of all available tools
 ///
@@ -46,8 +46,9 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
         use crate::tools::{BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool};
+        use crate::tools::{WebSearchTool, WebFetchTool};
         
-        let mut registry = Self::new();
+        let registry = Self::new();
         
         // Register file tools
         let _ = registry.register(FileReadTool::new());
@@ -60,6 +61,10 @@ impl ToolRegistry {
         
         // Register shell tools
         let _ = registry.register(BashTool::new());
+        
+        // Register web tools
+        let _ = registry.register(WebSearchTool::new());
+        let _ = registry.register(WebFetchTool::new());
         
         registry
     }

@@ -18,6 +18,9 @@ tokio-util = { workspace = true }
 futures = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
 
 # Internal dependencies
 clarity-core = { workspace = true }
@@ -26,6 +29,18 @@ clarity-core = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true, features = ["cors", "fs", "trace"] }
 
-# Additional dependencies
-thiserror = "1"
-async-trait = "0.1"
+# HTTP client for Telegram & Webhook
+reqwest = { version = "0.12", features = ["json"] }
+
+# Telegram Bot API (optional feature)
+teloxide = { version = "0.12", optional = true }
+
+# Discord Bot API (optional feature)
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache", "framework"], optional = true }
+poise = { version = "0.6", optional = true }
+
+[features]
+default = ["telegram", "discord", "webhook"]
+telegram = ["dep:teloxide"]
+discord = ["dep:serenity", "dep:poise"]
+webhook = []

@@ -26,6 +26,7 @@ impl Default for SessionId {
 }
 
 /// 会话信息
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Session {
     pub id: SessionId,
@@ -34,6 +35,7 @@ pub struct Session {
     pub message_count: u64,
 }
 
+#[allow(dead_code)]
 impl Session {
     pub fn new(id: SessionId) -> Self {
         let now = Utc::now();
@@ -63,6 +65,7 @@ pub struct SessionManager {
     started_at: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 impl SessionManager {
     pub fn new() -> Self {
         Self {

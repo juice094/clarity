@@ -13,16 +13,19 @@ use tracing::{info, warn};
 
 use crate::handlers;
 use crate::session::SessionManager;
+use clarity_core::registry::ToolRegistry;
 
 /// 应用状态
 pub struct AppState {
     pub session_manager: Arc<RwLock<SessionManager>>,
+    pub tool_registry: ToolRegistry,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             session_manager: Arc::new(RwLock::new(SessionManager::new())),
+            tool_registry: ToolRegistry::with_builtin_tools(),
         }
     }
 }

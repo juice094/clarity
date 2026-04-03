@@ -2,15 +2,24 @@
 //!
 //! Manages conversation memory storage and retrieval.
 //! Provides ticker-based memory updates during agent execution.
+//!
+//! Enhanced features:
+//! - File-based storage backend
+//! - TF-IDF vector search
+//! - Automatic importance scoring
+//! - Memory consolidation
 
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+mod enhanced;
 mod store;
 
-pub use store::{MemoryStore, InMemoryStore};
+pub use enhanced::{
+    FileMemoryStore, ImportanceScorer, MemoryConsolidator, TfidfSearch,
+};
+pub use store::{InMemoryStore, MemoryStore};
 
 /// A single memory entry
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -116,6 +125,61 @@ impl Default for MemoryTicker {
     }
 }
 
+/// Placeholder for PersistentMemoryStore (uses clarity-memory when enabled)
+#[derive(Debug, Clone)]
+pub struct PersistentMemoryStore;
+
+impl PersistentMemoryStore {
+    /// Create a new persistent memory store
+    pub fn new(_db_path: &std::path::Path) -> anyhow::Result<Self> {
+        Ok(Self)
+    }
+
+    /// Create an in-memory persistent store for testing
+    pub fn new_in_memory() -> anyhow::Result<Self> {
+        Ok(Self)
+    }
+
+    /// Create with custom config
+    pub fn with_config(_db_path: &std::path::Path, _config: MemoryConfig) -> anyhow::Result<Self> {
+        Ok(Self)
+    }
+
+    /// Get config reference
+    pub fn config(&self) -> &MemoryConfig {
+        // Return static default since this is a placeholder
+        static DEFAULT_CONFIG: std::sync::OnceLock<MemoryConfig> = std::sync::OnceLock::new();
+        DEFAULT_CONFIG.get_or_init(MemoryConfig::default)
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryStore for PersistentMemoryStore {
+    async fn store(&self, _memory: Memory) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn retrieve(&self, _min_importance: f32) -> anyhow::Result<Vec<Memory>> {
+        Ok(Vec::new())
+    }
+
+    async fn search(&self, _query: &str, _limit: usize) -> anyhow::Result<Vec<Memory>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_all(&self) -> anyhow::Result<Vec<Memory>> {
+        Ok(Vec::new())
+    }
+
+    async fn clear(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn count(&self) -> anyhow::Result<usize> {
+        Ok(0)
+    }
+}
+
 /// Generate a simple UUID
 fn uuid() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -164,5 +228,24 @@ mod tests {
         assert!(ticker.tick().await);  // 2 - trigger
         assert!(!ticker.tick().await); // 3
         assert!(ticker.tick().await);  // 4 - trigger
+    }
+
+    #[tokio::test]
+    async fn test_file_memory_store() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = FileMemoryStore::new(temp_dir.path()).unwrap();
+
+        store.store(Memory::new("Rust is great").with_tags(vec!["tech".to_string()])).await.unwrap();
+        store.store(Memory::new("I love pizza").with_tags(vec!["food".to_string()])).await.unwrap();
+        
+        let all = store.get_all().await.unwrap();
+        assert_eq!(all.len(), 2);
+        
+        let search = store.search("Rust", 10).await.unwrap();
+        assert_eq!(search.len(), 1);
+        assert_eq!(search[0].content, "Rust is great");
+        
+        let count = store.count().await.unwrap();
+        assert_eq!(count, 2);
     }
 }

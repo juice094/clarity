@@ -1,32 +1,54 @@
+use crate::app::Message;
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget, Wrap},
+    widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
-use unicode_width::UnicodeWidthStr;
-
-use crate::app::{Message, MessageType};
 
 /// 聊天区域组件
-pub struct ChatWidget<'a> {
+pub struct ChatPane<'a> {
     messages: &'a [Message],
     scroll_offset: usize,
 }
 
-impl<'a> ChatWidget<'a> {
+impl<'a> ChatPane<'a> {
     pub fn new(messages: &'a [Message], scroll_offset: usize) -> Self {
         Self {
             messages,
             scroll_offset,
         }
     }
+
+    #[allow(dead_code)]
+    pub fn scroll_up(&mut self) {
+        if self.scroll_offset > 0 {
+            self.scroll_offset -= 1;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn scroll_down(&mut self) {
+        let max_scroll = self.messages.len().saturating_sub(1);
+        if self.scroll_offset < max_scroll {
+            self.scroll_offset += 1;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn messages(&self) -> &[Message] {
+        self.messages
+    }
+
+    #[allow(dead_code)]
+    pub fn scroll_offset(&self) -> usize {
+        self.scroll_offset
+    }
 }
 
-impl<'a> Widget for ChatWidget<'a> {
+impl<'a> Widget for ChatPane<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // 创建带边框的块
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::DarkGray))
@@ -40,17 +62,13 @@ impl<'a> Widget for ChatWidget<'a> {
             return;
         }
 
-        // 渲染消息
         let mut lines: Vec<Line> = vec![];
 
         for msg in self.messages.iter().skip(self.scroll_offset) {
-            // 空行
             lines.push(Line::from(""));
 
-            // 根据消息类型渲染
             match msg.msg_type {
-                MessageType::User => {
-                    // 用户消息
+                crate::app::MessageType::User => {
                     let prefix = Span::styled(
                         "  You ",
                         Style::default()
@@ -63,13 +81,11 @@ impl<'a> Widget for ChatWidget<'a> {
                     );
                     lines.push(Line::from(vec![prefix, time]));
 
-                    // 内容
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![Span::raw("  "), Span::raw(line)]));
                     }
                 }
-                MessageType::Assistant => {
-                    // 助手消息
+                crate::app::MessageType::Assistant => {
                     let prefix = if msg.is_streaming {
                         Span::styled(
                             "  🤖 ",
@@ -91,12 +107,10 @@ impl<'a> Widget for ChatWidget<'a> {
                     );
                     lines.push(Line::from(vec![prefix, time]));
 
-                    // 内容
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![Span::raw("  "), Span::raw(line)]));
                     }
 
-                    // 流式指示器
                     if msg.is_streaming {
                         lines.push(Line::from(vec![Span::styled(
                             "  ▌",
@@ -104,8 +118,7 @@ impl<'a> Widget for ChatWidget<'a> {
                         )]));
                     }
                 }
-                MessageType::System => {
-                    // 系统消息
+                crate::app::MessageType::System => {
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![Span::styled(
                             format!("  {} ", line),
@@ -113,8 +126,7 @@ impl<'a> Widget for ChatWidget<'a> {
                         )]));
                     }
                 }
-                MessageType::ToolCall => {
-                    // 工具调用消息
+                crate::app::MessageType::ToolCall => {
                     lines.push(Line::from(vec![
                         Span::styled("  🔧 ", Style::default().fg(Color::Yellow)),
                         Span::styled(
@@ -128,7 +140,6 @@ impl<'a> Widget for ChatWidget<'a> {
             }
         }
 
-        // 创建段落并渲染
         let paragraph = Paragraph::new(Text::from(lines))
             .wrap(Wrap { trim: true })
             .scroll((0, 0));

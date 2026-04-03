@@ -26,6 +26,17 @@ pub trait MemoryStore: Send + Sync {
     /// Get memory count
     async fn count(&self) -> anyhow::Result<usize>;
     
+    /// Search memories by query string
+    async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
+        let memories = self.retrieve(0.0).await?;
+        let filtered: Vec<Memory> = memories
+            .into_iter()
+            .filter(|m| m.content.to_lowercase().contains(&query.to_lowercase()))
+            .take(limit)
+            .collect();
+        Ok(filtered)
+    }
+
     /// Summarize memories into a formatted string
     async fn summarize(&self, limit: usize) -> anyhow::Result<String> {
         let memories = self.retrieve(0.0).await?;
@@ -73,6 +84,19 @@ impl Default for InMemoryStore {
 
 #[async_trait]
 impl MemoryStore for InMemoryStore {
+    async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
+        let memories = self.memories.read().await;
+        let query_lower = query.to_lowercase();
+        let filtered: Vec<Memory> = memories
+            .iter()
+            .rev()
+            .filter(|m| m.content.to_lowercase().contains(&query_lower))
+            .take(limit)
+            .cloned()
+            .collect();
+        Ok(filtered)
+    }
+
     async fn store(&self, memory: Memory) -> anyhow::Result<()> {
         let mut memories = self.memories.write().await;
         

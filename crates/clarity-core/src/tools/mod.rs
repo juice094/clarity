@@ -15,10 +15,12 @@ use std::sync::Arc;
 pub mod file;
 pub mod search;
 pub mod shell;
+pub mod web;
 
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
 pub use search::{GlobTool, GrepTool};
 pub use shell::{BashTool, PowerShellTool};
+pub use web::{WebFetchTool, WebSearchTool};
 
 use crate::error::ToolError;
 

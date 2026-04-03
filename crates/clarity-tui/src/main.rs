@@ -7,6 +7,7 @@ use anyhow::Result;
 use app::App;
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::llm::LlmFactory;
+use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
 use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use crossterm::{
@@ -62,12 +63,26 @@ fn create_agent() -> Result<Arc<Agent>> {
         .with_read_only(false)
         .with_personality(personality_config);
 
-    // 从环境变量创建 LLM Provider
+    // 从环境变量创建 LLM Provider (自动检测: ANTHROPIC > KIMI > DEEPSEEK > OPENAI)
     let llm = LlmFactory::auto()
         .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
 
-    // 创建 Agent（将 Box 转换为 Arc）
-    let agent = Agent::with_config(registry, config).with_llm(Arc::from(llm));
+    // 创建持久化记忆存储（放在当前工作目录下的 .clarity/memory.db）
+    let memory_db_path = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(".clarity")
+        .join("memory.db");
+    std::fs::create_dir_all(memory_db_path.parent().unwrap())?;
+    let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path)?);
+
+    // 创建记忆触发器（每 5 轮对话触发一次）
+    let memory_ticker = MemoryTicker::new(5);
+
+    // 创建 Agent
+    let agent = Agent::with_config(registry, config)
+        .with_llm(Arc::from(llm))
+        .with_memory(memory_store)
+        .with_memory_ticker(memory_ticker);
 
     Ok(Arc::new(agent))
 }

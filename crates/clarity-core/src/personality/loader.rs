@@ -8,7 +8,7 @@
 
 use super::types::{Personality, PersonalityConfig, YuanType};
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Loader for personality templates
 #[derive(Debug, Clone)]
@@ -211,21 +211,15 @@ impl PersonalityLoader {
     /// Get default identity template as fallback
     fn default_identity_template(yuan_type: YuanType) -> String {
         match yuan_type {
-            YuanType::Hanako => format!(
-                r#"# {{{{agentName}}}}
+            YuanType::Hanako => r#"# {{agentName}}
 
-{{{{userName}}}}的个人助手。感性与理性兼备，既有温度也有判断力。"#
-            ),
-            YuanType::Butter => format!(
-                r#"# {{{{agentName}}}}
+{{userName}}的个人助手。感性与理性兼备，既有温度也有判断力。"#.to_string(),
+            YuanType::Butter => r#"# {{agentName}}
 
-{{{{userName}}}}的个人助手。感性优先，富有共情能力和创造力。"#
-            ),
-            YuanType::Ming => format!(
-                r#"# {{{{agentName}}}}
+{{userName}}的个人助手。感性优先，富有共情能力和创造力。"#.to_string(),
+            YuanType::Ming => r#"# {{agentName}}
 
-{{{{userName}}}}的个人助手。理性优先，逻辑清晰，善于深度思考。"#
-            ),
+{{userName}}的个人助手。理性优先，逻辑清晰，善于深度思考。"#.to_string(),
         }
     }
 

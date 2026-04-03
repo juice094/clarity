@@ -4,9 +4,10 @@ use chrono::Local;
 use clarity_core::agent::Agent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::events::Event;
+use crate::widgets::input_pane::InputPane;
 
 /// 消息类型
 #[derive(Clone, Debug)]
@@ -14,6 +15,7 @@ pub enum MessageType {
     User,
     Assistant,
     System,
+    #[allow(dead_code)]
     ToolCall,
 }
 
@@ -46,10 +48,8 @@ impl Message {
 pub struct App {
     /// 聊天历史
     pub messages: Vec<Message>,
-    /// 当前输入
-    pub input: String,
-    /// 输入光标位置
-    pub cursor_position: usize,
+    /// 输入框组件
+    pub input_pane: InputPane,
     /// 是否运行中
     pub running: bool,
     /// 是否正在生成响应
@@ -67,12 +67,11 @@ pub struct App {
     /// Agent 实例
     agent: Arc<Agent>,
     /// 事件发送器（用于后台任务发送事件）
-    event_tx: Option<Sender<Event>>,
+    event_tx: Option<UnboundedSender<Event>>,
 }
 
 impl App {
     pub fn new(agent: Arc<Agent>) -> Self {
-        // 从环境变量获取模型名称
         let model_name = std::env::var("ANTHROPIC_MODEL")
             .or_else(|_| std::env::var("KIMI_MODEL"))
             .unwrap_or_else(|_| "default".to_string());
@@ -84,8 +83,7 @@ impl App {
                     MessageType::System,
                 ),
             ],
-            input: String::new(),
-            cursor_position: 0,
+            input_pane: InputPane::new(),
             running: true,
             is_generating: false,
             model_name,
@@ -98,15 +96,26 @@ impl App {
         }
     }
 
+    /// 向后兼容的 input 访问器
+    #[allow(dead_code)]
+    pub fn input(&self) -> &str {
+        self.input_pane.input()
+    }
+
+    /// 向后兼容的光标位置访问器
+    #[allow(dead_code)]
+    pub fn cursor_position(&self) -> usize {
+        self.input_pane.cursor_position()
+    }
+
     /// 设置事件发送器
-    pub fn set_event_sender(&mut self, tx: Sender<Event>) {
+    pub fn set_event_sender(&mut self, tx: UnboundedSender<Event>) {
         self.event_tx = Some(tx);
     }
 
     /// 处理按键事件
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
         match key.code {
-            // Ctrl+C: 停止生成或退出
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if self.is_generating {
                     self.stop_generation();
@@ -114,89 +123,47 @@ impl App {
                     return Ok(false);
                 }
             }
-            // Ctrl+D: 退出
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return Ok(false);
             }
-            // 回车发送消息
             KeyCode::Enter => {
                 self.submit_message().await?;
             }
-            // 退格删除
             KeyCode::Backspace => {
-                self.delete_char();
+                self.input_pane.delete_char();
             }
-            // 删除键
             KeyCode::Delete => {
-                self.delete_char_forward();
+                self.input_pane.delete_char_forward();
             }
-            // 左箭头
             KeyCode::Left => {
-                self.move_cursor_left();
+                self.input_pane.move_cursor_left();
             }
-            // 右箭头
             KeyCode::Right => {
-                self.move_cursor_right();
+                self.input_pane.move_cursor_right();
             }
-            // Home
             KeyCode::Home => {
-                self.cursor_position = 0;
+                self.input_pane.set_cursor_position(0);
             }
-            // End
             KeyCode::End => {
-                self.cursor_position = self.input.len();
+                let len = self.input_pane.input().chars().count();
+                self.input_pane.set_cursor_position(len);
             }
-            // 上箭头 - 历史记录
             KeyCode::Up => {
                 self.scroll_up();
             }
-            // 下箭头 - 历史记录
             KeyCode::Down => {
                 self.scroll_down();
             }
-            // 输入字符
             KeyCode::Char(c) => {
-                self.insert_char(c);
+                // Only handle key press, ignore repeat/release
+                if key.kind == crossterm::event::KeyEventKind::Press {
+                    self.input_pane.insert_char(c);
+                }
             }
             _ => {}
         }
 
         Ok(true)
-    }
-
-    /// 插入字符
-    pub fn insert_char(&mut self, c: char) {
-        self.input.insert(self.cursor_position, c);
-        self.cursor_position += 1;
-    }
-
-    /// 删除字符
-    pub fn delete_char(&mut self) {
-        if self.cursor_position > 0 {
-            self.cursor_position -= 1;
-            self.input.remove(self.cursor_position);
-        }
-    }
-
-    /// 向前删除字符
-    pub fn delete_char_forward(&mut self) {
-        if self.cursor_position < self.input.len() {
-            self.input.remove(self.cursor_position);
-        }
-    }
-
-    /// 移动光标左
-    pub fn move_cursor_left(&mut self) {
-        if self.cursor_position > 0 {
-            self.cursor_position -= 1;
-        }
-    }
-
-    /// 移动光标右
-    pub fn move_cursor_right(&mut self) {
-        if self.cursor_position < self.input.len() {
-            self.cursor_position += 1;
-        }
     }
 
     /// 滚动上
@@ -216,25 +183,19 @@ impl App {
 
     /// 提交消息
     async fn submit_message(&mut self) -> Result<()> {
-        let content = self.input.trim().to_string();
+        let content = self.input_pane.input().trim().to_string();
         if content.is_empty() {
             return Ok(());
         }
 
-        // 清空输入
-        self.input.clear();
-        self.cursor_position = 0;
+        self.input_pane.clear();
 
-        // 处理命令
         if content.starts_with('/') {
             self.handle_command(&content).await;
             return Ok(());
         }
 
-        // 添加用户消息
         self.messages.push(Message::new(&content, MessageType::User));
-
-        // 开始生成响应
         self.start_generation(content).await;
 
         Ok(())
@@ -288,45 +249,32 @@ impl App {
         }
     }
 
-    /// 开始生成响应
+    /// 开始生成响应（真实流式）
     async fn start_generation(&mut self, user_input: String) {
         self.is_generating = true;
-
-        // 添加一个空的助手消息（流式）
         self.messages
             .push(Message::new("", MessageType::Assistant).streaming());
 
-        // 克隆需要移动到异步任务中的数据
         let agent = self.agent.clone();
         let event_tx = self.event_tx.clone();
+        let chunk_tx = event_tx.clone();
 
-        // 在后台任务中调用 LLM
         tokio::spawn(async move {
-            match agent.run(&user_input).await {
-                Ok(response) => {
-                    // 将响应按字符分块发送，模拟流式效果
-                    // 注意：这里是非真实的流式，真实流式需要修改 LLM Provider
-                    let chunk_size = 5;
-                    let chars: Vec<char> = response.chars().collect();
-                    
-                    for chunk in chars.chunks(chunk_size) {
-                        let text: String = chunk.iter().collect();
-                        if let Some(ref tx) = event_tx {
-                            let _ = tx.send(Event::StreamResponse(text)).await;
-                        }
-                        // 小延迟以模拟打字效果
-                        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                    }
-                    
-                    // 发送完成事件
+            let result = agent.run_streaming(&user_input, move |chunk: &str| {
+                if let Some(ref tx) = chunk_tx {
+                    let _ = tx.send(Event::StreamResponse(chunk.to_string()));
+                }
+            }).await;
+
+            match result {
+                Ok(_) => {
                     if let Some(ref tx) = event_tx {
-                        let _ = tx.send(Event::ResponseComplete).await;
+                        let _ = tx.send(Event::ResponseComplete);
                     }
                 }
                 Err(e) => {
-                    // 发送错误事件
                     if let Some(ref tx) = event_tx {
-                        let _ = tx.send(Event::Error(format!("LLM 错误: {}", e))).await;
+                        let _ = tx.send(Event::Error(format!("LLM 错误: {}", e)));
                     }
                 }
             }
@@ -337,7 +285,6 @@ impl App {
     pub fn stop_generation(&mut self) {
         if self.is_generating {
             self.is_generating = false;
-            // 将最后一条消息标记为非流式
             if let Some(last) = self.messages.last_mut() {
                 last.is_streaming = false;
             }
@@ -375,9 +322,8 @@ impl App {
     }
 
     /// 处理工具调用
-    pub fn handle_tool_call(&mut self, tool: ToolCallInfo) {
-        let tool_msg = format!("[使用 {}] {}", tool.name, tool.params);
-        self.messages.push(Message::new(tool_msg, MessageType::ToolCall));
+    pub fn handle_tool_call(&mut self, _tool: ToolCallInfo) {
+        // Tool call visualization is handled inline in chat messages
     }
 
     /// 时钟滴答
@@ -393,13 +339,9 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        // 创建一个空的 Agent 用于 default，实际使用时会替换
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
         Self::new(agent)
     }
 }
-
-// 引入需要的类型
-use clarity_core::registry::ToolRegistry;

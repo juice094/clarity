@@ -1,29 +1,52 @@
-//! Four-level memory compilation pipeline (OpenHanako-style)
+//! Four-level memory compilation pipeline (OpenHanako-style) with enhancements
+//!
+//! This module provides:
+//! - Four-level memory compilation (today, week, long-term, facts)
+//! - Memory deduplication and merging
+//! - Hierarchical memory organization
+//! - Forgetting mechanism based on importance and time
 
-use crate::extractor::{FactExtractor, LlmClient};
+use crate::extractor::{FactExtractor, LlmClient, RuleBasedExtractor};
 use crate::store::MemoryStore;
-use crate::types::{CompileStatus, CompileConfig, Message, Result};
 use crate::session_store::SessionStore;
+use crate::types::{CompileStatus, CompileConfig, Fact, Message, Result};
 use chrono::{Duration, Utc};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument, warn};
 
-/// Four-level memory compiler following OpenHanako's design
-/// 
-/// Level 1: Today - Recent conversation summaries
-/// Level 2: Week - Aggregated daily summaries
-/// Level 3: Long-term - Compressed historical context
-/// Level 4: Facts - Structured fact database (via extractor)
+/// Importance score for facts (0.0 - 1.0)
+pub type ImportanceScore = f32;
+
+/// Enhanced four-level memory compiler with deduplication and forgetting
 pub struct MemoryCompiler {
     store: MemoryStore,
     session_store: SessionStore,
     llm_client: Arc<dyn LlmClient>,
     config: CompileConfig,
-    fingerprints: HashMap<String, String>, // path -> fingerprint
+    fingerprints: HashMap<String, String>,
+    rule_extractor: RuleBasedExtractor,
+}
+
+/// Memory merge configuration
+#[derive(Debug, Clone)]
+pub struct MergeConfig {
+    pub similarity_threshold: f32,
+    pub min_long_term_importance: f32,
+    pub forget_after_days: i64,
+}
+
+impl Default for MergeConfig {
+    fn default() -> Self {
+        Self {
+            similarity_threshold: 0.85,
+            min_long_term_importance: 0.3,
+            forget_after_days: 90,
+        }
+    }
 }
 
 impl MemoryCompiler {
@@ -40,6 +63,7 @@ impl MemoryCompiler {
             llm_client,
             config,
             fingerprints: HashMap::new(),
+            rule_extractor: RuleBasedExtractor::new(),
         }
     }
 
@@ -74,7 +98,7 @@ impl MemoryCompiler {
     fn has_changed(&self, path: &Path, content: &str) -> (bool, String) {
         let path_str = path.to_string_lossy().to_string();
         let new_fp = Self::calculate_fingerprint(content);
-        
+
         match self.fingerprints.get(&path_str) {
             Some(old_fp) if old_fp == &new_fp => (false, new_fp),
             _ => (true, new_fp),
@@ -88,13 +112,10 @@ impl MemoryCompiler {
     }
 
     /// Level 1: Compile today's conversations into summaries
-    /// 
-    /// Aggregates recent messages from all sessions into a daily summary.
     #[instrument(skip(self, output_path))]
     pub async fn compile_today(&self, output_path: &Path) -> Result<CompileStatus> {
         info!("Starting Level 1 compilation (today)");
 
-        // Get messages from last 24 hours
         let since = Utc::now() - Duration::days(1);
         let sessions = self.session_store.read_all_sessions(Some(since))?;
 
@@ -104,10 +125,9 @@ impl MemoryCompiler {
             });
         }
 
-        // Build compilation input
         let mut input = String::new();
         input.push_str("# Conversations from the last 24 hours\n\n");
-        
+
         for (session_id, messages) in &sessions {
             input.push_str(&format!("## Session: {}\n\n", session_id));
             for msg in messages {
@@ -115,38 +135,31 @@ impl MemoryCompiler {
             }
         }
 
-        // Check if changed
         let (changed, fingerprint) = self.has_changed(output_path, &input);
         if !changed {
             debug!("No changes detected, skipping today compilation");
             return Ok(CompileStatus::Skipped { fingerprint });
         }
 
-        // Generate summary using LLM
         let summary = self.summarize(&input, self.config.max_tokens_today).await?;
-
-        // Write output
         self.write_compiled(output_path, "Today", &summary)?;
 
         Ok(CompileStatus::Success { fingerprint })
     }
 
     /// Level 2: Compile week summaries
-    /// 
-    /// Aggregates daily summaries into a weekly summary.
     #[instrument(skip(self, output_path))]
     pub async fn compile_week(&self, output_path: &Path) -> Result<CompileStatus> {
         info!("Starting Level 2 compilation (week)");
 
-        // Get messages from last 7 days (excluding today which is handled separately)
         let since = Utc::now() - Duration::days(7);
         let until = Utc::now() - Duration::days(1);
         let sessions = self.session_store.read_all_sessions(Some(since))?;
 
-        // Filter messages to the week range
         let mut weekly_messages: Vec<(String, Vec<Message>)> = Vec::new();
         for (session_id, messages) in sessions {
-            let filtered: Vec<Message> = messages.into_iter()
+            let filtered: Vec<Message> = messages
+                .into_iter()
                 .filter(|m| m.timestamp >= since && m.timestamp < until)
                 .collect();
             if !filtered.is_empty() {
@@ -160,36 +173,34 @@ impl MemoryCompiler {
             });
         }
 
-        // Build compilation input
         let mut input = String::new();
         input.push_str("# Conversations from the last week\n\n");
-        
+
         for (session_id, messages) in &weekly_messages {
             input.push_str(&format!("## Session: {}\n\n", session_id));
             for msg in messages {
-                input.push_str(&format!("**{}**: {}\n\n", msg.role, &msg.content[..100.min(msg.content.len())]));
+                let truncated = if msg.content.len() > 100 {
+                    format!("{}...", &msg.content[..100])
+                } else {
+                    msg.content.clone()
+                };
+                input.push_str(&format!("**{}**: {}\n\n", msg.role, truncated));
             }
         }
 
-        // Check if changed
         let (changed, fingerprint) = self.has_changed(output_path, &input);
         if !changed {
             debug!("No changes detected, skipping week compilation");
             return Ok(CompileStatus::Skipped { fingerprint });
         }
 
-        // Generate summary
         let summary = self.summarize(&input, self.config.max_tokens_week).await?;
-
-        // Write output
         self.write_compiled(output_path, "Week", &summary)?;
 
         Ok(CompileStatus::Success { fingerprint })
     }
 
     /// Level 3: Compile long-term memory
-    /// 
-    /// Takes week summaries and creates a compressed long-term summary.
     #[instrument(skip(self, week_path, output_path))]
     pub async fn compile_longterm(
         &self,
@@ -205,15 +216,13 @@ impl MemoryCompiler {
         }
 
         let week_content = fs::read_to_string(week_path)?;
-        
-        // Check if changed
+
         let (changed, fingerprint) = self.has_changed(output_path, &week_content);
         if !changed {
             debug!("No changes detected, skipping long-term compilation");
             return Ok(CompileStatus::Skipped { fingerprint });
         }
 
-        // Generate compressed long-term summary
         let prompt = format!(
             r#"Create a highly compressed, long-term memory summary from the following weekly summaries.
 Focus on persistent facts, relationships, and important context that should be retained indefinitely.
@@ -228,21 +237,16 @@ Long-term memory summary:"#,
         );
 
         let summary = self.llm_client.complete(&prompt, &self.config.compile_model).await?;
-
-        // Write output
         self.write_compiled(output_path, "Long-term", &summary)?;
 
         Ok(CompileStatus::Success { fingerprint })
     }
 
     /// Level 4: Compile structured facts
-    /// 
-    /// Uses LLM extraction to build structured fact database.
     #[instrument(skip(self, output_path))]
     pub async fn compile_facts(&self, output_path: &Path) -> Result<CompileStatus> {
         info!("Starting Level 4 compilation (facts)");
 
-        // Get recent conversations for fact extraction
         let since = Utc::now() - Duration::days(7);
         let sessions = self.session_store.read_all_sessions(Some(since))?;
 
@@ -252,37 +256,46 @@ Long-term memory summary:"#,
             });
         }
 
-        // Create fact extractor
         let extractor = FactExtractor::new(
             self.llm_client.clone(),
             self.config.extractor_model.clone(),
         );
 
-        // Extract facts from each session
         let mut all_facts = Vec::new();
         for (session_id, messages) in &sessions {
-            let conversation: String = messages.iter()
+            let conversation: String = messages
+                .iter()
                 .map(|m| format!("{}: {}", m.role, m.content))
                 .collect::<Vec<_>>()
                 .join("\n");
 
             match extractor.extract_facts(&conversation).await {
                 Ok(facts) => {
-                    for fact in facts {
-                        // Save to database
+                    for fact in &facts {
                         let _ = self.store.save_fact(
                             &fact.fact,
                             &fact.tags,
                             fact.time.as_deref(),
                             Some(session_id),
-                        )?;
-                        all_facts.push(fact);
+                        ).await;
                     }
+                    all_facts.extend(facts);
                 }
                 Err(e) => {
                     warn!("Failed to extract facts from session {}: {}", session_id, e);
                 }
             }
+
+            let rule_facts = self.rule_extractor.extract(&conversation);
+            for fact in &rule_facts {
+                let _ = self.store.save_fact(
+                    &fact.fact,
+                    &fact.tags,
+                    fact.time.as_deref(),
+                    Some(session_id),
+                ).await;
+            }
+            all_facts.extend(rule_facts);
         }
 
         if all_facts.is_empty() {
@@ -291,11 +304,12 @@ Long-term memory summary:"#,
             });
         }
 
-        // Generate output content
+        let unique_facts = self.deduplicate_facts(&all_facts);
+
         let mut content = String::new();
         content.push_str("# Extracted Facts\n\n");
-        
-        for fact in &all_facts {
+
+        for fact in &unique_facts {
             content.push_str(&format!("- **{}**\n", fact.fact));
             content.push_str(&format!("  - Tags: {}\n", fact.tags.join(", ")));
             if let Some(time) = &fact.time {
@@ -304,22 +318,135 @@ Long-term memory summary:"#,
             content.push('\n');
         }
 
-        // Check if changed
         let (changed, fingerprint) = self.has_changed(output_path, &content);
         if !changed {
             debug!("No changes detected, skipping facts compilation");
             return Ok(CompileStatus::Skipped { fingerprint });
         }
 
-        // Write output
         fs::write(output_path, content)?;
 
+        info!("Compiled {} unique facts", unique_facts.len());
         Ok(CompileStatus::Success { fingerprint })
     }
 
+    /// Deduplicate facts based on content similarity
+    fn deduplicate_facts(&self, facts: &[crate::types::MetaFact]) -> Vec<crate::types::MetaFact> {
+        let mut unique = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+
+        for fact in facts {
+            let normalized = fact.fact.to_lowercase().trim().to_string();
+            if !seen.contains(&normalized) {
+                seen.insert(normalized);
+                unique.push(fact.clone());
+            }
+        }
+
+        unique
+    }
+
+    /// Merge similar memories based on similarity threshold
+    pub fn merge_memories(&self, memories: &[String], threshold: f32) -> Vec<String> {
+        if memories.len() < 2 {
+            return memories.to_vec();
+        }
+
+        use crate::embedding::{TfidfVectorizer};
+
+        let mut vectorizer = TfidfVectorizer::new();
+        vectorizer.fit(memories);
+
+        let mut merged = Vec::new();
+        let mut used: HashSet<usize> = HashSet::new();
+
+        for (i, mem) in memories.iter().enumerate() {
+            if used.contains(&i) {
+                continue;
+            }
+
+            let query_vec = vectorizer.transform(mem);
+            let mut similar_indices = vec![i];
+
+            for (j, other) in memories.iter().enumerate() {
+                if i != j && !used.contains(&j) {
+                    let other_vec = vectorizer.transform(other);
+                    let similarity = query_vec.cosine_similarity(&other_vec);
+
+                    if similarity >= threshold {
+                        similar_indices.push(j);
+                        used.insert(j);
+                    }
+                }
+            }
+
+            if similar_indices.len() > 1 {
+                let best = similar_indices
+                    .iter()
+                    .map(|&idx| &memories[idx])
+                    .max_by_key(|m| m.len())
+                    .unwrap()
+                    .clone();
+                merged.push(best);
+            } else {
+                merged.push(mem.clone());
+            }
+
+            used.insert(i);
+        }
+
+        merged
+    }
+
+    /// Apply forgetting mechanism to remove old, low-importance memories
+    pub async fn forget_old_memories(
+        &self,
+        older_than_days: i64,
+        importance_threshold: f32,
+    ) -> Result<usize> {
+        let cutoff = Utc::now() - Duration::days(older_than_days);
+        let old_facts = self.store.get_facts_since(cutoff).await?;
+
+        let mut removed = 0;
+        for fact in old_facts {
+            let importance = self.calculate_importance(&fact);
+
+            if importance < importance_threshold {
+                self.store.delete_fact(fact.id).await?;
+                removed += 1;
+            }
+        }
+
+        info!("Forgot {} old memories", removed);
+        Ok(removed)
+    }
+
+    /// Calculate importance score for a fact
+    fn calculate_importance(&self, fact: &Fact) -> ImportanceScore {
+        let mut score = 0.5;
+
+        let important_tags: HashSet<&str> = [
+            "preference", "goal", "identity", "work", "important"
+        ].iter().cloned().collect();
+
+        for tag in &fact.tags {
+            if important_tags.contains(tag.as_str()) {
+                score += 0.2;
+            }
+        }
+
+        let age_days = (Utc::now() - fact.created_at).num_days() as f32;
+        let age_penalty = (age_days / 365.0) * 0.1;
+        score -= age_penalty;
+
+        if fact.fact.len() > 50 {
+            score += 0.05;
+        }
+
+        score.clamp(0.0, 1.0)
+    }
+
     /// Assemble the final memory.md file
-    /// 
-    /// Combines all four levels into a single memory file with sections.
     #[instrument(skip(self))]
     pub fn assemble(
         &self,
@@ -332,17 +459,15 @@ Long-term memory summary:"#,
         info!("Assembling final memory.md");
 
         let mut output = String::new();
-        
-        // Header
+
         output.push_str("# Memory\n\n");
         output.push_str(&format!("*Generated at {}*\n\n", Utc::now().to_rfc3339()));
 
-        // Section 1: Facts (highest priority)
         output.push_str("## 1. Key Facts\n\n");
         if facts_path.exists() {
             let content = fs::read_to_string(facts_path)?;
-            // Strip the header if present
-            let clean = content.strip_prefix("# Extracted Facts\n\n")
+            let clean = content
+                .strip_prefix("# Extracted Facts\n\n")
                 .or_else(|| content.strip_prefix("# Extracted Facts\n"))
                 .unwrap_or(&content);
             output.push_str(clean);
@@ -350,11 +475,11 @@ Long-term memory summary:"#,
             output.push_str("_No facts compiled yet_\n\n");
         }
 
-        // Section 2: Today
         output.push_str("## 2. Today\n\n");
         if today_path.exists() {
             let content = fs::read_to_string(today_path)?;
-            let clean = content.strip_prefix("# Today\n\n")
+            let clean = content
+                .strip_prefix("# Today\n\n")
                 .or_else(|| content.strip_prefix("# Today\n"))
                 .unwrap_or(&content);
             output.push_str(clean);
@@ -362,11 +487,11 @@ Long-term memory summary:"#,
             output.push_str("_No recent conversations_\n\n");
         }
 
-        // Section 3: This Week
         output.push_str("## 3. This Week\n\n");
         if week_path.exists() {
             let content = fs::read_to_string(week_path)?;
-            let clean = content.strip_prefix("# Week\n\n")
+            let clean = content
+                .strip_prefix("# Week\n\n")
                 .or_else(|| content.strip_prefix("# Week\n"))
                 .unwrap_or(&content);
             output.push_str(clean);
@@ -374,11 +499,11 @@ Long-term memory summary:"#,
             output.push_str("_No weekly summary_\n\n");
         }
 
-        // Section 4: Long-term
         output.push_str("## 4. Long-term\n\n");
         if longterm_path.exists() {
             let content = fs::read_to_string(longterm_path)?;
-            let clean = content.strip_prefix("# Long-term\n\n")
+            let clean = content
+                .strip_prefix("# Long-term\n\n")
                 .or_else(|| content.strip_prefix("# Long-term\n"))
                 .unwrap_or(&content);
             output.push_str(clean);
@@ -386,7 +511,6 @@ Long-term memory summary:"#,
             output.push_str("_No long-term memory_\n\n");
         }
 
-        // Ensure output directory exists
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -408,7 +532,6 @@ Long-term memory summary:"#,
 
         let mut results = HashMap::new();
 
-        // Level 1: Today
         match self.compile_today(&today_path).await {
             Ok(status) => {
                 if let Some(fp) = status.fingerprint() {
@@ -421,7 +544,6 @@ Long-term memory summary:"#,
             }
         }
 
-        // Level 2: Week
         match self.compile_week(&week_path).await {
             Ok(status) => {
                 if let Some(fp) = status.fingerprint() {
@@ -434,7 +556,6 @@ Long-term memory summary:"#,
             }
         }
 
-        // Level 3: Long-term
         match self.compile_longterm(&week_path, &longterm_path).await {
             Ok(status) => {
                 if let Some(fp) = status.fingerprint() {
@@ -447,7 +568,6 @@ Long-term memory summary:"#,
             }
         }
 
-        // Level 4: Facts
         match self.compile_facts(&facts_path).await {
             Ok(status) => {
                 if let Some(fp) = status.fingerprint() {
@@ -460,12 +580,10 @@ Long-term memory summary:"#,
             }
         }
 
-        // Assemble final memory.md
         if let Err(e) = self.assemble(&facts_path, &today_path, &week_path, &longterm_path, &memory_path) {
             error!("Failed to assemble memory: {}", e);
         }
 
-        // Save fingerprints
         let fp_path = output_dir.join(".fingerprints.json");
         if let Err(e) = self.save_fingerprints(&fp_path) {
             warn!("Failed to save fingerprints: {}", e);
@@ -477,15 +595,12 @@ Long-term memory summary:"#,
     /// Generate a summary using the LLM
     async fn summarize(&self, input: &str, max_tokens: usize) -> Result<String> {
         let prompt = format!(
-            r#"Summarize the following conversation content concisely. 
-Focus on key topics discussed, important information shared, and action items.
-Limit your response to approximately {} tokens.
-
-Content to summarize:
-{}
-
-Summary:"#,
-            max_tokens / 4, // Rough approximation: 1 token ~= 4 chars
+            "Summarize the following conversation content concisely.\n\
+            Focus on key topics discussed, important information shared, and action items.\n\
+            Limit your response to approximately {} tokens.\n\n\
+            Content to summarize:\n{}\n\n\
+            Summary:",
+            max_tokens / 4,
             input
         );
 
@@ -500,7 +615,7 @@ Summary:"#,
 
         let output = format!("# {}\n\n{}", level, content);
         fs::write(path, output)?;
-        
+
         debug!("Wrote {} compilation to {:?}", level, path);
         Ok(())
     }
@@ -514,14 +629,14 @@ mod tests {
 
     fn create_test_compiler() -> (TempDir, MemoryCompiler) {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let store = MemoryStore::new_in_memory().unwrap();
         let session_store = SessionStore::new(temp_dir.path().join("sessions")).unwrap();
         let client = Arc::new(MockLlmClient::new("Test summary output"));
         let config = CompileConfig::default();
 
         let compiler = MemoryCompiler::new(store, session_store, client, config);
-        
+
         (temp_dir, compiler)
     }
 
@@ -533,7 +648,7 @@ mod tests {
 
         assert_eq!(fp1, fp2);
         assert_ne!(fp1, fp3);
-        assert_eq!(fp1.len(), 64); // SHA256 hex is 64 chars
+        assert_eq!(fp1.len(), 64);
     }
 
     #[tokio::test]
@@ -545,11 +660,10 @@ mod tests {
         assert!(result.is_skipped());
     }
 
-    #[tokio::test]
-    async fn test_assemble() {
+    #[test]
+    fn test_assemble() {
         let (temp, compiler) = create_test_compiler();
-        
-        // Create test input files
+
         let facts_path = temp.path().join("facts.md");
         let today_path = temp.path().join("today.md");
         let week_path = temp.path().join("week.md");
@@ -561,10 +675,12 @@ mod tests {
         fs::write(&week_path, "# Week\n\nWeekly summary here.\n").unwrap();
         fs::write(&longterm_path, "# Long-term\n\nLong term facts.\n").unwrap();
 
-        compiler.assemble(&facts_path, &today_path, &week_path, &longterm_path, &output_path).unwrap();
+        compiler
+            .assemble(&facts_path, &today_path, &week_path, &longterm_path, &output_path)
+            .unwrap();
 
         let output = fs::read_to_string(&output_path).unwrap();
-        
+
         assert!(output.contains("# Memory"));
         assert!(output.contains("## 1. Key Facts"));
         assert!(output.contains("## 2. Today"));
@@ -576,23 +692,91 @@ mod tests {
     #[test]
     fn test_fingerprints_persist() {
         let (temp, mut compiler) = create_test_compiler();
-        
+
         let fp_path = temp.path().join("fingerprints.json");
-        
-        // Add some fingerprints
+
         compiler.fingerprints.insert("test".to_string(), "abc123".to_string());
-        
-        // Save
+
         compiler.save_fingerprints(&fp_path).unwrap();
-        
-        // Load into new compiler
+
         let store = MemoryStore::new_in_memory().unwrap();
         let session_store = SessionStore::new(temp.path().join("sessions2")).unwrap();
         let client = Arc::new(MockLlmClient::new("test"));
         let mut compiler2 = MemoryCompiler::new(store, session_store, client, CompileConfig::default());
-        
+
         compiler2.load_fingerprints(&fp_path).unwrap();
-        
+
         assert_eq!(compiler2.fingerprints.get("test"), Some(&"abc123".to_string()));
+    }
+
+    #[test]
+    fn test_merge_memories() {
+        let (_temp, compiler) = create_test_compiler();
+
+        let memories = vec![
+            "User likes Rust programming".to_string(),
+            "User likes Rust for systems programming".to_string(),
+            "User enjoys Python scripting".to_string(),
+            "User prefers JavaScript for web".to_string(),
+        ];
+
+        let merged = compiler.merge_memories(&memories, 0.7);
+
+        assert!(merged.len() < memories.len());
+    }
+
+    #[test]
+    fn test_calculate_importance() {
+        let (_temp, compiler) = create_test_compiler();
+
+        let important_fact = Fact {
+            id: 1,
+            fact: "User is CEO of company".to_string(),
+            tags: vec!["identity".to_string(), "work".to_string()],
+            time: None,
+            session_id: None,
+            created_at: Utc::now(),
+        };
+
+        let unimportant_fact = Fact {
+            id: 2,
+            fact: "User said hello".to_string(),
+            tags: vec!["greeting".to_string()],
+            time: None,
+            session_id: None,
+            created_at: Utc::now() - Duration::days(400),
+        };
+
+        let important_score = compiler.calculate_importance(&important_fact);
+        let unimportant_score = compiler.calculate_importance(&unimportant_fact);
+
+        assert!(important_score > unimportant_score);
+        assert!(important_score > 0.5);
+    }
+
+    #[test]
+    fn test_deduplicate_facts() {
+        let (_temp, compiler) = create_test_compiler();
+
+        let facts = vec![
+            crate::types::MetaFact {
+                fact: "User likes Rust".to_string(),
+                tags: vec!["tech".to_string()],
+                time: None,
+            },
+            crate::types::MetaFact {
+                fact: "user likes rust".to_string(),
+                tags: vec!["tech".to_string()],
+                time: None,
+            },
+            crate::types::MetaFact {
+                fact: "User likes Python".to_string(),
+                tags: vec!["tech".to_string()],
+                time: None,
+            },
+        ];
+
+        let unique = compiler.deduplicate_facts(&facts);
+        assert_eq!(unique.len(), 2);
     }
 }

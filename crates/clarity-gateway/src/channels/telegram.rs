@@ -1,47 +1,96 @@
-//! Telegram Bot 接口（预留实现）
+//! Telegram Bot 渠道实现
 //!
-//! 提供 Telegram Bot 接入点，支持：
+//! 使用 teloxide crate 实现 Telegram Bot：
 //! - 接收用户消息
-//! - 发送回复
-//! - Webhook 或 Long polling 模式
+//! - 发送响应（支持流式响应）
+//! - 支持 Long polling 模式
+
+#![allow(dead_code)]
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use std::sync::Arc;
+use tracing::{error, info, warn};
 
-use super::{Channel, ChannelConfig, ChannelError, ChannelMessage, ChannelStatus};
+#[cfg(feature = "telegram")]
+use teloxide::prelude::*;
+#[cfg(feature = "telegram")]
+use teloxide::types::ParseMode;
 
-/// Telegram Bot Channel
+use clarity_core::Agent;
+
+use super::{Channel, ChannelConfig, ChannelError};
+
+/// Telegram Bot 渠道
 pub struct TelegramChannel {
     config: ChannelConfig,
-    status: ChannelStatus,
     bot_token: Option<String>,
 }
 
 impl TelegramChannel {
     pub fn new(config: ChannelConfig) -> Self {
-        let bot_token = config.token.clone();
         Self {
+            bot_token: config.token.clone(),
             config,
-            status: ChannelStatus::Stopped,
-            bot_token,
         }
     }
 
-    /// 处理接收到的消息（供 webhook 调用）
-    pub async fn handle_update(&self, update: TelegramUpdate) -> Result<(), ChannelError> {
-        if let Some(message) = update.message {
-            info!(
-                "Received Telegram message from {}: {}",
-                message.from.id, message.text.as_deref().unwrap_or("")
-            );
+    /// 使用 teloxide 运行 bot（feature enabled）
+    #[cfg(feature = "telegram")]
+    async fn run_with_teloxide(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
+        let token = self.bot_token.as_ref()
+            .ok_or_else(|| ChannelError::AuthFailed("Telegram bot token not configured".to_string()))?;
 
-            // TODO: 转发到 clarity-core 处理
-            // 临时 echo 回复
-            let response = format!("Echo: {}", message.text.as_deref().unwrap_or(""));
-            self.send_message(&message.from.id.to_string(), &response)
-                .await?;
-        }
+        info!("Starting Telegram bot with teloxide...");
+
+        let bot = Bot::new(token);
+
+        teloxide::repl(bot, move |bot: Bot, msg: Message| {
+            let agent = agent.clone();
+            async move {
+                if let Some(text) = msg.text() {
+                    info!("[Telegram] Received message from {}: {}", msg.chat.id, text);
+
+                    // 处理消息并获取响应
+                    match process_message(agent, text).await {
+                        Ok(response) => {
+                            // 发送响应，支持长消息分批
+                            let chunks = split_message(&response, 4096);
+                            for chunk in chunks {
+                                if let Err(e) = bot.send_message(msg.chat.id, chunk)
+                                    .parse_mode(ParseMode::MarkdownV2)
+                                    .await {
+                                    error!("[Telegram] Failed to send message: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("[Telegram] Failed to process message: {}", e);
+                            let _ = bot.send_message(msg.chat.id, "Sorry, I encountered an error processing your message.").await;
+                        }
+                    }
+                }
+                respond(())
+            }
+        }).await;
+
+        Ok(())
+    }
+
+    /// Mock 实现（feature disabled）
+    #[cfg(not(feature = "telegram"))]
+    async fn run_with_teloxide(&self, _agent: Arc<Agent>) -> Result<(), ChannelError> {
+        warn!("[Telegram] teloxide feature is disabled, using mock mode");
+        
+        // Mock mode: 记录配置但不实际启动
+        info!("[Telegram] Mock mode - would start bot with token: {:?}", 
+            self.bot_token.as_ref().map(|_| "***REDACTED***"));
+        
+        // 保持运行直到收到停止信号
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        info!("[Telegram] Mock bot finished");
+        
         Ok(())
     }
 }
@@ -52,57 +101,57 @@ impl Channel for TelegramChannel {
         "telegram"
     }
 
-    async fn start(&self) -> Result<(), ChannelError> {
+    async fn start(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
         if !self.config.enabled {
-            warn!("Telegram channel is disabled");
+            warn!("[Telegram] Channel is disabled");
             return Ok(());
         }
 
-        if self.bot_token.is_none() {
-            return Err(ChannelError::AuthFailed(
-                "Telegram bot token not configured".to_string(),
-            ));
-        }
-
-        info!("Starting Telegram channel...");
-
-        // TODO: 实现 webhook 设置或 long polling
-        // let token = self.bot_token.as_ref().unwrap();
-        // 1. 设置 webhook: https://api.telegram.org/bot{token}/setWebhook
-        // 2. 或使用 long polling 模式
-
-        info!("Telegram channel started");
-        Ok(())
+        info!("[Telegram] Starting channel...");
+        self.run_with_teloxide(agent).await
     }
 
     async fn stop(&self) -> Result<(), ChannelError> {
-        info!("Stopping Telegram channel...");
-        // TODO: 清理 webhook 或停止 polling
-        info!("Telegram channel stopped");
+        info!("[Telegram] Stopping channel...");
+        // teloxide 的 repl 会在程序退出时自动停止
         Ok(())
     }
+}
 
-    async fn send_message(&self, user_id: &str, message: &str) -> Result<(), ChannelError> {
-        let token = self
-            .bot_token
-            .as_ref()
-            .ok_or_else(|| ChannelError::NotStarted)?;
+/// 处理用户消息
+async fn process_message(agent: Arc<Agent>, text: &str) -> Result<String, ChannelError> {
+    match agent.run(text).await {
+        Ok(response) => Ok(response),
+        Err(e) => {
+            error!("[Telegram] Agent error: {}", e);
+            Err(ChannelError::Unknown(e.to_string()))
+        }
+    }
+}
 
-        // TODO: 调用 Telegram API 发送消息
-        // https://api.telegram.org/bot{token}/sendMessage
-        // POST body: {"chat_id": user_id, "text": message}
-
-        info!(
-            "[Telegram] Would send message to {}: {}",
-            user_id, message
-        );
-
-        Ok(())
+/// 将长消息分割成多个块
+fn split_message(text: &str, max_length: usize) -> Vec<&str> {
+    if text.len() <= max_length {
+        return vec![text];
     }
 
-    fn status(&self) -> ChannelStatus {
-        self.status.clone()
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    
+    while start < text.len() {
+        let end = (start + max_length).min(text.len());
+        // 尝试在换行处分割
+        let split_point = if end < text.len() {
+            text[start..end].rfind('\n').map(|i| start + i + 1).unwrap_or(end)
+        } else {
+            end
+        };
+        
+        chunks.push(&text[start..split_point]);
+        start = split_point;
     }
+    
+    chunks
 }
 
 // ==================== Telegram API 类型 ====================
@@ -151,17 +200,90 @@ pub struct SendMessageRequest {
     pub parse_mode: Option<String>,
 }
 
-// ==================== Webhook Handler ====================
+/// HTTP 实现的 Telegram API 客户端
+pub struct TelegramApiClient {
+    client: reqwest::Client,
+    token: String,
+    base_url: String,
+}
 
-/// 处理 Telegram webhook 请求
-pub async fn webhook_handler(
-    update: TelegramUpdate,
-) -> Result<impl axum::response::IntoResponse, ChannelError> {
-    // TODO: 从状态中获取 TelegramChannel 实例并处理
-    info!("Received Telegram webhook: {:?}", update);
+impl TelegramApiClient {
+    pub fn new(token: impl Into<String>) -> Self {
+        let token = token.into();
+        Self {
+            client: reqwest::Client::new(),
+            base_url: format!("https://api.telegram.org/bot{}", token),
+            token,
+        }
+    }
 
-    // 临时返回成功
-    Ok((axum::http::StatusCode::OK, "OK"))
+    /// 发送消息
+    pub async fn send_message(
+        &self,
+        chat_id: i64,
+        text: &str,
+    ) -> Result<(), ChannelError> {
+        let url = format!("{}/sendMessage", self.base_url);
+        
+        let body = SendMessageRequest {
+            chat_id,
+            text: text.to_string(),
+            parse_mode: Some("Markdown".to_string()),
+        };
+
+        let response = self.client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(ChannelError::SendFailed(format!(
+                "Telegram API error: {}", error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// 设置 Webhook
+    pub async fn set_webhook(&self, webhook_url: &str) -> Result<(), ChannelError> {
+        let url = format!("{}/setWebhook", self.base_url);
+        
+        let body = serde_json::json!({
+            "url": webhook_url,
+        });
+
+        let response = self.client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(ChannelError::Unknown(format!(
+                "Failed to set webhook: {}", error_text
+            )));
+        }
+
+        info!("[Telegram] Webhook set to: {}", webhook_url);
+        Ok(())
+    }
+
+    /// 删除 Webhook
+    pub async fn delete_webhook(&self) -> Result<(), ChannelError> {
+        let url = format!("{}/deleteWebhook", self.base_url);
+
+        self.client
+            .get(&url)
+            .send()
+            .await?;
+
+        info!("[Telegram] Webhook deleted");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -196,5 +318,30 @@ mod tests {
         let message = update.message.unwrap();
         assert_eq!(message.text, Some("Hello".to_string()));
         assert_eq!(message.from.id, 12345);
+    }
+
+    #[test]
+    fn test_split_message() {
+        // 测试短消息
+        let text = "Hello";
+        let chunks = split_message(text, 10);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], "Hello");
+
+        // 测试长消息
+        let long_text = "a".repeat(5000);
+        let chunks = split_message(&long_text, 4096);
+        assert!(chunks.len() > 1);
+        
+        // 测试在换行处分割
+        let text_with_newlines = "Line1\nLine2\nLine3";
+        let chunks = split_message(text_with_newlines, 10);
+        assert!(chunks.len() >= 1);
+    }
+
+    #[test]
+    fn test_telegram_api_client_creation() {
+        let client = TelegramApiClient::new("test_token");
+        assert_eq!(client.base_url, "https://api.telegram.org/bottest_token");
     }
 }

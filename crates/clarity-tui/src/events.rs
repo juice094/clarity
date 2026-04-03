@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -38,13 +40,13 @@ pub enum Event {
 
 /// 事件处理器
 pub struct EventHandler {
-    rx: mpsc::Receiver<Event>,
-    tx: mpsc::Sender<Event>,
+    rx: mpsc::UnboundedReceiver<Event>,
+    tx: mpsc::UnboundedSender<Event>,
 }
 
 impl EventHandler {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::unbounded_channel();
         let tx_clone = tx.clone();
 
         // 启动事件监听任务
@@ -55,17 +57,17 @@ impl EventHandler {
                 tokio::select! {
                     // 定时滴答
                     _ = tick_interval.tick() => {
-                        let _ = tx.send(Event::Tick).await;
+                        let _ = tx.send(Event::Tick);
                     }
                     // 处理终端事件
                     Ok(()) = async {
                         if event::poll(Duration::from_millis(100))? {
                             match event::read()? {
                                 CrosstermEvent::Key(key) => {
-                                    let _ = tx.send(Event::Key(key)).await;
+                                    let _ = tx.send(Event::Key(key));
                                 }
                                 CrosstermEvent::Resize(width, height) => {
-                                    let _ = tx.send(Event::Resize(width, height)).await;
+                                    let _ = tx.send(Event::Resize(width, height));
                                 }
                                 _ => {}
                             }
@@ -83,7 +85,7 @@ impl EventHandler {
     }
 
     /// 获取事件发送器
-    pub fn get_sender(&self) -> mpsc::Sender<Event> {
+    pub fn get_sender(&self) -> mpsc::UnboundedSender<Event> {
         self.tx.clone()
     }
 
