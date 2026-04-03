@@ -1,0 +1,39 @@
+# Clarity Configuration Example
+# 
+# This file demonstrates multi-profile configuration for Project Clarity.
+# Place this as `.clarity.toml` in your project root, or save it as
+# `~/.config/clarity/config.toml` for global configuration.
+
+# Default profile to use when none is specified
+default_profile = "kimi"
+
+# Profile configurations
+[profiles.kimi]
+model = "kimi-latest"
+provider = "kimi"
+api_key = "sk-your-kimi-api-key"
+base_url = "https://api.moonshot.cn/v1"
+
+[profiles.openai]
+model = "gpt-4"
+provider = "openai"
+api_key = "sk-your-openai-api-key"
+base_url = "https://api.openai.com/v1"
+
+[profiles.ollama-local]
+model = "llama3.2"
+provider = "ollama"
+# No API key needed for local Ollama
+base_url = "http://localhost:11434"
+
+[profiles.deepseek]
+model = "deepseek-chat"
+provider = "deepseek"
+api_key = "sk-your-deepseek-api-key"
+base_url = "https://api.deepseek.com/v1"
+
+[profiles.azure-openai]
+model = "gpt-4"
+provider = "azure"
+api_key = "your-azure-api-key"
+base_url = "https://your-resource.openai.azure.com/openai/deployments/your-deployment"
