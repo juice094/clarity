@@ -1,0 +1,1429 @@
+//! Agent Loop - Core orchestration component
+//!
+//! The `Agent` manages the interaction loop between the LLM and tools.
+//! It handles:
+//! - Tool discovery for LLM
+//! - Request routing to appropriate tools
+//! - Context management
+//! - Iteration limits and safety
+//! - Error recovery with retry
+//! - Execution tracing
+//! - State persistence
+//! - Parallel tool execution
+
+pub mod enhanced;
+
+use crate::approval::{ApprovalMode, ApprovalRuntime, ApprovalSource, ApprovalResponse};
+use crate::compaction::{CompactionConfig, estimate_message_tokens};
+use crate::error::{AgentError, ToolError};
+use crate::memory::{Memory, MemoryStore, MemoryTicker};
+use crate::personality::{Personality, PersonalityConfig, PersonalityLoader, SystemPromptBuilder};
+use crate::registry::ToolRegistry;
+use crate::tools::ToolContext;
+use clarity_wire::{Wire, WireMessage};
+
+/// Default max context size in tokens (approximate)
+const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
+
+// Re-export enhanced features
+pub use enhanced::{
+    ConversationState, ErrorRecovery, ErrorRecoveryConfig, ExecutionStep, ExecutionSummary,
+    ExecutionTracer, ParallelToolExecutor, RecoveryStrategy, StatePersistence, StepType,
+    TokenUsage,
+};
+
+/// LLM message role
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageRole {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+
+/// A message in the conversation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub role: MessageRole,
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+}
+
+impl Message {
+    /// Create a system message
+    pub fn system(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::System,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Create a user message
+    pub fn user(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::User,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Create an assistant message
+    pub fn assistant(content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Create a tool response message
+    pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: MessageRole::Tool,
+            content: content.into(),
+            tool_calls: None,
+            tool_call_id: Some(tool_call_id.into()),
+        }
+    }
+}
+
+/// A tool call from the LLM
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub call_type: String,
+    pub function: FunctionCall,
+}
+
+/// Function call details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionCall {
+    pub name: String,
+    pub arguments: String, // JSON string
+}
+
+/// Configuration for the Agent
+#[derive(Debug, Clone)]
+pub struct AgentConfig {
+    /// Maximum number of tool call iterations
+    pub max_iterations: usize,
+    /// Default timeout for tool execution (seconds)
+    pub tool_timeout_secs: u64,
+    /// Working directory for file operations
+    pub working_dir: std::path::PathBuf,
+    /// Read-only mode (prevents file modifications)
+    pub read_only: bool,
+    /// System prompt (legacy, use personality instead)
+    pub system_prompt: String,
+    /// Personality configuration
+    pub personality_config: Option<PersonalityConfig>,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            max_iterations: 10,
+            tool_timeout_secs: 60,
+            working_dir: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            read_only: false,
+            system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
+            personality_config: None,
+        }
+    }
+}
+
+impl AgentConfig {
+    /// Create a new config with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set max iterations
+    pub fn with_max_iterations(mut self, max: usize) -> Self {
+        self.max_iterations = max;
+        self
+    }
+
+    /// Set working directory
+    pub fn with_working_dir(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.working_dir = path.into();
+        self
+    }
+
+    /// Set read-only mode
+    pub fn with_read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    /// Set custom system prompt (legacy, use with_personality instead)
+    pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.system_prompt = prompt.into();
+        self
+    }
+
+    /// Set personality configuration
+    pub fn with_personality(mut self, config: PersonalityConfig) -> Self {
+        self.personality_config = Some(config);
+        self
+    }
+}
+
+/// Default system prompt for the agent
+const DEFAULT_SYSTEM_PROMPT: &str = r#"You are a helpful AI assistant with access to various tools.
+You can use these tools to help users with their tasks.
+
+When you need to use a tool, respond with a tool call in the appropriate format.
+After receiving the tool result, provide a helpful response to the user.
+
+Available tools will be provided at the start of each conversation.
+"#;
+
+/// LLM Provider trait - implement this to integrate with different LLMs
+#[async_trait::async_trait]
+pub trait LlmProvider: Send + Sync {
+    /// Generate a response from the LLM
+    async fn complete(
+        &self,
+        messages: &[Message],
+        tools: &Value,
+    ) -> Result<LlmResponse, AgentError>;
+
+    /// Stream the response as text chunks.
+    /// Returns a receiver that yields chunks of the response.
+    /// The receiver closes when the stream ends.
+    fn stream(
+        &self,
+        messages: &[Message],
+        tools: &Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError>;
+}
+
+/// Response from an LLM
+#[derive(Debug, Clone)]
+pub struct LlmResponse {
+    /// The text content of the response
+    pub content: String,
+    /// Tool calls to execute (if any)
+    pub tool_calls: Vec<ToolCall>,
+    /// Whether this is the final response
+    pub is_complete: bool,
+}
+
+/// Simple mock LLM for testing
+pub struct MockLlm;
+
+#[async_trait::async_trait]
+impl LlmProvider for MockLlm {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &Value,
+    ) -> Result<LlmResponse, AgentError> {
+        Ok(LlmResponse {
+            content: "This is a mock response".to_string(),
+            tool_calls: vec![],
+            is_complete: true,
+        })
+    }
+
+    fn stream(
+        &self,
+        _messages: &[Message],
+        _tools: &Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx.send(Ok("This is a mock response".to_string())).await;
+        });
+        Ok(rx)
+    }
+}
+
+/// The main Agent struct
+///
+/// Manages the interaction between user, LLM, and tools.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use clarity_core::{Agent, ToolRegistry};
+/// use clarity_core::agent::AgentConfig;
+/// use clarity_core::personality::{PersonalityConfig, YuanType};
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let registry = ToolRegistry::with_builtin_tools();
+///     
+///     // Configure with personality
+///     let personality_config = PersonalityConfig::new()
+///         .with_agent_name("Clarity")
+///         .with_user_name("User")
+///         .with_yuan_type(YuanType::Hanako);
+///     
+///     let config = AgentConfig::new()
+///         .with_max_iterations(10)
+///         .with_read_only(false)
+///         .with_personality(personality_config);
+///     
+///     let agent = Agent::with_config(registry, config);
+///     
+///     // This would need an actual LLM provider
+///     // let response = agent.run("List all Rust files").await?;
+///     
+///     Ok(())
+/// }
+/// ```
+pub struct Agent {
+    registry: ToolRegistry,
+    config: AgentConfig,
+    llm: Option<Arc<dyn LlmProvider>>,
+    personality: Option<Personality>,
+    system_prompt_builder: Option<SystemPromptBuilder>,
+    memory_store: Option<Arc<dyn MemoryStore>>,
+    memory_ticker: Option<MemoryTicker>,
+    /// Optional wire for UI communication
+    wire: Option<Wire>,
+    /// Approval runtime for tool execution control
+    approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
+    /// Approval mode (Interactive, Yolo, Plan)
+    approval_mode: ApprovalMode,
+    /// Compaction configuration for context management
+    compaction_config: CompactionConfig,
+    /// Maximum context tokens before compaction
+    max_context_tokens: usize,
+}
+
+impl Agent {
+    /// Create a new Agent with the given registry and default config
+    pub fn new(registry: ToolRegistry) -> Self {
+        Self::with_config(registry, AgentConfig::default())
+    }
+
+    /// Create a new Agent with custom configuration
+    pub fn with_config(registry: ToolRegistry, config: AgentConfig) -> Self {
+        let (personality, system_prompt_builder) =
+            if let Some(ref personality_config) = config.personality_config {
+                let loader = PersonalityLoader::new();
+                match loader.load(personality_config) {
+                    Ok(personality) => {
+                        let builder = SystemPromptBuilder::new(personality.clone());
+                        (Some(personality), Some(builder))
+                    }
+                    Err(e) => {
+                        warn!("Failed to load personality: {}. Using fallback.", e);
+                        (None, None)
+                    }
+                }
+            } else {
+                (None, None)
+            };
+
+        Self {
+            registry,
+            config,
+            llm: None,
+            personality,
+            system_prompt_builder,
+            memory_store: None,
+            memory_ticker: None,
+            wire: None,
+            approval_runtime: None,
+            approval_mode: ApprovalMode::Interactive,
+            compaction_config: CompactionConfig::default(),
+            max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
+        }
+    }
+
+    /// Set the LLM provider
+    pub fn with_llm(mut self, llm: Arc<dyn LlmProvider>) -> Self {
+        self.llm = Some(llm);
+        self
+    }
+
+    /// Set the memory store
+    pub fn with_memory(mut self, store: Arc<dyn MemoryStore>) -> Self {
+        self.memory_store = Some(store);
+        self
+    }
+
+    /// Set the memory ticker
+    pub fn with_memory_ticker(mut self, ticker: MemoryTicker) -> Self {
+        self.memory_ticker = Some(ticker);
+        self
+    }
+
+    /// Set the wire for UI communication
+    pub fn with_wire(mut self, wire: Wire) -> Self {
+        self.wire = Some(wire);
+        self
+    }
+
+    /// Send a wire message if wire is configured
+    fn send_wire_message(&self, msg: WireMessage) {
+        if let Some(ref wire) = self.wire {
+            wire.soul_side().send(msg);
+        }
+    }
+
+    /// Set the approval runtime
+    pub fn with_approval_runtime(mut self, runtime: Arc<dyn ApprovalRuntime>) -> Self {
+        self.approval_runtime = Some(runtime);
+        self
+    }
+
+    /// Set the approval mode
+    pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
+        self.approval_mode = mode;
+        self
+    }
+
+    /// Set the compaction configuration
+    pub fn with_compaction_config(mut self, config: CompactionConfig) -> Self {
+        self.compaction_config = config;
+        self
+    }
+
+    /// Set the maximum context tokens
+    pub fn with_max_context_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_context_tokens = max_tokens;
+        self
+    }
+
+    /// Get the tool registry
+    pub fn registry(&self) -> &ToolRegistry {
+        &self.registry
+    }
+
+    /// Get the agent configuration
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    /// Get the personality (if configured)
+    pub fn personality(&self) -> Option<&Personality> {
+        self.personality.as_ref()
+    }
+
+    /// Build the system prompt
+    /// Uses personality if available, otherwise falls back to config.system_prompt
+    fn build_system_prompt(&self) -> String {
+        if let Some(ref builder) = self.system_prompt_builder {
+            // Build with personality and optional skill definitions
+            let skills = self.get_skill_definitions();
+            builder
+                .clone()
+                .with_skills(skills)
+                .build()
+        } else {
+            // Fallback to legacy system prompt
+            self.config.system_prompt.clone()
+        }
+    }
+
+    /// Get skill definitions from the tool registry
+    fn get_skill_definitions(&self) -> Vec<String> {
+        // Convert tool schemas to skill descriptions
+        match self.registry.get_tool_schemas() {
+            Ok(schemas) => {
+                if let Some(functions) = schemas.get("functions").and_then(|f| f.as_array()) {
+                    functions
+                        .iter()
+                        .filter_map(|f| {
+                            let name = f.get("name")?.as_str()?;
+                            let description = f.get("description")?.as_str()?;
+                            Some(format!("- {}: {}", name, description))
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            Err(_) => vec![],
+        }
+    }
+
+    /// Update personality configuration (hot reload)
+    ///
+    /// This allows changing the agent's personality without recreating the agent.
+    pub fn update_personality(&mut self, config: PersonalityConfig) -> anyhow::Result<()> {
+        info!("Updating personality configuration");
+
+        let loader = PersonalityLoader::new();
+        let personality = loader.load(&config)?;
+
+        self.personality = Some(personality.clone());
+        self.system_prompt_builder = Some(SystemPromptBuilder::new(personality));
+        self.config.personality_config = Some(config);
+
+        info!("Personality updated successfully");
+        Ok(())
+    }
+
+    /// Run the agent with a user query
+    ///
+    /// This is the main entry point that orchestrates the agent loop:
+    /// 1. Sends user query to LLM with available tools
+    /// 2. Processes any tool calls
+    /// 3. Sends tool results back to LLM
+    /// 4. Returns final response
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The user's request
+    ///
+    /// # Returns
+    ///
+    /// The final response from the agent
+    pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
+        let llm = self
+            .llm
+            .as_ref()
+            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+
+        let tools = self.registry.get_tool_schemas()?;
+
+        // Build system prompt with optional memory context
+        let base_system_prompt = self.build_system_prompt();
+        let mut system_prompt = base_system_prompt;
+
+        if let Some(ref store) = self.memory_store {
+            match store.search(query.as_ref(), 5).await {
+                Ok(memories) => {
+                    if !memories.is_empty() {
+                        let memory_text = memories
+                            .iter()
+                            .map(|m| format!("- {}", m.content))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        system_prompt.push_str(&format!(
+                            "\n\n# Relevant Memories\n{}\n",
+                            memory_text
+                        ));
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to retrieve memories: {}", e);
+                }
+            }
+        }
+
+        // Initialize conversation
+        let mut messages = vec![
+            Message::system(system_prompt),
+            Message::user(query.as_ref()),
+        ];
+
+        info!("Starting agent loop for query: {}", query.as_ref());
+
+        // Send TurnBegin message
+        self.send_wire_message(WireMessage::TurnBegin {
+            user_input: query.as_ref().to_string(),
+        });
+
+        // Agent loop
+        let mut final_response = String::new();
+        let mut completed = false;
+
+        for iteration in 0..self.config.max_iterations {
+            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
+
+            // 检查是否需要压缩
+            if self.should_compact(&messages).await {
+                match self.compact_messages(&messages).await {
+                    Ok(compacted) => {
+                        info!("Context compacted: {} messages -> {} messages", messages.len(), compacted.len());
+                        messages = compacted;
+                    }
+                    Err(e) => {
+                        warn!("Failed to compact messages: {}", e);
+                    }
+                }
+            }
+
+            // Get LLM response
+            let response = llm.complete(&messages, &tools).await?;
+            final_response = response.content.clone();
+
+            // If no tool calls, we're done
+            if response.tool_calls.is_empty() {
+                // Send final content as ContentPart
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+
+                info!("Agent loop completed after {} iterations", iteration + 1);
+                completed = true;
+                break;
+            }
+
+            // Send assistant content as ContentPart (if any)
+            if !response.content.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+            }
+
+            // Add assistant message with tool calls
+            messages.push(Message {
+                role: MessageRole::Assistant,
+                content: response.content,
+                tool_calls: Some(response.tool_calls.clone()),
+                tool_call_id: None,
+            });
+
+            // Execute tool calls
+            for tool_call in &response.tool_calls {
+                // Send StepBegin message
+                self.send_wire_message(WireMessage::StepBegin {
+                    tool_name: tool_call.function.name.clone(),
+                });
+
+                // Send ToolCall message
+                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                    .unwrap_or_else(|_| serde_json::json!({}));
+                self.send_wire_message(WireMessage::ToolCall {
+                    id: tool_call.id.clone(),
+                    name: tool_call.function.name.clone(),
+                    arguments: args,
+                });
+
+                let result = self.execute_tool_call(tool_call).await;
+
+                let result_content = match result {
+                    Ok(value) => value.to_string(),
+                    Err(e) => json!({"error": e.to_string()}).to_string(),
+                };
+
+                // Send ToolResult message
+                self.send_wire_message(WireMessage::ToolResult {
+                    id: tool_call.id.clone(),
+                    result: result_content.clone(),
+                });
+
+                messages.push(Message::tool(&tool_call.id, result_content));
+            }
+        }
+
+        // Send TurnEnd message
+        self.send_wire_message(WireMessage::TurnEnd);
+
+        // Persist interaction to memory
+        if let Some(ref store) = self.memory_store {
+            let memory_content = if completed {
+                format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
+            } else {
+                format!("User: {}\nAssistant: [max iterations reached] {}", query.as_ref(), final_response)
+            };
+            let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
+            if let Err(e) = store.store(memory).await {
+                warn!("Failed to store memory: {}", e);
+            }
+        }
+
+        // Trigger memory ticker
+        if let Some(ref ticker) = self.memory_ticker {
+            match ticker.tick().await {
+                true => info!("Memory ticker triggered"),
+                false => debug!("Memory ticker not triggered yet"),
+            }
+        }
+
+        if completed {
+            Ok(final_response)
+        } else {
+            warn!("Max iterations ({}) reached", self.config.max_iterations);
+            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+        }
+    }
+
+    /// Run the agent with streaming response.
+    ///
+    /// Same as `run()`, but streams the final assistant response via `on_chunk`.
+    /// Tool-calling rounds still use `complete()` internally; only the final
+    /// text response is streamed.
+    pub async fn run_streaming<F>(
+        &self,
+        query: impl AsRef<str>,
+        mut on_chunk: F,
+    ) -> Result<String, AgentError>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        let llm = self
+            .llm
+            .as_ref()
+            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+
+        let tools = self.registry.get_tool_schemas()?;
+
+        let base_system_prompt = self.build_system_prompt();
+        let mut system_prompt = base_system_prompt;
+
+        if let Some(ref store) = self.memory_store {
+            match store.search(query.as_ref(), 5).await {
+                Ok(memories) => {
+                    if !memories.is_empty() {
+                        let memory_text = memories
+                            .iter()
+                            .map(|m| format!("- {}", m.content))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        system_prompt.push_str(&format!(
+                            "\n\n# Relevant Memories\n{}\n",
+                            memory_text
+                        ));
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to retrieve memories: {}", e);
+                }
+            }
+        }
+
+        let mut messages = vec![
+            Message::system(system_prompt),
+            Message::user(query.as_ref()),
+        ];
+
+        info!("Starting streaming agent loop for query: {}", query.as_ref());
+
+        // Send TurnBegin message
+        self.send_wire_message(WireMessage::TurnBegin {
+            user_input: query.as_ref().to_string(),
+        });
+
+        let mut final_response = String::new();
+        let mut completed = false;
+
+        for iteration in 0..self.config.max_iterations {
+            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
+
+            let response = llm.complete(&messages, &tools).await?;
+
+            if response.tool_calls.is_empty() {
+                // Send final content start notification
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: String::new(),
+                });
+
+                // Try streaming first, fall back to complete() if not supported
+                match llm.stream(&messages, &tools) {
+                    Ok(mut stream_rx) => {
+                        while let Some(chunk_result) = stream_rx.recv().await {
+                            match chunk_result {
+                                Ok(chunk) => {
+                                    final_response.push_str(&chunk);
+                                    on_chunk(&chunk);
+                                    // Send streaming chunk via wire
+                                    self.send_wire_message(WireMessage::ContentPart {
+                                        text: chunk.clone(),
+                                    });
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Streaming not supported, use complete() and simulate streaming
+                        let content = response.content.clone();
+                        // Stream character by character for smooth display
+                        for c in content.chars() {
+                            let chunk = c.to_string();
+                            final_response.push_str(&chunk);
+                            on_chunk(&chunk);
+                            // Send streaming chunk via wire
+                            self.send_wire_message(WireMessage::ContentPart {
+                                text: chunk.clone(),
+                            });
+                            // Small delay for visual effect (optional, can remove)
+                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                        }
+                    }
+                }
+
+                info!("Agent loop completed after {} iterations", iteration + 1);
+                completed = true;
+                break;
+            }
+
+            // Send assistant content as ContentPart (if any) for tool-calling rounds
+            if !response.content.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+            }
+
+            messages.push(Message {
+                role: MessageRole::Assistant,
+                content: response.content,
+                tool_calls: Some(response.tool_calls.clone()),
+                tool_call_id: None,
+            });
+
+            for tool_call in &response.tool_calls {
+                // Send StepBegin message
+                self.send_wire_message(WireMessage::StepBegin {
+                    tool_name: tool_call.function.name.clone(),
+                });
+
+                // Send ToolCall message
+                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                    .unwrap_or_else(|_| serde_json::json!({}));
+                self.send_wire_message(WireMessage::ToolCall {
+                    id: tool_call.id.clone(),
+                    name: tool_call.function.name.clone(),
+                    arguments: args,
+                });
+
+                let result = self.execute_tool_call(tool_call).await;
+                let result_content = match result {
+                    Ok(value) => value.to_string(),
+                    Err(e) => json!({"error": e.to_string()}).to_string(),
+                };
+
+                // Send ToolResult message
+                self.send_wire_message(WireMessage::ToolResult {
+                    id: tool_call.id.clone(),
+                    result: result_content.clone(),
+                });
+
+                messages.push(Message::tool(&tool_call.id, result_content));
+            }
+        }
+
+        // Send TurnEnd message
+        self.send_wire_message(WireMessage::TurnEnd);
+
+        if let Some(ref store) = self.memory_store {
+            let memory_content = if completed {
+                format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
+            } else {
+                format!("User: {}\nAssistant: [max iterations reached] {}", query.as_ref(), final_response)
+            };
+            let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
+            if let Err(e) = store.store(memory).await {
+                warn!("Failed to store memory: {}", e);
+            }
+        }
+
+        if let Some(ref ticker) = self.memory_ticker {
+            match ticker.tick().await {
+                true => info!("Memory ticker triggered"),
+                false => debug!("Memory ticker not triggered yet"),
+            }
+        }
+
+        if completed {
+            Ok(final_response)
+        } else {
+            warn!("Max iterations ({}) reached", self.config.max_iterations);
+            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+        }
+    }
+
+    /// Execute a single tool call
+    async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<Value, ToolError> {
+        let name = &tool_call.function.name;
+        let args: Value = serde_json::from_str(&tool_call.function.arguments)
+            .map_err(|e| ToolError::invalid_params(format!("Invalid JSON: {}", e)))?;
+
+        info!("Executing tool '{}' with args: {:?}", name, args);
+
+        // 如果配置了审批运行时，先请求审批
+        if let Some(ref runtime) = self.approval_runtime {
+            match self.approval_mode {
+                ApprovalMode::Interactive => {
+                    // 创建审批请求
+                    let turn_id = uuid::Uuid::new_v4().to_string();
+                    let request_id = runtime
+                        .create_request(
+                            tool_call,
+                            ApprovalSource::ForegroundTurn { turn_id },
+                        )
+                        .await
+                        .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+
+                    // 等待审批结果，带超时
+                    let approval_result = tokio::time::timeout(
+                        tokio::time::Duration::from_secs(300),
+                        runtime.wait_for_response(&request_id),
+                    )
+                    .await;
+
+                    match approval_result {
+                        Ok(Ok(ApprovalResponse::Approve)) => {
+                            // 继续执行
+                        }
+                        Ok(Ok(ApprovalResponse::Reject)) => {
+                            return Err(ToolError::execution_failed(
+                                "Tool call rejected by user".to_string(),
+                            ));
+                        }
+                        Ok(Ok(ApprovalResponse::ApproveForSession)) => {
+                            // TODO: 标记后续同类调用自动批准
+                        }
+                        Ok(Err(e)) => {
+                            return Err(ToolError::execution_failed(format!(
+                                "Approval error: {}",
+                                e
+                            )));
+                        }
+                        Err(_) => {
+                            return Err(ToolError::execution_failed(
+                                "Approval timeout after 300 seconds".to_string(),
+                            ));
+                        }
+                    }
+                }
+                ApprovalMode::Yolo => {
+                    // Yolo 模式跳过审批
+                }
+                ApprovalMode::Plan => {
+                    // Plan 模式下暂时按 Interactive 处理
+                    let turn_id = uuid::Uuid::new_v4().to_string();
+                    let request_id = runtime
+                        .create_request(
+                            tool_call,
+                            ApprovalSource::ForegroundTurn { turn_id },
+                        )
+                        .await
+                        .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+
+                    let approval_result = tokio::time::timeout(
+                        tokio::time::Duration::from_secs(300),
+                        runtime.wait_for_response(&request_id),
+                    )
+                    .await;
+
+                    match approval_result {
+                        Ok(Ok(ApprovalResponse::Approve | ApprovalResponse::ApproveForSession)) => {
+                            // 继续执行
+                        }
+                        Ok(Ok(ApprovalResponse::Reject)) => {
+                            return Err(ToolError::execution_failed(
+                                "Tool call rejected by user".to_string(),
+                            ));
+                        }
+                        Ok(Err(e)) => {
+                            return Err(ToolError::execution_failed(format!(
+                                "Approval error: {}",
+                                e
+                            )));
+                        }
+                        Err(_) => {
+                            return Err(ToolError::execution_failed(
+                                "Approval timeout after 300 seconds".to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        let ctx = ToolContext::new()
+            .with_working_dir(&self.config.working_dir)
+            .with_read_only(self.config.read_only)
+            .with_timeout(self.config.tool_timeout_secs);
+
+        self.registry.execute(name, args, ctx).await
+    }
+
+    /// Execute a tool directly (bypassing the LLM loop)
+    ///
+    /// Useful for programmatic tool execution
+    pub async fn execute_tool(
+        &self,
+        name: &str,
+        args: Value,
+    ) -> Result<Value, ToolError> {
+        let ctx = ToolContext::new()
+            .with_working_dir(&self.config.working_dir)
+            .with_read_only(self.config.read_only)
+            .with_timeout(self.config.tool_timeout_secs);
+
+        self.registry.execute(name, args, ctx).await
+    }
+
+    /// 检查是否需要压缩
+    async fn should_compact(&self, messages: &[Message]) -> bool {
+        let token_count = estimate_message_tokens(messages);
+        self.compaction_config.should_compact(token_count, self.max_context_tokens)
+    }
+
+    /// 执行压缩
+    async fn compact_messages(&self, messages: &[Message]) -> Result<Vec<Message>, AgentError> {
+        use crate::compaction::{Compaction, SimpleCompaction};
+
+        let compactor = SimpleCompaction::new();
+        
+        // 调用 LLM 压缩 (如果配置了 LLM)
+        if let Some(ref llm) = self.llm {
+            let result = compactor.compact(messages, llm.as_ref()).await?;
+            
+            // 构建压缩后的消息列表
+            let mut new_messages = vec![
+                Message::system(format!("Previous context compacted: {} messages summarized", messages.len() - result.messages.len() + 1))
+            ];
+            new_messages.extend(result.messages);
+            
+            Ok(new_messages)
+        } else {
+            Ok(messages.to_vec())
+        }
+    }
+}
+
+use serde_json::json;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::FileReadTool;
+
+    #[test]
+    fn test_message_creation() {
+        let system = Message::system("You are helpful");
+        assert_eq!(system.role, MessageRole::System);
+
+        let user = Message::user("Hello");
+        assert_eq!(user.role, MessageRole::User);
+
+        let tool = Message::tool("call_123", "result");
+        assert_eq!(tool.role, MessageRole::Tool);
+        assert_eq!(tool.tool_call_id, Some("call_123".to_string()));
+    }
+
+    #[test]
+    fn test_agent_config() {
+        let config = AgentConfig::new()
+            .with_max_iterations(5)
+            .with_read_only(true);
+
+        assert_eq!(config.max_iterations, 5);
+        assert!(config.read_only);
+    }
+
+    #[tokio::test]
+    async fn test_agent_direct_tool_execution() {
+        let registry = ToolRegistry::new();
+        registry.register(FileReadTool::new()).unwrap();
+
+        let agent = Agent::new(registry);
+
+        // This will fail because file doesn't exist, but tests the path
+        let result = agent
+            .execute_tool("file_read", json!({"path": "/nonexistent/file.txt"}))
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_agent_with_personality() {
+        let personality_config = PersonalityConfig::new()
+            .with_agent_name("TestAgent")
+            .with_user_name("TestUser")
+            .with_yuan_type(crate::personality::YuanType::Hanako);
+
+        let config = AgentConfig::new().with_personality(personality_config);
+        let registry = ToolRegistry::new();
+        let agent = Agent::with_config(registry, config);
+
+        // Should have personality loaded
+        assert!(agent.personality().is_some());
+    }
+
+    #[test]
+    fn test_system_prompt_building() {
+        let personality_config = PersonalityConfig::new()
+            .with_agent_name("TestAgent")
+            .with_user_name("TestUser")
+            .with_yuan_type(crate::personality::YuanType::Hanako);
+
+        let config = AgentConfig::new().with_personality(personality_config);
+        let registry = ToolRegistry::new();
+        let agent = Agent::with_config(registry, config);
+
+        let system_prompt = agent.build_system_prompt();
+
+        // Should contain personality content
+        assert!(system_prompt.contains("TestAgent"));
+        assert!(system_prompt.contains("人格"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_run_streaming() {
+        use std::sync::{Arc, Mutex};
+
+        let registry = ToolRegistry::new();
+        let config = AgentConfig::new();
+        let agent = Agent::with_config(registry, config)
+            .with_llm(Arc::new(MockLlm));
+
+        let chunks = Arc::new(Mutex::new(Vec::new()));
+        let chunks_clone = chunks.clone();
+        let result = agent.run_streaming("Hello", move |chunk| {
+            chunks_clone.lock().unwrap().push(chunk.to_string());
+        }).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "This is a mock response");
+        assert_eq!(*chunks.lock().unwrap(), vec!["This is a mock response"]);
+    }
+
+    #[tokio::test]
+    async fn test_compaction_triggered_in_agent() {
+        use crate::compaction::CompactionConfig;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // 创建一个 Mock LLM 记录调用次数
+        struct CountingMockLlm {
+            call_count: AtomicUsize,
+        }
+
+        #[async_trait::async_trait]
+        impl LlmProvider for CountingMockLlm {
+            async fn complete(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<LlmResponse, AgentError> {
+                self.call_count.fetch_add(1, Ordering::SeqCst);
+                Ok(LlmResponse {
+                    content: "This is a mock response for compaction test".to_string(),
+                    tool_calls: vec![],
+                    is_complete: true,
+                })
+            }
+
+            fn stream(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+                let (tx, rx) = tokio::sync::mpsc::channel(1);
+                tokio::spawn(async move {
+                    let _ = tx.send(Ok("This is a mock response".to_string())).await;
+                });
+                Ok(rx)
+            }
+        }
+
+        let registry = ToolRegistry::new();
+        let config = AgentConfig::new().with_max_iterations(5);
+
+        // 创建一个使用低阈值触发压缩的 Agent
+        let agent = Agent::with_config(registry, config)
+            .with_llm(Arc::new(CountingMockLlm {
+                call_count: AtomicUsize::new(0),
+            }))
+            .with_max_context_tokens(100) // 设置低阈值触发压缩
+            .with_compaction_config(CompactionConfig::default());
+
+        // 运行多次对话
+        for i in 0..3 {
+            let result = agent.run(format!("test query with some content to increase token count {} ", i).repeat(10)).await;
+            assert!(result.is_ok());
+        }
+
+        // 验证压缩逻辑被正确配置 (token 估算和压缩配置)
+        // 由于 MockLlm 在压缩时也会返回简单响应，测试主要验证代码路径不崩溃
+    }
+
+    #[test]
+    fn test_should_compact_method() {
+        use crate::compaction::CompactionConfig;
+
+        let registry = ToolRegistry::new();
+        let config = AgentConfig::new();
+        let agent = Agent::with_config(registry, config)
+            .with_max_context_tokens(100)
+            .with_compaction_config(CompactionConfig::default());
+
+        // 创建足够多的消息以超过阈值
+        let messages: Vec<Message> = (0..20)
+            .map(|i| Message::user(format!("This is a test message with enough content to consume tokens {} ", i).repeat(5)))
+            .collect();
+
+        // 验证 should_compact 方法存在并且可以调用
+        // 注意：由于方法是 async 的，我们主要验证编译通过
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let should_compact = rt.block_on(agent.should_compact(&messages));
+        
+        // 消息内容应该触发压缩（超过 100 token 的 80% = 80 tokens）
+        assert!(should_compact, "Should detect that compaction is needed with large messages");
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_approval_flow() {
+        use crate::approval::{ApprovalResponse, InMemoryApprovalRuntime};
+        use std::time::Duration;
+
+        // 创建一个 Mock LLM 会返回工具调用
+        struct MockLlmWithToolCall;
+
+        #[async_trait::async_trait]
+        impl LlmProvider for MockLlmWithToolCall {
+            async fn complete(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<LlmResponse, AgentError> {
+                Ok(LlmResponse {
+                    content: "I'll use the mock tool".to_string(),
+                    tool_calls: vec![ToolCall {
+                        id: "call_123".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "mock_tool".to_string(),
+                            arguments: r#"{"param": "value"}"#.to_string(),
+                        },
+                    }],
+                    is_complete: false,
+                })
+            }
+
+            fn stream(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+                let (tx, rx) = tokio::sync::mpsc::channel(1);
+                tokio::spawn(async move {
+                    let _ = tx.send(Ok("Mock response".to_string())).await;
+                });
+                Ok(rx)
+            }
+        }
+
+        // 创建注册表并注册一个 Mock 工具
+        let registry = ToolRegistry::new();
+        // 由于我们没有真正的 mock_tool，我们期望工具执行失败
+        // 但审批流程应该被触发
+
+        // 创建内存审批运行时
+        let approval_rt = Arc::new(InMemoryApprovalRuntime::new());
+        let rt_clone = approval_rt.clone();
+
+        let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(1))
+            .with_approval_runtime(approval_rt)
+            .with_approval_mode(ApprovalMode::Interactive)
+            .with_llm(Arc::new(MockLlmWithToolCall));
+
+        // 在后台运行 Agent
+        let handle = tokio::spawn(async move {
+            agent.run("use mock tool").await
+        });
+
+        // 等待审批请求出现
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let pending = rt_clone.list_pending();
+        assert_eq!(pending.len(), 1, "Should have one pending approval request");
+
+        // 批准请求
+        rt_clone
+            .resolve(&pending[0].id, ApprovalResponse::Approve)
+            .await
+            .expect("Failed to resolve approval");
+
+        // Agent 应该完成（虽然工具执行会失败，因为 mock_tool 不存在）
+        let result = handle.await.unwrap();
+        // 结果应该是 Err，因为工具不存在，但审批流程已经测试到了
+        assert!(result.is_err(), "Expected error because mock_tool is not registered");
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_yolo_mode() {
+        use crate::approval::InMemoryApprovalRuntime;
+
+        // 创建一个 Mock LLM 会返回工具调用
+        struct MockLlmWithToolCall;
+
+        #[async_trait::async_trait]
+        impl LlmProvider for MockLlmWithToolCall {
+            async fn complete(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<LlmResponse, AgentError> {
+                Ok(LlmResponse {
+                    content: "I'll use the mock tool".to_string(),
+                    tool_calls: vec![ToolCall {
+                        id: "call_456".to_string(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "mock_tool".to_string(),
+                            arguments: r#"{"param": "value"}"#.to_string(),
+                        },
+                    }],
+                    is_complete: false,
+                })
+            }
+
+            fn stream(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+                let (tx, rx) = tokio::sync::mpsc::channel(1);
+                tokio::spawn(async move {
+                    let _ = tx.send(Ok("Mock response".to_string())).await;
+                });
+                Ok(rx)
+            }
+        }
+
+        let registry = ToolRegistry::new();
+        let approval_rt = Arc::new(InMemoryApprovalRuntime::new());
+
+        let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(1))
+            .with_approval_runtime(approval_rt.clone())
+            .with_approval_mode(ApprovalMode::Yolo)  // Yolo 模式
+            .with_llm(Arc::new(MockLlmWithToolCall));
+
+        // 运行 Agent
+        let result = agent.run("use mock tool").await;
+        // 结果应该是 Err，因为工具不存在，但 Yolo 模式应该跳过审批
+        assert!(result.is_err(), "Expected error because mock_tool is not registered");
+
+        // Yolo 模式下不应有 pending 审批请求
+        let pending = approval_rt.list_pending();
+        assert!(pending.is_empty(), "Yolo mode should not create pending approval requests");
+    }
+
+    #[tokio::test]
+    async fn test_agent_run_with_wire() {
+        use clarity_wire::Wire;
+        use std::sync::Arc;
+        use tokio::time::{timeout, Duration};
+
+        // Create Wire
+        let wire = Wire::new();
+        let mut ui_side = wire.ui_side(false);
+
+        // Create Agent with Wire
+        let registry = ToolRegistry::new();
+        let config = AgentConfig::new();
+        let agent = Agent::with_config(registry, config)
+            .with_llm(Arc::new(MockLlm))
+            .with_wire(wire);
+
+        // Run Agent in background
+        let handle = tokio::spawn(async move {
+            agent.run("test query").await
+        });
+
+        // Verify UI side receives TurnBegin
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for TurnBegin")
+            .expect("channel closed");
+        assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "test query"));
+
+        // Verify ContentPart is received
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for ContentPart")
+            .expect("channel closed");
+        assert!(matches!(msg, WireMessage::ContentPart { text } if text == "This is a mock response"));
+
+        // Verify TurnEnd is received
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for TurnEnd")
+            .expect("channel closed");
+        assert!(matches!(msg, WireMessage::TurnEnd));
+
+        // Wait for agent to complete
+        let result = timeout(Duration::from_millis(1000), handle)
+            .await
+            .expect("timeout waiting for agent")
+            .expect("join error");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "This is a mock response");
+    }
+
+    #[tokio::test]
+    async fn test_agent_run_streaming_with_wire() {
+        use clarity_wire::Wire;
+        use std::sync::Arc;
+        use std::sync::{Arc as StdArc, Mutex};
+        use tokio::time::{timeout, Duration};
+
+        // Create Wire
+        let wire = Wire::new();
+        let mut ui_side = wire.ui_side(false);
+
+        // Create Agent with Wire
+        let registry = ToolRegistry::new();
+        let config = AgentConfig::new();
+        let agent = Agent::with_config(registry, config)
+            .with_llm(Arc::new(MockLlm))
+            .with_wire(wire);
+
+        // Run Agent in background with streaming
+        let chunks = StdArc::new(Mutex::new(Vec::new()));
+        let chunks_clone = chunks.clone();
+        let handle = tokio::spawn(async move {
+            agent.run_streaming("streaming test", move |chunk| {
+                chunks_clone.lock().unwrap().push(chunk.to_string());
+            }).await
+        });
+
+        // Verify UI side receives TurnBegin
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for TurnBegin")
+            .expect("channel closed");
+        assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "streaming test"));
+
+        // Verify ContentPart is received (empty start marker)
+        let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+            .await
+            .expect("timeout waiting for ContentPart start")
+            .expect("channel closed");
+        assert!(matches!(msg, WireMessage::ContentPart { .. }));
+
+        // Verify streaming ContentParts are received
+        let mut content_received = false;
+        loop {
+            match timeout(Duration::from_millis(500), ui_side.recv()).await {
+                Ok(Some(msg)) => {
+                    match msg {
+                        WireMessage::ContentPart { text } => {
+                            if !text.is_empty() {
+                                content_received = true;
+                            }
+                        }
+                        WireMessage::TurnEnd => break,
+                        _ => {}
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => break, // Timeout
+            }
+        }
+        assert!(content_received, "Should have received content parts");
+
+        // Wait for agent to complete
+        let result = timeout(Duration::from_millis(1000), handle)
+            .await
+            .expect("timeout waiting for agent")
+            .expect("join error");
+        assert!(result.is_ok());
+    }
+}
