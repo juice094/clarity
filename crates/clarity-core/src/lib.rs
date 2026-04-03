@@ -50,6 +50,7 @@ pub mod memory;
 pub mod mcp;
 pub mod personality;
 pub mod registry;
+pub mod subagents;
 pub mod tools;
 
 // Re-export core types
