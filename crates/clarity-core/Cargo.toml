@@ -11,7 +11,7 @@ description = "Core engine for Project Clarity - AI agent framework with tool re
 [dependencies]
 # Workspace dependencies
 tokio = { workspace = true }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -21,14 +21,29 @@ tracing = { workspace = true }
 regex = { workspace = true }
 glob = { workspace = true }
 chrono = { workspace = true }
+futures = { workspace = true }
+rand = "0.8"
+uuid = { workspace = true }
+toml = "0.8"
+dirs = "5.0"
+url = "2.5"
+urlencoding = "2.1"
+html-escape = "0.2"
 
 # MCP (Model Context Protocol)
 rmcp = { workspace = true, optional = true }
 
+# clarity-memory integration (disabled by default due to incomplete state)
+clarity-memory = { path = "../clarity-memory", optional = true }
+clarity-wire = { path = "../clarity-wire" }
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.9"
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
 
 [features]
 default = []
 mcp = ["dep:rmcp"]
+clarity-memory = ["dep:clarity-memory"]

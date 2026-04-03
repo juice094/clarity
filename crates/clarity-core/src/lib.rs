@@ -41,6 +41,9 @@
 //! ```
 
 pub mod agent;
+pub mod approval;
+pub mod compaction;
+pub mod config;
 pub mod error;
 pub mod llm;
 pub mod memory;
@@ -52,7 +55,7 @@ pub mod tools;
 // Re-export core types
 pub use agent::Agent;
 pub use error::{ToolError, AgentError};
-pub use llm::{KimiLlm, OpenAiCompatibleLlm, LlmFactory};
+pub use llm::{AnthropicLlm, KimiLlm, OpenAiCompatibleLlm, LlmFactory};
 pub use registry::ToolRegistry;
 pub use tools::{Tool, ToolContext, ToolResult};
 
