@@ -51,7 +51,7 @@
 | 功能模块 | Clarity | Kimi CLI | 参考价值 |
 |----------|---------|----------|----------|
 | **Agent 核心** | ✅ ReAct 循环 | ✅ Soul 系统 | ⭐⭐⭐ 高 |
-| **子代理系统** | ⚠️ 有 LaborMarket，无 Runner | ✅ 完整实现 | ⭐⭐⭐⭐⭐ 极高 |
+| **子代理系统** | ✅ 完整实现（含 Runner） | ✅ 完整实现 | ⭐⭐⭐⭐⭐ 极高 |
 | **后台任务** | ❌ 未实现 | ✅ BackgroundTaskManager | ⭐⭐⭐⭐⭐ 极高 |
 | **Wire 通信** | ✅ clarity-wire | ✅ wire 模块 | ⭐⭐⭐ 中 |
 | **审批系统** | ✅ 三种模式 | ✅ ApprovalRuntime | ⭐⭐⭐ 中 |
@@ -375,21 +375,28 @@ pub async fn run_soul_checked(...) -> SoulResult<()> {
 3. **生产验证**：经过大规模用户验证，设计可靠
 4. **代码开放**：开源实现，可直接参考
 
-### 8.2 推荐策略
+### 8.2 推荐策略（已更新 2026-04-04）
 
 ```
-Phase 1 (立即): 实现 SubagentRunner
-    └─ 参考：kimi_cli/subagents/runner.py
+Phase 1 (已完成 ✅): SubagentRunner
+    └─ 已实现，18 测试通过
     
-Phase 2 (短期): 集成 clarity-memory
+Phase 2 (立即 P0): PersistentMemoryStore 真实实现
     └─ 参考：kimi_cli/soul/context.py 的记忆管理
+    └─ 原因：当前最大可用性瓶颈
     
-Phase 3 (中期): 实现 BackgroundTaskManager
+Phase 3 (立即 P0): BackgroundTaskManager
     └─ 参考：kimi_cli/background/manager.py
+    └─ 原因：支持后台任务和并行执行
     
-Phase 4 (长期): 完善 MCP 支持
+Phase 4 (短期 P1): MCP 完整支持
     └─ 参考：kimi_cli/tools/mcp.py
+    
+Phase 5 (中期 P2): Web UI / Gateway 渠道
+    └─ 延后，TUI 已足够验证核心
 ```
+
+> 📊 **详细优先级分析**: 参见 `IMPLEMENTATION_PRIORITY.md`
 
 ### 8.3 关键文件清单
 
