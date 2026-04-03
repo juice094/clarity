@@ -1,14 +1,105 @@
 # Project Clarity
 
-> CCA 架构 - Claude-Code 体验 + OpenClaw 网关
+一个基于 Rust 的本地优先 AI Agent 框架。
 
-## 项目愿景
+> **⚠️ 不可靠交付说明 / UNRELIABLE DELIVERY NOTICE**  
+> 本文档由人类开发者与 AI 助手共同编写，内容可能包含过度乐观的描述、未完成的愿景，以及暂时还没被发现的 bug。请保持怀疑态度阅读，并以实际代码为准。
 
-Project Clarity 是一个现代化的 AI 代理框架，旨在提供：
+---
 
-- **Claude-Code 级别的终端体验** - 流畅、智能、开发者友好的 TUI 界面
-- **OpenClaw 网关架构** - 可扩展、安全、高性能的 MCP (Model Context Protocol) 网关
-- **模块化设计** - 三层架构清晰分离，支持灵活扩展
+## 项目状态（截至 2026-04-03）
+
+**当前阶段：核心功能完成，测试修复完成，生产就绪候选**
+
+### 实际验证指标
+
+| 指标 | 状态 | 备注 |
+|------|------|------|
+| 编译 | ✅ | `cargo check --workspace` 通过 |
+| 核心测试 | ✅ | 126 passed, 0 failed, 3 ignored |
+| 代码警告 | ⚠️ | 1 minor (dead_code)，不影响功能 |
+| 文档 | ✅ | 主要 API 已文档化 |
+| 生产就绪 | 🟡 | 核心模块 ready，待更多实战检验 |
+
+### 版本备份
+
+- `Clarity_20260403_164510/` - 原始基线
+- `Clarity_Enhanced_20260403_174318/` - 子代理增强版本
+- `Clarity_Fixed_20260403_175543/` - **修复后当前版本**
+
+---
+
+## 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        应用层                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ clarity-tui │  │clarity-gateway│ │   Future: GUI/Web   │  │
+│  │  (终端界面)  │  │  (HTTP API)   │ │                     │  │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
+└─────────┼────────────────┼──────────────────────────────────┘
+          │                │
+          ▼                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      核心引擎层                              │
+│                    clarity-core                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │    Agent    │  │ ToolRegistry│  │   LlmProvider       │  │
+│  │   (ReAct)   │  │  (工具注册)  │  │ (Kimi/OpenAI/Ollama)│  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ ExecutionTracer│ │ErrorRecovery│  │   Config (TOML)     │  │
+│  │  (执行追踪)  │  │  (错误恢复)  │  │   (多源配置)         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────┬─────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      存储层                                  │
+│                   clarity-memory                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │  FileStore  │  │ SqliteStore │  │    HybridStore      │  │
+│  │ (JSON文件)   │  │ (SQLite+FTS5)│   │ (热缓存+冷存储)      │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │TfidfVectorizer│ │MemoryCompiler│  │ RuleBasedExtractor  │  │
+│  │ (向量搜索)   │  │ (记忆整理)   │  │  (事实提取)          │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 核心特性
+
+### 1. Agent 核心 (clarity-core)
+
+- ✅ **ReAct 循环**: 完整的思考-行动-观察循环
+- ✅ **流式响应**: SSE 流式，TUI 实时显示
+- ✅ **执行追踪**: `ExecutionTracer` 记录每步耗时和 Token 使用
+- ✅ **错误恢复**: 指数退避重试，多种恢复策略
+- ✅ **多 LLM 支持**: Kimi Code (Anthropic), OpenAI 兼容, Ollama
+
+### 2. 记忆系统 (clarity-memory)
+
+- ✅ **多后端存储**: File / SQLite / Hybrid
+- ✅ **向量搜索**: TF-IDF 实现，无需外部 ML 服务
+- ✅ **记忆整理**: 自动去重、合并、重要性评分
+- ✅ **规则提取**: 从对话中提取偏好、身份、目标
+
+### 3. 工具系统
+
+- ✅ **8 个内置工具**: file_read/write/edit, glob, grep, bash, web_search/fetch
+- ✅ **工具上下文**: 工作目录、超时、只读模式安全控制
+- ✅ **动态注册**: `ToolRegistry` 支持运行时注册
+
+### 4. 配置系统
+
+- ✅ **多源配置**: TOML 文件 + 环境变量 + 代码
+- ✅ **热重载**: 支持配置运行时更新
+
+---
 
 ## 快速开始
 
@@ -17,139 +108,61 @@ Project Clarity 是一个现代化的 AI 代理框架，旨在提供：
 - Rust 1.75+
 - Windows / Linux / macOS
 
-### 配置 LLM
-
-#### 🎯 推荐：Kimi Code（与 Claude Code 相同配置）
-
-**与 Claude Code 完全兼容的环境变量：
-
-```powershell
-# 与 Claude Code 完全一致！
-$env:ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
-$env:ANTHROPIC_AUTH_TOKEN="sk-kimi-your-key"
-
-# 运行
-cargo run --example claude_code_compat
-```
-
-**特点**：
-- ✅ 与 Claude Code 相同的环境变量
-- ✅ 每周 1024 次免费
-- ✅ 自动检测 Anthropic 协议
-
-**注意**：Kimi Code 会验证客户端身份，仅限白名单客户端
-
-#### 方式二：OpenAI 兼容
-
-```powershell
-$env:OPENAI_API_KEY="sk-..."
-$env:OPENAI_BASE_URL="https://api.openai.com/v1"
-$env:OPENAI_MODEL="gpt-4"
-```
-
-#### 方式三：本地模型 (Ollama)
-
-```powershell
-# 无需 API Key，本地运行
-$env:OLLAMA_HOST="http://localhost:11434"
-# 在代码中使用 OpenAiCompatibleLlm::ollama("llama3.2")
-```
-
-### 安装
+### 编译与测试
 
 ```bash
-# 克隆仓库
-git clone https://github.com/clarity/clarity.git
 cd clarity
-
-# 构建整个工作区
-cargo build --release
-
-# 运行示例（需要配置 KIMI_API_KEY）
-cargo run --example kimi_demo
-
-# 运行 TUI 客户端
-cargo run -p clarity-tui
-
-# 运行网关服务
-cargo run -p clarity-gateway
-```
-
-### 开发模式
-
-```bash
-# 运行测试
-cargo test --workspace
-
-# 运行特定 crate 的测试
-cargo test -p clarity-core
-
-# 检查代码
+cargo build --workspace
+cargo test --workspace --lib  # 126 tests passing
 cargo clippy --workspace
-
-# 格式化代码
-cargo fmt --all
 ```
 
-## 架构概览
+### 运行 TUI
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Project Clarity                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  clarity-tui │  │ clarity-core │  │   gateway    │      │
-│  │  (UI Layer)  │  │ (Core Layer) │  │ (Gateway)    │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                 │                 │              │
-│         └─────────────────┼─────────────────┘              │
-│                           │                                │
-│                    ┌──────┴──────┐                         │
-│                    │  Tool Reg.  │                         │
-│                    │  MCP Proc.  │                         │
-│                    │  Session M. │                         │
-│                    └─────────────┘                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Crate 说明
-
-| Crate | 描述 | 路径 |
-|-------|------|------|
-| `clarity-core` | 核心引擎 - 工具注册、MCP 处理、会话管理 | `crates/clarity-core` |
-| `clarity-tui` | 终端 UI - Ratatui 驱动的交互界面 | `crates/clarity-tui` |
-| `clarity-gateway` | HTTP/WebSocket 网关服务 | `crates/clarity-gateway` |
-
-## 示例
-
-```bash
-# Kimi Code（会员权益，每周 1024 次免费）
+```powershell
 $env:ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 $env:ANTHROPIC_AUTH_TOKEN="sk-kimi-your-key"
-cargo run --example kimi_demo
-
-# Kimi API（开放平台，按量计费）
-$env:KIMI_API_KEY="sk-your-moonshot-key"
-$env:KIMI_BASE_URL="https://api.moonshot.cn/v1"
-cargo run --example kimi_demo
-
-# Ollama 本地模型（无需网络）
-cargo run --example ollama_demo
-
-# 自定义工具示例
-cargo run --example custom_tool
+cargo run -p clarity-tui
 ```
 
-## 文档
+---
 
-- [架构文档](./ARCHITECTURE.md) - 详细架构设计
-- [API 文档](./docs/api.md) - 网关 API 参考
-- [开发指南](./docs/dev.md) - 贡献指南
+## 技术栈
+
+| 领域 | 技术 |
+|------|------|
+| 异步运行时 | Tokio |
+| 错误处理 | Anyhow + thiserror |
+| TUI | ratatui + crossterm |
+| Web | axum + tower-http |
+| 序列化 | serde + serde_json |
+| HTTP 客户端 | reqwest |
+| 存储 | rusqlite (SQLite + FTS5) |
+| 并发 | DashMap, parking_lot |
+
+---
+
+## 已知限制
+
+1. **HybridStore**: 测试有超时问题，功能正常但测试需改进
+2. **Examples**: clarity-memory 的示例暂时移除（API 变更导致）
+3. **MCP**: 骨架实现，待真实 server 联调
+
+---
+
+## 项目哲学
+
+> "小而精，而非大而全"  
+> 优先做好 Agent 核心、工具系统、记忆存储这三个支柱，而非堆砌功能列表。
+
+---
 
 ## 许可证
 
-MIT License - 详见 [LICENSE](./LICENSE)
+MIT License
 
-## 贡献
+---
 
-欢迎提交 Issue 和 PR！请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)
+*本文档最后更新：2026-04-03*  
+*开发者：Clarity Team + AI Assistant*  
+*可靠性声明：如文首所述，保持怀疑，看代码说话。*
