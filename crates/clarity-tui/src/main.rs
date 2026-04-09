@@ -38,10 +38,10 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // 创建 Agent
-    let (agent, model_name) = create_agent()?;
+    let (agent, model_name, yuan_type) = create_agent()?;
 
     // 创建应用
-    let mut app = App::new(agent, model_name);
+    let mut app = App::new(agent, model_name, yuan_type.to_string());
 
     // 运行应用
     let result = run_app(&mut terminal, &mut app).await;
@@ -54,15 +54,19 @@ async fn main() -> Result<()> {
     result
 }
 
-fn create_agent() -> Result<(Arc<Agent>, String)> {
+fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
-    // 配置人格
+    // 配置人格（默认 Direct 工程模式，可通过 CLARITY_YUAN_TYPE 覆盖）
+    let yuan_type = std::env::var("CLARITY_YUAN_TYPE")
+        .ok()
+        .and_then(|s| s.parse::<YuanType>().ok())
+        .unwrap_or(YuanType::Direct);
     let personality_config = PersonalityConfig::new()
         .with_agent_name("Clarity")
         .with_user_name("User")
-        .with_yuan_type(YuanType::Hanako)
+        .with_yuan_type(yuan_type)
         .with_locale("zh-CN");
 
     // 创建 Agent 配置
@@ -97,7 +101,7 @@ fn create_agent() -> Result<(Arc<Agent>, String)> {
         .with_memory(memory_store)
         .with_memory_ticker(memory_ticker);
 
-    Ok((Arc::new(agent), model_name))
+    Ok((Arc::new(agent), model_name, yuan_type))
 }
 
 /// Detect the active model name from environment variables, matching LlmFactory::auto() logic.

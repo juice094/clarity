@@ -122,6 +122,13 @@ impl AgentController {
                             debug!("Controller: Compact (no-op; compaction runs automatically inside Agent)");
                         }
 
+                        Some(Op::UpdatePersonality(config)) => {
+                            debug!("Controller: UpdatePersonality ({:?})", config.yuan_type);
+                            if let Err(e) = self.agent.update_personality(config) {
+                                warn!("Failed to update personality: {}", e);
+                            }
+                        }
+
                         Some(Op::Shutdown) | None => {
                             debug!("Controller: Shutdown");
                             break;

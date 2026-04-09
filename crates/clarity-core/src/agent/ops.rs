@@ -1,5 +1,7 @@
 //! Operations that can be dispatched to an AgentController.
 
+use crate::personality::PersonalityConfig;
+
 /// An operation submitted to the controller.
 #[derive(Debug, Clone)]
 pub enum Op {
@@ -11,6 +13,8 @@ pub enum Op {
     ToolApproval { request_id: String, approved: bool },
     /// Trigger context compaction.
     Compact,
+    /// Update personality configuration without restarting.
+    UpdatePersonality(PersonalityConfig),
     /// Shut down the controller gracefully.
     Shutdown,
 }

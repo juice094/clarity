@@ -29,6 +29,8 @@ pub enum YuanType {
     Butter,
     /// Ming:理性优先, Contemplation module
     Ming,
+    /// Direct:工程模式, 无 XML 元数据, 工具优先
+    Direct,
 }
 
 impl YuanType {
@@ -38,6 +40,7 @@ impl YuanType {
             YuanType::Hanako => "hanako",
             YuanType::Butter => "butter",
             YuanType::Ming => "ming",
+            YuanType::Direct => "direct",
         }
     }
 
@@ -47,6 +50,7 @@ impl YuanType {
             YuanType::Hanako => "Hanako",
             YuanType::Butter => "Butter",
             YuanType::Ming => "Ming",
+            YuanType::Direct => "Direct",
         }
     }
 
@@ -56,6 +60,7 @@ impl YuanType {
             YuanType::Hanako => include_str!("../../templates/yuan/hanako.md"),
             YuanType::Butter => include_str!("../../templates/yuan/butter.md"),
             YuanType::Ming => include_str!("../../templates/yuan/ming.md"),
+            YuanType::Direct => include_str!("../../templates/yuan/direct.md"),
         }
     }
 
@@ -65,6 +70,7 @@ impl YuanType {
             YuanType::Hanako => include_str!("../../templates/ishiki-templates/hanako.md"),
             YuanType::Butter => include_str!("../../templates/ishiki-templates/butter.md"),
             YuanType::Ming => include_str!("../../templates/ishiki-templates/ming.md"),
+            YuanType::Direct => include_str!("../../templates/ishiki-templates/direct.md"),
         }
     }
 }
@@ -83,6 +89,7 @@ impl std::str::FromStr for YuanType {
             "hanako" => Ok(YuanType::Hanako),
             "butter" => Ok(YuanType::Butter),
             "ming" => Ok(YuanType::Ming),
+            "direct" => Ok(YuanType::Direct),
             _ => Err(format!("Unknown YuanType: {}", s)),
         }
     }

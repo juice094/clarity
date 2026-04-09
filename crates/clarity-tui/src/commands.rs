@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use clarity_core::agent::Op;
+use clarity_core::personality::{PersonalityConfig, YuanType};
+
 use crate::app::{App, Message, MessageType};
 
 pub trait CommandHandler: Send + Sync {
@@ -117,6 +120,47 @@ impl CommandHandler for StopCommand {
     }
 }
 
+pub struct PersonalityCommand;
+impl CommandHandler for PersonalityCommand {
+    fn execute(&self, app: &mut App, args: &[&str]) {
+        if args.is_empty() {
+            app.messages.push(Message::new(
+                format!("当前人格: {} (可用: direct, hanako, butter, ming)", app.current_yuan_type),
+                MessageType::System,
+            ));
+            return;
+        }
+
+        let name = args[0].to_lowercase();
+        match name.parse::<YuanType>() {
+            Ok(yuan_type) => {
+                app.current_yuan_type = yuan_type.to_string();
+                let config = PersonalityConfig::new()
+                    .with_agent_name("Clarity")
+                    .with_user_name("User")
+                    .with_yuan_type(yuan_type)
+                    .with_locale("zh-CN");
+                if let Some(ref tx) = app.controller_tx {
+                    let _ = tx.send(Op::UpdatePersonality(config));
+                }
+                app.messages.push(Message::new(
+                    format!("已切换人格至: {}", yuan_type),
+                    MessageType::System,
+                ));
+            }
+            Err(e) => {
+                app.messages.push(Message::new(
+                    format!("无效人格类型: {}。可用: direct, hanako, butter, ming", e),
+                    MessageType::System,
+                ));
+            }
+        }
+    }
+    fn description(&self) -> &str {
+        "显示或切换人格 (direct/hanako/butter/ming)"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -131,6 +175,9 @@ pub fn build_default_registry() -> CommandRegistry {
     registry.alias("/h", "/help");
 
     registry.register("/model", Arc::new(ModelCommand));
+
+    registry.register("/personality", Arc::new(PersonalityCommand));
+    registry.alias("/p", "/personality");
 
     registry.register("/stop", Arc::new(StopCommand));
 

@@ -95,16 +95,19 @@ pub struct App {
     /// 事件发送器（用于后台任务发送事件）
     event_tx: Option<UnboundedSender<Event>>,
     /// AgentController 操作发送器
-    controller_tx: Option<UnboundedSender<Op>>,
+    pub(crate) controller_tx: Option<UnboundedSender<Op>>,
     /// 命令注册表
     pub registry: CommandRegistry,
     /// 生成指标
     pub generation_metrics: Option<GenerationMetrics>,
+    /// 当前人格类型
+    pub current_yuan_type: String,
 }
 
 impl App {
-    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>) -> Self {
+    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>, yuan_type: impl Into<String>) -> Self {
         let model_name = model_name.into();
+        let current_yuan_type = yuan_type.into();
 
         Self {
             messages: vec![
@@ -129,6 +132,7 @@ impl App {
             controller_tx: None,
             registry: build_default_registry(),
             generation_metrics: None,
+            current_yuan_type,
         }
     }
 
@@ -504,7 +508,7 @@ impl Default for App {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        Self::new(agent, "default")
+        Self::new(agent, "default", "Direct")
     }
 }
 
@@ -644,7 +648,7 @@ mod tests {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        let mut app = App::new(agent, "default");
+        let mut app = App::new(agent, "default", "Direct");
         app.handle_command("/model gpt-4").await;
         assert_eq!(app.model_name, "gpt-4");
     }

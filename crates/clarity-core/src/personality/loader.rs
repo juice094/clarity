@@ -220,6 +220,9 @@ impl PersonalityLoader {
             YuanType::Ming => r#"# {{agentName}}
 
 {{userName}}的个人助手。理性优先，逻辑清晰，善于深度思考。"#.to_string(),
+            YuanType::Direct => r#"# {{agentName}}
+
+{{userName}}的工程助手。直接、简洁、优先使用工具解决问题。"#.to_string(),
         }
     }
 
