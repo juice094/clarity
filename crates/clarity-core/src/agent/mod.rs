@@ -20,6 +20,7 @@ use crate::agent::compaction_service::{CompactionService, CompactionServiceConfi
 use crate::approval::{ApprovalMode, ApprovalRuntime, ApprovalSource, ApprovalResponse};
 use crate::compaction::{CompactionConfig, estimate_message_tokens};
 use crate::error::{AgentError, ToolError};
+use crate::llm::StreamDelta;
 use crate::memory::{Memory, MemoryStore, MemoryTicker};
 use crate::personality::{Personality, PersonalityConfig, PersonalityLoader, SystemPromptBuilder};
 use crate::registry::ToolRegistry;
@@ -225,7 +226,10 @@ pub trait LlmProvider: Send + Sync {
         &self,
         messages: &[Message],
         tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError>;
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>;
+
+    /// Set a prompt cache key for provider-side cache routing.
+    fn set_prompt_cache_key(&mut self, key: &str);
 }
 
 /// Response from an LLM
@@ -260,13 +264,18 @@ impl LlmProvider for MockLlm {
         &self,
         _messages: &[Message],
         _tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
-            let _ = tx.send(Ok("This is a mock response".to_string())).await;
+            let _ = tx.send(Ok(StreamDelta {
+                content: Some("This is a mock response".to_string()),
+                tool_calls: vec![],
+            })).await;
         });
         Ok(rx)
     }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
 }
 
 /// The main Agent struct
@@ -610,8 +619,13 @@ impl Agent {
                 }
             }
 
-            // Get LLM response
-            let response = llm.complete(&messages, &tools).await?;
+            // Get LLM response with timeout
+            let response = tokio::time::timeout(
+                tokio::time::Duration::from_secs(45),
+                llm.complete(&messages, &tools),
+            )
+            .await
+            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
             final_response = response.content.clone();
 
             // If no tool calls, we're done
@@ -780,55 +794,79 @@ impl Agent {
                 }
             }
 
-            let response = llm.complete(&messages, &tools).await?;
+            // Stream-first: try streaming, fall back to complete() if unsupported or errors.
+            let mut turn_response: Option<LlmResponse> = None;
 
-            if response.tool_calls.is_empty() {
-                // Send final content start notification
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: String::new(),
-                });
-
-                // Try streaming first, fall back to complete() if not supported
-                match llm.stream(&messages, &tools) {
-                    Ok(mut stream_rx) => {
-                        while let Some(chunk_result) = stream_rx.recv().await {
-                            match chunk_result {
-                                Ok(chunk) => {
-                                    final_response.push_str(&chunk);
-                                    on_chunk(&chunk);
-                                    // Send streaming chunk via wire
+            match llm.stream(&messages, &tools) {
+                Ok(mut stream_rx) => {
+                    // Send final content start notification
+                    self.send_wire_message(WireMessage::ContentPart {
+                        text: String::new(),
+                    });
+                    let mut accumulated = String::new();
+                    let mut tool_calls: Vec<ToolCall> = Vec::new();
+                    while let Some(chunk_result) = stream_rx.recv().await {
+                        match chunk_result {
+                            Ok(delta) => {
+                                if let Some(content) = delta.content {
+                                    accumulated.push_str(&content);
+                                    on_chunk(&content);
                                     self.send_wire_message(WireMessage::ContentPart {
-                                        text: chunk.clone(),
+                                        text: content,
                                     });
                                 }
-                                Err(e) => return Err(e),
+                                for call in delta.tool_calls {
+                                    tool_calls.push(call);
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Stream error: {}, falling back to complete()", e);
+                                accumulated.clear();
+                                tool_calls.clear();
+                                break;
                             }
                         }
                     }
-                    Err(_) => {
-                        // Streaming not supported, use complete() and simulate streaming
-                        let content = response.content.clone();
-                        // Stream character by character for smooth display
-                        for c in content.chars() {
-                            let chunk = c.to_string();
-                            final_response.push_str(&chunk);
-                            on_chunk(&chunk);
-                            // Send streaming chunk via wire
-                            self.send_wire_message(WireMessage::ContentPart {
-                                text: chunk.clone(),
-                            });
-                            // Small delay for visual effect (optional, can remove)
-                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                        }
+                    if !accumulated.is_empty() || !tool_calls.is_empty() {
+                        turn_response = Some(LlmResponse {
+                            content: accumulated,
+                            tool_calls,
+                            is_complete: true,
+                        });
+                    }
+                }
+                Err(e) => {
+                    debug!("Streaming not supported or failed: {}, falling back to complete()", e);
+                }
+            }
+
+            let was_streamed = turn_response.is_some();
+            let response = match turn_response {
+                Some(r) => r,
+                None => llm.complete(&messages, &tools).await?,
+            };
+
+            if response.tool_calls.is_empty() {
+                // No tool calls: final answer.
+                // If we arrived here via fallback (turn_response was None), simulate
+                // streaming from the complete() response for smooth UI.
+                if !was_streamed && !response.content.is_empty() {
+                    for c in response.content.chars() {
+                        let chunk = c.to_string();
+                        on_chunk(&chunk);
+                        self.send_wire_message(WireMessage::ContentPart {
+                            text: chunk.clone(),
+                        });
                     }
                 }
 
+                final_response = response.content;
                 info!("Agent loop completed after {} iterations", iteration + 1);
                 completed = true;
                 break;
             }
 
-            // Send assistant content as ContentPart (if any) for tool-calling rounds
+            // Tool-calling round: send assistant content (if any)
             if !response.content.is_empty() {
                 self.send_wire_message(WireMessage::ContentPart {
                     text: response.content.clone(),
@@ -1257,13 +1295,18 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok("This is a mock response".to_string())).await;
+                    let _ = tx.send(Ok(StreamDelta {
+                        content: Some("This is a mock response".to_string()),
+                        tool_calls: vec![],
+                    })).await;
                 });
                 Ok(rx)
             }
+
+            fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
         let registry = ToolRegistry::new();
@@ -1344,13 +1387,18 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok("Mock response".to_string())).await;
+                    let _ = tx.send(Ok(StreamDelta {
+                        content: Some("Mock response".to_string()),
+                        tool_calls: vec![],
+                    })).await;
                 });
                 Ok(rx)
             }
+
+            fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
         // 创建注册表并注册一个 Mock 工具
@@ -1421,13 +1469,18 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok("Mock response".to_string())).await;
+                    let _ = tx.send(Ok(StreamDelta {
+                        content: Some("Mock response".to_string()),
+                        tool_calls: vec![],
+                    })).await;
                 });
                 Ok(rx)
             }
+
+            fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
         let registry = ToolRegistry::new();

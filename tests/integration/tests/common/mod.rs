@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use clarity_core::agent::{LlmProvider, LlmResponse, Message, ToolCall};
 use clarity_core::error::AgentError;
+use clarity_core::llm::StreamDelta;
 use serde_json::Value;
 use std::sync::Mutex;
 
@@ -41,13 +42,18 @@ impl LlmProvider for SequentialMockLlm {
         &self,
         _messages: &[Message],
         _tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
-            let _ = tx.send(Ok("Done".to_string())).await;
+            let _ = tx.send(Ok(StreamDelta {
+                content: Some("Done".to_string()),
+                tool_calls: vec![],
+            })).await;
         });
         Ok(rx)
     }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
 }
 
 /// Convenience builder for a simple text-only mock response.

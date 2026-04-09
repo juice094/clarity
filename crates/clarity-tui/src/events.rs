@@ -1,6 +1,12 @@
 #![allow(dead_code)]
 
-use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
+use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEventKind};
+
+#[derive(Clone, Debug)]
+pub enum MouseScroll {
+    Up,
+    Down,
+}
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -28,6 +34,8 @@ pub enum Event {
     Key(KeyEvent),
     /// 窗口大小变化
     Resize(u16, u16),
+    /// 鼠标滚轮
+    MouseScroll(MouseScroll),
     /// 流式响应
     StreamResponse(String),
     /// 响应完成
@@ -53,7 +61,7 @@ impl EventHandler {
 
         // 启动事件监听任务
         tokio::spawn(async move {
-            let mut tick_interval = tokio::time::interval(Duration::from_millis(250));
+            let mut tick_interval = tokio::time::interval(Duration::from_millis(50));
 
             loop {
                 tokio::select! {
@@ -70,6 +78,17 @@ impl EventHandler {
                                 }
                                 CrosstermEvent::Resize(width, height) => {
                                     let _ = tx.send(Event::Resize(width, height));
+                                }
+                                CrosstermEvent::Mouse(mouse_event) => {
+                                    match mouse_event.kind {
+                                        MouseEventKind::ScrollUp => {
+                                            let _ = tx.send(Event::MouseScroll(MouseScroll::Up));
+                                        }
+                                        MouseEventKind::ScrollDown => {
+                                            let _ = tx.send(Event::MouseScroll(MouseScroll::Down));
+                                        }
+                                        _ => {}
+                                    }
                                 }
                                 _ => {}
                             }

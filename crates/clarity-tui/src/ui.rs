@@ -1,6 +1,8 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    widgets::Clear,
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
@@ -10,7 +12,6 @@ use crate::popup;
 use crate::widgets::{
     chat_pane::ChatPane,
     generating_indicator::GeneratingIndicator,
-    status_bar::StatusBar,
 };
 
 /// 渲染主界面
@@ -27,9 +28,45 @@ pub fn draw(f: &mut Frame, app: &App) {
         ])
         .split(size);
 
-    // 状态栏
-    let status_bar = StatusBar::new(&app.model_name, &app.session_id);
-    status_bar.render(f, chunks[0]);
+    // 状态栏 - 深色背景 + 三段式布局
+    let header_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 3),
+        ])
+        .split(chunks[0]);
+
+    let status_dot = if app.is_generating { "◐" } else { "●" };
+    let dot_color = if app.is_generating {
+        Color::Rgb(255, 200, 80)
+    } else {
+        Color::Rgb(100, 220, 120)
+    };
+
+    let left = Paragraph::new(Line::from(vec![
+        Span::styled(status_dot, Style::default().fg(dot_color).add_modifier(Modifier::BOLD)),
+        Span::styled(" Clarity", Style::default().fg(Color::Rgb(200, 200, 220)).add_modifier(Modifier::BOLD)),
+    ]))
+    .alignment(Alignment::Left);
+
+    let center = Paragraph::new(Line::from(vec![
+        Span::styled("Model: ", Style::default().fg(Color::Rgb(140, 140, 160))),
+        Span::styled(&app.model_name, Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+    ]))
+    .alignment(Alignment::Center);
+
+    let session_short = &app.session_id[..8.min(app.session_id.len())];
+    let right = Paragraph::new(Line::from(vec![
+        Span::styled("Session: ", Style::default().fg(Color::Rgb(140, 140, 160))),
+        Span::styled(session_short.to_string(), Style::default().fg(Color::Rgb(180, 180, 200))),
+    ]))
+    .alignment(Alignment::Right);
+
+    f.render_widget(left, header_chunks[0]);
+    f.render_widget(center, header_chunks[1]);
+    f.render_widget(right, header_chunks[2]);
 
     // 聊天区域
     let chat_pane = ChatPane::new(&app.messages, app.scroll_offset);
@@ -44,7 +81,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // 生成中指示器
     if app.is_generating {
-        GeneratingIndicator::render(f, size);
+        GeneratingIndicator::render(f, size, app.generation_metrics.as_ref());
     }
 
     // 弹窗（最上层）

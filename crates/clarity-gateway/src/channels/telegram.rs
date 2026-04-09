@@ -336,7 +336,7 @@ mod tests {
         // 测试在换行处分割
         let text_with_newlines = "Line1\nLine2\nLine3";
         let chunks = split_message(text_with_newlines, 10);
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
     }
 
     #[test]

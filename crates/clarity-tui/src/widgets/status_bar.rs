@@ -6,11 +6,13 @@ use ratatui::{
 };
 
 /// 状态栏组件
+#[allow(dead_code)]
 pub struct StatusBar {
     model_name: String,
     session_id: String,
 }
 
+#[allow(dead_code)]
 impl StatusBar {
     pub fn new(model_name: impl Into<String>, session_id: impl Into<String>) -> Self {
         Self {

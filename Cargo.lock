@@ -468,6 +468,7 @@ dependencies = [
  "similar",
  "tokio",
  "unicode-width",
+ "uuid",
 ]
 
 [[package]]

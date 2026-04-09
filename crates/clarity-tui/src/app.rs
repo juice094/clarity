@@ -10,9 +10,17 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::commands::{build_default_registry, CommandRegistry};
 use crate::events::Event;
 use crate::widgets::input_pane::InputPane;
 use crate::wire_adapter::spawn_wire_adapter;
+
+#[derive(Debug, Clone)]
+pub struct GenerationMetrics {
+    pub start_time: std::time::Instant,
+    pub first_token_time: Option<std::time::Instant>,
+    pub total_chars: usize,
+}
 
 /// 消息类型
 #[derive(Clone, Debug, PartialEq)]
@@ -88,13 +96,15 @@ pub struct App {
     event_tx: Option<UnboundedSender<Event>>,
     /// AgentController 操作发送器
     controller_tx: Option<UnboundedSender<Op>>,
+    /// 命令注册表
+    pub registry: CommandRegistry,
+    /// 生成指标
+    pub generation_metrics: Option<GenerationMetrics>,
 }
 
 impl App {
-    pub fn new(agent: Arc<Agent>) -> Self {
-        let model_name = std::env::var("ANTHROPIC_MODEL")
-            .or_else(|_| std::env::var("KIMI_MODEL"))
-            .unwrap_or_else(|_| "default".to_string());
+    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>) -> Self {
+        let model_name = model_name.into();
 
         Self {
             messages: vec![
@@ -117,6 +127,8 @@ impl App {
             agent,
             event_tx: None,
             controller_tx: None,
+            registry: build_default_registry(),
+            generation_metrics: None,
         }
     }
 
@@ -177,6 +189,11 @@ impl App {
             }
         }
 
+        // 过滤 key release/repeat，只处理 press（避免某些终端重复触发）
+        if key.kind != crossterm::event::KeyEventKind::Press {
+            return Ok(true);
+        }
+
         match self.mode {
             AppMode::Normal => {
                 match key.code {
@@ -196,6 +213,9 @@ impl App {
                     }
                     KeyCode::Char('g') => {
                         self.scroll_offset = 0;
+                    }
+                    KeyCode::Backspace | KeyCode::Delete => {
+                        self.input_pane.delete_char();
                     }
                     _ => {}
                 }
@@ -234,10 +254,7 @@ impl App {
                         self.scroll_down();
                     }
                     KeyCode::Char(c) => {
-                        // Only handle key press, ignore repeat/release
-                        if key.kind == crossterm::event::KeyEventKind::Press {
-                            self.input_pane.insert_char(c);
-                        }
+                        self.input_pane.insert_char(c);
                     }
                     _ => {}
                 }
@@ -313,55 +330,30 @@ impl App {
 
     /// 处理命令
     async fn handle_command(&mut self, cmd: &str) {
-        match cmd {
-            "/exit" | "/quit" | "/q" => {
-                self.running = false;
-            }
-            "/clear" | "/cls" => {
-                self.messages.clear();
-                self.messages.push(Message::new(
-                    "屏幕已清空。输入 /help 查看可用命令。",
-                    MessageType::System,
-                ));
-                self.scroll_offset = 0;
-            }
-            "/help" | "/h" => {
-                let help_text = r#"可用命令:
-  /exit, /quit, /q    - 退出程序
-  /clear, /cls        - 清空屏幕
-  /help, /h           - 显示帮助
-  /model              - 显示当前模型
-  /stop               - 停止生成
+        let trimmed = cmd.trim();
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.is_empty() {
+            return;
+        }
 
-快捷键:
-  Ctrl+C              - 停止生成 / 退出
-  Ctrl+D              - 退出
-  ↑ / ↓               - 滚动聊天记录
-  Home / End          - 移动光标到行首/行尾"#;
-                self.messages
-                    .push(Message::new(help_text, MessageType::System));
-            }
-            "/stop" => {
-                self.stop_generation();
-            }
-            "/model" => {
-                self.messages.push(Message::new(
-                    format!("当前模型: {}", self.model_name),
-                    MessageType::System,
-                ));
-            }
-            _ => {
-                self.messages.push(Message::new(
-                    format!("未知命令: {}。输入 /help 查看可用命令。", cmd),
-                    MessageType::System,
-                ));
-            }
+        if let Some(handler) = self.registry.get(parts[0]) {
+            handler.execute(self, &parts[1..]);
+        } else {
+            self.messages.push(Message::new(
+                format!("未知命令: {}。输入 /help 查看可用命令。", parts[0]),
+                MessageType::System,
+            ));
         }
     }
 
     /// 开始生成响应（通过 clarity-wire 接收流式事件）
     async fn start_generation(&mut self, user_input: String) {
         self.is_generating = true;
+        self.generation_metrics = Some(GenerationMetrics {
+            start_time: std::time::Instant::now(),
+            first_token_time: None,
+            total_chars: 0,
+        });
         self.messages
             .push(Message::new("", MessageType::Assistant).streaming());
 
@@ -407,6 +399,7 @@ impl App {
                 let _ = controller_tx.send(Op::Interrupt);
             }
             self.is_generating = false;
+            self.generation_metrics = None;
             if let Some(last) = self.messages.last_mut() {
                 last.is_streaming = false;
             }
@@ -420,6 +413,7 @@ impl App {
     /// 完成生成
     pub fn finish_generation(&mut self) {
         self.is_generating = false;
+        self.generation_metrics = None;
         if let Some(last) = self.messages.last_mut() {
             last.is_streaming = false;
         }
@@ -428,6 +422,7 @@ impl App {
     /// 处理错误
     pub fn handle_error(&mut self, error: String) {
         self.is_generating = false;
+        self.generation_metrics = None;
         if let Some(last) = self.messages.last_mut() {
             last.is_streaming = false;
         }
@@ -436,6 +431,12 @@ impl App {
 
     /// 处理流式响应块
     pub fn handle_stream_chunk(&mut self, chunk: String) {
+        if let Some(ref mut metrics) = self.generation_metrics {
+            if metrics.first_token_time.is_none() && !chunk.is_empty() {
+                metrics.first_token_time = Some(std::time::Instant::now());
+            }
+            metrics.total_chars += chunk.chars().count();
+        }
         if let Some(last) = self.messages.last_mut() {
             if matches!(last.msg_type, MessageType::Assistant) && last.is_streaming {
                 last.content.push_str(&chunk);
@@ -503,11 +504,12 @@ impl Default for App {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        Self::new(agent)
+        Self::new(agent, "default")
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::events::ToolStatus;
@@ -635,5 +637,40 @@ mod tests {
         let keep = app.handle_key(key).await.unwrap();
         assert!(keep);
         assert!(app.popup.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_command_registry_model() {
+        let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
+        let config = clarity_core::agent::AgentConfig::default();
+        let agent = Arc::new(Agent::with_config(registry, config));
+        let mut app = App::new(agent, "default");
+        app.handle_command("/model gpt-4").await;
+        assert_eq!(app.model_name, "gpt-4");
+    }
+
+    #[test]
+    fn test_generation_metrics() {
+        let mut app = test_app();
+        app.start_generation_sync();
+        assert!(app.generation_metrics.is_some());
+        app.handle_stream_chunk("hello".to_string());
+        let metrics = app.generation_metrics.as_ref().unwrap();
+        assert_eq!(metrics.total_chars, 5);
+        assert!(metrics.first_token_time.is_some());
+    }
+}
+
+impl App {
+    #[cfg(test)]
+    fn start_generation_sync(&mut self) {
+        self.is_generating = true;
+        self.generation_metrics = Some(GenerationMetrics {
+            start_time: std::time::Instant::now(),
+            first_token_time: None,
+            total_chars: 0,
+        });
+        self.messages
+            .push(Message::new("", MessageType::Assistant).streaming());
     }
 }

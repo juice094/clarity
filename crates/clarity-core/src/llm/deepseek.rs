@@ -64,6 +64,10 @@ impl DeepSeekProvider {
     pub fn reasoner(api_key: impl Into<String>) -> Self {
         Self::new(api_key, "https://api.deepseek.com/v1", "deepseek-reasoner")
     }
+
+    pub fn set_prompt_cache_key(&mut self, key: &str) {
+        self.inner.set_prompt_cache_key(key);
+    }
 }
 
 #[async_trait]
@@ -80,8 +84,12 @@ impl LlmProvider for DeepSeekProvider {
         &self,
         messages: &[Message],
         tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
         self.inner.stream(messages, tools)
+    }
+
+    fn set_prompt_cache_key(&mut self, key: &str) {
+        self.inner.set_prompt_cache_key(key);
     }
 }
 

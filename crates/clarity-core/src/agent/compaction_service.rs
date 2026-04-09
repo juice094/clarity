@@ -179,13 +179,18 @@ mod tests {
             &self,
             _messages: &[Message],
             _tools: &Value,
-        ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+        ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
-                let _ = tx.send(Ok("chunk".to_string())).await;
+                let _ = tx.send(Ok(crate::llm::StreamDelta {
+                    content: Some("chunk".to_string()),
+                    tool_calls: vec![],
+                })).await;
             });
             Ok(rx)
         }
+
+        fn set_prompt_cache_key(&mut self, _key: &str) {}
     }
 
     struct FailingMockLlm;
@@ -204,13 +209,15 @@ mod tests {
             &self,
             _messages: &[Message],
             _tools: &Value,
-        ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+        ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
                 let _ = tx.send(Err(AgentError::Llm("mock stream error".to_string()))).await;
             });
             Ok(rx)
         }
+
+        fn set_prompt_cache_key(&mut self, _key: &str) {}
     }
 
     fn make_messages(n: usize, content_len: usize) -> Vec<Message> {
@@ -463,13 +470,18 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok("chunk".to_string())).await;
+                    let _ = tx.send(Ok(crate::llm::StreamDelta {
+                        content: Some("chunk".to_string()),
+                        tool_calls: vec![],
+                    })).await;
                 });
                 Ok(rx)
             }
+
+            fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
         let config = CompactionServiceConfig {

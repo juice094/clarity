@@ -1,4 +1,4 @@
-use crate::app::Message;
+use crate::app::{Message, MessageType};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -6,6 +6,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
+
 
 /// 聊天区域组件
 pub struct ChatPane<'a> {
@@ -48,7 +49,7 @@ impl<'a> Widget for ChatPane<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray))
+            .border_style(Style::default().fg(Color::Rgb(60, 60, 80)))
             .title(" Chat ")
             .title_alignment(ratatui::layout::Alignment::Left);
 
@@ -62,74 +63,109 @@ impl<'a> Widget for ChatPane<'a> {
         let mut lines: Vec<Line> = vec![];
 
         for msg in self.messages.iter() {
-            lines.push(Line::from(""));
-
             match msg.msg_type {
-                crate::app::MessageType::User => {
-                    let prefix = Span::styled(
-                        "  You ",
-                        Style::default()
-                            .fg(Color::Blue)
-                            .add_modifier(Modifier::BOLD),
-                    );
+                MessageType::User => {
+                    lines.push(Line::from(""));
                     let time = Span::styled(
-                        format!("({}) ", msg.timestamp),
-                        Style::default().fg(Color::DarkGray),
+                        format!(" {} ", msg.timestamp),
+                        Style::default().fg(Color::Rgb(100, 100, 120)),
                     );
-                    lines.push(Line::from(vec![prefix, time]));
-
+                    lines.push(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(
+                            " You ",
+                            Style::default()
+                                .fg(Color::Rgb(220, 230, 255))
+                                .bg(Color::Rgb(50, 100, 180))
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" "),
+                        time,
+                    ]));
                     for line in msg.content.lines() {
-                        lines.push(Line::from(vec![Span::raw("  "), Span::raw(line)]));
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                "  ▎ ",
+                                Style::default().fg(Color::Rgb(80, 140, 220)),
+                            ),
+                            Span::styled(
+                                line,
+                                Style::default().fg(Color::Rgb(200, 210, 240)),
+                            ),
+                        ]));
                     }
                 }
-                crate::app::MessageType::Assistant => {
+                MessageType::Assistant => {
+                    lines.push(Line::from(""));
                     let prefix = if msg.is_streaming {
                         Span::styled(
-                            "  🤖 ",
-                            Style::default()
-                                .fg(Color::Green)
-                                .add_modifier(Modifier::BOLD),
+                            " ● ",
+                            Style::default().fg(Color::Rgb(100, 220, 150)),
                         )
                     } else {
                         Span::styled(
-                            "  Clarity ",
-                            Style::default()
-                                .fg(Color::Green)
-                                .add_modifier(Modifier::BOLD),
+                            " ● ",
+                            Style::default().fg(Color::Rgb(80, 180, 140)),
                         )
                     };
-                    let time = Span::styled(
-                        format!("({}) ", msg.timestamp),
-                        Style::default().fg(Color::DarkGray),
+                    let name = Span::styled(
+                        " Clarity ",
+                        Style::default()
+                            .fg(Color::Rgb(220, 255, 235))
+                            .bg(Color::Rgb(40, 120, 80))
+                            .add_modifier(Modifier::BOLD),
                     );
-                    lines.push(Line::from(vec![prefix, time]));
+                    let time = Span::styled(
+                        format!(" {} ", msg.timestamp),
+                        Style::default().fg(Color::Rgb(100, 100, 120)),
+                    );
+                    lines.push(Line::from(vec![
+                        Span::raw(" "),
+                        prefix,
+                        name,
+                        Span::raw(" "),
+                        time,
+                    ]));
 
                     for line in msg.content.lines() {
-                        lines.push(Line::from(vec![Span::raw("  "), Span::raw(line)]));
+                        lines.push(Line::from(vec![
+                            Span::styled(
+                                "  ▎ ",
+                                Style::default().fg(Color::Rgb(80, 180, 140)),
+                            ),
+                            Span::styled(
+                                line,
+                                Style::default().fg(Color::Rgb(210, 230, 220)),
+                            ),
+                        ]));
                     }
 
                     if msg.is_streaming {
                         lines.push(Line::from(vec![Span::styled(
                             "  ▌",
-                            Style::default().fg(Color::Green),
+                            Style::default().fg(Color::Rgb(100, 220, 150)),
                         )]));
                     }
                 }
-                crate::app::MessageType::System => {
+                MessageType::System => {
+                    lines.push(Line::from(""));
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![Span::styled(
                             format!("  {} ", line),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default()
+                                .fg(Color::Rgb(140, 140, 160))
+                                .add_modifier(Modifier::ITALIC),
                         )]));
                     }
                 }
-                crate::app::MessageType::ToolCall => {
+                MessageType::ToolCall => {
+                    lines.push(Line::from(""));
                     lines.push(Line::from(vec![
-                        Span::styled("  🔧 ", Style::default().fg(Color::Yellow)),
+                        Span::styled("  ▶ ", Style::default().fg(Color::Rgb(220, 180, 80))),
                         Span::styled(
                             &msg.content,
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(Color::Rgb(240, 220, 160))
                                 .add_modifier(Modifier::ITALIC),
                         ),
                     ]));
