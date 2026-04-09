@@ -5,8 +5,10 @@ use crate::types::{Fact, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -15,22 +17,69 @@ struct CachedFact {
     last_access: i64,
 }
 
-#[derive(Debug)]
 pub struct HybridStore {
     hot_cache: Arc<DashMap<i64, CachedFact>>,
     cold_storage: FileStore,
     cache_size: usize,
     access_counter: AtomicI64,
+    sync_handle: Option<tokio::task::JoinHandle<()>>,
+    shutdown: Arc<AtomicI64>,
+}
+
+impl std::fmt::Debug for HybridStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HybridStore")
+            .field("hot_cache", &self.hot_cache)
+            .field("cold_storage", &self.cold_storage)
+            .field("cache_size", &self.cache_size)
+            .field("access_counter", &self.access_counter)
+            .field("sync_handle", &self.sync_handle.is_some())
+            .finish()
+    }
 }
 
 impl HybridStore {
-    pub async fn new(cache_size: usize, cold_dir: impl AsRef<std::path::Path>, _sync_interval_secs: u64) -> Result<Self> {
+    pub async fn new(cache_size: usize, cold_dir: impl AsRef<std::path::Path>, sync_interval_secs: u64) -> Result<Self> {
         let cold_storage = FileStore::new(cold_dir).await?;
+        let hot_cache = Arc::new(DashMap::<i64, CachedFact>::with_capacity(cache_size));
+        let shutdown = Arc::new(AtomicI64::new(0));
+
+        let sync_handle = if sync_interval_secs > 0 {
+            let cache = hot_cache.clone();
+            let cold = cold_storage.clone();
+            let shutdown = shutdown.clone();
+            Some(tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(sync_interval_secs));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    interval.tick().await;
+                    if shutdown.load(Ordering::Relaxed) != 0 {
+                        break;
+                    }
+                    for entry in cache.iter() {
+                        let cf = entry.value();
+                        let _ = cold
+                            .save_fact(
+                                &cf.fact.fact,
+                                &cf.fact.tags,
+                                cf.fact.time.as_deref(),
+                                cf.fact.session_id.as_deref(),
+                            )
+                            .await;
+                    }
+                }
+            }))
+        } else {
+            None
+        };
+
         Ok(Self {
-            hot_cache: Arc::new(DashMap::with_capacity(cache_size)),
+            hot_cache,
             cold_storage,
             cache_size,
             access_counter: AtomicI64::new(0),
+            sync_handle,
+            shutdown,
         })
     }
 
@@ -67,10 +116,47 @@ impl HybridStore {
         }
     }
 
+    fn cached_facts<F>(&self, predicate: F) -> Vec<Fact>
+    where
+        F: Fn(&Fact) -> bool,
+    {
+        self.hot_cache
+            .iter()
+            .map(|e| e.value().fact.clone())
+            .filter(predicate)
+            .collect()
+    }
+
+    fn merge_facts(&self, cached: Vec<Fact>, cold: Vec<Fact>) -> Vec<Fact> {
+        let mut seen = HashSet::new();
+        let mut merged = Vec::with_capacity(cached.len() + cold.len());
+        // Prefer cached facts (they may be more recent)
+        for fact in cached {
+            if seen.insert(fact.id) {
+                merged.push(fact);
+            }
+        }
+        for fact in cold {
+            if seen.insert(fact.id) {
+                merged.push(fact);
+            }
+        }
+        merged
+    }
+
     pub fn cache_stats(&self) -> CacheStats {
         CacheStats {
             cache_size: self.hot_cache.len(),
             max_cache_size: self.cache_size,
+        }
+    }
+}
+
+impl Drop for HybridStore {
+    fn drop(&mut self) {
+        self.shutdown.store(1, Ordering::Relaxed);
+        if let Some(handle) = self.sync_handle.take() {
+            handle.abort();
         }
     }
 }
@@ -116,23 +202,50 @@ impl StorageBackend for HybridStore {
     }
 
     async fn search_by_tags(&self, tags: &[String], limit: usize) -> Result<Vec<Fact>> {
-        self.cold_storage.search_by_tags(tags, limit).await
+        let cached = if tags.is_empty() {
+            Vec::new()
+        } else {
+            self.cached_facts(|f| tags.iter().all(|tag| f.tags.contains(tag)))
+        };
+        let cold = self.cold_storage.search_by_tags(tags, limit).await?;
+        let mut merged = self.merge_facts(cached, cold);
+        merged.truncate(limit);
+        Ok(merged)
     }
 
     async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
-        self.cold_storage.search_fulltext(query, limit).await
+        let query_lower = query.to_lowercase();
+        let cached = self.cached_facts(|f| f.fact.to_lowercase().contains(&query_lower));
+        let cold = self.cold_storage.search_fulltext(query, limit).await?;
+        let mut merged = self.merge_facts(cached, cold);
+        merged.truncate(limit);
+        Ok(merged)
     }
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
-        self.cold_storage.get_facts_by_session(session_id, limit).await
+        let cached = self.cached_facts(|f| f.session_id.as_deref() == Some(session_id));
+        let cold = self.cold_storage.get_facts_by_session(session_id, limit).await?;
+        let mut merged = self.merge_facts(cached, cold);
+        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        merged.truncate(limit);
+        Ok(merged)
     }
 
     async fn get_facts_since(&self, since: DateTime<Utc>) -> Result<Vec<Fact>> {
-        self.cold_storage.get_facts_since(since).await
+        let cached = self.cached_facts(|f| f.created_at > since);
+        let cold = self.cold_storage.get_facts_since(since).await?;
+        let mut merged = self.merge_facts(cached, cold);
+        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(merged)
     }
 
     async fn get_recent_facts(&self, limit: usize) -> Result<Vec<Fact>> {
-        self.cold_storage.get_recent_facts(limit).await
+        let cached = self.cached_facts(|_| true);
+        let cold = self.cold_storage.get_recent_facts(limit).await?;
+        let mut merged = self.merge_facts(cached, cold);
+        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        merged.truncate(limit);
+        Ok(merged)
     }
 
     async fn count_facts(&self) -> Result<i64> {

@@ -30,10 +30,7 @@ impl<'a> ChatPane<'a> {
 
     #[allow(dead_code)]
     pub fn scroll_down(&mut self) {
-        let max_scroll = self.messages.len().saturating_sub(1);
-        if self.scroll_offset < max_scroll {
-            self.scroll_offset += 1;
-        }
+        self.scroll_offset += 1;
     }
 
     #[allow(dead_code)]
@@ -64,7 +61,7 @@ impl<'a> Widget for ChatPane<'a> {
 
         let mut lines: Vec<Line> = vec![];
 
-        for msg in self.messages.iter().skip(self.scroll_offset) {
+        for msg in self.messages.iter() {
             lines.push(Line::from(""));
 
             match msg.msg_type {
@@ -142,7 +139,7 @@ impl<'a> Widget for ChatPane<'a> {
 
         let paragraph = Paragraph::new(Text::from(lines))
             .wrap(Wrap { trim: true })
-            .scroll((0, 0));
+            .scroll((self.scroll_offset as u16, 0));
 
         paragraph.render(inner_area, buf);
     }

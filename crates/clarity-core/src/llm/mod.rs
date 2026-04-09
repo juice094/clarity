@@ -28,6 +28,7 @@ struct ChatCompletionRequest {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    stream: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,6 +112,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             messages: api_messages,
             temperature: None,
             max_tokens: None,
+            stream: false,
         };
 
         // Build URL: base_url should end with /v1, e.g. https://api.kimi.com/coding/v1
@@ -167,13 +169,94 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
     fn stream(
         &self,
-        _messages: &[Message],
+        messages: &[Message],
         _tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<String, AgentError>>, AgentError> {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let api_messages: Vec<ApiMessage> = messages
+            .iter()
+            .map(|m| ApiMessage {
+                role: format!("{:?}", m.role).to_lowercase(),
+                content: m.content.clone(),
+            })
+            .collect();
+
+        let request_body = ChatCompletionRequest {
+            model: self.model.clone(),
+            messages: api_messages,
+            temperature: None,
+            max_tokens: None,
+            stream: true,
+        };
+
+        let base = self.base_url.trim_end_matches('/');
+        let url = if base.ends_with("/v1") {
+            format!("{}/chat/completions", base)
+        } else {
+            format!("{}/v1/chat/completions", base)
+        };
+        let api_key = self.api_key.clone();
+        let client = self.client.clone();
+
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
+
         tokio::spawn(async move {
-            let _ = tx.send(Ok("Streaming not supported for this provider".to_string())).await;
+            let response = client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .header("User-Agent", "claude-code/0.1.0 (Claude Code)")
+                .json(&request_body)
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        let err = resp.text().await.unwrap_or_default();
+                        let _ = tx.send(Err(AgentError::Llm(format!("API error: {}", err)))).await;
+                        return;
+                    }
+
+                    let mut stream = resp.bytes_stream();
+                    use futures::StreamExt;
+
+                    while let Some(chunk) = stream.next().await {
+                        match chunk {
+                            Ok(bytes) => {
+                                let text = String::from_utf8_lossy(&bytes);
+                                for line in text.lines() {
+                                    if let Some(data) = line.strip_prefix("data: ") {
+                                        if data == "[DONE]" {
+                                            return;
+                                        }
+                                        if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
+                                            if let Some(choices) = event.get("choices").and_then(|c| c.as_array()) {
+                                                for choice in choices {
+                                                    if let Some(content) = choice.get("delta").and_then(|d| d.get("content")).and_then(|c| c.as_str()) {
+                                                        if !content.is_empty() && tx.send(Ok(content.to_string())).await.is_err() {
+                                                            return;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let _ = tx.send(Err(AgentError::Llm(format!("Stream error: {}", e)))).await;
+                                return;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(AgentError::Llm(format!("HTTP error: {}", e)))).await;
+                }
+            }
         });
+
         Ok(rx)
     }
 }
@@ -444,8 +527,7 @@ impl LlmProvider for AnthropicLlm {
                             Ok(bytes) => {
                                 let text = String::from_utf8_lossy(&bytes);
                                 for line in text.lines() {
-                                    if line.starts_with("data: ") {
-                                        let data = &line[6..];
+                                    if let Some(data) = line.strip_prefix("data: ") {
                                         if data == "[DONE]" {
                                             return;
                                         }

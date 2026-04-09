@@ -25,6 +25,14 @@ impl Default for SessionId {
     }
 }
 
+/// 会话中的消息记录
+#[derive(Debug, Clone)]
+pub struct SessionMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+}
+
 /// 会话信息
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -33,6 +41,7 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
     pub message_count: u64,
+    pub messages: Vec<SessionMessage>,
 }
 
 #[allow(dead_code)]
@@ -44,6 +53,7 @@ impl Session {
             created_at: now,
             last_activity: now,
             message_count: 0,
+            messages: Vec::new(),
         }
     }
 
@@ -54,6 +64,19 @@ impl Session {
     pub fn increment_message_count(&mut self) {
         self.message_count += 1;
         self.touch();
+    }
+
+    pub fn record_message(&mut self, role: impl Into<String>, content: impl Into<String>) {
+        self.messages.push(SessionMessage {
+            role: role.into(),
+            content: content.into(),
+            timestamp: Utc::now(),
+        });
+        self.increment_message_count();
+    }
+
+    pub fn get_messages(&self) -> &[SessionMessage] {
+        &self.messages
     }
 }
 
@@ -166,6 +189,24 @@ mod tests {
 
         assert_eq!(session.id.0, id.0);
         assert_eq!(session.message_count, 0);
+        assert!(session.messages.is_empty());
+    }
+
+    #[test]
+    fn test_session_message_tracking() {
+        let mut manager = SessionManager::new();
+        let id = SessionId::new();
+        let session = manager.create_session(id.clone());
+
+        session.record_message("user", "Hello");
+        assert_eq!(session.message_count, 1);
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, "user");
+        assert_eq!(session.messages[0].content, "Hello");
+
+        session.record_message("assistant", "Hi there!");
+        assert_eq!(session.message_count, 2);
+        assert_eq!(session.messages.len(), 2);
     }
 
     #[test]

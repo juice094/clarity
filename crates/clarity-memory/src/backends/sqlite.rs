@@ -253,6 +253,36 @@ impl StorageBackend for SqliteStore {
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
+    async fn search_similar(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
+        let query = query.to_string();
+        let conn = self.conn.clone();
+
+        let facts = tokio::task::spawn_blocking(move || {
+            let conn = conn.lock().unwrap();
+            let mut stmt = conn.prepare(
+                "SELECT id, fact, tags, time, session_id, created_at FROM facts"
+            )?;
+            let rows = stmt.query_map([], Self::row_to_fact)?;
+            let mut facts = Vec::new();
+            for row in rows { facts.push(row?); }
+            Ok::<_, MemoryError>(facts)
+        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+        if facts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let fact_tuples: Vec<(i64, String)> = facts.iter().map(|f| (f.id, f.fact.clone())).collect();
+        let mut vector_store = crate::embedding::VectorStore::new();
+        vector_store.index_facts(&fact_tuples);
+        let results = vector_store.search(&query, limit);
+
+        let fact_map: std::collections::HashMap<i64, Fact> = facts.into_iter().map(|f| (f.id, f)).collect();
+        Ok(results.into_iter().filter_map(|(id, _, score)| {
+            fact_map.get(&id).cloned().map(|f| (f, score))
+        }).collect())
+    }
+
     async fn clear_all(&self) -> Result<usize> {
         let conn = self.conn.clone();
 

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 use clarity_core::agent::{Agent, AgentConfig, Message, MessageRole, MockLlm};
+use clarity_core::memory::{Memory, MemoryStore, MemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::tools::{FileReadTool, BashTool, Tool};
 use clarity_core::error::AgentError;
@@ -13,7 +14,6 @@ use serde_json::json;
 
 // ==================== Core + Memory Integration ====================
 
-#[cfg(feature = "clarity-memory")]
 #[tokio::test]
 async fn test_agent_with_persistent_memory() {
     use clarity_core::memory::PersistentMemoryStore;
@@ -39,7 +39,6 @@ async fn test_agent_with_persistent_memory() {
     assert!(!memories.is_empty());
 }
 
-#[cfg(feature = "clarity-memory")]
 #[tokio::test]
 async fn test_agent_memory_search_integration() {
     use clarity_core::memory::PersistentMemoryStore;

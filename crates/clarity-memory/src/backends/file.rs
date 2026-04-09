@@ -12,11 +12,11 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileStore {
     dir: PathBuf,
     index: Arc<DashMap<i64, FactFile>>,
-    next_id: AtomicI64,
+    next_id: Arc<AtomicI64>,
     meta_path: PathBuf,
     tags_index: Arc<DashMap<String, Vec<i64>>>,
 }
@@ -50,7 +50,7 @@ impl FileStore {
         let store = Self {
             dir,
             index: Arc::new(DashMap::new()),
-            next_id: AtomicI64::new(1),
+            next_id: Arc::new(AtomicI64::new(1)),
             meta_path,
             tags_index: Arc::new(DashMap::new()),
         };

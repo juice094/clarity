@@ -42,14 +42,17 @@
 
 pub mod agent;
 pub mod approval;
+pub mod background;
 pub mod compaction;
 pub mod config;
 pub mod error;
 pub mod llm;
 pub mod memory;
 pub mod mcp;
+pub mod notifications;
 pub mod personality;
 pub mod registry;
+pub mod skill;
 pub mod subagents;
 pub mod tools;
 

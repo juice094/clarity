@@ -1,21 +1,25 @@
+use crate::async_job::ToolCallJob;
+use crate::diff::compute_diff;
 use crate::events::ToolCallInfo;
+use crate::popup::{EventState, Popup};
+use crate::popups::{diff_popup::DiffPopup, HelpPopup, ToolResultPopup};
 use anyhow::Result;
 use chrono::Local;
-use clarity_core::agent::Agent;
+use clarity_core::agent::{Agent, AgentController, Op};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::events::Event;
 use crate::widgets::input_pane::InputPane;
+use crate::wire_adapter::spawn_wire_adapter;
 
 /// 消息类型
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MessageType {
     User,
     Assistant,
     System,
-    #[allow(dead_code)]
     ToolCall,
 }
 
@@ -44,6 +48,13 @@ impl Message {
     }
 }
 
+/// 应用模式
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AppMode {
+    Normal,
+    Input,
+}
+
 /// 应用状态
 pub struct App {
     /// 聊天历史
@@ -58,16 +69,25 @@ pub struct App {
     pub model_name: String,
     /// 会话ID
     pub session_id: String,
-    /// 滚动位置
+    /// 滚动偏移（以行为单位）
     pub scroll_offset: usize,
     /// 窗口大小
     pub terminal_size: (u16, u16),
     /// 输入框高度
     pub input_height: u16,
+    /// 当前模式
+    pub mode: AppMode,
+    /// 当前弹窗
+    pub popup: Option<Box<dyn Popup>>,
+    /// 后台任务（工具调用）
+    #[allow(dead_code)]
+    pub async_job: ToolCallJob,
     /// Agent 实例
     agent: Arc<Agent>,
     /// 事件发送器（用于后台任务发送事件）
     event_tx: Option<UnboundedSender<Event>>,
+    /// AgentController 操作发送器
+    controller_tx: Option<UnboundedSender<Op>>,
 }
 
 impl App {
@@ -91,8 +111,12 @@ impl App {
             scroll_offset: 0,
             terminal_size: (80, 24),
             input_height: 3,
+            mode: AppMode::Input,
+            popup: None,
+            async_job: ToolCallJob::new(),
             agent,
             event_tx: None,
+            controller_tx: None,
         }
     }
 
@@ -110,75 +134,161 @@ impl App {
 
     /// 设置事件发送器
     pub fn set_event_sender(&mut self, tx: UnboundedSender<Event>) {
-        self.event_tx = Some(tx);
+        self.event_tx = Some(tx.clone());
+        let wire = std::sync::Arc::new(clarity_wire::Wire::new());
+        let agent = (*self.agent).clone().with_wire(wire.clone());
+        spawn_wire_adapter(wire.ui_side(false), tx);
+        let (controller, controller_tx) = AgentController::new_with_sender(agent);
+        tokio::spawn(controller.run());
+        self.controller_tx = Some(controller_tx);
     }
 
     /// 处理按键事件
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
-        match key.code {
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if self.is_generating {
-                    self.stop_generation();
-                } else {
+        // 全局快捷键（Ctrl+C / Ctrl+D）
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('c') => {
+                    if self.is_generating {
+                        self.stop_generation();
+                        return Ok(true);
+                    } else {
+                        return Ok(false);
+                    }
+                }
+                KeyCode::Char('d') => {
                     return Ok(false);
                 }
+                _ => {}
             }
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Ok(false);
+        }
+
+        // 优先将事件路由给弹窗
+        if let Some(ref mut popup) = self.popup {
+            let event = crossterm::event::Event::Key(key);
+            match popup.handle_event(event) {
+                EventState::Consumed => {
+                    if popup.is_done() {
+                        self.popup = None;
+                    }
+                    return Ok(true);
+                }
+                EventState::NotConsumed => {}
             }
-            KeyCode::Enter => {
-                self.submit_message().await?;
-            }
-            KeyCode::Backspace => {
-                self.input_pane.delete_char();
-            }
-            KeyCode::Delete => {
-                self.input_pane.delete_char_forward();
-            }
-            KeyCode::Left => {
-                self.input_pane.move_cursor_left();
-            }
-            KeyCode::Right => {
-                self.input_pane.move_cursor_right();
-            }
-            KeyCode::Home => {
-                self.input_pane.set_cursor_position(0);
-            }
-            KeyCode::End => {
-                let len = self.input_pane.input().chars().count();
-                self.input_pane.set_cursor_position(len);
-            }
-            KeyCode::Up => {
-                self.scroll_up();
-            }
-            KeyCode::Down => {
-                self.scroll_down();
-            }
-            KeyCode::Char(c) => {
-                // Only handle key press, ignore repeat/release
-                if key.kind == crossterm::event::KeyEventKind::Press {
-                    self.input_pane.insert_char(c);
+        }
+
+        match self.mode {
+            AppMode::Normal => {
+                match key.code {
+                    KeyCode::Char('q') => return Ok(false),
+                    KeyCode::Char('?') => {
+                        self.popup = Some(Box::new(HelpPopup::new()));
+                    }
+                    KeyCode::Char('i') | KeyCode::Enter => {
+                        self.mode = AppMode::Input;
+                    }
+                    KeyCode::Char('j') | KeyCode::Down => self.scroll_down(),
+                    KeyCode::Char('k') | KeyCode::Up => self.scroll_up(),
+                    KeyCode::Char('G') => {
+                        let total = self.total_content_lines();
+                        let visible = self.visible_chat_height();
+                        self.scroll_offset = total.saturating_sub(visible);
+                    }
+                    KeyCode::Char('g') => {
+                        self.scroll_offset = 0;
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+            AppMode::Input => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = AppMode::Normal;
+                    }
+                    KeyCode::Enter => {
+                        self.submit_message().await?;
+                    }
+                    KeyCode::Backspace => {
+                        self.input_pane.delete_char();
+                    }
+                    KeyCode::Delete => {
+                        self.input_pane.delete_char_forward();
+                    }
+                    KeyCode::Left => {
+                        self.input_pane.move_cursor_left();
+                    }
+                    KeyCode::Right => {
+                        self.input_pane.move_cursor_right();
+                    }
+                    KeyCode::Home => {
+                        self.input_pane.set_cursor_position(0);
+                    }
+                    KeyCode::End => {
+                        let len = self.input_pane.input().chars().count();
+                        self.input_pane.set_cursor_position(len);
+                    }
+                    KeyCode::Up => {
+                        self.scroll_up();
+                    }
+                    KeyCode::Down => {
+                        self.scroll_down();
+                    }
+                    KeyCode::Char(c) => {
+                        // Only handle key press, ignore repeat/release
+                        if key.kind == crossterm::event::KeyEventKind::Press {
+                            self.input_pane.insert_char(c);
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
 
         Ok(true)
     }
 
-    /// 滚动上
-    pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
+    /// Approximate total number of rendered content lines.
+    fn total_content_lines(&self) -> usize {
+        let mut total = 0usize;
+        for msg in &self.messages {
+            // header line(s)
+            match msg.msg_type {
+                MessageType::User | MessageType::Assistant => total += 1,
+                MessageType::ToolCall => total += 1,
+                MessageType::System => {}
+            }
+            // content lines
+            let content_lines = msg.content.lines().count();
+            total += content_lines;
+            // streaming cursor indicator
+            if msg.is_streaming && matches!(msg.msg_type, MessageType::Assistant) {
+                total += 1;
+            }
+            // spacer between messages
+            total += 1;
         }
+        total
     }
 
-    /// 滚动下
+    /// 可见聊天区域高度
+    fn visible_chat_height(&self) -> usize {
+        // 状态栏 1 行 + 输入框 input_height 行 + 命令栏 1 行
+        self.terminal_size
+            .1
+            .saturating_sub(1 + self.input_height + 1) as usize
+    }
+
+    /// 滚动上（按行）
+    pub fn scroll_up(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
+    }
+
+    /// 滚动下（按行）
     pub fn scroll_down(&mut self) {
-        let max_scroll = self.messages.len().saturating_sub(1);
-        if self.scroll_offset < max_scroll {
-            self.scroll_offset += 1;
-        }
+        let total = self.total_content_lines();
+        let visible = self.visible_chat_height();
+        let max_scroll = total.saturating_sub(visible);
+        self.scroll_offset = (self.scroll_offset + 1).min(max_scroll);
     }
 
     /// 提交消息
@@ -249,28 +359,37 @@ impl App {
         }
     }
 
-    /// 开始生成响应（真实流式）
+    /// 开始生成响应（通过 clarity-wire 接收流式事件）
     async fn start_generation(&mut self, user_input: String) {
         self.is_generating = true;
         self.messages
             .push(Message::new("", MessageType::Assistant).streaming());
 
-        let agent = self.agent.clone();
+        if let Some(ref controller_tx) = self.controller_tx {
+            let _ = controller_tx.send(Op::UserTurn(user_input));
+            return;
+        }
+
+        // Fallback: direct spawn without controller
         let event_tx = self.event_tx.clone();
-        let chunk_tx = event_tx.clone();
+
+        // 创建 Wire 并绑定到 Agent 副本
+        let wire = std::sync::Arc::new(clarity_wire::Wire::new());
+        let agent = (*self.agent).clone().with_wire(wire.clone());
+
+        // 启动适配器，将 WireMessage 转成 Event
+        if let Some(ref tx) = event_tx {
+            spawn_wire_adapter(wire.ui_side(false), tx.clone());
+        }
 
         tokio::spawn(async move {
-            let result = agent.run_streaming(&user_input, move |chunk: &str| {
-                if let Some(ref tx) = chunk_tx {
-                    let _ = tx.send(Event::StreamResponse(chunk.to_string()));
-                }
+            let result = agent.run_streaming(&user_input, |_chunk: &str| {
+                // 所有流式内容通过 wire 传递，回调留空
             }).await;
 
             match result {
                 Ok(_) => {
-                    if let Some(ref tx) = event_tx {
-                        let _ = tx.send(Event::ResponseComplete);
-                    }
+                    // TurnEnd 已经由 wire adapter 转换为 ResponseComplete
                 }
                 Err(e) => {
                     if let Some(ref tx) = event_tx {
@@ -284,6 +403,9 @@ impl App {
     /// 停止生成
     pub fn stop_generation(&mut self) {
         if self.is_generating {
+            if let Some(ref controller_tx) = self.controller_tx {
+                let _ = controller_tx.send(Op::Interrupt);
+            }
             self.is_generating = false;
             if let Some(last) = self.messages.last_mut() {
                 last.is_streaming = false;
@@ -322,8 +444,47 @@ impl App {
     }
 
     /// 处理工具调用
-    pub fn handle_tool_call(&mut self, _tool: ToolCallInfo) {
-        // Tool call visualization is handled inline in chat messages
+    pub fn handle_tool_call(&mut self, tool: ToolCallInfo) {
+        let text = if tool.params.is_empty() {
+            format!("🔧 调用工具: {}", tool.name)
+        } else {
+            format!("🔧 调用工具: {} 参数: {}", tool.name, tool.params)
+        };
+        self.messages.push(Message::new(text, MessageType::ToolCall));
+    }
+
+    /// 处理工具结果
+    pub fn handle_tool_result(&mut self, tool: ToolCallInfo) {
+        let text = format!("✅ 工具结果: {}", tool.params);
+        self.messages.push(Message::new(text, MessageType::ToolCall));
+
+        let has_diff = serde_json::from_str::<serde_json::Value>(&tool.params)
+            .ok()
+            .and_then(|json| json.get("_diff_preview").cloned())
+            .is_some();
+
+        if has_diff {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&tool.params) {
+                if let Some(diff_preview) = json.get("_diff_preview") {
+                    if let (Some(path), Some(old), Some(new)) = (
+                        json.get("path").and_then(|v| v.as_str()),
+                        diff_preview.get("old").and_then(|v| v.as_str()),
+                        diff_preview.get("new").and_then(|v| v.as_str()),
+                    ) {
+                        self.popup = Some(Box::new(DiffPopup::new(
+                            path.to_string(),
+                            compute_diff(old, new),
+                        )));
+                        return;
+                    }
+                }
+            }
+        }
+
+        self.popup = Some(Box::new(ToolResultPopup::new(
+            format!("Tool: {}", tool.name),
+            tool.params,
+        )));
     }
 
     /// 时钟滴答
@@ -343,5 +504,136 @@ impl Default for App {
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
         Self::new(agent)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::ToolStatus;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn test_app() -> App {
+        App::default()
+    }
+
+    #[test]
+    fn test_app_new_initial_state() {
+        let app = test_app();
+        assert_eq!(app.messages.len(), 1);
+        assert!(matches!(app.messages[0].msg_type, MessageType::System));
+        assert!(!app.is_generating);
+        assert_eq!(app.scroll_offset, 0);
+        assert_eq!(app.mode, AppMode::Input);
+        assert!(app.popup.is_none());
+    }
+
+    #[test]
+    fn test_add_message() {
+        let mut app = test_app();
+        app.messages.push(Message::new("hello", MessageType::User));
+        assert_eq!(app.messages.len(), 2);
+        assert_eq!(app.messages.last().unwrap().content, "hello");
+    }
+
+    #[test]
+    fn test_scroll_up_down() {
+        let mut app = test_app();
+        app.messages.push(Message::new("a\nb\nc\nd\ne", MessageType::User));
+        app.terminal_size = (80, 10);
+        app.input_height = 3;
+
+        let initial_offset = app.scroll_offset;
+        app.scroll_down();
+        assert!(app.scroll_offset > initial_offset);
+
+        let after_down = app.scroll_offset;
+        app.scroll_up();
+        assert_eq!(app.scroll_offset, after_down - 1);
+    }
+
+    #[test]
+    fn test_scroll_up_does_not_underflow() {
+        let mut app = test_app();
+        app.scroll_offset = 0;
+        app.scroll_up();
+        assert_eq!(app.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_handle_tool_call() {
+        let mut app = test_app();
+        app.handle_tool_call(ToolCallInfo {
+            name: "read_file".to_string(),
+            params: "{\"path\":\"/tmp\"}".to_string(),
+            status: ToolStatus::Running,
+        });
+        assert_eq!(app.messages.len(), 2);
+        let last = app.messages.last().unwrap();
+        assert!(matches!(last.msg_type, MessageType::ToolCall));
+        assert!(last.content.contains("read_file"));
+    }
+
+    #[test]
+    fn test_handle_tool_result() {
+        let mut app = test_app();
+        app.handle_tool_result(ToolCallInfo {
+            name: "result".to_string(),
+            params: "ok".to_string(),
+            status: ToolStatus::Success,
+        });
+        let last = app.messages.last().unwrap();
+        assert!(last.content.contains("ok"));
+        assert!(app.popup.is_some());
+    }
+
+    #[test]
+    fn test_finish_generation() {
+        let mut app = test_app();
+        app.messages.push(Message::new("", MessageType::Assistant).streaming());
+        app.is_generating = true;
+        app.finish_generation();
+        assert!(!app.is_generating);
+        assert!(!app.messages.last().unwrap().is_streaming);
+    }
+
+    #[test]
+    fn test_handle_error() {
+        let mut app = test_app();
+        app.is_generating = true;
+        app.messages.push(Message::new("", MessageType::Assistant).streaming());
+        app.handle_error("boom".to_string());
+        assert!(!app.is_generating);
+        let last = app.messages.last().unwrap();
+        assert_eq!(last.content, "boom");
+        assert!(matches!(last.msg_type, MessageType::System));
+    }
+
+    #[tokio::test]
+    async fn test_handle_key_exit_ctrl_d() {
+        let mut app = test_app();
+        let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL);
+        let keep = app.handle_key(key).await.unwrap();
+        assert!(!keep);
+    }
+
+    #[tokio::test]
+    async fn test_app_event_routing_to_popup_consumed() {
+        let mut app = test_app();
+        app.popup = Some(Box::new(HelpPopup::new()));
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let keep = app.handle_key(key).await.unwrap();
+        assert!(keep);
+        assert!(app.popup.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_app_open_help_popup_in_normal_mode() {
+        let mut app = test_app();
+        app.mode = AppMode::Normal;
+        let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::empty());
+        let keep = app.handle_key(key).await.unwrap();
+        assert!(keep);
+        assert!(app.popup.is_some());
     }
 }

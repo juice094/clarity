@@ -10,10 +10,6 @@ use tracing::{debug, error, info};
 
 use crate::server::AppState;
 
-use clarity_core::agent::{Agent, AgentConfig};
-use clarity_core::llm::LlmFactory;
-
-
 // ==================== 健康检查 ====================
 
 #[derive(Serialize)]
@@ -111,28 +107,8 @@ pub async fn chat_completions(
         }
     };
 
-    // Create LLM provider (try Kimi first)
-    let llm = match LlmFactory::kimi() {
-        Ok(llm) => llm,
-        Err(e) => {
-            error!("Failed to create LLM provider: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("LLM configuration error: {}", e)
-                })),
-            )
-                .into_response();
-        }
-    };
-
-    // Build agent with the shared tool registry
-    let config = AgentConfig::new()
-        .with_max_iterations(5)
-        .with_read_only(false);
-
-    let agent = Agent::with_config(state.tool_registry.clone(), config)
-        .with_llm(Arc::from(llm));
+    // Clone the shared agent and run it
+    let agent = state.agent.clone();
 
     // Run the agent
     match agent.run(&user_message).await {

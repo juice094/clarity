@@ -1,0 +1,246 @@
+//! AgentController - Event-driven operation dispatcher for Agent.
+//!
+//! Inspired by Codex's event loop, the controller owns an [`Agent`] and
+//! processes [`Op`]s sent over an async channel.  This allows the UI (or any
+//! other frontend) to:
+//!
+//! * submit new user turns,
+//! * interrupt an in-flight turn,
+//! * resolve pending tool approvals, and
+//! * shut the agent down gracefully.
+
+use crate::agent::ops::Op;
+use crate::agent::Agent;
+use crate::approval::ApprovalResponse;
+use crate::error::AgentError;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::task::JoinHandle;
+use tracing::{debug, info, warn};
+
+/// State machine for the controller's background agent task.
+enum ControllerState {
+    /// No turn is currently running.
+    Idle,
+    /// A turn is in progress on a background task.
+    Running(JoinHandle<Result<String, AgentError>>),
+}
+
+/// Event-driven controller around an [`Agent`].
+///
+/// Create a controller with [`AgentController::new`], obtain a cheaply-clonable
+/// sender via [`AgentController::sender`], and then spawn or await the
+/// controller's own event loop.
+pub struct AgentController {
+    agent: Agent,
+    rx: UnboundedReceiver<Op>,
+}
+
+impl AgentController {
+    /// Wrap `agent` in a new controller.
+    pub fn new(agent: Agent) -> Self {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        Self { agent, rx }
+    }
+
+    /// Wrap `agent` in a new controller and return both the controller and a
+    /// clonable sender.
+    pub fn new_with_sender(agent: Agent) -> (Self, UnboundedSender<Op>) {
+        let (tx, rx) = mpsc::unbounded_channel();
+        (Self { agent, rx }, tx)
+    }
+
+    /// Obtain a clonable handle to the operation channel.
+    pub fn sender(&self) -> UnboundedSender<Op> {
+        // We keep a clone of the sender internally so that the receiver is
+        // never closed while the controller exists.
+        // However, we only store `rx`.  To return a sender we re-create one
+        // from the same channel… which is impossible without storing it.
+        //
+        // Instead we expose `new_with_sender` and keep `tx` alongside the
+        // controller when needed.  For ergonomic one-liners we also provide
+        // `spawn(agent)` below.
+        panic!("Use AgentController::new_with_sender(agent) or AgentController::spawn(agent) to obtain a sender");
+    }
+
+    /// Convenience constructor that spawns the event loop and returns the
+    /// clonable sender.
+    pub fn spawn(agent: Agent) -> UnboundedSender<Op> {
+        let (controller, tx) = Self::new_with_sender(agent);
+        tokio::spawn(controller.run());
+        tx
+    }
+
+    /// Run the event loop until [`Op::Shutdown`] is received or the channel
+    /// closes.
+    ///
+    /// The final accumulated response from the last successful turn is
+    /// returned.
+    pub async fn run(mut self) -> Result<String, AgentError> {
+        let mut result = String::new();
+        let mut state = ControllerState::Idle;
+
+        info!("AgentController event loop started");
+
+        loop {
+            tokio::select! {
+                biased;
+
+                op = self.rx.recv() => {
+                    match op {
+                        Some(Op::UserTurn(prompt)) => {
+                            debug!("Controller: UserTurn (len={})", prompt.len());
+                            self.agent.reset_cancel_token();
+                            let agent = self.agent.clone();
+                            let handle = tokio::spawn(async move {
+                                agent.run_streaming(&prompt, |_chunk| {}).await
+                            });
+                            state = ControllerState::Running(handle);
+                        }
+
+                        Some(Op::Interrupt) => {
+                            debug!("Controller: Interrupt");
+                            self.agent.cancel();
+                        }
+
+                        Some(Op::ToolApproval { request_id, approved }) => {
+                            debug!("Controller: ToolApproval {} approved={}", request_id, approved);
+                            if let Some(ref rt) = self.agent.approval_runtime() {
+                                let response = if approved {
+                                    ApprovalResponse::Approve
+                                } else {
+                                    ApprovalResponse::Reject
+                                };
+                                if let Err(e) = rt.resolve(&request_id, response).await {
+                                    warn!("Failed to resolve approval request: {}", e);
+                                }
+                            } else {
+                                warn!("ToolApproval received but no approval runtime configured");
+                            }
+                        }
+
+                        Some(Op::Compact) => {
+                            debug!("Controller: Compact (no-op; compaction runs automatically inside Agent)");
+                        }
+
+                        Some(Op::Shutdown) | None => {
+                            debug!("Controller: Shutdown");
+                            break;
+                        }
+                    }
+                }
+
+                // Only poll the background task when one is running.
+                turn_result = Self::poll_state(&mut state), if matches!(state, ControllerState::Running(_)) => {
+                    state = ControllerState::Idle;
+                    match turn_result {
+                        Some(Ok(Ok(response))) => {
+                            result = response;
+                        }
+                        Some(Ok(Err(AgentError::Cancelled))) => {
+                            warn!("Agent turn was cancelled");
+                            // Intentionally preserve the previous result
+                        }
+                        Some(Ok(Err(e))) => {
+                            return Err(e);
+                        }
+                        Some(Err(_)) => {
+                            return Err(AgentError::Llm(
+                                "Agent background task panicked".to_string(),
+                            ));
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+
+        // If a turn is still running when shutdown arrives, give it a moment
+        // to observe cancellation, but don't block indefinitely.
+        if let ControllerState::Running(handle) = state {
+            let _ = tokio::time::timeout(
+                tokio::time::Duration::from_secs(5),
+                handle,
+            )
+            .await;
+        }
+
+        info!("AgentController event loop finished");
+        Ok(result)
+    }
+
+    async fn poll_state(
+        state: &mut ControllerState,
+    ) -> Option<Result<Result<String, AgentError>, tokio::task::JoinError>> {
+        match state {
+            ControllerState::Running(handle) => Some(handle.await),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::{Agent, AgentConfig};
+    use crate::registry::ToolRegistry;
+
+    fn dummy_agent() -> Agent {
+        let registry = ToolRegistry::with_builtin_tools();
+        Agent::with_config(registry, AgentConfig::default())
+    }
+
+    #[tokio::test]
+    async fn test_controller_shutdown() {
+        let agent = dummy_agent();
+        let (controller, tx) = AgentController::new_with_sender(agent);
+        let handle = tokio::spawn(controller.run());
+
+        tx.send(Op::Shutdown).unwrap();
+        let result = handle.await.unwrap().unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_controller_interrupt_without_turn() {
+        let agent = dummy_agent();
+        let (controller, tx) = AgentController::new_with_sender(agent);
+        let handle = tokio::spawn(controller.run());
+
+        tx.send(Op::Interrupt).unwrap();
+        tx.send(Op::Shutdown).unwrap();
+        let result = handle.await.unwrap().unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_controller_sender_clone() {
+        let agent = dummy_agent();
+        let (controller, tx) = AgentController::new_with_sender(agent);
+        let tx2 = tx.clone();
+
+        let handle = tokio::spawn(controller.run());
+        tx2.send(Op::Shutdown).unwrap();
+        let result = handle.await.unwrap().unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_controller_interrupt_then_new_turn() {
+        use crate::agent::{AgentConfig, MockLlm};
+        use std::sync::Arc;
+
+        let registry = ToolRegistry::new();
+        let agent = Agent::with_config(registry, AgentConfig::default())
+            .with_llm(Arc::new(MockLlm));
+        let (controller, tx) = AgentController::new_with_sender(agent);
+        let handle = tokio::spawn(controller.run());
+
+        tx.send(Op::UserTurn("hello".to_string())).unwrap();
+        tx.send(Op::Interrupt).unwrap();
+        tx.send(Op::UserTurn("world".to_string())).unwrap();
+        tx.send(Op::Shutdown).unwrap();
+
+        let result = handle.await.unwrap();
+        assert!(result.is_ok());
+    }
+}

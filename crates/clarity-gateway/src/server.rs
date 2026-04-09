@@ -13,17 +13,20 @@ use tracing::{info, warn};
 
 use crate::handlers;
 use crate::session::SessionManager;
+use clarity_core::agent::Agent;
 use clarity_core::registry::ToolRegistry;
 
 /// 应用状态
 pub struct AppState {
+    pub agent: Arc<Agent>,
     pub session_manager: Arc<RwLock<SessionManager>>,
     pub tool_registry: ToolRegistry,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(agent: Arc<Agent>) -> Self {
         Self {
+            agent,
             session_manager: Arc::new(RwLock::new(SessionManager::new())),
             tool_registry: ToolRegistry::with_builtin_tools(),
         }
@@ -31,8 +34,19 @@ impl AppState {
 }
 
 /// 运行双端口服务器
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let state = Arc::new(AppState::new());
+pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
+    let state = Arc::new(AppState::new(agent));
+
+    // 启动会话清理后台任务
+    let cleanup_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            let mut manager = cleanup_state.session_manager.write().await;
+            manager.cleanup_expired(10);
+        }
+    });
 
     // 创建 API 服务器 (端口 18790)
     let api_app = create_api_router(state.clone());
@@ -71,7 +85,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// 创建 API 路由器
-fn create_api_router(state: Arc<AppState>) -> Router {
+pub fn create_api_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -87,7 +101,7 @@ fn create_api_router(state: Arc<AppState>) -> Router {
 }
 
 /// 创建 Admin 路由器
-fn create_admin_router(state: Arc<AppState>) -> Router {
+pub fn create_admin_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/stats", get(handlers::admin_stats))
         .route("/api/tools", get(handlers::admin_tools))

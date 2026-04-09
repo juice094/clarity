@@ -94,6 +94,10 @@ pub enum AgentError {
     /// Invalid response from LLM
     #[error("Invalid LLM response: {0}")]
     InvalidResponse(String),
+
+    /// Operation cancelled
+    #[error("Operation cancelled")]
+    Cancelled,
 }
 
 /// Result type for tool operations

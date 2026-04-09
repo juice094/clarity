@@ -8,9 +8,25 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use tracing::{debug, error, warn};
 
+use crate::approval::ApprovalMode;
 use crate::error::ToolError;
+use crate::tools::file::is_sensitive_file;
 use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
+
+/// Best-effort scan of a shell command string for references to sensitive files.
+fn detect_sensitive_in_command(command: &str) -> Option<String> {
+    for token in command.split_whitespace() {
+        let trimmed = token.trim_matches(|c| c == '"' || c == '\'');
+        if !trimmed.is_empty() {
+            let path = std::path::Path::new(trimmed);
+            if is_sensitive_file(path) {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
 
 /// Result of a shell command execution
 #[derive(Debug)]
@@ -125,6 +141,8 @@ impl Tool for BashTool {
             .map(|v| v.min(300))
             .unwrap_or(ctx.timeout_secs);
         
+        let sensitive = detect_sensitive_in_command(command);
+        
         let result = self.execute_bash(
             command,
             &ctx.working_dir,
@@ -132,13 +150,24 @@ impl Tool for BashTool {
             timeout_secs,
         ).await?;
         
-        Ok(json!({
+        let mut value = json!({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
             "stderr": result.stderr,
             "timed_out": result.timed_out,
             "success": result.exit_code == 0
-        }))
+        });
+        
+        if let Some(ref path) = sensitive {
+            if ctx.approval_mode == ApprovalMode::Yolo {
+                tracing::warn!("Sensitive file access in bash command (YOLO): {}", path);
+                if let Some(obj) = value.as_object_mut() {
+                    obj.insert("sensitive_file_warning".to_string(), json!(format!("Command references sensitive file: {}", path)));
+                }
+            }
+        }
+        
+        Ok(value)
     }
 }
 
@@ -246,6 +275,8 @@ impl Tool for PowerShellTool {
             .map(|v| v.min(300))
             .unwrap_or(ctx.timeout_secs);
         
+        let sensitive = detect_sensitive_in_command(command);
+        
         let result = self.execute_powershell(
             command,
             &ctx.working_dir,
@@ -253,20 +284,33 @@ impl Tool for PowerShellTool {
             timeout_secs,
         ).await?;
         
-        Ok(json!({
+        let mut value = json!({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
             "stderr": result.stderr,
             "timed_out": result.timed_out,
             "success": result.exit_code == 0
-        }))
+        });
+        
+        if let Some(ref path) = sensitive {
+            if ctx.approval_mode == ApprovalMode::Yolo {
+                tracing::warn!("Sensitive file access in PowerShell command (YOLO): {}", path);
+                if let Some(obj) = value.as_object_mut() {
+                    obj.insert("sensitive_file_warning".to_string(), json!(format!("Command references sensitive file: {}", path)));
+                }
+            }
+        }
+        
+        Ok(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::approval::ApprovalMode;
     use tempfile::TempDir;
+    use tokio::fs;
     
     #[tokio::test]
     async fn test_bash_echo() {
@@ -304,5 +348,21 @@ mod tests {
         assert_eq!(result["exit_code"], 0);
         assert!(result["stdout"].as_str().unwrap().contains("Hello World"));
         assert!(result["success"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_powershell_sensitive_file_yolo_warning() {
+        let temp_dir = TempDir::new().unwrap();
+        let tool = PowerShellTool::new();
+        let ctx = ToolContext::new()
+            .with_working_dir(temp_dir.path())
+            .with_approval_mode(ApprovalMode::Yolo);
+        
+        let sensitive_path = temp_dir.path().join(".env");
+        fs::write(&sensitive_path, "secret").await.unwrap();
+        
+        let args = json!({"command": format!("Get-Content '{}'", sensitive_path.display())});
+        let result = tool.execute(args, ctx).await.unwrap();
+        assert!(result["sensitive_file_warning"].as_str().is_some());
     }
 }

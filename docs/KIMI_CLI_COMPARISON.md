@@ -52,13 +52,13 @@
 |----------|---------|----------|----------|
 | **Agent 核心** | ✅ ReAct 循环 | ✅ Soul 系统 | ⭐⭐⭐ 高 |
 | **子代理系统** | ✅ 完整实现（含 Runner） | ✅ 完整实现 | ⭐⭐⭐⭐⭐ 极高 |
-| **后台任务** | ❌ 未实现 | ✅ BackgroundTaskManager | ⭐⭐⭐⭐⭐ 极高 |
+| **后台任务** | 🔄 骨架已实现，待集成活化 | ✅ BackgroundTaskManager | ⭐⭐⭐⭐⭐ 极高 |
 | **Wire 通信** | ✅ clarity-wire | ✅ wire 模块 | ⭐⭐⭐ 中 |
 | **审批系统** | ✅ 三种模式 | ✅ ApprovalRuntime | ⭐⭐⭐ 中 |
 | **上下文压缩** | ✅ SimpleCompaction | ✅ compaction | ⭐⭐ 低（思路相似）|
 | **工具系统** | ✅ 8 个基础工具 | ✅ 15+ 工具 | ⭐⭐⭐⭐ 高 |
-| **MCP 支持** | ⚠️ 骨架实现 | ✅ 完整支持 | ⭐⭐⭐⭐⭐ 极高 |
-| **记忆系统** | ⚠️ 独立但未集成 | ✅ 集成在 soul | ⭐⭐⭐ 中 |
+| **MCP 支持** | 🔄 骨架实现，`mcp.json` 配置支持进行中 | ✅ 完整支持 | ⭐⭐⭐⭐⭐ 极高 |
+| **记忆系统** | ✅ 已集成（clarity-memory → clarity-core） | ✅ 集成在 soul | ⭐⭐⭐ 中 |
 | **多 LLM** | ✅ 4 家提供商 | ✅ 6+ 家提供商 | ⭐⭐⭐ 中 |
 | **Web UI** | ❌ 画饼 | ✅ 完整实现 | ⭐⭐⭐⭐ 高 |
 | **IDE 集成** | ❌ 无 | ✅ VS Code, ACP | ⭐⭐⭐ 中 |
@@ -221,9 +221,12 @@ pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
 
 | 功能 | 实现难度 | 价值评估 | 建议方案 |
 |------|----------|----------|----------|
-| **SubagentRunner** | 中 | ⭐⭐⭐⭐⭐ | 参考 `subagents/runner.py` 实现 |
-| **BackgroundTaskManager** | 高 | ⭐⭐⭐⭐⭐ | 移植 Python 逻辑到 Rust |
-| **MCP 完整支持** | 中 | ⭐⭐⭐⭐⭐ | 参考 `tools/mcp.py` 实现 |
+| **SubagentRunner** | 中 | ⭐⭐⭐⭐⭐ | ✅ 已完成，参考 `subagents/runner.py` |
+| **PersistentMemoryStore** | 中 | ⭐⭐⭐⭐⭐ | ✅ 已完成，clarity-memory 已集成 |
+| **BackgroundTaskManager** | 高 | ⭐⭐⭐⭐⭐ | 🔄 骨架已完成，参考 `background/manager.py` 继续集成 |
+| **MCP 完整支持** | 中 | ⭐⭐⭐⭐⭐ | 🔄 进行中，参考 `tools/mcp.py` |
+| **Git 上下文传递** | 中 | ⭐⭐⭐⭐ | 参考 `subagents/git_context.py` |
+| **工具安全增强** | 低 | ⭐⭐⭐⭐ | 敏感文件检测、媒体嗅探 |
 
 ### 5.2 中优先级借鉴（中期价值）
 
@@ -246,56 +249,13 @@ pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
 
 ## 6. 具体实现建议
 
-### 6.1 立即行动项
+### 6.1 立即行动项（当前计划）
 
+#### P0: BackgroundTaskManager 集成活化
 ```rust
-// 1. 实现 SubagentRunner
-// 参考: kimi_cli/subagents/runner.py
-
-pub struct SubagentRunner {
-    labor_market: LaborMarket,
-    store: SubagentStore,
-}
-
-impl SubagentRunner {
-    pub async fn run(
-        &self,
-        spec: SubagentSpec,
-        parent_context: &Context,
-    ) -> Result<SubagentResult, SubagentError> {
-        // 实现要点:
-        // - 创建隔离的 Soul/Agent 实例
-        // - 传递 Git 上下文
-        // - 收集输出并返回父代理
-        // - 处理最大步数、取消等边界情况
-    }
-}
-```
-
-```rust
-// 2. 替换 PersistentMemoryStore 占位符
-// 参考: kimi_cli/soul/context.py 的记忆管理
-
-use clarity_memory::HybridStore;
-
-pub struct PersistentMemoryStore {
-    inner: HybridStore,
-}
-
-#[async_trait]
-impl MemoryStore for PersistentMemoryStore {
-    async fn store(&self, memory: Memory) -> anyhow::Result<()> {
-        // 真正持久化到 SQLite
-    }
-    // ...
-}
-```
-
-### 6.2 中期改进项
-
-```rust
-// 3. 实现 BackgroundTaskManager
 // 参考: kimi_cli/background/manager.py
+// 当前状态: 骨架已实现（crates/clarity-core/src/background/mod.rs）
+// 待完成: Gateway/TUI 集成、Wire File 持久化、任务恢复
 
 pub struct BackgroundTaskManager {
     store: BackgroundTaskStore,
@@ -310,6 +270,46 @@ impl BackgroundTaskManager {
     }
 }
 ```
+
+#### P0: MCP `mcp.json` 配置支持
+```json
+// 工作区配置示例: .clarity/mcp.json
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
+      "transport": "stdio"
+    }
+  ]
+}
+```
+- 支持从工作区/用户目录加载 MCP server 配置
+- 实现动态注册与热重载
+
+#### P1: Git 上下文传递
+```rust
+// 参考: kimi_cli/subagents/git_context.py
+// 在 SubagentRunner 执行时自动收集 Git 上下文
+
+pub struct GitContext {
+    pub branch: String,
+    pub recent_commits: Vec<String>,
+    pub uncommitted_changes: Vec<String>,
+}
+```
+
+#### P1: 工具安全增强
+- 敏感文件检测（`is_sensitive_file`）
+- 媒体文件嗅探（`MEDIA_SNIFF_BYTES`）
+- 工具沙箱路径限制（可选）
+
+### 6.2 中期改进项
+
+- Wire Protocol 版本管理
+- TUI 高级交互（多会话、历史搜索）
+- Web UI 原型探索
 
 ### 6.3 参考代码片段
 
@@ -375,25 +375,48 @@ pub async fn run_soul_checked(...) -> SoulResult<()> {
 3. **生产验证**：经过大规模用户验证，设计可靠
 4. **代码开放**：开源实现，可直接参考
 
-### 8.2 推荐策略（已更新 2026-04-04）
+### 8.2 Tier S/A/B/C 参照性矩阵
+
+| 层级 | 功能项 | 状态 | 说明 |
+|------|--------|------|------|
+| **Tier S** | BackgroundTaskManager | 🔄 骨架已完成，待集成 | 参考 `background/manager.py` |
+| **Tier S** | MCP config (`mcp.json`) | 🔄 进行中 | 配置加载 + 真实 server 联调 |
+| **Tier A** | Git context propagation | 📋 计划中 | 参考 `subagents/git_context.py` |
+| **Tier A** | Tool security enhancements | 📋 计划中 | 敏感文件检测、媒体嗅探 |
+| **Tier A** | MCP real server testing | 🔄 进行中 | filesystem / git server 联调 |
+| **Tier B** | Wire Protocol versioning | 📋  backlog | 协议版本管理 |
+| **Tier B** | TUI advanced interactions | 📋  backlog | 多会话、历史搜索 |
+| **Tier C** | devbase integration | 📋 长期 | 成熟期通过 MCP 对接 |
+| **Tier C** | syncthing-rust-rearch integration | 📋 长期 | 配置级对接 |
+
+### 8.3 推荐策略（已更新 2026-04-09）
 
 ```
 Phase 1 (已完成 ✅): SubagentRunner
     └─ 已实现，18 测试通过
-    
-Phase 2 (立即 P0): PersistentMemoryStore 真实实现
-    └─ 参考：kimi_cli/soul/context.py 的记忆管理
-    └─ 原因：当前最大可用性瓶颈
-    
-Phase 3 (立即 P0): BackgroundTaskManager
+
+Phase 2 (已完成 ✅): PersistentMemoryStore 真实实现
+    └─ clarity-memory → clarity-core 集成完成
+    └─ 57 个记忆相关测试通过
+
+Phase 3 (已完成 ✅): Gateway WebSocket 集成
+    └─ Gateway WebSocket streaming 已实现
+    └─ 3 个 WS 集成测试通过
+
+Phase 4 (立即 P0): BackgroundTaskManager 活化
     └─ 参考：kimi_cli/background/manager.py
     └─ 原因：支持后台任务和并行执行
-    
-Phase 4 (短期 P1): MCP 完整支持
+
+Phase 5 (立即 P0): MCP `mcp.json` 配置支持
     └─ 参考：kimi_cli/tools/mcp.py
-    
-Phase 5 (中期 P2): Web UI / Gateway 渠道
-    └─ 延后，TUI 已足够验证核心
+    └─ 原因：扩展工具生态的标准化入口
+
+Phase 6 (短期 P1): Git 上下文传递 + 工具安全增强
+    └─ 参考：kimi_cli/subagents/git_context.py
+    └─ 敏感文件检测、媒体嗅探
+
+Phase 7 (中期 P2): Web UI / IDE 扩展
+    └─ 长期画饼，非核心阻塞项
 ```
 
 > 📊 **详细优先级分析**: 参见 `IMPLEMENTATION_PRIORITY.md`

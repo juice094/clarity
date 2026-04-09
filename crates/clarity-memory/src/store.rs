@@ -127,11 +127,14 @@ impl MemoryStore {
     /// Bulk save facts for better performance
     pub async fn bulk_save_facts(
         &self,
-        facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)],
+        facts: &[FactTuple<'_>],
     ) -> Result<Vec<i64>> {
         self.inner.bulk_save_facts(facts).await
     }
 }
+
+/// Fact tuple for bulk operations: (content, tags, source, scope)
+pub type FactTuple<'a> = (&'a str, Vec<String>, Option<&'a str>, Option<&'a str>);
 
 // Synchronous API for backwards compatibility
 impl MemoryStore {

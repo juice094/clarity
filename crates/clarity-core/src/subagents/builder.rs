@@ -12,6 +12,7 @@ pub struct SubagentBuilder {
     labor_market: LaborMarket,
     tool_registry: ToolRegistry,
     parent_working_dir: std::path::PathBuf,
+    git_context: Option<String>,
 }
 
 impl SubagentBuilder {
@@ -21,7 +22,14 @@ impl SubagentBuilder {
             labor_market: LaborMarket::new(),
             tool_registry,
             parent_working_dir: parent_working_dir.into(),
+            git_context: None,
         }
+    }
+
+    /// Attach an optional Git context string to prepend to the system prompt
+    pub fn with_git_context(mut self, git_context: Option<String>) -> Self {
+        self.git_context = git_context;
+        self
     }
 
     /// Build a subagent from type definition
@@ -37,11 +45,18 @@ impl SubagentBuilder {
         // Filter tools based on allowed_tools
         let filtered_registry = self.filter_tools(&type_def.allowed_tools)?;
 
+        // Build system prompt, optionally prepending Git context
+        let system_prompt = if let Some(git_ctx) = &self.git_context {
+            format!("{}\n\n{}", git_ctx, type_def.system_prompt)
+        } else {
+            type_def.system_prompt.clone()
+        };
+
         // Build agent config
         let config = AgentConfig::new()
             .with_max_iterations(type_def.max_iterations)
             .with_working_dir(&self.parent_working_dir)
-            .with_system_prompt(&type_def.system_prompt);
+            .with_system_prompt(&system_prompt);
 
         let agent = Agent::with_config(filtered_registry, config);
 
@@ -77,10 +92,19 @@ impl SubagentBuilder {
     }
 
     /// Filter tools based on allowed list
-    fn filter_tools(&self, _allowed: &Option<Vec<String>>) -> anyhow::Result<ToolRegistry> {
-        // For simplicity, return all tools for now
-        // Full implementation would need proper tool filtering based on _allowed
-        Ok(self.tool_registry.clone())
+    fn filter_tools(&self, allowed: &Option<Vec<String>>) -> anyhow::Result<ToolRegistry> {
+        match allowed {
+            None => Ok(self.tool_registry.clone()),
+            Some(allowed_tools) => {
+                let filtered = ToolRegistry::new();
+                for name in allowed_tools {
+                    if let Ok(Some(tool)) = self.tool_registry.get(name) {
+                        let _ = filtered.register_shared(tool);
+                    }
+                }
+                Ok(filtered)
+            }
+        }
     }
 
     /// Get labor market reference

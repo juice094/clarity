@@ -34,6 +34,8 @@ pub enum Event {
     ResponseComplete,
     /// 工具调用
     ToolCall(ToolCallInfo),
+    /// 工具结果
+    ToolResult(ToolCallInfo),
     /// 错误
     Error(String),
 }
@@ -98,5 +100,38 @@ impl EventHandler {
 impl Default for EventHandler {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
+    #[tokio::test]
+    async fn test_event_handler_sender() {
+        let handler = EventHandler::new();
+        let tx = handler.get_sender();
+        assert!(tx.send(Event::Tick).is_ok());
+    }
+
+    #[test]
+    fn test_tool_call_info_clone() {
+        let info = ToolCallInfo {
+            name: "test".to_string(),
+            params: "{}".to_string(),
+            status: ToolStatus::Running,
+        };
+        let cloned = info.clone();
+        assert_eq!(cloned.name, "test");
+        assert!(matches!(cloned.status, ToolStatus::Running));
+    }
+
+    #[tokio::test]
+    async fn test_event_roundtrip() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        tx.send(Event::StreamResponse("hi".to_string())).unwrap();
+        let ev = rx.recv().await.unwrap();
+        assert!(matches!(ev, Event::StreamResponse(s) if s == "hi"));
     }
 }

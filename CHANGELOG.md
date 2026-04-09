@@ -2,51 +2,75 @@
 
 All notable changes to Project Clarity will be documented in this file.
 
-## [Unreleased] - 2026-04-04
+## [Unreleased] - 2026-04-09
 
 ### Added
 
-- **Subagent Runner** (`crates/clarity-core/src/subagents/runner.rs`)
-  - 完整子代理执行器实现，参考 Kimi CLI 架构
-  - 支持前台执行和恢复执行模式
-  - 执行上下文管理（持久化对话历史）
-  - Git 上下文自动收集（分支、提交、未提交更改）
-  - 输出收集和摘要生成
-  - 完整的错误处理（MaxStepsReached、Cancelled 等）
-  - 18 个单元测试覆盖核心逻辑
-  - API 设计参考 `std::process::Command` 构建器模式
+- **`clarity-memory` 集成到 `clarity-core`**
+  - `PersistentMemoryStore` 从占位符升级为真实实现
+  - 底层使用 `clarity_memory::MemoryStore`（SQLite + FTS5）
+  - 支持 `store`、`retrieve`、`search`、`get_all`、`clear`、`count` 全生命周期操作
+  - 集成测试已覆盖记忆持久化链路
 
-- **SubagentManager** (`crates/clarity-core/src/subagents/mod.rs`)
-  - 高级接口整合所有子代理功能
-  - 简化子代理生命周期管理
+- **Gateway WebSocket 集成**
+  - Gateway 新增 `/ws` WebSocket endpoint，支持实时流式消息推送
+  - 实现 Agent Wire 与 WebSocket 的双向桥接
+  - 新增 3 个 WebSocket 集成测试全部通过
+
+- **TUI Wire 适配器**
+  - TUI 应用层完成 Wire 绑定：`Agent::with_wire(Arc<Wire>)`
+  - 实现 WireMessage → TUI Event 的实时适配与渲染
+  - 支持行级滚动，优化长消息的可读性
+
+- **后台任务系统骨架**
+  - 新增 `BackgroundTaskManager`、`TaskScheduler`、`WorkerPool`
+  - 支持任务优先级队列、并发控制（信号量）、状态通知
+  - 任务状态机：`Pending → Running → Completed / Failed / Cancelled`
+  - 待完成：Gateway/TUI 集成活化、Wire File 持久化通信
+
+### Changed
+
+- **全工作区 clippy 清理**
+  - 修复所有 crate 的编译警告
+  - 消除大量未使用导入、冗余生命周期、不必要的可变绑定
+  - 当前剩余 3 个警告（均为未使用变量/可变修饰符，已在计划中修复）
+
+### Testing
+
+- **跨模块集成测试扩充**
+  - 新增 `core_wire` 集成测试（2 个）
+  - 新增 `gateway_http` 集成测试（4 个）
+  - 新增 `memory_persistence` 集成测试（1 个）
+  - 全工作区测试总数达到 **~380+**，全部通过
 
 ### Documentation
 
-- **Updated README.md**: 根据实际代码状态更新
-  - 修正代码规模为 ~645 KB（68 个 Rust 文件）
-  - 更新测试数量为 180+ 个
-  - 明确标注 PersistentMemoryStore 为占位符实现
-  - 更新子代理 Runner 状态为 ✅ 已实现
-  - 更新功能完成度矩阵
+- **Updated KIMI_CLI_COMPARISON.md**
+  - 更新模块对比矩阵：PersistentMemoryStore、Gateway WebSocket、记忆系统标记为 ✅ 已完成
+  - 更新立即行动项为当前计划（BackgroundTaskManager、MCP `mcp.json`、Git 上下文、工具安全增强）
+  - 新增 Tier S/A/B/C 参照性矩阵
 
-- **Updated PROJECT_REPORT.md**: 技术验证报告 v3.0
-  - 更新所有统计数据以匹配实际代码
-  - 补充 clarity-wire 和审批/压缩功能的测试状态
-  - 修正已知限制列表
-  - 更新后续推进路线
+- **Added THIRD_PARTY_INTEGRATION_ROADMAP.md**
+  - 第三方项目关系与集成路线图
+  - 短期/中期/长期规划与决策日志
 
-- **Added KIMI_CLI_COMPARISON.md**: 横向对比分析
-  - 与 Kimi CLI 的详细功能对比
-  - 参考价值和实现建议
+- **Updated README.md**
+  - 测试数量更新为 ~380+
+  - 项目状态表更新（clarity-memory ✅、Gateway WebSocket ✅、BackgroundTaskManager 🔄、MCP config 🔄）
+  - 已知限制更新，移除已修复项
+
+- **Updated docs/README.md**
+  - 新增 `THIRD_PARTY_INTEGRATION_ROADMAP.md` 索引
+  - 更新项目状态速览
 
 ### Code Status (Verified)
 
 | 指标 | 数值 | 验证命令 |
 |------|------|----------|
 | 编译 | ✅ | `cargo check --workspace` |
-| 测试 | 180+ passed | `cargo test --workspace --lib` |
+| 测试 | ~380+ passed | `cargo test --workspace --lib --tests` |
 | 警告 | 3 | `cargo clippy --workspace` |
-| 代码规模 | ~650 KB | PowerShell 统计 |
+| 代码规模 | ~750 KB，91 个 Rust 文件 | PowerShell 统计 |
 
 ## [0.1.1] - 2026-04-03
 

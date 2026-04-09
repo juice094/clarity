@@ -22,6 +22,7 @@ pub use search::{GlobTool, GrepTool};
 pub use shell::{BashTool, PowerShellTool};
 pub use web::{WebFetchTool, WebSearchTool};
 
+use crate::approval::ApprovalMode;
 use crate::error::ToolError;
 
 /// Result type for tool execution
@@ -47,6 +48,9 @@ pub struct ToolContext {
     
     /// Whether the operation is read-only
     pub read_only: bool,
+    
+    /// Current approval mode
+    pub approval_mode: ApprovalMode,
 }
 
 impl ToolContext {
@@ -58,6 +62,7 @@ impl ToolContext {
             timeout_secs: 30,
             max_output_size: 1024 * 1024, // 1MB
             read_only: false,
+            approval_mode: ApprovalMode::Interactive,
         }
     }
     
@@ -82,6 +87,12 @@ impl ToolContext {
     /// Add an environment variable
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
+        self
+    }
+    
+    /// Set approval mode
+    pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
+        self.approval_mode = mode;
         self
     }
 }

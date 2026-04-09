@@ -21,6 +21,18 @@ pub enum ApprovalSource {
     BackgroundAgent { task_id: String, agent_id: String },
 }
 
+impl ApprovalSource {
+    /// Returns a stable session key for this approval source
+    fn session_key(&self) -> String {
+        match self {
+            ApprovalSource::ForegroundTurn { turn_id } => format!("turn:{}", turn_id),
+            ApprovalSource::BackgroundAgent { task_id, agent_id } => {
+                format!("agent:{}:{}", agent_id, task_id)
+            }
+        }
+    }
+}
+
 /// Response to an approval request
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApprovalResponse {
@@ -56,17 +68,20 @@ pub struct ApprovalRequest {
     pub status: ApprovalStatus,
     /// When the request was created
     pub created_at: Instant,
+    /// Optional description highlighting sensitive nature or other concerns
+    pub description: Option<String>,
 }
 
 impl ApprovalRequest {
     /// Create a new approval request
-    fn new(tool_call: ToolCall, source: ApprovalSource) -> Self {
+    fn new(tool_call: ToolCall, source: ApprovalSource, description: Option<String>) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             tool_call,
             source,
             status: ApprovalStatus::Pending,
             created_at: Instant::now(),
+            description,
         }
     }
 }
@@ -88,6 +103,7 @@ pub trait ApprovalRuntime: Send + Sync {
         &self,
         tool_call: &ToolCall,
         source: ApprovalSource,
+        description: Option<String>,
     ) -> Result<String, AgentError>;
 
     /// Wait for a response to an approval request
@@ -133,12 +149,19 @@ pub enum ApprovalMode {
 pub struct ModeAwareApprovalRuntime<R: ApprovalRuntime> {
     inner: R,
     mode: ApprovalMode,
+    session_approvals: Mutex<HashMap<String, ()>>,
+    request_sessions: Mutex<HashMap<String, String>>,
 }
 
 impl<R: ApprovalRuntime> ModeAwareApprovalRuntime<R> {
     /// Create a new mode-aware wrapper
     pub fn new(inner: R, mode: ApprovalMode) -> Self {
-        Self { inner, mode }
+        Self {
+            inner,
+            mode,
+            session_approvals: Mutex::new(HashMap::new()),
+            request_sessions: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Get the current approval mode
@@ -165,6 +188,13 @@ impl<R: ApprovalRuntime> ModeAwareApprovalRuntime<R> {
     pub fn into_inner(self) -> R {
         self.inner
     }
+
+    /// Approve all requests for a given session key
+    pub fn approve_session(&self, session_key: &str) {
+        if let Ok(mut approvals) = self.session_approvals.lock() {
+            approvals.insert(session_key.to_string(), ());
+        }
+    }
 }
 
 #[async_trait]
@@ -173,8 +203,26 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
         &self,
         tool_call: &ToolCall,
         source: ApprovalSource,
+        description: Option<String>,
     ) -> Result<String, AgentError> {
-        self.inner.create_request(tool_call, source).await
+        let session_key = source.session_key();
+        let request_id = self
+            .inner
+            .create_request(tool_call, source.clone(), description)
+            .await?;
+        if let Ok(mut sessions) = self.request_sessions.lock() {
+            sessions.insert(request_id.clone(), session_key.clone());
+        }
+        // Auto-approve if session is already approved
+        let should_auto_approve = if let Ok(approvals) = self.session_approvals.lock() {
+            approvals.contains_key(&session_key)
+        } else {
+            false
+        };
+        if should_auto_approve {
+            let _ = self.inner.resolve(&request_id, ApprovalResponse::Approve).await;
+        }
+        Ok(request_id)
     }
 
     async fn wait_for_response(
@@ -183,12 +231,20 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
     ) -> Result<ApprovalResponse, AgentError> {
         match self.mode {
             ApprovalMode::Yolo => Ok(ApprovalResponse::Approve),
-            ApprovalMode::Plan => {
-                // In plan mode, we could add special logic here
-                // For now, behave like interactive mode
+            ApprovalMode::Plan | ApprovalMode::Interactive => {
+                // Check if session already approved
+                if let Ok(sessions) = self.request_sessions.lock() {
+                    if let Some(session_key) = sessions.get(request_id) {
+                        if let Ok(approvals) = self.session_approvals.lock() {
+                            if approvals.contains_key(session_key) {
+                                return Ok(ApprovalResponse::Approve);
+                            }
+                        }
+                    }
+                }
+
                 self.inner.wait_for_response(request_id).await
             }
-            ApprovalMode::Interactive => self.inner.wait_for_response(request_id).await,
         }
     }
 
@@ -197,6 +253,14 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
         request_id: &str,
         response: ApprovalResponse,
     ) -> Result<(), AgentError> {
+        if response == ApprovalResponse::ApproveForSession {
+            if let Ok(sessions) = self.request_sessions.lock() {
+                if let Some(session_key) = sessions.get(request_id) {
+                    self.approve_session(session_key);
+                }
+            }
+            return Ok(());
+        }
         self.inner.resolve(request_id, response).await
     }
 }
@@ -292,8 +356,9 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
         &self,
         tool_call: &ToolCall,
         source: ApprovalSource,
+        description: Option<String>,
     ) -> Result<String, AgentError> {
-        let request = ApprovalRequest::new(tool_call.clone(), source);
+        let request = ApprovalRequest::new(tool_call.clone(), source, description);
         let request_id = request.id.clone();
 
         let mut requests = self.requests.lock().map_err(|_| {
@@ -421,6 +486,7 @@ impl Clone for ApprovalRequest {
             source: self.source.clone(),
             status: self.status,
             created_at: self.created_at,
+            description: self.description.clone(),
         }
     }
 }
@@ -450,7 +516,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -470,7 +536,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -495,7 +561,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -520,7 +586,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -542,7 +608,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -576,7 +642,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source)
+            .create_request(&tool_call, source, None)
             .await
             .expect("Failed to create request");
 
@@ -597,7 +663,7 @@ mod tests {
                 turn_id: format!("turn-{}", i),
             };
             runtime
-                .create_request(&tool_call, source)
+                .create_request(&tool_call, source, None)
                 .await
                 .expect("Failed to create request");
         }
@@ -614,5 +680,93 @@ mod tests {
 
         let pending = runtime.list_pending();
         assert_eq!(pending.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_approve_for_session() {
+        let inner = InMemoryApprovalRuntime::new();
+        let runtime = ModeAwareApprovalRuntime::new(inner, ApprovalMode::Interactive);
+        let tool_call = create_test_tool_call();
+        let source = ApprovalSource::ForegroundTurn {
+            turn_id: "turn-123".to_string(),
+        };
+
+        // First request should be pending
+        let request_id1 = runtime
+            .create_request(&tool_call, source.clone(), None)
+            .await
+            .expect("Failed to create request");
+
+        let request1 = runtime
+            .inner()
+            .get_request(&request_id1)
+            .expect("Request not found");
+        assert_eq!(request1.status, ApprovalStatus::Pending);
+
+        // Resolve with ApproveForSession
+        runtime
+            .resolve(&request_id1, ApprovalResponse::ApproveForSession)
+            .await
+            .expect("Failed to resolve");
+
+        // Second request for same session should be auto-approved
+        let request_id2 = runtime
+            .create_request(&tool_call, source.clone(), None)
+            .await
+            .expect("Failed to create request");
+
+        let request2 = runtime
+            .inner()
+            .get_request(&request_id2)
+            .expect("Request not found");
+        assert_eq!(request2.status, ApprovalStatus::Resolved);
+
+        // wait_for_response should return Approve immediately
+        let response = runtime
+            .wait_for_response(&request_id2)
+            .await
+            .expect("Failed to wait for response");
+        assert_eq!(response, ApprovalResponse::Approve);
+    }
+
+    #[tokio::test]
+    async fn test_auto_approved_wait_for_response() {
+        let inner = InMemoryApprovalRuntime::new();
+        let runtime = ModeAwareApprovalRuntime::new(inner, ApprovalMode::Interactive);
+        let tool_call = create_test_tool_call();
+        let source = ApprovalSource::ForegroundTurn {
+            turn_id: "turn-123".to_string(),
+        };
+
+        // First request
+        let request_id1 = runtime
+            .create_request(&tool_call, source.clone(), None)
+            .await
+            .expect("Failed to create request");
+
+        // Approve for session
+        runtime
+            .resolve(&request_id1, ApprovalResponse::ApproveForSession)
+            .await
+            .expect("Failed to resolve");
+
+        // Second request - wait_for_response should return immediately without blocking
+        let request_id2 = runtime
+            .create_request(&tool_call, source.clone(), None)
+            .await
+            .expect("Failed to create request");
+
+        let start = Instant::now();
+        let response = runtime
+            .wait_for_response(&request_id2)
+            .await
+            .expect("Failed to wait for response");
+        let elapsed = start.elapsed();
+
+        assert_eq!(response, ApprovalResponse::Approve);
+        assert!(
+            elapsed < std::time::Duration::from_millis(50),
+            "wait_for_response should return immediately"
+        );
     }
 }

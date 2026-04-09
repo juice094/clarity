@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tracing::{debug, error, trace, warn};
 
@@ -109,8 +109,9 @@ impl WireMessage {
 /// 
 /// let wire = Wire::new();
 /// let soul = wire.soul_side();
-/// let mut ui = wire.ui_side();
+/// let mut ui = wire.ui_side(false);
 /// ```
+#[derive(Clone)]
 pub struct Wire {
     /// Sender for raw (unmerged) messages.
     raw_sender: broadcast::Sender<WireMessage>,
@@ -154,7 +155,7 @@ impl Wire {
         let soul_side = WireSoulSide {
             raw_sender: raw_sender.clone(),
             merged_sender: merged_sender.clone(),
-            merge_buffer: Mutex::new(None),
+            merge_buffer: Arc::new(Mutex::new(None)),
         };
         
         Self {
@@ -249,11 +250,12 @@ impl Default for Wire {
 /// automatically sent to both the raw and merged channels.
 /// 
 /// Uses interior mutability to allow sending from shared references.
+#[derive(Clone)]
 pub struct WireSoulSide {
     raw_sender: broadcast::Sender<WireMessage>,
     merged_sender: broadcast::Sender<WireMessage>,
     /// Buffer for accumulating mergeable messages (protected by mutex for interior mutability).
-    merge_buffer: Mutex<Option<WireMessage>>,
+    merge_buffer: Arc<Mutex<Option<WireMessage>>>,
 }
 
 impl WireSoulSide {
@@ -357,7 +359,7 @@ impl WireUISide {
     /// ```
     /// use clarity_wire::{Wire, WireMessage};
     /// 
-    /// # tokio_test::block_on(async {
+    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
     /// let wire = Wire::new();
     /// let soul = wire.soul_side();
     /// let mut ui = wire.ui_side(false);

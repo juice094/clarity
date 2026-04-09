@@ -1,11 +1,7 @@
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-mod channels;
-mod handlers;
-mod server;
-mod session;
-mod ws;
+use clarity_gateway::{channels, server};
 
 use channels::{ChannelManager, ChannelConfig, telegram::TelegramChannel, discord::DiscordChannel, webhook::WebhookChannel};
 use clarity_core::agent::{Agent, AgentConfig};
@@ -142,7 +138,7 @@ async fn main() {
 
     // 启动主 HTTP 服务器
     info!("🌐 Starting main HTTP server...");
-    if let Err(e) = server::run().await {
+    if let Err(e) = server::run(agent).await {
         error!("Server error: {}", e);
     }
 

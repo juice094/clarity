@@ -4,16 +4,21 @@
 //! - **LaborMarket**: 子代理类型注册表
 //! - **SubagentStore**: 状态存储
 //! - **SubagentBuilder**: 构建器
-//! - **SubagentRunner**: 执行器（新增）
+//! - **SubagentRunner**: 执行器
+//! - **ParallelExecutor**: 并行执行
 //!
 //! 设计参考 std::process::Command 的构建器模式。
 
 pub mod builder;
+mod parallel;
 pub mod registry;
 pub mod runner;
 mod store;
 
 pub use builder::SubagentBuilder;
+pub use parallel::{
+    run_parallel, ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch,
+};
 pub use registry::{AgentTypeDefinition, LaborMarket};
 pub use runner::{
     collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector,
@@ -53,6 +58,28 @@ impl SubagentManager {
         spec: RunSpec,
     ) -> Result<SubagentResult, SubagentError> {
         self.runner.run(spec, &mut self.store, None).await
+    }
+
+    /// 并行运行多个子代理
+    pub async fn run_parallel(
+        &mut self,
+        specs: Vec<RunSpec>,
+        config: ParallelConfig,
+    ) -> anyhow::Result<ParallelResult> {
+        use crate::background::BackgroundTaskManager;
+        
+        let task_manager = BackgroundTaskManager::new(
+            self.runner.working_dir().join("tasks"),
+            self.runner.working_dir(),
+            self.runner.working_dir().join("context"),
+        );
+        
+        let batch = SubagentBatch::new()
+            .add_many(specs)
+            .with_config(config);
+        
+        let mut executor = ParallelExecutor::new(task_manager, self.runner.clone());
+        executor.execute(batch).await
     }
 
     /// 获取存储
@@ -143,5 +170,27 @@ mod tests {
         };
         assert!(err.to_string().contains("10"));
         assert!(err.to_string().contains("execution"));
+    }
+
+    #[test]
+    fn test_parallel_config() {
+        let config = ParallelConfig::new()
+            .with_max_concurrency(5)
+            .with_timeout(600)
+            .cancel_on_error();
+        
+        assert_eq!(config.max_concurrency, 5);
+        assert_eq!(config.timeout_secs, Some(600));
+        assert!(config.cancel_on_error);
+    }
+
+    #[test]
+    fn test_subagent_batch() {
+        let batch = SubagentBatch::new()
+            .add(RunSpec::new("Task 1", "Do something").with_type("coder"))
+            .add(RunSpec::new("Task 2", "Do another").with_type("explore"));
+        
+        assert_eq!(batch.len(), 2);
+        assert!(!batch.is_empty());
     }
 }

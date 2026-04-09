@@ -449,60 +449,70 @@ pub struct GitContext {
     pub branch: Option<String>,
     /// 最近的提交
     pub recent_commits: Vec<String>,
-    /// 是否有未提交的更改
-    pub has_uncommitted: bool,
-    /// 更改的文件数
-    pub changed_files: usize,
-    /// 远程仓库 URL
-    pub remote_url: Option<String>,
+    /// 状态摘要
+    pub status_summary: String,
+    /// 仓库根目录
+    pub repo_root: Option<PathBuf>,
 }
 
-/// 收集 Git 上下文
-pub async fn collect_git_context(working_dir: impl AsRef<Path>) -> Option<String> {
-    let working_dir = working_dir.as_ref();
-    
-    // 检查是否是 Git 仓库
-    let git_dir = working_dir.join(".git");
-    if !git_dir.exists() {
-        return None;
-    }
-
-    let mut context = String::new();
-    context.push_str("# Git Context\n\n");
-
-    // 获取当前分支
-    match get_git_branch(working_dir).await {
-        Ok(Some(branch)) => {
-            context.push_str(&format!("Current branch: {}\n", branch));
+impl GitContext {
+    /// 从工作目录收集 Git 上下文
+    pub async fn collect(working_dir: impl AsRef<Path>) -> Option<GitContext> {
+        let working_dir = working_dir.as_ref();
+        let git_dir = working_dir.join(".git");
+        if !git_dir.exists() {
+            return None;
         }
-        _ => {}
+
+        let branch = get_git_branch(working_dir).await.ok().flatten();
+        let recent_commits = get_recent_commits(working_dir, 3).await.unwrap_or_default();
+        let changed_count = get_changed_files_count(working_dir).await.unwrap_or(0);
+        let status_summary = if changed_count > 0 {
+            format!("{} uncommitted files", changed_count)
+        } else {
+            "clean".to_string()
+        };
+        let repo_root = get_git_repo_root(working_dir)
+            .await
+            .ok()
+            .flatten()
+            .or_else(|| Some(working_dir.to_path_buf()));
+
+        Some(GitContext {
+            branch,
+            recent_commits,
+            status_summary,
+            repo_root,
+        })
     }
 
-    // 获取最近的提交
-    match get_recent_commits(working_dir, 5).await {
-        Ok(commits) if !commits.is_empty() => {
-            context.push_str("\nRecent commits:\n");
-            for commit in commits {
-                context.push_str(&format!("- {}\n", commit));
+    /// 格式化为提示词块
+    pub fn to_prompt_string(&self) -> String {
+        let mut s = String::from("# Git Context\n\n");
+        if let Some(branch) = &self.branch {
+            s.push_str(&format!("Current branch: {}\n", branch));
+        }
+        if !self.recent_commits.is_empty() {
+            s.push_str("Recent commits:\n");
+            for commit in &self.recent_commits {
+                s.push_str(&format!("- {}\n", commit));
             }
         }
-        _ => {}
-    }
-
-    // 检查未提交的更改
-    match get_changed_files_count(working_dir).await {
-        Ok(count) if count > 0 => {
-            context.push_str(&format!("\nUncommitted changes: {} files\n", count));
+        if !self.status_summary.is_empty() {
+            s.push_str(&format!("Status: {}\n", self.status_summary));
         }
-        _ => {}
+        s
     }
+}
 
-    Some(context)
+/// 收集 Git 上下文（返回格式化字符串的兼容接口）
+pub async fn collect_git_context(working_dir: impl AsRef<Path>) -> Option<String> {
+    GitContext::collect(working_dir).await.map(|ctx| ctx.to_prompt_string())
 }
 
 async fn get_git_branch(working_dir: impl AsRef<Path>) -> Result<Option<String>, std::io::Error> {
     let output = tokio::process::Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(working_dir)
         .output()
         .await?;
@@ -515,12 +525,29 @@ async fn get_git_branch(working_dir: impl AsRef<Path>) -> Result<Option<String>,
     }
 }
 
+async fn get_git_repo_root(
+    working_dir: impl AsRef<Path>,
+) -> Result<Option<PathBuf>, std::io::Error> {
+    let output = tokio::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(working_dir)
+        .output()
+        .await?;
+
+    if output.status.success() {
+        let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(Some(PathBuf::from(root)))
+    } else {
+        Ok(None)
+    }
+}
+
 async fn get_recent_commits(
     working_dir: impl AsRef<Path>,
     count: usize,
 ) -> Result<Vec<String>, std::io::Error> {
     let output = tokio::process::Command::new("git")
-        .args(&[
+        .args([
             "log",
             &format!("-n {}", count),
             "--oneline",
@@ -543,7 +570,7 @@ async fn get_recent_commits(
 
 async fn get_changed_files_count(working_dir: impl AsRef<Path>) -> Result<usize, std::io::Error> {
     let output = tokio::process::Command::new("git")
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .current_dir(working_dir)
         .output()
         .await?;
@@ -581,6 +608,20 @@ pub struct SubagentRunner {
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
     /// 审批模式
     approval_mode: ApprovalMode,
+}
+
+impl Clone for SubagentRunner {
+    fn clone(&self) -> Self {
+        Self {
+            labor_market: LaborMarket::new(),
+            tool_registry: self.tool_registry.clone(),
+            working_dir: self.working_dir.clone(),
+            context_dir: self.context_dir.clone(),
+            llm: self.llm.clone(),
+            approval_runtime: self.approval_runtime.clone(),
+            approval_mode: self.approval_mode,
+        }
+    }
 }
 
 impl SubagentRunner {
@@ -664,7 +705,7 @@ impl SubagentRunner {
         collector.stage("runner_started");
 
         // 5. 构建代理
-        let agent = self.build_agent(&agent_id, &type_def, spec.max_iterations, store)?;
+        let agent = self.build_agent(&agent_id, &type_def, spec.max_iterations, store, spec.git_context).await?;
         collector.stage("agent_built");
 
         // 6. 准备提示词
@@ -765,17 +806,24 @@ impl SubagentRunner {
     }
 
     /// 构建代理
-    fn build_agent(
+    async fn build_agent(
         &self,
         agent_id: &str,
         type_def: &AgentTypeDefinition,
         max_iterations_override: Option<usize>,
         _store: &SubagentStore,
+        enable_git_context: bool,
     ) -> Result<Agent, SubagentError> {
+        let git_ctx = if enable_git_context {
+            GitContext::collect(&self.working_dir).await.map(|ctx| ctx.to_prompt_string())
+        } else {
+            None
+        };
+
         let builder = SubagentBuilder::new(
             self.tool_registry.clone(),
             &self.working_dir,
-        );
+        ).with_git_context(git_ctx);
 
         let mut store_for_build = SubagentStore::new(&self.context_dir);
         store_for_build.create(agent_id.to_string(), type_def.name.clone());
@@ -811,18 +859,11 @@ impl SubagentRunner {
     async fn prepare_prompt(
         &self,
         spec: &RunSpec,
-        type_def: &AgentTypeDefinition,
+        _type_def: &AgentTypeDefinition,
         context: &ExecutionContext,
         resumed: bool,
     ) -> Result<String, SubagentError> {
         let mut prompt = spec.prompt.clone();
-
-        // 对于 explore 类型且非恢复执行，添加 Git 上下文
-        if type_def.name == "explore" && !resumed && spec.git_context {
-            if let Some(git_ctx) = collect_git_context(&self.working_dir).await {
-                prompt = format!("{}\n\n{}", git_ctx, prompt);
-            }
-        }
 
         // 如果有历史上下文，添加为参考
         let history = context.history();
@@ -910,6 +951,11 @@ Your previous response was too brief. Please provide a more comprehensive summar
     /// 获取劳动力市场
     pub fn labor_market(&self) -> &LaborMarket {
         &self.labor_market
+    }
+
+    /// 获取工作目录
+    pub fn working_dir(&self) -> &Path {
+        &self.working_dir
     }
 }
 
@@ -1023,5 +1069,92 @@ mod tests {
         
         assert_eq!(deserialized.agent_id, result.agent_id);
         assert_eq!(deserialized.status, result.status);
+    }
+
+    #[tokio::test]
+    async fn test_git_context_collect_none() {
+        let temp_dir = TempDir::new().unwrap();
+        let ctx = GitContext::collect(temp_dir.path()).await;
+        assert!(ctx.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_git_context_format() {
+        let ctx = GitContext {
+            branch: Some("main".to_string()),
+            recent_commits: vec!["abc123 fix bug".to_string(), "def456 add feat".to_string()],
+            status_summary: "2 uncommitted files".to_string(),
+            repo_root: Some(PathBuf::from("/repo")),
+        };
+        let s = ctx.to_prompt_string();
+        assert!(s.contains("main"));
+        assert!(s.contains("abc123 fix bug"));
+        assert!(s.contains("2 uncommitted files"));
+    }
+
+    #[tokio::test]
+    async fn test_git_context_collect_repo() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_dir = temp_dir.path().join("repo");
+        fs::create_dir(&repo_dir).await.unwrap();
+
+        // init git repo
+        let init = tokio::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_dir)
+            .output()
+            .await
+            .unwrap();
+        assert!(init.status.success());
+
+        // config user
+        let _ = tokio::process::Command::new("git")
+            .args(["config", "user.email", "test@test.com"])
+            .current_dir(&repo_dir)
+            .output()
+            .await;
+        let _ = tokio::process::Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(&repo_dir)
+            .output()
+            .await;
+
+        // create file and commit
+        fs::write(repo_dir.join("readme.txt"), "hello").await.unwrap();
+        let add = tokio::process::Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_dir)
+            .output()
+            .await
+            .unwrap();
+        assert!(add.status.success());
+
+        let commit = tokio::process::Command::new("git")
+            .args(["commit", "-m", "initial"])
+            .current_dir(&repo_dir)
+            .output()
+            .await
+            .unwrap();
+        assert!(commit.status.success());
+
+        let ctx = GitContext::collect(&repo_dir).await.expect("should collect");
+        assert!(ctx.branch.is_some());
+        assert!(!ctx.recent_commits.is_empty());
+        assert_eq!(ctx.status_summary, "clean");
+        assert!(ctx.repo_root.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_subagent_builder_git_context_injection() {
+        let registry = create_test_registry();
+        let builder = SubagentBuilder::new(registry, "/tmp")
+            .with_git_context(Some("# Git Context\n\nCurrent branch: main\n".to_string()));
+        let mut store = SubagentStore::new("/tmp/store");
+
+        let type_def = builder.labor_market().require("coder");
+        let agent = builder.build("test-git", type_def, &mut store).unwrap();
+
+        assert!(agent.config().system_prompt.contains("Git Context"));
+        assert!(agent.config().system_prompt.contains("main"));
     }
 }

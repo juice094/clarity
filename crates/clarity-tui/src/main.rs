@@ -1,7 +1,13 @@
 mod app;
+mod async_job;
+mod command_bar;
+mod diff;
 mod events;
+mod popup;
+mod popups;
 mod ui;
 mod widgets;
+mod wire_adapter;
 
 use anyhow::Result;
 use app::App;
@@ -89,7 +95,7 @@ fn create_agent() -> Result<Arc<Agent>> {
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
     let mut events = events::EventHandler::new();
-    
+
     // 设置事件发送器，用于后台任务向主循环发送事件
     app.set_event_sender(events.get_sender());
 
@@ -115,6 +121,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
             }
             events::Event::ToolCall(tool) => {
                 app.handle_tool_call(tool);
+            }
+            events::Event::ToolResult(tool) => {
+                app.handle_tool_result(tool);
             }
             events::Event::ResponseComplete => {
                 app.finish_generation();

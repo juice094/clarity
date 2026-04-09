@@ -264,7 +264,7 @@ async fn test_memory_with_agent_integration() {
 
     // Memory should now contain the conversation
     let memories = memory_store.get_all().await.unwrap();
-    assert!(memories.len() >= 1);
+    assert!(!memories.is_empty());
 }
 
 #[tokio::test]

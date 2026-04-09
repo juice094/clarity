@@ -21,7 +21,7 @@
 //! cargo run --example mcp_demo -- <command> [args...]
 //! ```
 
-use clarity_core::mcp::{McpClient, McpManager, McpToolAdapter};
+use clarity_core::mcp::{McpClient, McpClientBuilder, McpManager, McpToolAdapter};
 use clarity_core::ToolRegistry;
 
 #[tokio::main]
@@ -51,14 +51,16 @@ async fn main() -> anyhow::Result<()> {
     // 1. Connect to an MCP server via stdio
     // ------------------------------------------------------------------
     println!("▶️  Connecting to MCP server: {} {:?}", cmd, mcp_args);
-    let client = match McpClient::connect_stdio(&cmd, &mcp_args).await {
-        Ok(client) => client,
-        Err(e) => {
-            eprintln!("❌ Failed to connect to MCP server: {}", e);
-            eprintln!("Make sure the command '{}' is available in PATH.", cmd);
-            return Ok(());
-        }
-    };
+    let mut builder = McpClientBuilder::stdio("demo", &cmd);
+    for arg in &mcp_args {
+        builder = builder.arg(arg);
+    }
+    let mut client = builder.build();
+    if let Err(e) = client.connect().await {
+        eprintln!("❌ Failed to connect to MCP server: {}", e);
+        eprintln!("Make sure the command '{}' is available in PATH.", cmd);
+        return Ok(());
+    }
     println!("✅ Connected to MCP server\n");
 
     // ------------------------------------------------------------------
@@ -67,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
     let tools = client.list_tools().await?;
     println!("🔧 Discovered {} MCP tool(s):", tools.len());
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description);
+        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or(""));
     }
     println!();
 
@@ -75,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
     // 3. Wrap each MCP tool as a Clarity Tool and register them
     // ------------------------------------------------------------------
     let registry = ToolRegistry::new();
+    let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
     for tool in tools {
         let adapter = McpToolAdapter::new(client.clone(), tool);
         registry.register(adapter)?;
@@ -92,17 +95,16 @@ async fn main() -> anyhow::Result<()> {
     // ------------------------------------------------------------------
     // 5. Alternative: using McpManager for multiple connections
     // ------------------------------------------------------------------
-    let manager = McpManager::new();
-    manager.add_client("filesystem", client).await?;
+    let mut manager = McpManager::new();
+    manager.connect_stdio("filesystem", &cmd, &mcp_args).await?;
     println!("✅ Added client to McpManager");
 
-    let all_tools = manager.get_all_tools().await;
+    let all_tools = manager.tools();
     println!("📊 McpManager reports {} total tool(s)\n", all_tools.len());
 
     // ------------------------------------------------------------------
     // 6. Clean up
     // ------------------------------------------------------------------
-    manager.disconnect_all().await?;
     println!("👋 Disconnected from MCP server");
 
     Ok(())

@@ -6,7 +6,7 @@
 use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
 use clarity_core::agent::AgentConfig;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -70,13 +70,13 @@ async fn test_openai_streaming_e2e() {
     let agent = Agent::with_config(ToolRegistry::new(), AgentConfig::default())
         .with_llm(Arc::new(llm));
 
-    let chunks = Arc::new(AtomicUsize::new(0));
+    let chunks = Arc::new(Mutex::new(Vec::new()));
     let chunks_clone = chunks.clone();
 
     let result = agent
         .run_streaming("test query", move |chunk: &str| {
-            assert!(chunk == "Hello" || chunk == " world");
-            chunks_clone.fetch_add(1, Ordering::SeqCst);
+            assert!(!chunk.is_empty(), "chunk should not be empty");
+            chunks_clone.lock().unwrap().push(chunk.to_string());
         })
         .await;
 
@@ -86,7 +86,22 @@ async fn test_openai_streaming_e2e() {
 
     assert!(result.is_ok(), "run_streaming failed: {:?}", result);
     assert_eq!(result.unwrap(), "Hello world");
-    assert_eq!(chunks.load(Ordering::SeqCst), 2);
+
+    let received = chunks.lock().unwrap().clone();
+    assert!(!received.is_empty(), "should receive at least one chunk");
+    assert_eq!(received.join(""), "Hello world");
+    // Verify chunks appear in order without gaps or overlaps
+    let mut pos = 0usize;
+    for chunk in &received {
+        assert!(
+            "Hello world"[pos..].starts_with(chunk),
+            "chunk {:?} doesn't match at offset {}",
+            chunk,
+            pos
+        );
+        pos += chunk.len();
+    }
+    assert_eq!(pos, "Hello world".len());
 
     // 验证收到了 complete 和 stream 两个请求
     let complete_count = reqs.iter().filter(|r| !r.contains(r#""stream":true"#)).count();

@@ -22,6 +22,7 @@ regex = { workspace = true }
 glob = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+tokio-util = { workspace = true }
 rand = "0.8"
 uuid = { workspace = true }
 toml = "0.8"
@@ -33,8 +34,7 @@ html-escape = "0.2"
 # MCP (Model Context Protocol)
 rmcp = { workspace = true, optional = true }
 
-# clarity-memory integration (disabled by default due to incomplete state)
-clarity-memory = { path = "../clarity-memory", optional = true }
+clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
 
 [dev-dependencies]
@@ -46,4 +46,3 @@ anyhow = { workspace = true }
 [features]
 default = []
 mcp = ["dep:rmcp"]
-clarity-memory = ["dep:clarity-memory"]

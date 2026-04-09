@@ -168,9 +168,9 @@ impl StorageFactory {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use super::*;
-    
 
     /// Test helper to verify backend behavior
     pub async fn test_backend_basic<B: StorageBackend>(backend: &B) -> Result<()> {

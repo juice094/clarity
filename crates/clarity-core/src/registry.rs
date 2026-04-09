@@ -46,7 +46,7 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
         use crate::tools::{BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool};
-        use crate::tools::{WebSearchTool, WebFetchTool};
+        use crate::tools::{PowerShellTool, WebSearchTool, WebFetchTool};
         
         let registry = Self::new();
         
@@ -61,6 +61,7 @@ impl ToolRegistry {
         
         // Register shell tools
         let _ = registry.register(BashTool::new());
+        let _ = registry.register(PowerShellTool::new());
         
         // Register web tools
         let _ = registry.register(WebSearchTool::new());
@@ -79,8 +80,21 @@ impl ToolRegistry {
     ///
     /// Returns an error if a tool with the same name is already registered
     pub fn register<T: Tool + 'static>(&self, tool: T) -> Result<(), AgentError> {
-        let name = tool.name().to_string();
         let tool = Arc::new(tool) as SharedTool;
+        self.register_shared(tool)
+    }
+    
+    /// Register a shared tool in the registry
+    ///
+    /// # Arguments
+    ///
+    /// * `tool` - The shared tool to register
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a tool with the same name is already registered
+    pub fn register_shared(&self, tool: SharedTool) -> Result<(), AgentError> {
+        let name = tool.name().to_string();
         
         let mut tools = self.tools.write().map_err(|_| {
             AgentError::Registry("Registry lock poisoned".to_string())

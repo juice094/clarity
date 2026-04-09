@@ -11,8 +11,12 @@
 //! - State persistence
 //! - Parallel tool execution
 
+pub mod compaction_service;
 pub mod enhanced;
+pub mod ops;
+pub mod controller;
 
+use crate::agent::compaction_service::{CompactionService, CompactionServiceConfig};
 use crate::approval::{ApprovalMode, ApprovalRuntime, ApprovalSource, ApprovalResponse};
 use crate::compaction::{CompactionConfig, estimate_message_tokens};
 use crate::error::{AgentError, ToolError};
@@ -27,6 +31,7 @@ const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 // Re-export enhanced features
@@ -35,6 +40,8 @@ pub use enhanced::{
     ExecutionTracer, ParallelToolExecutor, RecoveryStrategy, StatePersistence, StepType,
     TokenUsage,
 };
+pub use controller::AgentController;
+pub use ops::Op;
 
 /// LLM message role
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -130,6 +137,8 @@ pub struct AgentConfig {
     pub system_prompt: String,
     /// Personality configuration
     pub personality_config: Option<PersonalityConfig>,
+    /// Optional compaction service configuration
+    pub compaction_service: Option<CompactionServiceConfig>,
 }
 
 impl Default for AgentConfig {
@@ -141,6 +150,7 @@ impl Default for AgentConfig {
             read_only: false,
             system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
             personality_config: None,
+            compaction_service: None,
         }
     }
 }
@@ -178,6 +188,12 @@ impl AgentConfig {
     /// Set personality configuration
     pub fn with_personality(mut self, config: PersonalityConfig) -> Self {
         self.personality_config = Some(config);
+        self
+    }
+
+    /// Set compaction service configuration
+    pub fn with_compaction_service(mut self, config: CompactionServiceConfig) -> Self {
+        self.compaction_service = Some(config);
         self
     }
 }
@@ -287,6 +303,7 @@ impl LlmProvider for MockLlm {
 ///     Ok(())
 /// }
 /// ```
+#[derive(Clone)]
 pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
@@ -296,7 +313,7 @@ pub struct Agent {
     memory_store: Option<Arc<dyn MemoryStore>>,
     memory_ticker: Option<MemoryTicker>,
     /// Optional wire for UI communication
-    wire: Option<Wire>,
+    wire: Option<Arc<Wire>>,
     /// Approval runtime for tool execution control
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
     /// Approval mode (Interactive, Yolo, Plan)
@@ -305,6 +322,10 @@ pub struct Agent {
     compaction_config: CompactionConfig,
     /// Maximum context tokens before compaction
     max_context_tokens: usize,
+    /// Optional compaction service for proactive history compression
+    compaction_service: Option<CompactionService>,
+    /// Cancellation token for interrupting in-flight runs
+    cancel_token: CancellationToken,
 }
 
 impl Agent {
@@ -334,7 +355,7 @@ impl Agent {
 
         Self {
             registry,
-            config,
+            config: config.clone(),
             llm: None,
             personality,
             system_prompt_builder,
@@ -345,6 +366,8 @@ impl Agent {
             approval_mode: ApprovalMode::Interactive,
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
+            compaction_service: config.compaction_service.map(CompactionService::new),
+            cancel_token: CancellationToken::new(),
         }
     }
 
@@ -366,8 +389,8 @@ impl Agent {
         self
     }
 
-    /// Set the wire for UI communication
-    pub fn with_wire(mut self, wire: Wire) -> Self {
+    /// Set the wire for UI communication (builder pattern)
+    pub fn with_wire(mut self, wire: Arc<Wire>) -> Self {
         self.wire = Some(wire);
         self
     }
@@ -401,6 +424,27 @@ impl Agent {
     pub fn with_max_context_tokens(mut self, max_tokens: usize) -> Self {
         self.max_context_tokens = max_tokens;
         self
+    }
+
+    /// Set the compaction service
+    pub fn with_compaction_service(mut self, service: CompactionService) -> Self {
+        self.compaction_service = Some(service);
+        self
+    }
+
+    /// Cancel any in-flight agent run.
+    pub fn cancel(&self) {
+        self.cancel_token.cancel();
+    }
+
+    /// Reset the cancellation token so a new turn can run.
+    pub fn reset_cancel_token(&mut self) {
+        self.cancel_token = CancellationToken::new();
+    }
+
+    /// Access the configured approval runtime, if any.
+    pub fn approval_runtime(&self) -> Option<Arc<dyn ApprovalRuntime>> {
+        self.approval_runtime.clone()
     }
 
     /// Get the tool registry
@@ -540,6 +584,18 @@ impl Agent {
 
         for iteration in 0..self.config.max_iterations {
             debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
+
+            if self.cancel_token.is_cancelled() {
+                warn!("Agent run cancelled");
+                return Err(AgentError::Cancelled);
+            }
+
+            // Proactive compaction via CompactionService
+            if let Some(ref service) = self.compaction_service {
+                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
+                    warn!("Compaction failed: {}", e);
+                }
+            }
 
             // 检查是否需要压缩
             if self.should_compact(&messages).await {
@@ -712,6 +768,18 @@ impl Agent {
         for iteration in 0..self.config.max_iterations {
             debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
 
+            if self.cancel_token.is_cancelled() {
+                warn!("Agent run streaming cancelled");
+                return Err(AgentError::Cancelled);
+            }
+
+            // Proactive compaction via CompactionService
+            if let Some(ref service) = self.compaction_service {
+                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
+                    warn!("Compaction failed: {}", e);
+                }
+            }
+
             let response = llm.complete(&messages, &tools).await?;
 
             if response.tool_calls.is_empty() {
@@ -835,6 +903,41 @@ impl Agent {
         }
     }
 
+    /// Detect whether a tool call targets a sensitive file or path.
+    fn detect_sensitive_access(&self, tool_name: &str, args: &Value) -> Option<String> {
+        use crate::tools::file::is_sensitive_file;
+        match tool_name {
+            "file_read" | "file_write" | "file_edit" => {
+                if let Some(path_str) = args.get("path").and_then(|v| v.as_str()) {
+                    let path = std::path::PathBuf::from(path_str);
+                    let path = if path.is_absolute() {
+                        path
+                    } else {
+                        self.config.working_dir.join(path)
+                    };
+                    if is_sensitive_file(&path) {
+                        return Some(path.display().to_string());
+                    }
+                }
+            }
+            "bash" | "powershell" => {
+                if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
+                    for token in cmd.split_whitespace() {
+                        let trimmed = token.trim_matches(|c| c == '"' || c == '\'');
+                        if !trimmed.is_empty() {
+                            let path = std::path::Path::new(trimmed);
+                            if is_sensitive_file(path) {
+                                return Some(trimmed.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     /// Execute a single tool call
     async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<Value, ToolError> {
         let name = &tool_call.function.name;
@@ -843,16 +946,34 @@ impl Agent {
 
         info!("Executing tool '{}' with args: {:?}", name, args);
 
+        let sensitive_path = self.detect_sensitive_access(name, &args);
+
         // 如果配置了审批运行时，先请求审批
         if let Some(ref runtime) = self.approval_runtime {
+            let description = sensitive_path
+                .as_ref()
+                .map(|p| format!("Sensitive file access: {}", p));
+
+            let tool_call_for_approval = if sensitive_path.is_some() {
+                let mut tc = tool_call.clone();
+                let mut approval_args = args.clone();
+                approval_args["_sensitive_file_warning"] =
+                    json!("This operation accesses a sensitive file");
+                tc.function.arguments = approval_args.to_string();
+                tc
+            } else {
+                tool_call.clone()
+            };
+
             match self.approval_mode {
                 ApprovalMode::Interactive => {
                     // 创建审批请求
                     let turn_id = uuid::Uuid::new_v4().to_string();
                     let request_id = runtime
                         .create_request(
-                            tool_call,
+                            &tool_call_for_approval,
                             ApprovalSource::ForegroundTurn { turn_id },
+                            description,
                         )
                         .await
                         .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
@@ -874,7 +995,15 @@ impl Agent {
                             ));
                         }
                         Ok(Ok(ApprovalResponse::ApproveForSession)) => {
-                            // TODO: 标记后续同类调用自动批准
+                            if let Err(e) = runtime
+                                .resolve(&request_id, ApprovalResponse::ApproveForSession)
+                                .await
+                            {
+                                return Err(ToolError::execution_failed(format!(
+                                    "Approval error: {}",
+                                    e
+                                )));
+                            }
                         }
                         Ok(Err(e)) => {
                             return Err(ToolError::execution_failed(format!(
@@ -897,8 +1026,9 @@ impl Agent {
                     let turn_id = uuid::Uuid::new_v4().to_string();
                     let request_id = runtime
                         .create_request(
-                            tool_call,
+                            &tool_call_for_approval,
                             ApprovalSource::ForegroundTurn { turn_id },
+                            description,
                         )
                         .await
                         .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
@@ -910,8 +1040,19 @@ impl Agent {
                     .await;
 
                     match approval_result {
-                        Ok(Ok(ApprovalResponse::Approve | ApprovalResponse::ApproveForSession)) => {
+                        Ok(Ok(ApprovalResponse::Approve)) => {
                             // 继续执行
+                        }
+                        Ok(Ok(ApprovalResponse::ApproveForSession)) => {
+                            if let Err(e) = runtime
+                                .resolve(&request_id, ApprovalResponse::ApproveForSession)
+                                .await
+                            {
+                                return Err(ToolError::execution_failed(format!(
+                                    "Approval error: {}",
+                                    e
+                                )));
+                            }
                         }
                         Ok(Ok(ApprovalResponse::Reject)) => {
                             return Err(ToolError::execution_failed(
@@ -937,7 +1078,8 @@ impl Agent {
         let ctx = ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
-            .with_timeout(self.config.tool_timeout_secs);
+            .with_timeout(self.config.tool_timeout_secs)
+            .with_approval_mode(self.approval_mode);
 
         self.registry.execute(name, args, ctx).await
     }
@@ -953,7 +1095,8 @@ impl Agent {
         let ctx = ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
-            .with_timeout(self.config.tool_timeout_secs);
+            .with_timeout(self.config.tool_timeout_secs)
+            .with_approval_mode(self.approval_mode);
 
         self.registry.execute(name, args, ctx).await
     }
@@ -1320,7 +1463,7 @@ mod tests {
         let config = AgentConfig::new();
         let agent = Agent::with_config(registry, config)
             .with_llm(Arc::new(MockLlm))
-            .with_wire(wire);
+            .with_wire(Arc::new(wire));
 
         // Run Agent in background
         let handle = tokio::spawn(async move {
@@ -1373,7 +1516,7 @@ mod tests {
         let config = AgentConfig::new();
         let agent = Agent::with_config(registry, config)
             .with_llm(Arc::new(MockLlm))
-            .with_wire(wire);
+            .with_wire(Arc::new(wire));
 
         // Run Agent in background with streaming
         let chunks = StdArc::new(Mutex::new(Vec::new()));

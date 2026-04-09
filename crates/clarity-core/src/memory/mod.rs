@@ -10,15 +10,12 @@
 //! - Memory consolidation
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-mod enhanced;
 mod store;
 
-pub use enhanced::{
-    FileMemoryStore, ImportanceScorer, MemoryConsolidator, TfidfSearch,
-};
 pub use store::{InMemoryStore, MemoryStore};
 
 /// A single memory entry
@@ -125,58 +122,114 @@ impl Default for MemoryTicker {
     }
 }
 
-/// Placeholder for PersistentMemoryStore (uses clarity-memory when enabled)
-#[derive(Debug, Clone)]
-pub struct PersistentMemoryStore;
+/// Persistent memory store backed by `clarity-memory`
+#[derive(Debug)]
+pub struct PersistentMemoryStore {
+    inner: clarity_memory::MemoryStore,
+    config: MemoryConfig,
+    importance_scores: Arc<RwLock<HashMap<i64, f32>>>,
+}
 
 impl PersistentMemoryStore {
     /// Create a new persistent memory store
-    pub fn new(_db_path: &std::path::Path) -> anyhow::Result<Self> {
-        Ok(Self)
+    pub fn new(db_path: &std::path::Path) -> anyhow::Result<Self> {
+        let db_path = db_path.to_path_buf();
+        let inner = block_on_async(clarity_memory::MemoryStore::new(db_path))??;
+        Ok(Self {
+            inner,
+            config: MemoryConfig::default(),
+            importance_scores: Arc::new(RwLock::new(HashMap::new())),
+        })
     }
 
     /// Create an in-memory persistent store for testing
     pub fn new_in_memory() -> anyhow::Result<Self> {
-        Ok(Self)
+        let inner = clarity_memory::MemoryStore::new_in_memory()?;
+        Ok(Self {
+            inner,
+            config: MemoryConfig::default(),
+            importance_scores: Arc::new(RwLock::new(HashMap::new())),
+        })
     }
 
     /// Create with custom config
-    pub fn with_config(_db_path: &std::path::Path, _config: MemoryConfig) -> anyhow::Result<Self> {
-        Ok(Self)
+    pub fn with_config(db_path: &std::path::Path, config: MemoryConfig) -> anyhow::Result<Self> {
+        let mut store = Self::new(db_path)?;
+        store.config = config;
+        Ok(store)
     }
 
     /// Get config reference
     pub fn config(&self) -> &MemoryConfig {
-        // Return static default since this is a placeholder
-        static DEFAULT_CONFIG: std::sync::OnceLock<MemoryConfig> = std::sync::OnceLock::new();
-        DEFAULT_CONFIG.get_or_init(MemoryConfig::default)
+        &self.config
+    }
+}
+
+fn block_on_async<F>(f: F) -> anyhow::Result<F::Output>
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(f)
+    })
+    .join()
+    .map_err(|e| anyhow::anyhow!("Thread panicked: {:?}", e))
+}
+
+fn fact_to_memory(fact: clarity_memory::Fact, scores: &HashMap<i64, f32>) -> Memory {
+    Memory {
+        id: fact.id.to_string(),
+        timestamp: fact.created_at,
+        content: fact.fact,
+        importance: scores.get(&fact.id).copied().unwrap_or(0.5),
+        tags: fact.tags,
     }
 }
 
 #[async_trait::async_trait]
 impl MemoryStore for PersistentMemoryStore {
-    async fn store(&self, _memory: Memory) -> anyhow::Result<()> {
+    async fn store(&self, memory: Memory) -> anyhow::Result<()> {
+        let id = self
+            .inner
+            .save_fact(&memory.content, &memory.tags, None, None)
+            .await?;
+        let mut scores = self.importance_scores.write().await;
+        scores.insert(id, memory.importance);
         Ok(())
     }
 
-    async fn retrieve(&self, _min_importance: f32) -> anyhow::Result<Vec<Memory>> {
-        Ok(Vec::new())
+    async fn retrieve(&self, min_importance: f32) -> anyhow::Result<Vec<Memory>> {
+        let all = self.get_all().await?;
+        Ok(all.into_iter().filter(|m| m.importance >= min_importance).collect())
     }
 
-    async fn search(&self, _query: &str, _limit: usize) -> anyhow::Result<Vec<Memory>> {
-        Ok(Vec::new())
+    async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
+        let facts = self.inner.search_fulltext(query, limit).await?;
+        let scores = self.importance_scores.read().await;
+        Ok(facts.into_iter().map(|f| fact_to_memory(f, &scores)).collect())
     }
 
     async fn get_all(&self) -> anyhow::Result<Vec<Memory>> {
-        Ok(Vec::new())
+        let count = self.inner.count_facts().await? as usize;
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let facts = self.inner.get_recent_facts(count).await?;
+        let scores = self.importance_scores.read().await;
+        Ok(facts.into_iter().map(|f| fact_to_memory(f, &scores)).collect())
     }
 
     async fn clear(&self) -> anyhow::Result<()> {
+        self.inner.clear_all().await?;
+        let mut scores = self.importance_scores.write().await;
+        scores.clear();
         Ok(())
     }
 
     async fn count(&self) -> anyhow::Result<usize> {
-        Ok(0)
+        Ok(self.inner.count_facts().await? as usize)
     }
 }
 
@@ -231,9 +284,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_file_memory_store() {
+    async fn test_persistent_memory_store() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let store = FileMemoryStore::new(temp_dir.path()).unwrap();
+        let store = PersistentMemoryStore::new(temp_dir.path().join("memory.db").as_path()).unwrap();
 
         store.store(Memory::new("Rust is great").with_tags(vec!["tech".to_string()])).await.unwrap();
         store.store(Memory::new("I love pizza").with_tags(vec!["food".to_string()])).await.unwrap();

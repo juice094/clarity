@@ -24,6 +24,7 @@ anyhow = { workspace = true }
 
 # Internal dependencies
 clarity-core = { workspace = true }
+clarity-wire = { path = "../clarity-wire" }
 
 # Web dependencies
 axum = { workspace = true }
@@ -38,6 +39,16 @@ teloxide = { version = "0.12", optional = true }
 # Discord Bot API (optional feature)
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache", "framework"], optional = true }
 poise = { version = "0.6", optional = true }
+
+# Webhook signature verification
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+
+[dev-dependencies]
+tokio-tungstenite = "0.24"
+http-body-util = "0.1"
+tower = "0.5"
 
 [features]
 default = ["telegram", "discord", "webhook"]

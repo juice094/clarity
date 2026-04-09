@@ -37,12 +37,12 @@
 //!    - Search for files
 //! 5. Shows proper error handling
 
-use clarity_core::mcp::{McpClient, McpManager, McpToolAdapter};
-use clarity_core::tools::{Tool, ToolContext};
+use clarity_core::mcp::{McpClient, McpClientBuilder, McpClientInstance, McpManager, McpToolAdapter};
+use clarity_core::tools::ToolContext;
 use clarity_core::ToolRegistry;
 use serde_json::json;
 use std::env;
-use tracing::{info, warn};
+use tracing::warn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -103,15 +103,14 @@ async fn main() -> anyhow::Result<()> {
     
     for tool in &tools {
         println!("   🔧 {}", tool.name);
-        println!("      {}", tool.description);
-        if let Some(schema) = &tool.input_schema {
-            if let Some(props) = schema.get("properties") {
-                println!("      Parameters: {}", 
-                    props.as_object()
-                        .map(|p| p.keys().cloned().collect::<Vec<_>>().join(", "))
-                        .unwrap_or_default()
-                );
-            }
+        println!("      {}", tool.description.as_deref().unwrap_or(""));
+        let schema = &tool.input_schema;
+        if let Some(props) = schema.get("properties") {
+            println!("      Parameters: {}", 
+                props.as_object()
+                    .map(|p| p.keys().cloned().collect::<Vec<_>>().join(", "))
+                    .unwrap_or_default()
+            );
         }
         println!();
     }
@@ -123,6 +122,7 @@ async fn main() -> anyhow::Result<()> {
     
     let registry = ToolRegistry::new();
     let mut registered_count = 0;
+    let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
     
     for tool in tools {
         let adapter = McpToolAdapter::new(client.clone(), tool);
@@ -272,24 +272,21 @@ async fn main() -> anyhow::Result<()> {
     // =================================================================
     println!("▶️  Step 5: Using McpManager for multiple connections...\n");
     
-    let manager = McpManager::new();
-    manager.add_client("filesystem", client.clone()).await?;
+    let mut manager = McpManager::new();
+    let fs_args: Vec<String> = std::iter::once("-y".into())
+        .chain(std::iter::once("@modelcontextprotocol/server-filesystem".into()))
+        .chain(allowed_paths.iter().cloned())
+        .collect();
+    manager.connect_stdio("filesystem", "npx", &fs_args).await?;
     println!("   ✅ Added filesystem client to McpManager");
     
-    let clients = manager.list_clients().await;
+    let clients = manager.list_servers();
     println!("   Connected clients: {:?}", clients);
     
-    let all_tools = manager.get_all_tools().await;
+    let all_tools = manager.tools();
     println!("   Total tools available: {}", all_tools.len());
     
-    // Register McpManager tools to registry as well
-    for adapter in all_tools {
-        let tool_name = adapter.name().to_string();
-        match registry.register(adapter) {
-            Ok(_) => info!("Registered MCP tool: {}", tool_name),
-            Err(_) => {} // Already registered, ignore
-        }
-    }
+    manager.register_all(&registry);
     
     println!("   Total registered tools: {}\n", registry.len()?);
 
@@ -339,9 +336,6 @@ async fn main() -> anyhow::Result<()> {
     // =================================================================
     println!("▶️  Step 7: Cleanup...");
     
-    manager.disconnect_all().await?;
-    client.disconnect().await?;
-    
     println!("✅ Disconnected from MCP server\n");
 
     // =================================================================
@@ -369,16 +363,17 @@ async fn main() -> anyhow::Result<()> {
 /// Helper function to connect to the MCP filesystem server
 async fn connect_to_filesystem_server(
     allowed_paths: &[String],
-) -> anyhow::Result<McpClient> {
-    let args: Vec<&str> = allowed_paths.iter().map(|s| s.as_str()).collect();
+) -> anyhow::Result<McpClientInstance> {
+    let mut builder = McpClientBuilder::stdio("filesystem", "npx")
+        .arg("-y")
+        .arg("@modelcontextprotocol/server-filesystem");
     
-    // The filesystem server requires at least one allowed path
-    let client = McpClient::connect_stdio("npx", &["-y", "@modelcontextprotocol/server-filesystem"]
-        .into_iter()
-        .chain(args.iter().copied())
-        .collect::<Vec<_>>().as_slice())
-        .await?;
+    for path in allowed_paths {
+        builder = builder.arg(path);
+    }
     
+    let mut client = builder.build();
+    client.connect().await?;
     Ok(client)
 }
 

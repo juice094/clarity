@@ -51,16 +51,33 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
                 match serde_json::from_str::<WsRequest>(&text) {
                     Ok(request) => {
-                        let response = handle_request(&session_id, request).await;
-                        match serde_json::to_string(&response) {
-                            Ok(json) => {
-                                if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                                    warn!("Failed to send message: {}", e);
-                                    break;
-                                }
+                        match request {
+                            WsRequest::Chat {
+                                message,
+                                context: _,
+                                use_wire: true,
+                            } => {
+                                handle_chat_with_wire(
+                                    &state,
+                                    &session_id,
+                                    message,
+                                    &mut sender,
+                                )
+                                .await;
                             }
-                            Err(e) => {
-                                error!("Failed to serialize response: {}", e);
+                            request => {
+                                let response = handle_request(&state, &session_id, request).await;
+                                match serde_json::to_string(&response) {
+                                    Ok(json) => {
+                                        if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                                            warn!("Failed to send message: {}", e);
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to serialize response: {}", e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -97,6 +114,82 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     info!("WebSocket disconnected: session_id={}", session_id);
 }
 
+/// Handle a Chat request with wire streaming.
+async fn handle_chat_with_wire(
+    state: &AppState,
+    session_id: &SessionId,
+    message: String,
+    sender: &mut futures::stream::SplitSink<WebSocket, WsMessage>,
+) {
+    debug!(
+        "Processing wire chat request from {}: message={}",
+        session_id, message
+    );
+
+    // 记录用户消息
+    {
+        let mut manager = state.session_manager.write().await;
+        if let Some(session) = manager.get_session_mut(session_id) {
+            session.record_message("user", &message);
+        }
+    }
+
+    // Create wire and wire-enabled agent
+    let wire = clarity_wire::Wire::new();
+    let agent = (*state.agent).clone().with_wire(Arc::new(wire.clone()));
+
+    // Run agent in background
+    let message_clone = message.clone();
+    let agent_task = tokio::spawn(async move { agent.run(&message_clone).await });
+
+    // Forward wire messages to WebSocket
+    let mut ui_side = wire.ui_side(false);
+    while let Some(msg) = ui_side.recv().await {
+        match serde_json::to_string(&msg) {
+            Ok(json) => {
+                if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                    warn!("Failed to send wire message: {}", e);
+                    break;
+                }
+            }
+            Err(e) => {
+                error!("Failed to serialize wire message: {}", e);
+            }
+        }
+    }
+
+    // Wait for agent to complete
+    match agent_task.await {
+        Ok(Ok(response_text)) => {
+            // 记录助手回复
+            {
+                let mut manager = state.session_manager.write().await;
+                if let Some(session) = manager.get_session_mut(session_id) {
+                    session.record_message("assistant", &response_text);
+                }
+            }
+        }
+        Ok(Err(e)) => {
+            error!("Agent execution error in WebSocket: {}", e);
+            let error = WsResponse::Error {
+                error: format!("Agent execution error: {}", e),
+            };
+            if let Ok(json) = serde_json::to_string(&error) {
+                let _ = sender.send(WsMessage::Text(json)).await;
+            }
+        }
+        Err(e) => {
+            error!("Agent task panicked: {}", e);
+            let error = WsResponse::Error {
+                error: format!("Agent task panicked: {}", e),
+            };
+            if let Ok(json) = serde_json::to_string(&error) {
+                let _ = sender.send(WsMessage::Text(json)).await;
+            }
+        }
+    }
+}
+
 /// WebSocket 请求
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -106,6 +199,8 @@ pub enum WsRequest {
         message: String,
         #[serde(default)]
         context: Option<serde_json::Value>,
+        #[serde(default)]
+        use_wire: bool,
     },
     Ping,
     GetHistory,
@@ -148,32 +243,71 @@ pub struct ChatMessage {
 }
 
 /// 处理 WebSocket 请求
-async fn handle_request(session_id: &SessionId, request: WsRequest) -> WsResponse {
+async fn handle_request(state: &AppState, session_id: &SessionId, request: WsRequest) -> WsResponse {
     match request {
-        WsRequest::Chat { message, context } => {
+        WsRequest::Chat {
+            message,
+            context: _,
+            use_wire: _,
+        } => {
             debug!(
                 "Processing chat request from {}: message={}",
                 session_id, message
             );
-            // TODO: 集成 clarity-core 处理对话
-            WsResponse::Chat {
-                message: format!(
-                    "Echo from Clarity Gateway: '{}' (context: {:?})",
-                    message, context
-                ),
-                tool_calls: None,
+
+            // 记录用户消息
+            {
+                let mut manager = state.session_manager.write().await;
+                if let Some(session) = manager.get_session_mut(session_id) {
+                    session.record_message("user", &message);
+                }
+            }
+
+            // 使用 Agent 处理消息
+            match state.agent.run(&message).await {
+                Ok(response_text) => {
+                    // 记录助手回复
+                    {
+                        let mut manager = state.session_manager.write().await;
+                        if let Some(session) = manager.get_session_mut(session_id) {
+                            session.record_message("assistant", &response_text);
+                        }
+                    }
+
+                    WsResponse::Chat {
+                        message: response_text,
+                        tool_calls: None,
+                    }
+                }
+                Err(e) => {
+                    error!("Agent execution error in WebSocket: {}", e);
+                    WsResponse::Error {
+                        error: format!("Agent execution error: {}", e),
+                    }
+                }
             }
         }
         WsRequest::Ping => WsResponse::Pong,
         WsRequest::GetHistory => {
-            // TODO: 从会话管理器获取历史
-            WsResponse::History {
-                messages: vec![ChatMessage {
-                    role: "system".to_string(),
-                    content: "Welcome to Clarity Gateway".to_string(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                }],
-            }
+            let messages = {
+                let manager = state.session_manager.read().await;
+                manager
+                    .get_session(session_id)
+                    .map(|session| {
+                        session
+                            .get_messages()
+                            .iter()
+                            .map(|m| ChatMessage {
+                                role: m.role.clone(),
+                                content: m.content.clone(),
+                                timestamp: m.timestamp.to_rfc3339(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+
+            WsResponse::History { messages }
         }
     }
 }

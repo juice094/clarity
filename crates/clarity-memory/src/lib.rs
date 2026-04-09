@@ -23,7 +23,7 @@
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! // Initialize stores
-//! let memory_store = MemoryStore::new("memory.db".as_ref()).await?;
+//! let memory_store = MemoryStore::new(std::path::Path::new("memory.db")).await?;
 //! let session_store = SessionStore::new("sessions")?;
 //!
 //! // Save a fact

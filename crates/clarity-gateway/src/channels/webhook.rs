@@ -39,6 +39,7 @@ pub struct WebhookChannel {
     port: u16,
     auth_header: Option<String>,
     auth_token: Option<String>,
+    webhook_secret: Option<String>,
 }
 
 impl WebhookChannel {
@@ -52,12 +53,17 @@ impl WebhookChannel {
             ))
             .unwrap_or((18791, None, None));
 
+        // 优先使用 config.webhook_secret，否则回退到 extra 中的 auth_token
+        let webhook_secret = config.webhook_secret.clone()
+            .or_else(|| auth_token.clone());
+
         Self {
             state: Arc::new(RwLock::new(WebhookState::Stopped)),
             config,
             port,
             auth_header,
             auth_token,
+            webhook_secret,
         }
     }
 
@@ -69,6 +75,7 @@ impl WebhookChannel {
             agent,
             auth_header: self.auth_header.clone(),
             auth_token: self.auth_token.clone(),
+            webhook_secret: self.webhook_secret.clone(),
         };
 
         let app = Router::new()
@@ -153,6 +160,7 @@ struct WebhookAppState {
     agent: Arc<Agent>,
     auth_header: Option<String>,
     auth_token: Option<String>,
+    webhook_secret: Option<String>,
 }
 
 /// 通用 Webhook 请求
@@ -301,14 +309,14 @@ async fn webhook_handler_with_platform(
     };
 
     // 验证认证（平台特定）
-    if let Err(e) = verify_platform_auth(&platform, &headers, &body) {
+    if let Err(e) = verify_platform_auth(&platform, &headers, &body, state.webhook_secret.as_deref()) {
         return (
             StatusCode::UNAUTHORIZED,
             Json(WebhookResponse {
                 success: false,
                 message: None,
                 response: None,
-                error: Some(e),
+                error: Some(e.to_string()),
             }),
         ).into_response();
     }
@@ -425,21 +433,95 @@ fn parse_wecom_request(body: &[u8]) -> Option<String> {
 /// 验证平台特定的认证
 fn verify_platform_auth(
     platform: &str,
-    _headers: &HeaderMap,
-    _body: &[u8],
-) -> Result<(), String> {
+    headers: &HeaderMap,
+    body: &[u8],
+    secret: Option<&str>,
+) -> Result<(), ChannelError> {
+    // 如果没有配置 secret，跳过验证
+    let secret = match secret {
+        Some(s) if !s.is_empty() => s,
+        _ => return Ok(()),
+    };
+
     match platform {
         "feishu" | "lark" => {
             // 飞书使用 X-Lark-Signature 验证
-            // 实际实现需要验证签名
+            let signature = headers
+                .get("X-Lark-Signature")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| ChannelError::AuthFailed("Missing X-Lark-Signature".to_string()))?;
+
+            let timestamp = headers
+                .get("X-Lark-Request-Timestamp")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+
+            let nonce = headers
+                .get("X-Lark-Request-Nonce")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+
+            let body_str = std::str::from_utf8(body).unwrap_or("");
+            let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_str);
+
+            let computed = compute_hmac_sha256_base64(secret, &sign_string);
+
+            if computed != signature {
+                return Err(ChannelError::AuthFailed("Invalid Feishu signature".to_string()));
+            }
+
             Ok(())
         }
         "dingtalk" | "dingding" => {
             // 钉钉使用 timestamp + sign 验证
+            #[derive(Deserialize)]
+            struct DingTalkAuthBody {
+                timestamp: Option<String>,
+                sign: Option<String>,
+            }
+
+            let auth_body: DingTalkAuthBody = serde_json::from_slice(body)
+                .map_err(|e| ChannelError::AuthFailed(format!("Invalid DingTalk body: {}", e)))?;
+
+            let timestamp = auth_body.timestamp
+                .ok_or_else(|| ChannelError::AuthFailed("Missing timestamp".to_string()))?;
+            let sign = auth_body.sign
+                .ok_or_else(|| ChannelError::AuthFailed("Missing sign".to_string()))?;
+
+            let sign_string = format!("{}\n{}", timestamp, secret);
+            let computed = compute_hmac_sha256_base64(secret, &sign_string);
+
+            if computed != sign {
+                return Err(ChannelError::AuthFailed("Invalid DingTalk signature".to_string()));
+            }
+
             Ok(())
         }
-        _ => Ok(()),
+        "wecom" | "wechat-work" => {
+            // 企业微信暂时直接通过
+            Ok(())
+        }
+        _ => {
+            // 通用平台直接通过
+            Ok(())
+        }
     }
+}
+
+/// 计算 HMAC-SHA256 并进行 Base64 编码
+fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
+    use base64::Engine;
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .expect("HMAC can take key of any size");
+    mac.update(message.as_bytes());
+    let result = mac.finalize();
+    let bytes = result.into_bytes();
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 /// 格式化平台特定的响应
@@ -624,5 +706,60 @@ mod tests {
 
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_dingtalk_signature_verification() {
+        let secret = "test_secret";
+        let timestamp = "1234567890";
+        let sign_string = format!("{}\n{}", timestamp, secret);
+        let sign = compute_hmac_sha256_base64(secret, &sign_string);
+
+        let body = format!(
+            r#"{{"timestamp":"{}","sign":"{}","text":{{"content":"Hello"}}}}"#,
+            timestamp, sign
+        );
+
+        let headers = HeaderMap::new();
+        let result = verify_platform_auth("dingtalk", &headers, body.as_bytes(), Some(secret));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_dingtalk_signature_mismatch() {
+        let body = r#"{"timestamp":"1234567890","sign":"invalid_sign","text":{"content":"Hello"}}"#;
+        let headers = HeaderMap::new();
+        let result = verify_platform_auth("dingtalk", &headers, body.as_bytes(), Some("test_secret"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_feishu_signature_verification() {
+        let secret = "test_secret";
+        let timestamp = "1234567890";
+        let nonce = "abc123";
+        let body_str = r#"{"event":{"message":{"content":"Hello"}}}"#;
+        let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_str);
+        let sign = compute_hmac_sha256_base64(secret, &sign_string);
+
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Lark-Signature", sign.parse().unwrap());
+        headers.insert("X-Lark-Request-Timestamp", timestamp.parse().unwrap());
+        headers.insert("X-Lark-Request-Nonce", nonce.parse().unwrap());
+
+        let result = verify_platform_auth("feishu", &headers, body_str.as_bytes(), Some(secret));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_feishu_signature_mismatch() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Lark-Signature", "invalid_sign".parse().unwrap());
+        headers.insert("X-Lark-Request-Timestamp", "1234567890".parse().unwrap());
+        headers.insert("X-Lark-Request-Nonce", "abc123".parse().unwrap());
+
+        let body = r#"{"event":{"message":{"content":"Hello"}}}"#;
+        let result = verify_platform_auth("feishu", &headers, body.as_bytes(), Some("test_secret"));
+        assert!(result.is_err());
     }
 }

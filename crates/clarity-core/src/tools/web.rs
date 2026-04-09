@@ -645,7 +645,7 @@ mod tests {
         <a class="result__a" href="https://example.com/2">Second Result</a>
         "#;
         
-        let results = tool.parse_duckduckgo_results(&simple_html, 10).unwrap();
+        let results = tool.parse_duckduckgo_results(simple_html, 10).unwrap();
         
         // The fallback regex should find these results
         assert!(!results.is_empty(), "Should find at least one result");
@@ -788,7 +788,7 @@ mod tests {
         assert!(result.is_ok(), "Search failed: {:?}", result.err());
         let value = result.unwrap();
         
-        assert!(value.get("results").unwrap().as_array().unwrap().len() > 0);
+        assert!(!value.get("results").unwrap().as_array().unwrap().is_empty());
         assert!(value.get("query").unwrap().as_str().unwrap() == "Rust programming language");
     }
 
@@ -810,6 +810,6 @@ mod tests {
         let value = result.unwrap();
         
         assert!(value.get("title").is_some());
-        assert!(value.get("content").unwrap().as_str().unwrap().len() > 0);
+        assert!(!value.get("content").unwrap().as_str().unwrap().is_empty());
     }
 }

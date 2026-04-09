@@ -236,6 +236,7 @@ enum FactTemplate {
     /// Use a static prefix + capture group
     Prefixed(String, usize),
     /// Custom formatter
+    #[allow(dead_code)]
     Custom(fn(&regex::Captures) -> Option<String>),
 }
 

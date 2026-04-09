@@ -202,7 +202,7 @@ fn test_error_types_api() {
     let _err = ToolError::invalid_params("test");
     let _err = ToolError::execution_failed("test");
     let _err = ToolError::not_found("test");
-    let _err = ToolError::from_io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+    let _err = ToolError::from_io(std::io::Error::other("test"));
 
     // Test: AgentError variants exist
     let _err = AgentError::Registry("test".to_string());
@@ -236,7 +236,7 @@ fn test_crate_level_reexports() {
         // Note: This function is never called, just checking compilation
         let _: fn() = || {
             // Types should be available from prelude
-            let _ = panic!("compile-time check");
+            panic!("compile-time check");
         };
     }
 }
