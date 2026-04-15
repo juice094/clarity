@@ -1,4 +1,8 @@
 use axum::{
+    body::Body,
+    http::{header, HeaderValue, Method, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
@@ -6,7 +10,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -48,16 +52,21 @@ pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // 创建 API 服务器 (端口 18790)
+    // 创建 API 服务器 (端口 18790) — 允许外部访问
     let api_app = create_api_router(state.clone());
     let api_addr: SocketAddr = "0.0.0.0:18790".parse()?;
 
-    // 创建 Admin 服务器 (端口 18800)
+    // 创建 Admin 服务器 (端口 18800) — 仅限本地回环，降低暴露面
     let admin_app = create_admin_router(state.clone());
-    let admin_addr: SocketAddr = "0.0.0.0:18800".parse()?;
+    let admin_addr: SocketAddr = "127.0.0.1:18800".parse()?;
 
     info!("📡 API Server listening on http://{}", api_addr);
-    info!("🎛️  Admin UI listening on http://{}", admin_addr);
+    info!("🎛️  Admin UI listening on http://{} (localhost only)", admin_addr);
+    if std::env::var("CLARITY_ADMIN_TOKEN").is_ok() {
+        info!("🔒 Admin authentication enabled via CLARITY_ADMIN_TOKEN");
+    } else {
+        warn!("⚠️  CLARITY_ADMIN_TOKEN not set — Admin UI is open to any local process");
+    }
 
     // 创建两个服务器的监听
     let api_listener = tokio::net::TcpListener::bind(api_addr).await?;
@@ -87,9 +96,19 @@ pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
 /// 创建 API 路由器
 pub fn create_api_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin([
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:3000".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:18800".parse::<HeaderValue>().unwrap(),
+        ])
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+        ]);
 
     Router::new()
         .route("/health", get(handlers::health_check))
@@ -100,12 +119,36 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+/// Admin 认证中间件
+///
+/// 如果 `CLARITY_ADMIN_TOKEN` 环境变量未设置，则允许无认证访问（降级兼容）。
+/// 如果已设置，则要求请求头携带 `Authorization: Bearer <token>`。
+async fn admin_auth(req: Request<Body>, next: Next) -> Response {
+    let expected = std::env::var("CLARITY_ADMIN_TOKEN").unwrap_or_default();
+    if expected.is_empty() {
+        return next.run(req).await;
+    }
+
+    let token = req
+        .headers()
+        .get("authorization")
+        .and_then(|v: &HeaderValue| v.to_str().ok())
+        .unwrap_or("");
+
+    if token == format!("Bearer {}", expected) {
+        next.run(req).await
+    } else {
+        (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
+    }
+}
+
 /// 创建 Admin 路由器
 pub fn create_admin_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/api/stats", get(handlers::admin_stats))
         .route("/api/tools", get(handlers::admin_tools))
         .nest_service("/", ServeDir::new("static"))
+        .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

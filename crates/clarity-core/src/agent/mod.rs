@@ -41,7 +41,7 @@ pub use enhanced::{
     ExecutionTracer, ParallelToolExecutor, RecoveryStrategy, StatePersistence, StepType,
     TokenUsage,
 };
-pub use controller::AgentController;
+pub use controller::{AgentController, ControllerEvent};
 pub use ops::Op;
 
 /// LLM message role

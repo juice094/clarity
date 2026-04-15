@@ -359,7 +359,8 @@ impl App {
         }
     }
 
-    /// 开始生成响应（通过 clarity-wire 接收流式事件）
+    /// 开始生成响应（统一通过 AgentController 发送 UserTurn，流式事件由
+    /// clarity-wire → wire_adapter → Event 路径接收）。
     async fn start_generation(&mut self, user_input: String) {
         self.is_generating = true;
         self.generation_metrics = Some(GenerationMetrics {
@@ -372,37 +373,7 @@ impl App {
 
         if let Some(ref controller_tx) = self.controller_tx {
             let _ = controller_tx.send(Op::UserTurn(user_input));
-            return;
         }
-
-        // Fallback: direct spawn without controller
-        let event_tx = self.event_tx.clone();
-
-        // 创建 Wire 并绑定到 Agent 副本
-        let wire = std::sync::Arc::new(clarity_wire::Wire::new());
-        let agent = (*self.agent).clone().with_wire(wire.clone());
-
-        // 启动适配器，将 WireMessage 转成 Event
-        if let Some(ref tx) = event_tx {
-            spawn_wire_adapter(wire.ui_side(false), tx.clone());
-        }
-
-        tokio::spawn(async move {
-            let result = agent.run_streaming(&user_input, |_chunk: &str| {
-                // 所有流式内容通过 wire 传递，回调留空
-            }).await;
-
-            match result {
-                Ok(_) => {
-                    // TurnEnd 已经由 wire adapter 转换为 ResponseComplete
-                }
-                Err(e) => {
-                    if let Some(ref tx) = event_tx {
-                        let _ = tx.send(Event::Error(format!("LLM 错误: {}", e)));
-                    }
-                }
-            }
-        });
     }
 
     /// 停止生成

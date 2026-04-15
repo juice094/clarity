@@ -55,7 +55,7 @@ $env:OPENAI_BASE_URL="http://localhost:11434/v1"  # Ollama
 npm install -g @modelcontextprotocol/server-filesystem
 
 # 或直接使用 npx (推荐)
-# npx -y @modelcontextprotocol/server-filesystem C:\Users\22414\Desktop
+# npx -y @modelcontextprotocol/server-filesystem C:\Users\<user>\Desktop
 ```
 
 ---
@@ -67,7 +67,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 **目的**: 验证 TUI 能正常启动并进行基本交互
 
 ```powershell
-cd C:\Users\22414\Desktop\clarity
+cd C:\Users\<user>\Desktop\clarity
 
 # 设置环境变量
 $env:ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
@@ -247,7 +247,7 @@ cargo run -p clarity-tui
 **数据库验证**:
 ```powershell
 # 检查记忆数据库
-cd C:\Users\22414\AppData\Local\Clarity  # 或其他数据目录
+cd C:\Users\<user>\AppData\Local\Clarity  # 或其他数据目录
 sqlite3 memories.db "SELECT * FROM memories LIMIT 5;"
 ```
 

@@ -17,6 +17,17 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
+/// Events emitted by [`AgentController`] during a turn.
+#[derive(Debug, Clone)]
+pub enum ControllerEvent {
+    /// A streaming text chunk from the model.
+    Chunk(String),
+    /// The turn completed successfully with the final response.
+    Complete(String),
+    /// The turn failed with an error.
+    Error(String),
+}
+
 /// State machine for the controller's background agent task.
 enum ControllerState {
     /// No turn is currently running.
@@ -33,26 +44,66 @@ enum ControllerState {
 pub struct AgentController {
     agent: Agent,
     rx: UnboundedReceiver<Op>,
+    event_tx: Option<UnboundedSender<ControllerEvent>>,
 }
 
 impl AgentController {
     /// Wrap `agent` in a new controller.
     pub fn new(agent: Agent) -> Self {
         let (_tx, rx) = mpsc::unbounded_channel();
-        Self { agent, rx }
+        Self {
+            agent,
+            rx,
+            event_tx: None,
+        }
     }
 
     /// Wrap `agent` in a new controller and return both the controller and a
     /// clonable sender.
     pub fn new_with_sender(agent: Agent) -> (Self, UnboundedSender<Op>) {
         let (tx, rx) = mpsc::unbounded_channel();
-        (Self { agent, rx }, tx)
+        (
+            Self {
+                agent,
+                rx,
+                event_tx: None,
+            },
+            tx,
+        )
+    }
+
+    /// Wrap `agent` in a new controller with an event channel for streaming
+    /// output, and return both the controller and a clonable sender.
+    pub fn new_with_events(
+        agent: Agent,
+        event_tx: UnboundedSender<ControllerEvent>,
+    ) -> (Self, UnboundedSender<Op>) {
+        let (tx, rx) = mpsc::unbounded_channel();
+        (
+            Self {
+                agent,
+                rx,
+                event_tx: Some(event_tx),
+            },
+            tx,
+        )
     }
 
     /// Convenience constructor that spawns the event loop and returns the
     /// clonable sender.
     pub fn spawn(agent: Agent) -> UnboundedSender<Op> {
         let (controller, tx) = Self::new_with_sender(agent);
+        tokio::spawn(controller.run());
+        tx
+    }
+
+    /// Convenience constructor that spawns the event loop with streaming
+    /// events and returns the clonable sender.
+    pub fn spawn_with_events(
+        agent: Agent,
+        event_tx: UnboundedSender<ControllerEvent>,
+    ) -> UnboundedSender<Op> {
+        let (controller, tx) = Self::new_with_events(agent, event_tx);
         tokio::spawn(controller.run());
         tx
     }
@@ -78,8 +129,27 @@ impl AgentController {
                             debug!("Controller: UserTurn (len={})", prompt.len());
                             self.agent.reset_cancel_token();
                             let agent = self.agent.clone();
+                            let event_tx = self.event_tx.clone();
+                            let event_tx2 = event_tx.clone();
                             let handle = tokio::spawn(async move {
-                                agent.run_streaming(&prompt, |_chunk| {}).await
+                                let result = agent.run_streaming(&prompt, move |chunk| {
+                                    if let Some(ref tx) = event_tx {
+                                        let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
+                                    }
+                                }).await;
+
+                                if let Some(ref tx) = event_tx2 {
+                                    match &result {
+                                        Ok(response) => {
+                                            let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                        }
+                                    }
+                                }
+
+                                result
                             });
                             state = ControllerState::Running(handle);
                         }
@@ -236,5 +306,46 @@ mod tests {
 
         let result = handle.await.unwrap();
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_controller_streaming_events() {
+        use crate::agent::{AgentConfig, MockLlm};
+        use std::sync::Arc;
+        use tokio::time::{timeout, Duration};
+
+        let registry = ToolRegistry::new();
+        let agent = Agent::with_config(registry, AgentConfig::default())
+            .with_llm(Arc::new(MockLlm));
+
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControllerEvent>();
+        let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
+        let handle = tokio::spawn(controller.run());
+
+        op_tx.send(Op::UserTurn("hello".to_string())).unwrap();
+
+        // MockLlm streams one chunk and then completes, so we expect
+        // Chunk followed by Complete.
+        let mut saw_chunk = false;
+        let mut saw_complete = false;
+        while let Ok(Some(event)) = timeout(Duration::from_secs(2), event_rx.recv()).await {
+            match event {
+                ControllerEvent::Chunk(text) => {
+                    assert_eq!(text, "This is a mock response");
+                    saw_chunk = true;
+                }
+                ControllerEvent::Complete(text) => {
+                    assert_eq!(text, "This is a mock response");
+                    saw_complete = true;
+                    break;
+                }
+                _ => panic!("unexpected event: {:?}", event),
+            }
+        }
+        assert!(saw_chunk, "expected at least one Chunk event");
+        assert!(saw_complete, "expected Complete event");
+
+        op_tx.send(Op::Shutdown).unwrap();
+        let _ = handle.await;
     }
 }

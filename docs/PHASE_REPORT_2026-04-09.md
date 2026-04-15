@@ -136,7 +136,7 @@
 
 ## 5. 第三方参照项目清单与横向对比规划
 
-> 仓库根目录：`C:\Users\22414\dev\third_party`
+> 仓库根目录：`C:\Users\<user>\dev\third_party`
 
 ### 5.1 高优先级参照项目（功能强相关）
 

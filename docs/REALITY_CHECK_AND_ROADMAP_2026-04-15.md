@@ -1,8 +1,8 @@
 # Clarity 项目可靠性分析报告
 
 > 分析日期：2026-04-15  
-> 分析范围：`C:\Users\22414\Desktop\clarity` 全代码库  
-> 对比项目：`C:\Users\22414\dev\third_party` (kimi-cli, zeroclaw, AutoCLI, claude-code-rust, openclaw)  
+> 分析范围：`C:\Users\<user>\Desktop\clarity` 全代码库  
+> 对比项目：`C:\Users\<user>\dev\third_party` (kimi-cli, zeroclaw, AutoCLI, claude-code-rust, openclaw)  
 > 分析原则：**基于实际代码，不夸大成果，不回避问题**
 
 ---
@@ -160,7 +160,7 @@ match ticker.tick().await {
 
 ---
 
-## 4. 第三方项目对比（基于 `C:\Users\22414\dev\third_party` 实际代码）
+## 4. 第三方项目对比（基于 `C:\Users\<user>\dev\third_party` 实际代码）
 
 ### 4.1 对比矩阵
 

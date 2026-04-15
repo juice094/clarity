@@ -3,7 +3,7 @@
 ## Quick Reference
 
 ```bash
-cd C:\Users\22414\Desktop\clarity
+cd C:\Users\<user>\Desktop\clarity
 cargo test --workspace --lib          # 334+ tests
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)

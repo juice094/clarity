@@ -28,7 +28,7 @@
 ### 2.1 编译测试结果
 
 ```powershell
-cd C:\Users\22414\Desktop\clarity
+cd C:\Users\<user>\Desktop\clarity
 
 # 检查编译
 cargo check --workspace
@@ -199,7 +199,7 @@ $env:ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
 $env:KIMI_API_KEY="sk-xxx"
 
 # 2. MCP Server (Node.js 环境)
-npx -y @modelcontextprotocol/server-filesystem C:\Users\22414\Desktop
+npx -y @modelcontextprotocol/server-filesystem C:\Users\<user>\Desktop
 
 # 3. 运行测试
 cargo run -p clarity-tui

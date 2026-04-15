@@ -437,4 +437,4 @@ Phase 7 (中期 P2): Web UI / IDE 扩展
 **文档索引**
 - Clarity 项目: `../README.md`
 - 技术报告: `../PROJECT_REPORT.md`
-- Kimi CLI 源码: `C:\Users\22414\Desktop\kimi-cli-main`
+- Kimi CLI 源码: `C:\Users\<user>\Desktop\kimi-cli-main`
