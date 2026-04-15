@@ -28,7 +28,7 @@ enum ControllerState {
 /// Event-driven controller around an [`Agent`].
 ///
 /// Create a controller with [`AgentController::new`], obtain a cheaply-clonable
-/// sender via [`AgentController::sender`], and then spawn or await the
+/// sender via [`AgentController::new_with_sender`], and then spawn or await the
 /// controller's own event loop.
 pub struct AgentController {
     agent: Agent,
@@ -47,19 +47,6 @@ impl AgentController {
     pub fn new_with_sender(agent: Agent) -> (Self, UnboundedSender<Op>) {
         let (tx, rx) = mpsc::unbounded_channel();
         (Self { agent, rx }, tx)
-    }
-
-    /// Obtain a clonable handle to the operation channel.
-    pub fn sender(&self) -> UnboundedSender<Op> {
-        // We keep a clone of the sender internally so that the receiver is
-        // never closed while the controller exists.
-        // However, we only store `rx`.  To return a sender we re-create one
-        // from the same channel… which is impossible without storing it.
-        //
-        // Instead we expose `new_with_sender` and keep `tx` alongside the
-        // controller when needed.  For ergonomic one-liners we also provide
-        // `spawn(agent)` below.
-        panic!("Use AgentController::new_with_sender(agent) or AgentController::spawn(agent) to obtain a sender");
     }
 
     /// Convenience constructor that spawns the event loop and returns the

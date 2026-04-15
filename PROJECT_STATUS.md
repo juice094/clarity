@@ -1,8 +1,10 @@
 # Clarity 项目状态报告
 
-> 生成时间：2026-04-09  
+> 生成时间：2026-04-09（2026-04-15 诚实化更新）  
 > 分支：main  
-> 最近提交：Phase 4B 完成 + AgentController TUI 集成
+> 最近提交：Phase 4B 完成 + AgentController TUI 集成 + Phase 1 止血修复
+
+> **2026-04-15 更新说明**：本次更新修正了此前文档中对构建状态和部分功能完成度的夸大描述，并完成了 6 项 P0 止血修复。详见 `docs/REALITY_CHECK_AND_ROADMAP_2026-04-15.md`。
 
 ---
 
@@ -11,8 +13,9 @@
 | 指标 | 状态 | 备注 |
 |------|------|------|
 | `cargo check --workspace` | ✅ 通过 | 全 crate 编译无错误 |
-| `cargo test --workspace --lib` | ✅ 331 passed | 3 ignored（需网络/外部依赖） |
-| `cargo test --workspace` | ✅ 全绿 | 含 examples + integration tests |
+| `cargo test --workspace --lib` | ✅ 334 passed | 3 ignored（需网络/外部依赖） |
+| `cargo test --workspace --examples` | ✅ 全绿 | 示例编译通过 |
+| `cargo test --workspace` | ⚠️ 部分 timeout | 个别 MCP 集成测试依赖外部 `npx` 进程，可能挂起 |
 | `cargo clippy --workspace` | ✅ 零警告 | 包含新引入的代码 |
 | `cargo test --workspace --doc` | ✅ 全绿 | Doc-test 全部修复 |
 
@@ -22,12 +25,14 @@
 
 ### Core — `clarity-core`
 - [x] **AgentController** (`src/agent/controller.rs`)：Codex 风格事件驱动调度器，支持 `UserTurn` / `Interrupt` / `ToolApproval` / `Compact` / `Shutdown`。
+  - *2026-04-15 修复*：移除了会 `panic!` 的公开 `sender()` API 陷阱。
 - [x] **Agent 取消机制**：`CancellationToken` 贯穿 `run()` 与 `run_streaming()`；支持 `cancel()` 与 `reset_cancel_token()` 实现多轮取消后再生成。
 - [x] **CompactionService** (`src/agent/compaction_service.rs`)： proactive 上下文压缩，按 token 阈值触发 LLM 摘要。
 - [x] **ApproveForSession** (`src/approval.rs`)：交互模式下首次审批后，同 session 后续调用自动放行。
 - [x] **MCP 集成** (`src/mcp/`)：支持 `mcp.json` 配置解析、stdio 启动、失败降级；示例文件已更新至新 API。
 - [x] **BackgroundTaskManager** (`src/background/`)：16 个测试通过，支持优先级、调度、Worker Pool。
 - [x] **Subagents** (`src/subagents/`)：LaborMarket、Store、Builder、Runner、ParallelExecutor 全链路可用。
+  - *2026-04-15 修复*：修正了 `SubagentRunner::clone()` 会静默清空 `labor_market` 的数据丢失 bug。
 - [x] **工具增强**：文件敏感检测、媒体嗅探（PNG/PDF）、PowerShellTool、Diff 预览内嵌 (`_diff_preview`)。
 
 ### TUI — `clarity-tui`
@@ -46,6 +51,7 @@
 ### Memory — `clarity-memory`
 - [x] **持久化存储**：SQLite / JSONL / Hybrid Backend。
 - [x] **MemoryTicker**：周期性触发记忆总结与归档。
+  - *限制*：当前触发后仅打印日志，实际的记忆整合/归档动作尚未接入（P1）。
 - [x] **向量化**：TF-IDF / Cosine Similarity（`sqlite-vec` 语义检索为 roadmap 项）。
 
 ---
@@ -162,8 +168,10 @@ cargo run --bin clarity-gateway
 
 | 限制 | 说明 | 预计优先级 |
 |------|------|-----------|
-| MCP SSE Transport | `SseMcpClient` 目前为 stub，不支持真正的 SSE 长连接 | P1 |
+| MCP SSE Transport | `SseMcpClientStub` 是占位实现，使用 HTTP POST 而非真正的 SSE 长连接 | P1 |
 | BackgroundTaskManager 真实 Agent 任务 | 当前仅支持 Bash/占位任务，缺少真正的 `AgentTask` | P1 |
+| AgentController 流式输出 | `UserTurn` 通过 Controller 执行时丢弃流式输出，TUI 与 Gateway 路径尚未统一 | P1 |
+| MemoryTicker 实际动作 | 触发后仅打印日志，未执行记忆整合/归档 | P1 |
 | Gateway Session 持久化 | Session 仅存内存，重启后丢失 | P2 |
 | Vector Search (sqlite-vec) | `search_similar` 使用 TF-IDF，非语义向量检索 | P2 |
 | Slack 频道集成 | Roadmap 中标记为 P0，尚未实现 | P2 |

@@ -102,6 +102,9 @@ pub struct App {
     pub generation_metrics: Option<GenerationMetrics>,
     /// 当前人格类型
     pub current_yuan_type: String,
+    /// 命令补全状态
+    complete_last_prefix: String,
+    complete_last_index: usize,
 }
 
 impl App {
@@ -133,6 +136,8 @@ impl App {
             registry: build_default_registry(),
             generation_metrics: None,
             current_yuan_type,
+            complete_last_prefix: String::new(),
+            complete_last_index: 0,
         }
     }
 
@@ -167,10 +172,11 @@ impl App {
                 KeyCode::Char('c') => {
                     if self.is_generating {
                         self.stop_generation();
-                        return Ok(true);
                     } else {
-                        return Ok(false);
+                        // Ctrl+C when idle -> switch to Normal mode instead of quitting
+                        self.mode = AppMode::Normal;
                     }
+                    return Ok(true);
                 }
                 KeyCode::Char('d') => {
                     return Ok(false);
@@ -252,10 +258,13 @@ impl App {
                         self.input_pane.set_cursor_position(len);
                     }
                     KeyCode::Up => {
-                        self.scroll_up();
+                        self.input_pane.history_prev();
                     }
                     KeyCode::Down => {
-                        self.scroll_down();
+                        self.input_pane.history_next();
+                    }
+                    KeyCode::Tab => {
+                        self.complete_command();
                     }
                     KeyCode::Char(c) => {
                         self.input_pane.insert_char(c);
@@ -490,6 +499,40 @@ impl App {
             format!("Tool: {}", tool.name),
             tool.params,
         )));
+    }
+
+    /// 命令补全（Tab 键）
+    fn complete_command(&mut self) {
+        let input = self.input_pane.input();
+        if !input.starts_with('/') {
+            return;
+        }
+        let prefix = input.to_lowercase();
+        let candidates: Vec<&str> = self
+            .registry
+            .names()
+            .into_iter()
+            .filter(|name| name.to_lowercase().starts_with(&prefix))
+            .collect();
+        if candidates.is_empty() {
+            return;
+        }
+        // Cycle through candidates on repeated Tab presses
+        let (next_cmd, _next_idx) = if self.complete_last_prefix != prefix {
+            self.complete_last_prefix = prefix.clone();
+            self.complete_last_index = 0;
+            (candidates[0], 0)
+        } else {
+            let idx = (self.complete_last_index + 1) % candidates.len();
+            self.complete_last_index = idx;
+            (candidates[idx], idx)
+        };
+        // Replace input with the selected command + trailing space
+        self.input_pane.clear();
+        for c in next_cmd.chars() {
+            self.input_pane.insert_char(c);
+        }
+        self.input_pane.insert_char(' ');
     }
 
     /// 时钟滴答

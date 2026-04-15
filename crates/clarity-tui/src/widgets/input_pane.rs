@@ -14,6 +14,9 @@ use unicode_width::UnicodeWidthStr;
 pub struct InputPane {
     input: String,
     cursor_position: usize, // Character position, NOT byte index
+    history: Vec<String>,
+    history_index: Option<usize>,
+    draft: String,
 }
 
 impl InputPane {
@@ -21,6 +24,9 @@ impl InputPane {
         Self {
             input: String::new(),
             cursor_position: 0,
+            history: Vec::new(),
+            history_index: None,
+            draft: String::new(),
         }
     }
 
@@ -45,6 +51,7 @@ impl InputPane {
         let byte_idx = self.char_pos_to_byte_idx(self.cursor_position);
         self.input.insert(byte_idx, c);
         self.cursor_position += 1;
+        self.history_index = None;
     }
 
     pub fn delete_char(&mut self) {
@@ -83,8 +90,53 @@ impl InputPane {
     }
 
     pub fn clear(&mut self) {
+        let text = self.input.trim().to_string();
+        if !text.is_empty() && self.history.last() != Some(&text) {
+            self.history.push(text);
+        }
         self.input.clear();
         self.cursor_position = 0;
+        self.history_index = None;
+        self.draft.clear();
+    }
+
+    pub fn history_prev(&mut self) {
+        if self.history.is_empty() {
+            return;
+        }
+        match self.history_index {
+            None => {
+                self.draft = self.input.clone();
+                let idx = self.history.len() - 1;
+                self.history_index = Some(idx);
+                self.input = self.history[idx].clone();
+                self.cursor_position = self.input.chars().count();
+            }
+            Some(idx) if idx > 0 => {
+                let idx = idx - 1;
+                self.history_index = Some(idx);
+                self.input = self.history[idx].clone();
+                self.cursor_position = self.input.chars().count();
+            }
+            Some(_) => {}
+        }
+    }
+
+    pub fn history_next(&mut self) {
+        match self.history_index {
+            None => {}
+            Some(idx) => {
+                if idx + 1 < self.history.len() {
+                    let idx = idx + 1;
+                    self.history_index = Some(idx);
+                    self.input = self.history[idx].clone();
+                } else {
+                    self.history_index = None;
+                    self.input = self.draft.clone();
+                }
+                self.cursor_position = self.input.chars().count();
+            }
+        }
     }
 }
 

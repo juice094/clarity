@@ -47,6 +47,8 @@ struct ChatCompletionRequest {
     model: String,
     messages: Vec<ApiMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
@@ -142,7 +144,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
     async fn complete(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
         // Convert internal Message to API message format
         let api_messages: Vec<ApiMessage> = messages
@@ -154,9 +156,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
             })
             .collect();
 
+        let tools_opt = tools.as_array().filter(|a| !a.is_empty()).map(|_| tools.clone());
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
+            tools: tools_opt,
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -233,7 +237,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
     fn stream(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         let api_messages: Vec<ApiMessage> = messages
             .iter()
@@ -244,9 +248,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
             })
             .collect();
 
+        let tools_opt = tools.as_array().filter(|a| !a.is_empty()).map(|_| tools.clone());
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
+            tools: tools_opt,
             temperature: None,
             max_tokens: None,
             stream: true,
@@ -930,6 +936,7 @@ mod tests {
                 content: "hello".into(),
                 tool_calls: None,
             }],
+            tools: None,
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -949,6 +956,7 @@ mod tests {
                 content: "hello".into(),
                 tool_calls: None,
             }],
+            tools: None,
             temperature: None,
             max_tokens: None,
             stream: false,

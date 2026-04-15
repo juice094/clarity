@@ -613,7 +613,7 @@ pub struct SubagentRunner {
 impl Clone for SubagentRunner {
     fn clone(&self) -> Self {
         Self {
-            labor_market: LaborMarket::new(),
+            labor_market: self.labor_market.clone(),
             tool_registry: self.tool_registry.clone(),
             working_dir: self.working_dir.clone(),
             context_dir: self.context_dir.clone(),

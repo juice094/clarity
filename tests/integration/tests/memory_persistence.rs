@@ -14,7 +14,7 @@ async fn test_memory_persistence_through_core() {
 
     // First agent + store instance
     let store = Arc::new(
-        PersistentMemoryStore::new(&db_path).expect("Failed to create PersistentMemoryStore"),
+        PersistentMemoryStore::new(&db_path).await.expect("Failed to create PersistentMemoryStore"),
     );
 
     let registry = ToolRegistry::with_builtin_tools();
@@ -38,7 +38,7 @@ async fn test_memory_persistence_through_core() {
     drop(agent);
 
     // Re-create a new store pointing at the same file
-    let store2 = PersistentMemoryStore::new(&db_path).expect("Failed to reopen PersistentMemoryStore");
+    let store2 = PersistentMemoryStore::new(&db_path).await.expect("Failed to reopen PersistentMemoryStore");
 
     // Verify the directly saved fact is retrievable
     let all = store2.get_all().await.expect("get_all failed");

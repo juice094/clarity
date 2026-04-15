@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, RwLock};
-use tracing::info;
+use tracing::{info, warn};
 
 // =============================================================================
 // Transport Types
@@ -475,16 +475,21 @@ impl McpClient for HttpMcpClient {
 }
 
 // =============================================================================
-// SSE Client
+// SSE Client Stub
 // =============================================================================
-
-pub struct SseMcpClient {
+/// Stub implementation for SSE MCP client.
+///
+/// **WARNING**: This is not a real SSE client. `connect()` is a no-op and
+/// `request_raw()` sends plain HTTP POST requests instead of using the
+/// Server-Sent Events protocol. A proper SSE implementation is tracked as a
+/// known limitation (P1).
+pub struct SseMcpClientStub {
     config: McpServerConfig,
     client: reqwest::Client,
     request_id: AtomicU64,
 }
 
-impl SseMcpClient {
+impl SseMcpClientStub {
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
@@ -495,9 +500,10 @@ impl SseMcpClient {
 }
 
 #[async_trait]
-impl McpClient for SseMcpClient {
+#[async_trait]
+impl McpClient for SseMcpClientStub {
     async fn connect(&mut self) -> Result<(), McpError> {
-        info!("SSE MCP client configured: {}", self.config.name);
+        warn!("SSE MCP client '{}' connect() is a stub (no-op)", self.config.name);
         Ok(())
     }
 
@@ -554,7 +560,7 @@ impl McpClientBuilder {
         match &config.transport {
             McpTransport::Stdio { .. } => McpClientInstance::Stdio(Box::new(StdioMcpClient::new(config))),
             McpTransport::Http { .. } => McpClientInstance::Http(HttpMcpClient::new(config)),
-            McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClient::new(config)),
+            McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClientStub::new(config)),
         }
     }
 
@@ -637,7 +643,7 @@ impl SseClientBuilder {
     }
 
     pub fn build(self) -> McpClientInstance {
-        McpClientInstance::Sse(SseMcpClient::new(self.config))
+        McpClientInstance::Sse(SseMcpClientStub::new(self.config))
     }
 }
 
@@ -719,7 +725,7 @@ pub enum McpError {
 pub enum McpClientInstance {
     Stdio(Box<StdioMcpClient>),
     Http(HttpMcpClient),
-    Sse(SseMcpClient),
+    Sse(SseMcpClientStub),
 }
 
 #[async_trait]

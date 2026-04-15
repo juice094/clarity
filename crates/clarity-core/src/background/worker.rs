@@ -2,10 +2,10 @@
 //!
 //! 提供可扩展的工作线程池，用于执行后台任务
 
-use super::{TaskId, TaskResult, TaskSpec, TaskStatus, TaskStore};
+use super::{AgentTaskExecutor, TaskId, TaskResult, TaskSpec, TaskStatus, TaskStore};
 use crate::notifications::{NotificationManager, task_status_notification};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info};
 
@@ -75,6 +75,10 @@ pub struct WorkerPool {
     handles: std::sync::Mutex<Vec<JoinHandle<()>>>,
     /// 关闭信号发送器
     shutdown_tx: std::sync::Mutex<Option<mpsc::Sender<()>>>,
+    /// 工作线程实时统计信息
+    worker_stats: Arc<RwLock<Vec<Option<WorkerStats>>>>,
+    /// 可选的 Agent 任务执行器
+    agent_executor: Option<Arc<dyn AgentTaskExecutor>>,
 }
 
 impl WorkerPool {
@@ -92,7 +96,12 @@ impl WorkerPool {
         
         // 使用 Arc<Mutex<Receiver>> 允许多个 worker 共享接收器
         let work_rx = Arc::new(Mutex::new(work_rx));
-        
+
+        // 共享的 worker 统计信息
+        let worker_stats = Arc::new(RwLock::new(
+            (0..worker_count).map(|_| None).collect::<Vec<_>>()
+        ));
+
         let pool = Arc::new(Self {
             work_tx,
             store: store.clone(),
@@ -100,6 +109,8 @@ impl WorkerPool {
             worker_count,
             handles,
             shutdown_tx: std::sync::Mutex::new(Some(shutdown_tx)),
+            worker_stats: worker_stats.clone(),
+            agent_executor: None,
         });
 
         // 启动工作线程
@@ -108,11 +119,17 @@ impl WorkerPool {
             let notif_clone = notification_manager.clone();
             let work_rx = work_rx.clone();
             let shutdown_rx = shutdown_rx.clone();
-            
+            let worker_stats = worker_stats.clone();
+
+            let pool_clone = pool.clone();
             let handle = tokio::spawn(async move {
                 info!("Worker {} started", id);
                 let mut stats = WorkerStats::new(id);
-                
+                {
+                    let mut ws = worker_stats.write().await;
+                    ws[id] = Some(stats.clone());
+                }
+
                 loop {
                     tokio::select! {
                         // 接收工作项
@@ -121,10 +138,16 @@ impl WorkerPool {
                             rx.recv().await
                         } => {
                             let start = std::time::Instant::now();
-                            
+
                             // 更新统计
                             stats.is_busy = true;
                             stats.current_task = Some(work.task_id.clone());
+                            {
+                                let mut ws = worker_stats.write().await;
+                                if let Some(ref mut s) = ws[id] {
+                                    *s = stats.clone();
+                                }
+                            }
                             
                             debug!("Worker {} processing task {}", id, work.task_id);
                             
@@ -142,16 +165,16 @@ impl WorkerPool {
                             }
                             
                             // 执行任务处理逻辑
-                            let result = Self::process_task(&work.spec).await;
-                            
+                            let result = pool_clone.process_task(&work.spec).await;
+
                             let elapsed = start.elapsed();
                             let elapsed_ms = elapsed.as_millis() as u64;
-                            
+
                             // 构建任务结果
                             let task_result = match result {
-                                Ok(output) => {
+                                Ok((output, steps)) => {
                                     let _ = store_clone.update_status(&work.task_id, TaskStatus::Completed).await;
-                                    
+
                                     // 发送完成通知
                                     if let Some(ref manager) = notif_clone {
                                         let notif = task_status_notification(
@@ -161,12 +184,12 @@ impl WorkerPool {
                                         );
                                         manager.publish(notif);
                                     }
-                                    
+
                                     TaskResult {
                                         status: TaskStatus::Completed,
                                         output,
                                         elapsed_ms,
-                                        steps: 1,
+                                        steps,
                                     }
                                 }
                                 Err(e) => {
@@ -203,10 +226,16 @@ impl WorkerPool {
                             }
                             stats.is_busy = false;
                             stats.current_task = None;
-                            
+                            {
+                                let mut ws = worker_stats.write().await;
+                                if let Some(ref mut s) = ws[id] {
+                                    *s = stats.clone();
+                                }
+                            }
+
                             // 通知完成
                             let _ = work.done_tx.send(task_result);
-                            
+
                             debug!("Worker {} completed task {} in {:?}", id, work.task_id, elapsed);
                         }
                         
@@ -236,26 +265,31 @@ impl WorkerPool {
         pool
     }
     
-    /// 处理任务的默认实现
-    async fn process_task(spec: &TaskSpec) -> anyhow::Result<String> {
-        // 这里可以扩展为根据 agent_type 调用不同的处理器
-        // 目前提供一个简单的模拟实现
-        
+    /// 处理任务——优先使用 Agent 执行器，否则回退到模拟实现
+    async fn process_task(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)> {
+        let fut = async {
+            if let Some(ref executor) = self.agent_executor {
+                executor.execute(spec).await
+            } else {
+                Self::execute_task_logic(spec).await.map(|s| (s, 1))
+            }
+        };
+
         if let Some(timeout_secs) = spec.timeout_seconds {
             tokio::time::timeout(
                 tokio::time::Duration::from_secs(timeout_secs),
-                Self::execute_task_logic(spec)
+                fut
             ).await.map_err(|_| anyhow::anyhow!("Task timed out"))?
         } else {
-            Self::execute_task_logic(spec).await
+            fut.await
         }
     }
-    
-    /// 执行任务逻辑（模拟）
+
+    /// 模拟任务执行（当没有配置 Agent 执行器时的回退）
     async fn execute_task_logic(spec: &TaskSpec) -> anyhow::Result<String> {
-        // 模拟一些工作
+        // 保留旧行为作为无配置时的回退
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-        
+
         Ok(format!(
             "Task '{}' processed by {} agent. Prompt: {}",
             spec.name, spec.agent_type, spec.prompt
@@ -272,6 +306,22 @@ impl WorkerPool {
             worker_count: self.worker_count,
             handles: std::sync::Mutex::new(Vec::new()),
             shutdown_tx: std::sync::Mutex::new(None),
+            worker_stats: self.worker_stats.clone(),
+            agent_executor: self.agent_executor.clone(),
+        })
+    }
+
+    /// 设置 Agent 任务执行器
+    pub fn with_agent_executor(self: &Arc<Self>, executor: Arc<dyn AgentTaskExecutor>) -> Arc<Self> {
+        Arc::new(WorkerPool {
+            work_tx: self.work_tx.clone(),
+            store: self.store.clone(),
+            _notification_manager: self._notification_manager.clone(),
+            worker_count: self.worker_count,
+            handles: std::sync::Mutex::new(Vec::new()),
+            shutdown_tx: std::sync::Mutex::new(None),
+            worker_stats: self.worker_stats.clone(),
+            agent_executor: Some(executor),
         })
     }
 
@@ -300,14 +350,16 @@ impl WorkerPool {
 
     /// 获取所有工作线程的统计信息
     pub async fn stats(&self) -> Vec<WorkerStats> {
-        // 简化的统计实现
-        Vec::new()
+        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> = self.worker_stats.read().await;
+        ws.iter().filter_map(|s: &Option<WorkerStats>| s.clone()).collect()
     }
 
     /// 获取忙碌的工作线程数
     pub async fn busy_count(&self) -> usize {
-        // 简化的实现
-        0
+        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> = self.worker_stats.read().await;
+        ws.iter()
+            .filter(|s: &&Option<WorkerStats>| s.as_ref().map_or(false, |stats| stats.is_busy))
+            .count()
     }
 
     /// 优雅关闭工作线程池

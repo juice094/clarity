@@ -107,7 +107,11 @@ async fn main() -> anyhow::Result<()> {
         Ok(mut rx) => {
             while let Some(result) = rx.recv().await {
                 match result {
-                    Ok(chunk) => print!("{}", chunk),
+                    Ok(chunk) => {
+                        if let Some(text) = chunk.content {
+                            print!("{}", text);
+                        }
+                    }
                     Err(e) => {
                         eprintln!("\n   ❌ Stream error: {}", e);
                         break;

@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // 创建 Agent
-    let (agent, model_name, yuan_type) = create_agent()?;
+    let (agent, model_name, yuan_type) = create_agent().await?;
 
     // 创建应用
     let mut app = App::new(agent, model_name, yuan_type.to_string());
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     result
 }
 
-fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
+async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
@@ -90,7 +90,7 @@ fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
         .join(".clarity")
         .join("memory.db");
     std::fs::create_dir_all(memory_db_path.parent().unwrap())?;
-    let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path)?);
+    let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path).await?);
 
     // 创建记忆触发器（每 5 轮对话触发一次）
     let memory_ticker = MemoryTicker::new(5);
@@ -139,6 +139,14 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
 
     // 设置事件发送器，用于后台任务向主循环发送事件
     app.set_event_sender(events.get_sender());
+
+    // 捕获 OS 级别的 SIGINT，发送 Interrupt 而不是直接退出进程
+    if let Some(ref ctrl_tx) = app.controller_tx {
+        let ctrl_tx = ctrl_tx.clone();
+        let _ = ctrlc::set_handler(move || {
+            let _ = ctrl_tx.send(clarity_core::agent::Op::Interrupt);
+        });
+    }
 
     loop {
         // 渲染界面

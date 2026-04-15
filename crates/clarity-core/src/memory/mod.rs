@@ -132,9 +132,8 @@ pub struct PersistentMemoryStore {
 
 impl PersistentMemoryStore {
     /// Create a new persistent memory store
-    pub fn new(db_path: &std::path::Path) -> anyhow::Result<Self> {
-        let db_path = db_path.to_path_buf();
-        let inner = block_on_async(clarity_memory::MemoryStore::new(db_path))??;
+    pub async fn new(db_path: &std::path::Path) -> anyhow::Result<Self> {
+        let inner = clarity_memory::MemoryStore::new(db_path).await?;
         Ok(Self {
             inner,
             config: MemoryConfig::default(),
@@ -153,8 +152,8 @@ impl PersistentMemoryStore {
     }
 
     /// Create with custom config
-    pub fn with_config(db_path: &std::path::Path, config: MemoryConfig) -> anyhow::Result<Self> {
-        let mut store = Self::new(db_path)?;
+    pub async fn with_config(db_path: &std::path::Path, config: MemoryConfig) -> anyhow::Result<Self> {
+        let mut store = Self::new(db_path).await?;
         store.config = config;
         Ok(store)
     }
@@ -163,19 +162,6 @@ impl PersistentMemoryStore {
     pub fn config(&self) -> &MemoryConfig {
         &self.config
     }
-}
-
-fn block_on_async<F>(f: F) -> anyhow::Result<F::Output>
-where
-    F: std::future::Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(f)
-    })
-    .join()
-    .map_err(|e| anyhow::anyhow!("Thread panicked: {:?}", e))
 }
 
 fn fact_to_memory(fact: clarity_memory::Fact, scores: &HashMap<i64, f32>) -> Memory {
@@ -286,7 +272,7 @@ mod tests {
     #[tokio::test]
     async fn test_persistent_memory_store() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let store = PersistentMemoryStore::new(temp_dir.path().join("memory.db").as_path()).unwrap();
+        let store = PersistentMemoryStore::new(temp_dir.path().join("memory.db").as_path()).await.unwrap();
 
         store.store(Memory::new("Rust is great").with_tags(vec!["tech".to_string()])).await.unwrap();
         store.store(Memory::new("I love pizza").with_tags(vec!["food".to_string()])).await.unwrap();

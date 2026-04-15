@@ -15,6 +15,7 @@ pub struct AgentTypeDefinition {
 }
 
 /// Registry for subagent types (LaborMarket)
+#[derive(Clone)]
 pub struct LaborMarket {
     types: HashMap<String, AgentTypeDefinition>,
 }

@@ -35,7 +35,7 @@
 | **Gateway WebSocket** | ✅ | WebSocket streaming 已实现，3 个 WS 集成测试通过 |
 | **Gateway 渠道** | ⚠️ | Discord/Telegram/Webhook 代码存在，待实测 |
 | **BackgroundTaskManager** | 🔄 | 骨架已实现（store/scheduler/worker），待 Gateway/TUI 集成活化 |
-| **TUI 交互** | ✅ | 鼠标滚轮、命令注册表 (`/model` `/help` `/stop`)、深色主题、实时指标 HUD |
+| **TUI 交互** | ✅ | 鼠标滚轮、命令注册表 (`/model` `/help` `/stop` `/personality`)、**Tab 命令补全**、输入历史 (↑/↓)、深色主题、实时指标 HUD |
 
 ---
 
@@ -93,6 +93,7 @@
 - ✅ **多 LLM 支持**: Kimi, Kimi Code, Anthropic, OpenAI 兼容, DeepSeek
 - ✅ **Prompt Cache**: 自动注入 `prompt_cache_key`，支持会话级缓存路由
 - ✅ **共享 HTTP 客户端**: 连接池复用，300s 请求超时
+- ✅ **人格切换**: 默认 `Direct` 工程人格，支持 `/personality [direct|hanako|butter|ming]` 热切换
 
 ### 2. 子代理系统 (clarity-core/src/subagents/)
 
@@ -110,6 +111,7 @@
 ### 4. 工具系统
 
 - ✅ **8 个内置工具**: file_read/write/edit, glob, grep, bash, web_search/fetch
+- ✅ **真实工具调用**: `tools` schema 已正确注入 LLM 请求，`complete()` 与 `stream()` 均支持
 - ✅ **工具审批**: 危险操作需用户确认（Yolo 模式除外）
 - ⚠️ **MCP Client**: 骨架实现，待真实 server 联调
 
@@ -129,7 +131,7 @@
 cd clarity
 cargo build --workspace
 cargo test --workspace --lib --tests  # ~380+ tests passing
-cargo clippy --workspace              # 3 警告（均为未使用变量/可变修饰符）
+cargo clippy --workspace              # 零警告
 ```
 
 ### 运行 TUI
@@ -152,19 +154,21 @@ cargo run -p clarity-tui
 
 **TUI 快捷键**
 - `Enter` 发送消息 / `Esc` 返回 Normal 模式
-- `↑/↓` 或 **鼠标滚轮** 滚动聊天记录
-- `Ctrl+C` 停止生成
-- `/help` 查看可用命令 (`/model`, `/stop`, `/clear` 等)
+- `↑/↓` 在输入框中浏览历史记录，Normal 模式下滚动聊天记录
+- **鼠标滚轮** 滚动聊天记录
+- `Tab` 自动补全 `/` 命令
+- `Ctrl+C` 停止生成（生成中）或返回 Normal 模式（空闲时）
+- `Ctrl+D` 退出程序
+- `/help` 查看可用命令 (`/model`, `/stop`, `/clear`, `/personality` 等)
 
 ---
 
 ## 已知限制
 
-1. **Personality 系统过度拟人化**: 默认人格会生成 `<mood>` XML 元数据和诗意叙事，浪费 Token 且干扰工具调用。正在规划 `minimal` / `engineering` 人格模式。
-2. **MCP 配置文件支持待完善**: `mcp.json` 加载与动态 server 注册尚未完成
-3. **后台任务系统骨架待活化**: `BackgroundTaskManager` 核心逻辑已实现，但与 Gateway/TUI 的端到端集成仍在推进
-4. **Gateway 渠道**: Discord/Telegram/Webhook 代码存在但未实测
-5. **Web UI**: 还在画饼阶段
+1. **MCP 配置文件支持待完善**: `mcp.json` 加载与动态 server 注册尚未完成
+2. **后台任务系统骨架待活化**: `BackgroundTaskManager` 核心逻辑已实现，但与 Gateway/TUI 的端到端集成仍在推进
+3. **Gateway 渠道**: Discord/Telegram/Webhook 代码存在但未实测
+4. **Web UI**: 还在画饼阶段
 
 ---
 
@@ -173,7 +177,8 @@ cargo run -p clarity-tui
 ### Phase 1: 实测验证（当前 - 1 周）
 - [x] TUI 真实 LLM 联调（Kimi Code / Moonshot）
 - [x] Stream-first 架构落地 + Prompt Cache
-- [ ] Personality 最小化/工程化改造
+- [x] Personality 最小化/工程化改造（Direct 人格已上线）
+- [x] TUI 交互补完（命令补全、历史、Ctrl+C 安全处理）
 - [ ] Gateway HTTP API 端到端测试
 - [ ] MCP Client + filesystem server 联调
 

@@ -8,6 +8,7 @@
 //! - 工作线程池
 //! - 通知集成
 
+pub mod agent_executor;
 pub mod store;
 pub mod worker;
 
@@ -15,6 +16,17 @@ pub use store::{
     TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore, TaskId
 };
 pub use worker::{Worker, WorkerPool, WorkerStats};
+
+use async_trait::async_trait;
+
+/// Executor trait for running real Agent tasks in the background.
+///
+/// Implementations receive a [`TaskSpec`] and must build/run an [`Agent`],
+/// returning the textual output and the number of steps taken.
+#[async_trait]
+pub trait AgentTaskExecutor: Send + Sync + std::fmt::Debug {
+    async fn execute(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)>;
+}
 
 use crate::notifications::{NotificationManager, task_status_notification};
 use std::collections::BinaryHeap;
@@ -192,6 +204,8 @@ pub struct BackgroundTaskManager {
     notification_manager: Option<Arc<NotificationManager>>,
     /// 任务调度器
     scheduler: Option<Arc<TaskScheduler>>,
+    /// Agent 任务执行器
+    agent_executor: Option<Arc<dyn AgentTaskExecutor>>,
 }
 
 impl BackgroundTaskManager {
@@ -211,6 +225,7 @@ impl BackgroundTaskManager {
             semaphore: Arc::new(tokio::sync::Semaphore::new(max_concurrency)),
             notification_manager: None,
             scheduler: None,
+            agent_executor: None,
         }
     }
 
@@ -233,6 +248,12 @@ impl BackgroundTaskManager {
         self
     }
 
+    /// 设置 Agent 任务执行器
+    pub fn with_agent_executor(mut self, executor: Arc<dyn AgentTaskExecutor>) -> Self {
+        self.agent_executor = Some(executor);
+        self
+    }
+
     /// 获取通知管理器
     pub fn notification_manager(&self) -> Option<Arc<NotificationManager>> {
         self.notification_manager.clone()
@@ -241,6 +262,11 @@ impl BackgroundTaskManager {
     /// 获取调度器
     pub fn scheduler(&self) -> Option<Arc<TaskScheduler>> {
         self.scheduler.clone()
+    }
+
+    /// 获取 Agent 任务执行器
+    pub fn agent_executor(&self) -> Option<Arc<dyn AgentTaskExecutor>> {
+        self.agent_executor.clone()
     }
 
     /// 发送任务状态变更通知
@@ -344,6 +370,27 @@ impl BackgroundTaskManager {
         
         info!("Started background task: {}", task_id);
         Ok(task_id)
+    }
+
+    /// 启动一个真实的 Agent 后台任务。
+    ///
+    /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
+    pub async fn spawn_agent(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
+        let executor = self.agent_executor.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("AgentTaskExecutor not configured. Use with_agent_executor() first."))?
+            .clone();
+
+        self.spawn(spec, move |spec| async move {
+            match executor.execute(&spec).await {
+                Ok((output, steps)) => Ok(TaskResult {
+                    status: TaskStatus::Completed,
+                    output,
+                    elapsed_ms: 0,
+                    steps,
+                }),
+                Err(e) => Err(e),
+            }
+        }).await
     }
 
     /// 使用调度器安排任务
@@ -749,5 +796,43 @@ mod tests {
             "task_low",
             "task_background",
         ]);
+    }
+
+    #[tokio::test]
+    async fn test_spawn_agent_with_mock_llm() {
+        use crate::agent::MockLlm;
+        use crate::background::agent_executor::DefaultAgentTaskExecutor;
+        use crate::registry::ToolRegistry;
+        use std::sync::Arc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        );
+
+        // 未配置 executor 时 spawn_agent 应报错
+        let spec = TaskSpec::new("agent_task", "Say hello").with_agent_type("coder");
+        let err = manager.spawn_agent(spec.clone()).await;
+        assert!(err.is_err());
+        assert!(err.unwrap_err().to_string().contains("AgentTaskExecutor not configured"));
+
+        // 配置 executor 后应能成功启动真实 Agent 任务
+        let registry = ToolRegistry::with_builtin_tools();
+        let llm = Arc::new(MockLlm);
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(llm, registry, temp_dir.path()));
+
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store2"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        ).with_agent_executor(executor);
+
+        let task_id = manager.spawn_agent(spec).await.unwrap();
+        let result = manager.wait(&task_id).await.unwrap();
+
+        assert_eq!(result.status, TaskStatus::Completed);
+        assert_eq!(result.output, "This is a mock response");
     }
 }
