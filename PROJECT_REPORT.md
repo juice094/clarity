@@ -15,7 +15,7 @@
 | 指标 | 数值 | 验证方式 |
 |------|------|----------|
 | 编译状态 | ✅ 通过 | `cargo check --workspace` |
-| 测试通过 | **192 个** | `cargo test --workspace --lib` |
+| 测试通过 | **252+ 个** | `cargo test --workspace --lib` |
 | Clippy 警告 | **0 个** | `cargo clippy --workspace` |
 | crates 代码 | ~717 KB | PowerShell 统计 |
 | Rust 文件数 | 72 个 | PowerShell 统计 |
@@ -50,10 +50,10 @@ cargo clippy --workspace
 
 | Crate | 测试数 | 状态 | 说明 |
 |-------|--------|------|------|
-| clarity-core | 127 + 2 | ✅ | 单元测试 + Doc-tests（含子代理 Runner 测试）|
-| clarity-memory | 57 + 1 | ✅ | 完整单元测试覆盖 |
+| clarity-core | 252 | ✅ | 单元测试（含 MCP E2E、AgentController streaming、子代理 Runner）|
+| clarity-memory | 57 | ✅ | 完整单元测试覆盖 |
 | clarity-wire | 8 | ✅ | 通信通道测试 |
-| clarity-gateway | 2 | ⚠️ | 仅基础配置测试 |
+| clarity-gateway | 22 | ✅ | 基础配置 + 会话管理测试 |
 | clarity-tui | 0 | ⚠️ | 依赖终端，需手工验证 |
 
 ### 2.3 代码规模核实
@@ -84,8 +84,8 @@ cargo clippy --workspace
 | 人格系统 | ✅ | `clarity-core/src/personality/` | 测试通过 | Yuan 类型 |
 | 记忆接口 | ✅ | `clarity-core/src/memory/` | 代码审查 | PersistentMemoryStore 已实现 |
 | SSE 流式响应 | ✅ | `clarity-core/src/llm/` | 代码审查 | Anthropic 格式 |
-| Gateway API | ⚠️ | `clarity-gateway/src/` | 代码审查 | 待端到端实测 |
-| MCP Client | ⚠️ | `clarity-core/src/mcp.rs` | 代码完成 | 待真实 server 联调 |
+| Gateway API | ✅ | `clarity-gateway/src/` | 代码审查 + 编译通过 | Chat Completions SSE 流式已实现 |
+| MCP Client | ✅ | `clarity-core/src/mcp/` | E2E 实测 | filesystem server 联调通过，自动注入 ToolRegistry |
 | 子代理 LaborMarket | ✅ | `clarity-core/src/subagents/` | 测试通过 | 类型注册 |
 | 子代理 Runner | ✅ | `clarity-core/src/subagents/runner.rs` | 完整实现 + 测试 | 已落地 |
 

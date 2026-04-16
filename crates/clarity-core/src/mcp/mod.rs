@@ -45,13 +45,17 @@
 
 pub mod config;
 pub mod enhanced;
+pub mod tools;
 
 // Re-export from enhanced module
 pub use enhanced::{
-    HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance, 
-    McpError, McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig, 
+    HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance,
+    McpError, McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig,
     SseClientBuilder, SseMcpClientStub, StdioClientBuilder, StdioMcpClient, ToolCallResult, ToolContent,
 };
+
+// Re-export MCP tool bridge
+pub use tools::{register_mcp_tools, McpToolWrapper};
 
 // Legacy exports for backward compatibility
 use crate::error::{AgentError, ToolError};

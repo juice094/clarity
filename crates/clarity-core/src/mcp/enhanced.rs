@@ -131,6 +131,30 @@ impl McpServerConfig {
         }
         self
     }
+
+    /// Add an argument for stdio transport
+    pub fn with_arg(mut self, arg: impl Into<String>) -> Self {
+        if let McpTransport::Stdio { args, .. } = &mut self.transport {
+            args.push(arg.into());
+        }
+        self
+    }
+
+    /// Add multiple arguments for stdio transport
+    pub fn with_args(mut self, args: Vec<String>) -> Self {
+        if let McpTransport::Stdio { args: ref mut a, .. } = &mut self.transport {
+            a.extend(args);
+        }
+        self
+    }
+
+    /// Add multiple environment variables for stdio transport
+    pub fn with_envs(mut self, env: std::collections::HashMap<String, String>) -> Self {
+        if let McpTransport::Stdio { env: ref mut e, .. } = &mut self.transport {
+            e.extend(env);
+        }
+        self
+    }
 }
 
 // =============================================================================
@@ -756,7 +780,7 @@ impl McpClient for McpClientInstance {
 }
 
 pub struct McpRegistry {
-    clients: HashMap<String, McpClientInstance>,
+    clients: HashMap<String, Arc<RwLock<McpClientInstance>>>,
 }
 
 impl McpRegistry {
@@ -767,18 +791,14 @@ impl McpRegistry {
     }
 
     pub fn register(&mut self, name: impl Into<String>, client: McpClientInstance) {
-        self.clients.insert(name.into(), client);
+        self.clients.insert(name.into(), Arc::new(RwLock::new(client)));
     }
 
-    pub fn get(&self, name: &str) -> Option<&McpClientInstance> {
+    pub fn get(&self, name: &str) -> Option<&Arc<RwLock<McpClientInstance>>> {
         self.clients.get(name)
     }
 
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut McpClientInstance> {
-        self.clients.get_mut(name)
-    }
-
-    pub fn remove(&mut self, name: &str) -> Option<McpClientInstance> {
+    pub fn remove(&mut self, name: &str) -> Option<Arc<RwLock<McpClientInstance>>> {
         self.clients.remove(name)
     }
 
@@ -786,20 +806,25 @@ impl McpRegistry {
         self.clients.keys().map(|k| k.as_str()).collect()
     }
 
-    pub async fn connect_all(&mut self) -> Result<(), McpError> {
-        for (name, client) in &mut self.clients {
+    pub async fn connect_all(&self) -> Result<(), McpError> {
+        for (name, client) in &self.clients {
             info!("Connecting to MCP server: {}", name);
-            client.connect().await?;
+            client.write().await.connect().await?;
         }
         Ok(())
     }
 
-    pub async fn disconnect_all(&mut self) -> Result<(), McpError> {
-        for (name, client) in &mut self.clients {
+    pub async fn disconnect_all(&self) -> Result<(), McpError> {
+        for (name, client) in &self.clients {
             info!("Disconnecting from MCP server: {}", name);
-            client.disconnect().await?;
+            client.write().await.disconnect().await?;
         }
         Ok(())
+    }
+
+    /// Iterate over registered clients.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Arc<RwLock<McpClientInstance>>)> {
+        self.clients.iter()
     }
 }
 

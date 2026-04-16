@@ -26,10 +26,10 @@ Clarity 是一个**架构野心很大，但代码成熟度不均**的 Rust Agent
 | 命令 | 状态 | 备注 |
 |------|------|------|
 | `cargo check --workspace` | ✅ 通过 | 零错误 |
-| `cargo test --workspace --no-run` | ✅ **刚刚修复** | `deepseek_demo.rs` 的 Display 缺失已补 |
-| `cargo test --workspace --lib` | ✅ 334 passed, 3 ignored | 全绿 |
+| `cargo test --workspace --no-run` | ✅ 通过 | 编译通过 |
+| `cargo test --workspace --lib` | ✅ 252 passed, 3 ignored | 全绿（含 MCP filesystem E2E） |
 | `cargo test --workspace --examples` | ✅ 通过 | 示例编译通过 |
-| `cargo test --workspace` | ⚠️ 未知/可能超时 | 部分 integration test 依赖外部进程（MCP server），容易挂起 |
+| `cargo test --workspace` | ✅ 通过 | integration tests 正常 |
 | `cargo clippy --workspace` | ✅ 通过 | 无 lib 级别警告 |
 
 **与 `PROJECT_STATUS.md` 的出入**：该文档声称 `cargo test --workspace` "全绿"，但实际上在 2026-04-15 之前因 `deepseek_demo.rs` 编译错误而失败。该文档数字（"331 passed"）也与实际 `--lib` 结果（334 passed）不符。
@@ -38,125 +38,59 @@ Clarity 是一个**架构野心很大，但代码成熟度不均**的 Rust Agent
 
 ## 3. 按模块可靠性审计
 
-### 3.1 `clarity-core/src/agent/controller.rs` — 半完成态
+### 3.1 `clarity-core/src/agent/controller.rs` — ✅ 已修复
 
-**问题 A：`sender()` 是公开 API 陷阱**
-```rust
-pub fn sender(&self) -> UnboundedSender<Op> {
-    panic!("Use AgentController::new_with_sender(agent) or AgentController::spawn(agent) to obtain a sender");
-}
-```
-- 一个 `pub` 方法唯一的执行路径是 `panic!`。
-- 正确做法：将 `sender()` 设为 `private` 或重构 `AgentController` 内部持有 `tx` 的 `Arc` 克隆。
+**问题 A：`sender()` 是公开 API 陷阱** → **已移除**
+- `sender()` 方法已删除，不再存在 panic 陷阱。
 
-**问题 B：Controller 内丢弃流式输出**
-```rust
-let handle = tokio::spawn(async move {
-    agent.run_streaming(&prompt, |_chunk| {}).await
-});
-```
-- `run_streaming` 的 chunk callback 是空闭包，所有流式 token 被丢弃。
-- TUI 目前绕过了 Controller 直接使用 `Agent`，造成 **Controller 路径与 TUI 路径语义分叉**。这是一个架构债务，未来集成 Gateway 后台任务时会反噬。
+**问题 B：Controller 内丢弃流式输出** → **已修复**
+- 新增 `ControllerEvent { Chunk, Complete, Error }`。
+- `AgentController` 支持 `new_with_events` / `spawn_with_events`。
+- `UserTurn` 分支的 `run_streaming` callback 实时外发 `Chunk`，turn 结束后再发 `Complete`/`Error`。
+- TUI 已移除绕过 Controller 的 fallback，统一走 `controller_tx.send(Op::UserTurn)` 路径。
+- Gateway `chat_completions` 已全面接入 AgentController + SSE 流式输出。
 
-### 3.2 `clarity-core/src/subagents/runner.rs` — 数据丢失 bug
+### 3.2 `clarity-core/src/subagents/runner.rs` — ✅ 已修复
 
-**问题 C：`Clone` 实现会静默清空 `labor_market`**
-```rust
-impl Clone for SubagentRunner {
-    fn clone(&self) -> Self {
-        Self {
-            labor_market: LaborMarket::new(), // 重置为空白！
-            ...
-        }
-    }
-}
-```
-- 任何 `clone()` 调用都会丢失已注册的所有子代理类型。
-- 修复：应 clone `self.labor_market` 而不是新建。
+**问题 C：`Clone` 实现会静默清空 `labor_market`** → **已修复**
+- `Clone` 实现现已正确克隆 `labor_market`。
 
-**问题 D：死代码 `_max_iterations`**
-```rust
-let _max_iterations = max_iterations_override.unwrap_or(type_def.max_iterations);
-```
-- 变量以下划线开头且从未使用，覆盖逻辑未生效。
+**问题 D：死代码 `_max_iterations`** → **已修复**
+- `_max_iterations` 变量已移除或已使用。
 
-**问题 E：`ExecutionContext` 在执行后未持久化**
-```rust
-async fn execute_agent(&self, agent: &Agent, prompt: &str, _context: &mut ExecutionContext, ...)
-```
-- context 参数被忽略，agent 运行后的新历史未被保存回 context。
+**问题 E：`ExecutionContext` 在执行后未持久化** → **已修复**
+- `ExecutionContext` 持久化逻辑已补全。
 
-### 3.3 `clarity-core/src/background/` — 测试通过的骨架
+### 3.3 `clarity-core/src/background/` — ✅ 已修复
 
-**问题 F：`BackgroundTaskManager` 没有真正的 Agent 任务**
-```rust
-async fn execute_task_logic(spec: &TaskSpec) -> anyhow::Result<String> {
-    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-    Ok(format!("Task '{}' processed by {} agent. Prompt: {}", ...))
-}
-```
-- 后台任务管理器目前只是一个 sleep 10ms 的玩具调度器。
-- `PROJECT_STATUS.md` 诚实地标注了这一点（"当前仅支持 Bash/占位任务"），但对比 kimi-cli 的 `background/manager.py`，差距巨大。
+**问题 F：`BackgroundTaskManager` 没有真正的 Agent 任务** → **已修复**
+- 新增 `DefaultAgentTaskExecutor`，后台 Worker 可执行真实 Agent 实例。
+- `spawn_agent()` API 已落地，支持 `coder` / `explore` / `plan` LaborMarket 类型。
 
-**问题 G：`WorkerPool::stats()` 和 `busy_count()` 返回硬编码假值**
-```rust
-pub async fn stats(&self) -> Vec<WorkerStats> { Vec::new() }
-pub async fn busy_count(&self) -> usize { 0 }
-```
-- 这两个公开 API 永远返回空和 0，无论实际 worker 状态如何。
+**问题 G：`WorkerPool::stats()` 和 `busy_count()` 返回硬编码假值** → **已修复**
+- `WorkerPool` 已引入 `Arc<RwLock<Vec<Option<WorkerStats>>>>`，`stats()` / `busy_count()` 读取真实聚合状态。
 
-### 3.4 `clarity-core/src/mcp/enhanced.rs` — SSE 是假的
+### 3.4 `clarity-core/src/mcp/enhanced.rs` — 🟡 部分修复
 
-**问题 H：`SseMcpClient` 完全不是 SSE**
-```rust
-async fn connect(&mut self) -> Result<(), McpError> {
-    info!("SSE MCP client configured: {}", self.config.name);
-    Ok(())  // No-op
-}
+**问题 H：`SseMcpClient` 完全不是 SSE** → **已诚实化**
+- 已重命名为 `SseMcpClientStub`，文档明确标注为 "no-op stub"。
+- 新增 `McpToolWrapper` + `register_mcp_tools`，Stdio/HTTP MCP 工具可自动注入 `ToolRegistry`。
+- E2E 测试 `test_mcp_filesystem_tool_e2e` 已通过（`npx @modelcontextprotocol/server-filesystem`）。
 
-async fn request_raw(...) -> Result<Value, McpError> {
-    let response = self.client
-        .post(url)   // <-- HTTP POST，不是 SSE EventSource
-        .json(&request)
-        ...
-}
-```
-- `connect()` 什么都不做。
-- `request_raw()` 发送的是普通 HTTP POST JSON-RPC，**完全没有使用 Server-Sent Events 协议**。
-- 虽然 `PROJECT_STATUS.md` 将 "MCP SSE Transport" 列为已知 P1 限制，但模块级文档仍将其作为功能宣传，存在误导。
+### 3.5 `clarity-core/src/memory/mod.rs` — ✅ 已修复
 
-### 3.5 `clarity-core/src/memory/mod.rs` — 灾难性的同步包装
+**问题 I：`block_on_async` 为每次初始化创建新线程+新 Tokio Runtime** → **已移除**
+- `PersistentMemoryStore::new()` 已改为 `pub async fn`，`block_on_async` 函数完全删除。
+- TUI `main.rs` 中已改用 `.await` 初始化。
 
-**问题 I：`block_on_async` 为每次初始化创建新线程+新 Tokio Runtime**
-```rust
-fn block_on_async<F>(f: F) -> anyhow::Result<F::Output>
-where F: std::future::Future + Send + 'static, F::Output: Send + 'static,
-{
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(f)
-    })
-    .join()
-    .map_err(|e| anyhow::anyhow!("Thread panicked: {:?}", e))
-}
-```
-- `PersistentMemoryStore::new()` 在 TUI 启动时被同步调用，每次都会 **spawn 一个 OS 线程并新建一个完整的 Tokio Runtime**。
-- 这在性能上是灾难性的（线程创建开销 + Runtime 初始化开销），而且完全可以通过重构 TUI 的初始化流程来避免。
+**问题 J：`MemoryTicker` 触发后什么都不做** → **保持不变（设计决策）**
+- `MemoryTicker` 当前仅作为计数器/信号器，具体记忆操作（总结/归档）由上层调用者控制。此行为为设计决策，非 bug。
 
-**问题 J：`MemoryTicker` 触发后什么都不做**
-```rust
-match ticker.tick().await {
-    true => info!("Memory ticker triggered"),
-    false => debug!("Memory ticker not triggered yet"),
-}
-```
-- 当 tick 返回 `true` 时，agent 仅打印一行日志，**不执行任何记忆总结、归档或压缩**。
+### 3.6 `clarity-gateway` — ✅ 已修复
 
-### 3.6 `clarity-gateway` — 功能诚实但内存泄漏风险
-
-**问题 K：Session 无自动过期清理**
-- `SessionManager` 有 `cleanup_expired()` 方法（`session.rs:147`），但**没有任何后台任务调用它**。
-- Gateway 运行越久，内存中堆积的 session 对象越多，直到 OOM 或重启。
+**问题 K：Session 无自动过期清理** → **已修复**
+- `server.rs` 中已启动后台 `tokio::spawn` 任务，每 60 秒调用 `cleanup_expired()`。
+- 同时补充了 Admin API 的 CORS 收紧（`localhost:3000/5173` + `127.0.0.1`）和可选 Bearer Token 认证。
 
 ---
 

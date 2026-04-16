@@ -1,10 +1,13 @@
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response, sse::{Event as SseEvent, Sse}},
 };
+use clarity_core::agent::{AgentController, ControllerEvent, Op};
+use futures::stream;
 use serde::{Deserialize, Serialize};
 
+use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -77,7 +80,7 @@ pub struct Usage {
 pub async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatCompletionRequest>,
-) -> impl IntoResponse {
+) -> Response {
     info!(
         "Chat completion request: model={}, stream={}",
         req.model, req.stream
@@ -107,47 +110,115 @@ pub async fn chat_completions(
         }
     };
 
-    // Clone the shared agent and run it
-    let agent = state.agent.clone();
+    // Create a per-request AgentController so that streaming events are isolated.
+    let agent = (*state.agent).clone();
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ControllerEvent>();
+    let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
+    tokio::spawn(controller.run());
 
-    // Run the agent
-    match agent.run(&user_message).await {
-        Ok(content) => {
-            let prompt_tokens = user_message.len() as u32 / 4;
-            let completion_tokens = content.len() as u32 / 4;
+    if let Err(e) = op_tx.send(Op::UserTurn(user_message.clone())) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to start agent turn: {}", e)
+            })),
+        )
+            .into_response();
+    }
 
-            let response = ChatCompletionResponse {
-                id: format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
-                object: "chat.completion".to_string(),
-                created: chrono::Utc::now().timestamp(),
-                model: req.model,
-                choices: vec![Choice {
-                    index: 0,
-                    message: Message {
-                        role: "assistant".to_string(),
-                        content,
-                    },
-                    finish_reason: "stop".to_string(),
-                }],
-                usage: Usage {
-                    prompt_tokens,
-                    completion_tokens,
-                    total_tokens: prompt_tokens + completion_tokens,
-                },
-            };
+    if req.stream {
+        let model = req.model.clone();
+        let created = chrono::Utc::now().timestamp();
+        let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
 
-            (StatusCode::OK, Json(response)).into_response()
+        let sse_stream = stream::unfold((event_rx, Option::<String>::None), move |(mut rx, pending)| {
+            let model = model.clone();
+            let id = id.clone();
+            async move {
+                if let Some(data) = pending {
+                    let event = SseEvent::default().data(data);
+                    return Some((Ok::<_, Infallible>(event), (rx, None)));
+                }
+                match rx.recv().await {
+                    Some(ControllerEvent::Chunk(text)) => {
+                        let data = serde_json::json!({
+                            "id": &id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": &model,
+                            "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
+                        });
+                        let event = SseEvent::default().data(data.to_string());
+                        Some((Ok(event), (rx, None)))
+                    }
+                    Some(ControllerEvent::Complete(_)) | Some(ControllerEvent::Error(_)) | None => {
+                        let data = serde_json::json!({
+                            "id": &id,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": &model,
+                            "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
+                        });
+                        let event = SseEvent::default().data(data.to_string());
+                        Some((Ok(event), (rx, Some("[DONE]".to_string()))))
+                    }
+                }
+            }
+        });
+
+        Sse::new(sse_stream).into_response()
+    } else {
+        // Non-streaming: accumulate chunks until Complete/Error.
+        let mut content = String::new();
+        let mut error_msg: Option<String> = None;
+        while let Some(ev) = event_rx.recv().await {
+            match ev {
+                ControllerEvent::Chunk(chunk) => content.push_str(&chunk),
+                ControllerEvent::Complete(final_text) => {
+                    content = final_text;
+                    break;
+                }
+                ControllerEvent::Error(e) => {
+                    error_msg = Some(e);
+                    break;
+                }
+            }
         }
-        Err(e) => {
-            error!("Agent execution error: {}", e);
-            (
+
+        if let Some(e) = error_msg {
+            return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": format!("Agent execution error: {}", e)
                 })),
             )
-                .into_response()
+                .into_response();
         }
+
+        let prompt_tokens = user_message.len() as u32 / 4;
+        let completion_tokens = content.len() as u32 / 4;
+
+        let response = ChatCompletionResponse {
+            id: format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+            object: "chat.completion".to_string(),
+            created: chrono::Utc::now().timestamp(),
+            model: req.model,
+            choices: vec![Choice {
+                index: 0,
+                message: Message {
+                    role: "assistant".to_string(),
+                    content,
+                },
+                finish_reason: "stop".to_string(),
+            }],
+            usage: Usage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens: prompt_tokens + completion_tokens,
+            },
+        };
+
+        (StatusCode::OK, Json(response)).into_response()
     }
 }
 

@@ -15,6 +15,8 @@ use app::App;
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::llm::LlmFactory;
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
+use clarity_core::mcp::{McpClientBuilder, McpRegistry, register_mcp_tools};
+use clarity_core::mcp::config::McpConfig;
 use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use crossterm::{
@@ -57,6 +59,9 @@ async fn main() -> Result<()> {
 async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
+
+    // 尝试加载 MCP 配置并注入外部工具
+    load_and_register_mcp_tools(&registry).await;
 
     // 配置人格（默认 Direct 工程模式，可通过 CLARITY_YUAN_TYPE 覆盖）
     let yuan_type = std::env::var("CLARITY_YUAN_TYPE")
@@ -102,6 +107,43 @@ async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
         .with_memory_ticker(memory_ticker);
 
     Ok((Arc::new(agent), model_name, yuan_type))
+}
+
+/// Load `~/.config/clarity/mcp.json` and register available MCP tools.
+async fn load_and_register_mcp_tools(registry: &ToolRegistry) {
+    let config = match McpConfig::load_default() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            println!("No MCP config found or failed to load: {}", e);
+            return;
+        }
+    };
+
+    let mut mcp_registry = McpRegistry::new();
+    for (name, entry) in &config.servers {
+        if entry.disabled {
+            println!("MCP server '{}' is disabled, skipping", name);
+            continue;
+        }
+        let server_config = clarity_core::mcp::McpServerConfig::stdio(name, &entry.command)
+            .with_args(entry.args.clone())
+            .with_envs(entry.env.clone());
+        let client = McpClientBuilder::from_config(server_config);
+        mcp_registry.register(name, client);
+    }
+
+    if let Err(e) = mcp_registry.connect_all().await {
+        eprintln!("Failed to connect to one or more MCP servers: {}", e);
+        return;
+    }
+
+    if let Err(e) = register_mcp_tools(&mcp_registry, registry).await {
+        eprintln!("Failed to register MCP tools: {}", e);
+    } else {
+        let names = registry.list_tools().unwrap_or_default();
+        let mcp_names: Vec<_> = names.into_iter().filter(|n| n.contains('_')).collect();
+        println!("Registered MCP tools: {:?}", mcp_names);
+    }
 }
 
 /// Detect the active model name from environment variables, matching LlmFactory::auto() logic.

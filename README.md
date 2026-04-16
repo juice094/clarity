@@ -31,10 +31,11 @@
 | **子代理 LaborMarket** | ✅ | 类型注册表（coder/explore/plan）|
 | **子代理 Runner** | ✅ | 完整实现，支持前台/恢复执行 |
 | **clarity-memory 集成** | ✅ | clarity-memory → clarity-core 集成完成，57 个记忆测试通过 |
-| **MCP Client** | 🔄 | 骨架实现，`mcp.json` 配置支持进行中 |
+| **MCP Client** | ✅ | Stdio/HTTP 实测通过，E2E `filesystem_read_file` 联调成功，支持 `mcp.json` 自动注入 ToolRegistry |
+| **Gateway Chat Completions** | ✅ | OpenAI 兼容 API，支持 `stream=true` SSE 流式输出，已接入 AgentController |
 | **Gateway WebSocket** | ✅ | WebSocket streaming 已实现，3 个 WS 集成测试通过 |
 | **Gateway 渠道** | ⚠️ | Discord/Telegram/Webhook 代码存在，待实测 |
-| **BackgroundTaskManager** | 🔄 | 骨架已实现（store/scheduler/worker），待 Gateway/TUI 集成活化 |
+| **BackgroundTaskManager** | ✅ | `DefaultAgentTaskExecutor` 已实现，后台 Worker 可执行真实 Agent 实例 |
 | **TUI 交互** | ✅ | 鼠标滚轮、命令注册表 (`/model` `/help` `/stop` `/personality`)、**Tab 命令补全**、输入历史 (↑/↓)、深色主题、实时指标 HUD |
 
 ---
