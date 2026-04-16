@@ -116,6 +116,14 @@
 
 ---
 
+## 🖼 TUI Demo
+
+A quick look at Clarity in action — asking the agent to read a file via the MCP filesystem server:
+
+![Clarity TUI Demo](assets/tui_demo.png)
+
+---
+
 ## 🚀 Quick Start
 
 ### Requirements
