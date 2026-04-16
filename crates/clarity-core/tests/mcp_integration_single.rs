@@ -30,6 +30,9 @@ async fn test_filesystem_only() {
     .expect("Timed out");
 
     let tools = manager.tools();
-    eprintln!("Tools: {:?}", tools.iter().map(|t| t.name()).collect::<Vec<_>>());
+    eprintln!(
+        "Tools: {:?}",
+        tools.iter().map(|t| t.name()).collect::<Vec<_>>()
+    );
     assert!(!tools.is_empty(), "Expected filesystem tools");
 }

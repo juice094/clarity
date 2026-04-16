@@ -52,8 +52,12 @@ pub enum McpTransport {
     },
 }
 
-fn default_timeout() -> u64 { 30 }
-fn default_reconnect_delay() -> u64 { 5000 }
+fn default_timeout() -> u64 {
+    30
+}
+fn default_reconnect_delay() -> u64 {
+    5000
+}
 
 /// OAuth 2.0 configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -142,7 +146,10 @@ impl McpServerConfig {
 
     /// Add multiple arguments for stdio transport
     pub fn with_args(mut self, args: Vec<String>) -> Self {
-        if let McpTransport::Stdio { args: ref mut a, .. } = &mut self.transport {
+        if let McpTransport::Stdio {
+            args: ref mut a, ..
+        } = &mut self.transport
+        {
             a.extend(args);
         }
         self
@@ -200,16 +207,13 @@ pub trait McpClient: Send + Sync {
     async fn disconnect(&mut self) -> Result<(), McpError>;
 
     /// Send a raw JSON-RPC request
-    async fn request_raw(
-        &self,
-        method: &str,
-        params: Option<Value>,
-    ) -> Result<Value, McpError>;
+    async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError>;
 
     /// List available tools
     async fn list_tools(&self) -> Result<Vec<McpTool>, McpError> {
         let result = self.request_raw("tools/list", None).await?;
-        let tools = result.get("tools")
+        let tools = result
+            .get("tools")
             .cloned()
             .unwrap_or_else(|| Value::Array(vec![]));
         serde_json::from_value(tools).map_err(McpError::Serialization)
@@ -264,7 +268,9 @@ impl Drop for StdioMcpClient {
 impl McpClient for StdioMcpClient {
     async fn connect(&mut self) -> Result<(), McpError> {
         let McpTransport::Stdio { command, args, env } = &self.config.transport else {
-            return Err(McpError::InvalidTransport("Expected stdio transport".into()));
+            return Err(McpError::InvalidTransport(
+                "Expected stdio transport".into(),
+            ));
         };
 
         let mut cmd = Command::new(command);
@@ -293,15 +299,22 @@ impl McpClient for StdioMcpClient {
                     for (key, value) in env {
                         cmd.env(key, value);
                     }
-                    cmd.spawn().map_err(|e| McpError::ConnectionFailed(e.to_string()))?
+                    cmd.spawn()
+                        .map_err(|e| McpError::ConnectionFailed(e.to_string()))?
                 }
                 #[cfg(not(windows))]
                 return Err(McpError::ConnectionFailed(e.to_string()));
             }
             Err(e) => return Err(McpError::ConnectionFailed(e.to_string())),
         };
-        let stdin = child.stdin.take().ok_or(McpError::ConnectionFailed("Failed to open stdin".into()))?;
-        let stdout = child.stdout.take().ok_or(McpError::ConnectionFailed("Failed to open stdout".into()))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or(McpError::ConnectionFailed("Failed to open stdin".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(McpError::ConnectionFailed("Failed to open stdout".into()))?;
 
         self.child = Some(child);
         self.stdin = Some(tokio::sync::Mutex::new(stdin));
@@ -365,11 +378,7 @@ impl McpClient for StdioMcpClient {
         Ok(())
     }
 
-    async fn request_raw(
-        &self,
-        method: &str,
-        params: Option<Value>,
-    ) -> Result<Value, McpError> {
+    async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError> {
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
@@ -396,12 +405,14 @@ impl McpClient for StdioMcpClient {
             .await
             .map_err(|_| McpError::RequestTimeout)?
             .map_err(|_| McpError::RequestTimeout)?;
-        
+
         if let Some(error) = response.error {
             return Err(McpError::RpcError(error.message));
         }
 
-        response.result.ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
+        response
+            .result
+            .ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
     }
 }
 
@@ -427,11 +438,17 @@ impl HttpMcpClient {
     fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert("Content-Type", "application/json".parse().unwrap());
-        
-        if let McpTransport::Http { headers: custom_headers, .. } = &self.config.transport {
+
+        if let McpTransport::Http {
+            headers: custom_headers,
+            ..
+        } = &self.config.transport
+        {
             for (key, value) in custom_headers {
-                if let (Ok(header_name), Ok(header_value)) = 
-                    (key.parse::<reqwest::header::HeaderName>(), value.parse::<reqwest::header::HeaderValue>()) {
+                if let (Ok(header_name), Ok(header_value)) = (
+                    key.parse::<reqwest::header::HeaderName>(),
+                    value.parse::<reqwest::header::HeaderValue>(),
+                ) {
                     headers.insert(header_name, header_value);
                 }
             }
@@ -440,7 +457,10 @@ impl HttpMcpClient {
         // Add OAuth token if available
         if let Some(oauth) = &self.config.oauth {
             if let Some(token) = &oauth.access_token {
-                headers.insert("Authorization", format!("Bearer {}", token).parse().unwrap());
+                headers.insert(
+                    "Authorization",
+                    format!("Bearer {}", token).parse().unwrap(),
+                );
             }
         }
 
@@ -459,11 +479,7 @@ impl McpClient for HttpMcpClient {
         Ok(())
     }
 
-    async fn request_raw(
-        &self,
-        method: &str,
-        params: Option<Value>,
-    ) -> Result<Value, McpError> {
+    async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError> {
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
@@ -472,11 +488,17 @@ impl McpClient for HttpMcpClient {
             params,
         };
 
-        let McpTransport::Http { url, timeout_seconds, .. } = &self.config.transport else {
+        let McpTransport::Http {
+            url,
+            timeout_seconds,
+            ..
+        } = &self.config.transport
+        else {
             return Err(McpError::InvalidTransport("Expected HTTP transport".into()));
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(url)
             .headers(self.build_headers())
             .json(&request)
@@ -494,7 +516,9 @@ impl McpClient for HttpMcpClient {
             return Err(McpError::RpcError(error.message));
         }
 
-        rpc_response.result.ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
+        rpc_response
+            .result
+            .ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
     }
 }
 
@@ -527,7 +551,10 @@ impl SseMcpClientStub {
 #[async_trait]
 impl McpClient for SseMcpClientStub {
     async fn connect(&mut self) -> Result<(), McpError> {
-        warn!("SSE MCP client '{}' connect() is a stub (no-op)", self.config.name);
+        warn!(
+            "SSE MCP client '{}' connect() is a stub (no-op)",
+            self.config.name
+        );
         Ok(())
     }
 
@@ -535,11 +562,7 @@ impl McpClient for SseMcpClientStub {
         Ok(())
     }
 
-    async fn request_raw(
-        &self,
-        method: &str,
-        params: Option<Value>,
-    ) -> Result<Value, McpError> {
+    async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError> {
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
         let request = JsonRpcRequest {
             jsonrpc: "2.0",
@@ -548,11 +571,17 @@ impl McpClient for SseMcpClientStub {
             params,
         };
 
-        let McpTransport::Sse { url, timeout_seconds, .. } = &self.config.transport else {
+        let McpTransport::Sse {
+            url,
+            timeout_seconds,
+            ..
+        } = &self.config.transport
+        else {
             return Err(McpError::InvalidTransport("Expected SSE transport".into()));
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(url)
             .json(&request)
             .timeout(Duration::from_secs(*timeout_seconds))
@@ -569,7 +598,9 @@ impl McpClient for SseMcpClientStub {
             return Err(McpError::RpcError(error.message));
         }
 
-        rpc_response.result.ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
+        rpc_response
+            .result
+            .ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
     }
 }
 
@@ -582,7 +613,9 @@ pub struct McpClientBuilder;
 impl McpClientBuilder {
     pub fn from_config(config: McpServerConfig) -> McpClientInstance {
         match &config.transport {
-            McpTransport::Stdio { .. } => McpClientInstance::Stdio(Box::new(StdioMcpClient::new(config))),
+            McpTransport::Stdio { .. } => {
+                McpClientInstance::Stdio(Box::new(StdioMcpClient::new(config)))
+            }
             McpTransport::Http { .. } => McpClientInstance::Http(HttpMcpClient::new(config)),
             McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClientStub::new(config)),
         }
@@ -719,25 +752,25 @@ pub struct McpResource {
 pub enum McpError {
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    
+
     #[error("Invalid transport: {0}")]
     InvalidTransport(String),
-    
+
     #[error("Request failed: {0}")]
     RequestFailed(String),
-    
+
     #[error("Request timeout")]
     RequestTimeout,
-    
+
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
-    
+
     #[error("RPC error: {0}")]
     RpcError(String),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -791,7 +824,8 @@ impl McpRegistry {
     }
 
     pub fn register(&mut self, name: impl Into<String>, client: McpClientInstance) {
-        self.clients.insert(name.into(), Arc::new(RwLock::new(client)));
+        self.clients
+            .insert(name.into(), Arc::new(RwLock::new(client)));
     }
 
     pub fn get(&self, name: &str) -> Option<&Arc<RwLock<McpClientInstance>>> {
@@ -845,17 +879,22 @@ mod tests {
     #[test]
     fn test_stdio_config() {
         let config = McpServerConfig::stdio("test", "npx");
-        assert!(matches!(&config.transport, McpTransport::Stdio { command, .. } if command == "npx"));
+        assert!(
+            matches!(&config.transport, McpTransport::Stdio { command, .. } if command == "npx")
+        );
     }
 
     #[test]
     fn test_http_config() {
         let config = McpServerConfig::http("api", "https://api.example.com/mcp")
             .with_header("Authorization", "Bearer token");
-        
+
         if let McpTransport::Http { url, headers, .. } = &config.transport {
             assert_eq!(url, "https://api.example.com/mcp");
-            assert_eq!(headers.get("Authorization"), Some(&"Bearer token".to_string()));
+            assert_eq!(
+                headers.get("Authorization"),
+                Some(&"Bearer token".to_string())
+            );
         } else {
             panic!("Expected HTTP transport");
         }
@@ -866,12 +905,12 @@ mod tests {
         let mut registry = McpRegistry::new();
         let client = McpClientBuilder::stdio("test", "echo").build();
         registry.register("test", client);
-        
+
         assert_eq!(registry.list(), vec!["test"]);
         assert!(registry.get("test").is_some());
         assert!(registry.get("missing").is_none());
     }
-    
+
     #[test]
     fn test_mcp_client_instance() {
         let instance = McpClientBuilder::stdio("test", "echo").build();

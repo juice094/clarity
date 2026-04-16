@@ -90,9 +90,7 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
             }
         };
 
-        let max_iterations = spec
-            .max_iterations
-            .unwrap_or(type_def.max_iterations);
+        let max_iterations = spec.max_iterations.unwrap_or(type_def.max_iterations);
 
         let config = AgentConfig::new()
             .with_max_iterations(max_iterations)
@@ -121,7 +119,7 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
 mod tests {
     use super::*;
     use crate::agent::MockLlm;
-    use crate::background::TaskResult;
+    // use crate::background::TaskResult;
     use crate::registry::ToolRegistry;
     use tempfile::TempDir;
 
@@ -157,8 +155,8 @@ mod tests {
             max_iterations: 3,
         });
 
-        let executor = DefaultAgentTaskExecutor::new(llm, registry, temp_dir.path())
-            .with_labor_market(market);
+        let executor =
+            DefaultAgentTaskExecutor::new(llm, registry, temp_dir.path()).with_labor_market(market);
 
         let spec = TaskSpec::new("custom_task", "Do something")
             .with_agent_type("custom")

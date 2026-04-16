@@ -42,8 +42,9 @@ impl DiscordChannel {
     async fn run_with_poise(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
         use serenity::GatewayIntents;
 
-        let token = self.bot_token.as_ref()
-            .ok_or_else(|| ChannelError::AuthFailed("Discord bot token not configured".to_string()))?;
+        let token = self.bot_token.as_ref().ok_or_else(|| {
+            ChannelError::AuthFailed("Discord bot token not configured".to_string())
+        })?;
 
         info!("[Discord] Starting bot with poise framework...");
 
@@ -55,10 +56,7 @@ impl DiscordChannel {
         // 创建 poise 框架
         let framework = poise::Framework::builder()
             .options(poise::FrameworkOptions {
-                commands: vec![
-                    ask(),
-                    help(),
-                ],
+                commands: vec![ask(), help()],
                 ..Default::default()
             })
             .setup(|ctx, _ready, framework| {
@@ -76,8 +74,10 @@ impl DiscordChannel {
             .map_err(|e| ChannelError::ConnectionFailed(e.to_string()))?;
 
         info!("[Discord] Bot is now running!");
-        
-        client.start().await
+
+        client
+            .start()
+            .await
             .map_err(|e| ChannelError::Unknown(e.to_string()))?;
 
         Ok(())
@@ -87,14 +87,16 @@ impl DiscordChannel {
     #[cfg(not(feature = "discord"))]
     async fn run_with_poise(&self, _agent: Arc<Agent>) -> Result<(), ChannelError> {
         warn!("[Discord] discord feature is disabled, using mock mode");
-        
-        info!("[Discord] Mock mode - would start bot with token: {:?}", 
-            self.bot_token.as_ref().map(|_| "***REDACTED***"));
-        
+
+        info!(
+            "[Discord] Mock mode - would start bot with token: {:?}",
+            self.bot_token.as_ref().map(|_| "***REDACTED***")
+        );
+
         // 模拟运行
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         info!("[Discord] Mock bot finished");
-        
+
         Ok(())
     }
 }
@@ -141,13 +143,16 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 #[poise::command(slash_command, prefix_command, category = "AI")]
 async fn ask(
     ctx: Context<'_>,
-    #[description = "Your question"] 
-    question: String,
+    #[description = "Your question"] question: String,
     #[description = "Enable streaming response"]
     #[flag]
     _stream: bool,
 ) -> Result<(), Error> {
-    info!("[Discord] /ask command from {}: {}", ctx.author().name, question);
+    info!(
+        "[Discord] /ask command from {}: {}",
+        ctx.author().name,
+        question
+    );
 
     // 先发送 "thinking" 响应
     ctx.defer().await?;
@@ -207,26 +212,28 @@ fn split_discord_message(text: &str, max_length: usize) -> Vec<&str> {
 
     let mut chunks = Vec::new();
     let mut start = 0;
-    
+
     while start < text.len() {
         let end = (start + max_length).min(text.len());
-        
+
         // 尝试在代码块或换行处分割
         let split_point = if end < text.len() {
             let slice = &text[start..end];
-            
+
             // 优先在 ``` 之前分割
-            slice.rfind("\n```").map(|i| start + i)
+            slice
+                .rfind("\n```")
+                .map(|i| start + i)
                 .or_else(|| slice.rfind('\n').map(|i| start + i + 1))
                 .unwrap_or(end)
         } else {
             end
         };
-        
+
         chunks.push(&text[start..split_point.min(text.len())]);
         start = split_point;
     }
-    
+
     chunks
 }
 
@@ -281,7 +288,8 @@ impl DiscordWebhookClient {
             embeds: None,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&self.webhook_url)
             .json(&body)
             .send()
@@ -290,7 +298,8 @@ impl DiscordWebhookClient {
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(ChannelError::SendFailed(format!(
-                "Discord webhook error: {}", error_text
+                "Discord webhook error: {}",
+                error_text
             )));
         }
 
@@ -306,7 +315,8 @@ impl DiscordWebhookClient {
             embeds: Some(vec![embed]),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&self.webhook_url)
             .json(&body)
             .send()
@@ -315,7 +325,8 @@ impl DiscordWebhookClient {
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(ChannelError::SendFailed(format!(
-                "Discord webhook error: {}", error_text
+                "Discord webhook error: {}",
+                error_text
             )));
         }
 

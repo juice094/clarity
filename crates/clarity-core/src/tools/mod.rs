@@ -29,26 +29,26 @@ use crate::error::ToolError;
 pub type ToolResult<T> = Result<T, ToolError>;
 
 /// Context passed to tools during execution
-/// 
+///
 /// Contains information about the current execution environment,
 /// working directory, and shared resources.
 #[derive(Debug, Clone)]
 pub struct ToolContext {
     /// Current working directory for the operation
     pub working_dir: PathBuf,
-    
+
     /// Environment variables
     pub env: HashMap<String, String>,
-    
+
     /// Request timeout in seconds
     pub timeout_secs: u64,
-    
+
     /// Maximum output size (bytes)
     pub max_output_size: usize,
-    
+
     /// Whether the operation is read-only
     pub read_only: bool,
-    
+
     /// Current approval mode
     pub approval_mode: ApprovalMode,
 }
@@ -65,31 +65,31 @@ impl ToolContext {
             approval_mode: ApprovalMode::Interactive,
         }
     }
-    
+
     /// Set the working directory
     pub fn with_working_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.working_dir = path.into();
         self
     }
-    
+
     /// Set the timeout
     pub fn with_timeout(mut self, secs: u64) -> Self {
         self.timeout_secs = secs;
         self
     }
-    
+
     /// Set read-only mode
     pub fn with_read_only(mut self, read_only: bool) -> Self {
         self.read_only = read_only;
         self
     }
-    
+
     /// Add an environment variable
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
     }
-    
+
     /// Set approval mode
     pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
         self.approval_mode = mode;
@@ -154,16 +154,16 @@ impl Default for ToolContext {
 pub trait Tool: Send + Sync {
     /// Tool name - must be unique within a registry
     fn name(&self) -> &str;
-    
+
     /// Human-readable description for LLM
     fn description(&self) -> &str;
-    
+
     /// JSON Schema for tool parameters
     ///
     /// This should follow the JSON Schema specification and describe
     /// all parameters the tool accepts.
     fn parameters(&self) -> Value;
-    
+
     /// Execute the tool with the given arguments
     ///
     /// # Arguments
@@ -184,7 +184,10 @@ pub type BoxedTool = Box<dyn Tool>;
 pub type SharedTool = Arc<dyn Tool>;
 
 /// Helper trait to convert tools to shared references
-pub trait IntoSharedTool: Tool + Sized where Self: 'static {
+pub trait IntoSharedTool: Tool + Sized
+where
+    Self: 'static,
+{
     fn into_shared(self) -> SharedTool {
         Arc::new(self)
     }
@@ -195,42 +198,46 @@ impl<T: Tool + Sized + 'static> IntoSharedTool for T {}
 /// Common parameter extraction helpers
 pub mod helpers {
     use super::*;
-    
+
     /// Extract a required string parameter
     pub fn required_str<'a>(args: &'a Value, name: &str) -> ToolResult<&'a str> {
-        args.get(name)
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| ToolError::invalid_params(format!("missing required parameter: {}", name)))
+        args.get(name).and_then(|v| v.as_str()).ok_or_else(|| {
+            ToolError::invalid_params(format!("missing required parameter: {}", name))
+        })
     }
-    
+
     /// Extract an optional string parameter
     pub fn optional_str<'a>(args: &'a Value, name: &str) -> Option<&'a str> {
         args.get(name).and_then(|v| v.as_str())
     }
-    
+
     /// Extract a required boolean parameter
     pub fn required_bool(args: &Value, name: &str) -> ToolResult<bool> {
-        args.get(name)
-            .and_then(|v| v.as_bool())
-            .ok_or_else(|| ToolError::invalid_params(format!("missing required parameter: {}", name)))
+        args.get(name).and_then(|v| v.as_bool()).ok_or_else(|| {
+            ToolError::invalid_params(format!("missing required parameter: {}", name))
+        })
     }
-    
+
     /// Extract an optional boolean parameter
     pub fn optional_bool(args: &Value, name: &str, default: bool) -> bool {
         args.get(name).and_then(|v| v.as_bool()).unwrap_or(default)
     }
-    
+
     /// Extract a required array of strings
     pub fn required_string_array(args: &Value, name: &str) -> ToolResult<Vec<String>> {
         args.get(name)
             .and_then(|v| v.as_array())
-            .ok_or_else(|| ToolError::invalid_params(format!("missing required parameter: {}", name)))?
+            .ok_or_else(|| {
+                ToolError::invalid_params(format!("missing required parameter: {}", name))
+            })?
             .iter()
             .map(|v| v.as_str().map(|s| s.to_string()))
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| ToolError::invalid_params(format!("{} must be an array of strings", name)))
+            .ok_or_else(|| {
+                ToolError::invalid_params(format!("{} must be an array of strings", name))
+            })
     }
-    
+
     /// Resolve a path relative to the working directory
     pub fn resolve_path(ctx: &ToolContext, path: &str) -> PathBuf {
         let path = PathBuf::from(path);

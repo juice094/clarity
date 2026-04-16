@@ -49,9 +49,10 @@ pub mod tools;
 
 // Re-export from enhanced module
 pub use enhanced::{
-    HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance,
-    McpError, McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig,
-    SseClientBuilder, SseMcpClientStub, StdioClientBuilder, StdioMcpClient, ToolCallResult, ToolContent,
+    HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance, McpError,
+    McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig,
+    SseClientBuilder, SseMcpClientStub, StdioClientBuilder, StdioMcpClient, ToolCallResult,
+    ToolContent,
 };
 
 // Re-export MCP tool bridge
@@ -129,14 +130,12 @@ impl McpClientLegacy {
             )))
         })?;
 
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| AgentError::Tool(ToolError::ExecutionFailed("Failed to open stdin".into())))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| AgentError::Tool(ToolError::ExecutionFailed("Failed to open stdout".into())))?;
+        let stdin = child.stdin.take().ok_or_else(|| {
+            AgentError::Tool(ToolError::ExecutionFailed("Failed to open stdin".into()))
+        })?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            AgentError::Tool(ToolError::ExecutionFailed("Failed to open stdout".into()))
+        })?;
 
         let pending: Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse>>>> =
             Arc::new(RwLock::new(HashMap::new()));
@@ -158,10 +157,7 @@ impl McpClientLegacy {
             }
         });
 
-        info!(
-            "Connected to MCP server: {} {:?}",
-            command, args
-        );
+        info!("Connected to MCP server: {} {:?}", command, args);
 
         Ok(Self {
             _command: command,
@@ -219,7 +215,7 @@ impl McpClientLegacy {
 
         let response = rx.await.map_err(|_| {
             AgentError::Tool(ToolError::ExecutionFailed(
-                "MCP request cancelled or timed out".into()
+                "MCP request cancelled or timed out".into(),
             ))
         })?;
 
@@ -232,7 +228,7 @@ impl McpClientLegacy {
 
         response.result.ok_or_else(|| {
             AgentError::Tool(ToolError::ExecutionFailed(
-                "MCP response missing result".into()
+                "MCP response missing result".into(),
             ))
         })
     }
@@ -241,10 +237,14 @@ impl McpClientLegacy {
     pub async fn list_tools(&mut self) -> Result<Vec<McpToolInfo>, AgentError> {
         let result = self.request::<Value>("tools/list", None).await?;
         let tools: Vec<McpToolInfo> = serde_json::from_value(
-            result.get("tools").cloned().unwrap_or_default()
-        ).map_err(|e| AgentError::Tool(ToolError::ExecutionFailed(format!(
-            "Failed to parse tools list: {}", e
-        ))))?;
+            result.get("tools").cloned().unwrap_or_default(),
+        )
+        .map_err(|e| {
+            AgentError::Tool(ToolError::ExecutionFailed(format!(
+                "Failed to parse tools list: {}",
+                e
+            )))
+        })?;
         Ok(tools)
     }
 
@@ -328,12 +328,8 @@ fn map_mcp_error(err: McpError) -> ToolError {
         | McpError::RequestFailed(msg) => {
             ToolError::Unavailable(format!("MCP transport error: {}", msg))
         }
-        McpError::RequestTimeout => {
-            ToolError::Unavailable("MCP request timed out".to_string())
-        }
-        McpError::Io(io_err) => {
-            ToolError::Unavailable(format!("MCP I/O error: {}", io_err))
-        }
+        McpError::RequestTimeout => ToolError::Unavailable("MCP request timed out".to_string()),
+        McpError::Io(io_err) => ToolError::Unavailable(format!("MCP I/O error: {}", io_err)),
         McpError::RpcError(msg) => {
             ToolError::execution_failed(format!("MCP server error: {}", msg))
         }
@@ -463,7 +459,9 @@ impl McpManager {
             match result {
                 Ok((client, tools)) => {
                     for tool in tools {
-                        manager.tools.push(McpToolAdapter::new(client.clone(), tool));
+                        manager
+                            .tools
+                            .push(McpToolAdapter::new(client.clone(), tool));
                     }
                     manager.clients.insert(name, client);
                 }
@@ -572,10 +570,10 @@ mod tests {
         let mut registry = McpRegistry::new();
         let client = McpClientBuilder::stdio("test", "echo").build();
         registry.register("test", client);
-        
+
         assert_eq!(registry.list(), vec!["test"]);
     }
-    
+
     #[test]
     fn test_mcp_client_instance() {
         let instance = McpClientBuilder::stdio("test", "echo").build();

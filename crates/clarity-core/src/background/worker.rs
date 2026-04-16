@@ -3,7 +3,7 @@
 //! 提供可扩展的工作线程池，用于执行后台任务
 
 use super::{AgentTaskExecutor, TaskId, TaskResult, TaskSpec, TaskStatus, TaskStore};
-use crate::notifications::{NotificationManager, task_status_notification};
+use crate::notifications::{task_status_notification, NotificationManager};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -83,23 +83,20 @@ pub struct WorkerPool {
 
 impl WorkerPool {
     /// 创建新的工作线程池
-    pub async fn new(
-        store: TaskStore,
-        worker_count: usize,
-    ) -> Arc<Self> {
+    pub async fn new(store: TaskStore, worker_count: usize) -> Arc<Self> {
         let (work_tx, work_rx) = mpsc::channel::<WorkItem>(100);
         let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
         let shutdown_rx = Arc::new(Mutex::new(shutdown_rx));
-        
+
         let notification_manager: Option<Arc<NotificationManager>> = None;
         let handles = std::sync::Mutex::new(Vec::with_capacity(worker_count));
-        
+
         // 使用 Arc<Mutex<Receiver>> 允许多个 worker 共享接收器
         let work_rx = Arc::new(Mutex::new(work_rx));
 
         // 共享的 worker 统计信息
         let worker_stats = Arc::new(RwLock::new(
-            (0..worker_count).map(|_| None).collect::<Vec<_>>()
+            (0..worker_count).map(|_| None).collect::<Vec<_>>(),
         ));
 
         let pool = Arc::new(Self {
@@ -148,12 +145,12 @@ impl WorkerPool {
                                     *s = stats.clone();
                                 }
                             }
-                            
+
                             debug!("Worker {} processing task {}", id, work.task_id);
-                            
+
                             // 更新任务状态为运行中
                             let _ = store_clone.update_status(&work.task_id, TaskStatus::Running).await;
-                            
+
                             // 发送通知
                             if let Some(ref manager) = notif_clone {
                                 let notif = task_status_notification(
@@ -163,7 +160,7 @@ impl WorkerPool {
                                 );
                                 manager.publish(notif);
                             }
-                            
+
                             // 执行任务处理逻辑
                             let result = pool_clone.process_task(&work.spec).await;
 
@@ -194,7 +191,7 @@ impl WorkerPool {
                                 }
                                 Err(e) => {
                                     let _ = store_clone.update_status(&work.task_id, TaskStatus::Failed).await;
-                                    
+
                                     // 发送失败通知
                                     if let Some(ref manager) = notif_clone {
                                         let notif = task_status_notification(
@@ -204,7 +201,7 @@ impl WorkerPool {
                                         );
                                         manager.publish(notif);
                                     }
-                                    
+
                                     error!("Worker {} task {} failed: {}", id, work.task_id, e);
                                     TaskResult {
                                         status: TaskStatus::Failed,
@@ -214,10 +211,10 @@ impl WorkerPool {
                                     }
                                 }
                             };
-                            
+
                             // 保存结果
                             let _ = store_clone.save_result(&work.task_id, &task_result).await;
-                            
+
                             // 更新统计
                             stats.tasks_processed += 1;
                             stats.total_elapsed_ms += elapsed_ms;
@@ -238,7 +235,7 @@ impl WorkerPool {
 
                             debug!("Worker {} completed task {} in {:?}", id, work.task_id, elapsed);
                         }
-                        
+
                         // 接收关闭信号
                         _ = async {
                             let mut rx = shutdown_rx.lock().await;
@@ -247,7 +244,7 @@ impl WorkerPool {
                             info!("Worker {} shutting down", id);
                             break;
                         }
-                        
+
                         // 通道关闭
                         else => {
                             info!("Worker {} work channel closed", id);
@@ -255,16 +252,16 @@ impl WorkerPool {
                         }
                     }
                 }
-                
+
                 info!("Worker {} stopped", id);
             });
-            
+
             pool.handles.lock().unwrap().push(handle);
         }
-        
+
         pool
     }
-    
+
     /// 处理任务——优先使用 Agent 执行器，否则回退到模拟实现
     async fn process_task(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)> {
         let fut = async {
@@ -276,10 +273,9 @@ impl WorkerPool {
         };
 
         if let Some(timeout_secs) = spec.timeout_seconds {
-            tokio::time::timeout(
-                tokio::time::Duration::from_secs(timeout_secs),
-                fut
-            ).await.map_err(|_| anyhow::anyhow!("Task timed out"))?
+            tokio::time::timeout(tokio::time::Duration::from_secs(timeout_secs), fut)
+                .await
+                .map_err(|_| anyhow::anyhow!("Task timed out"))?
         } else {
             fut.await
         }
@@ -312,7 +308,10 @@ impl WorkerPool {
     }
 
     /// 设置 Agent 任务执行器
-    pub fn with_agent_executor(self: &Arc<Self>, executor: Arc<dyn AgentTaskExecutor>) -> Arc<Self> {
+    pub fn with_agent_executor(
+        self: &Arc<Self>,
+        executor: Arc<dyn AgentTaskExecutor>,
+    ) -> Arc<Self> {
         Arc::new(WorkerPool {
             work_tx: self.work_tx.clone(),
             store: self.store.clone(),
@@ -326,20 +325,26 @@ impl WorkerPool {
     }
 
     /// 提交任务到工作线程池
-    pub async fn submit(&self, task_id: TaskId, spec: TaskSpec) -> anyhow::Result<oneshot::Receiver<TaskResult>> {
+    pub async fn submit(
+        &self,
+        task_id: TaskId,
+        spec: TaskSpec,
+    ) -> anyhow::Result<oneshot::Receiver<TaskResult>> {
         // 先创建任务记录
         self.store.create(&task_id, spec.clone()).await?;
-        
+
         let (done_tx, done_rx) = oneshot::channel();
         let work = WorkItem {
             task_id,
             spec,
             done_tx,
         };
-        
-        self.work_tx.send(work).await
+
+        self.work_tx
+            .send(work)
+            .await
             .map_err(|_| anyhow::anyhow!("Failed to submit work item"))?;
-        
+
         Ok(done_rx)
     }
 
@@ -350,37 +355,41 @@ impl WorkerPool {
 
     /// 获取所有工作线程的统计信息
     pub async fn stats(&self) -> Vec<WorkerStats> {
-        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> = self.worker_stats.read().await;
-        ws.iter().filter_map(|s: &Option<WorkerStats>| s.clone()).collect()
+        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> =
+            self.worker_stats.read().await;
+        ws.iter()
+            .filter_map(|s: &Option<WorkerStats>| s.clone())
+            .collect()
     }
 
     /// 获取忙碌的工作线程数
     pub async fn busy_count(&self) -> usize {
-        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> = self.worker_stats.read().await;
+        let ws: tokio::sync::RwLockReadGuard<'_, Vec<Option<WorkerStats>>> =
+            self.worker_stats.read().await;
         ws.iter()
-            .filter(|s: &&Option<WorkerStats>| s.as_ref().map_or(false, |stats| stats.is_busy))
+            .filter(|s: &&Option<WorkerStats>| s.as_ref().is_some_and(|stats| stats.is_busy))
             .count()
     }
 
     /// 优雅关闭工作线程池
     pub async fn shutdown(&self) {
-        info!("Shutting down worker pool with {} workers", self.worker_count);
-        
+        info!(
+            "Shutting down worker pool with {} workers",
+            self.worker_count
+        );
+
         // 发送关闭信号
         let tx = self.shutdown_tx.lock().unwrap().take();
         if let Some(tx) = tx {
             let _ = tx.send(()).await;
         }
-        
+
         // 等待所有工作线程完成
         let handles: Vec<_> = std::mem::take(&mut *self.handles.lock().unwrap());
         for handle in handles {
-            let _ = tokio::time::timeout(
-                tokio::time::Duration::from_secs(5),
-                handle
-            ).await;
+            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await;
         }
-        
+
         info!("Worker pool shut down complete");
     }
 }
@@ -400,13 +409,9 @@ pub struct ScalableWorkerPool {
 
 impl ScalableWorkerPool {
     /// 创建新的可扩展工作线程池
-    pub async fn new(
-        store: TaskStore,
-        min_workers: usize,
-        max_workers: usize,
-    ) -> Self {
+    pub async fn new(store: TaskStore, min_workers: usize, max_workers: usize) -> Self {
         let pool = WorkerPool::new(store, min_workers).await;
-        
+
         Self {
             pool,
             _min_workers: min_workers,
@@ -422,7 +427,11 @@ impl ScalableWorkerPool {
     }
 
     /// 提交任务
-    pub async fn submit(&self, task_id: TaskId, spec: TaskSpec) -> anyhow::Result<oneshot::Receiver<TaskResult>> {
+    pub async fn submit(
+        &self,
+        task_id: TaskId,
+        spec: TaskSpec,
+    ) -> anyhow::Result<oneshot::Receiver<TaskResult>> {
         self.pool.submit(task_id, spec).await
     }
 
@@ -446,8 +455,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_spec(name: &str) -> TaskSpec {
-        TaskSpec::new(name, "test prompt")
-            .with_agent_type("coder")
+        TaskSpec::new(name, "test prompt").with_agent_type("coder")
     }
 
     #[tokio::test]
@@ -455,9 +463,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
         let pool = WorkerPool::new(store, 2).await;
-        
+
         assert_eq!(pool.worker_count(), 2);
-        
+
         pool.shutdown().await;
     }
 
@@ -466,15 +474,15 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
         let pool = WorkerPool::new(store, 1).await;
-        
+
         let spec = create_test_spec("test_task");
         let done_rx = pool.submit("task_1".to_string(), spec).await.unwrap();
-        
+
         // 等待任务完成
         let result = done_rx.await.unwrap();
         assert_eq!(result.status, TaskStatus::Completed);
         assert!(result.output.contains("test_task"));
-        
+
         pool.shutdown().await;
     }
 
@@ -483,22 +491,22 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
         let pool = WorkerPool::new(store, 2).await;
-        
+
         let mut receivers = Vec::new();
-        
+
         // 提交多个任务
         for i in 0..5 {
             let spec = create_test_spec(&format!("task_{}", i));
             let done_rx = pool.submit(format!("task_{}", i), spec).await.unwrap();
             receivers.push(done_rx);
         }
-        
+
         // 等待所有任务完成
         for (i, rx) in receivers.into_iter().enumerate() {
             let result = rx.await.unwrap();
             assert_eq!(result.status, TaskStatus::Completed, "Task {} failed", i);
         }
-        
+
         pool.shutdown().await;
     }
 
@@ -507,17 +515,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
         let notif_manager = Arc::new(NotificationManager::new());
-        
+
         let _rx = notif_manager.subscribe();
-        
+
         // 注意：由于通知管理器在创建后设置，这个测试简化处理
         let pool = WorkerPool::new(store, 1).await;
-        
+
         let spec = create_test_spec("notified_task");
         let done_rx = pool.submit("notif_task".to_string(), spec).await.unwrap();
-        
+
         let _ = done_rx.await;
-        
+
         pool.shutdown().await;
     }
 
@@ -526,20 +534,20 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
         let pool = ScalableWorkerPool::new(store, 1, 4).await;
-        
+
         let mut receivers = Vec::new();
-        
+
         for i in 0..3 {
             let spec = create_test_spec(&format!("scalable_task_{}", i));
             let done_rx = pool.submit(format!("scalable_{}", i), spec).await.unwrap();
             receivers.push(done_rx);
         }
-        
+
         for rx in receivers {
             let result = rx.await.unwrap();
             assert_eq!(result.status, TaskStatus::Completed);
         }
-        
+
         pool.shutdown().await;
     }
 }

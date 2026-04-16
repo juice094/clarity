@@ -13,17 +13,15 @@ use tracing::{debug, info, instrument, warn};
 pub const DEFAULT_TURNS_PER_SUMMARY: u32 = 6;
 
 /// Type alias for compilation callback
-/// 
+///
 /// Note: This doesn't require Send because SQLite connections are not Send.
 /// The callback will be executed on the same thread.
 pub type CompileCallback = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>>>>
-        + Send
-        + Sync
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>>>> + Send + Sync,
 >;
 
 /// Turn-based memory compilation trigger
-/// 
+///
 /// Tracks the number of turns (message exchanges) in each session
 /// and triggers compilation when the threshold is reached.
 pub struct MemoryTicker {
@@ -40,18 +38,15 @@ pub struct MemoryTicker {
 }
 
 /// Future type returned by notify_turn
-/// 
+///
 /// Note: This doesn't require Send because SQLite connections are not Send.
 pub type CompilationFuture = Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>>>>;
 
 impl MemoryTicker {
     /// Create a new MemoryTicker without a compile callback
-    /// 
+    ///
     /// Use `set_compile_callback` to set the callback later.
-    pub fn new(
-        output_dir: impl AsRef<Path>,
-        turns_per_summary: Option<u32>,
-    ) -> Self {
+    pub fn new(output_dir: impl AsRef<Path>, turns_per_summary: Option<u32>) -> Self {
         Self {
             turn_count: HashMap::new(),
             turns_per_summary: turns_per_summary.unwrap_or(DEFAULT_TURNS_PER_SUMMARY),
@@ -67,13 +62,11 @@ impl MemoryTicker {
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<HashMap<String, CompileStatus>>> + 'static,
     {
-        self.compile_callback = Some(Arc::new(move || {
-            Box::pin(callback()) as CompilationFuture
-        }));
+        self.compile_callback = Some(Arc::new(move || Box::pin(callback()) as CompilationFuture));
     }
 
     /// Notify the ticker of a new turn in a session
-    /// 
+    ///
     /// Returns a future that will run compilation if the threshold is reached.
     /// Returns None if no compilation is triggered.
     #[instrument(skip(self))]
@@ -119,7 +112,10 @@ impl MemoryTicker {
 
     /// Notify of a turn and immediately await compilation if triggered
     #[instrument(skip(self))]
-    pub async fn notify_turn_and_wait(&mut self, session_path: &str) -> Option<Result<HashMap<String, CompileStatus>>> {
+    pub async fn notify_turn_and_wait(
+        &mut self,
+        session_path: &str,
+    ) -> Option<Result<HashMap<String, CompileStatus>>> {
         if let Some(future) = self.notify_turn(session_path) {
             let result = future.await;
             self.compiling.insert(session_path.to_string(), false);
@@ -201,7 +197,10 @@ impl SharedMemoryTicker {
     }
 
     /// Notify and wait for compilation
-    pub async fn notify_turn_and_wait(&self, session_path: &str) -> Option<Result<HashMap<String, CompileStatus>>> {
+    pub async fn notify_turn_and_wait(
+        &self,
+        session_path: &str,
+    ) -> Option<Result<HashMap<String, CompileStatus>>> {
         let mut ticker = self.inner.lock().await;
         ticker.notify_turn_and_wait(session_path).await
     }
@@ -244,19 +243,19 @@ mod tests {
     fn test_turn_counting() {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(3));
-        
+
         // Set a no-op callback
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         assert_eq!(ticker.get_turn_count("session-1"), 0);
-        
+
         // First 2 turns should not trigger
         assert!(ticker.notify_turn("session-1").is_none());
         assert_eq!(ticker.get_turn_count("session-1"), 1);
-        
+
         assert!(ticker.notify_turn("session-1").is_none());
         assert_eq!(ticker.get_turn_count("session-1"), 2);
-        
+
         // Third turn should trigger
         assert!(ticker.notify_turn("session-1").is_some());
         assert_eq!(ticker.get_turn_count("session-1"), 0); // Reset after trigger
@@ -267,19 +266,19 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(3));
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         // Track turns independently
         ticker.notify_turn("session-a");
         ticker.notify_turn("session-a");
         ticker.notify_turn("session-b");
-        
+
         assert_eq!(ticker.get_turn_count("session-a"), 2);
         assert_eq!(ticker.get_turn_count("session-b"), 1);
-        
+
         // Trigger only for session-a
         assert!(ticker.notify_turn("session-a").is_some());
         assert!(ticker.notify_turn("session-b").is_none());
-        
+
         assert_eq!(ticker.get_turn_count("session-a"), 0);
         assert_eq!(ticker.get_turn_count("session-b"), 2);
     }
@@ -289,14 +288,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(3));
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         ticker.notify_turn("session-1");
         ticker.notify_turn("session-1");
         assert_eq!(ticker.get_turn_count("session-1"), 2);
-        
+
         ticker.reset_turn_count("session-1");
         assert_eq!(ticker.get_turn_count("session-1"), 0);
-        
+
         // Should need 3 more turns to trigger
         assert!(ticker.notify_turn("session-1").is_none());
         assert!(ticker.notify_turn("session-1").is_none());
@@ -308,11 +307,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(3));
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         // Change threshold to 5
         ticker.set_threshold(5);
         assert_eq!(ticker.threshold(), 5);
-        
+
         // Should need 5 turns now
         for _ in 0..4 {
             assert!(ticker.notify_turn("session-1").is_none());
@@ -325,7 +324,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), None);
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         assert_eq!(ticker.threshold(), DEFAULT_TURNS_PER_SUMMARY);
     }
 
@@ -334,14 +333,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(2));
         ticker.set_compile_callback(|| async { Ok(HashMap::new()) });
-        
+
         let shared = SharedMemoryTicker::new(ticker);
-        
+
         assert_eq!(shared.get_turn_count("session-1").await, 0);
-        
+
         shared.notify_turn("session-1").await;
         assert_eq!(shared.get_turn_count("session-1").await, 1);
-        
+
         shared.notify_turn("session-1").await;
         assert_eq!(shared.get_turn_count("session-1").await, 0); // Triggered and reset
     }
@@ -350,11 +349,11 @@ mod tests {
     async fn test_callback_invocation() {
         let temp_dir = TempDir::new().unwrap();
         let mut ticker = MemoryTicker::new(temp_dir.path(), Some(2));
-        
+
         // Track if callback was called
         let call_count = Arc::new(Mutex::new(0));
         let call_count_clone = Arc::clone(&call_count);
-        
+
         ticker.set_compile_callback(move || {
             let count = Arc::clone(&call_count_clone);
             async move {
@@ -363,15 +362,15 @@ mod tests {
                 Ok(HashMap::new())
             }
         });
-        
+
         // First turn - no trigger
         ticker.notify_turn("session-1");
         assert_eq!(*call_count.lock().await, 0);
-        
+
         // Second turn - triggers
         let future = ticker.notify_turn("session-1").expect("Should trigger");
         future.await.ok();
-        
+
         assert_eq!(*call_count.lock().await, 1);
     }
 }

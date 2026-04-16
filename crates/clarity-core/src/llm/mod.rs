@@ -30,14 +30,16 @@ pub struct StreamDelta {
 static SHARED_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 fn shared_http_client() -> reqwest::Client {
-    SHARED_HTTP_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(300))
-            .connect_timeout(Duration::from_secs(10))
-            .pool_max_idle_per_host(10)
-            .build()
-            .expect("failed to build reqwest client")
-    }).clone()
+    SHARED_HTTP_CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(300))
+                .connect_timeout(Duration::from_secs(10))
+                .pool_max_idle_per_host(10)
+                .build()
+                .expect("failed to build reqwest client")
+        })
+        .clone()
 }
 
 // ==================== OpenAI Compatible API Types ====================
@@ -125,11 +127,10 @@ impl OpenAiCompatibleLlm {
         let api_key = env::var("OPENAI_API_KEY")
             .map_err(|_| AgentError::Llm("OPENAI_API_KEY not set".into()))?;
 
-        let base_url = env::var("OPENAI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com/v1".into());
+        let base_url =
+            env::var("OPENAI_BASE_URL").unwrap_or_else(|_| "https://api.openai.com/v1".into());
 
-        let model = env::var("OPENAI_MODEL")
-            .unwrap_or_else(|_| "gpt-4o".into());
+        let model = env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -156,7 +157,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
             })
             .collect();
 
-        let tools_opt = tools.as_array().filter(|a| !a.is_empty()).map(|_| tools.clone());
+        let tools_opt = tools
+            .as_array()
+            .filter(|a| !a.is_empty())
+            .map(|_| tools.clone());
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
@@ -174,9 +178,9 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             format!("{}/v1/chat/completions", base)
         };
-        
+
         tracing::debug!("Sending request to {}", url);
-        
+
         let response = self
             .client
             .post(&url)
@@ -206,7 +210,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
             .map_err(|e| AgentError::Llm(format!("Failed to parse response: {}", e)))?;
 
         let choice = completion.choices.into_iter().next();
-        let content = choice.as_ref().map(|c| c.message.content.clone()).unwrap_or_default();
+        let content = choice
+            .as_ref()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
         let tool_calls: Vec<crate::agent::ToolCall> = choice
             .and_then(|c| c.message.tool_calls)
             .map(|tcs| {
@@ -248,7 +255,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
             })
             .collect();
 
-        let tools_opt = tools.as_array().filter(|a| !a.is_empty()).map(|_| tools.clone());
+        let tools_opt = tools
+            .as_array()
+            .filter(|a| !a.is_empty())
+            .map(|_| tools.clone());
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
@@ -294,16 +304,17 @@ impl LlmProvider for OpenAiCompatibleLlm {
                 }
             };
 
-            let flush_last = |pc: &[PartialToolCall], lsi: Option<usize>| -> Option<crate::agent::ToolCall> {
-                let idx = lsi?;
-                let ptc = pc.get(idx)?;
-                let call = assemble(ptc);
-                if call.id.is_empty() || call.function.name.is_empty() {
-                    None
-                } else {
-                    Some(call)
-                }
-            };
+            let flush_last =
+                |pc: &[PartialToolCall], lsi: Option<usize>| -> Option<crate::agent::ToolCall> {
+                    let idx = lsi?;
+                    let ptc = pc.get(idx)?;
+                    let call = assemble(ptc);
+                    if call.id.is_empty() || call.function.name.is_empty() {
+                        None
+                    } else {
+                        Some(call)
+                    }
+                };
 
             let mut partial_calls: Vec<PartialToolCall> = Vec::new();
             let mut last_seen_index: Option<usize> = None;
@@ -322,7 +333,9 @@ impl LlmProvider for OpenAiCompatibleLlm {
                 Ok(resp) => {
                     if !resp.status().is_success() {
                         let err = resp.text().await.unwrap_or_default();
-                        let _ = tx.send(Err(AgentError::Llm(format!("API error: {}", err)))).await;
+                        let _ = tx
+                            .send(Err(AgentError::Llm(format!("API error: {}", err))))
+                            .await;
                         return;
                     }
 
@@ -336,36 +349,68 @@ impl LlmProvider for OpenAiCompatibleLlm {
                                 for line in text.lines() {
                                     if let Some(data) = line.strip_prefix("data: ") {
                                         if data == "[DONE]" {
-                                            if let Some(call) = flush_last(&partial_calls, last_seen_index) {
-                                                let _ = tx.send(Ok(StreamDelta {
-                                                    content: None,
-                                                    tool_calls: vec![call],
-                                                })).await;
+                                            if let Some(call) =
+                                                flush_last(&partial_calls, last_seen_index)
+                                            {
+                                                let _ = tx
+                                                    .send(Ok(StreamDelta {
+                                                        content: None,
+                                                        tool_calls: vec![call],
+                                                    }))
+                                                    .await;
                                             }
                                             return;
                                         }
-                                        if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                                            if let Some(choices) = event.get("choices").and_then(|c| c.as_array()) {
+                                        if let Ok(event) =
+                                            serde_json::from_str::<serde_json::Value>(data)
+                                        {
+                                            if let Some(choices) =
+                                                event.get("choices").and_then(|c| c.as_array())
+                                            {
                                                 for choice in choices {
                                                     if let Some(delta) = choice.get("delta") {
                                                         // Content delta
-                                                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                                            if !content.is_empty() && tx.send(Ok(StreamDelta {
-                                                                content: Some(content.to_string()),
-                                                                tool_calls: vec![],
-                                                            })).await.is_err() {
+                                                        if let Some(content) = delta
+                                                            .get("content")
+                                                            .and_then(|c| c.as_str())
+                                                        {
+                                                            if !content.is_empty()
+                                                                && tx
+                                                                    .send(Ok(StreamDelta {
+                                                                        content: Some(
+                                                                            content.to_string(),
+                                                                        ),
+                                                                        tool_calls: vec![],
+                                                                    }))
+                                                                    .await
+                                                                    .is_err()
+                                                            {
                                                                 return;
                                                             }
                                                         }
 
                                                         // Tool call deltas
-                                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|t| t.as_array()) {
+                                                        if let Some(tool_calls) = delta
+                                                            .get("tool_calls")
+                                                            .and_then(|t| t.as_array())
+                                                        {
                                                             for tc_delta in tool_calls {
-                                                                if let Some(index) = tc_delta.get("index").and_then(|i| i.as_u64()).map(|i| i as usize) {
+                                                                if let Some(index) = tc_delta
+                                                                    .get("index")
+                                                                    .and_then(|i| i.as_u64())
+                                                                    .map(|i| i as usize)
+                                                                {
                                                                     // Flush previous index when a new one appears
-                                                                    if let Some(last) = last_seen_index {
+                                                                    if let Some(last) =
+                                                                        last_seen_index
+                                                                    {
                                                                         if index > last {
-                                                                            if let Some(call) = flush_last(&partial_calls, last_seen_index) {
+                                                                            if let Some(call) =
+                                                                                flush_last(
+                                                                                    &partial_calls,
+                                                                                    last_seen_index,
+                                                                                )
+                                                                            {
                                                                                 if tx.send(Ok(StreamDelta {
                                                                                     content: None,
                                                                                     tool_calls: vec![call],
@@ -378,22 +423,52 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
                                                                     last_seen_index = Some(index);
 
-                                                                    if index >= partial_calls.len() {
+                                                                    if index >= partial_calls.len()
+                                                                    {
                                                                         partial_calls.resize_with(index + 1, PartialToolCall::default);
                                                                     }
 
-                                                                    if let Some(id) = tc_delta.get("id").and_then(|i| i.as_str()) {
-                                                                        partial_calls[index].id.push_str(id);
+                                                                    if let Some(id) = tc_delta
+                                                                        .get("id")
+                                                                        .and_then(|i| i.as_str())
+                                                                    {
+                                                                        partial_calls[index]
+                                                                            .id
+                                                                            .push_str(id);
                                                                     }
-                                                                    if let Some(call_type) = tc_delta.get("type").and_then(|t| t.as_str()) {
-                                                                        partial_calls[index].call_type.push_str(call_type);
+                                                                    if let Some(call_type) =
+                                                                        tc_delta
+                                                                            .get("type")
+                                                                            .and_then(|t| {
+                                                                                t.as_str()
+                                                                            })
+                                                                    {
+                                                                        partial_calls[index]
+                                                                            .call_type
+                                                                            .push_str(call_type);
                                                                     }
-                                                                    if let Some(func) = tc_delta.get("function") {
-                                                                        if let Some(name) = func.get("name").and_then(|n| n.as_str()) {
-                                                                            partial_calls[index].name.push_str(name);
+                                                                    if let Some(func) =
+                                                                        tc_delta.get("function")
+                                                                    {
+                                                                        if let Some(name) = func
+                                                                            .get("name")
+                                                                            .and_then(|n| {
+                                                                                n.as_str()
+                                                                            })
+                                                                        {
+                                                                            partial_calls[index]
+                                                                                .name
+                                                                                .push_str(name);
                                                                         }
-                                                                        if let Some(args) = func.get("arguments").and_then(|a| a.as_str()) {
-                                                                            partial_calls[index].arguments.push_str(args);
+                                                                        if let Some(args) = func
+                                                                            .get("arguments")
+                                                                            .and_then(|a| {
+                                                                                a.as_str()
+                                                                            })
+                                                                        {
+                                                                            partial_calls[index]
+                                                                                .arguments
+                                                                                .push_str(args);
                                                                         }
                                                                     }
                                                                 }
@@ -407,7 +482,9 @@ impl LlmProvider for OpenAiCompatibleLlm {
                                 }
                             }
                             Err(e) => {
-                                let _ = tx.send(Err(AgentError::Llm(format!("Stream error: {}", e)))).await;
+                                let _ = tx
+                                    .send(Err(AgentError::Llm(format!("Stream error: {}", e))))
+                                    .await;
                                 return;
                             }
                         }
@@ -415,14 +492,18 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
                     // Flush any remaining completed tool call when stream ends without [DONE]
                     if let Some(call) = flush_last(&partial_calls, last_seen_index) {
-                        let _ = tx.send(Ok(StreamDelta {
-                            content: None,
-                            tool_calls: vec![call],
-                        })).await;
+                        let _ = tx
+                            .send(Ok(StreamDelta {
+                                content: None,
+                                tool_calls: vec![call],
+                            }))
+                            .await;
                     }
                 }
                 Err(e) => {
-                    let _ = tx.send(Err(AgentError::Llm(format!("HTTP error: {}", e)))).await;
+                    let _ = tx
+                        .send(Err(AgentError::Llm(format!("HTTP error: {}", e))))
+                        .await;
                 }
             }
         });
@@ -444,14 +525,13 @@ pub struct KimiLlm {
 impl KimiLlm {
     /// Create from environment variables
     pub fn from_env() -> Result<Self, AgentError> {
-        let api_key = env::var("KIMI_API_KEY")
-            .map_err(|_| AgentError::Llm("KIMI_API_KEY not set".into()))?;
+        let api_key =
+            env::var("KIMI_API_KEY").map_err(|_| AgentError::Llm("KIMI_API_KEY not set".into()))?;
 
-        let base_url = env::var("KIMI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.moonshot.ai/v1".into());
+        let base_url =
+            env::var("KIMI_BASE_URL").unwrap_or_else(|_| "https://api.moonshot.ai/v1".into());
 
-        let model = env::var("KIMI_MODEL")
-            .unwrap_or_else(|_| "kimi-k2-07132k".into());
+        let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -509,8 +589,7 @@ impl KimiCodeLlm {
         let base_url = env::var("KIMI_CODE_BASE_URL")
             .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
 
-        let model = env::var("KIMI_CODE_MODEL")
-            .unwrap_or_else(|_| "kimi-k2-07132k".into());
+        let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -555,7 +634,7 @@ impl LlmProvider for KimiCodeLlm {
 }
 
 /// Anthropic LLM Provider
-/// 
+///
 /// Supports Anthropic Messages API format
 /// Used by Kimi Code and other Claude-compatible endpoints
 #[derive(Debug, Clone)]
@@ -597,7 +676,7 @@ struct AnthropicContent {
 
 impl AnthropicLlm {
     /// Create from environment variables
-    /// 
+    ///
     /// Required: ANTHROPIC_AUTH_TOKEN
     /// Optional: ANTHROPIC_BASE_URL (default: "https://api.anthropic.com")
     /// Optional: ANTHROPIC_MODEL (default: "claude-3-sonnet-20240229")
@@ -605,11 +684,11 @@ impl AnthropicLlm {
         let api_key = env::var("ANTHROPIC_AUTH_TOKEN")
             .map_err(|_| AgentError::Llm("ANTHROPIC_AUTH_TOKEN not set".into()))?;
 
-        let base_url = env::var("ANTHROPIC_BASE_URL")
-            .unwrap_or_else(|_| "https://api.anthropic.com".into());
+        let base_url =
+            env::var("ANTHROPIC_BASE_URL").unwrap_or_else(|_| "https://api.anthropic.com".into());
 
-        let model = env::var("ANTHROPIC_MODEL")
-            .unwrap_or_else(|_| "claude-3-sonnet-20240229".into());
+        let model =
+            env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -637,7 +716,8 @@ impl LlmProvider for AnthropicLlm {
         _tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
         // Extract system message if present
-        let system_msg = messages.iter()
+        let system_msg = messages
+            .iter()
             .find(|m| m.role == MessageRole::System)
             .map(|m| m.content.clone());
 
@@ -659,9 +739,9 @@ impl LlmProvider for AnthropicLlm {
         };
 
         let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
-        
+
         tracing::debug!("Sending Anthropic request to {}", url);
-        
+
         let response = self
             .client
             .post(&url)
@@ -712,7 +792,8 @@ impl LlmProvider for AnthropicLlm {
         _tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         // Extract system message if present
-        let system_msg = messages.iter()
+        let system_msg = messages
+            .iter()
             .find(|m| m.role == MessageRole::System)
             .map(|m| m.content.clone());
 
@@ -755,7 +836,9 @@ impl LlmProvider for AnthropicLlm {
                 Ok(resp) => {
                     if !resp.status().is_success() {
                         let err = resp.text().await.unwrap_or_default();
-                        let _ = tx.send(Err(AgentError::Llm(format!("API error: {}", err)))).await;
+                        let _ = tx
+                            .send(Err(AgentError::Llm(format!("API error: {}", err))))
+                            .await;
                         return;
                     }
 
@@ -773,14 +856,22 @@ impl LlmProvider for AnthropicLlm {
                                             return;
                                         }
                                         // Parse SSE event and extract content
-                                        if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
+                                        if let Ok(event) =
+                                            serde_json::from_str::<serde_json::Value>(data)
+                                        {
                                             // Anthropic streaming format: content_block_delta events
                                             if let Some(delta) = event.get("delta") {
-                                                if let Some(text) = delta.get("text").and_then(|t| t.as_str()) {
-                                                    if tx.send(Ok(StreamDelta {
-                                                        content: Some(text.to_string()),
-                                                        tool_calls: vec![],
-                                                    })).await.is_err() {
+                                                if let Some(text) =
+                                                    delta.get("text").and_then(|t| t.as_str())
+                                                {
+                                                    if tx
+                                                        .send(Ok(StreamDelta {
+                                                            content: Some(text.to_string()),
+                                                            tool_calls: vec![],
+                                                        }))
+                                                        .await
+                                                        .is_err()
+                                                    {
                                                         return;
                                                     }
                                                 }
@@ -790,14 +881,18 @@ impl LlmProvider for AnthropicLlm {
                                 }
                             }
                             Err(e) => {
-                                let _ = tx.send(Err(AgentError::Llm(format!("Stream error: {}", e)))).await;
+                                let _ = tx
+                                    .send(Err(AgentError::Llm(format!("Stream error: {}", e))))
+                                    .await;
                                 return;
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = tx.send(Err(AgentError::Llm(format!("HTTP error: {}", e)))).await;
+                    let _ = tx
+                        .send(Err(AgentError::Llm(format!("HTTP error: {}", e))))
+                        .await;
                 }
             }
         });
@@ -828,8 +923,7 @@ impl LlmFactory {
             if kimi_key.starts_with("sk-kimi-") {
                 let base_url = env::var("KIMI_BASE_URL")
                     .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
-                let model = env::var("KIMI_MODEL")
-                    .unwrap_or_else(|_| "kimi-k2-07132k".into());
+                let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
                 return Ok(Box::new(KimiCodeLlm::new(kimi_key, base_url, model)));
             }
             return Ok(Box::new(KimiLlm::from_env()?));
@@ -849,7 +943,8 @@ impl LlmFactory {
              - KIMI_CODE_API_KEY (for Kimi Code)\n\
              - KIMI_API_KEY (for Moonshot)\n\
              - DEEPSEEK_API_KEY\n\
-             - OPENAI_API_KEY".into()
+             - OPENAI_API_KEY"
+                .into(),
         ))
     }
 
@@ -901,11 +996,8 @@ mod tests {
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let llm = OpenAiCompatibleLlm::new(
-            "test-key",
-            format!("http://127.0.0.1:{}", port),
-            "gpt-4o",
-        );
+        let llm =
+            OpenAiCompatibleLlm::new("test-key", format!("http://127.0.0.1:{}", port), "gpt-4o");
         let mut rx = llm.stream(&[], &serde_json::json!({})).unwrap();
 
         let mut deltas = Vec::new();
@@ -925,7 +1017,6 @@ mod tests {
             "{\"path\": \"/test.txt\"}"
         );
     }
-
 
     #[test]
     fn test_chat_completion_request_serialization_with_cache_key() {

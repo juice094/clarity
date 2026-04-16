@@ -3,8 +3,8 @@
 //! 启动一个本地 mock HTTP server，模拟 OpenAI SSE 流式响应，
 //! 验证 OpenAiCompatibleLlm + Agent::run_streaming 的完整网络链路。
 
-use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
 use clarity_core::agent::AgentConfig;
+use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -66,9 +66,13 @@ async fn test_openai_streaming_e2e() {
     let server_handle = tokio::spawn(run_mock_server(port, rx));
 
     // 构造 OpenAI 兼容 LLM，指向本地 mock
-    let llm = OpenAiCompatibleLlm::new("fake-key", format!("http://127.0.0.1:{}", port), "mock-model");
-    let agent = Agent::with_config(ToolRegistry::new(), AgentConfig::default())
-        .with_llm(Arc::new(llm));
+    let llm = OpenAiCompatibleLlm::new(
+        "fake-key",
+        format!("http://127.0.0.1:{}", port),
+        "mock-model",
+    );
+    let agent =
+        Agent::with_config(ToolRegistry::new(), AgentConfig::default()).with_llm(Arc::new(llm));
 
     let chunks = Arc::new(Mutex::new(Vec::new()));
     let chunks_clone = chunks.clone();
@@ -104,8 +108,14 @@ async fn test_openai_streaming_e2e() {
     assert_eq!(pos, "Hello world".len());
 
     // 验证收到了 complete 和 stream 两个请求
-    let complete_count = reqs.iter().filter(|r| !r.contains(r#""stream":true"#)).count();
-    let stream_count = reqs.iter().filter(|r| r.contains(r#""stream":true"#)).count();
+    let complete_count = reqs
+        .iter()
+        .filter(|r| !r.contains(r#""stream":true"#))
+        .count();
+    let stream_count = reqs
+        .iter()
+        .filter(|r| r.contains(r#""stream":true"#))
+        .count();
     assert_eq!(complete_count, 1, "expected 1 complete request");
     assert_eq!(stream_count, 1, "expected 1 stream request");
 }

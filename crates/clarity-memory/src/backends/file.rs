@@ -77,7 +77,7 @@ impl FileStore {
         let mut entries = fs::read_dir(&self.dir).await.map_err(MemoryError::Io)?;
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            
+
             if path == self.meta_path {
                 continue;
             }
@@ -127,23 +127,27 @@ impl FileStore {
             version: 1,
         };
         let content = serde_json::to_string_pretty(&meta)?;
-        
+
         let temp_path = self.meta_path.with_extension("tmp");
-        let mut file = fs::File::create(&temp_path).await.map_err(MemoryError::Io)?;
-        file.write_all(content.as_bytes()).await.map_err(MemoryError::Io)?;
+        let mut file = fs::File::create(&temp_path)
+            .await
+            .map_err(MemoryError::Io)?;
+        file.write_all(content.as_bytes())
+            .await
+            .map_err(MemoryError::Io)?;
         file.flush().await.map_err(MemoryError::Io)?;
         drop(file);
-        
+
         fs::rename(&temp_path, &self.meta_path)
             .await
             .map_err(MemoryError::Io)?;
-        
+
         Ok(())
     }
 
     async fn write_fact_file(&self, fact: &FactFile) -> Result<()> {
         let path = self.fact_path(fact.id);
-        
+
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent).await.map_err(MemoryError::Io)?;
@@ -151,15 +155,21 @@ impl FileStore {
         }
 
         let content = serde_json::to_string_pretty(fact)?;
-        
+
         let temp_path = path.with_extension("tmp");
-        let mut file = fs::File::create(&temp_path).await.map_err(MemoryError::Io)?;
-        file.write_all(content.as_bytes()).await.map_err(MemoryError::Io)?;
+        let mut file = fs::File::create(&temp_path)
+            .await
+            .map_err(MemoryError::Io)?;
+        file.write_all(content.as_bytes())
+            .await
+            .map_err(MemoryError::Io)?;
         file.flush().await.map_err(MemoryError::Io)?;
         drop(file);
-        
-        fs::rename(&temp_path, &path).await.map_err(MemoryError::Io)?;
-        
+
+        fs::rename(&temp_path, &path)
+            .await
+            .map_err(MemoryError::Io)?;
+
         Ok(())
     }
 
@@ -173,10 +183,7 @@ impl FileStore {
 
     fn add_to_tags_index(&self, id: i64, tags: &[String]) {
         for tag in tags {
-            self.tags_index
-                .entry(tag.clone())
-                .or_default()
-                .push(id);
+            self.tags_index.entry(tag.clone()).or_default().push(id);
         }
     }
 
@@ -332,7 +339,7 @@ impl StorageBackend for FileStore {
             let created_at = DateTime::parse_from_rfc3339(&ff.created_at)
                 .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
                 .with_timezone(&Utc);
-            
+
             if created_at > since {
                 if let Some(fact) = self.get_fact(ff.id).await? {
                     facts.push(fact);
@@ -384,7 +391,10 @@ impl StorageBackend for FileStore {
         Ok(count)
     }
 
-    async fn bulk_save_facts(&self, facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)]) -> Result<Vec<i64>> {
+    async fn bulk_save_facts(
+        &self,
+        facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)],
+    ) -> Result<Vec<i64>> {
         let mut ids = Vec::with_capacity(facts.len());
 
         for (fact, tags, time, session_id) in facts {
@@ -410,8 +420,15 @@ mod tests {
     #[tokio::test]
     async fn test_save_and_retrieve() {
         let (_temp, store) = create_test_store().await;
-        let id = store.save_fact("Test fact", &["tag1".to_string()], None, Some("session-1")).await.unwrap();
-        let fact = store.get_fact(id).await.unwrap().expect("Fact should exist");
+        let id = store
+            .save_fact("Test fact", &["tag1".to_string()], None, Some("session-1"))
+            .await
+            .unwrap();
+        let fact = store
+            .get_fact(id)
+            .await
+            .unwrap()
+            .expect("Fact should exist");
         assert_eq!(fact.fact, "Test fact");
         assert_eq!(fact.tags, vec!["tag1"]);
     }

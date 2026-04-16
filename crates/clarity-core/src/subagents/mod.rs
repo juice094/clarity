@@ -16,13 +16,11 @@ pub mod runner;
 mod store;
 
 pub use builder::SubagentBuilder;
-pub use parallel::{
-    run_parallel, ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch,
-};
+pub use parallel::{run_parallel, ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch};
 pub use registry::{AgentTypeDefinition, LaborMarket};
 pub use runner::{
-    collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector,
-    RunSpec, SubagentError, SubagentResult, SubagentRunner,
+    collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
+    SubagentError, SubagentResult, SubagentRunner,
 };
 pub use store::{SubagentState, SubagentStatus, SubagentStore};
 
@@ -53,10 +51,7 @@ impl SubagentManager {
     }
 
     /// 运行子代理
-    pub async fn run(
-        &mut self,
-        spec: RunSpec,
-    ) -> Result<SubagentResult, SubagentError> {
+    pub async fn run(&mut self, spec: RunSpec) -> Result<SubagentResult, SubagentError> {
         self.runner.run(spec, &mut self.store, None).await
     }
 
@@ -67,17 +62,15 @@ impl SubagentManager {
         config: ParallelConfig,
     ) -> anyhow::Result<ParallelResult> {
         use crate::background::BackgroundTaskManager;
-        
+
         let task_manager = BackgroundTaskManager::new(
             self.runner.working_dir().join("tasks"),
             self.runner.working_dir(),
             self.runner.working_dir().join("context"),
         );
-        
-        let batch = SubagentBatch::new()
-            .add_many(specs)
-            .with_config(config);
-        
+
+        let batch = SubagentBatch::new().add_many(specs).with_config(config);
+
         let mut executor = ParallelExecutor::new(task_manager, self.runner.clone());
         executor.execute(batch).await
     }
@@ -178,7 +171,7 @@ mod tests {
             .with_max_concurrency(5)
             .with_timeout(600)
             .cancel_on_error();
-        
+
         assert_eq!(config.max_concurrency, 5);
         assert_eq!(config.timeout_secs, Some(600));
         assert!(config.cancel_on_error);
@@ -189,7 +182,7 @@ mod tests {
         let batch = SubagentBatch::new()
             .add(RunSpec::new("Task 1", "Do something").with_type("coder"))
             .add(RunSpec::new("Task 2", "Do another").with_type("explore"));
-        
+
         assert_eq!(batch.len(), 2);
         assert!(!batch.is_empty());
     }

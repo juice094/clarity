@@ -102,21 +102,18 @@ impl ParallelResult {
     /// 合并所有输出
     pub fn merged_output(&self) -> String {
         let mut outputs = Vec::new();
-        
+
         for result in &self.results {
             outputs.push(format!(
                 "## {} ({}): {}\n{}\n",
-                result.agent_id,
-                result.agent_type,
-                result.status,
-                result.summary
+                result.agent_id, result.agent_type, result.status, result.summary
             ));
         }
-        
+
         for (id, err) in &self.failures {
             outputs.push(format!("## {}: FAILED\n{}\n", id, err));
         }
-        
+
         outputs.join("\n---\n")
     }
 }
@@ -184,10 +181,7 @@ pub struct ParallelExecutor {
 
 impl ParallelExecutor {
     /// 创建新的并行执行器
-    pub fn new(
-        task_manager: BackgroundTaskManager,
-        runner: SubagentRunner,
-    ) -> Self {
+    pub fn new(task_manager: BackgroundTaskManager, runner: SubagentRunner) -> Self {
         Self {
             task_manager,
             runner,
@@ -195,12 +189,7 @@ impl ParallelExecutor {
     }
 
     /// 并行执行多个子代理
-    pub async fn execute(
-        &mut self,
-        batch: SubagentBatch,
-    ) -> anyhow::Result<ParallelResult> {
-        
-
+    pub async fn execute(&mut self, batch: SubagentBatch) -> anyhow::Result<ParallelResult> {
         if batch.is_empty() {
             return Ok(ParallelResult {
                 results: Vec::new(),
@@ -214,24 +203,23 @@ impl ParallelExecutor {
         let start_time = std::time::Instant::now();
         let config = batch.config.clone();
         let len = batch.len();
-        
+
         info!(
             "Starting parallel execution of {} subagents with max concurrency {}",
-            len,
-            config.max_concurrency
+            len, config.max_concurrency
         );
 
         // 创建信号量控制并发
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
-        
+
         // 任务列表
         let mut task_ids: Vec<String> = Vec::new();
-        
+
         for spec in batch.specs.clone() {
             let sem = semaphore.clone();
             let runner = self.runner.clone();
             let mut store = SubagentStore::new(self.runner.working_dir().join("parallel_store"));
-            
+
             // 创建后台任务
             let task_spec = TaskSpec {
                 name: spec.description.clone(),
@@ -243,37 +231,42 @@ impl ParallelExecutor {
                 priority: crate::background::TaskPriority::Normal,
             };
 
-            let task_id = self.task_manager.spawn(task_spec, move |_ts| async move {
-                // 获取信号量许可
-                let _permit = sem.acquire().await.map_err(|e| {
-                    SubagentError::ExecutionFailed {
-                        message: e.to_string(),
-                        brief: "semaphore error".to_string(),
-                    }
-                })?;
+            let task_id = self
+                .task_manager
+                .spawn(task_spec, move |_ts| async move {
+                    // 获取信号量许可
+                    let _permit =
+                        sem.acquire()
+                            .await
+                            .map_err(|e| SubagentError::ExecutionFailed {
+                                message: e.to_string(),
+                                brief: "semaphore error".to_string(),
+                            })?;
 
-                // 执行子代理
-                let result = runner.run(spec, &mut store, None).await;
-                
-                // 转换结果为 TaskResult
-                match result {
-                    Ok(r) => Ok(TaskResult {
-                        status: TaskStatus::Completed,
-                        output: serde_json::to_string(&r).unwrap_or_default(),
-                        elapsed_ms: r.elapsed_ms,
-                        steps: r.steps_taken,
-                    }),
-                    Err(e) => Ok(TaskResult {
-                        status: TaskStatus::Failed,
-                        output: e.to_string(),
-                        elapsed_ms: 0,
-                        steps: 0,
-                    }),
-                }
-            }).await.map_err(|e| SubagentError::ExecutionFailed {
-                message: e.to_string(),
-                brief: "spawn failed".to_string(),
-            })?;
+                    // 执行子代理
+                    let result = runner.run(spec, &mut store, None).await;
+
+                    // 转换结果为 TaskResult
+                    match result {
+                        Ok(r) => Ok(TaskResult {
+                            status: TaskStatus::Completed,
+                            output: serde_json::to_string(&r).unwrap_or_default(),
+                            elapsed_ms: r.elapsed_ms,
+                            steps: r.steps_taken,
+                        }),
+                        Err(e) => Ok(TaskResult {
+                            status: TaskStatus::Failed,
+                            output: e.to_string(),
+                            elapsed_ms: 0,
+                            steps: 0,
+                        }),
+                    }
+                })
+                .await
+                .map_err(|e| SubagentError::ExecutionFailed {
+                    message: e.to_string(),
+                    brief: "spawn failed".to_string(),
+                })?;
 
             task_ids.push(task_id);
         }
@@ -281,22 +274,20 @@ impl ParallelExecutor {
         // 收集结果
         let mut results = Vec::new();
         let mut failures = Vec::new();
-        
+
         for task_id in task_ids {
             match self.task_manager.wait(&task_id).await {
                 Ok(task_result) => {
                     if task_result.status == TaskStatus::Completed {
-                        if let Ok(subagent_result) = serde_json::from_str::<SubagentResult>(&task_result.output) {
+                        if let Ok(subagent_result) =
+                            serde_json::from_str::<SubagentResult>(&task_result.output)
+                        {
                             results.push(subagent_result);
                         } else {
-                            failures.push((task_id, 
-                                "Failed to parse subagent result".to_string()
-                            ));
+                            failures.push((task_id, "Failed to parse subagent result".to_string()));
                         }
                     } else {
-                        failures.push((task_id, 
-                            format!("task failed: {}", task_result.output)
-                        ));
+                        failures.push((task_id, format!("task failed: {}", task_result.output)));
 
                         // 如果需要，取消其他任务
                         if config.cancel_on_error {
@@ -306,15 +297,13 @@ impl ParallelExecutor {
                     }
                 }
                 Err(e) => {
-                    failures.push((task_id, 
-                        format!("wait failed: {}", e)
-                    ));
+                    failures.push((task_id, format!("wait failed: {}", e)));
                 }
             }
         }
 
         let elapsed = start_time.elapsed().as_millis() as u64;
-        
+
         // 结果聚合
         let aggregated_summary = if config.enable_aggregation && !results.is_empty() {
             Some(Self::aggregate_results(&results))
@@ -341,21 +330,22 @@ impl ParallelExecutor {
     /// 聚合结果
     fn aggregate_results(results: &[SubagentResult]) -> String {
         let mut summary = String::from("# Parallel Execution Summary\n\n");
-        
+
         summary.push_str(&format!("Total tasks: {}\n", results.len()));
         summary.push_str(&format!("Successful: {}\n", results.len()));
-        
+
         // 按代理类型分组
-        let mut by_type: std::collections::HashMap<String, Vec<&SubagentResult>> = std::collections::HashMap::new();
+        let mut by_type: std::collections::HashMap<String, Vec<&SubagentResult>> =
+            std::collections::HashMap::new();
         for r in results {
             by_type.entry(r.agent_type.clone()).or_default().push(r);
         }
-        
+
         summary.push_str("\n## By Agent Type\n\n");
         for (agent_type, items) in by_type {
             summary.push_str(&format!("- {}: {} tasks\n", agent_type, items.len()));
         }
-        
+
         // 添加每个结果的摘要
         summary.push_str("\n## Individual Results\n\n");
         for (i, result) in results.iter().enumerate() {
@@ -367,7 +357,7 @@ impl ParallelExecutor {
                 result.summary.lines().next().unwrap_or("No summary")
             ));
         }
-        
+
         summary
     }
 }
@@ -381,10 +371,8 @@ pub async fn run_parallel(
     task_manager: BackgroundTaskManager,
     config: ParallelConfig,
 ) -> anyhow::Result<ParallelResult> {
-    let batch = SubagentBatch::new()
-        .add_many(specs)
-        .with_config(config);
-    
+    let batch = SubagentBatch::new().add_many(specs).with_config(config);
+
     let mut executor = ParallelExecutor::new(task_manager, runner);
     executor.execute(batch).await
 }
@@ -392,20 +380,20 @@ pub async fn run_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use crate::registry::ToolRegistry;
     use crate::subagents::ExecutionStatus;
+    use tempfile::TempDir;
 
     fn create_test_runner() -> (SubagentRunner, TempDir) {
         let registry = ToolRegistry::with_builtin_tools();
         let temp_dir = TempDir::new().unwrap();
-        
+
         let runner = SubagentRunner::new(
             registry,
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
+
         (runner, temp_dir)
     }
 
@@ -415,7 +403,7 @@ mod tests {
             .with_max_concurrency(5)
             .with_timeout(600)
             .cancel_on_error();
-        
+
         assert_eq!(config.max_concurrency, 5);
         assert_eq!(config.timeout_secs, Some(600));
         assert!(config.cancel_on_error);
@@ -427,7 +415,7 @@ mod tests {
             .add(RunSpec::new("Task 1", "Do something").with_type("coder"))
             .add(RunSpec::new("Task 2", "Do another").with_type("explore"))
             .with_config(ParallelConfig::new().with_max_concurrency(2));
-        
+
         assert_eq!(batch.len(), 2);
         assert!(!batch.is_empty());
     }
@@ -466,7 +454,7 @@ mod tests {
             actual_concurrency: 2,
             aggregated_summary: None,
         };
-        
+
         assert!(result.all_succeeded());
         assert_eq!(result.success_rate(), 1.0);
         assert!(result.merged_output().contains("Success 1"));
@@ -481,10 +469,10 @@ mod tests {
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
+
         let mut executor = ParallelExecutor::new(task_manager, runner);
         let batch = SubagentBatch::new();
-        
+
         let result = executor.execute(batch).await.unwrap();
         assert!(result.results.is_empty());
         assert!(result.failures.is_empty());

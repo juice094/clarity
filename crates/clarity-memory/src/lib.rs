@@ -83,10 +83,10 @@ pub mod ticker;
 pub mod types;
 
 // Re-export commonly used types
-pub use backends::{BackendConfig, StorageBackend, StorageFactory};
-pub use backends::{FileStore, HybridStore};
 #[cfg(feature = "sqlite")]
 pub use backends::SqliteStore;
+pub use backends::{BackendConfig, StorageBackend, StorageFactory};
+pub use backends::{FileStore, HybridStore};
 
 pub use compiler::MemoryCompiler;
 pub use embedding::{CosineIndex, SparseVector, TfidfVectorizer, VectorStore};
@@ -132,10 +132,18 @@ mod integration_tests {
             .append_message("session-1", "user", "I love Rust programming!")
             .unwrap();
         session_store
-            .append_message("session-1", "assistant", "That's great! Rust is a powerful language.")
+            .append_message(
+                "session-1",
+                "assistant",
+                "That's great! Rust is a powerful language.",
+            )
             .unwrap();
         session_store
-            .append_message("session-1", "user", "I'm learning async programming in Rust.")
+            .append_message(
+                "session-1",
+                "user",
+                "I'm learning async programming in Rust.",
+            )
             .unwrap();
 
         // Verify session store has messages
@@ -210,7 +218,11 @@ mod integration_tests {
             .await
             .unwrap();
 
-        let fact = store.get_fact(id).await.unwrap().expect("Fact should exist");
+        let fact = store
+            .get_fact(id)
+            .await
+            .unwrap()
+            .expect("Fact should exist");
         assert_eq!(fact.fact, "File store test");
 
         // Test search
@@ -231,7 +243,11 @@ mod integration_tests {
             .await
             .unwrap();
 
-        let fact = store.get_fact(id).await.unwrap().expect("Fact should exist");
+        let fact = store
+            .get_fact(id)
+            .await
+            .unwrap()
+            .expect("Fact should exist");
         assert_eq!(fact.fact, "Hybrid store test");
 
         // Check cache stats
@@ -331,7 +347,11 @@ mod integration_tests {
 
         // Verify all facts were saved
         for (i, id) in ids.iter().enumerate() {
-            let fact = store.get_fact(*id).await.unwrap().expect("Fact should exist");
+            let fact = store
+                .get_fact(*id)
+                .await
+                .unwrap()
+                .expect("Fact should exist");
             assert_eq!(fact.fact, format!("Bulk fact {}", i + 1));
         }
     }

@@ -8,7 +8,7 @@
 //! - Rust 错误处理的最佳实践
 
 use crate::agent::{Agent, LlmProvider, Message};
-use crate::approval::{ApprovalRuntime, ApprovalMode};
+use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};
 use crate::registry::ToolRegistry;
 use crate::subagents::builder::SubagentBuilder;
@@ -257,7 +257,9 @@ impl ExecutionContext {
 
     /// 系统提示词路径
     fn system_prompt_path(&self) -> PathBuf {
-        self.context_dir.join(&self.agent_id).join("system_prompt.txt")
+        self.context_dir
+            .join(&self.agent_id)
+            .join("system_prompt.txt")
     }
 
     /// 提示词快照路径
@@ -277,12 +279,16 @@ impl ExecutionContext {
             let content = fs::read_to_string(&context_file).await.map_err(|e| {
                 SubagentError::ResumeFailed(format!("Failed to read context: {}", e))
             })?;
-            
+
             let messages: Vec<Message> = serde_json::from_str(&content).map_err(|e| {
                 SubagentError::ResumeFailed(format!("Failed to parse context: {}", e))
             })?;
-            
-            info!("Restored {} messages for agent {}", messages.len(), self.agent_id);
+
+            info!(
+                "Restored {} messages for agent {}",
+                messages.len(),
+                self.agent_id
+            );
             self.history = messages;
         }
 
@@ -301,18 +307,18 @@ impl ExecutionContext {
     /// 保存上下文
     pub async fn save(&self) -> Result<(), SubagentError> {
         let agent_dir = self.context_dir.join(&self.agent_id);
-        fs::create_dir_all(&agent_dir).await.map_err(|e| {
-            SubagentError::StoreError(format!("Failed to create directory: {}", e))
-        })?;
+        fs::create_dir_all(&agent_dir)
+            .await
+            .map_err(|e| SubagentError::StoreError(format!("Failed to create directory: {}", e)))?;
 
         let context_file = self.context_path();
         let content = serde_json::to_string_pretty(&self.history).map_err(|e| {
             SubagentError::StoreError(format!("Failed to serialize context: {}", e))
         })?;
 
-        fs::write(&context_file, content).await.map_err(|e| {
-            SubagentError::StoreError(format!("Failed to write context: {}", e))
-        })?;
+        fs::write(&context_file, content)
+            .await
+            .map_err(|e| SubagentError::StoreError(format!("Failed to write context: {}", e)))?;
 
         Ok(())
     }
@@ -320,9 +326,9 @@ impl ExecutionContext {
     /// 写入系统提示词
     pub async fn write_system_prompt(&self, prompt: impl AsRef<str>) -> Result<(), SubagentError> {
         let agent_dir = self.context_dir.join(&self.agent_id);
-        fs::create_dir_all(&agent_dir).await.map_err(|e| {
-            SubagentError::StoreError(format!("Failed to create directory: {}", e))
-        })?;
+        fs::create_dir_all(&agent_dir)
+            .await
+            .map_err(|e| SubagentError::StoreError(format!("Failed to create directory: {}", e)))?;
 
         let path = self.system_prompt_path();
         fs::write(&path, prompt.as_ref()).await.map_err(|e| {
@@ -333,7 +339,10 @@ impl ExecutionContext {
     }
 
     /// 写入提示词快照
-    pub async fn write_prompt_snapshot(&self, prompt: impl AsRef<str>) -> Result<(), SubagentError> {
+    pub async fn write_prompt_snapshot(
+        &self,
+        prompt: impl AsRef<str>,
+    ) -> Result<(), SubagentError> {
         let path = self.prompt_path();
         fs::write(&path, prompt.as_ref()).await.map_err(|e| {
             SubagentError::StoreError(format!("Failed to write prompt snapshot: {}", e))
@@ -421,9 +430,9 @@ impl OutputCollector {
             summary.as_ref()
         );
 
-        fs::write(&self.output_path, output).await.map_err(|e| {
-            SubagentError::StoreError(format!("Failed to write output: {}", e))
-        })?;
+        fs::write(&self.output_path, output)
+            .await
+            .map_err(|e| SubagentError::StoreError(format!("Failed to write output: {}", e)))?;
 
         Ok(())
     }
@@ -507,7 +516,9 @@ impl GitContext {
 
 /// 收集 Git 上下文（返回格式化字符串的兼容接口）
 pub async fn collect_git_context(working_dir: impl AsRef<Path>) -> Option<String> {
-    GitContext::collect(working_dir).await.map(|ctx| ctx.to_prompt_string())
+    GitContext::collect(working_dir)
+        .await
+        .map(|ctx| ctx.to_prompt_string())
 }
 
 async fn get_git_branch(working_dir: impl AsRef<Path>) -> Result<Option<String>, std::io::Error> {
@@ -678,21 +689,20 @@ impl SubagentRunner {
         parent_wire: Option<&Wire>,
     ) -> Result<SubagentResult, SubagentError> {
         let start_time = SystemTime::now();
-        let started_at = start_time
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let started_at = start_time.duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         // 1. 准备或恢复代理实例
         let (agent_id, agent_type, resumed) = self.prepare_instance(&spec, store).await?;
-        
+
         info!(
             "Starting subagent {} (type: {}, resumed: {})",
             agent_id, agent_type, resumed
         );
 
         // 2. 获取类型定义
-        let type_def = self.labor_market.get(&agent_type)
+        let type_def = self
+            .labor_market
+            .get(&agent_type)
             .ok_or_else(|| SubagentError::UnknownAgentType(agent_type.clone()))?
             .clone();
 
@@ -705,11 +715,21 @@ impl SubagentRunner {
         collector.stage("runner_started");
 
         // 5. 构建代理
-        let agent = self.build_agent(&agent_id, &type_def, spec.max_iterations, store, spec.git_context).await?;
+        let agent = self
+            .build_agent(
+                &agent_id,
+                &type_def,
+                spec.max_iterations,
+                store,
+                spec.git_context,
+            )
+            .await?;
         collector.stage("agent_built");
 
         // 6. 准备提示词
-        let prompt = self.prepare_prompt(&spec, &type_def, &context, resumed).await?;
+        let prompt = self
+            .prepare_prompt(&spec, &type_def, &context, resumed)
+            .await?;
         context.write_prompt_snapshot(&prompt).await?;
         collector.stage("prompt_prepared");
 
@@ -718,13 +738,9 @@ impl SubagentRunner {
         collector.stage("status_updated_to_running");
 
         // 8. 执行代理循环
-        let result = self.execute_agent(
-            &agent,
-            &prompt,
-            &mut context,
-            &mut collector,
-            parent_wire,
-        ).await;
+        let result = self
+            .execute_agent(&agent, &prompt, &mut context, &mut collector, parent_wire)
+            .await;
 
         // 9. 处理结果
         let elapsed = SystemTime::now().duration_since(start_time).unwrap();
@@ -775,26 +791,29 @@ impl SubagentRunner {
     ) -> Result<(String, String, bool), SubagentError> {
         if let Some(resume_id) = &spec.resume {
             // 恢复现有实例
-            let state = store.get(resume_id)
-                .ok_or_else(|| SubagentError::ResumeFailed(
-                    format!("Agent instance {} not found", resume_id)
-                ))?;
+            let state = store.get(resume_id).ok_or_else(|| {
+                SubagentError::ResumeFailed(format!("Agent instance {} not found", resume_id))
+            })?;
 
             if state.status == SubagentStatus::Running {
-                return Err(SubagentError::ResumeFailed(
-                    format!("Agent instance {} is already running", resume_id)
-                ));
+                return Err(SubagentError::ResumeFailed(format!(
+                    "Agent instance {} is already running",
+                    resume_id
+                )));
             }
 
-            info!("Resuming subagent {} (type: {})", resume_id, state.agent_type);
+            info!(
+                "Resuming subagent {} (type: {})",
+                resume_id, state.agent_type
+            );
             Ok((resume_id.clone(), state.agent_type.clone(), true))
         } else {
             // 创建新实例
             let agent_id = self.generate_agent_id();
             let agent_type = spec.requested_type.clone();
-            
+
             store.create(agent_id.clone(), agent_type.clone());
-            
+
             // 确保上下文目录存在
             let agent_dir = self.context_dir.join(&agent_id);
             fs::create_dir_all(&agent_dir).await.map_err(|e| {
@@ -815,28 +834,24 @@ impl SubagentRunner {
         enable_git_context: bool,
     ) -> Result<Agent, SubagentError> {
         let git_ctx = if enable_git_context {
-            GitContext::collect(&self.working_dir).await.map(|ctx| ctx.to_prompt_string())
+            GitContext::collect(&self.working_dir)
+                .await
+                .map(|ctx| ctx.to_prompt_string())
         } else {
             None
         };
 
-        let builder = SubagentBuilder::new(
-            self.tool_registry.clone(),
-            &self.working_dir,
-        ).with_git_context(git_ctx);
+        let builder = SubagentBuilder::new(self.tool_registry.clone(), &self.working_dir)
+            .with_git_context(git_ctx);
 
         let mut store_for_build = SubagentStore::new(&self.context_dir);
         store_for_build.create(agent_id.to_string(), type_def.name.clone());
 
-        let agent = builder.build(
-            agent_id,
-            type_def,
-            &mut store_for_build,
-        )?;
+        let agent = builder.build(agent_id, type_def, &mut store_for_build)?;
 
         // 应用覆盖设置
         let _max_iterations = max_iterations_override.unwrap_or(type_def.max_iterations);
-        
+
         // 如果有 LLM，设置 LLM
         let agent = if let Some(llm) = &self.llm {
             agent.with_llm(llm.clone())
@@ -846,7 +861,8 @@ impl SubagentRunner {
 
         // 如果有审批运行时，设置审批
         let agent = if let Some(runtime) = &self.approval_runtime {
-            agent.with_approval_runtime(runtime.clone())
+            agent
+                .with_approval_runtime(runtime.clone())
                 .with_approval_mode(self.approval_mode)
         } else {
             agent
@@ -870,9 +886,15 @@ impl SubagentRunner {
         if !history.is_empty() && resumed {
             let history_summary: Vec<String> = history
                 .iter()
-                .map(|m| format!("[{:?}]: {}", m.role, m.content.chars().take(100).collect::<String>()))
+                .map(|m| {
+                    format!(
+                        "[{:?}]: {}",
+                        m.role,
+                        m.content.chars().take(100).collect::<String>()
+                    )
+                })
                 .collect();
-            
+
             prompt = format!(
                 "# Previous Conversation Context\n{}\n\n# Current Task\n{}",
                 history_summary.join("\n"),
@@ -900,12 +922,12 @@ impl SubagentRunner {
         match result {
             Ok(response) => {
                 collector.stage("agent_completed_successfully");
-                
+
                 // 验证响应长度
                 if response.len() < 100 {
                     // 响应太短，尝试继续
                     collector.stage("response_too_short_attempting_continuation");
-                    
+
                     let continuation_prompt = r#"
 Your previous response was too brief. Please provide a more comprehensive summary that includes:
 
@@ -928,18 +950,14 @@ Your previous response was too brief. Please provide a more comprehensive summar
                     Ok(response)
                 }
             }
-            Err(AgentError::MaxIterationsExceeded(n)) => {
-                Err(SubagentError::MaxStepsReached {
-                    steps: n,
-                    phase: "execution".into(),
-                })
-            }
-            Err(e) => {
-                Err(SubagentError::ExecutionFailed {
-                    message: e.to_string(),
-                    brief: "agent execution failed".into(),
-                })
-            }
+            Err(AgentError::MaxIterationsExceeded(n)) => Err(SubagentError::MaxStepsReached {
+                steps: n,
+                phase: "execution".into(),
+            }),
+            Err(e) => Err(SubagentError::ExecutionFailed {
+                message: e.to_string(),
+                brief: "agent execution failed".into(),
+            }),
         }
     }
 
@@ -976,13 +994,9 @@ mod tests {
         let registry = create_test_registry();
         let work_dir = TempDir::new().unwrap();
         let context_dir = TempDir::new().unwrap();
-        
-        let runner = SubagentRunner::new(
-            registry,
-            work_dir.path(),
-            context_dir.path(),
-        );
-        
+
+        let runner = SubagentRunner::new(registry, work_dir.path(), context_dir.path());
+
         (runner, work_dir, context_dir)
     }
 
@@ -991,7 +1005,7 @@ mod tests {
         let (runner, _work, _context) = create_test_runner();
         let id1 = runner.generate_agent_id();
         let id2 = runner.generate_agent_id();
-        
+
         assert!(id1.starts_with('a'));
         assert!(id2.starts_with('a'));
         assert_ne!(id1, id2);
@@ -1016,18 +1030,18 @@ mod tests {
     async fn test_execution_context_save_restore() {
         let temp_dir = TempDir::new().unwrap();
         let mut context = ExecutionContext::new(temp_dir.path(), "test-agent");
-        
+
         // 添加一些消息
         context.push_message(Message::user("Hello"));
         context.push_message(Message::assistant("Hi there!"));
-        
+
         // 保存
         context.save().await.unwrap();
-        
+
         // 恢复
         let mut restored = ExecutionContext::new(temp_dir.path(), "test-agent");
         restored.restore().await.unwrap();
-        
+
         assert_eq!(restored.history().len(), 2);
     }
 
@@ -1035,14 +1049,14 @@ mod tests {
     async fn test_output_collector() {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("output.txt");
-        
+
         let mut collector = OutputCollector::new(&output_path);
         collector.stage("stage1");
         collector.append("Some output");
         collector.stage("stage2");
-        
+
         collector.save_summary("Final summary").await.unwrap();
-        
+
         let content = tokio::fs::read_to_string(&output_path).await.unwrap();
         assert!(content.contains("stage1"));
         assert!(content.contains("stage2"));
@@ -1066,7 +1080,7 @@ mod tests {
 
         let json = serde_json::to_string(&result).unwrap();
         let deserialized: SubagentResult = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(deserialized.agent_id, result.agent_id);
         assert_eq!(deserialized.status, result.status);
     }
@@ -1120,7 +1134,9 @@ mod tests {
             .await;
 
         // create file and commit
-        fs::write(repo_dir.join("readme.txt"), "hello").await.unwrap();
+        fs::write(repo_dir.join("readme.txt"), "hello")
+            .await
+            .unwrap();
         let add = tokio::process::Command::new("git")
             .args(["add", "."])
             .current_dir(&repo_dir)
@@ -1137,7 +1153,9 @@ mod tests {
             .unwrap();
         assert!(commit.status.success());
 
-        let ctx = GitContext::collect(&repo_dir).await.expect("should collect");
+        let ctx = GitContext::collect(&repo_dir)
+            .await
+            .expect("should collect");
         assert!(ctx.branch.is_some());
         assert!(!ctx.recent_commits.is_empty());
         assert_eq!(ctx.status_summary, "clean");

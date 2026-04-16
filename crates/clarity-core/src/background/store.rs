@@ -12,7 +12,9 @@ use tracing::{debug, info};
 pub type TaskId = String;
 
 /// 任务优先级
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, Hash, Default,
+)]
 pub enum TaskPriority {
     /// 后台任务，最低优先级
     Background = 0,
@@ -59,7 +61,10 @@ pub enum TaskStatus {
 impl TaskStatus {
     /// 是否终止状态
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled)
+        matches!(
+            self,
+            TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled
+        )
     }
 
     /// 转换为字符串
@@ -222,7 +227,7 @@ impl TaskStore {
         // 写入文件
         let task_dir = self.task_dir(task_id);
         fs::create_dir_all(&task_dir).await?;
-        
+
         let info_path = task_dir.join("info.json");
         let info_json = serde_json::to_string_pretty(&info)?;
         fs::write(&info_path, info_json).await?;
@@ -259,7 +264,11 @@ impl TaskStore {
     }
 
     /// 更新任务状态
-    pub async fn update_status(&self, task_id: impl AsRef<str>, status: TaskStatus) -> anyhow::Result<()> {
+    pub async fn update_status(
+        &self,
+        task_id: impl AsRef<str>,
+        status: TaskStatus,
+    ) -> anyhow::Result<()> {
         let task_id = task_id.as_ref();
         let mut info = self.get(task_id).await?;
         info.status = status;
@@ -279,7 +288,11 @@ impl TaskStore {
     }
 
     /// 保存任务结果
-    pub async fn save_result(&self, task_id: impl AsRef<str>, result: &TaskResult) -> anyhow::Result<()> {
+    pub async fn save_result(
+        &self,
+        task_id: impl AsRef<str>,
+        result: &TaskResult,
+    ) -> anyhow::Result<()> {
         let task_id = task_id.as_ref();
         let task_dir = self.task_dir(task_id);
         fs::create_dir_all(&task_dir).await?;
@@ -315,11 +328,12 @@ impl TaskStore {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.is_dir() {
-                let task_id = path.file_name()
+                let task_id = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .map(|s| s.to_string())
                     .unwrap_or_default();
-                
+
                 if let Ok(info) = self.get(&task_id).await {
                     tasks.push(info);
                 }
@@ -397,10 +411,10 @@ mod tests {
     async fn test_create_and_get() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
+
         let spec = create_test_spec("test_task");
         store.create("task_1", spec.clone()).await.unwrap();
-        
+
         let info = store.get("task_1").await.unwrap();
         assert_eq!(info.id, "task_1");
         assert_eq!(info.spec.name, "test_task");
@@ -411,12 +425,15 @@ mod tests {
     async fn test_update_status() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
+
         let spec = create_test_spec("test_task");
         store.create("task_1", spec).await.unwrap();
-        
-        store.update_status("task_1", TaskStatus::Running).await.unwrap();
-        
+
+        store
+            .update_status("task_1", TaskStatus::Running)
+            .await
+            .unwrap();
+
         let info = store.get("task_1").await.unwrap();
         assert_eq!(info.status, TaskStatus::Running);
     }
@@ -425,10 +442,10 @@ mod tests {
     async fn test_save_and_get_result() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
+
         let spec = create_test_spec("test_task");
         store.create("task_1", spec).await.unwrap();
-        
+
         let result = TaskResult {
             status: TaskStatus::Completed,
             output: "success".to_string(),
@@ -436,7 +453,7 @@ mod tests {
             steps: 5,
         };
         store.save_result("task_1", &result).await.unwrap();
-        
+
         let loaded = store.get_result("task_1").await.unwrap();
         assert_eq!(loaded.status, TaskStatus::Completed);
         assert_eq!(loaded.output, "success");
@@ -446,11 +463,20 @@ mod tests {
     async fn test_list_all() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
-        store.create("task_1", create_test_spec("task_1")).await.unwrap();
-        store.create("task_2", create_test_spec("task_2")).await.unwrap();
-        store.create("task_3", create_test_spec("task_3")).await.unwrap();
-        
+
+        store
+            .create("task_1", create_test_spec("task_1"))
+            .await
+            .unwrap();
+        store
+            .create("task_2", create_test_spec("task_2"))
+            .await
+            .unwrap();
+        store
+            .create("task_3", create_test_spec("task_3"))
+            .await
+            .unwrap();
+
         let list = store.list_all().await.unwrap();
         assert_eq!(list.len(), 3);
     }
@@ -459,11 +485,20 @@ mod tests {
     async fn test_list_by_status() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
-        store.create("task_1", create_test_spec("task_1")).await.unwrap();
-        store.create("task_2", create_test_spec("task_2")).await.unwrap();
-        store.update_status("task_2", TaskStatus::Completed).await.unwrap();
-        
+
+        store
+            .create("task_1", create_test_spec("task_1"))
+            .await
+            .unwrap();
+        store
+            .create("task_2", create_test_spec("task_2"))
+            .await
+            .unwrap();
+        store
+            .update_status("task_2", TaskStatus::Completed)
+            .await
+            .unwrap();
+
         let completed = store.list_by_status(TaskStatus::Completed).await.unwrap();
         assert_eq!(completed.len(), 1);
         assert_eq!(completed[0].id, "task_2");
@@ -473,10 +508,13 @@ mod tests {
     async fn test_delete() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
-        store.create("task_1", create_test_spec("task_1")).await.unwrap();
+
+        store
+            .create("task_1", create_test_spec("task_1"))
+            .await
+            .unwrap();
         assert!(store.get("task_1").await.is_ok());
-        
+
         store.delete("task_1").await.unwrap();
         assert!(store.get("task_1").await.is_err());
     }
@@ -532,15 +570,19 @@ mod tests {
     async fn test_list_pending_by_priority() {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path());
-        
+
         let low_priority = TaskSpec::new("low", "test").with_priority(TaskPriority::Low);
         let high_priority = TaskSpec::new("high", "test").with_priority(TaskPriority::High);
-        let critical_priority = TaskSpec::new("critical", "test").with_priority(TaskPriority::Critical);
+        let critical_priority =
+            TaskSpec::new("critical", "test").with_priority(TaskPriority::Critical);
 
         store.create("task_low", low_priority).await.unwrap();
         store.create("task_high", high_priority).await.unwrap();
-        store.create("task_critical", critical_priority).await.unwrap();
-        
+        store
+            .create("task_critical", critical_priority)
+            .await
+            .unwrap();
+
         let pending = store.list_pending_by_priority().await.unwrap();
         assert_eq!(pending.len(), 3);
         assert_eq!(pending[0].spec.name, "critical");

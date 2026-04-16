@@ -42,11 +42,14 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Registered {} MCP tool(s)", manager.tools().len());
     for tool in manager.tools() {
-        println!("  - {}: {}", tool.name(), tool.description().unwrap_or("no description"));
+        println!(
+            "  - {}: {}",
+            tool.name(),
+            tool.description().unwrap_or("no description")
+        );
     }
 
-    let agent = Agent::with_config(registry, AgentConfig::new())
-        .with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(MockLlm));
 
     let response = agent
         .run("Say hello and list what tools you have access to")

@@ -7,9 +7,9 @@
 //! - Forgetting mechanism based on importance and time
 
 use crate::extractor::{FactExtractor, LlmClient, RuleBasedExtractor};
-use crate::store::MemoryStore;
 use crate::session_store::SessionStore;
-use crate::types::{CompileStatus, CompileConfig, Fact, Message, Result};
+use crate::store::MemoryStore;
+use crate::types::{CompileConfig, CompileStatus, Fact, Message, Result};
 use chrono::{Duration, Utc};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -236,7 +236,10 @@ Long-term memory summary:"#,
             week_content
         );
 
-        let summary = self.llm_client.complete(&prompt, &self.config.compile_model).await?;
+        let summary = self
+            .llm_client
+            .complete(&prompt, &self.config.compile_model)
+            .await?;
         self.write_compiled(output_path, "Long-term", &summary)?;
 
         Ok(CompileStatus::Success { fingerprint })
@@ -256,10 +259,8 @@ Long-term memory summary:"#,
             });
         }
 
-        let extractor = FactExtractor::new(
-            self.llm_client.clone(),
-            self.config.extractor_model.clone(),
-        );
+        let extractor =
+            FactExtractor::new(self.llm_client.clone(), self.config.extractor_model.clone());
 
         let mut all_facts = Vec::new();
         for (session_id, messages) in &sessions {
@@ -272,12 +273,15 @@ Long-term memory summary:"#,
             match extractor.extract_facts(&conversation).await {
                 Ok(facts) => {
                     for fact in &facts {
-                        let _ = self.store.save_fact(
-                            &fact.fact,
-                            &fact.tags,
-                            fact.time.as_deref(),
-                            Some(session_id),
-                        ).await;
+                        let _ = self
+                            .store
+                            .save_fact(
+                                &fact.fact,
+                                &fact.tags,
+                                fact.time.as_deref(),
+                                Some(session_id),
+                            )
+                            .await;
                     }
                     all_facts.extend(facts);
                 }
@@ -288,12 +292,15 @@ Long-term memory summary:"#,
 
             let rule_facts = self.rule_extractor.extract(&conversation);
             for fact in &rule_facts {
-                let _ = self.store.save_fact(
-                    &fact.fact,
-                    &fact.tags,
-                    fact.time.as_deref(),
-                    Some(session_id),
-                ).await;
+                let _ = self
+                    .store
+                    .save_fact(
+                        &fact.fact,
+                        &fact.tags,
+                        fact.time.as_deref(),
+                        Some(session_id),
+                    )
+                    .await;
             }
             all_facts.extend(rule_facts);
         }
@@ -352,7 +359,7 @@ Long-term memory summary:"#,
             return memories.to_vec();
         }
 
-        use crate::embedding::{TfidfVectorizer};
+        use crate::embedding::TfidfVectorizer;
 
         let mut vectorizer = TfidfVectorizer::new();
         vectorizer.fit(memories);
@@ -425,9 +432,10 @@ Long-term memory summary:"#,
     fn calculate_importance(&self, fact: &Fact) -> ImportanceScore {
         let mut score = 0.5;
 
-        let important_tags: HashSet<&str> = [
-            "preference", "goal", "identity", "work", "important"
-        ].iter().cloned().collect();
+        let important_tags: HashSet<&str> = ["preference", "goal", "identity", "work", "important"]
+            .iter()
+            .cloned()
+            .collect();
 
         for tag in &fact.tags {
             if important_tags.contains(tag.as_str()) {
@@ -523,7 +531,10 @@ Long-term memory summary:"#,
 
     /// Run the full compilation pipeline
     #[instrument(skip(self))]
-    pub async fn compile_all(&mut self, output_dir: &Path) -> Result<HashMap<String, CompileStatus>> {
+    pub async fn compile_all(
+        &mut self,
+        output_dir: &Path,
+    ) -> Result<HashMap<String, CompileStatus>> {
         let facts_path = output_dir.join("facts.md");
         let today_path = output_dir.join("today.md");
         let week_path = output_dir.join("week.md");
@@ -540,7 +551,12 @@ Long-term memory summary:"#,
                 results.insert("today".to_string(), status);
             }
             Err(e) => {
-                results.insert("today".to_string(), CompileStatus::Failed { error: e.to_string() });
+                results.insert(
+                    "today".to_string(),
+                    CompileStatus::Failed {
+                        error: e.to_string(),
+                    },
+                );
             }
         }
 
@@ -552,7 +568,12 @@ Long-term memory summary:"#,
                 results.insert("week".to_string(), status);
             }
             Err(e) => {
-                results.insert("week".to_string(), CompileStatus::Failed { error: e.to_string() });
+                results.insert(
+                    "week".to_string(),
+                    CompileStatus::Failed {
+                        error: e.to_string(),
+                    },
+                );
             }
         }
 
@@ -564,7 +585,12 @@ Long-term memory summary:"#,
                 results.insert("longterm".to_string(), status);
             }
             Err(e) => {
-                results.insert("longterm".to_string(), CompileStatus::Failed { error: e.to_string() });
+                results.insert(
+                    "longterm".to_string(),
+                    CompileStatus::Failed {
+                        error: e.to_string(),
+                    },
+                );
             }
         }
 
@@ -576,11 +602,22 @@ Long-term memory summary:"#,
                 results.insert("facts".to_string(), status);
             }
             Err(e) => {
-                results.insert("facts".to_string(), CompileStatus::Failed { error: e.to_string() });
+                results.insert(
+                    "facts".to_string(),
+                    CompileStatus::Failed {
+                        error: e.to_string(),
+                    },
+                );
             }
         }
 
-        if let Err(e) = self.assemble(&facts_path, &today_path, &week_path, &longterm_path, &memory_path) {
+        if let Err(e) = self.assemble(
+            &facts_path,
+            &today_path,
+            &week_path,
+            &longterm_path,
+            &memory_path,
+        ) {
             error!("Failed to assemble memory: {}", e);
         }
 
@@ -604,7 +641,9 @@ Long-term memory summary:"#,
             input
         );
 
-        self.llm_client.complete(&prompt, &self.config.compile_model).await
+        self.llm_client
+            .complete(&prompt, &self.config.compile_model)
+            .await
     }
 
     /// Write compiled content with header
@@ -676,7 +715,13 @@ mod tests {
         fs::write(&longterm_path, "# Long-term\n\nLong term facts.\n").unwrap();
 
         compiler
-            .assemble(&facts_path, &today_path, &week_path, &longterm_path, &output_path)
+            .assemble(
+                &facts_path,
+                &today_path,
+                &week_path,
+                &longterm_path,
+                &output_path,
+            )
             .unwrap();
 
         let output = fs::read_to_string(&output_path).unwrap();
@@ -695,18 +740,24 @@ mod tests {
 
         let fp_path = temp.path().join("fingerprints.json");
 
-        compiler.fingerprints.insert("test".to_string(), "abc123".to_string());
+        compiler
+            .fingerprints
+            .insert("test".to_string(), "abc123".to_string());
 
         compiler.save_fingerprints(&fp_path).unwrap();
 
         let store = MemoryStore::new_in_memory().unwrap();
         let session_store = SessionStore::new(temp.path().join("sessions2")).unwrap();
         let client = Arc::new(MockLlmClient::new("test"));
-        let mut compiler2 = MemoryCompiler::new(store, session_store, client, CompileConfig::default());
+        let mut compiler2 =
+            MemoryCompiler::new(store, session_store, client, CompileConfig::default());
 
         compiler2.load_fingerprints(&fp_path).unwrap();
 
-        assert_eq!(compiler2.fingerprints.get("test"), Some(&"abc123".to_string()));
+        assert_eq!(
+            compiler2.fingerprints.get("test"),
+            Some(&"abc123".to_string())
+        );
     }
 
     #[test]

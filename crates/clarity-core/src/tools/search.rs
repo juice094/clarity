@@ -23,23 +23,19 @@ impl GlobTool {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Execute glob pattern matching
-    fn execute_glob(
-        &self,
-        pattern: &str,
-        working_dir: &Path,
-    ) -> ToolResult<Vec<String>> {
+    fn execute_glob(&self, pattern: &str, working_dir: &Path) -> ToolResult<Vec<String>> {
         let pattern_path = if Path::new(pattern).is_absolute() {
             pattern.to_string()
         } else {
             working_dir.join(pattern).to_string_lossy().to_string()
         };
-        
+
         debug!("Glob pattern: {}", pattern_path);
-        
+
         let mut matches = Vec::new();
-        
+
         match glob(&pattern_path) {
             Ok(paths) => {
                 for entry in paths {
@@ -54,10 +50,13 @@ impl GlobTool {
                 }
             }
             Err(e) => {
-                return Err(ToolError::invalid_params(format!("Invalid glob pattern: {}", e)));
+                return Err(ToolError::invalid_params(format!(
+                    "Invalid glob pattern: {}",
+                    e
+                )));
             }
         }
-        
+
         Ok(matches)
     }
 }
@@ -73,12 +72,12 @@ impl Tool for GlobTool {
     fn name(&self) -> &str {
         "glob"
     }
-    
+
     fn description(&self) -> &str {
         "Find files matching a glob pattern. Returns a list of matching file paths. \
          Supports patterns like '*.rs', 'src/**/*.js', etc."
     }
-    
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -98,22 +97,23 @@ impl Tool for GlobTool {
             "required": ["pattern"]
         })
     }
-    
+
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         let pattern = helpers::required_str(&args, "pattern")?;
-        let limit = args.get("limit")
+        let limit = args
+            .get("limit")
             .and_then(|v| v.as_u64())
             .map(|v| (v as usize).min(1000))
             .unwrap_or(100);
-        
+
         let mut matches = self.execute_glob(pattern, &ctx.working_dir)?;
         let total = matches.len();
-        
+
         // Apply limit
         if matches.len() > limit {
             matches.truncate(limit);
         }
-        
+
         Ok(json!({
             "pattern": pattern,
             "matches": matches,
@@ -146,7 +146,7 @@ impl GrepTool {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Search for pattern in files
     async fn search_files(
         &self,
@@ -162,36 +162,37 @@ impl GrepTool {
             } else {
                 format!("(?i){}", pattern)
             };
-            Some(Regex::new(&regex_pattern).map_err(|e| {
-                ToolError::invalid_params(format!("Invalid regex: {}", e))
-            })?)
+            Some(
+                Regex::new(&regex_pattern)
+                    .map_err(|e| ToolError::invalid_params(format!("Invalid regex: {}", e)))?,
+            )
         } else {
             None
         };
-        
+
         let mut matches = Vec::new();
-        
+
         for path_str in paths {
             let path = if Path::new(path_str).is_absolute() {
                 PathBuf::from(path_str)
             } else {
                 working_dir.join(path_str)
             };
-            
+
             if path.is_dir() {
                 // Skip directories for now (could be enhanced to recurse)
                 continue;
             }
-            
+
             if !path.is_file() {
                 continue;
             }
-            
+
             let content = match fs::read_to_string(&path).await {
                 Ok(c) => c,
                 Err(_) => continue, // Skip binary or unreadable files
             };
-            
+
             for (line_num, line) in content.lines().enumerate() {
                 let is_match = if let Some(ref re) = regex {
                     re.is_match(line)
@@ -202,7 +203,7 @@ impl GrepTool {
                         line.to_lowercase().contains(&pattern.to_lowercase())
                     }
                 };
-                
+
                 if is_match {
                     let groups = if let Some(ref re) = regex {
                         re.captures(line).map(|caps| {
@@ -214,7 +215,7 @@ impl GrepTool {
                     } else {
                         None
                     };
-                    
+
                     matches.push(GrepMatch {
                         file: path.to_string_lossy().to_string(),
                         line_number: line_num + 1, // 1-indexed
@@ -224,7 +225,7 @@ impl GrepTool {
                 }
             }
         }
-        
+
         Ok(matches)
     }
 }
@@ -240,12 +241,12 @@ impl Tool for GrepTool {
     fn name(&self) -> &str {
         "grep"
     }
-    
+
     fn description(&self) -> &str {
         "Search for patterns in file contents. Supports both literal text \
          and regex matching. Returns matching lines with file paths and line numbers."
     }
-    
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -280,34 +281,31 @@ impl Tool for GrepTool {
             "required": ["pattern", "paths"]
         })
     }
-    
+
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         let pattern = helpers::required_str(&args, "pattern")?;
         let paths = helpers::required_string_array(&args, "paths")?;
         let use_regex = helpers::optional_bool(&args, "regex", false);
         let case_sensitive = helpers::optional_bool(&args, "case_sensitive", false);
-        let limit = args.get("limit")
+        let limit = args
+            .get("limit")
             .and_then(|v| v.as_u64())
             .map(|v| (v as usize).min(1000))
             .unwrap_or(100);
-        
+
         debug!("Grepping for '{}' in {:?}", pattern, paths);
-        
-        let mut matches = self.search_files(
-            pattern,
-            &paths,
-            case_sensitive,
-            use_regex,
-            &ctx.working_dir,
-        ).await?;
-        
+
+        let mut matches = self
+            .search_files(pattern, &paths, case_sensitive, use_regex, &ctx.working_dir)
+            .await?;
+
         let total = matches.len();
-        
+
         // Apply limit
         if matches.len() > limit {
             matches.truncate(limit);
         }
-        
+
         Ok(json!({
             "pattern": pattern,
             "matches": matches,
@@ -323,68 +321,72 @@ use std::path::PathBuf;
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[tokio::test]
     async fn test_glob_pattern() {
         let temp_dir = TempDir::new().unwrap();
         let base = temp_dir.path();
-        
+
         // Create test files
         fs::write(base.join("file1.rs"), "").await.unwrap();
         fs::write(base.join("file2.rs"), "").await.unwrap();
         fs::write(base.join("file.txt"), "").await.unwrap();
-        
+
         let tool = GlobTool::new();
         let ctx = ToolContext::new().with_working_dir(base);
-        
+
         let args = json!({"pattern": "*.rs"});
         let result = tool.execute(args, ctx).await.unwrap();
-        
+
         let matches = result["matches"].as_array().unwrap();
         assert_eq!(matches.len(), 2);
     }
-    
+
     #[tokio::test]
     async fn test_grep_literal() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
-        fs::write(&file_path, "Hello World\nFoo Bar\nHello Rust").await.unwrap();
-        
+        fs::write(&file_path, "Hello World\nFoo Bar\nHello Rust")
+            .await
+            .unwrap();
+
         let tool = GrepTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
-        
+
         let args = json!({
             "pattern": "Hello",
             "paths": ["test.txt"],
             "regex": false
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         let matches = result["matches"].as_array().unwrap();
-        
+
         assert_eq!(matches.len(), 2);
         assert_eq!(matches[0]["line_number"], 1);
         assert_eq!(matches[1]["line_number"], 3);
     }
-    
+
     #[tokio::test]
     async fn test_grep_regex() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
-        fs::write(&file_path, "func1()\nfunc2()\nvar x").await.unwrap();
-        
+        fs::write(&file_path, "func1()\nfunc2()\nvar x")
+            .await
+            .unwrap();
+
         let tool = GrepTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
-        
+
         let args = json!({
             "pattern": r"func\d+\(\)",
             "paths": ["test.txt"],
             "regex": true
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         let matches = result["matches"].as_array().unwrap();
-        
+
         assert_eq!(matches.len(), 2);
     }
 }

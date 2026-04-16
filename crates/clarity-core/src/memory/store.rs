@@ -13,19 +13,19 @@ use tokio::sync::RwLock;
 pub trait MemoryStore: Send + Sync {
     /// Store a new memory
     async fn store(&self, memory: Memory) -> anyhow::Result<()>;
-    
+
     /// Retrieve memories, optionally filtered by importance
     async fn retrieve(&self, min_importance: f32) -> anyhow::Result<Vec<Memory>>;
-    
+
     /// Get all memories
     async fn get_all(&self) -> anyhow::Result<Vec<Memory>>;
-    
+
     /// Clear all memories
     async fn clear(&self) -> anyhow::Result<()>;
-    
+
     /// Get memory count
     async fn count(&self) -> anyhow::Result<usize>;
-    
+
     /// Search memories by query string
     async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
         let memories = self.retrieve(0.0).await?;
@@ -99,27 +99,27 @@ impl MemoryStore for InMemoryStore {
 
     async fn store(&self, memory: Memory) -> anyhow::Result<()> {
         let mut memories = self.memories.write().await;
-        
+
         // Add new memory
         memories.push_back(memory);
-        
+
         // Enforce max_memories limit
         while memories.len() > self.config.max_memories {
             memories.pop_front();
         }
-        
+
         Ok(())
     }
 
     async fn retrieve(&self, min_importance: f32) -> anyhow::Result<Vec<Memory>> {
         let memories = self.memories.read().await;
-        
+
         let filtered: Vec<Memory> = memories
             .iter()
             .filter(|m| m.importance >= min_importance)
             .cloned()
             .collect();
-        
+
         Ok(filtered)
     }
 
@@ -141,14 +141,14 @@ impl MemoryStore for InMemoryStore {
 
     async fn summarize(&self, limit: usize) -> anyhow::Result<String> {
         let memories = self.memories.read().await;
-        
+
         let summary: Vec<String> = memories
             .iter()
             .rev() // Most recent first
             .take(limit)
             .map(|m| format!("- {}", m.content))
             .collect();
-        
+
         if summary.is_empty() {
             Ok("(No memories yet)".to_string())
         } else {
@@ -164,18 +164,24 @@ mod tests {
     #[tokio::test]
     async fn test_in_memory_store() {
         let store = InMemoryStore::new();
-        
+
         // Store memories
-        store.store(Memory::new("Memory 1").with_importance(0.8)).await.unwrap();
-        store.store(Memory::new("Memory 2").with_importance(0.4)).await.unwrap();
-        
+        store
+            .store(Memory::new("Memory 1").with_importance(0.8))
+            .await
+            .unwrap();
+        store
+            .store(Memory::new("Memory 2").with_importance(0.4))
+            .await
+            .unwrap();
+
         // Count
         assert_eq!(store.count().await.unwrap(), 2);
-        
+
         // Retrieve all
         let all = store.get_all().await.unwrap();
         assert_eq!(all.len(), 2);
-        
+
         // Retrieve filtered
         let important = store.retrieve(0.5).await.unwrap();
         assert_eq!(important.len(), 1);
@@ -189,15 +195,18 @@ mod tests {
             ..Default::default()
         };
         let store = InMemoryStore::with_config(config);
-        
+
         // Store 5 memories
         for i in 0..5 {
-            store.store(Memory::new(format!("Memory {}", i))).await.unwrap();
+            store
+                .store(Memory::new(format!("Memory {}", i)))
+                .await
+                .unwrap();
         }
-        
+
         // Should only keep 3 most recent
         assert_eq!(store.count().await.unwrap(), 3);
-        
+
         let memories = store.get_all().await.unwrap();
         assert_eq!(memories[0].content, "Memory 2");
         assert_eq!(memories[2].content, "Memory 4");
@@ -206,10 +215,10 @@ mod tests {
     #[tokio::test]
     async fn test_summarize() {
         let store = InMemoryStore::new();
-        
+
         store.store(Memory::new("First")).await.unwrap();
         store.store(Memory::new("Second")).await.unwrap();
-        
+
         let summary = store.summarize(10).await.unwrap();
         assert!(summary.contains("Second"));
         assert!(summary.contains("First"));
@@ -218,10 +227,10 @@ mod tests {
     #[tokio::test]
     async fn test_clear() {
         let store = InMemoryStore::new();
-        
+
         store.store(Memory::new("Test")).await.unwrap();
         assert_eq!(store.count().await.unwrap(), 1);
-        
+
         store.clear().await.unwrap();
         assert_eq!(store.count().await.unwrap(), 0);
     }

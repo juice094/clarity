@@ -340,12 +340,18 @@ impl RuleBasedExtractor {
     }
 
     /// Apply a template to regex captures
-    fn apply_template(&self, template: &FactTemplate, captures: &regex::Captures) -> Option<String> {
+    fn apply_template(
+        &self,
+        template: &FactTemplate,
+        captures: &regex::Captures,
+    ) -> Option<String> {
         match template {
-            FactTemplate::Capture(group) => captures.get(*group).map(|m| m.as_str().trim().to_string()),
-            FactTemplate::Prefixed(prefix, group) => {
-                captures.get(*group).map(|m| format!("{}{}", prefix, m.as_str().trim()))
+            FactTemplate::Capture(group) => {
+                captures.get(*group).map(|m| m.as_str().trim().to_string())
             }
+            FactTemplate::Prefixed(prefix, group) => captures
+                .get(*group)
+                .map(|m| format!("{}{}", prefix, m.as_str().trim())),
             FactTemplate::Custom(f) => f(captures),
         }
     }
@@ -427,8 +433,9 @@ impl RuleBasedExtractor {
 
         // Match file paths
         let path_regex = Regex::new(
-            r"(?:[\w-]+/)+[\w-]+\.(rs|py|js|ts|json|toml|yaml|yml|md|txt|go|java|cpp|c|h|hpp)"
-        ).unwrap();
+            r"(?:[\w-]+/)+[\w-]+\.(rs|py|js|ts|json|toml|yaml|yml|md|txt|go|java|cpp|c|h|hpp)",
+        )
+        .unwrap();
 
         for captures in path_regex.captures_iter(text) {
             if let Some(path) = captures.get(0) {
@@ -508,9 +515,9 @@ impl MockLlmClient {
 #[async_trait]
 impl LlmClient for MockLlmClient {
     async fn complete(&self, _prompt: &str, _model: &str) -> Result<String> {
-        self.response.clone().ok_or_else(|| {
-            MemoryError::LlmClient("No response configured".to_string())
-        })
+        self.response
+            .clone()
+            .ok_or_else(|| MemoryError::LlmClient("No response configured".to_string()))
     }
 }
 
@@ -632,7 +639,10 @@ Hope that helps!"#;
 
         // With markdown and extra
         let complex = "Result:\n```\n[{\"fact\": \"test\"}]\n```\nThat's it!";
-        assert_eq!(FactExtractor::extract_json(complex), "[{\"fact\": \"test\"}]");
+        assert_eq!(
+            FactExtractor::extract_json(complex),
+            "[{\"fact\": \"test\"}]"
+        );
     }
 
     // Rule-based extractor tests
@@ -645,7 +655,9 @@ Hope that helps!"#;
 
         assert!(!facts.is_empty());
         assert!(facts.iter().any(|f| f.fact.contains("likes Rust")));
-        assert!(facts.iter().any(|f| f.tags.contains(&"preference".to_string())));
+        assert!(facts
+            .iter()
+            .any(|f| f.tags.contains(&"preference".to_string())));
     }
 
     #[test]

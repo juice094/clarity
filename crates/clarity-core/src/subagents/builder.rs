@@ -17,7 +17,10 @@ pub struct SubagentBuilder {
 
 impl SubagentBuilder {
     /// Create new builder
-    pub fn new(tool_registry: ToolRegistry, parent_working_dir: impl Into<std::path::PathBuf>) -> Self {
+    pub fn new(
+        tool_registry: ToolRegistry,
+        parent_working_dir: impl Into<std::path::PathBuf>,
+    ) -> Self {
         Self {
             labor_market: LaborMarket::new(),
             tool_registry,

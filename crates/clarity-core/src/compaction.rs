@@ -594,9 +594,9 @@ mod tests {
     #[test]
     fn test_estimate_message_tokens() {
         let messages = vec![
-            Message::user("Hello"),           // 5 chars -> 2 tokens
-            Message::assistant("Hi there!"),  // 10 chars -> 3 tokens
-            Message::user("How are you?"),    // 12 chars -> 3 tokens
+            Message::user("Hello"),          // 5 chars -> 2 tokens
+            Message::assistant("Hi there!"), // 10 chars -> 3 tokens
+            Message::user("How are you?"),   // 12 chars -> 3 tokens
         ];
 
         let total = estimate_message_tokens(&messages);

@@ -33,9 +33,7 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
                     params: String::new(),
                     status: ToolStatus::Running,
                 })),
-                WireMessage::StatusUpdate { message } => {
-                    Some(Event::StreamResponse(message))
-                }
+                WireMessage::StatusUpdate { message } => Some(Event::StreamResponse(message)),
                 WireMessage::TurnEnd => Some(Event::ResponseComplete),
                 _ => None,
             };

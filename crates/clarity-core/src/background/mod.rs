@@ -12,9 +12,7 @@ pub mod agent_executor;
 pub mod store;
 pub mod worker;
 
-pub use store::{
-    TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore, TaskId
-};
+pub use store::{TaskId, TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore};
 pub use worker::{Worker, WorkerPool, WorkerStats};
 
 use async_trait::async_trait;
@@ -28,7 +26,7 @@ pub trait AgentTaskExecutor: Send + Sync + std::fmt::Debug {
     async fn execute(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)>;
 }
 
-use crate::notifications::{NotificationManager, task_status_notification};
+use crate::notifications::{task_status_notification, NotificationManager};
 use std::collections::BinaryHeap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
@@ -120,7 +118,10 @@ impl TaskScheduler {
         let mut queue = self.queue.lock().unwrap();
         queue.push(scheduled);
 
-        info!("Scheduled task {} with priority {:?}", task_id, spec.priority);
+        info!(
+            "Scheduled task {} with priority {:?}",
+            task_id, spec.priority
+        );
         Ok(())
     }
 
@@ -286,45 +287,52 @@ impl BackgroundTaskManager {
         let task_id = generate_task_id();
         let task_id_clone = task_id.clone();
         let task_name = spec.name.clone();
-        
+
         // 1. 保存任务到存储
         self.store.create(&task_id, spec.clone()).await?;
         info!("Created background task: {}", task_id);
 
         // 2. 发送创建通知
-        self.notify_status_change(&task_id, &task_name, TaskStatus::Pending).await;
+        self.notify_status_change(&task_id, &task_name, TaskStatus::Pending)
+            .await;
 
         // 3. 获取信号量许可（控制并发）
         let permit = self.semaphore.clone().acquire_owned().await?;
-        
+
         // 4. 更新状态为运行中
-        self.store.update_status(&task_id, TaskStatus::Running).await?;
-        self.notify_status_change(&task_id, &task_name, TaskStatus::Running).await;
-        
+        self.store
+            .update_status(&task_id, TaskStatus::Running)
+            .await?;
+        self.notify_status_change(&task_id, &task_name, TaskStatus::Running)
+            .await;
+
         // 5. 启动任务执行
         let store = self.store.clone();
         let running_tasks = self.running_tasks.clone();
         let notification_manager = self.notification_manager.clone();
-        
+
         let handle = tokio::spawn(async move {
             // 执行任务
             let start = std::time::Instant::now();
             let result = task_fn(spec).await;
             let elapsed = start.elapsed();
-            
+
             // 保存结果
             let task_result = match result {
                 Ok(mut r) => {
                     r.elapsed_ms = elapsed.as_millis() as u64;
                     let _ = store.save_result(&task_id_clone, &r).await;
-                    let _ = store.update_status(&task_id_clone, TaskStatus::Completed).await;
-                    
+                    let _ = store
+                        .update_status(&task_id_clone, TaskStatus::Completed)
+                        .await;
+
                     // 发送完成通知
                     if let Some(ref manager) = notification_manager {
-                        let notif = task_status_notification(&task_id_clone, &task_name, "completed");
+                        let notif =
+                            task_status_notification(&task_id_clone, &task_name, "completed");
                         manager.publish(notif);
                     }
-                    
+
                     info!("Task {} completed in {:?}", task_id_clone, elapsed);
                     r
                 }
@@ -336,26 +344,28 @@ impl BackgroundTaskManager {
                         steps: 0,
                     };
                     let _ = store.save_result(&task_id_clone, &error_result).await;
-                    let _ = store.update_status(&task_id_clone, TaskStatus::Failed).await;
-                    
+                    let _ = store
+                        .update_status(&task_id_clone, TaskStatus::Failed)
+                        .await;
+
                     // 发送失败通知
                     if let Some(ref manager) = notification_manager {
                         let notif = task_status_notification(&task_id_clone, &task_name, "failed");
                         manager.publish(notif);
                     }
-                    
+
                     error!("Task {} failed: {}", task_id_clone, e);
                     error_result
                 }
             };
-            
+
             // 从运行中移除
             let mut running = running_tasks.write().await;
             running.remove(&task_id_clone);
-            
+
             // 释放许可
             drop(permit);
-            
+
             task_result
         });
 
@@ -364,10 +374,10 @@ impl BackgroundTaskManager {
             task_id: task_id.clone(),
             abort_handle: handle.abort_handle(),
         };
-        
+
         let mut running = self.running_tasks.write().await;
         running.insert(task_id.clone(), task_handle);
-        
+
         info!("Started background task: {}", task_id);
         Ok(task_id)
     }
@@ -376,8 +386,14 @@ impl BackgroundTaskManager {
     ///
     /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
     pub async fn spawn_agent(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
-        let executor = self.agent_executor.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AgentTaskExecutor not configured. Use with_agent_executor() first."))?
+        let executor = self
+            .agent_executor
+            .as_ref()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "AgentTaskExecutor not configured. Use with_agent_executor() first."
+                )
+            })?
             .clone();
 
         self.spawn(spec, move |spec| async move {
@@ -390,20 +406,24 @@ impl BackgroundTaskManager {
                 }),
                 Err(e) => Err(e),
             }
-        }).await
+        })
+        .await
     }
 
     /// 使用调度器安排任务
     pub async fn schedule(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
-        let scheduler = self.scheduler.as_ref()
+        let scheduler = self
+            .scheduler
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Scheduler not configured"))?;
-        
+
         let task_id = generate_task_id();
         scheduler.schedule(task_id.clone(), spec.clone()).await?;
-        
+
         // 发送通知
-        self.notify_status_change(&task_id, &spec.name, TaskStatus::Pending).await;
-        
+        self.notify_status_change(&task_id, &spec.name, TaskStatus::Pending)
+            .await;
+
         Ok(task_id)
     }
 
@@ -420,8 +440,10 @@ impl BackgroundTaskManager {
 
         if let Some((task_id, spec)) = scheduler.next_task() {
             // 更新状态为运行中
-            self.store.update_status(&task_id, TaskStatus::Running).await?;
-            
+            self.store
+                .update_status(&task_id, TaskStatus::Running)
+                .await?;
+
             // 启动任务
             let actual_task_id = self.spawn(spec, task_fn).await?;
             Ok(Some(actual_task_id))
@@ -440,10 +462,10 @@ impl BackgroundTaskManager {
     pub async fn wait(&self, task_id: &TaskId) -> anyhow::Result<TaskResult> {
         // 轮询等待
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
-        
+
         loop {
             interval.tick().await;
-            
+
             let status = self.status(task_id).await?;
             match status {
                 TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled => {
@@ -460,7 +482,7 @@ impl BackgroundTaskManager {
     /// 取消任务
     pub async fn cancel(&self, task_id: &TaskId) -> anyhow::Result<()> {
         info!("Cancelling task: {}", task_id);
-        
+
         // 如果任务正在运行，发送取消信号
         let mut running = self.running_tasks.write().await;
         if let Some(handle) = running.get(task_id) {
@@ -468,18 +490,21 @@ impl BackgroundTaskManager {
             running.remove(task_id);
         }
         drop(running);
-        
+
         // 获取任务信息以发送通知
         let task_info = self.store.get(task_id).await.ok();
-        
+
         // 更新存储状态
-        self.store.update_status(task_id, TaskStatus::Cancelled).await?;
-        
+        self.store
+            .update_status(task_id, TaskStatus::Cancelled)
+            .await?;
+
         // 发送通知
         if let Some(info) = task_info {
-            self.notify_status_change(task_id, &info.spec.name, TaskStatus::Cancelled).await;
+            self.notify_status_change(task_id, &info.spec.name, TaskStatus::Cancelled)
+                .await;
         }
-        
+
         Ok(())
     }
 
@@ -507,7 +532,7 @@ impl BackgroundTaskManager {
             .filter(|(_, handle)| handle.is_finished())
             .map(|(id, _)| id.clone())
             .collect();
-        
+
         for id in completed {
             running.remove(&id);
         }
@@ -554,7 +579,7 @@ mod tests {
     async fn test_task_id_generation() {
         let id1 = generate_task_id();
         let id2 = generate_task_id();
-        
+
         assert!(id1.starts_with("task_"));
         assert!(id2.starts_with("task_"));
         assert_ne!(id1, id2);
@@ -569,7 +594,7 @@ mod tests {
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
+
         let list = manager.list().await.unwrap();
         assert!(list.is_empty());
     }
@@ -582,17 +607,22 @@ mod tests {
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
+
         let spec = TaskSpec::new("test", "test prompt")
             .with_agent_type("coder")
             .with_max_iterations(10)
             .with_timeout_seconds(30);
-        
-        let task_id = manager.spawn(spec, |_spec| async {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            Ok(TaskResult::success("done").with_elapsed_ms(100).with_steps(1))
-        }).await.unwrap();
-        
+
+        let task_id = manager
+            .spawn(spec, |_spec| async {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                Ok(TaskResult::success("done")
+                    .with_elapsed_ms(100)
+                    .with_steps(1))
+            })
+            .await
+            .unwrap();
+
         // 等待完成
         let result = manager.wait(&task_id).await.unwrap();
         assert_eq!(result.status, TaskStatus::Completed);
@@ -606,21 +636,25 @@ mod tests {
             temp_dir.path().join("store"),
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
-        ).with_max_concurrency(2);
-        
+        )
+        .with_max_concurrency(2);
+
         // 启动多个任务
         let mut task_ids = Vec::new();
         for i in 0..5 {
             let spec = TaskSpec::new(format!("task_{}", i), "test");
-            
-            let id = manager.spawn(spec, move |_spec| async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                Ok(TaskResult::success(format!("task_{}", i)))
-            }).await.unwrap();
-            
+
+            let id = manager
+                .spawn(spec, move |_spec| async move {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    Ok(TaskResult::success(format!("task_{}", i)))
+                })
+                .await
+                .unwrap();
+
             task_ids.push(id);
         }
-        
+
         // 等待所有完成
         for id in task_ids {
             let result = manager.wait(&id).await.unwrap();
@@ -636,24 +670,27 @@ mod tests {
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
+
         let spec = TaskSpec::new("long_running", "test");
-        
-        let task_id = manager.spawn(spec, |_spec| async {
-            // 长时间运行的任务
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-            Ok(TaskResult::success("completed"))
-        }).await.unwrap();
-        
+
+        let task_id = manager
+            .spawn(spec, |_spec| async {
+                // 长时间运行的任务
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                Ok(TaskResult::success("completed"))
+            })
+            .await
+            .unwrap();
+
         // 短暂等待确保任务开始
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        
+
         // 取消任务
         manager.cancel(&task_id).await.unwrap();
-        
+
         // 等待状态更新
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         let status = manager.status(&task_id).await.unwrap();
         assert_eq!(status, TaskStatus::Cancelled);
     }
@@ -663,28 +700,34 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path().join("store"));
         let scheduler = Arc::new(TaskScheduler::new(store.clone()));
-        
+
         // 调度任务
         let spec1 = TaskSpec::new("low_priority", "test").with_priority(TaskPriority::Low);
         let spec2 = TaskSpec::new("high_priority", "test").with_priority(TaskPriority::High);
-        
-        scheduler.schedule("task_1".to_string(), spec1).await.unwrap();
-        scheduler.schedule("task_2".to_string(), spec2).await.unwrap();
-        
+
+        scheduler
+            .schedule("task_1".to_string(), spec1)
+            .await
+            .unwrap();
+        scheduler
+            .schedule("task_2".to_string(), spec2)
+            .await
+            .unwrap();
+
         assert_eq!(scheduler.queue_len(), 2);
-        
+
         // 验证高优先级任务先出队
         let (next_id, next_spec) = scheduler.peek_task().unwrap();
         assert_eq!(next_id, "task_2");
         assert_eq!(next_spec.priority, TaskPriority::High);
-        
+
         // 弹出并验证
         let (popped_id, _) = scheduler.next_task().unwrap();
         assert_eq!(popped_id, "task_2");
-        
+
         let (popped_id, _) = scheduler.next_task().unwrap();
         assert_eq!(popped_id, "task_1");
-        
+
         assert!(scheduler.is_empty());
     }
 
@@ -693,17 +736,18 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path().join("store"));
         let scheduler = Arc::new(TaskScheduler::new(store));
-        
+
         let manager = BackgroundTaskManager::new(
             temp_dir.path().join("store"),
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
-        ).with_scheduler(scheduler.clone());
-        
+        )
+        .with_scheduler(scheduler.clone());
+
         // 调度任务
         let spec = TaskSpec::new("scheduled_task", "test").with_priority(TaskPriority::Normal);
         let task_id = manager.schedule(spec).await.unwrap();
-        
+
         assert!(task_id.starts_with("task_"));
         assert_eq!(scheduler.queue_len(), 1);
     }
@@ -712,32 +756,36 @@ mod tests {
     async fn test_notification_integration() {
         let temp_dir = TempDir::new().unwrap();
         let notif_manager = Arc::new(NotificationManager::new());
-        
+
         let manager = BackgroundTaskManager::new(
             temp_dir.path().join("store"),
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
-        ).with_notifications(notif_manager.clone());
-        
+        )
+        .with_notifications(notif_manager.clone());
+
         // 订阅通知
         let mut receiver = notif_manager.subscribe();
-        
+
         // 启动任务
         let spec = TaskSpec::new("notified_task", "test");
-        let task_id = manager.spawn(spec, |_spec| async {
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-            Ok(TaskResult::success("done"))
-        }).await.unwrap();
-        
+        let task_id = manager
+            .spawn(spec, |_spec| async {
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                Ok(TaskResult::success("done"))
+            })
+            .await
+            .unwrap();
+
         // 等待任务完成
         let _ = manager.wait(&task_id).await;
-        
+
         // 应该收到多个通知（pending, running, completed）
         let mut notification_count = 0;
         while let Ok(_notif) = receiver.try_recv() {
             notification_count += 1;
         }
-        
+
         assert!(notification_count >= 2); // 至少 running 和 completed
     }
 
@@ -749,14 +797,16 @@ mod tests {
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
         );
-        
-        let spec = TaskSpec::new("critical_task", "test")
-            .with_priority(TaskPriority::Critical);
-        
-        let task_id = manager.spawn(spec.clone(), |_spec| async {
-            Ok(TaskResult::success("done"))
-        }).await.unwrap();
-        
+
+        let spec = TaskSpec::new("critical_task", "test").with_priority(TaskPriority::Critical);
+
+        let task_id = manager
+            .spawn(spec.clone(), |_spec| async {
+                Ok(TaskResult::success("done"))
+            })
+            .await
+            .unwrap();
+
         let info = manager.store().get(&task_id).await.unwrap();
         assert_eq!(info.spec.priority, TaskPriority::Critical);
     }
@@ -766,7 +816,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path().join("store"));
         let scheduler = Arc::new(TaskScheduler::new(store));
-        
+
         // 按不同优先级调度任务
         let priorities = vec![
             ("task_low", TaskPriority::Low),
@@ -775,12 +825,12 @@ mod tests {
             ("task_high", TaskPriority::High),
             ("task_background", TaskPriority::Background),
         ];
-        
+
         for (id, priority) in &priorities {
             let spec = TaskSpec::new(*id, "test").with_priority(*priority);
             scheduler.schedule(id.to_string(), spec).await.unwrap();
         }
-        
+
         // 验证出队顺序
         let order: Vec<String> = (0..5)
             .filter_map(|_| {
@@ -788,14 +838,17 @@ mod tests {
                 scheduler.next_task().map(|(id, _)| id)
             })
             .collect();
-        
-        assert_eq!(order, vec![
-            "task_critical",
-            "task_high", 
-            "task_normal",
-            "task_low",
-            "task_background",
-        ]);
+
+        assert_eq!(
+            order,
+            vec![
+                "task_critical",
+                "task_high",
+                "task_normal",
+                "task_low",
+                "task_background",
+            ]
+        );
     }
 
     #[tokio::test]
@@ -816,18 +869,26 @@ mod tests {
         let spec = TaskSpec::new("agent_task", "Say hello").with_agent_type("coder");
         let err = manager.spawn_agent(spec.clone()).await;
         assert!(err.is_err());
-        assert!(err.unwrap_err().to_string().contains("AgentTaskExecutor not configured"));
+        assert!(err
+            .unwrap_err()
+            .to_string()
+            .contains("AgentTaskExecutor not configured"));
 
         // 配置 executor 后应能成功启动真实 Agent 任务
         let registry = ToolRegistry::with_builtin_tools();
         let llm = Arc::new(MockLlm);
-        let executor = Arc::new(DefaultAgentTaskExecutor::new(llm, registry, temp_dir.path()));
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+            llm,
+            registry,
+            temp_dir.path(),
+        ));
 
         let manager = BackgroundTaskManager::new(
             temp_dir.path().join("store2"),
             temp_dir.path().join("work"),
             temp_dir.path().join("context"),
-        ).with_agent_executor(executor);
+        )
+        .with_agent_executor(executor);
 
         let task_id = manager.spawn_agent(spec).await.unwrap();
         let result = manager.wait(&task_id).await.unwrap();

@@ -79,10 +79,7 @@ impl Config {
         debug!("Applying environment variables");
         config.apply_env_vars();
 
-        info!(
-            "Config loaded with {} profiles",
-            config.profiles.len()
-        );
+        info!("Config loaded with {} profiles", config.profiles.len());
 
         Ok(config)
     }
@@ -143,10 +140,7 @@ impl Config {
 
         // Ensure default profile exists
         let default_profile = self.default_profile.clone();
-        let profile = self
-            .profiles
-            .entry(default_profile)
-            .or_default();
+        let profile = self.profiles.entry(default_profile).or_default();
 
         // Apply environment variable overrides to default profile
         if let Ok(api_key) = env::var("CLARITY_API_KEY") {
@@ -300,7 +294,10 @@ base_url = "https://api.openai.com/v1"
 
         let production = config.profiles.get("production").unwrap();
         assert_eq!(production.model, "gpt-4-turbo");
-        assert_eq!(production.base_url, Some("https://api.openai.com/v1".to_string()));
+        assert_eq!(
+            production.base_url,
+            Some("https://api.openai.com/v1".to_string())
+        );
     }
 
     #[test]

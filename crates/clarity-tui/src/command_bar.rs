@@ -83,7 +83,10 @@ pub fn render_command_bar(f: &mut Frame, area: Rect, commands: &[CommandInfo]) {
                 ),
             ];
             if i + 1 < commands.len() {
-                parts.push(Span::styled("  •  ", Style::default().fg(Color::Rgb(100, 100, 120))));
+                parts.push(Span::styled(
+                    "  •  ",
+                    Style::default().fg(Color::Rgb(100, 100, 120)),
+                ));
             }
             parts
         })

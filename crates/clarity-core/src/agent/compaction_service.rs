@@ -37,10 +37,7 @@ impl CompactionService {
     /// Estimate token count for a slice of messages using a character heuristic
     /// (~4 characters per token).
     pub fn estimate_tokens(messages: &[Message]) -> usize {
-        messages
-            .iter()
-            .map(|m| m.content.len().div_ceil(4))
-            .sum()
+        messages.iter().map(|m| m.content.len().div_ceil(4)).sum()
     }
 
     /// Returns `true` when the total estimated tokens exceed `token_limit`
@@ -179,13 +176,18 @@ mod tests {
             &self,
             _messages: &[Message],
             _tools: &Value,
-        ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
+        ) -> Result<
+            tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+            AgentError,
+        > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
-                let _ = tx.send(Ok(crate::llm::StreamDelta {
-                    content: Some("chunk".to_string()),
-                    tool_calls: vec![],
-                })).await;
+                let _ = tx
+                    .send(Ok(crate::llm::StreamDelta {
+                        content: Some("chunk".to_string()),
+                        tool_calls: vec![],
+                    }))
+                    .await;
             });
             Ok(rx)
         }
@@ -209,10 +211,15 @@ mod tests {
             &self,
             _messages: &[Message],
             _tools: &Value,
-        ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
+        ) -> Result<
+            tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+            AgentError,
+        > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
-                let _ = tx.send(Err(AgentError::Llm("mock stream error".to_string()))).await;
+                let _ = tx
+                    .send(Err(AgentError::Llm("mock stream error".to_string())))
+                    .await;
             });
             Ok(rx)
         }
@@ -241,7 +248,7 @@ mod tests {
         assert_eq!(CompactionService::estimate_tokens(&[msg]), 1);
 
         let msgs = vec![
-            Message::user("abcdefgh"),  // 8 chars -> 2 tokens
+            Message::user("abcdefgh"),      // 8 chars -> 2 tokens
             Message::assistant("abcdefgh"), // 8 chars -> 2 tokens
         ];
         assert_eq!(CompactionService::estimate_tokens(&msgs), 4);
@@ -364,7 +371,10 @@ mod tests {
         ];
         let mut messages = original.clone();
 
-        service.maybe_compact(&mut messages, &FailingMockLlm).await.unwrap();
+        service
+            .maybe_compact(&mut messages, &FailingMockLlm)
+            .await
+            .unwrap();
 
         // Messages should remain unchanged on LLM error.
         assert_eq!(messages.len(), original.len());
@@ -452,7 +462,9 @@ mod tests {
                 assert_eq!(messages[0].role, MessageRole::System);
                 assert_eq!(messages[1].role, MessageRole::User);
                 assert!(
-                    messages[1].content.contains("Summarize the following conversation"),
+                    messages[1]
+                        .content
+                        .contains("Summarize the following conversation"),
                     "Expected summarization prompt"
                 );
                 assert!(
@@ -470,13 +482,18 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
+            ) -> Result<
+                tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+                AgentError,
+            > {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok(crate::llm::StreamDelta {
-                        content: Some("chunk".to_string()),
-                        tool_calls: vec![],
-                    })).await;
+                    let _ = tx
+                        .send(Ok(crate::llm::StreamDelta {
+                            content: Some("chunk".to_string()),
+                            tool_calls: vec![],
+                        }))
+                        .await;
                 });
                 Ok(rx)
             }

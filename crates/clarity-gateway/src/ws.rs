@@ -50,37 +50,29 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 debug!("Received message from {}: {}", session_id, text);
 
                 match serde_json::from_str::<WsRequest>(&text) {
-                    Ok(request) => {
-                        match request {
-                            WsRequest::Chat {
-                                message,
-                                context: _,
-                                use_wire: true,
-                            } => {
-                                handle_chat_with_wire(
-                                    &state,
-                                    &session_id,
-                                    message,
-                                    &mut sender,
-                                )
-                                .await;
-                            }
-                            request => {
-                                let response = handle_request(&state, &session_id, request).await;
-                                match serde_json::to_string(&response) {
-                                    Ok(json) => {
-                                        if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                                            warn!("Failed to send message: {}", e);
-                                            break;
-                                        }
+                    Ok(request) => match request {
+                        WsRequest::Chat {
+                            message,
+                            context: _,
+                            use_wire: true,
+                        } => {
+                            handle_chat_with_wire(&state, &session_id, message, &mut sender).await;
+                        }
+                        request => {
+                            let response = handle_request(&state, &session_id, request).await;
+                            match serde_json::to_string(&response) {
+                                Ok(json) => {
+                                    if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                                        warn!("Failed to send message: {}", e);
+                                        break;
                                     }
-                                    Err(e) => {
-                                        error!("Failed to serialize response: {}", e);
-                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to serialize response: {}", e);
                                 }
                             }
                         }
-                    }
+                    },
                     Err(e) => {
                         warn!("Invalid request format: {}", e);
                         let error = WsResponse::Error {
@@ -243,7 +235,11 @@ pub struct ChatMessage {
 }
 
 /// 处理 WebSocket 请求
-async fn handle_request(state: &AppState, session_id: &SessionId, request: WsRequest) -> WsResponse {
+async fn handle_request(
+    state: &AppState,
+    session_id: &SessionId,
+    request: WsRequest,
+) -> WsResponse {
     match request {
         WsRequest::Chat {
             message,

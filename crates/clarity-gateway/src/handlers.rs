@@ -1,7 +1,10 @@
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::{IntoResponse, Response, sse::{Event as SseEvent, Sse}},
+    response::{
+        sse::{Event as SseEvent, Sse},
+        IntoResponse, Response,
+    },
 };
 use clarity_core::agent::{AgentController, ControllerEvent, Op};
 use futures::stream;
@@ -131,40 +134,45 @@ pub async fn chat_completions(
         let created = chrono::Utc::now().timestamp();
         let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
 
-        let sse_stream = stream::unfold((event_rx, Option::<String>::None), move |(mut rx, pending)| {
-            let model = model.clone();
-            let id = id.clone();
-            async move {
-                if let Some(data) = pending {
-                    let event = SseEvent::default().data(data);
-                    return Some((Ok::<_, Infallible>(event), (rx, None)));
-                }
-                match rx.recv().await {
-                    Some(ControllerEvent::Chunk(text)) => {
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, None)))
+        let sse_stream = stream::unfold(
+            (event_rx, Option::<String>::None),
+            move |(mut rx, pending)| {
+                let model = model.clone();
+                let id = id.clone();
+                async move {
+                    if let Some(data) = pending {
+                        let event = SseEvent::default().data(data);
+                        return Some((Ok::<_, Infallible>(event), (rx, None)));
                     }
-                    Some(ControllerEvent::Complete(_)) | Some(ControllerEvent::Error(_)) | None => {
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, Some("[DONE]".to_string()))))
+                    match rx.recv().await {
+                        Some(ControllerEvent::Chunk(text)) => {
+                            let data = serde_json::json!({
+                                "id": &id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": &model,
+                                "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, None)))
+                        }
+                        Some(ControllerEvent::Complete(_))
+                        | Some(ControllerEvent::Error(_))
+                        | None => {
+                            let data = serde_json::json!({
+                                "id": &id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": &model,
+                                "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, Some("[DONE]".to_string()))))
+                        }
                     }
                 }
-            }
-        });
+            },
+        );
 
         Sse::new(sse_stream).into_response()
     } else {
@@ -261,7 +269,8 @@ pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoRespons
                     .iter()
                     .filter_map(|f| {
                         let name = f.get("function")?.get("name")?.as_str()?.to_string();
-                        let description = f.get("function")?.get("description")?.as_str()?.to_string();
+                        let description =
+                            f.get("function")?.get("description")?.as_str()?.to_string();
                         Some(ToolInfo {
                             name,
                             description,

@@ -45,17 +45,26 @@ pub struct WebhookChannel {
 impl WebhookChannel {
     pub fn new(config: ChannelConfig) -> Self {
         // 从 extra 配置中提取端口和认证信息
-        let (port, auth_header, auth_token) = config.extra.as_ref()
-            .map(|extra| (
-                extra.get("port").and_then(|v| v.as_u64()).unwrap_or(18791) as u16,
-                extra.get("auth_header").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                extra.get("auth_token").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            ))
+        let (port, auth_header, auth_token) = config
+            .extra
+            .as_ref()
+            .map(|extra| {
+                (
+                    extra.get("port").and_then(|v| v.as_u64()).unwrap_or(18791) as u16,
+                    extra
+                        .get("auth_header")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    extra
+                        .get("auth_token")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                )
+            })
             .unwrap_or((18791, None, None));
 
         // 优先使用 config.webhook_secret，否则回退到 extra 中的 auth_token
-        let webhook_secret = config.webhook_secret.clone()
-            .or_else(|| auth_token.clone());
+        let webhook_secret = config.webhook_secret.clone().or_else(|| auth_token.clone());
 
         Self {
             state: Arc::new(RwLock::new(WebhookState::Stopped)),
@@ -70,7 +79,7 @@ impl WebhookChannel {
     /// 启动 HTTP 服务器接收 webhook
     async fn start_server(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
         let addr = format!("0.0.0.0:{}", self.port);
-        
+
         let app_state = WebhookAppState {
             agent,
             auth_header: self.auth_header.clone(),
@@ -83,10 +92,9 @@ impl WebhookChannel {
             .route("/webhook/:platform", post(webhook_handler_with_platform))
             .with_state(Arc::new(app_state));
 
-        let listener = tokio::net::TcpListener::bind(&addr).await
-            .map_err(|e| ChannelError::ConnectionFailed(format!(
-                "Failed to bind to {}: {}", addr, e
-            )))?;
+        let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| {
+            ChannelError::ConnectionFailed(format!("Failed to bind to {}: {}", addr, e))
+        })?;
 
         info!("[Webhook] Server listening on http://{}", addr);
         info!("[Webhook] Webhook URL: http://{}/webhook", addr);
@@ -95,7 +103,8 @@ impl WebhookChannel {
         *self.state.write().await = WebhookState::Running;
 
         // 启动服务器
-        axum::serve(listener, app).await
+        axum::serve(listener, app)
+            .await
             .map_err(|e| ChannelError::Unknown(format!("Server error: {}", e)))?;
 
         Ok(())
@@ -115,12 +124,14 @@ impl WebhookChannel {
         let provided_token = headers
             .get(header_name)
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| ChannelError::AuthFailed(
-                format!("Missing required header: {}", header_name)
-            ))?;
+            .ok_or_else(|| {
+                ChannelError::AuthFailed(format!("Missing required header: {}", header_name))
+            })?;
 
         // 支持 "Bearer token" 格式
-        let provided_token = provided_token.strip_prefix("Bearer ").unwrap_or(provided_token);
+        let provided_token = provided_token
+            .strip_prefix("Bearer ")
+            .unwrap_or(provided_token);
 
         if provided_token != expected_token {
             return Err(ChannelError::AuthFailed("Invalid token".to_string()));
@@ -200,10 +211,11 @@ async fn webhook_handler(
     // 验证认证
     if let Some(ref header) = state.auth_header {
         if let Some(ref token) = state.auth_token {
-            let provided = headers.get(header)
+            let provided = headers
+                .get(header)
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("");
-            
+
             // 支持 "Bearer token" 格式
             let provided = provided.strip_prefix("Bearer ").unwrap_or(provided);
 
@@ -222,7 +234,8 @@ async fn webhook_handler(
     }
 
     // 提取消息内容
-    let message = req.message
+    let message = req
+        .message
         .or(req.text)
         .or_else(|| req.content.clone())
         .unwrap_or_default();
@@ -244,17 +257,15 @@ async fn webhook_handler(
 
     // 使用 Agent 处理消息
     match state.agent.run(&message).await {
-        Ok(response) => {
-            (
-                StatusCode::OK,
-                Json(WebhookResponse {
-                    success: true,
-                    message: Some("Processed".to_string()),
-                    response: Some(response),
-                    error: None,
-                }),
-            )
-        }
+        Ok(response) => (
+            StatusCode::OK,
+            Json(WebhookResponse {
+                success: true,
+                message: Some("Processed".to_string()),
+                response: Some(response),
+                error: None,
+            }),
+        ),
         Err(e) => {
             error!("[Webhook] Agent error: {}", e);
             (
@@ -304,12 +315,15 @@ async fn webhook_handler_with_platform(
                     response: None,
                     error: Some("Failed to parse message".to_string()),
                 }),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
     // 验证认证（平台特定）
-    if let Err(e) = verify_platform_auth(&platform, &headers, &body, state.webhook_secret.as_deref()) {
+    if let Err(e) =
+        verify_platform_auth(&platform, &headers, &body, state.webhook_secret.as_deref())
+    {
         return (
             StatusCode::UNAUTHORIZED,
             Json(WebhookResponse {
@@ -318,7 +332,8 @@ async fn webhook_handler_with_platform(
                 response: None,
                 error: Some(e.to_string()),
             }),
-        ).into_response();
+        )
+            .into_response();
     }
 
     // 处理消息
@@ -338,7 +353,8 @@ async fn webhook_handler_with_platform(
                     response: None,
                     error: Some(e.to_string()),
                 }),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -371,10 +387,10 @@ fn parse_feishu_request(body: &[u8]) -> Option<String> {
     }
 
     let req: FeishuRequest = serde_json::from_slice(body).ok()?;
-    
+
     // 提取消息内容
     let content = req.event?.message?.content?;
-    
+
     // 飞书消息内容可能是 JSON 字符串
     if content.starts_with('{') {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -383,7 +399,7 @@ fn parse_feishu_request(body: &[u8]) -> Option<String> {
             }
         }
     }
-    
+
     Some(content)
 }
 
@@ -403,9 +419,8 @@ fn parse_dingtalk_request(body: &[u8]) -> Option<String> {
     }
 
     let req: DingTalkRequest = serde_json::from_slice(body).ok()?;
-    
-    req.text.map(|t| t.content)
-        .or(req.content)
+
+    req.text.map(|t| t.content).or(req.content)
 }
 
 /// 解析企业微信请求
@@ -425,9 +440,8 @@ fn parse_wecom_request(body: &[u8]) -> Option<String> {
     }
 
     let req: WeComRequest = serde_json::from_slice(body).ok()?;
-    
-    req.content
-        .or_else(|| req.text.map(|t| t.content))
+
+    req.content.or_else(|| req.text.map(|t| t.content))
 }
 
 /// 验证平台特定的认证
@@ -467,7 +481,9 @@ fn verify_platform_auth(
             let computed = compute_hmac_sha256_base64(secret, &sign_string);
 
             if computed != signature {
-                return Err(ChannelError::AuthFailed("Invalid Feishu signature".to_string()));
+                return Err(ChannelError::AuthFailed(
+                    "Invalid Feishu signature".to_string(),
+                ));
             }
 
             Ok(())
@@ -483,16 +499,20 @@ fn verify_platform_auth(
             let auth_body: DingTalkAuthBody = serde_json::from_slice(body)
                 .map_err(|e| ChannelError::AuthFailed(format!("Invalid DingTalk body: {}", e)))?;
 
-            let timestamp = auth_body.timestamp
+            let timestamp = auth_body
+                .timestamp
                 .ok_or_else(|| ChannelError::AuthFailed("Missing timestamp".to_string()))?;
-            let sign = auth_body.sign
+            let sign = auth_body
+                .sign
                 .ok_or_else(|| ChannelError::AuthFailed("Missing sign".to_string()))?;
 
             let sign_string = format!("{}\n{}", timestamp, secret);
             let computed = compute_hmac_sha256_base64(secret, &sign_string);
 
             if computed != sign {
-                return Err(ChannelError::AuthFailed("Invalid DingTalk signature".to_string()));
+                return Err(ChannelError::AuthFailed(
+                    "Invalid DingTalk signature".to_string(),
+                ));
             }
 
             Ok(())
@@ -516,8 +536,8 @@ fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(message.as_bytes());
     let result = mac.finalize();
     let bytes = result.into_bytes();
@@ -527,36 +547,32 @@ fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
 /// 格式化平台特定的响应
 fn format_platform_response(platform: &str, response: &str) -> String {
     match platform {
-        "feishu" | "lark" => {
-            serde_json::json!({
-                "msg_type": "text",
-                "content": {
-                    "text": response
-                }
-            }).to_string()
-        }
-        "dingtalk" | "dingding" => {
-            serde_json::json!({
-                "msgtype": "text",
-                "text": {
-                    "content": response
-                }
-            }).to_string()
-        }
-        "wecom" | "wechat-work" => {
-            serde_json::json!({
-                "msgtype": "text",
-                "text": {
-                    "content": response
-                }
-            }).to_string()
-        }
-        _ => {
-            serde_json::json!({
-                "success": true,
-                "response": response
-            }).to_string()
-        }
+        "feishu" | "lark" => serde_json::json!({
+            "msg_type": "text",
+            "content": {
+                "text": response
+            }
+        })
+        .to_string(),
+        "dingtalk" | "dingding" => serde_json::json!({
+            "msgtype": "text",
+            "text": {
+                "content": response
+            }
+        })
+        .to_string(),
+        "wecom" | "wechat-work" => serde_json::json!({
+            "msgtype": "text",
+            "text": {
+                "content": response
+            }
+        })
+        .to_string(),
+        _ => serde_json::json!({
+            "success": true,
+            "response": response
+        })
+        .to_string(),
     }
 }
 
@@ -595,7 +611,8 @@ impl WebhookSender {
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(ChannelError::SendFailed(format!(
-                "Webhook failed: {}", error_text
+                "Webhook failed: {}",
+                error_text
             )));
         }
 
@@ -603,11 +620,7 @@ impl WebhookSender {
     }
 
     /// 发送到飞书 webhook
-    pub async fn send_feishu(
-        &self,
-        webhook_url: &str,
-        message: &str,
-    ) -> Result<(), ChannelError> {
+    pub async fn send_feishu(&self, webhook_url: &str, message: &str) -> Result<(), ChannelError> {
         let payload = serde_json::json!({
             "msg_type": "text",
             "content": {
@@ -729,7 +742,8 @@ mod tests {
     fn test_dingtalk_signature_mismatch() {
         let body = r#"{"timestamp":"1234567890","sign":"invalid_sign","text":{"content":"Hello"}}"#;
         let headers = HeaderMap::new();
-        let result = verify_platform_auth("dingtalk", &headers, body.as_bytes(), Some("test_secret"));
+        let result =
+            verify_platform_auth("dingtalk", &headers, body.as_bytes(), Some("test_secret"));
         assert!(result.is_err());
     }
 

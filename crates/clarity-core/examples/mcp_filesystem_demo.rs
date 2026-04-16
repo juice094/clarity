@@ -37,7 +37,9 @@
 //!    - Search for files
 //! 5. Shows proper error handling
 
-use clarity_core::mcp::{McpClient, McpClientBuilder, McpClientInstance, McpManager, McpToolAdapter};
+use clarity_core::mcp::{
+    McpClient, McpClientBuilder, McpClientInstance, McpManager, McpToolAdapter,
+};
 use clarity_core::tools::ToolContext;
 use clarity_core::ToolRegistry;
 use serde_json::json;
@@ -74,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     // =================================================================
     println!("▶️  Step 1: Connecting to MCP Filesystem Server...");
     println!("   Command: npx -y @modelcontextprotocol/server-filesystem");
-    
+
     let client = match connect_to_filesystem_server(&allowed_paths).await {
         Ok(client) => {
             println!("✅ Connected to MCP Filesystem Server\n");
@@ -88,7 +90,10 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("  2. Ensure npx is available: npx --version");
             eprintln!("  3. Check your internet connection (npx needs to download the package)");
             eprintln!("  4. Try running manually:");
-            eprintln!("     npx -y @modelcontextprotocol/server-filesystem {}", allowed_paths.join(" "));
+            eprintln!(
+                "     npx -y @modelcontextprotocol/server-filesystem {}",
+                allowed_paths.join(" ")
+            );
             return Ok(());
         }
     };
@@ -97,17 +102,19 @@ async fn main() -> anyhow::Result<()> {
     // STEP 2: Discover Available Tools
     // =================================================================
     println!("▶️  Step 2: Discovering available tools...");
-    
+
     let tools = client.list_tools().await?;
     println!("   Found {} tool(s):\n", tools.len());
-    
+
     for tool in &tools {
         println!("   🔧 {}", tool.name);
         println!("      {}", tool.description.as_deref().unwrap_or(""));
         let schema = &tool.input_schema;
         if let Some(props) = schema.get("properties") {
-            println!("      Parameters: {}", 
-                props.as_object()
+            println!(
+                "      Parameters: {}",
+                props
+                    .as_object()
                     .map(|p| p.keys().cloned().collect::<Vec<_>>().join(", "))
                     .unwrap_or_default()
             );
@@ -119,11 +126,11 @@ async fn main() -> anyhow::Result<()> {
     // STEP 3: Register Tools in Clarity Registry
     // =================================================================
     println!("▶️  Step 3: Registering tools in Clarity ToolRegistry...");
-    
+
     let registry = ToolRegistry::new();
     let mut registered_count = 0;
     let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
-    
+
     for tool in tools {
         let adapter = McpToolAdapter::new(client.clone(), tool);
         match registry.register(adapter) {
@@ -133,14 +140,17 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-    
-    println!("✅ Registered {} tool(s) in ToolRegistry\n", registered_count);
+
+    println!(
+        "✅ Registered {} tool(s) in ToolRegistry\n",
+        registered_count
+    );
 
     // =================================================================
     // STEP 4: Demonstrate Tool Execution
     // =================================================================
     println!("▶️  Step 4: Demonstrating tool execution...\n");
-    
+
     let ctx = ToolContext::new();
     let test_path = &allowed_paths[0];
 
@@ -148,15 +158,15 @@ async fn main() -> anyhow::Result<()> {
     println!("   ─────────────────────────────────────────");
     println!("   Demo 1: List Directory");
     println!("   ─────────────────────────────────────────");
-    
+
     if let Some(tool) = registry.get("list_directory")? {
         println!("   Tool: list_directory");
         println!("   Path: {}", test_path);
-        
+
         let args = json!({
             "path": test_path
         });
-        
+
         match tool.execute(args, ctx.clone()).await {
             Ok(result) => {
                 println!("   ✅ Success!");
@@ -164,7 +174,10 @@ async fn main() -> anyhow::Result<()> {
                     println!("   Found {} item(s):", files.len());
                     for (i, file) in files.iter().take(5).enumerate() {
                         let name = file.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-                        let ftype = file.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                        let ftype = file
+                            .get("type")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("unknown");
                         println!("      {}. {} ({})", i + 1, name, ftype);
                     }
                     if files.len() > 5 {
@@ -185,16 +198,16 @@ async fn main() -> anyhow::Result<()> {
     println!("   ─────────────────────────────────────────");
     println!("   Demo 2: Search Files");
     println!("   ─────────────────────────────────────────");
-    
+
     if let Some(tool) = registry.get("search_files")? {
         println!("   Tool: search_files");
         println!("   Pattern: *.rs");
-        
+
         let args = json!({
             "path": test_path,
             "pattern": "*.rs"
         });
-        
+
         match tool.execute(args, ctx.clone()).await {
             Ok(result) => {
                 println!("   ✅ Success!");
@@ -222,22 +235,22 @@ async fn main() -> anyhow::Result<()> {
     println!("   ─────────────────────────────────────────");
     println!("   Demo 3: Read File");
     println!("   ─────────────────────────────────────────");
-    
+
     if let Some(tool) = registry.get("read_file")? {
         // Try to find a file to read
         let test_files = ["README.md", "Cargo.toml", "package.json", ".gitignore"];
         let mut file_read = false;
-        
+
         for file_name in &test_files {
             let file_path = std::path::Path::new(test_path).join(file_name);
             if file_path.exists() {
                 println!("   Tool: read_file");
                 println!("   Path: {}", file_path.display());
-                
+
                 let args = json!({
                     "path": file_path.to_string_lossy()
                 });
-                
+
                 match tool.execute(args, ctx.clone()).await {
                     Ok(result) => {
                         println!("   ✅ Success!");
@@ -258,7 +271,7 @@ async fn main() -> anyhow::Result<()> {
                 break;
             }
         }
-        
+
         if !file_read {
             println!("   ⚠️  No suitable test file found in {}", test_path);
         }
@@ -271,39 +284,41 @@ async fn main() -> anyhow::Result<()> {
     // STEP 5: Alternative - Using McpManager
     // =================================================================
     println!("▶️  Step 5: Using McpManager for multiple connections...\n");
-    
+
     let mut manager = McpManager::new();
     let fs_args: Vec<String> = std::iter::once("-y".into())
-        .chain(std::iter::once("@modelcontextprotocol/server-filesystem".into()))
+        .chain(std::iter::once(
+            "@modelcontextprotocol/server-filesystem".into(),
+        ))
         .chain(allowed_paths.iter().cloned())
         .collect();
     manager.connect_stdio("filesystem", "npx", &fs_args).await?;
     println!("   ✅ Added filesystem client to McpManager");
-    
+
     let clients = manager.list_servers();
     println!("   Connected clients: {:?}", clients);
-    
+
     let all_tools = manager.tools();
     println!("   Total tools available: {}", all_tools.len());
-    
+
     manager.register_all(&registry);
-    
+
     println!("   Total registered tools: {}\n", registry.len()?);
 
     // =================================================================
     // STEP 6: Error Handling Demo
     // =================================================================
     println!("▶️  Step 6: Error handling demonstration...\n");
-    
+
     if let Some(tool) = registry.get("read_file")? {
         println!("   ─────────────────────────────────────────");
         println!("   Testing: Read non-existent file");
         println!("   ─────────────────────────────────────────");
-        
+
         let args = json!({
             "path": "/nonexistent/path/to/file.txt"
         });
-        
+
         match tool.execute(args, ctx.clone()).await {
             Ok(_) => println!("   ⚠️  Unexpected success"),
             Err(e) => {
@@ -312,15 +327,15 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         println!();
-        
+
         println!("   ─────────────────────────────────────────");
         println!("   Testing: Access outside allowed path");
         println!("   ─────────────────────────────────────────");
-        
+
         let args = json!({
             "path": "C:\\Windows\\System32\\config\\SAM"
         });
-        
+
         match tool.execute(args, ctx.clone()).await {
             Ok(_) => println!("   ⚠️  Unexpected success"),
             Err(e) => {
@@ -335,7 +350,7 @@ async fn main() -> anyhow::Result<()> {
     // STEP 7: Cleanup
     // =================================================================
     println!("▶️  Step 7: Cleanup...");
-    
+
     println!("✅ Disconnected from MCP server\n");
 
     // =================================================================
@@ -367,11 +382,11 @@ async fn connect_to_filesystem_server(
     let mut builder = McpClientBuilder::stdio("filesystem", "npx")
         .arg("-y")
         .arg("@modelcontextprotocol/server-filesystem");
-    
+
     for path in allowed_paths {
         builder = builder.arg(path);
     }
-    
+
     let mut client = builder.build();
     client.connect().await?;
     Ok(client)
@@ -381,14 +396,14 @@ async fn connect_to_filesystem_server(
 /*
 async fn use_with_agent(registry: &ToolRegistry) -> anyhow::Result<()> {
     use clarity_core::Agent;
-    
+
     // Create agent with the registry that includes MCP tools
     let agent = Agent::new(registry.clone())
         .with_model("kimi-k2-07132k-preview");
-    
+
     // The agent can now use MCP filesystem tools
     let result = agent.run("List all Rust files in the current directory and show me their contents").await?;
-    
+
     println!("Agent result: {}", result);
     Ok(())
 }

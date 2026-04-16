@@ -182,7 +182,10 @@ impl ThinkSkill {
 
         if steps.is_empty() {
             return if let Some(t) = topic {
-                format!("Thinking about: {}\n\nNo reasoning steps yet. Use 'step' to add thoughts.", t)
+                format!(
+                    "Thinking about: {}\n\nNo reasoning steps yet. Use 'step' to add thoughts.",
+                    t
+                )
             } else {
                 "No active reasoning. Start with 'analyze <topic>' or 'step <thought>'.".to_string()
             };
@@ -240,23 +243,22 @@ impl ThinkSkill {
             .filter(|s| s.step_type == StepType::Constraint)
             .count();
 
-        output.push_str(&format!(
-            "Based on {} reasoning steps:\n",
-            steps.len()
-        ));
+        output.push_str(&format!("Based on {} reasoning steps:\n", steps.len()));
         output.push_str(&format!("  - {} analysis points\n", analysis_count));
         output.push_str(&format!("  - {} evidence points\n", evidence_count));
-        output.push_str(&format!("  - {} alternatives considered\n", alternatives_count));
-        output.push_str(&format!("  - {} constraints identified\n\n", constraints_count));
+        output.push_str(&format!(
+            "  - {} alternatives considered\n",
+            alternatives_count
+        ));
+        output.push_str(&format!(
+            "  - {} constraints identified\n\n",
+            constraints_count
+        ));
 
         // List all reasoning steps for reference
         output.push_str("Key reasoning:\n");
         for step in &steps {
-            output.push_str(&format!(
-                "  {} {}\n",
-                step.step_type.prefix(),
-                step.content
-            ));
+            output.push_str(&format!("  {} {}\n", step.step_type.prefix(), step.content));
         }
 
         // Add the conclusion step
@@ -281,7 +283,11 @@ impl ThinkSkill {
                 }
                 self.set_topic(args.to_string());
                 self.add_step(StepType::Analysis, format!("Analyzing: {}", args));
-                Ok(format!("Started analysis of: {}\n\n{}", args, self.show_reasoning()))
+                Ok(format!(
+                    "Started analysis of: {}\n\n{}",
+                    args,
+                    self.show_reasoning()
+                ))
             }
             "question" => {
                 if args.trim().is_empty() {
@@ -447,7 +453,10 @@ mod tests {
     #[tokio::test]
     async fn test_think_step() {
         let skill = ThinkSkill::new();
-        let result = skill.execute("step Rust has great performance").await.unwrap();
+        let result = skill
+            .execute("step Rust has great performance")
+            .await
+            .unwrap();
         assert!(result.contains("Added reasoning step"));
         assert_eq!(skill.get_steps().len(), 1);
         assert_eq!(skill.get_steps()[0].content, "Rust has great performance");
@@ -464,14 +473,20 @@ mod tests {
     #[tokio::test]
     async fn test_think_question() {
         let skill = ThinkSkill::new();
-        skill.execute("question What about learning curve?").await.unwrap();
+        skill
+            .execute("question What about learning curve?")
+            .await
+            .unwrap();
         assert_eq!(skill.get_steps()[0].step_type, StepType::Question);
     }
 
     #[tokio::test]
     async fn test_think_evidence() {
         let skill = ThinkSkill::new();
-        skill.execute("evidence Benchmarks show 10x speedup").await.unwrap();
+        skill
+            .execute("evidence Benchmarks show 10x speedup")
+            .await
+            .unwrap();
         assert_eq!(skill.get_steps()[0].step_type, StepType::Evidence);
     }
 
@@ -485,7 +500,10 @@ mod tests {
     #[tokio::test]
     async fn test_think_constraint() {
         let skill = ThinkSkill::new();
-        skill.execute("constraint Team is new to Rust").await.unwrap();
+        skill
+            .execute("constraint Team is new to Rust")
+            .await
+            .unwrap();
         assert_eq!(skill.get_steps()[0].step_type, StepType::Constraint);
     }
 
@@ -562,14 +580,32 @@ mod tests {
         let skill = ThinkSkill::new();
 
         // Start analysis
-        skill.execute("analyze Should we use microservices?").await.unwrap();
+        skill
+            .execute("analyze Should we use microservices?")
+            .await
+            .unwrap();
 
         // Add reasoning steps
-        skill.execute("step Microservices enable independent scaling").await.unwrap();
-        skill.execute("step Adds operational complexity").await.unwrap();
-        skill.execute("alternative Consider modular monolith").await.unwrap();
-        skill.execute("evidence AWS recommends starting with monolith").await.unwrap();
-        skill.execute("constraint Small team of 3 developers").await.unwrap();
+        skill
+            .execute("step Microservices enable independent scaling")
+            .await
+            .unwrap();
+        skill
+            .execute("step Adds operational complexity")
+            .await
+            .unwrap();
+        skill
+            .execute("alternative Consider modular monolith")
+            .await
+            .unwrap();
+        skill
+            .execute("evidence AWS recommends starting with monolith")
+            .await
+            .unwrap();
+        skill
+            .execute("constraint Small team of 3 developers")
+            .await
+            .unwrap();
 
         // Show reasoning
         let show = skill.execute("show").await.unwrap();
@@ -594,7 +630,10 @@ mod tests {
 
         // Test 'conclude' shortcut
         skill.execute("conclude").await.unwrap();
-        assert_eq!(skill.get_steps().last().unwrap().step_type, StepType::Conclusion);
+        assert_eq!(
+            skill.get_steps().last().unwrap().step_type,
+            StepType::Conclusion
+        );
 
         // Test 'list' shortcut
         let result = skill.execute("list").await.unwrap();

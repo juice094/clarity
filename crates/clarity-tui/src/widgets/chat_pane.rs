@@ -7,7 +7,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
 
-
 /// 聊天区域组件
 pub struct ChatPane<'a> {
     messages: &'a [Message],
@@ -84,29 +83,17 @@ impl<'a> Widget for ChatPane<'a> {
                     ]));
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                "  ▎ ",
-                                Style::default().fg(Color::Rgb(80, 140, 220)),
-                            ),
-                            Span::styled(
-                                line,
-                                Style::default().fg(Color::Rgb(200, 210, 240)),
-                            ),
+                            Span::styled("  ▎ ", Style::default().fg(Color::Rgb(80, 140, 220))),
+                            Span::styled(line, Style::default().fg(Color::Rgb(200, 210, 240))),
                         ]));
                     }
                 }
                 MessageType::Assistant => {
                     lines.push(Line::from(""));
                     let prefix = if msg.is_streaming {
-                        Span::styled(
-                            " ● ",
-                            Style::default().fg(Color::Rgb(100, 220, 150)),
-                        )
+                        Span::styled(" ● ", Style::default().fg(Color::Rgb(100, 220, 150)))
                     } else {
-                        Span::styled(
-                            " ● ",
-                            Style::default().fg(Color::Rgb(80, 180, 140)),
-                        )
+                        Span::styled(" ● ", Style::default().fg(Color::Rgb(80, 180, 140)))
                     };
                     let name = Span::styled(
                         " Clarity ",
@@ -129,14 +116,8 @@ impl<'a> Widget for ChatPane<'a> {
 
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![
-                            Span::styled(
-                                "  ▎ ",
-                                Style::default().fg(Color::Rgb(80, 180, 140)),
-                            ),
-                            Span::styled(
-                                line,
-                                Style::default().fg(Color::Rgb(210, 230, 220)),
-                            ),
+                            Span::styled("  ▎ ", Style::default().fg(Color::Rgb(80, 180, 140))),
+                            Span::styled(line, Style::default().fg(Color::Rgb(210, 230, 220))),
                         ]));
                     }
 

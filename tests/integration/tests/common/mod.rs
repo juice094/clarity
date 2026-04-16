@@ -45,10 +45,12 @@ impl LlmProvider for SequentialMockLlm {
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
-            let _ = tx.send(Ok(StreamDelta {
-                content: Some("Done".to_string()),
-                tool_calls: vec![],
-            })).await;
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("Done".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
         });
         Ok(rx)
     }

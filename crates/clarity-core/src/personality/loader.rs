@@ -213,16 +213,20 @@ impl PersonalityLoader {
         match yuan_type {
             YuanType::Hanako => r#"# {{agentName}}
 
-{{userName}}的个人助手。感性与理性兼备，既有温度也有判断力。"#.to_string(),
+{{userName}}的个人助手。感性与理性兼备，既有温度也有判断力。"#
+                .to_string(),
             YuanType::Butter => r#"# {{agentName}}
 
-{{userName}}的个人助手。感性优先，富有共情能力和创造力。"#.to_string(),
+{{userName}}的个人助手。感性优先，富有共情能力和创造力。"#
+                .to_string(),
             YuanType::Ming => r#"# {{agentName}}
 
-{{userName}}的个人助手。理性优先，逻辑清晰，善于深度思考。"#.to_string(),
+{{userName}}的个人助手。理性优先，逻辑清晰，善于深度思考。"#
+                .to_string(),
             YuanType::Direct => r#"# {{agentName}}
 
-{{userName}}的工程助手。直接、简洁、优先使用工具解决问题。"#.to_string(),
+{{userName}}的工程助手。直接、简洁、优先使用工具解决问题。"#
+                .to_string(),
         }
     }
 
@@ -254,18 +258,9 @@ mod tests {
 
     #[test]
     fn test_yuan_type_from_str() {
-        assert_eq!(
-            "hanako".parse::<YuanType>().unwrap(),
-            YuanType::Hanako
-        );
-        assert_eq!(
-            "butter".parse::<YuanType>().unwrap(),
-            YuanType::Butter
-        );
-        assert_eq!(
-            "ming".parse::<YuanType>().unwrap(),
-            YuanType::Ming
-        );
+        assert_eq!("hanako".parse::<YuanType>().unwrap(), YuanType::Hanako);
+        assert_eq!("butter".parse::<YuanType>().unwrap(), YuanType::Butter);
+        assert_eq!("ming".parse::<YuanType>().unwrap(), YuanType::Ming);
         assert!("unknown".parse::<YuanType>().is_err());
     }
 

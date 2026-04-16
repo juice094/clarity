@@ -38,8 +38,9 @@ impl TelegramChannel {
     /// 使用 teloxide 运行 bot（feature enabled）
     #[cfg(feature = "telegram")]
     async fn run_with_teloxide(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
-        let token = self.bot_token.as_ref()
-            .ok_or_else(|| ChannelError::AuthFailed("Telegram bot token not configured".to_string()))?;
+        let token = self.bot_token.as_ref().ok_or_else(|| {
+            ChannelError::AuthFailed("Telegram bot token not configured".to_string())
+        })?;
 
         info!("Starting Telegram bot with teloxide...");
 
@@ -57,9 +58,11 @@ impl TelegramChannel {
                             // 发送响应，支持长消息分批
                             let chunks = split_message(&response, 4096);
                             for chunk in chunks {
-                                if let Err(e) = bot.send_message(msg.chat.id, chunk)
+                                if let Err(e) = bot
+                                    .send_message(msg.chat.id, chunk)
                                     .parse_mode(ParseMode::MarkdownV2)
-                                    .await {
+                                    .await
+                                {
                                     error!("[Telegram] Failed to send message: {}", e);
                                     break;
                                 }
@@ -67,13 +70,19 @@ impl TelegramChannel {
                         }
                         Err(e) => {
                             error!("[Telegram] Failed to process message: {}", e);
-                            let _ = bot.send_message(msg.chat.id, "Sorry, I encountered an error processing your message.").await;
+                            let _ = bot
+                                .send_message(
+                                    msg.chat.id,
+                                    "Sorry, I encountered an error processing your message.",
+                                )
+                                .await;
                         }
                     }
                 }
                 respond(())
             }
-        }).await;
+        })
+        .await;
 
         Ok(())
     }
@@ -82,15 +91,17 @@ impl TelegramChannel {
     #[cfg(not(feature = "telegram"))]
     async fn run_with_teloxide(&self, _agent: Arc<Agent>) -> Result<(), ChannelError> {
         warn!("[Telegram] teloxide feature is disabled, using mock mode");
-        
+
         // Mock mode: 记录配置但不实际启动
-        info!("[Telegram] Mock mode - would start bot with token: {:?}", 
-            self.bot_token.as_ref().map(|_| "***REDACTED***"));
-        
+        info!(
+            "[Telegram] Mock mode - would start bot with token: {:?}",
+            self.bot_token.as_ref().map(|_| "***REDACTED***")
+        );
+
         // 保持运行直到收到停止信号
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         info!("[Telegram] Mock bot finished");
-        
+
         Ok(())
     }
 }
@@ -137,20 +148,23 @@ fn split_message(text: &str, max_length: usize) -> Vec<&str> {
 
     let mut chunks = Vec::new();
     let mut start = 0;
-    
+
     while start < text.len() {
         let end = (start + max_length).min(text.len());
         // 尝试在换行处分割
         let split_point = if end < text.len() {
-            text[start..end].rfind('\n').map(|i| start + i + 1).unwrap_or(end)
+            text[start..end]
+                .rfind('\n')
+                .map(|i| start + i + 1)
+                .unwrap_or(end)
         } else {
             end
         };
-        
+
         chunks.push(&text[start..split_point]);
         start = split_point;
     }
-    
+
     chunks
 }
 
@@ -218,29 +232,22 @@ impl TelegramApiClient {
     }
 
     /// 发送消息
-    pub async fn send_message(
-        &self,
-        chat_id: i64,
-        text: &str,
-    ) -> Result<(), ChannelError> {
+    pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<(), ChannelError> {
         let url = format!("{}/sendMessage", self.base_url);
-        
+
         let body = SendMessageRequest {
             chat_id,
             text: text.to_string(),
             parse_mode: Some("Markdown".to_string()),
         };
 
-        let response = self.client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&body).send().await?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(ChannelError::SendFailed(format!(
-                "Telegram API error: {}", error_text
+                "Telegram API error: {}",
+                error_text
             )));
         }
 
@@ -250,21 +257,18 @@ impl TelegramApiClient {
     /// 设置 Webhook
     pub async fn set_webhook(&self, webhook_url: &str) -> Result<(), ChannelError> {
         let url = format!("{}/setWebhook", self.base_url);
-        
+
         let body = serde_json::json!({
             "url": webhook_url,
         });
 
-        let response = self.client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&body).send().await?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(ChannelError::Unknown(format!(
-                "Failed to set webhook: {}", error_text
+                "Failed to set webhook: {}",
+                error_text
             )));
         }
 
@@ -276,10 +280,7 @@ impl TelegramApiClient {
     pub async fn delete_webhook(&self) -> Result<(), ChannelError> {
         let url = format!("{}/deleteWebhook", self.base_url);
 
-        self.client
-            .get(&url)
-            .send()
-            .await?;
+        self.client.get(&url).send().await?;
 
         info!("[Telegram] Webhook deleted");
         Ok(())
@@ -332,7 +333,7 @@ mod tests {
         let long_text = "a".repeat(5000);
         let chunks = split_message(&long_text, 4096);
         assert!(chunks.len() > 1);
-        
+
         // 测试在换行处分割
         let text_with_newlines = "Line1\nLine2\nLine3";
         let chunks = split_message(text_with_newlines, 10);

@@ -99,10 +99,7 @@ impl EventHandler {
             }
         });
 
-        Self {
-            rx,
-            tx: tx_clone,
-        }
+        Self { rx, tx: tx_clone }
     }
 
     /// 获取事件发送器
@@ -125,7 +122,6 @@ impl Default for EventHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[tokio::test]
     async fn test_event_handler_sender() {

@@ -87,10 +87,18 @@ impl fmt::Display for CompileStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CompileStatus::Success { fingerprint } => {
-                write!(f, "Success(fingerprint={})", &fingerprint[..8.min(fingerprint.len())])
+                write!(
+                    f,
+                    "Success(fingerprint={})",
+                    &fingerprint[..8.min(fingerprint.len())]
+                )
             }
             CompileStatus::Skipped { fingerprint } => {
-                write!(f, "Skipped(fingerprint={})", &fingerprint[..8.min(fingerprint.len())])
+                write!(
+                    f,
+                    "Skipped(fingerprint={})",
+                    &fingerprint[..8.min(fingerprint.len())]
+                )
             }
             CompileStatus::Failed { error } => write!(f, "Failed(error={})", error),
         }

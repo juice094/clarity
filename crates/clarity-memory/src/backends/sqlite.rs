@@ -20,17 +20,23 @@ impl SqliteStore {
         let db_path_str = db_path.to_string_lossy().to_string();
         let conn = tokio::task::spawn_blocking(move || {
             Connection::open(&db_path).map_err(MemoryError::Database)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
 
         info!("Initializing SqliteStore at {}", db_path_str);
-        let store = Self { conn: Arc::new(Mutex::new(conn)) };
+        let store = Self {
+            conn: Arc::new(Mutex::new(conn)),
+        };
         store.init_schema()?;
         Ok(store)
     }
 
     pub fn new_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory().map_err(MemoryError::Database)?;
-        let store = Self { conn: Arc::new(Mutex::new(conn)) };
+        let store = Self {
+            conn: Arc::new(Mutex::new(conn)),
+        };
         store.init_schema()?;
         Ok(store)
     }
@@ -53,36 +59,47 @@ impl SqliteStore {
                 time TEXT,
                 session_id TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )", [],
+            )",
+            [],
         )?;
 
         conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
                 fact, content='facts', content_rowid='id'
-            )", [],
+            )",
+            [],
         )?;
 
         conn.execute(
             "CREATE TRIGGER IF NOT EXISTS facts_fts_insert AFTER INSERT ON facts BEGIN
                 INSERT INTO facts_fts(rowid, fact) VALUES (new.id, new.fact);
-            END", [],
+            END",
+            [],
         )?;
 
         conn.execute(
             "CREATE TRIGGER IF NOT EXISTS facts_fts_delete AFTER DELETE ON facts BEGIN
                 INSERT INTO facts_fts(facts_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
-            END", [],
+            END",
+            [],
         )?;
 
         conn.execute(
             "CREATE TRIGGER IF NOT EXISTS facts_fts_update AFTER UPDATE ON facts BEGIN
                 INSERT INTO facts_fts(facts_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
                 INSERT INTO facts_fts(rowid, fact) VALUES (new.id, new.fact);
-            END", [],
+            END",
+            [],
         )?;
 
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_session ON facts(session_id)", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_created ON facts(created_at)", [])?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_facts_session ON facts(session_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_facts_created ON facts(created_at)",
+            [],
+        )?;
 
         debug!("Schema initialization complete");
         Ok(())
@@ -90,8 +107,9 @@ impl SqliteStore {
 
     fn row_to_fact(row: &rusqlite::Row) -> rusqlite::Result<Fact> {
         let tags_json: String = row.get(2)?;
-        let tags: Vec<String> = serde_json::from_str(&tags_json)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e)))?;
+        let tags: Vec<String> = serde_json::from_str(&tags_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+        })?;
         Ok(Fact {
             id: row.get(0)?,
             fact: row.get(1)?,
@@ -99,7 +117,13 @@ impl SqliteStore {
             time: row.get(3)?,
             session_id: row.get(4)?,
             created_at: DateTime::parse_from_rfc3339(&row.get::<_, String>(5)?)
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?
                 .with_timezone(&Utc),
         })
     }
@@ -107,7 +131,13 @@ impl SqliteStore {
 
 #[async_trait]
 impl StorageBackend for SqliteStore {
-    async fn save_fact(&self, fact: &str, tags: &[String], time: Option<&str>, session_id: Option<&str>) -> Result<i64> {
+    async fn save_fact(
+        &self,
+        fact: &str,
+        tags: &[String],
+        time: Option<&str>,
+        session_id: Option<&str>,
+    ) -> Result<i64> {
         let tags_json = serde_json::to_string(tags)?;
         let now = Utc::now().to_rfc3339();
         let fact = fact.to_string();
@@ -132,12 +162,17 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
-            let result = conn.query_row(
-                "SELECT id, fact, tags, time, session_id, created_at FROM facts WHERE id = ?",
-                [id], Self::row_to_fact,
-            ).optional()?;
+            let result = conn
+                .query_row(
+                    "SELECT id, fact, tags, time, session_id, created_at FROM facts WHERE id = ?",
+                    [id],
+                    Self::row_to_fact,
+                )
+                .optional()?;
             Ok::<_, MemoryError>(result)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn delete_fact(&self, id: i64) -> Result<bool> {
@@ -146,14 +181,18 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let rows = conn.execute("DELETE FROM facts WHERE id = ?", [id])?;
             Ok::<_, MemoryError>(rows > 0)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn search_by_tags(&self, tags: &[String], limit: usize) -> Result<Vec<Fact>> {
-        if tags.is_empty() { return Ok(Vec::new()); }
+        if tags.is_empty() {
+            return Ok(Vec::new());
+        }
         let tags = tags.to_vec();
         let conn = self.conn.clone();
-        
+
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
             let mut stmt = conn.prepare("SELECT id, fact, tags, time, session_id, created_at FROM facts ORDER BY created_at DESC LIMIT ?")?;
@@ -180,14 +219,18 @@ impl StorageBackend for SqliteStore {
             let mut stmt = conn.prepare(
                 "SELECT f.id, f.fact, f.tags, f.time, f.session_id, f.created_at 
                  FROM facts f JOIN facts_fts fts ON f.id = fts.rowid
-                 WHERE facts_fts MATCH ? ORDER BY rank LIMIT ?"
+                 WHERE facts_fts MATCH ? ORDER BY rank LIMIT ?",
             )?;
             let rows = stmt.query_map(params![query, limit as i64], Self::row_to_fact)?;
 
             let mut facts = Vec::new();
-            for row in rows { facts.push(row?); }
+            for row in rows {
+                facts.push(row?);
+            }
             Ok::<_, MemoryError>(facts)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
@@ -198,14 +241,18 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
-                 WHERE session_id = ? ORDER BY created_at DESC LIMIT ?"
+                 WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
             )?;
             let rows = stmt.query_map(params![session_id, limit as i64], Self::row_to_fact)?;
 
             let mut facts = Vec::new();
-            for row in rows { facts.push(row?); }
+            for row in rows {
+                facts.push(row?);
+            }
             Ok::<_, MemoryError>(facts)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn get_facts_since(&self, since: DateTime<Utc>) -> Result<Vec<Fact>> {
@@ -216,14 +263,18 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
-                 WHERE created_at > ? ORDER BY created_at DESC"
+                 WHERE created_at > ? ORDER BY created_at DESC",
             )?;
             let rows = stmt.query_map([&since_str], Self::row_to_fact)?;
 
             let mut facts = Vec::new();
-            for row in rows { facts.push(row?); }
+            for row in rows {
+                facts.push(row?);
+            }
             Ok::<_, MemoryError>(facts)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn get_recent_facts(&self, limit: usize) -> Result<Vec<Fact>> {
@@ -233,14 +284,18 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
-                 ORDER BY created_at DESC LIMIT ?"
+                 ORDER BY created_at DESC LIMIT ?",
             )?;
             let rows = stmt.query_map([limit as i64], Self::row_to_fact)?;
 
             let mut facts = Vec::new();
-            for row in rows { facts.push(row?); }
+            for row in rows {
+                facts.push(row?);
+            }
             Ok::<_, MemoryError>(facts)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn count_facts(&self) -> Result<i64> {
@@ -250,7 +305,9 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let count: i64 = conn.query_row("SELECT COUNT(*) FROM facts", [], |row| row.get(0))?;
             Ok::<_, MemoryError>(count)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
     async fn search_similar(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
@@ -259,28 +316,34 @@ impl StorageBackend for SqliteStore {
 
         let facts = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
-            let mut stmt = conn.prepare(
-                "SELECT id, fact, tags, time, session_id, created_at FROM facts"
-            )?;
+            let mut stmt =
+                conn.prepare("SELECT id, fact, tags, time, session_id, created_at FROM facts")?;
             let rows = stmt.query_map([], Self::row_to_fact)?;
             let mut facts = Vec::new();
-            for row in rows { facts.push(row?); }
+            for row in rows {
+                facts.push(row?);
+            }
             Ok::<_, MemoryError>(facts)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
 
         if facts.is_empty() {
             return Ok(Vec::new());
         }
 
-        let fact_tuples: Vec<(i64, String)> = facts.iter().map(|f| (f.id, f.fact.clone())).collect();
+        let fact_tuples: Vec<(i64, String)> =
+            facts.iter().map(|f| (f.id, f.fact.clone())).collect();
         let mut vector_store = crate::embedding::VectorStore::new();
         vector_store.index_facts(&fact_tuples);
         let results = vector_store.search(&query, limit);
 
-        let fact_map: std::collections::HashMap<i64, Fact> = facts.into_iter().map(|f| (f.id, f)).collect();
-        Ok(results.into_iter().filter_map(|(id, _, score)| {
-            fact_map.get(&id).cloned().map(|f| (f, score))
-        }).collect())
+        let fact_map: std::collections::HashMap<i64, Fact> =
+            facts.into_iter().map(|f| (f.id, f)).collect();
+        Ok(results
+            .into_iter()
+            .filter_map(|(id, _, score)| fact_map.get(&id).cloned().map(|f| (f, score)))
+            .collect())
     }
 
     async fn clear_all(&self) -> Result<usize> {
@@ -290,13 +353,26 @@ impl StorageBackend for SqliteStore {
             let conn = conn.lock().unwrap();
             let rows = conn.execute("DELETE FROM facts", [])?;
             Ok::<_, MemoryError>(rows)
-        }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
-    async fn bulk_save_facts(&self, facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)]) -> Result<Vec<i64>> {
-        let facts: Vec<_> = facts.iter().map(|(f, t, time, sid)| {
-            (f.to_string(), t.clone(), time.map(|s| s.to_string()), sid.map(|s| s.to_string()))
-        }).collect();
+    async fn bulk_save_facts(
+        &self,
+        facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)],
+    ) -> Result<Vec<i64>> {
+        let facts: Vec<_> = facts
+            .iter()
+            .map(|(f, t, time, sid)| {
+                (
+                    f.to_string(),
+                    t.clone(),
+                    time.map(|s| s.to_string()),
+                    sid.map(|s| s.to_string()),
+                )
+            })
+            .collect();
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {

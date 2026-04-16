@@ -115,8 +115,14 @@ impl ExecutionTracer {
         let steps = self.steps.read().await;
         let total_duration = self.start_time.elapsed();
 
-        let llm_requests = steps.iter().filter(|s| s.step_type == StepType::LlmRequest).count();
-        let tool_executions = steps.iter().filter(|s| s.step_type == StepType::ToolExecution).count();
+        let llm_requests = steps
+            .iter()
+            .filter(|s| s.step_type == StepType::LlmRequest)
+            .count();
+        let tool_executions = steps
+            .iter()
+            .filter(|s| s.step_type == StepType::ToolExecution)
+            .count();
         let errors = steps.iter().filter(|s| s.error.is_some()).count();
 
         let total_tokens: u32 = steps
@@ -263,7 +269,7 @@ impl ErrorRecovery {
         let exponential = self.config.retry_base_delay_ms as f64
             * self.config.retry_backoff_multiplier.powi(attempt as i32);
         let delay_ms = exponential.min(self.config.retry_max_delay_ms as f64) as u64;
-        
+
         // Add jitter (±25%)
         let jitter = 0.75 + rand::random::<f64>() * 0.5;
         Duration::from_millis((delay_ms as f64 * jitter) as u64)
@@ -425,7 +431,6 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn test_execution_step_creation() {
@@ -461,15 +466,17 @@ mod tests {
     #[tokio::test]
     async fn test_tracer() {
         let tracer = ExecutionTracer::new();
-        
-        tracer.record_step(
-            1,
-            StepType::LlmRequest,
-            "input",
-            "output",
-            Duration::from_millis(100),
-            None,
-        ).await;
+
+        tracer
+            .record_step(
+                1,
+                StepType::LlmRequest,
+                "input",
+                "output",
+                Duration::from_millis(100),
+                None,
+            )
+            .await;
 
         let steps = tracer.get_steps().await;
         assert_eq!(steps.len(), 1);

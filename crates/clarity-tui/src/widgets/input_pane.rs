@@ -8,7 +8,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 /// 输入框组件
-/// 
+///
 /// cursor_position 是按字符计数的位置（Unicode scalar value）
 /// 所有字符串操作都需要先将字符位置转换为字节索引
 pub struct InputPane {
@@ -161,7 +161,12 @@ impl Widget for &InputPane {
         let cursor_pos_in_line = prompt.width() + text_before_cursor.width();
 
         let line = Line::from(vec![
-            Span::styled(prompt, Style::default().fg(Color::Rgb(80, 140, 220)).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                prompt,
+                Style::default()
+                    .fg(Color::Rgb(80, 140, 220))
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(&self.input, Style::default().fg(Color::Rgb(230, 230, 250))),
         ]);
 
@@ -169,11 +174,15 @@ impl Widget for &InputPane {
         paragraph.render(inner_area, buf);
 
         if inner_area.width > 0 && inner_area.height > 0 {
-            let cursor_x = inner_area.left() + (cursor_pos_in_line as u16).min(inner_area.width.saturating_sub(1));
+            let cursor_x = inner_area.left()
+                + (cursor_pos_in_line as u16).min(inner_area.width.saturating_sub(1));
             let cursor_y = inner_area.top();
             buf.set_style(
                 Rect::new(cursor_x, cursor_y, 1, 1),
-                Style::default().bg(Color::Rgb(80, 140, 220)).fg(Color::Rgb(20, 20, 30)).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .bg(Color::Rgb(80, 140, 220))
+                    .fg(Color::Rgb(20, 20, 30))
+                    .add_modifier(Modifier::BOLD),
             );
         }
     }

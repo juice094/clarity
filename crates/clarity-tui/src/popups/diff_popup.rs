@@ -27,7 +27,6 @@ impl DiffPopup {
             confirmed: false,
         }
     }
-
 }
 
 impl Popup for DiffPopup {
@@ -86,7 +85,11 @@ impl Popup for DiffPopup {
         let max_scroll = total.saturating_sub(visible_height);
         let scroll = self.scroll_offset.min(max_scroll);
 
-        let visible_lines: Vec<Line> = lines.into_iter().skip(scroll).take(visible_height).collect();
+        let visible_lines: Vec<Line> = lines
+            .into_iter()
+            .skip(scroll)
+            .take(visible_height)
+            .collect();
         let paragraph = Paragraph::new(Text::from(visible_lines)).wrap(Wrap { trim: false });
         frame.render_widget(paragraph, inner);
     }
@@ -146,25 +149,33 @@ mod tests {
         let mut popup = DiffPopup::new("test.txt", hunks);
         assert_eq!(popup.scroll_offset, 0);
 
-        let action =
-            popup.handle_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::empty())));
+        let action = popup.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Down,
+            KeyModifiers::empty(),
+        )));
         assert!(matches!(action, EventState::Consumed));
         assert_eq!(popup.scroll_offset, 1);
 
-        let action =
-            popup.handle_event(Event::Key(KeyEvent::new(KeyCode::Up, KeyModifiers::empty())));
+        let action = popup.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Up,
+            KeyModifiers::empty(),
+        )));
         assert!(matches!(action, EventState::Consumed));
         assert_eq!(popup.scroll_offset, 0);
 
-        let action =
-            popup.handle_event(Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())));
+        let action = popup.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        )));
         assert!(matches!(action, EventState::Consumed));
         assert!(popup.is_done());
         assert!(popup.confirmed);
 
         let mut popup2 = DiffPopup::new("test.txt", vec![]);
-        let action =
-            popup2.handle_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())));
+        let action = popup2.handle_event(Event::Key(KeyEvent::new(
+            KeyCode::Esc,
+            KeyModifiers::empty(),
+        )));
         assert!(matches!(action, EventState::Consumed));
         assert!(popup2.is_done());
         assert!(!popup2.confirmed);

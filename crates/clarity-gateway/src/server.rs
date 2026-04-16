@@ -61,7 +61,10 @@ pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
     let admin_addr: SocketAddr = "127.0.0.1:18800".parse()?;
 
     info!("📡 API Server listening on http://{}", api_addr);
-    info!("🎛️  Admin UI listening on http://{} (localhost only)", admin_addr);
+    info!(
+        "🎛️  Admin UI listening on http://{} (localhost only)",
+        admin_addr
+    );
     if std::env::var("CLARITY_ADMIN_TOKEN").is_ok() {
         info!("🔒 Admin authentication enabled via CLARITY_ADMIN_TOKEN");
     } else {
@@ -104,11 +107,7 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "http://127.0.0.1:18800".parse::<HeaderValue>().unwrap(),
         ])
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([
-            header::CONTENT_TYPE,
-            header::AUTHORIZATION,
-            header::ACCEPT,
-        ]);
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
 
     Router::new()
         .route("/health", get(handlers::health_check))

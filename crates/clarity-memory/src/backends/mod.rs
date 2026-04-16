@@ -76,7 +76,10 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
     }
 
     /// Bulk save facts for better performance
-    async fn bulk_save_facts(&self, facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)]) -> Result<Vec<i64>> {
+    async fn bulk_save_facts(
+        &self,
+        facts: &[(&str, Vec<String>, Option<&str>, Option<&str>)],
+    ) -> Result<Vec<i64>> {
         let mut ids = Vec::new();
         for (fact, tags, time, session_id) in facts {
             let id = self.save_fact(fact, tags, *time, *session_id).await?;
@@ -155,10 +158,10 @@ impl StorageFactory {
                 }
                 Ok(Box::new(store))
             }
-            BackendConfig::Hybrid { 
-                cache_size, 
-                cold_dir, 
-                sync_interval_secs 
+            BackendConfig::Hybrid {
+                cache_size,
+                cold_dir,
+                sync_interval_secs,
             } => {
                 let store = HybridStore::new(cache_size, cold_dir, sync_interval_secs).await?;
                 Ok(Box::new(store))
@@ -175,7 +178,12 @@ mod tests {
     /// Test helper to verify backend behavior
     pub async fn test_backend_basic<B: StorageBackend>(backend: &B) -> Result<()> {
         let id = backend
-            .save_fact("Test fact", &["tag1".to_string(), "tag2".to_string()], None, Some("session-1"))
+            .save_fact(
+                "Test fact",
+                &["tag1".to_string(), "tag2".to_string()],
+                None,
+                Some("session-1"),
+            )
             .await?;
         assert!(id > 0);
 
@@ -189,7 +197,9 @@ mod tests {
         let results = backend.search_by_tags(&["tag1".to_string()], 10).await?;
         assert_eq!(results.len(), 1);
 
-        let results = backend.search_by_tags(&["tag1".to_string(), "tag2".to_string()], 10).await?;
+        let results = backend
+            .search_by_tags(&["tag1".to_string(), "tag2".to_string()], 10)
+            .await?;
         assert_eq!(results.len(), 1);
 
         assert!(backend.delete_fact(id).await?);
@@ -200,9 +210,30 @@ mod tests {
 
     /// Test helper for search operations
     pub async fn test_backend_search<B: StorageBackend>(backend: &B) -> Result<()> {
-        backend.save_fact("Rust programming language", &["tech".to_string(), "rust".to_string()], None, None).await?;
-        backend.save_fact("Python for data science", &["tech".to_string(), "python".to_string()], None, None).await?;
-        backend.save_fact("Machine learning basics", &["ai".to_string(), "ml".to_string()], None, None).await?;
+        backend
+            .save_fact(
+                "Rust programming language",
+                &["tech".to_string(), "rust".to_string()],
+                None,
+                None,
+            )
+            .await?;
+        backend
+            .save_fact(
+                "Python for data science",
+                &["tech".to_string(), "python".to_string()],
+                None,
+                None,
+            )
+            .await?;
+        backend
+            .save_fact(
+                "Machine learning basics",
+                &["ai".to_string(), "ml".to_string()],
+                None,
+                None,
+            )
+            .await?;
 
         let results = backend.search_fulltext("Rust", 10).await?;
         assert_eq!(results.len(), 1);

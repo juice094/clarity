@@ -105,7 +105,7 @@ impl FileReadTool {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Read a file with optional offset and limit
     async fn read_file(
         &self,
@@ -129,24 +129,24 @@ impl FileReadTool {
                 ToolError::from_io(e)
             }
         })?;
-        
+
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();
-        
+
         if total_lines == 0 {
             return Ok(String::new());
         }
-        
+
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(total_lines);
-        
+
         if offset >= total_lines {
             return Ok(String::new());
         }
-        
+
         let end = (offset + limit).min(total_lines);
         let selected = &lines[offset..end];
-        
+
         Ok(selected.join("\n"))
     }
 }
@@ -162,12 +162,12 @@ impl Tool for FileReadTool {
     fn name(&self) -> &str {
         "file_read"
     }
-    
+
     fn description(&self) -> &str {
         "Read the contents of a file. Supports optional line offset and limit for large files. \
          Returns the file content as text."
     }
-    
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -191,32 +191,44 @@ impl Tool for FileReadTool {
             "required": ["path"]
         })
     }
-    
+
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         let path_str = helpers::required_str(&args, "path")?;
         let path = helpers::resolve_path(&ctx, path_str);
-        
-        let offset = args.get("offset").and_then(|v| v.as_u64()).map(|v| v as usize);
-        let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
-        
-        debug!("Reading file: {:?}, offset={:?}, limit={:?}", path, offset, limit);
-        
+
+        let offset = args
+            .get("offset")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
+
+        debug!(
+            "Reading file: {:?}, offset={:?}, limit={:?}",
+            path, offset, limit
+        );
+
         let is_sensitive = is_sensitive_file(&path);
         let content = self.read_file(&path, offset, limit).await?;
-        
+
         let mut result = json!({
             "path": path.display().to_string(),
             "content": content,
             "size": content.len()
         });
-        
+
         if is_sensitive && ctx.approval_mode == ApprovalMode::Yolo {
             tracing::warn!("Sensitive file read in YOLO mode: {:?}", path);
             if let Some(obj) = result.as_object_mut() {
-                obj.insert("sensitive_file_warning".to_string(), json!(format!("Accessed sensitive file: {}", path.display())));
+                obj.insert(
+                    "sensitive_file_warning".to_string(),
+                    json!(format!("Accessed sensitive file: {}", path.display())),
+                );
             }
         }
-        
+
         Ok(result)
     }
 }
@@ -245,12 +257,12 @@ impl Tool for FileWriteTool {
     fn name(&self) -> &str {
         "file_write"
     }
-    
+
     fn description(&self) -> &str {
         "Write content to a file. Creates the file if it doesn't exist, \
          overwrites if it does. Creates parent directories as needed."
     }
-    
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -267,44 +279,49 @@ impl Tool for FileWriteTool {
             "required": ["path", "content"]
         })
     }
-    
+
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         if ctx.read_only {
             return Err(ToolError::PermissionDenied(
-                "Cannot write files in read-only mode".to_string()
+                "Cannot write files in read-only mode".to_string(),
             ));
         }
-        
+
         let path_str = helpers::required_str(&args, "path")?;
         let content = helpers::required_str(&args, "content")?;
         let path = helpers::resolve_path(&ctx, path_str);
-        
+
         let is_sensitive = is_sensitive_file(&path);
-        
+
         debug!("Writing file: {:?}", path);
-        
+
         // Create parent directories if needed
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await.map_err(ToolError::from_io)?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(ToolError::from_io)?;
         }
-        
-        fs::write(&path, content).await.map_err(|e| {
-            ToolError::execution_failed(format!("Failed to write file: {}", e))
-        })?;
-        
+
+        fs::write(&path, content)
+            .await
+            .map_err(|e| ToolError::execution_failed(format!("Failed to write file: {}", e)))?;
+
         let mut result = json!({
             "path": path.display().to_string(),
             "bytes_written": content.len(),
             "success": true
         });
-        
+
         if is_sensitive && ctx.approval_mode == ApprovalMode::Yolo {
             tracing::warn!("Sensitive file write in YOLO mode: {:?}", path);
             if let Some(obj) = result.as_object_mut() {
-                obj.insert("sensitive_file_warning".to_string(), json!(format!("Wrote sensitive file: {}", path.display())));
+                obj.insert(
+                    "sensitive_file_warning".to_string(),
+                    json!(format!("Wrote sensitive file: {}", path.display())),
+                );
             }
         }
-        
+
         Ok(result)
     }
 }
@@ -333,12 +350,12 @@ impl Tool for FileEditTool {
     fn name(&self) -> &str {
         "file_edit"
     }
-    
+
     fn description(&self) -> &str {
         "Edit a file by replacing text. Performs string replacements in the file. \
          Supports multiple replacements. Returns the number of replacements made."
     }
-    
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -364,25 +381,25 @@ impl Tool for FileEditTool {
             "required": ["path", "old_string", "new_string"]
         })
     }
-    
+
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         if ctx.read_only {
             return Err(ToolError::PermissionDenied(
-                "Cannot edit files in read-only mode".to_string()
+                "Cannot edit files in read-only mode".to_string(),
             ));
         }
-        
+
         let path_str = helpers::required_str(&args, "path")?;
         let old_string = helpers::required_str(&args, "old_string")?;
         let new_string = helpers::required_str(&args, "new_string")?;
         let replace_all = helpers::optional_bool(&args, "replace_all", false);
-        
+
         let path = helpers::resolve_path(&ctx, path_str);
-        
+
         let is_sensitive = is_sensitive_file(&path);
-        
+
         debug!("Editing file: {:?}", path);
-        
+
         // Read existing content
         let content = fs::read_to_string(&path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -391,52 +408,65 @@ impl Tool for FileEditTool {
                 ToolError::from_io(e)
             }
         })?;
-        
+
         // Perform replacement
         let new_content = if replace_all {
             content.replace(old_string, new_string)
         } else {
             content.replacen(old_string, new_string, 1)
         };
-        
+
         let count = if replace_all {
             content.matches(old_string).count()
         } else {
-            if content.contains(old_string) { 1 } else { 0 }
+            if content.contains(old_string) {
+                1
+            } else {
+                0
+            }
         };
-        
+
         if count == 0 {
             warn!("Pattern '{}' not found in file {:?}", old_string, path);
-            return Err(ToolError::execution_failed(
-                format!("Pattern '{}' not found in file", old_string)
-            ));
+            return Err(ToolError::execution_failed(format!(
+                "Pattern '{}' not found in file",
+                old_string
+            )));
         }
-        
+
         // Write back
-        fs::write(&path, &new_content).await.map_err(ToolError::from_io)?;
-        
+        fs::write(&path, &new_content)
+            .await
+            .map_err(ToolError::from_io)?;
+
         let mut result = json!({
             "path": path.display().to_string(),
             "replacements": count,
             "success": true
         });
-        
+
         if ctx.approval_mode != ApprovalMode::Yolo {
             if let Some(obj) = result.as_object_mut() {
-                obj.insert("_diff_preview".to_string(), json!({
-                    "old": content,
-                    "new": new_content
-                }));
+                obj.insert(
+                    "_diff_preview".to_string(),
+                    json!({
+                        "old": content,
+                        "new": new_content
+                    }),
+                );
             }
         }
-        
+
         if is_sensitive && ctx.approval_mode == ApprovalMode::Yolo {
             tracing::warn!("Sensitive file edit in YOLO mode: {:?}", path);
             if let Some(obj) = result.as_object_mut() {
-                obj.insert("sensitive_file_warning".to_string(), json!(format!("Edited sensitive file: {}", path.display())));
+                obj.insert(
+                    "sensitive_file_warning".to_string(),
+                    json!(format!("Edited sensitive file: {}", path.display())),
+                );
             }
         }
-        
+
         Ok(result)
     }
 }
@@ -446,69 +476,71 @@ mod tests {
     use super::*;
     use crate::approval::ApprovalMode;
     use tempfile::TempDir;
-    
+
     #[tokio::test]
     async fn test_file_read() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.txt");
         fs::write(&file_path, "Hello\nWorld\n!").await.unwrap();
-        
+
         let tool = FileReadTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
-        
+
         // Test full read
         let args = json!({"path": "test.txt"});
         let result = tool.execute(args, ctx.clone()).await.unwrap();
         assert_eq!(result["content"], "Hello\nWorld\n!");
-        
+
         // Test with offset
         let args = json!({"path": "test.txt", "offset": 1});
         let result = tool.execute(args, ctx.clone()).await.unwrap();
         assert_eq!(result["content"], "World\n!");
-        
+
         // Test with limit
         let args = json!({"path": "test.txt", "limit": 1});
         let result = tool.execute(args, ctx.clone()).await.unwrap();
         assert_eq!(result["content"], "Hello");
     }
-    
+
     #[tokio::test]
     async fn test_file_write() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let tool = FileWriteTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
-        
+
         let args = json!({
             "path": "output.txt",
             "content": "Test content"
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         assert!(result["success"].as_bool().unwrap());
-        
-        let content = fs::read_to_string(temp_dir.path().join("output.txt")).await.unwrap();
+
+        let content = fs::read_to_string(temp_dir.path().join("output.txt"))
+            .await
+            .unwrap();
         assert_eq!(content, "Test content");
     }
-    
+
     #[tokio::test]
     async fn test_file_edit() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("edit.txt");
         fs::write(&file_path, "Hello World").await.unwrap();
-        
+
         let tool = FileEditTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
-        
+
         let args = json!({
             "path": "edit.txt",
             "old_string": "World",
             "new_string": "Rust"
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["replacements"], 1);
-        
+
         let content = fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(content, "Hello Rust");
     }
@@ -519,7 +551,9 @@ mod tests {
         assert!(is_sensitive_file(Path::new(".env.local")));
         assert!(is_sensitive_file(Path::new("/home/user/.ssh/id_rsa")));
         assert!(is_sensitive_file(Path::new("/home/user/.ssh/known_hosts")));
-        assert!(is_sensitive_file(Path::new("C:\\Users\\user\\.aws\\credentials")));
+        assert!(is_sensitive_file(Path::new(
+            "C:\\Users\\user\\.aws\\credentials"
+        )));
         assert!(is_sensitive_file(Path::new("/root/.aws/config")));
         assert!(is_sensitive_file(Path::new("server.pem")));
         assert!(is_sensitive_file(Path::new("tls.key")));
@@ -532,8 +566,13 @@ mod tests {
     async fn test_sniff_png() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("image.png");
-        fs::write(&file_path, &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00]).await.unwrap();
-        
+        fs::write(
+            &file_path,
+            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00],
+        )
+        .await
+        .unwrap();
+
         let tool = FileReadTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
         let args = json!({"path": "image.png"});
@@ -548,7 +587,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("doc.pdf");
         fs::write(&file_path, b"%PDF-1.4 some data").await.unwrap();
-        
+
         let tool = FileReadTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
         let args = json!({"path": "doc.pdf"});
@@ -563,7 +602,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("tiny.txt");
         fs::write(&file_path, "hi").await.unwrap();
-        
+
         let tool = FileReadTool::new();
         let ctx = ToolContext::new().with_working_dir(temp_dir.path());
         let args = json!({"path": "tiny.txt"});
@@ -576,16 +615,19 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join(".env");
         fs::write(&file_path, "SECRET=1").await.unwrap();
-        
+
         let tool = FileReadTool::new();
         let ctx = ToolContext::new()
             .with_working_dir(temp_dir.path())
             .with_approval_mode(ApprovalMode::Yolo);
-        
+
         let args = json!({"path": ".env"});
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["content"], "SECRET=1");
-        assert!(result["sensitive_file_warning"].as_str().unwrap().contains(".env"));
+        assert!(result["sensitive_file_warning"]
+            .as_str()
+            .unwrap()
+            .contains(".env"));
     }
 
     #[tokio::test]
@@ -593,18 +635,18 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("edit.txt");
         fs::write(&file_path, "Hello World").await.unwrap();
-        
+
         let tool = FileEditTool::new();
         let ctx = ToolContext::new()
             .with_working_dir(temp_dir.path())
             .with_approval_mode(ApprovalMode::Interactive);
-        
+
         let args = json!({
             "path": "edit.txt",
             "old_string": "World",
             "new_string": "Rust"
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["replacements"], 1);
         assert!(result.get("_diff_preview").is_some());
@@ -617,18 +659,18 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("edit.txt");
         fs::write(&file_path, "Hello World").await.unwrap();
-        
+
         let tool = FileEditTool::new();
         let ctx = ToolContext::new()
             .with_working_dir(temp_dir.path())
             .with_approval_mode(ApprovalMode::Yolo);
-        
+
         let args = json!({
             "path": "edit.txt",
             "old_string": "World",
             "new_string": "Rust"
         });
-        
+
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["replacements"], 1);
         assert!(result.get("_diff_preview").is_none());

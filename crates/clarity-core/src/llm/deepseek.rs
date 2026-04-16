@@ -35,11 +35,10 @@ impl DeepSeekProvider {
         let api_key = env::var("DEEPSEEK_API_KEY")
             .map_err(|_| AgentError::Llm("DEEPSEEK_API_KEY not set".into()))?;
 
-        let base_url = env::var("DEEPSEEK_BASE_URL")
-            .unwrap_or_else(|_| "https://api.deepseek.com/v1".into());
+        let base_url =
+            env::var("DEEPSEEK_BASE_URL").unwrap_or_else(|_| "https://api.deepseek.com/v1".into());
 
-        let model = env::var("DEEPSEEK_MODEL")
-            .unwrap_or_else(|_| "deepseek-chat".into());
+        let model = env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-chat".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -84,7 +83,8 @@ impl LlmProvider for DeepSeekProvider {
         &self,
         messages: &[Message],
         tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError> {
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError>
+    {
         self.inner.stream(messages, tools)
     }
 

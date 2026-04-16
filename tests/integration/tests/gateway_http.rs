@@ -2,11 +2,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::routing::{get, post};
 use axum::Router;
-use clarity_gateway::{
-    handlers,
-    server::AppState,
-    ws::ws_handler,
-};
+use clarity_gateway::{handlers, server::AppState, ws::ws_handler};
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -115,7 +111,9 @@ async fn test_gateway_websocket_wire_forwarding() {
     use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
     let registry = ToolRegistry::with_builtin_tools();
-    let config = AgentConfig::new().with_max_iterations(5).with_read_only(false);
+    let config = AgentConfig::new()
+        .with_max_iterations(5)
+        .with_read_only(false);
     let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
     let state = Arc::new(clarity_gateway::server::AppState::new(agent));
     let app = create_api_router(state);
@@ -190,7 +188,9 @@ async fn test_tui_wire_to_gateway_websocket() {
     use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
     let registry = ToolRegistry::with_builtin_tools();
-    let config = AgentConfig::new().with_max_iterations(5).with_read_only(false);
+    let config = AgentConfig::new()
+        .with_max_iterations(5)
+        .with_read_only(false);
     let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
     let state = Arc::new(clarity_gateway::server::AppState::new(agent));
     let app = create_api_router(state);

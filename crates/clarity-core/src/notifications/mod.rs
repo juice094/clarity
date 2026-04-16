@@ -106,14 +106,10 @@ pub fn task_status_notification(
 ) -> Notification {
     let task_id = task_id.into();
     let status = status.into();
-    
+
     match status.as_str() {
-        "pending" => Notification::TaskStarted {
-            task_id,
-        },
-        "running" => Notification::TaskStarted {
-            task_id,
-        },
+        "pending" => Notification::TaskStarted { task_id },
+        "running" => Notification::TaskStarted { task_id },
         "completed" => Notification::TaskCompleted {
             task_id,
             result: "Task completed successfully".to_string(),

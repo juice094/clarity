@@ -14,7 +14,9 @@ async fn test_memory_persistence_through_core() {
 
     // First agent + store instance
     let store = Arc::new(
-        PersistentMemoryStore::new(&db_path).await.expect("Failed to create PersistentMemoryStore"),
+        PersistentMemoryStore::new(&db_path)
+            .await
+            .expect("Failed to create PersistentMemoryStore"),
     );
 
     let registry = ToolRegistry::with_builtin_tools();
@@ -38,7 +40,9 @@ async fn test_memory_persistence_through_core() {
     drop(agent);
 
     // Re-create a new store pointing at the same file
-    let store2 = PersistentMemoryStore::new(&db_path).await.expect("Failed to reopen PersistentMemoryStore");
+    let store2 = PersistentMemoryStore::new(&db_path)
+        .await
+        .expect("Failed to reopen PersistentMemoryStore");
 
     // Verify the directly saved fact is retrievable
     let all = store2.get_all().await.expect("get_all failed");
@@ -49,7 +53,10 @@ async fn test_memory_persistence_through_core() {
     );
 
     // Verify search works across the persisted data
-    let search = store2.search("Persist this thought", 10).await.expect("search failed");
+    let search = store2
+        .search("Persist this thought", 10)
+        .await
+        .expect("search failed");
     assert!(
         !search.is_empty(),
         "Expected to find the conversation memory after reopening"

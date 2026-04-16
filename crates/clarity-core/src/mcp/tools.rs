@@ -82,11 +82,14 @@ pub async fn register_mcp_tools(
         let tools = client.read().await.list_tools().await?;
         for tool in tools {
             let name = format!("{}_{}", server_name, tool.name);
-            let wrapper = McpToolWrapper::new(client.clone(), McpTool {
-                name,
-                description: tool.description,
-                input_schema: tool.input_schema,
-            });
+            let wrapper = McpToolWrapper::new(
+                client.clone(),
+                McpTool {
+                    name,
+                    description: tool.description,
+                    input_schema: tool.input_schema,
+                },
+            );
             tool_registry
                 .register(wrapper)
                 .map_err(|e| McpError::RpcError(e.to_string()))?;
@@ -104,7 +107,11 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_filesystem_tool_e2e() {
         // Skip if npx is unavailable (CI environments without Node.js).
-        if std::process::Command::new("npx").arg("--version").output().is_err() {
+        if std::process::Command::new("npx")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             eprintln!("Skipping MCP filesystem test: npx not available");
             return;
         }
@@ -122,7 +129,10 @@ mod tests {
             .arg("@modelcontextprotocol/server-filesystem")
             .arg(server_path)
             .build();
-        client.connect().await.expect("Failed to connect to MCP filesystem server");
+        client
+            .connect()
+            .await
+            .expect("Failed to connect to MCP filesystem server");
 
         // Verify tool listing works
         let tools = client.list_tools().await.expect("Failed to list tools");
@@ -135,7 +145,10 @@ mod tests {
 
         // Call read_file directly via MCP client
         let result = client
-            .call_tool("read_file", serde_json::json!({ "path": file_path.to_str().unwrap() }))
+            .call_tool(
+                "read_file",
+                serde_json::json!({ "path": file_path.to_str().unwrap() }),
+            )
             .await
             .expect("Failed to call read_file tool");
         assert!(!result.is_error);
@@ -175,6 +188,9 @@ mod tests {
             )
             .await
             .expect("Wrapper execution failed");
-        assert!(output.as_str().unwrap().contains("Hello from MCP filesystem server!"));
+        assert!(output
+            .as_str()
+            .unwrap()
+            .contains("Hello from MCP filesystem server!"));
     }
 }

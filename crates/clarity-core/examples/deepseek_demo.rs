@@ -11,7 +11,7 @@
 //! ```
 
 use clarity_core::agent::{LlmProvider, Message};
-use clarity_core::llm::deepseek::{DeepSeekProvider, models};
+use clarity_core::llm::deepseek::{models, DeepSeekProvider};
 use serde_json::json;
 
 #[tokio::main]

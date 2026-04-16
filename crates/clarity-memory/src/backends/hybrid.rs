@@ -39,7 +39,11 @@ impl std::fmt::Debug for HybridStore {
 }
 
 impl HybridStore {
-    pub async fn new(cache_size: usize, cold_dir: impl AsRef<std::path::Path>, sync_interval_secs: u64) -> Result<Self> {
+    pub async fn new(
+        cache_size: usize,
+        cold_dir: impl AsRef<std::path::Path>,
+        sync_interval_secs: u64,
+    ) -> Result<Self> {
         let cold_storage = FileStore::new(cold_dir).await?;
         let hot_cache = Arc::new(DashMap::<i64, CachedFact>::with_capacity(cache_size));
         let shutdown = Arc::new(AtomicI64::new(0));
@@ -91,10 +95,13 @@ impl HybridStore {
         if self.hot_cache.len() >= self.cache_size {
             self.evict_lru();
         }
-        self.hot_cache.insert(fact.id, CachedFact {
-            last_access: self.next_access(),
-            fact,
-        });
+        self.hot_cache.insert(
+            fact.id,
+            CachedFact {
+                last_access: self.next_access(),
+                fact,
+            },
+        );
     }
 
     fn evict_lru(&self) {
@@ -169,8 +176,17 @@ pub struct CacheStats {
 
 #[async_trait]
 impl StorageBackend for HybridStore {
-    async fn save_fact(&self, fact: &str, tags: &[String], time: Option<&str>, session_id: Option<&str>) -> Result<i64> {
-        let id = self.cold_storage.save_fact(fact, tags, time, session_id).await?;
+    async fn save_fact(
+        &self,
+        fact: &str,
+        tags: &[String],
+        time: Option<&str>,
+        session_id: Option<&str>,
+    ) -> Result<i64> {
+        let id = self
+            .cold_storage
+            .save_fact(fact, tags, time, session_id)
+            .await?;
         let fact_obj = Fact {
             id,
             fact: fact.to_string(),
@@ -224,7 +240,10 @@ impl StorageBackend for HybridStore {
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
         let cached = self.cached_facts(|f| f.session_id.as_deref() == Some(session_id));
-        let cold = self.cold_storage.get_facts_by_session(session_id, limit).await?;
+        let cold = self
+            .cold_storage
+            .get_facts_by_session(session_id, limit)
+            .await?;
         let mut merged = self.merge_facts(cached, cold);
         merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         merged.truncate(limit);

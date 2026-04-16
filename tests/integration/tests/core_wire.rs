@@ -2,8 +2,8 @@ mod common;
 
 use clarity_core::agent::{Agent, AgentConfig, ToolCall};
 use clarity_core::registry::ToolRegistry;
-use clarity_wire::WireMessage;
 use clarity_integration_tests::mock_consumer::MockConsumer;
+use clarity_wire::WireMessage;
 use common::{text_response, tool_call_response, SequentialMockLlm};
 use std::sync::Arc;
 
@@ -32,7 +32,8 @@ async fn test_core_wire_basic_flow() {
 
     // Verify sequence contains the expected lifecycle messages.
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::TurnBegin { .. })),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::TurnBegin { .. })),
         "Expected TurnBegin in {:?}",
         msgs
     );
@@ -60,14 +61,17 @@ async fn test_core_wire_tool_flow() {
         .with_read_only(false);
 
     // First response: ask the agent to execute bash.
-    let first = tool_call_response("Let me run a command for you.", vec![ToolCall {
-        id: "call_001".to_string(),
-        call_type: "function".to_string(),
-        function: clarity_core::agent::FunctionCall {
-            name: "bash".to_string(),
-            arguments: r#"{"command":"echo integration-test"}"#.to_string(),
-        },
-    }]);
+    let first = tool_call_response(
+        "Let me run a command for you.",
+        vec![ToolCall {
+            id: "call_001".to_string(),
+            call_type: "function".to_string(),
+            function: clarity_core::agent::FunctionCall {
+                name: "bash".to_string(),
+                arguments: r#"{"command":"echo integration-test"}"#.to_string(),
+            },
+        }],
+    );
     // Second response: plain text after tool execution.
     let second = text_response("The command returned 'integration-test'.");
 
@@ -86,21 +90,24 @@ async fn test_core_wire_tool_flow() {
 
     // Verify TurnBegin
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::TurnBegin { .. })),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::TurnBegin { .. })),
         "Expected TurnBegin in {:?}",
         msgs
     );
 
     // Verify StepBegin for bash
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::StepBegin { tool_name } if tool_name == "bash")),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::StepBegin { tool_name } if tool_name == "bash")),
         "Expected StepBegin for bash in {:?}",
         msgs
     );
 
     // Verify ToolCall
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::ToolCall { name, .. } if name == "bash")),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::ToolCall { name, .. } if name == "bash")),
         "Expected ToolCall for bash in {:?}",
         msgs
     );

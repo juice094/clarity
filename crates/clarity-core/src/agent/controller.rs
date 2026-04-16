@@ -221,11 +221,7 @@ impl AgentController {
         // If a turn is still running when shutdown arrives, give it a moment
         // to observe cancellation, but don't block indefinitely.
         if let ControllerState::Running(handle) = state {
-            let _ = tokio::time::timeout(
-                tokio::time::Duration::from_secs(5),
-                handle,
-            )
-            .await;
+            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await;
         }
 
         info!("AgentController event loop finished");
@@ -294,8 +290,8 @@ mod tests {
         use std::sync::Arc;
 
         let registry = ToolRegistry::new();
-        let agent = Agent::with_config(registry, AgentConfig::default())
-            .with_llm(Arc::new(MockLlm));
+        let agent =
+            Agent::with_config(registry, AgentConfig::default()).with_llm(Arc::new(MockLlm));
         let (controller, tx) = AgentController::new_with_sender(agent);
         let handle = tokio::spawn(controller.run());
 
@@ -315,8 +311,8 @@ mod tests {
         use tokio::time::{timeout, Duration};
 
         let registry = ToolRegistry::new();
-        let agent = Agent::with_config(registry, AgentConfig::default())
-            .with_llm(Arc::new(MockLlm));
+        let agent =
+            Agent::with_config(registry, AgentConfig::default()).with_llm(Arc::new(MockLlm));
 
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControllerEvent>();
         let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);

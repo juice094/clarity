@@ -12,13 +12,13 @@
 //! - Parallel tool execution
 
 pub mod compaction_service;
+pub mod controller;
 pub mod enhanced;
 pub mod ops;
-pub mod controller;
 
 use crate::agent::compaction_service::{CompactionService, CompactionServiceConfig};
-use crate::approval::{ApprovalMode, ApprovalRuntime, ApprovalSource, ApprovalResponse};
-use crate::compaction::{CompactionConfig, estimate_message_tokens};
+use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalRuntime, ApprovalSource};
+use crate::compaction::{estimate_message_tokens, CompactionConfig};
 use crate::error::{AgentError, ToolError};
 use crate::llm::StreamDelta;
 use crate::memory::{Memory, MemoryStore, MemoryTicker};
@@ -36,12 +36,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 // Re-export enhanced features
+pub use controller::{AgentController, ControllerEvent};
 pub use enhanced::{
     ConversationState, ErrorRecovery, ErrorRecoveryConfig, ExecutionStep, ExecutionSummary,
     ExecutionTracer, ParallelToolExecutor, RecoveryStrategy, StatePersistence, StepType,
     TokenUsage,
 };
-pub use controller::{AgentController, ControllerEvent};
 pub use ops::Op;
 
 /// LLM message role
@@ -267,10 +267,12 @@ impl LlmProvider for MockLlm {
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
-            let _ = tx.send(Ok(StreamDelta {
-                content: Some("This is a mock response".to_string()),
-                tool_calls: vec![],
-            })).await;
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("This is a mock response".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
         });
         Ok(rx)
     }
@@ -477,10 +479,7 @@ impl Agent {
         if let Some(ref builder) = self.system_prompt_builder {
             // Build with personality and optional skill definitions
             let skills = self.get_skill_definitions();
-            builder
-                .clone()
-                .with_skills(skills)
-                .build()
+            builder.clone().with_skills(skills).build()
         } else {
             // Fallback to legacy system prompt
             self.config.system_prompt.clone()
@@ -562,10 +561,8 @@ impl Agent {
                             .map(|m| format!("- {}", m.content))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        system_prompt.push_str(&format!(
-                            "\n\n# Relevant Memories\n{}\n",
-                            memory_text
-                        ));
+                        system_prompt
+                            .push_str(&format!("\n\n# Relevant Memories\n{}\n", memory_text));
                     }
                 }
                 Err(e) => {
@@ -610,7 +607,11 @@ impl Agent {
             if self.should_compact(&messages).await {
                 match self.compact_messages(&messages).await {
                     Ok(compacted) => {
-                        info!("Context compacted: {} messages -> {} messages", messages.len(), compacted.len());
+                        info!(
+                            "Context compacted: {} messages -> {} messages",
+                            messages.len(),
+                            compacted.len()
+                        );
                         messages = compacted;
                     }
                     Err(e) => {
@@ -696,7 +697,11 @@ impl Agent {
             let memory_content = if completed {
                 format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
             } else {
-                format!("User: {}\nAssistant: [max iterations reached] {}", query.as_ref(), final_response)
+                format!(
+                    "User: {}\nAssistant: [max iterations reached] {}",
+                    query.as_ref(),
+                    final_response
+                )
             };
             let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
             if let Err(e) = store.store(memory).await {
@@ -716,7 +721,9 @@ impl Agent {
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+            Err(AgentError::MaxIterationsExceeded(
+                self.config.max_iterations,
+            ))
         }
     }
 
@@ -752,10 +759,8 @@ impl Agent {
                             .map(|m| format!("- {}", m.content))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        system_prompt.push_str(&format!(
-                            "\n\n# Relevant Memories\n{}\n",
-                            memory_text
-                        ));
+                        system_prompt
+                            .push_str(&format!("\n\n# Relevant Memories\n{}\n", memory_text));
                     }
                 }
                 Err(e) => {
@@ -769,7 +774,10 @@ impl Agent {
             Message::user(query.as_ref()),
         ];
 
-        info!("Starting streaming agent loop for query: {}", query.as_ref());
+        info!(
+            "Starting streaming agent loop for query: {}",
+            query.as_ref()
+        );
 
         // Send TurnBegin message
         self.send_wire_message(WireMessage::TurnBegin {
@@ -836,7 +844,10 @@ impl Agent {
                     }
                 }
                 Err(e) => {
-                    debug!("Streaming not supported or failed: {}, falling back to complete()", e);
+                    debug!(
+                        "Streaming not supported or failed: {}, falling back to complete()",
+                        e
+                    );
                 }
             }
 
@@ -918,7 +929,11 @@ impl Agent {
             let memory_content = if completed {
                 format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
             } else {
-                format!("User: {}\nAssistant: [max iterations reached] {}", query.as_ref(), final_response)
+                format!(
+                    "User: {}\nAssistant: [max iterations reached] {}",
+                    query.as_ref(),
+                    final_response
+                )
             };
             let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
             if let Err(e) = store.store(memory).await {
@@ -937,7 +952,9 @@ impl Agent {
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+            Err(AgentError::MaxIterationsExceeded(
+                self.config.max_iterations,
+            ))
         }
     }
 
@@ -1014,7 +1031,9 @@ impl Agent {
                             description,
                         )
                         .await
-                        .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+                        .map_err(|e| {
+                            ToolError::execution_failed(format!("Approval error: {}", e))
+                        })?;
 
                     // 等待审批结果，带超时
                     let approval_result = tokio::time::timeout(
@@ -1069,7 +1088,9 @@ impl Agent {
                             description,
                         )
                         .await
-                        .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+                        .map_err(|e| {
+                            ToolError::execution_failed(format!("Approval error: {}", e))
+                        })?;
 
                     let approval_result = tokio::time::timeout(
                         tokio::time::Duration::from_secs(300),
@@ -1125,11 +1146,7 @@ impl Agent {
     /// Execute a tool directly (bypassing the LLM loop)
     ///
     /// Useful for programmatic tool execution
-    pub async fn execute_tool(
-        &self,
-        name: &str,
-        args: Value,
-    ) -> Result<Value, ToolError> {
+    pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value, ToolError> {
         let ctx = ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
@@ -1142,7 +1159,8 @@ impl Agent {
     /// 检查是否需要压缩
     async fn should_compact(&self, messages: &[Message]) -> bool {
         let token_count = estimate_message_tokens(messages);
-        self.compaction_config.should_compact(token_count, self.max_context_tokens)
+        self.compaction_config
+            .should_compact(token_count, self.max_context_tokens)
     }
 
     /// 执行压缩
@@ -1150,17 +1168,18 @@ impl Agent {
         use crate::compaction::{Compaction, SimpleCompaction};
 
         let compactor = SimpleCompaction::new();
-        
+
         // 调用 LLM 压缩 (如果配置了 LLM)
         if let Some(ref llm) = self.llm {
             let result = compactor.compact(messages, llm.as_ref()).await?;
-            
+
             // 构建压缩后的消息列表
-            let mut new_messages = vec![
-                Message::system(format!("Previous context compacted: {} messages summarized", messages.len() - result.messages.len() + 1))
-            ];
+            let mut new_messages = vec![Message::system(format!(
+                "Previous context compacted: {} messages summarized",
+                messages.len() - result.messages.len() + 1
+            ))];
             new_messages.extend(result.messages);
-            
+
             Ok(new_messages)
         } else {
             Ok(messages.to_vec())
@@ -1252,14 +1271,15 @@ mod tests {
 
         let registry = ToolRegistry::new();
         let config = AgentConfig::new();
-        let agent = Agent::with_config(registry, config)
-            .with_llm(Arc::new(MockLlm));
+        let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
 
         let chunks = Arc::new(Mutex::new(Vec::new()));
         let chunks_clone = chunks.clone();
-        let result = agent.run_streaming("Hello", move |chunk| {
-            chunks_clone.lock().unwrap().push(chunk.to_string());
-        }).await;
+        let result = agent
+            .run_streaming("Hello", move |chunk| {
+                chunks_clone.lock().unwrap().push(chunk.to_string());
+            })
+            .await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "This is a mock response");
@@ -1295,13 +1315,16 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+            {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok(StreamDelta {
-                        content: Some("This is a mock response".to_string()),
-                        tool_calls: vec![],
-                    })).await;
+                    let _ = tx
+                        .send(Ok(StreamDelta {
+                            content: Some("This is a mock response".to_string()),
+                            tool_calls: vec![],
+                        }))
+                        .await;
                 });
                 Ok(rx)
             }
@@ -1322,7 +1345,15 @@ mod tests {
 
         // 运行多次对话
         for i in 0..3 {
-            let result = agent.run(format!("test query with some content to increase token count {} ", i).repeat(10)).await;
+            let result = agent
+                .run(
+                    format!(
+                        "test query with some content to increase token count {} ",
+                        i
+                    )
+                    .repeat(10),
+                )
+                .await;
             assert!(result.is_ok());
         }
 
@@ -1342,16 +1373,27 @@ mod tests {
 
         // 创建足够多的消息以超过阈值
         let messages: Vec<Message> = (0..20)
-            .map(|i| Message::user(format!("This is a test message with enough content to consume tokens {} ", i).repeat(5)))
+            .map(|i| {
+                Message::user(
+                    format!(
+                        "This is a test message with enough content to consume tokens {} ",
+                        i
+                    )
+                    .repeat(5),
+                )
+            })
             .collect();
 
         // 验证 should_compact 方法存在并且可以调用
         // 注意：由于方法是 async 的，我们主要验证编译通过
         let rt = tokio::runtime::Runtime::new().unwrap();
         let should_compact = rt.block_on(agent.should_compact(&messages));
-        
+
         // 消息内容应该触发压缩（超过 100 token 的 80% = 80 tokens）
-        assert!(should_compact, "Should detect that compaction is needed with large messages");
+        assert!(
+            should_compact,
+            "Should detect that compaction is needed with large messages"
+        );
     }
 
     #[tokio::test]
@@ -1387,13 +1429,16 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+            {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok(StreamDelta {
-                        content: Some("Mock response".to_string()),
-                        tool_calls: vec![],
-                    })).await;
+                    let _ = tx
+                        .send(Ok(StreamDelta {
+                            content: Some("Mock response".to_string()),
+                            tool_calls: vec![],
+                        }))
+                        .await;
                 });
                 Ok(rx)
             }
@@ -1416,9 +1461,7 @@ mod tests {
             .with_llm(Arc::new(MockLlmWithToolCall));
 
         // 在后台运行 Agent
-        let handle = tokio::spawn(async move {
-            agent.run("use mock tool").await
-        });
+        let handle = tokio::spawn(async move { agent.run("use mock tool").await });
 
         // 等待审批请求出现
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1434,7 +1477,10 @@ mod tests {
         // Agent 应该完成（虽然工具执行会失败，因为 mock_tool 不存在）
         let result = handle.await.unwrap();
         // 结果应该是 Err，因为工具不存在，但审批流程已经测试到了
-        assert!(result.is_err(), "Expected error because mock_tool is not registered");
+        assert!(
+            result.is_err(),
+            "Expected error because mock_tool is not registered"
+        );
     }
 
     #[tokio::test]
@@ -1469,13 +1515,16 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+            {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok(StreamDelta {
-                        content: Some("Mock response".to_string()),
-                        tool_calls: vec![],
-                    })).await;
+                    let _ = tx
+                        .send(Ok(StreamDelta {
+                            content: Some("Mock response".to_string()),
+                            tool_calls: vec![],
+                        }))
+                        .await;
                 });
                 Ok(rx)
             }
@@ -1488,17 +1537,23 @@ mod tests {
 
         let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(1))
             .with_approval_runtime(approval_rt.clone())
-            .with_approval_mode(ApprovalMode::Yolo)  // Yolo 模式
+            .with_approval_mode(ApprovalMode::Yolo) // Yolo 模式
             .with_llm(Arc::new(MockLlmWithToolCall));
 
         // 运行 Agent
         let result = agent.run("use mock tool").await;
         // 结果应该是 Err，因为工具不存在，但 Yolo 模式应该跳过审批
-        assert!(result.is_err(), "Expected error because mock_tool is not registered");
+        assert!(
+            result.is_err(),
+            "Expected error because mock_tool is not registered"
+        );
 
         // Yolo 模式下不应有 pending 审批请求
         let pending = approval_rt.list_pending();
-        assert!(pending.is_empty(), "Yolo mode should not create pending approval requests");
+        assert!(
+            pending.is_empty(),
+            "Yolo mode should not create pending approval requests"
+        );
     }
 
     #[tokio::test]
@@ -1519,9 +1574,7 @@ mod tests {
             .with_wire(Arc::new(wire));
 
         // Run Agent in background
-        let handle = tokio::spawn(async move {
-            agent.run("test query").await
-        });
+        let handle = tokio::spawn(async move { agent.run("test query").await });
 
         // Verify UI side receives TurnBegin
         let msg = timeout(Duration::from_millis(1000), ui_side.recv())
@@ -1535,7 +1588,9 @@ mod tests {
             .await
             .expect("timeout waiting for ContentPart")
             .expect("channel closed");
-        assert!(matches!(msg, WireMessage::ContentPart { text } if text == "This is a mock response"));
+        assert!(
+            matches!(msg, WireMessage::ContentPart { text } if text == "This is a mock response")
+        );
 
         // Verify TurnEnd is received
         let msg = timeout(Duration::from_millis(1000), ui_side.recv())
@@ -1575,9 +1630,11 @@ mod tests {
         let chunks = StdArc::new(Mutex::new(Vec::new()));
         let chunks_clone = chunks.clone();
         let handle = tokio::spawn(async move {
-            agent.run_streaming("streaming test", move |chunk| {
-                chunks_clone.lock().unwrap().push(chunk.to_string());
-            }).await
+            agent
+                .run_streaming("streaming test", move |chunk| {
+                    chunks_clone.lock().unwrap().push(chunk.to_string());
+                })
+                .await
         });
 
         // Verify UI side receives TurnBegin
@@ -1585,7 +1642,9 @@ mod tests {
             .await
             .expect("timeout waiting for TurnBegin")
             .expect("channel closed");
-        assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "streaming test"));
+        assert!(
+            matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "streaming test")
+        );
 
         // Verify ContentPart is received (empty start marker)
         let msg = timeout(Duration::from_millis(1000), ui_side.recv())
@@ -1598,17 +1657,15 @@ mod tests {
         let mut content_received = false;
         loop {
             match timeout(Duration::from_millis(500), ui_side.recv()).await {
-                Ok(Some(msg)) => {
-                    match msg {
-                        WireMessage::ContentPart { text } => {
-                            if !text.is_empty() {
-                                content_received = true;
-                            }
+                Ok(Some(msg)) => match msg {
+                    WireMessage::ContentPart { text } => {
+                        if !text.is_empty() {
+                            content_received = true;
                         }
-                        WireMessage::TurnEnd => break,
-                        _ => {}
                     }
-                }
+                    WireMessage::TurnEnd => break,
+                    _ => {}
+                },
                 Ok(None) => break,
                 Err(_) => break, // Timeout
             }

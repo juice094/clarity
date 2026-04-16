@@ -5,8 +5,8 @@
 //! - Discord Bot
 //! - 通用 Webhook（适用于飞书/钉钉等）
 
-pub mod telegram;
 pub mod discord;
+pub mod telegram;
 pub mod webhook;
 
 use async_trait::async_trait;
@@ -107,8 +107,7 @@ impl ChannelMessage {
 }
 
 /// 渠道配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChannelConfig {
     pub enabled: bool,
     pub token: Option<String>,
@@ -219,8 +218,7 @@ mod tests {
 
     #[test]
     fn test_channel_message_with_username() {
-        let msg = ChannelMessage::new("user123", "Hello")
-            .with_username("Alice");
+        let msg = ChannelMessage::new("user123", "Hello").with_username("Alice");
         assert_eq!(msg.username, Some("Alice".to_string()));
     }
 
@@ -233,6 +231,9 @@ mod tests {
 
         assert!(config.enabled);
         assert_eq!(config.token, Some("test_token".to_string()));
-        assert_eq!(config.webhook_url, Some("https://example.com/webhook".to_string()));
+        assert_eq!(
+            config.webhook_url,
+            Some("https://example.com/webhook".to_string())
+        );
     }
 }

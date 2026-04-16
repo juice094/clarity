@@ -115,10 +115,7 @@ pub trait ApprovalRuntime: Send + Sync {
     /// # Returns
     ///
     /// The approval response when available
-    async fn wait_for_response(
-        &self,
-        request_id: &str,
-    ) -> Result<ApprovalResponse, AgentError>;
+    async fn wait_for_response(&self, request_id: &str) -> Result<ApprovalResponse, AgentError>;
 
     /// Resolve an approval request (typically called by UI)
     ///
@@ -126,11 +123,8 @@ pub trait ApprovalRuntime: Send + Sync {
     ///
     /// * `request_id` - The ID of the request to resolve
     /// * `response` - The response to set
-    async fn resolve(
-        &self,
-        request_id: &str,
-        response: ApprovalResponse,
-    ) -> Result<(), AgentError>;
+    async fn resolve(&self, request_id: &str, response: ApprovalResponse)
+        -> Result<(), AgentError>;
 }
 
 /// Approval mode determining automatic vs manual approval behavior
@@ -220,15 +214,15 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
             false
         };
         if should_auto_approve {
-            let _ = self.inner.resolve(&request_id, ApprovalResponse::Approve).await;
+            let _ = self
+                .inner
+                .resolve(&request_id, ApprovalResponse::Approve)
+                .await;
         }
         Ok(request_id)
     }
 
-    async fn wait_for_response(
-        &self,
-        request_id: &str,
-    ) -> Result<ApprovalResponse, AgentError> {
+    async fn wait_for_response(&self, request_id: &str) -> Result<ApprovalResponse, AgentError> {
         match self.mode {
             ApprovalMode::Yolo => Ok(ApprovalResponse::Approve),
             ApprovalMode::Plan | ApprovalMode::Interactive => {
@@ -372,10 +366,7 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
         Ok(request_id)
     }
 
-    async fn wait_for_response(
-        &self,
-        request_id: &str,
-    ) -> Result<ApprovalResponse, AgentError> {
+    async fn wait_for_response(&self, request_id: &str) -> Result<ApprovalResponse, AgentError> {
         // Check if already resolved
         {
             let requests = self.requests.lock().map_err(|_| {

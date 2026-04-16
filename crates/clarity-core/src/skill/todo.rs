@@ -186,7 +186,9 @@ impl TodoSkill {
         match command {
             "add" => {
                 if args.trim().is_empty() {
-                    return Err(SkillError::invalid_input("Task description cannot be empty"));
+                    return Err(SkillError::invalid_input(
+                        "Task description cannot be empty",
+                    ));
                 }
                 self.add_item(args.to_string());
                 Ok(format!("Added task: {}", args))
@@ -343,10 +345,7 @@ mod tests {
 
     #[test]
     fn test_todo_skill_with_items() {
-        let items = vec![
-            TodoItem::new("Task 1"),
-            TodoItem::new("Task 2"),
-        ];
+        let items = vec![TodoItem::new("Task 1"), TodoItem::new("Task 2")];
         let skill = TodoSkill::with_items(items);
         assert_eq!(skill.get_items().len(), 2);
     }
@@ -404,7 +403,10 @@ mod tests {
 
         let result = skill.execute("done 5").await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid task index"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid task index"));
     }
 
     #[tokio::test]

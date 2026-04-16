@@ -3,13 +3,13 @@
 //! These tests verify that public APIs maintain backward compatibility.
 //! Any breaking change here indicates a major version bump is needed.
 
-use std::sync::Arc;
-use clarity_core::agent::{Agent, AgentConfig, MockLlm, LlmProvider, Message};
-use clarity_core::memory::{MemoryStore, InMemoryStore, MemoryTicker};
-use clarity_core::tools::{Tool, ToolContext, FileReadTool};
+use clarity_core::agent::{Agent, AgentConfig, LlmProvider, Message, MockLlm};
 use clarity_core::error::{AgentError, ToolError};
-use clarity_core::registry::ToolRegistry;
 use clarity_core::llm::LlmFactory;
+use clarity_core::memory::{InMemoryStore, MemoryStore, MemoryTicker};
+use clarity_core::registry::ToolRegistry;
+use clarity_core::tools::{FileReadTool, Tool, ToolContext};
+use std::sync::Arc;
 
 // ==================== Agent API Stability ====================
 
@@ -45,8 +45,7 @@ async fn test_agent_run_api() {
     // Test: Agent::run(&self, query) -> Result<String, AgentError>
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
-    let agent = Agent::with_config(registry, config)
-        .with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
 
     // Should accept &str and String
     let _result = agent.run("test query").await;
@@ -58,12 +57,13 @@ async fn test_agent_run_streaming_api() {
     // Test: Agent::run_streaming<F>(&self, query, on_chunk) -> Result<String, AgentError>
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
-    let agent = Agent::with_config(registry, config)
-        .with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
 
-    let result = agent.run_streaming("test", |chunk: &str| {
-        println!("{}", chunk);
-    }).await;
+    let result = agent
+        .run_streaming("test", |chunk: &str| {
+            println!("{}", chunk);
+        })
+        .await;
 
     assert!(result.is_ok());
 }
@@ -120,7 +120,13 @@ async fn test_tool_registry_execute_api() {
 
     // Test: execute(&self, name, args, ctx) -> ToolResult<Value>
     let ctx = ToolContext::new();
-    let _result = registry.execute("file_read", serde_json::json!({"path": "/tmp/test.txt"}), ctx).await;
+    let _result = registry
+        .execute(
+            "file_read",
+            serde_json::json!({"path": "/tmp/test.txt"}),
+            ctx,
+        )
+        .await;
 }
 
 // ==================== Tool Trait API Stability ====================

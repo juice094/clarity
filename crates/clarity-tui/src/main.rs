@@ -14,9 +14,9 @@ use anyhow::Result;
 use app::App;
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::llm::LlmFactory;
-use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
-use clarity_core::mcp::{McpClientBuilder, McpRegistry, register_mcp_tools};
 use clarity_core::mcp::config::McpConfig;
+use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
+use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
 use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use crossterm::{
@@ -50,7 +50,11 @@ async fn main() -> Result<()> {
 
     // 恢复终端
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
     terminal.show_cursor()?;
 
     result
@@ -81,8 +85,8 @@ async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
         .with_personality(personality_config);
 
     // 从环境变量创建 LLM Provider (自动检测: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
-    let mut llm = LlmFactory::auto()
-        .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
+    let mut llm =
+        LlmFactory::auto().map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
     let session_id = uuid::Uuid::new_v4().to_string();
     llm.set_prompt_cache_key(&session_id);
 
@@ -153,8 +157,7 @@ fn detect_model_name() -> String {
             .unwrap_or_else(|_| "claude-3-sonnet-20240229".into());
     }
     if std::env::var("KIMI_CODE_API_KEY").is_ok() {
-        return std::env::var("KIMI_CODE_MODEL")
-            .unwrap_or_else(|_| "kimi-k2-07132k".into());
+        return std::env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
     }
     if let Ok(kimi_key) = std::env::var("KIMI_API_KEY") {
         if kimi_key.starts_with("sk-kimi-") {
@@ -162,16 +165,13 @@ fn detect_model_name() -> String {
                 .or_else(|_| std::env::var("KIMI_MODEL"))
                 .unwrap_or_else(|_| "kimi-k2-07132k".into());
         }
-        return std::env::var("KIMI_MODEL")
-            .unwrap_or_else(|_| "kimi-k2-07132k".into());
+        return std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
     }
     if std::env::var("DEEPSEEK_API_KEY").is_ok() {
-        return std::env::var("DEEPSEEK_MODEL")
-            .unwrap_or_else(|_| "deepseek-chat".into());
+        return std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-chat".into());
     }
     if std::env::var("OPENAI_API_KEY").is_ok() {
-        return std::env::var("OPENAI_MODEL")
-            .unwrap_or_else(|_| "gpt-4o".into());
+        return std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into());
     }
     "unknown".to_string()
 }
@@ -207,12 +207,10 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
             events::Event::Resize(width, height) => {
                 app.on_resize(width, height);
             }
-            events::Event::MouseScroll(scroll) => {
-                match scroll {
-                    events::MouseScroll::Up => app.scroll_up(),
-                    events::MouseScroll::Down => app.scroll_down(),
-                }
-            }
+            events::Event::MouseScroll(scroll) => match scroll {
+                events::MouseScroll::Up => app.scroll_up(),
+                events::MouseScroll::Down => app.scroll_down(),
+            },
             events::Event::StreamResponse(chunk) => {
                 app.handle_stream_chunk(chunk);
             }

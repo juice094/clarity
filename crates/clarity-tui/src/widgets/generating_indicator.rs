@@ -50,19 +50,36 @@ impl GeneratingIndicator {
                     .as_secs_f64();
                 let lines = vec![
                     Line::from(vec![
-                        Span::styled(spinner, Style::default().fg(Color::Rgb(100, 220, 150)).add_modifier(Modifier::BOLD)),
-                        Span::styled(" 生成中 ", Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            spinner,
+                            Style::default()
+                                .fg(Color::Rgb(100, 220, 150))
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            " 生成中 ",
+                            Style::default()
+                                .fg(Color::Rgb(220, 220, 240))
+                                .add_modifier(Modifier::BOLD),
+                        ),
                     ]),
                     Line::from(""),
                     Line::from(vec![
                         Span::styled("首字耗时: ", Style::default().fg(Color::Rgb(160, 160, 180))),
-                        Span::styled(format!("{:.1}s", ttft), Style::default().fg(Color::Rgb(100, 220, 150))),
+                        Span::styled(
+                            format!("{:.1}s", ttft),
+                            Style::default().fg(Color::Rgb(100, 220, 150)),
+                        ),
                         Span::styled(" | 已生成 ", Style::default().fg(Color::Rgb(160, 160, 180))),
-                        Span::styled(format!("{} 字", m.total_chars), Style::default().fg(Color::Rgb(100, 200, 255))),
+                        Span::styled(
+                            format!("{} 字", m.total_chars),
+                            Style::default().fg(Color::Rgb(100, 200, 255)),
+                        ),
                     ]),
-                    Line::from(vec![
-                        Span::styled("按 Ctrl+C 停止", Style::default().fg(Color::Rgb(140, 140, 160))),
-                    ]),
+                    Line::from(vec![Span::styled(
+                        "按 Ctrl+C 停止",
+                        Style::default().fg(Color::Rgb(140, 140, 160)),
+                    )]),
                 ];
                 (lines, Color::Rgb(80, 160, 120))
             }
@@ -71,33 +88,63 @@ impl GeneratingIndicator {
                 if elapsed < 10 {
                     let lines = vec![
                         Line::from(vec![
-                            Span::styled(spinner, Style::default().fg(Color::Rgb(255, 200, 80)).add_modifier(Modifier::BOLD)),
-                            Span::styled(" 等待响应 ", Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+                            Span::styled(
+                                spinner,
+                                Style::default()
+                                    .fg(Color::Rgb(255, 200, 80))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                " 等待响应 ",
+                                Style::default()
+                                    .fg(Color::Rgb(220, 220, 240))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
                         ]),
                         Line::from(""),
                         Line::from(vec![
                             Span::styled("已等待 ", Style::default().fg(Color::Rgb(160, 160, 180))),
-                            Span::styled(format!("{}s", elapsed), Style::default().fg(Color::Rgb(255, 200, 80))),
+                            Span::styled(
+                                format!("{}s", elapsed),
+                                Style::default().fg(Color::Rgb(255, 200, 80)),
+                            ),
                         ]),
-                        Line::from(vec![
-                            Span::styled("按 Ctrl+C 停止", Style::default().fg(Color::Rgb(140, 140, 160))),
-                        ]),
+                        Line::from(vec![Span::styled(
+                            "按 Ctrl+C 停止",
+                            Style::default().fg(Color::Rgb(140, 140, 160)),
+                        )]),
                     ];
                     (lines, Color::Rgb(180, 150, 60))
                 } else {
                     let lines = vec![
                         Line::from(vec![
-                            Span::styled("⏳", Style::default().fg(Color::Rgb(255, 100, 100)).add_modifier(Modifier::BOLD)),
-                            Span::styled(" 模型响应较慢 ", Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+                            Span::styled(
+                                "⏳",
+                                Style::default()
+                                    .fg(Color::Rgb(255, 100, 100))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::styled(
+                                " 模型响应较慢 ",
+                                Style::default()
+                                    .fg(Color::Rgb(220, 220, 240))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
                         ]),
                         Line::from(""),
                         Line::from(vec![
                             Span::styled("已等待 ", Style::default().fg(Color::Rgb(160, 160, 180))),
-                            Span::styled(format!("{}s", elapsed), Style::default().fg(Color::Rgb(255, 100, 100)).add_modifier(Modifier::BOLD)),
+                            Span::styled(
+                                format!("{}s", elapsed),
+                                Style::default()
+                                    .fg(Color::Rgb(255, 100, 100))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
                         ]),
-                        Line::from(vec![
-                            Span::styled("请耐心等待或按 Ctrl+C 停止", Style::default().fg(Color::Rgb(140, 140, 160))),
-                        ]),
+                        Line::from(vec![Span::styled(
+                            "请耐心等待或按 Ctrl+C 停止",
+                            Style::default().fg(Color::Rgb(140, 140, 160)),
+                        )]),
                     ];
                     (lines, Color::Rgb(180, 80, 80))
                 }
@@ -105,13 +152,24 @@ impl GeneratingIndicator {
             None => {
                 let lines = vec![
                     Line::from(vec![
-                        Span::styled(spinner, Style::default().fg(Color::Rgb(100, 200, 255)).add_modifier(Modifier::BOLD)),
-                        Span::styled(" 准备中 ", Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            spinner,
+                            Style::default()
+                                .fg(Color::Rgb(100, 200, 255))
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            " 准备中 ",
+                            Style::default()
+                                .fg(Color::Rgb(220, 220, 240))
+                                .add_modifier(Modifier::BOLD),
+                        ),
                     ]),
                     Line::from(""),
-                    Line::from(vec![
-                        Span::styled("按 Ctrl+C 停止", Style::default().fg(Color::Rgb(140, 140, 160))),
-                    ]),
+                    Line::from(vec![Span::styled(
+                        "按 Ctrl+C 停止",
+                        Style::default().fg(Color::Rgb(140, 140, 160)),
+                    )]),
                 ];
                 (lines, Color::Rgb(60, 120, 180))
             }

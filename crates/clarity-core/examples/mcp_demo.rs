@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
         println!("Usage: cargo run --example mcp_demo -- <command> [args...]");
         println!();
         println!("Example (filesystem server with npx):");
-        println!("  cargo run --example mcp_demo -- npx -y @modelcontextprotocol/server-filesystem .");
+        println!(
+            "  cargo run --example mcp_demo -- npx -y @modelcontextprotocol/server-filesystem ."
+        );
         println!();
         println!("Example (custom mock server):");
         println!("  cargo run --example mcp_demo -- python mock_mcp_server.py");
@@ -69,7 +71,11 @@ async fn main() -> anyhow::Result<()> {
     let tools = client.list_tools().await?;
     println!("🔧 Discovered {} MCP tool(s):", tools.len());
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or(""));
+        println!(
+            "  - {}: {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("")
+        );
     }
     println!();
 
@@ -82,7 +88,10 @@ async fn main() -> anyhow::Result<()> {
         let adapter = McpToolAdapter::new(client.clone(), tool);
         registry.register(adapter)?;
     }
-    println!("✅ Registered {} tool(s) into ToolRegistry\n", registry.len()?);
+    println!(
+        "✅ Registered {} tool(s) into ToolRegistry\n",
+        registry.len()?
+    );
 
     // ------------------------------------------------------------------
     // 4. Show tool schemas (as they would appear to an LLM)

@@ -15,16 +15,16 @@ pub struct SessionStore {
 
 impl SessionStore {
     /// Create a new SessionStore
-    /// 
+    ///
     /// The sessions directory will be created if it doesn't exist.
     pub fn new(sessions_dir: impl AsRef<Path>) -> Result<Self> {
         let sessions_dir = sessions_dir.as_ref().to_path_buf();
-        
+
         if !sessions_dir.exists() {
             fs::create_dir_all(&sessions_dir)?;
             info!("Created sessions directory at {:?}", sessions_dir);
         }
-        
+
         Ok(Self { sessions_dir })
     }
 
@@ -37,12 +37,7 @@ impl SessionStore {
 
     /// Append a message to a session
     #[instrument(skip(self, content))]
-    pub fn append_message(
-        &self,
-        session_id: &str,
-        role: &str,
-        content: &str,
-    ) -> Result<()> {
+    pub fn append_message(&self, session_id: &str, role: &str, content: &str) -> Result<()> {
         let path = self.session_path(session_id);
         let record = SessionRecord::Message {
             message: crate::types::MessageRecord {
@@ -52,10 +47,7 @@ impl SessionStore {
             timestamp: Utc::now(),
         };
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         let line = serde_json::to_string(&record)?;
         writeln!(file, "{}", line)?;
@@ -73,10 +65,7 @@ impl SessionStore {
             timestamp: Utc::now(),
         };
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         let line = serde_json::to_string(&record)?;
         writeln!(file, "{}", line)?;
@@ -89,7 +78,7 @@ impl SessionStore {
     #[instrument(skip(self))]
     pub fn get_messages(&self, session_id: &str) -> Result<Vec<Message>> {
         let path = self.session_path(session_id);
-        
+
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -122,7 +111,7 @@ impl SessionStore {
     /// Get all session records (including summaries)
     pub fn get_all_records(&self, session_id: &str) -> Result<Vec<SessionRecord>> {
         let path = self.session_path(session_id);
-        
+
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -190,7 +179,7 @@ impl SessionStore {
     /// Delete a session
     pub fn delete_session(&self, session_id: &str) -> Result<bool> {
         let path = self.session_path(session_id);
-        
+
         if path.exists() {
             fs::remove_file(&path)?;
             info!("Deleted session {}", session_id);
@@ -203,7 +192,7 @@ impl SessionStore {
     /// Get raw content of a session file
     pub fn get_session_content(&self, session_id: &str) -> Result<String> {
         let path = self.session_path(session_id);
-        
+
         if !path.exists() {
             return Ok(String::new());
         }
@@ -212,14 +201,18 @@ impl SessionStore {
     }
 
     /// Read recent messages from all sessions (for compilation)
-    pub fn read_all_sessions(&self, since: Option<chrono::DateTime<Utc>>) -> Result<Vec<(String, Vec<Message>)>> {
+    pub fn read_all_sessions(
+        &self,
+        since: Option<chrono::DateTime<Utc>>,
+    ) -> Result<Vec<(String, Vec<Message>)>> {
         let mut result = Vec::new();
 
         for session_id in self.get_session_ids() {
             let messages = self.get_messages(&session_id)?;
-            
+
             let filtered: Vec<Message> = if let Some(since_time) = since {
-                messages.into_iter()
+                messages
+                    .into_iter()
                     .filter(|m| m.timestamp > since_time)
                     .collect()
             } else {
@@ -237,9 +230,9 @@ impl SessionStore {
     /// Calculate a fingerprint of session content for change detection
     pub fn calculate_fingerprint(&self, session_id: &str) -> Result<Option<String>> {
         use sha2::{Digest, Sha256};
-        
+
         let content = self.get_session_content(session_id)?;
-        
+
         if content.is_empty() {
             return Ok(None);
         }
@@ -247,7 +240,7 @@ impl SessionStore {
         let mut hasher = Sha256::new();
         hasher.update(content.as_bytes());
         let hash = hex::encode(hasher.finalize());
-        
+
         Ok(Some(hash))
     }
 }
@@ -268,8 +261,12 @@ mod tests {
         let (_temp, store) = create_test_store();
 
         store.append_message("session-1", "user", "Hello").unwrap();
-        store.append_message("session-1", "assistant", "Hi there!").unwrap();
-        store.append_message("session-1", "user", "How are you?").unwrap();
+        store
+            .append_message("session-1", "assistant", "Hi there!")
+            .unwrap();
+        store
+            .append_message("session-1", "user", "How are you?")
+            .unwrap();
 
         let messages = store.get_messages("session-1").unwrap();
         assert_eq!(messages.len(), 3);
@@ -283,15 +280,19 @@ mod tests {
     fn test_multiple_sessions() {
         let (_temp, store) = create_test_store();
 
-        store.append_message("session-a", "user", "Message A").unwrap();
-        store.append_message("session-b", "user", "Message B").unwrap();
+        store
+            .append_message("session-a", "user", "Message A")
+            .unwrap();
+        store
+            .append_message("session-b", "user", "Message B")
+            .unwrap();
 
         let messages_a = store.get_messages("session-a").unwrap();
         let messages_b = store.get_messages("session-b").unwrap();
 
         assert_eq!(messages_a.len(), 1);
         assert_eq!(messages_a[0].content, "Message A");
-        
+
         assert_eq!(messages_b.len(), 1);
         assert_eq!(messages_b[0].content, "Message B");
     }
@@ -338,7 +339,9 @@ mod tests {
         let (_temp, store) = create_test_store();
 
         store.append_message("session", "user", "Hello").unwrap();
-        store.append_summary("session", "Summary of conversation").unwrap();
+        store
+            .append_summary("session", "Summary of conversation")
+            .unwrap();
         store.append_message("session", "user", "Goodbye").unwrap();
 
         // get_messages should filter out summaries
@@ -383,9 +386,9 @@ mod tests {
         // Read raw content
         let content = store.get_session_content("test").unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        
+
         assert_eq!(lines.len(), 2);
-        
+
         // Verify each line is valid JSON
         for line in &lines {
             let record: SessionRecord = serde_json::from_str(line).unwrap();

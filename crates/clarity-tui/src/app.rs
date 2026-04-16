@@ -108,17 +108,19 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>, yuan_type: impl Into<String>) -> Self {
+    pub fn new(
+        agent: Arc<Agent>,
+        model_name: impl Into<String>,
+        yuan_type: impl Into<String>,
+    ) -> Self {
         let model_name = model_name.into();
         let current_yuan_type = yuan_type.into();
 
         Self {
-            messages: vec![
-                Message::new(
-                    "欢迎使用 Clarity! 输入 /help 查看可用命令。",
-                    MessageType::System,
-                ),
-            ],
+            messages: vec![Message::new(
+                "欢迎使用 Clarity! 输入 /help 查看可用命令。",
+                MessageType::System,
+            )],
             input_pane: InputPane::new(),
             running: true,
             is_generating: false,
@@ -205,73 +207,69 @@ impl App {
         }
 
         match self.mode {
-            AppMode::Normal => {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(false),
-                    KeyCode::Char('?') => {
-                        self.popup = Some(Box::new(HelpPopup::new()));
-                    }
-                    KeyCode::Char('i') | KeyCode::Enter => {
-                        self.mode = AppMode::Input;
-                    }
-                    KeyCode::Char('j') | KeyCode::Down => self.scroll_down(),
-                    KeyCode::Char('k') | KeyCode::Up => self.scroll_up(),
-                    KeyCode::Char('G') => {
-                        let total = self.total_content_lines();
-                        let visible = self.visible_chat_height();
-                        self.scroll_offset = total.saturating_sub(visible);
-                    }
-                    KeyCode::Char('g') => {
-                        self.scroll_offset = 0;
-                    }
-                    KeyCode::Backspace | KeyCode::Delete => {
-                        self.input_pane.delete_char();
-                    }
-                    _ => {}
+            AppMode::Normal => match key.code {
+                KeyCode::Char('q') => return Ok(false),
+                KeyCode::Char('?') => {
+                    self.popup = Some(Box::new(HelpPopup::new()));
                 }
-            }
-            AppMode::Input => {
-                match key.code {
-                    KeyCode::Esc => {
-                        self.mode = AppMode::Normal;
-                    }
-                    KeyCode::Enter => {
-                        self.submit_message().await?;
-                    }
-                    KeyCode::Backspace => {
-                        self.input_pane.delete_char();
-                    }
-                    KeyCode::Delete => {
-                        self.input_pane.delete_char_forward();
-                    }
-                    KeyCode::Left => {
-                        self.input_pane.move_cursor_left();
-                    }
-                    KeyCode::Right => {
-                        self.input_pane.move_cursor_right();
-                    }
-                    KeyCode::Home => {
-                        self.input_pane.set_cursor_position(0);
-                    }
-                    KeyCode::End => {
-                        let len = self.input_pane.input().chars().count();
-                        self.input_pane.set_cursor_position(len);
-                    }
-                    KeyCode::Up => {
-                        self.input_pane.history_prev();
-                    }
-                    KeyCode::Down => {
-                        self.input_pane.history_next();
-                    }
-                    KeyCode::Tab => {
-                        self.complete_command();
-                    }
-                    KeyCode::Char(c) => {
-                        self.input_pane.insert_char(c);
-                    }
-                    _ => {}
+                KeyCode::Char('i') | KeyCode::Enter => {
+                    self.mode = AppMode::Input;
                 }
-            }
+                KeyCode::Char('j') | KeyCode::Down => self.scroll_down(),
+                KeyCode::Char('k') | KeyCode::Up => self.scroll_up(),
+                KeyCode::Char('G') => {
+                    let total = self.total_content_lines();
+                    let visible = self.visible_chat_height();
+                    self.scroll_offset = total.saturating_sub(visible);
+                }
+                KeyCode::Char('g') => {
+                    self.scroll_offset = 0;
+                }
+                KeyCode::Backspace | KeyCode::Delete => {
+                    self.input_pane.delete_char();
+                }
+                _ => {}
+            },
+            AppMode::Input => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::Normal;
+                }
+                KeyCode::Enter => {
+                    self.submit_message().await?;
+                }
+                KeyCode::Backspace => {
+                    self.input_pane.delete_char();
+                }
+                KeyCode::Delete => {
+                    self.input_pane.delete_char_forward();
+                }
+                KeyCode::Left => {
+                    self.input_pane.move_cursor_left();
+                }
+                KeyCode::Right => {
+                    self.input_pane.move_cursor_right();
+                }
+                KeyCode::Home => {
+                    self.input_pane.set_cursor_position(0);
+                }
+                KeyCode::End => {
+                    let len = self.input_pane.input().chars().count();
+                    self.input_pane.set_cursor_position(len);
+                }
+                KeyCode::Up => {
+                    self.input_pane.history_prev();
+                }
+                KeyCode::Down => {
+                    self.input_pane.history_next();
+                }
+                KeyCode::Tab => {
+                    self.complete_command();
+                }
+                KeyCode::Char(c) => {
+                    self.input_pane.insert_char(c);
+                }
+                _ => {}
+            },
         }
 
         Ok(true)
@@ -335,7 +333,8 @@ impl App {
             return Ok(());
         }
 
-        self.messages.push(Message::new(&content, MessageType::User));
+        self.messages
+            .push(Message::new(&content, MessageType::User));
         self.start_generation(content).await;
 
         Ok(())
@@ -387,10 +386,8 @@ impl App {
             if let Some(last) = self.messages.last_mut() {
                 last.is_streaming = false;
             }
-            self.messages.push(Message::new(
-                "⏹️ 生成已停止。",
-                MessageType::System,
-            ));
+            self.messages
+                .push(Message::new("⏹️ 生成已停止。", MessageType::System));
         }
     }
 
@@ -435,13 +432,15 @@ impl App {
         } else {
             format!("🔧 调用工具: {} 参数: {}", tool.name, tool.params)
         };
-        self.messages.push(Message::new(text, MessageType::ToolCall));
+        self.messages
+            .push(Message::new(text, MessageType::ToolCall));
     }
 
     /// 处理工具结果
     pub fn handle_tool_result(&mut self, tool: ToolCallInfo) {
         let text = format!("✅ 工具结果: {}", tool.params);
-        self.messages.push(Message::new(text, MessageType::ToolCall));
+        self.messages
+            .push(Message::new(text, MessageType::ToolCall));
 
         let has_diff = serde_json::from_str::<serde_json::Value>(&tool.params)
             .ok()
@@ -559,7 +558,8 @@ mod tests {
     #[test]
     fn test_scroll_up_down() {
         let mut app = test_app();
-        app.messages.push(Message::new("a\nb\nc\nd\ne", MessageType::User));
+        app.messages
+            .push(Message::new("a\nb\nc\nd\ne", MessageType::User));
         app.terminal_size = (80, 10);
         app.input_height = 3;
 
@@ -610,7 +610,8 @@ mod tests {
     #[test]
     fn test_finish_generation() {
         let mut app = test_app();
-        app.messages.push(Message::new("", MessageType::Assistant).streaming());
+        app.messages
+            .push(Message::new("", MessageType::Assistant).streaming());
         app.is_generating = true;
         app.finish_generation();
         assert!(!app.is_generating);
@@ -621,7 +622,8 @@ mod tests {
     fn test_handle_error() {
         let mut app = test_app();
         app.is_generating = true;
-        app.messages.push(Message::new("", MessageType::Assistant).streaming());
+        app.messages
+            .push(Message::new("", MessageType::Assistant).streaming());
         app.handle_error("boom".to_string());
         assert!(!app.is_generating);
         let last = app.messages.last().unwrap();

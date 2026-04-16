@@ -1,9 +1,9 @@
 //! # Clarity Core
-//! 
+//!
 //! Core engine for Project Clarity - An AI agent framework with tool registry.
-//! 
+//!
 //! ## Architecture
-//! 
+//!
 //! ```text
 //! ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
 //! │    Agent    │────▶│ ToolRegistry │────▶│    Tools    │
@@ -47,8 +47,8 @@ pub mod compaction;
 pub mod config;
 pub mod error;
 pub mod llm;
-pub mod memory;
 pub mod mcp;
+pub mod memory;
 pub mod notifications;
 pub mod personality;
 pub mod registry;
@@ -58,16 +58,14 @@ pub mod tools;
 
 // Re-export core types
 pub use agent::Agent;
-pub use error::{ToolError, AgentError};
-pub use llm::{AnthropicLlm, KimiLlm, OpenAiCompatibleLlm, LlmFactory};
+pub use error::{AgentError, ToolError};
+pub use llm::{AnthropicLlm, KimiLlm, LlmFactory, OpenAiCompatibleLlm};
 pub use registry::ToolRegistry;
 pub use tools::{Tool, ToolContext, ToolResult};
 
 /// Prelude module for convenient imports
 pub mod prelude {
-    pub use crate::{
-        Agent, Tool, ToolContext, ToolRegistry, ToolResult, ToolError, AgentError,
-    };
+    pub use crate::{Agent, AgentError, Tool, ToolContext, ToolError, ToolRegistry, ToolResult};
     pub use async_trait::async_trait;
     pub use serde_json::Value;
 }

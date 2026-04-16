@@ -1,5 +1,5 @@
 //! LaborMarket - Subagent type registry
-//! 
+//!
 //! Manages built-in subagent types like coder, explore, plan.
 
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 pub struct AgentTypeDefinition {
     pub name: String,
     pub description: String,
-    pub system_prompt: String,  // 直接存储而非文件路径
+    pub system_prompt: String,              // 直接存储而非文件路径
     pub allowed_tools: Option<Vec<String>>, // None = all tools
     pub max_iterations: usize,
 }
@@ -35,18 +35,19 @@ impl LaborMarket {
         market.register_builtin_types();
         market
     }
-    
+
     /// Register built-in types (coder, explore, plan)
     fn register_builtin_types(&mut self) {
         // coder: 用于代码工程任务
         self.register(AgentTypeDefinition {
             name: "coder".to_string(),
-            description: "Code engineering tasks - implementation, refactoring, debugging".to_string(),
+            description: "Code engineering tasks - implementation, refactoring, debugging"
+                .to_string(),
             system_prompt: CODER_SYSTEM_PROMPT.to_string(),
             allowed_tools: None, // 所有工具
             max_iterations: 20,
         });
-        
+
         // explore: 用于代码库探索
         self.register(AgentTypeDefinition {
             name: "explore".to_string(),
@@ -59,7 +60,7 @@ impl LaborMarket {
             ]), // 只读工具
             max_iterations: 10,
         });
-        
+
         // plan: 用于实现规划
         self.register(AgentTypeDefinition {
             name: "plan".to_string(),
@@ -74,22 +75,23 @@ impl LaborMarket {
             max_iterations: 5,
         });
     }
-    
+
     /// Register a new type
     pub fn register(&mut self, type_def: AgentTypeDefinition) {
         self.types.insert(type_def.name.clone(), type_def);
     }
-    
+
     /// Get a type by name
     pub fn get(&self, name: &str) -> Option<&AgentTypeDefinition> {
         self.types.get(name)
     }
-    
+
     /// Get a type or panic
     pub fn require(&self, name: &str) -> &AgentTypeDefinition {
-        self.get(name).unwrap_or_else(|| panic!("Unknown agent type: {}", name))
+        self.get(name)
+            .unwrap_or_else(|| panic!("Unknown agent type: {}", name))
     }
-    
+
     /// List all registered types
     pub fn list(&self) -> Vec<&AgentTypeDefinition> {
         self.types.values().collect()
@@ -130,7 +132,7 @@ Guidelines:
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_labor_market_default_types() {
         let market = LaborMarket::new();
@@ -138,21 +140,21 @@ mod tests {
         assert!(market.get("explore").is_some());
         assert!(market.get("plan").is_some());
     }
-    
+
     #[test]
     fn test_require_existing() {
         let market = LaborMarket::new();
         let coder = market.require("coder");
         assert_eq!(coder.name, "coder");
     }
-    
+
     #[test]
     #[should_panic]
     fn test_require_unknown() {
         let market = LaborMarket::new();
         market.require("unknown");
     }
-    
+
     #[test]
     fn test_register_custom() {
         let mut market = LaborMarket::new();
@@ -163,7 +165,7 @@ mod tests {
             allowed_tools: None,
             max_iterations: 10,
         });
-        
+
         assert!(market.get("custom").is_some());
     }
 }

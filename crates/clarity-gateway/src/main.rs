@@ -3,7 +3,10 @@ use tracing::{error, info, warn};
 
 use clarity_gateway::{channels, server};
 
-use channels::{ChannelManager, ChannelConfig, telegram::TelegramChannel, discord::DiscordChannel, webhook::WebhookChannel};
+use channels::{
+    discord::DiscordChannel, telegram::TelegramChannel, webhook::WebhookChannel, ChannelConfig,
+    ChannelManager,
+};
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::llm::LlmFactory;
 use clarity_core::registry::ToolRegistry;
@@ -124,8 +127,12 @@ async fn main() {
     // 启动所有渠道（在后台任务中运行）
     let channel_names = channel_manager.get_channel_names();
     if !channel_names.is_empty() {
-        info!("🔄 Starting {} channels: {:?}", channel_names.len(), channel_names);
-        
+        info!(
+            "🔄 Starting {} channels: {:?}",
+            channel_names.len(),
+            channel_names
+        );
+
         let agent_clone = agent.clone();
         tokio::spawn(async move {
             if let Err(e) = channel_manager.start_all(agent_clone).await {
@@ -153,7 +160,7 @@ mod tests {
     fn test_channel_config_loading() {
         // 测试默认配置（禁用状态）
         let (telegram, discord, webhook) = load_channel_configs();
-        
+
         assert!(!telegram.enabled);
         assert!(!discord.enabled);
         assert!(!webhook.enabled);

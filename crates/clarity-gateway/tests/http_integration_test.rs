@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::registry::ToolRegistry;
-use clarity_gateway::server::{create_api_router, create_admin_router, AppState};
+use clarity_gateway::server::{create_admin_router, create_api_router, AppState};
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tower::util::ServiceExt;
@@ -22,7 +22,12 @@ async fn test_health_check() {
     let app = create_api_router(state);
 
     let response = app
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -70,7 +75,12 @@ async fn test_admin_stats() {
     let app = create_admin_router(state);
 
     let response = app
-        .oneshot(Request::builder().uri("/api/stats").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/stats")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -89,7 +99,12 @@ async fn test_admin_tools() {
     let app = create_admin_router(state);
 
     let response = app
-        .oneshot(Request::builder().uri("/api/tools").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/tools")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 

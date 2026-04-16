@@ -9,10 +9,7 @@ use ratatui::{
 use crate::app::App;
 use crate::command_bar;
 use crate::popup;
-use crate::widgets::{
-    chat_pane::ChatPane,
-    generating_indicator::GeneratingIndicator,
-};
+use crate::widgets::{chat_pane::ChatPane, generating_indicator::GeneratingIndicator};
 
 /// 渲染主界面
 pub fn draw(f: &mut Frame, app: &App) {
@@ -46,21 +43,37 @@ pub fn draw(f: &mut Frame, app: &App) {
     };
 
     let left = Paragraph::new(Line::from(vec![
-        Span::styled(status_dot, Style::default().fg(dot_color).add_modifier(Modifier::BOLD)),
-        Span::styled(" Clarity", Style::default().fg(Color::Rgb(200, 200, 220)).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            status_dot,
+            Style::default().fg(dot_color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            " Clarity",
+            Style::default()
+                .fg(Color::Rgb(200, 200, 220))
+                .add_modifier(Modifier::BOLD),
+        ),
     ]))
     .alignment(Alignment::Left);
 
     let center = Paragraph::new(Line::from(vec![
         Span::styled("Model: ", Style::default().fg(Color::Rgb(140, 140, 160))),
-        Span::styled(&app.model_name, Style::default().fg(Color::Rgb(220, 220, 240)).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            &app.model_name,
+            Style::default()
+                .fg(Color::Rgb(220, 220, 240))
+                .add_modifier(Modifier::BOLD),
+        ),
     ]))
     .alignment(Alignment::Center);
 
     let session_short = &app.session_id[..8.min(app.session_id.len())];
     let right = Paragraph::new(Line::from(vec![
         Span::styled("Session: ", Style::default().fg(Color::Rgb(140, 140, 160))),
-        Span::styled(session_short.to_string(), Style::default().fg(Color::Rgb(180, 180, 200))),
+        Span::styled(
+            session_short.to_string(),
+            Style::default().fg(Color::Rgb(180, 180, 200)),
+        ),
     ]))
     .alignment(Alignment::Right);
 

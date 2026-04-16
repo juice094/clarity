@@ -33,6 +33,9 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    println!("\n\n✅ Final response matches streamed text: {}", response == streamed.lock().unwrap().join(""));
+    println!(
+        "\n\n✅ Final response matches streamed text: {}",
+        response == streamed.lock().unwrap().join("")
+    );
     Ok(())
 }

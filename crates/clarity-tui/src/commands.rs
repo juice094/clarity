@@ -33,10 +33,11 @@ impl CommandRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<Arc<dyn CommandHandler>> {
-        self.commands
-            .get(name)
-            .cloned()
-            .or_else(|| self.aliases.get(name).and_then(|t| self.commands.get(t).cloned()))
+        self.commands.get(name).cloned().or_else(|| {
+            self.aliases
+                .get(name)
+                .and_then(|t| self.commands.get(t).cloned())
+        })
     }
 
     pub fn names(&self) -> Vec<&str> {
@@ -86,7 +87,8 @@ impl CommandHandler for HelpCommand {
         lines.push("  Ctrl+D              - 退出".to_string());
         lines.push("  ↑ / ↓               - 滚动聊天记录".to_string());
         lines.push("  Home / End          - 移动光标到行首/行尾".to_string());
-        app.messages.push(Message::new(lines.join("\n"), MessageType::System));
+        app.messages
+            .push(Message::new(lines.join("\n"), MessageType::System));
     }
     fn description(&self) -> &str {
         "显示帮助"
@@ -125,7 +127,10 @@ impl CommandHandler for PersonalityCommand {
     fn execute(&self, app: &mut App, args: &[&str]) {
         if args.is_empty() {
             app.messages.push(Message::new(
-                format!("当前人格: {} (可用: direct, hanako, butter, ming)", app.current_yuan_type),
+                format!(
+                    "当前人格: {} (可用: direct, hanako, butter, ming)",
+                    app.current_yuan_type
+                ),
                 MessageType::System,
             ));
             return;

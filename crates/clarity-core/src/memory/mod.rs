@@ -152,7 +152,10 @@ impl PersistentMemoryStore {
     }
 
     /// Create with custom config
-    pub async fn with_config(db_path: &std::path::Path, config: MemoryConfig) -> anyhow::Result<Self> {
+    pub async fn with_config(
+        db_path: &std::path::Path,
+        config: MemoryConfig,
+    ) -> anyhow::Result<Self> {
         let mut store = Self::new(db_path).await?;
         store.config = config;
         Ok(store)
@@ -188,13 +191,19 @@ impl MemoryStore for PersistentMemoryStore {
 
     async fn retrieve(&self, min_importance: f32) -> anyhow::Result<Vec<Memory>> {
         let all = self.get_all().await?;
-        Ok(all.into_iter().filter(|m| m.importance >= min_importance).collect())
+        Ok(all
+            .into_iter()
+            .filter(|m| m.importance >= min_importance)
+            .collect())
     }
 
     async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
         let facts = self.inner.search_fulltext(query, limit).await?;
         let scores = self.importance_scores.read().await;
-        Ok(facts.into_iter().map(|f| fact_to_memory(f, &scores)).collect())
+        Ok(facts
+            .into_iter()
+            .map(|f| fact_to_memory(f, &scores))
+            .collect())
     }
 
     async fn get_all(&self) -> anyhow::Result<Vec<Memory>> {
@@ -204,7 +213,10 @@ impl MemoryStore for PersistentMemoryStore {
         }
         let facts = self.inner.get_recent_facts(count).await?;
         let scores = self.importance_scores.read().await;
-        Ok(facts.into_iter().map(|f| fact_to_memory(f, &scores)).collect())
+        Ok(facts
+            .into_iter()
+            .map(|f| fact_to_memory(f, &scores))
+            .collect())
     }
 
     async fn clear(&self) -> anyhow::Result<()> {
@@ -236,7 +248,7 @@ mod tests {
     #[test]
     fn test_memory_creation() {
         let memory = Memory::new("Test content").with_importance(0.8);
-        
+
         assert_eq!(memory.content, "Test content");
         assert!((memory.importance - 0.8).abs() < 0.001);
         assert!(!memory.id.is_empty());
@@ -245,14 +257,14 @@ mod tests {
     #[tokio::test]
     async fn test_memory_ticker() {
         let ticker = MemoryTicker::new(3);
-        
+
         // First 2 ticks should return false
         assert!(!ticker.tick().await);
         assert!(!ticker.tick().await);
-        
+
         // 3rd tick should return true
         assert!(ticker.tick().await);
-        
+
         // Reset and verify
         ticker.reset().await;
         assert_eq!(ticker.count().await, 0);
@@ -261,29 +273,37 @@ mod tests {
     #[tokio::test]
     async fn test_memory_ticker_cycles() {
         let ticker = MemoryTicker::new(2);
-        
+
         // Cycle through ticks
         assert!(!ticker.tick().await); // 1
-        assert!(ticker.tick().await);  // 2 - trigger
+        assert!(ticker.tick().await); // 2 - trigger
         assert!(!ticker.tick().await); // 3
-        assert!(ticker.tick().await);  // 4 - trigger
+        assert!(ticker.tick().await); // 4 - trigger
     }
 
     #[tokio::test]
     async fn test_persistent_memory_store() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let store = PersistentMemoryStore::new(temp_dir.path().join("memory.db").as_path()).await.unwrap();
+        let store = PersistentMemoryStore::new(temp_dir.path().join("memory.db").as_path())
+            .await
+            .unwrap();
 
-        store.store(Memory::new("Rust is great").with_tags(vec!["tech".to_string()])).await.unwrap();
-        store.store(Memory::new("I love pizza").with_tags(vec!["food".to_string()])).await.unwrap();
-        
+        store
+            .store(Memory::new("Rust is great").with_tags(vec!["tech".to_string()]))
+            .await
+            .unwrap();
+        store
+            .store(Memory::new("I love pizza").with_tags(vec!["food".to_string()]))
+            .await
+            .unwrap();
+
         let all = store.get_all().await.unwrap();
         assert_eq!(all.len(), 2);
-        
+
         let search = store.search("Rust", 10).await.unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].content, "Rust is great");
-        
+
         let count = store.count().await.unwrap();
         assert_eq!(count, 2);
     }

@@ -2,10 +2,12 @@
 //!
 //! These tests verify the integration between clarity-core and clarity-memory crates.
 
-use std::sync::Arc;
-use clarity_core::memory::{Memory, MemoryStore, InMemoryStore, PersistentMemoryStore, MemoryConfig, MemoryTicker};
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+use clarity_core::memory::{
+    InMemoryStore, Memory, MemoryConfig, MemoryStore, MemoryTicker, PersistentMemoryStore,
+};
 use clarity_core::registry::ToolRegistry;
+use std::sync::Arc;
 
 // ==================== Memory Store Implementations ====================
 
@@ -20,9 +22,18 @@ async fn test_in_memory_store_basic_operations() {
     let store = InMemoryStore::with_config(config);
 
     // Store memories
-    store.store(Memory::new("Memory 1").with_importance(0.8)).await.unwrap();
-    store.store(Memory::new("Memory 2").with_importance(0.4)).await.unwrap();
-    store.store(Memory::new("Memory 3").with_importance(0.9)).await.unwrap();
+    store
+        .store(Memory::new("Memory 1").with_importance(0.8))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("Memory 2").with_importance(0.4))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("Memory 3").with_importance(0.9))
+        .await
+        .unwrap();
 
     // Count
     assert_eq!(store.count().await.unwrap(), 3);
@@ -47,7 +58,10 @@ async fn test_in_memory_store_max_limit() {
 
     // Store more than max
     for i in 0..5 {
-        store.store(Memory::new(format!("Memory {}", i))).await.unwrap();
+        store
+            .store(Memory::new(format!("Memory {}", i)))
+            .await
+            .unwrap();
     }
 
     // Should only keep 3 most recent
@@ -62,9 +76,18 @@ async fn test_in_memory_store_max_limit() {
 async fn test_in_memory_store_search() {
     let store = InMemoryStore::new();
 
-    store.store(Memory::new("Rust is a great programming language")).await.unwrap();
-    store.store(Memory::new("Python is also popular")).await.unwrap();
-    store.store(Memory::new("I love Rust programming")).await.unwrap();
+    store
+        .store(Memory::new("Rust is a great programming language"))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("Python is also popular"))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("I love Rust programming"))
+        .await
+        .unwrap();
 
     // Search
     let results = store.search("rust", 10).await.unwrap();
@@ -105,7 +128,10 @@ async fn test_persistent_memory_store_basic() {
     let store = PersistentMemoryStore::new_in_memory().unwrap();
 
     // Store
-    store.store(Memory::new("Test memory").with_tags(vec!["test".to_string()])).await.unwrap();
+    store
+        .store(Memory::new("Test memory").with_tags(vec!["test".to_string()]))
+        .await
+        .unwrap();
 
     // Count
     assert_eq!(store.count().await.unwrap(), 1);
@@ -120,9 +146,18 @@ async fn test_persistent_memory_store_basic() {
 async fn test_persistent_memory_store_search() {
     let store = PersistentMemoryStore::new_in_memory().unwrap();
 
-    store.store(Memory::new("User likes Rust programming").with_tags(vec!["tech".to_string()])).await.unwrap();
-    store.store(Memory::new("User prefers tea").with_tags(vec!["preference".to_string()])).await.unwrap();
-    store.store(Memory::new("Learning async Rust").with_tags(vec!["learning".to_string()])).await.unwrap();
+    store
+        .store(Memory::new("User likes Rust programming").with_tags(vec!["tech".to_string()]))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("User prefers tea").with_tags(vec!["preference".to_string()]))
+        .await
+        .unwrap();
+    store
+        .store(Memory::new("Learning async Rust").with_tags(vec!["learning".to_string()]))
+        .await
+        .unwrap();
 
     // Full-text search
     let results = store.search("Rust", 10).await.unwrap();
@@ -140,11 +175,9 @@ async fn test_persistent_memory_store_with_config() {
         memory_format: String::from("{content}"),
     };
 
-    let store = PersistentMemoryStore::with_config(
-        std::path::Path::new(":memory:"),
-        config,
-    )
-    .unwrap();
+    let store = PersistentMemoryStore::with_config(std::path::Path::new(":memory:"), config)
+        .await
+        .unwrap();
 
     // Verify config is stored
     assert_eq!(store.config().max_memories, 50);
@@ -174,9 +207,9 @@ async fn test_memory_ticker_cycles() {
 
     // Cycle through
     assert!(!ticker.tick().await); // 1
-    assert!(ticker.tick().await);  // 2 - trigger
+    assert!(ticker.tick().await); // 2 - trigger
     assert!(!ticker.tick().await); // 3
-    assert!(ticker.tick().await);  // 4 - trigger
+    assert!(ticker.tick().await); // 4 - trigger
     assert!(!ticker.tick().await); // 5
 }
 
@@ -218,10 +251,7 @@ fn test_memory_with_importance() {
 
 #[test]
 fn test_memory_with_tags() {
-    let memory = Memory::new("Test").with_tags(vec![
-        "tag1".to_string(),
-        "tag2".to_string(),
-    ]);
+    let memory = Memory::new("Test").with_tags(vec!["tag1".to_string(), "tag2".to_string()]);
 
     assert_eq!(memory.tags.len(), 2);
     assert!(memory.tags.contains(&"tag1".to_string()));
@@ -249,7 +279,10 @@ async fn test_memory_with_agent_integration() {
     let memory_store: Arc<dyn MemoryStore> = Arc::new(InMemoryStore::new());
 
     // Pre-populate memory
-    memory_store.store(Memory::new("User preference: dark mode")).await.unwrap();
+    memory_store
+        .store(Memory::new("User preference: dark mode"))
+        .await
+        .unwrap();
 
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();

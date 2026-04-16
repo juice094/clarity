@@ -245,12 +245,12 @@ impl SkillRegistry {
 }
 
 // Submodules
-mod todo;
 mod think;
+mod todo;
 
 // Re-export skill implementations
-pub use todo::TodoSkill;
 pub use think::ThinkSkill;
+pub use todo::TodoSkill;
 
 #[cfg(test)]
 mod tests {
@@ -342,8 +342,12 @@ mod tests {
     #[test]
     fn test_skill_registry_list() {
         let mut registry = SkillRegistry::new();
-        registry.register(TestSkill::new("skill1", "First")).unwrap();
-        registry.register(TestSkill::new("skill2", "Second")).unwrap();
+        registry
+            .register(TestSkill::new("skill1", "First"))
+            .unwrap();
+        registry
+            .register(TestSkill::new("skill2", "Second"))
+            .unwrap();
 
         let list = registry.list();
         assert_eq!(list.len(), 2);
@@ -354,8 +358,12 @@ mod tests {
     #[test]
     fn test_skill_registry_descriptions() {
         let mut registry = SkillRegistry::new();
-        registry.register(TestSkill::new("skill1", "First skill")).unwrap();
-        registry.register(TestSkill::new("skill2", "Second skill")).unwrap();
+        registry
+            .register(TestSkill::new("skill1", "First skill"))
+            .unwrap();
+        registry
+            .register(TestSkill::new("skill2", "Second skill"))
+            .unwrap();
 
         let descs = registry.get_all_descriptions();
         assert_eq!(descs.len(), 2);
@@ -368,7 +376,9 @@ mod tests {
     #[tokio::test]
     async fn test_skill_registry_execute() {
         let mut registry = SkillRegistry::new();
-        registry.register(TestSkill::new("test", "A test skill")).unwrap();
+        registry
+            .register(TestSkill::new("test", "A test skill"))
+            .unwrap();
 
         let result = registry.execute("test", "input").await.unwrap();
         assert_eq!(result, "Executed test with: input");
@@ -380,7 +390,9 @@ mod tests {
     #[test]
     fn test_skill_registry_unregister() {
         let mut registry = SkillRegistry::new();
-        registry.register(TestSkill::new("test", "A test skill")).unwrap();
+        registry
+            .register(TestSkill::new("test", "A test skill"))
+            .unwrap();
 
         assert!(registry.unregister("test"));
         assert!(!registry.contains("test"));
@@ -390,8 +402,12 @@ mod tests {
     #[test]
     fn test_skill_registry_clear() {
         let mut registry = SkillRegistry::new();
-        registry.register(TestSkill::new("skill1", "First")).unwrap();
-        registry.register(TestSkill::new("skill2", "Second")).unwrap();
+        registry
+            .register(TestSkill::new("skill1", "First"))
+            .unwrap();
+        registry
+            .register(TestSkill::new("skill2", "Second"))
+            .unwrap();
 
         registry.clear();
         assert!(registry.is_empty());

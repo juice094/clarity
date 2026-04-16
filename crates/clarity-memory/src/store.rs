@@ -10,10 +10,10 @@ use crate::types::{Fact, Result};
 use std::path::Path;
 
 // Re-export backends for convenience
-pub use crate::backends::{StorageBackend, BackendConfig, StorageFactory};
-pub use crate::backends::{FileStore, HybridStore};
 #[cfg(feature = "sqlite")]
 pub use crate::backends::SqliteStore;
+pub use crate::backends::{BackendConfig, StorageBackend, StorageFactory};
+pub use crate::backends::{FileStore, HybridStore};
 
 /// SQLite-based fact store with FTS5 full-text search
 ///
@@ -54,9 +54,10 @@ impl MemoryStore {
         #[cfg(not(feature = "sqlite"))]
         {
             // Create a temporary directory for FileStore
-            let temp_dir = std::env::temp_dir().join(format!("clarity_memory_{}", std::process::id()));
+            let temp_dir =
+                std::env::temp_dir().join(format!("clarity_memory_{}", std::process::id()));
             std::fs::create_dir_all(&temp_dir).map_err(crate::types::MemoryError::Io)?;
-            
+
             // Use block_on for the async FileStore::new
             let inner = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(FileStore::new(&temp_dir))
@@ -92,10 +93,7 @@ impl MemoryStore {
     }
 
     /// Get facts created after a specific time
-    pub async fn get_facts_since(
-        &self,
-        since: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Vec<Fact>> {
+    pub async fn get_facts_since(&self, since: chrono::DateTime<chrono::Utc>) -> Result<Vec<Fact>> {
         self.inner.get_facts_since(since).await
     }
 
@@ -125,10 +123,7 @@ impl MemoryStore {
     }
 
     /// Bulk save facts for better performance
-    pub async fn bulk_save_facts(
-        &self,
-        facts: &[FactTuple<'_>],
-    ) -> Result<Vec<i64>> {
+    pub async fn bulk_save_facts(&self, facts: &[FactTuple<'_>]) -> Result<Vec<i64>> {
         self.inner.bulk_save_facts(facts).await
     }
 }
@@ -181,9 +176,7 @@ impl MemoryStore {
 
     /// Clear all synchronously
     pub fn clear_all_sync(&self) -> Result<usize> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.clear_all())
-        })
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.clear_all()))
     }
 
     /// Count facts synchronously
@@ -227,7 +220,11 @@ mod tests {
             .await
             .unwrap();
 
-        let fact = store.get_fact(id).await.unwrap().expect("Fact should exist");
+        let fact = store
+            .get_fact(id)
+            .await
+            .unwrap()
+            .expect("Fact should exist");
         assert_eq!(fact.fact, "User likes Rust programming");
         assert_eq!(fact.tags, vec!["preference", "tech"]);
         assert_eq!(fact.time, Some("2024-01-15".to_string()));
@@ -261,7 +258,10 @@ mod tests {
             .await
             .unwrap();
 
-        let results = store.search_by_tags(&["preference".to_string()], 10).await.unwrap();
+        let results = store
+            .search_by_tags(&["preference".to_string()], 10)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 2);
 
         let results = store
@@ -270,7 +270,10 @@ mod tests {
             .unwrap();
         assert_eq!(results.len(), 2);
 
-        let results = store.search_by_tags(&["schedule".to_string()], 10).await.unwrap();
+        let results = store
+            .search_by_tags(&["schedule".to_string()], 10)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].fact, "Meeting at 3pm");
     }
@@ -302,7 +305,10 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert!(results[0].fact.contains("Rust"));
 
-        let results = store.search_fulltext("programming language", 10).await.unwrap();
+        let results = store
+            .search_fulltext("programming language", 10)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
     }
 

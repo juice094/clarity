@@ -55,23 +55,128 @@ impl TfidfVectorizer {
     /// Create a new TfidfVectorizer with default English stop words
     pub fn new() -> Self {
         let stop_words: HashSet<String> = [
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "must", "shall",
-            "can", "need", "dare", "ought", "used", "to", "of", "in",
-            "for", "on", "with", "at", "by", "from", "as", "into",
-            "through", "during", "before", "after", "above", "below",
-            "between", "under", "again", "further", "then", "once",
-            "here", "there", "when", "where", "why", "how", "all",
-            "each", "few", "more", "most", "other", "some", "such",
-            "no", "nor", "not", "only", "own", "same", "so", "than",
-            "too", "very", "just", "and", "but", "if", "or", "because",
-            "until", "while", "this", "that", "these", "those", "i",
-            "me", "my", "myself", "we", "our", "ours", "ourselves",
-            "you", "your", "yours", "yourself", "yourselves", "he",
-            "him", "his", "himself", "she", "her", "hers", "herself",
-            "it", "its", "itself", "they", "them", "their", "theirs",
-            "themselves", "what", "which", "who", "whom", "whose",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "shall",
+            "can",
+            "need",
+            "dare",
+            "ought",
+            "used",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "under",
+            "again",
+            "further",
+            "then",
+            "once",
+            "here",
+            "there",
+            "when",
+            "where",
+            "why",
+            "how",
+            "all",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "just",
+            "and",
+            "but",
+            "if",
+            "or",
+            "because",
+            "until",
+            "while",
+            "this",
+            "that",
+            "these",
+            "those",
+            "i",
+            "me",
+            "my",
+            "myself",
+            "we",
+            "our",
+            "ours",
+            "ourselves",
+            "you",
+            "your",
+            "yours",
+            "yourself",
+            "yourselves",
+            "he",
+            "him",
+            "his",
+            "himself",
+            "she",
+            "her",
+            "hers",
+            "herself",
+            "it",
+            "its",
+            "itself",
+            "they",
+            "them",
+            "their",
+            "theirs",
+            "themselves",
+            "what",
+            "which",
+            "who",
+            "whom",
+            "whose",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -442,8 +547,11 @@ mod tests {
         // Search for "programming" - should match facts 1 and 2
         let results = store.search("programming", 2);
         assert_eq!(results.len(), 2, "Should find 2 results for 'programming'");
-        assert!(results[0].2 >= results[1].2, "Results should be sorted by score");
-        
+        assert!(
+            results[0].2 >= results[1].2,
+            "Results should be sorted by score"
+        );
+
         // First result should be about Rust or Python
         let first_text = &results[0].1;
         assert!(
@@ -471,10 +579,25 @@ mod tests {
         vectorizer.fit(&docs);
 
         // Stop words should be filtered
-        assert!(!vectorizer.has_term("the"), "'the' should be filtered as stop word");
-        assert!(!vectorizer.has_term("and"), "'and' should be filtered as stop word");
-        assert!(!vectorizer.has_term("of"), "'of' should be filtered as stop word");
-        assert!(vectorizer.has_term("rust"), "'rust' should be in vocabulary");
-        assert!(vectorizer.has_term("programming"), "'programming' should be in vocabulary");
+        assert!(
+            !vectorizer.has_term("the"),
+            "'the' should be filtered as stop word"
+        );
+        assert!(
+            !vectorizer.has_term("and"),
+            "'and' should be filtered as stop word"
+        );
+        assert!(
+            !vectorizer.has_term("of"),
+            "'of' should be filtered as stop word"
+        );
+        assert!(
+            vectorizer.has_term("rust"),
+            "'rust' should be in vocabulary"
+        );
+        assert!(
+            vectorizer.has_term("programming"),
+            "'programming' should be in vocabulary"
+        );
     }
 }
