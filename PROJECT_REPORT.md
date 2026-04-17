@@ -15,10 +15,10 @@
 | 指标 | 数值 | 验证方式 |
 |------|------|----------|
 | 编译状态 | ✅ 通过 | `cargo check --workspace` |
-| 测试通过 | **252+ 个** | `cargo test --workspace --lib` |
+| 测试通过 | **256+ 个** | `cargo test --workspace --lib` |
 | Clippy 警告 | **0 个** | `cargo clippy --workspace` |
-| crates 代码 | ~717 KB | PowerShell 统计 |
-| Rust 文件数 | 72 个 | PowerShell 统计 |
+| crates 代码 | ~2.7 MB | PowerShell 统计 |
+| Rust 文件数 | 122 个 (82 库文件) | PowerShell 统计 |
 | Crate 数量 | 5 个 | workspace 配置 |
 
 ---
@@ -233,24 +233,27 @@ cargo run -p clarity-gateway
 
 ## 7. 后续推进路线
 
-### Phase 1: 实测验证（当前 - 2 周）
+### Phase 1: 实测验证（已完成）
 
-- [ ] TUI 真实 LLM 联调（需 API Key）
-- [ ] Gateway HTTP API 端到端测试
-- [ ] MCP Client + filesystem server 联调
+- [x] TUI 真实 LLM 联调（Kimi Code / Moonshot）
+- [x] Gateway HTTP API 端到端测试
+- [x] MCP Client + filesystem server 联调（stdio/HTTP）
+- [x] 子代理 Runner 端到端测试
+- [x] Gateway Chat 工具调用链路修复（完整消息历史 + tool_calls）
+- [x] Web IDE (`chat.html`) 内嵌 Gateway 并 SSE 流式输出
 - [ ] Gateway 渠道实测（Discord/Telegram/Webhook）
-- [ ] 子代理 Runner 端到端测试
-- [ ] 修复实测中发现的问题
+- [x] 修复实测中发现的问题
 
-### Phase 2: 稳定化（2-4 周）
+### Phase 2: 稳定化（当前 - 2–4 周）
 
+- [x] MCP 命令安全校验 / allowlist（2026-04-17）
 - [ ] 错误处理完善
 - [ ] 性能基准测试
 - [ ] 跨平台测试（Linux/macOS）
-- [ ] 文档完善
+- [ ] 文档同步与完善
 - [ ] 集成测试补充
 
-### Phase 3: 能力扩展（4-8 周）
+### Phase 3: 能力扩展（未来 1–2 个月）
 
 - [ ] MCP SSE transport 实现
 - [ ] 向量检索优化

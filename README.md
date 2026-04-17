@@ -16,9 +16,10 @@
 | Metric | Status | Note |
 |--------|--------|------|
 | Build | ✅ | `cargo check --workspace` passes |
-| Tests | ✅ | **252+** passed, 0 failed |
+| Tests | ✅ | **256+** passed, 0 failed |
 | Lint | ✅ | `clippy --workspace --lib --bins --tests` zero warnings |
-| Codebase | ~750 KB | 91 Rust source files |
+| Codebase | ~2.7 MB | 122 Rust files (82 library sources) |
+| Binary | ~23 MB | Release `clarity-gateway.exe` |
 | Crates | 5 | workspace layout |
 
 ### Feature Matrix
@@ -36,7 +37,7 @@
 | **clarity-memory** | ✅ | File / SQLite / Hybrid backends, 57 tests passing |
 | **clarity-wire** | ✅ | Soul-UI broadcast channel, 8 tests passing |
 | Gateway Channels | ⚠️ | Discord / Telegram / Webhook code present, needs real-world testing |
-| Web UI | 📅 | Planned for Phase 3 |
+| Web UI | ✅ | Embedded Web IDE (`chat.html`) served by Gateway |
 
 ---
 
@@ -46,8 +47,8 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                        Application Layer                     │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ clarity-tui │  │clarity-gateway│ │   Future: Web UI    │  │
-│  │  (Terminal) │  │  (HTTP API)   │ │   (Planned)         │  │
+│  │ clarity-tui │  │clarity-gateway│ │   Web IDE           │  │
+│  │  (Terminal) │  │  (HTTP API)   │ │   (chat.html)       │  │
 │  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
 └─────────┼────────────────┼──────────────────────────────────┘
           │                │
@@ -110,7 +111,7 @@
 
 ### Tool System
 
-- **8 Built-in Tools**: `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `bash`, `web_search`, `web_fetch`.
+- **9 Built-in Tools**: `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `bash`, `powershell`, `web_search`, `web_fetch`.
 - **MCP Integration**: Load external MCP servers via `~/.config/clarity/mcp.json`; tools are automatically namespaced and injected into the registry.
 - **Tool Approval**: Dangerous ops require confirmation (unless in Yolo mode).
 
@@ -191,6 +192,17 @@ Create `~/.config/clarity/mcp.json`:
 
 On startup, `clarity-tui` will connect to the server and register tools (e.g. `filesystem_read_file`) into the agent's tool registry automatically.
 
+### Security: MCP Command Allowlist
+
+To prevent command-injection attacks, stdio commands are validated before execution:
+- Shell metacharacters and relative paths are rejected by default.
+- Absolute paths are allowed only if they exist.
+- Bare names (e.g. `npx`, `uvx`, `node`) are allowed and resolved via `PATH`.
+- You can override restrictions with the environment variable:
+  ```powershell
+  $env:CLARITY_MCP_ALLOWLIST="/usr/bin/npx,/opt/bin"
+  ```
+
 ---
 
 ## 📚 Documentation
@@ -210,10 +222,13 @@ On startup, `clarity-tui` will connect to the server and register tools (e.g. `f
 - [x] TUI interaction polish (commands, history, safe Ctrl+C)
 - [x] MCP Client + filesystem server E2E
 - [x] Gateway Chat Completions SSE streaming
+- [x] Gateway Chat tool-calling pipeline fixed (full message history + `tool_calls`)
 - [x] BackgroundTaskManager real-agent execution
+- [x] Embedded Web IDE (`chat.html`) in Gateway
 - [ ] Gateway channel end-to-end testing (Discord/Telegram/Webhook)
 
 ### Phase 2: Stabilization (Next 2–4 weeks)
+- [x] MCP command validation / allowlist (security hardening)
 - [ ] Error handling polish
 - [ ] Performance benchmarks
 - [ ] Cross-platform CI matrix
@@ -239,5 +254,5 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-*Last updated: 2026-04-15*  
+*Last updated: 2026-04-17*  
 *Maintained by the Clarity Team and AI Assistant.*

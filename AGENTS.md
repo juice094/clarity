@@ -53,10 +53,20 @@ $env:OPENAI_API_KEY="..."
 >
 > **Recommendation for future refactors**: Extract a `ChatDriver` or `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own message-building strategies without modifying core enums.
 
+## Security Notes
+
+- **MCP stdio command validation is active** (since 2026-04-17). Before spawning any MCP server, Clarity validates the `command` field:
+  - Shell metacharacters and `..` sequences are rejected.
+  - Relative paths are rejected.
+  - Absolute paths must exist and point to a file.
+  - Bare names (e.g. `npx`, `uvx`) are allowed and resolved via `PATH`.
+  - Override with the `CLARITY_MCP_ALLOWLIST` environment variable (comma-separated absolute paths or prefixes).
+
 ## Known Issues
 
 - ~~Personality system produces verbose `<mood>` XML metadata~~ **Fixed** by `Direct` mode.
-- ~~MCP client is skeletal~~ **Fixed** — stdio transport and dynamic registration are working.
+- ~~MCP client is skeletal~~ **Fixed** — stdio/HTTP transport and dynamic registration are working.
+- ~~Web UI missing~~ **Fixed** — Gateway serves an embedded Web IDE (`chat.html`) with Monaco Editor and SSE streaming.
 - **Gateway SSE does not forward `tool_calls` deltas to the client**: The current design treats the agent as a black box; only the final text answer is streamed. If you need OpenAI-compatible `tool_calls` visible in the frontend, the SSE formatter in `handlers.rs` will need to emit `delta.tool_calls` chunks.
 
 ## Code Style

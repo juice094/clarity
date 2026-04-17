@@ -1080,6 +1080,7 @@ mod tests {
             max_tokens: None,
             stream: false,
             prompt_cache_key: Some("cache-key-123".into()),
+            thinking: None,
         };
         let json = serde_json::to_value(&request).unwrap();
         assert_eq!(json.get("model").unwrap(), "test-model");
@@ -1102,6 +1103,7 @@ mod tests {
             max_tokens: None,
             stream: false,
             prompt_cache_key: None,
+            thinking: None,
         };
         let json = serde_json::to_value(&request).unwrap();
         assert!(json.get("prompt_cache_key").is_none());

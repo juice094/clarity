@@ -231,6 +231,86 @@ pub trait McpClient: Send + Sync {
 }
 
 // =============================================================================
+// Command validation for MCP stdio transport
+// =============================================================================
+
+/// Validate an MCP stdio command to prevent command-injection attacks.
+///
+/// Rules:
+/// 1. If `CLARITY_MCP_ALLOWLIST` is set, the command must match or start with
+///    one of the comma-separated entries.
+/// 2. Reject shell metacharacters and `..` sequences.
+/// 3. Absolute paths are allowed only if they exist and are files.
+/// 4. Bare names (no path separators) are allowed — the OS resolves them via PATH.
+/// 5. Relative paths are rejected.
+fn validate_mcp_command(command: &str) -> Result<(), McpError> {
+    let allowlist = std::env::var("CLARITY_MCP_ALLOWLIST").ok();
+    validate_mcp_command_with_allowlist(command, allowlist.as_deref())
+}
+
+fn validate_mcp_command_with_allowlist(
+    command: &str,
+    allowlist: Option<&str>,
+) -> Result<(), McpError> {
+    // 1. Explicit allowlist takes precedence.
+    if let Some(allowlist) = allowlist {
+        let allowed: Vec<&str> = allowlist
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !allowed.is_empty() {
+            let matched = allowed.iter().any(|prefix| {
+                command == *prefix || command.starts_with(&format!("{}/", prefix))
+            });
+            if !matched {
+                return Err(McpError::CommandNotAllowed(format!(
+                    "Command '{}' not in CLARITY_MCP_ALLOWLIST",
+                    command
+                )));
+            }
+            return Ok(());
+        }
+    }
+
+    // 2. Default hardening.
+    const BAD_CHARS: &[char] = &[
+        ';', '|', '&', '$', '`', '<', '>', '(', ')', '{', '}', '*', '?', '~', '\'',
+        '"',
+    ];
+    if command.contains("..") || command.contains(BAD_CHARS) {
+        return Err(McpError::CommandNotAllowed(format!(
+            "Command '{}' contains unsafe characters",
+            command
+        )));
+    }
+
+    let path = std::path::Path::new(command);
+
+    // Absolute path: must exist and be a file.
+    if path.is_absolute() {
+        if path.exists() && path.is_file() {
+            return Ok(());
+        }
+        return Err(McpError::CommandNotAllowed(format!(
+            "Absolute command '{}' does not exist or is not a file",
+            command
+        )));
+    }
+
+    // Bare name: allowed, OS resolves via PATH.
+    if !command.contains('/') && !command.contains('\\') {
+        return Ok(());
+    }
+
+    // Anything else is treated as a relative path and rejected.
+    Err(McpError::CommandNotAllowed(format!(
+        "Relative command paths are not allowed: '{}'",
+        command
+    )))
+}
+
+// =============================================================================
 // Stdio Client
 // =============================================================================
 
@@ -272,6 +352,8 @@ impl McpClient for StdioMcpClient {
                 "Expected stdio transport".into(),
             ));
         };
+
+        validate_mcp_command(command)?;
 
         let mut cmd = Command::new(command);
         cmd.args(args)
@@ -756,6 +838,9 @@ pub enum McpError {
     #[error("Invalid transport: {0}")]
     InvalidTransport(String),
 
+    #[error("Command not allowed: {0}")]
+    CommandNotAllowed(String),
+
     #[error("Request failed: {0}")]
     RequestFailed(String),
 
@@ -915,5 +1000,46 @@ mod tests {
     fn test_mcp_client_instance() {
         let instance = McpClientBuilder::stdio("test", "echo").build();
         assert!(matches!(instance, McpClientInstance::Stdio(_)));
+    }
+
+    #[test]
+    fn test_validate_command_bare_name_allowed() {
+        assert!(validate_mcp_command_with_allowlist("npx", None).is_ok());
+        assert!(validate_mcp_command_with_allowlist("node", None).is_ok());
+        assert!(validate_mcp_command_with_allowlist("uvx", None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_command_rejects_metacharacters() {
+        assert!(validate_mcp_command_with_allowlist("bash; rm -rf /", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("node | curl", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("npx && evil", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("`whoami`", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("$(id)", None).is_err());
+    }
+
+    #[test]
+    fn test_validate_command_rejects_relative_paths() {
+        assert!(validate_mcp_command_with_allowlist("../evil.exe", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("./script.sh", None).is_err());
+        assert!(validate_mcp_command_with_allowlist("subdir/binary", None).is_err());
+    }
+
+    #[test]
+    fn test_validate_command_allowlist_override() {
+        let allowlist = "/usr/bin/npx,/opt/bin";
+        // Allowed because it matches exactly
+        assert!(
+            validate_mcp_command_with_allowlist("/usr/bin/npx", Some(allowlist)).is_ok()
+        );
+        // Allowed because it starts with /opt/bin/
+        assert!(
+            validate_mcp_command_with_allowlist("/opt/bin/tool", Some(allowlist)).is_ok()
+        );
+        // Blocked
+        assert!(
+            validate_mcp_command_with_allowlist("/usr/bin/node", Some(allowlist)).is_err()
+        );
+        assert!(validate_mcp_command_with_allowlist("npx", Some(allowlist)).is_err());
     }
 }

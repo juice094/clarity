@@ -325,6 +325,7 @@ fn map_mcp_error(err: McpError) -> ToolError {
     match err {
         McpError::ConnectionFailed(msg)
         | McpError::InvalidTransport(msg)
+        | McpError::CommandNotAllowed(msg)
         | McpError::RequestFailed(msg) => {
             ToolError::Unavailable(format!("MCP transport error: {}", msg))
         }
