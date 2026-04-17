@@ -36,7 +36,7 @@
 | **clarity-gateway** | ✅ | OpenAI-compatible Chat Completions API with `stream=true` SSE via `AgentController` |
 | **clarity-memory** | ✅ | File / SQLite / Hybrid backends, 57 tests passing |
 | **clarity-wire** | ✅ | Soul-UI broadcast channel, 8 tests passing |
-| Gateway Channels | ⚠️ | Discord / Telegram / Webhook code present, needs real-world testing |
+| Gateway Channels | ⚠️ | Webhook ready; Discord / Telegram temporarily excluded from default build due to upstream `rustls-webpki` advisories |
 | Web UI | ✅ | Embedded Web IDE (`chat.html`) served by Gateway |
 
 ---
@@ -225,7 +225,7 @@ To prevent command-injection attacks, stdio commands are validated before execut
 - [x] Gateway Chat tool-calling pipeline fixed (full message history + `tool_calls`)
 - [x] BackgroundTaskManager real-agent execution
 - [x] Embedded Web IDE (`chat.html`) in Gateway
-- [ ] Gateway channel end-to-end testing (Discord/Telegram/Webhook)
+- [ ] Gateway channel end-to-end testing (Webhook active; Discord/Telegram blocked by upstream CVEs)
 
 ### Phase 2: Stabilization (Next 2–4 weeks)
 - [x] MCP command validation / allowlist (security hardening)

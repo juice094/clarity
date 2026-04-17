@@ -176,7 +176,7 @@ rmcp = "0.1"      # MCP 协议库
 | **Gateway 端到端** | 启动服务，发送 HTTP 请求 | 返回真实 LLM 响应 |
 | **记忆系统闭环** | 运行多轮对话，检查存储 | 记忆被存储和检索 |
 | **MCP Client 联调** | 连接真实 MCP Server | 能列出/调用 MCP 工具 |
-| **Gateway 渠道** | 配置 Discord/Telegram | 消息收发正常 |
+| **Gateway 渠道** | 配置 Webhook | 消息收发正常；Discord/Telegram 因上游 rustls-webpki 安全告警暂时从默认构建中移除 |
 
 ### 5.2 中优先级实测
 
@@ -241,7 +241,7 @@ cargo run -p clarity-gateway
 - [x] 子代理 Runner 端到端测试
 - [x] Gateway Chat 工具调用链路修复（完整消息历史 + tool_calls）
 - [x] Web IDE (`chat.html`) 内嵌 Gateway 并 SSE 流式输出
-- [ ] Gateway 渠道实测（Discord/Telegram/Webhook）
+- [ ] Gateway 渠道实测（Webhook；Discord/Telegram 待上游 CVE 修复后恢复）
 - [x] 修复实测中发现的问题
 
 ### Phase 2: 稳定化（当前 - 2–4 周）

@@ -30,15 +30,8 @@ clarity-wire = { path = "../clarity-wire" }
 axum = { workspace = true }
 tower-http = { workspace = true, features = ["cors", "fs", "trace"] }
 
-# HTTP client for Telegram & Webhook
+# HTTP client for Webhook
 reqwest = { version = "0.12", features = ["json"] }
-
-# Telegram Bot API (optional feature)
-teloxide = { version = "0.12", optional = true }
-
-# Discord Bot API (optional feature)
-serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache", "framework"], optional = true }
-poise = { version = "0.6", optional = true }
 
 # Webhook signature verification
 hmac = "0.12"
@@ -51,7 +44,9 @@ http-body-util = "0.1"
 tower = "0.5"
 
 [features]
-default = ["telegram", "discord", "webhook"]
-telegram = ["dep:teloxide"]
-discord = ["dep:serenity", "dep:poise"]
+default = ["webhook"]
+# Discord/Telegram features are temporarily disabled from default due to upstream
+# security advisories in rustls-webpki (via serenity). Re-enable when fixed.
+discord = []
+telegram = []
 webhook = []
