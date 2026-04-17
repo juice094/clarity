@@ -135,14 +135,17 @@ pub async fn chat_completions(
         let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
 
         let sse_stream = stream::unfold(
-            (event_rx, Option::<String>::None),
-            move |(mut rx, pending)| {
+            (event_rx, 0u8),
+            move |(mut rx, step)| {
                 let model = model.clone();
                 let id = id.clone();
                 async move {
-                    if let Some(data) = pending {
-                        let event = SseEvent::default().data(data);
-                        return Some((Ok::<_, Infallible>(event), (rx, None)));
+                    if step == 2 {
+                        return None;
+                    }
+                    if step == 1 {
+                        let event = SseEvent::default().data("[DONE]");
+                        return Some((Ok::<_, Infallible>(event), (rx, 2)));
                     }
                     match rx.recv().await {
                         Some(ControllerEvent::Chunk(text)) => {
@@ -154,7 +157,7 @@ pub async fn chat_completions(
                                 "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
                             });
                             let event = SseEvent::default().data(data.to_string());
-                            Some((Ok(event), (rx, None)))
+                            Some((Ok(event), (rx, 0)))
                         }
                         Some(ControllerEvent::Complete(_))
                         | Some(ControllerEvent::Error(_))
@@ -167,7 +170,7 @@ pub async fn chat_completions(
                                 "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
                             });
                             let event = SseEvent::default().data(data.to_string());
-                            Some((Ok(event), (rx, Some("[DONE]".to_string()))))
+                            Some((Ok(event), (rx, 1)))
                         }
                     }
                 }
@@ -289,4 +292,114 @@ pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoRespons
     };
 
     (StatusCode::OK, Json(ToolsResponse { tools }))
+}
+
+// ==================== Background Tasks API ====================
+
+use clarity_core::background::{TaskResult, TaskSpec, TaskStatus};
+use clarity_core::background::TaskId;
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTaskRequest {
+    pub name: String,
+    pub prompt: String,
+    #[serde(default)]
+    pub max_iterations: Option<usize>,
+}
+
+#[derive(Serialize)]
+pub struct TaskCreateResponse {
+    pub task_id: TaskId,
+    pub status: TaskStatus,
+}
+
+#[derive(Serialize)]
+pub struct TaskDetailResponse {
+    pub task_id: TaskId,
+    pub name: String,
+    pub status: TaskStatus,
+    pub prompt: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+    pub result: Option<TaskResult>,
+}
+
+pub async fn create_task(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateTaskRequest>,
+) -> Response {
+    let spec = TaskSpec::new(req.name.clone(), req.prompt)
+        .with_agent_type("default")
+        .with_max_iterations(req.max_iterations.unwrap_or(10));
+
+    match state.task_manager.spawn_agent(spec).await {
+        Ok(task_id) => {
+            let response = TaskCreateResponse {
+                task_id: task_id.clone(),
+                status: TaskStatus::Pending,
+            };
+            info!("Created background task {}", task_id);
+            (StatusCode::ACCEPTED, Json(response)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to create background task: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn get_task(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(task_id): axum::extract::Path<TaskId>,
+) -> Response {
+    info!("get_task called with id={}", task_id);
+    let store = state.task_manager.store();
+    match store.get(&task_id).await {
+        Ok(info) => {
+            let result = if info.status.is_terminal() {
+                store.get_result(&task_id).await.ok()
+            } else {
+                None
+            };
+            let response = TaskDetailResponse {
+                task_id: info.id,
+                name: info.spec.name,
+                status: info.status,
+                prompt: info.spec.prompt,
+                created_at: info.created_at,
+                updated_at: info.updated_at,
+                result,
+            };
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to get task {}: {}", task_id, e);
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn cancel_task(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(task_id): axum::extract::Path<TaskId>,
+) -> impl IntoResponse {
+    info!("cancel_task called with id={}", task_id);
+    match state.task_manager.cancel(&task_id).await {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"cancelled": true}))),
+        Err(e) => {
+            error!("Failed to cancel task {}: {}", task_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+        }
+    }
 }

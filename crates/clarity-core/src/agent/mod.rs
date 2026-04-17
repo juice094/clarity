@@ -463,6 +463,11 @@ impl Agent {
         &self.registry
     }
 
+    /// Get the LLM provider (if configured)
+    pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
+        self.llm.clone()
+    }
+
     /// Get the agent configuration
     pub fn config(&self) -> &AgentConfig {
         &self.config

@@ -11,13 +11,14 @@ use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::handlers;
 use crate::session::SessionManager;
 use clarity_core::agent::Agent;
+use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
 
 /// 应用状态
@@ -25,21 +26,26 @@ pub struct AppState {
     pub agent: Arc<Agent>,
     pub session_manager: Arc<RwLock<SessionManager>>,
     pub tool_registry: ToolRegistry,
+    pub task_manager: Arc<BackgroundTaskManager>,
 }
 
 impl AppState {
-    pub fn new(agent: Arc<Agent>) -> Self {
+    pub fn new(agent: Arc<Agent>, task_manager: Arc<BackgroundTaskManager>) -> Self {
         Self {
-            agent,
+            agent: agent.clone(),
             session_manager: Arc::new(RwLock::new(SessionManager::new())),
-            tool_registry: ToolRegistry::with_builtin_tools(),
+            tool_registry: agent.registry().clone(),
+            task_manager,
         }
     }
 }
 
 /// 运行双端口服务器
-pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
-    let state = Arc::new(AppState::new(agent));
+pub async fn run(
+    agent: Arc<Agent>,
+    task_manager: Arc<BackgroundTaskManager>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let state = Arc::new(AppState::new(agent, task_manager));
 
     // 启动会话清理后台任务
     let cleanup_state = state.clone();
@@ -96,6 +102,26 @@ pub async fn run(agent: Arc<Agent>) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// 嵌入的静态文件（编译时打包进二进制，避免运行时依赖工作目录）
+static INDEX_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/index.html"));
+static CHAT_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat.html"));
+
+async fn serve_index() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        INDEX_HTML,
+    )
+}
+
+async fn serve_chat() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        CHAT_HTML,
+    )
+}
+
 /// 创建 API 路由器
 pub fn create_api_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
@@ -106,12 +132,16 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
             "http://127.0.0.1:18800".parse::<HeaderValue>().unwrap(),
         ])
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
 
     Router::new()
+        .route("/", get(serve_chat))
+        .route("/chat.html", get(serve_chat))
         .route("/health", get(handlers::health_check))
         .route("/v1/chat/completions", post(handlers::chat_completions))
+        .route("/v1/tasks", post(handlers::create_task))
+        .route("/v1/tasks/:id", get(handlers::get_task).delete(handlers::cancel_task))
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -144,9 +174,11 @@ async fn admin_auth(req: Request<Body>, next: Next) -> Response {
 /// 创建 Admin 路由器
 pub fn create_admin_router(state: Arc<AppState>) -> Router {
     Router::new()
+        .route("/", get(serve_index))
+        .route("/index.html", get(serve_index))
+        .route("/chat.html", get(serve_chat))
         .route("/api/stats", get(handlers::admin_stats))
         .route("/api/tools", get(handlers::admin_tools))
-        .nest_service("/", ServeDir::new("static"))
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
