@@ -2,6 +2,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::routing::{get, post};
 use axum::Router;
+use clarity_core::background::BackgroundTaskManager;
 use clarity_gateway::{handlers, server::AppState, ws::ws_handler};
 use http_body_util::BodyExt;
 use std::sync::Arc;
@@ -15,7 +16,14 @@ fn test_api_router() -> Router {
     let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
     let config = clarity_core::agent::AgentConfig::new();
     let agent = Arc::new(clarity_core::agent::Agent::with_config(registry, config));
-    let state = Arc::new(AppState::new(agent));
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    let task_manager = Arc::new(BackgroundTaskManager::new(
+        &temp.join("store"),
+        &temp.join("work"),
+        &temp.join("context"),
+    ));
+    let state = Arc::new(AppState::new(agent, task_manager));
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -115,7 +123,14 @@ async fn test_gateway_websocket_wire_forwarding() {
         .with_max_iterations(5)
         .with_read_only(false);
     let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent));
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    let task_manager = Arc::new(BackgroundTaskManager::new(
+        &temp.join("store"),
+        &temp.join("work"),
+        &temp.join("context"),
+    ));
+    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager));
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -192,7 +207,14 @@ async fn test_tui_wire_to_gateway_websocket() {
         .with_max_iterations(5)
         .with_read_only(false);
     let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent));
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    let task_manager = Arc::new(BackgroundTaskManager::new(
+        &temp.join("store"),
+        &temp.join("work"),
+        &temp.join("context"),
+    ));
+    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager));
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

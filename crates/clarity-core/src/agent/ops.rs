@@ -1,5 +1,6 @@
 //! Operations that can be dispatched to an AgentController.
 
+use crate::agent::Message;
 use crate::personality::PersonalityConfig;
 
 /// An operation submitted to the controller.
@@ -7,6 +8,8 @@ use crate::personality::PersonalityConfig;
 pub enum Op {
     /// Start or continue a user turn.
     UserTurn(String),
+    /// Start or continue a turn with full message history.
+    ConversationTurn(Vec<Message>),
     /// Cancel the current in-flight agent run.
     Interrupt,
     /// Respond to a pending tool-approval request.

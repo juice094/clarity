@@ -6,7 +6,7 @@ use axum::{
         IntoResponse, Response,
     },
 };
-use clarity_core::agent::{AgentController, ControllerEvent, Op};
+use clarity_core::agent::{AgentController, ControllerEvent, Message as AgentMessage, MessageRole, Op};
 use futures::stream;
 use serde::{Deserialize, Serialize};
 
@@ -92,34 +92,51 @@ pub async fn chat_completions(
 
     state.session_manager.read().await.record_request();
 
-    // Extract the last user message
-    let user_message = req
-        .messages
-        .iter()
-        .rev()
-        .find(|m| m.role == "user")
-        .map(|m| m.content.clone());
-
-    let user_message = match user_message {
-        Some(content) => content,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": "No user message found in request"
-                })),
-            )
-                .into_response();
-        }
-    };
+    // Validate that there is at least one user message
+    let has_user = req.messages.iter().any(|m| m.role == "user");
+    if !has_user {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "No user message found in request"
+            })),
+        )
+            .into_response();
+    }
 
     // Create a per-request AgentController so that streaming events are isolated.
     let agent = (*state.agent).clone();
+
+    // Build the internal message list:
+    // 1. Agent system prompt (personality + skills)
+    // 2. All non-system messages from the request
+    let mut messages: Vec<AgentMessage> = vec![AgentMessage::system(agent.build_system_prompt())];
+    for msg in &req.messages {
+        if msg.role == "system" {
+            continue;
+        }
+        let role = match msg.role.as_str() {
+            "user" => MessageRole::User,
+            "assistant" => MessageRole::Assistant,
+            "tool" => MessageRole::Tool,
+            _ => MessageRole::User,
+        };
+        messages.push(AgentMessage {
+            role,
+            content: msg.content.clone(),
+            tool_calls: None,
+            tool_call_id: None,
+        });
+    }
+
+    // Pre-calculate token estimate before messages are moved into the controller.
+    let prompt_tokens = messages.iter().map(|m| m.content.len()).sum::<usize>() as u32 / 4;
+
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ControllerEvent>();
     let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
     tokio::spawn(controller.run());
 
-    if let Err(e) = op_tx.send(Op::UserTurn(user_message.clone())) {
+    if let Err(e) = op_tx.send(Op::ConversationTurn(messages)) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
@@ -206,7 +223,6 @@ pub async fn chat_completions(
                 .into_response();
         }
 
-        let prompt_tokens = user_message.len() as u32 / 4;
         let completion_tokens = content.len() as u32 / 4;
 
         let response = ChatCompletionResponse {

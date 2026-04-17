@@ -154,6 +154,35 @@ impl AgentController {
                             state = ControllerState::Running(handle);
                         }
 
+                        Some(Op::ConversationTurn(messages)) => {
+                            debug!("Controller: ConversationTurn ({} messages)", messages.len());
+                            self.agent.reset_cancel_token();
+                            let agent = self.agent.clone();
+                            let event_tx = self.event_tx.clone();
+                            let event_tx2 = event_tx.clone();
+                            let handle = tokio::spawn(async move {
+                                let result = agent.run_streaming_with_messages(messages, move |chunk| {
+                                    if let Some(ref tx) = event_tx {
+                                        let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
+                                    }
+                                }).await;
+
+                                if let Some(ref tx) = event_tx2 {
+                                    match &result {
+                                        Ok(response) => {
+                                            let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                        }
+                                    }
+                                }
+
+                                result
+                            });
+                            state = ControllerState::Running(handle);
+                        }
+
                         Some(Op::Interrupt) => {
                             debug!("Controller: Interrupt");
                             self.agent.cancel();

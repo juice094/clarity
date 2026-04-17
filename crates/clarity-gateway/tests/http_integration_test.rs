@@ -1,6 +1,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
 use clarity_gateway::server::{create_admin_router, create_api_router, AppState};
 use http_body_util::BodyExt;
@@ -16,9 +17,19 @@ fn create_test_agent() -> Arc<Agent> {
     Arc::new(agent)
 }
 
+fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    Arc::new(BackgroundTaskManager::new(
+        &temp.join("store"),
+        &temp.join("work"),
+        &temp.join("context"),
+    ))
+}
+
 #[tokio::test]
 async fn test_health_check() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_api_router(state);
 
     let response = app
@@ -40,7 +51,7 @@ async fn test_health_check() {
 
 #[tokio::test]
 async fn test_chat_completions() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_api_router(state);
 
     let request_body = serde_json::json!({
@@ -71,7 +82,7 @@ async fn test_chat_completions() {
 
 #[tokio::test]
 async fn test_admin_stats() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_admin_router(state);
 
     let response = app
@@ -95,7 +106,7 @@ async fn test_admin_stats() {
 
 #[tokio::test]
 async fn test_admin_tools() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_admin_router(state);
 
     let response = app

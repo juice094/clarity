@@ -480,7 +480,7 @@ impl Agent {
 
     /// Build the system prompt
     /// Uses personality if available, otherwise falls back to config.system_prompt
-    fn build_system_prompt(&self) -> String {
+    pub fn build_system_prompt(&self) -> String {
         if let Some(ref builder) = self.system_prompt_builder {
             // Build with personality and optional skill definitions
             let skills = self.get_skill_definitions();
@@ -496,18 +496,16 @@ impl Agent {
         // Convert tool schemas to skill descriptions
         match self.registry.get_tool_schemas() {
             Ok(schemas) => {
-                if let Some(functions) = schemas.get("functions").and_then(|f| f.as_array()) {
-                    functions
-                        .iter()
+                schemas.as_array().map(|arr| {
+                    arr.iter()
                         .filter_map(|f| {
-                            let name = f.get("name")?.as_str()?;
-                            let description = f.get("description")?.as_str()?;
+                            let func = f.get("function")?;
+                            let name = func.get("name")?.as_str()?;
+                            let description = func.get("description")?.as_str()?;
                             Some(format!("- {}: {}", name, description))
                         })
                         .collect()
-                } else {
-                    vec![]
-                }
+                }).unwrap_or_default()
             }
             Err(_) => vec![],
         }
@@ -740,7 +738,7 @@ impl Agent {
     pub async fn run_streaming<F>(
         &self,
         query: impl AsRef<str>,
-        mut on_chunk: F,
+        on_chunk: F,
     ) -> Result<String, AgentError>
     where
         F: FnMut(&str) + Send + 'static,
@@ -774,7 +772,7 @@ impl Agent {
             }
         }
 
-        let mut messages = vec![
+        let messages = vec![
             Message::system(system_prompt),
             Message::user(query.as_ref()),
         ];
@@ -789,6 +787,58 @@ impl Agent {
             user_input: query.as_ref().to_string(),
         });
 
+        self.run_streaming_loop(messages, query.as_ref(), tools, llm.clone(), on_chunk)
+            .await
+    }
+
+    /// Run the streaming agent loop with a pre-built message list.
+    pub async fn run_streaming_with_messages<F>(
+        &self,
+        messages: Vec<Message>,
+        on_chunk: F,
+    ) -> Result<String, AgentError>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        let llm = self
+            .llm
+            .as_ref()
+            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+
+        let tools = self.registry.get_tool_schemas()?;
+
+        let query_hint = messages
+            .iter()
+            .rev()
+            .find(|m| m.role == MessageRole::User)
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+
+        info!(
+            "Starting streaming agent loop with {} messages",
+            messages.len()
+        );
+
+        // Send TurnBegin message
+        self.send_wire_message(WireMessage::TurnBegin {
+            user_input: query_hint.clone(),
+        });
+
+        self.run_streaming_loop(messages, &query_hint, tools, llm.clone(), on_chunk)
+            .await
+    }
+
+    async fn run_streaming_loop<F>(
+        &self,
+        mut messages: Vec<Message>,
+        query_hint: &str,
+        tools: serde_json::Value,
+        llm: std::sync::Arc<dyn LlmProvider>,
+        mut on_chunk: F,
+    ) -> Result<String, AgentError>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
         let mut final_response = String::new();
         let mut completed = false;
 
@@ -932,11 +982,11 @@ impl Agent {
 
         if let Some(ref store) = self.memory_store {
             let memory_content = if completed {
-                format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
+                format!("User: {}\nAssistant: {}", query_hint, final_response)
             } else {
                 format!(
                     "User: {}\nAssistant: [max iterations reached] {}",
-                    query.as_ref(),
+                    query_hint,
                     final_response
                 )
             };

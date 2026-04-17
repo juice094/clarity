@@ -1,4 +1,5 @@
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
 use clarity_gateway::server::{create_api_router, AppState};
 use futures::{SinkExt, StreamExt};
@@ -14,9 +15,19 @@ fn create_test_agent() -> Arc<Agent> {
     Arc::new(agent)
 }
 
+fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    Arc::new(BackgroundTaskManager::new(
+        &temp.join("store"),
+        &temp.join("work"),
+        &temp.join("context"),
+    ))
+}
+
 #[tokio::test]
 async fn test_websocket_upgrade_and_ping_pong() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -52,7 +63,7 @@ async fn test_websocket_upgrade_and_ping_pong() {
 
 #[tokio::test]
 async fn test_websocket_chat() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -90,7 +101,7 @@ async fn test_websocket_chat() {
 
 #[tokio::test]
 async fn test_websocket_get_history() {
-    let state = Arc::new(AppState::new(create_test_agent()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

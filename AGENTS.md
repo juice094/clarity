@@ -7,6 +7,7 @@ cd C:\Users\<user>\Desktop\clarity
 cargo test --workspace --lib          # 334+ tests
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
+cargo run -p clarity-gateway           # run Gateway (needs API key)
 ```
 
 ## Environment Variables for LLM
@@ -24,23 +25,43 @@ $env:DEEPSEEK_API_KEY="..."
 $env:OPENAI_API_KEY="..."
 ```
 
-## Recent Major Changes (2026-04-09)
+## Recent Major Changes (2026-04-15)
 
-1. **Stream-first LLM architecture**: `Agent::run_streaming()` now calls `llm.stream()` first and only falls back to `complete()`. This eliminates the double-request penalty.
-2. **Prompt cache key**: `OpenAiCompatibleLlm` injects `prompt_cache_key` into request bodies. `KimiLlm` and `KimiCodeLlm` support `set_prompt_cache_key()`.
-3. **Shared HTTP client**: Connection pool, 10s connect timeout, 300s request timeout via `reqwest`.
-4. **TUI command registry + mouse wheel**: `clarity-tui` now has a `CommandRegistry` (`/model`, `/help`, `/stop`) and captures mouse scroll events.
-5. **TUI dark theme overhaul**: `ChatPane`, `InputPane`, `GeneratingIndicator`, `StatusBar`, and `CommandBar` all use a unified dark-blue color palette.
-6. **Kimi Code endpoint fixed**: Default base URL is now `https://api.kimi.com/coding/v1` (was incorrectly pointing at `api.moonshot.cn`).
-7. **Tool calls in `complete()`**: `OpenAiCompatibleLlm::complete()` now correctly parses `choices[].message.tool_calls` instead of returning an empty vector.
+1. **Fixed tool-calling pipeline in Gateway chat**:
+   - `get_skill_definitions()` now correctly parses `ToolRegistry::get_tool_schemas()` array format, so the system prompt's `# 技能` section is properly populated.
+   - `OpenAiCompatibleLlm` (`complete` + `stream`) now correctly forwards `tool_calls` and `tool_call_id` fields in API messages, fixing multi-round tool execution.
+   - Added `Op::ConversationTurn(Vec<Message>)` to `AgentController`; Gateway `/v1/chat/completions` now forwards the full message history instead of discarding everything except the last user message.
+
+2. **MCP auto-loading is live**: Gateway startup automatically loads `~/.config/clarity/mcp.json` (or env/local fallbacks) and registers MCP tools into the agent's `ToolRegistry`.
+
+3. **Personality system integrated**: `Direct` engineering mode is the default. It injects concise tool-calling instructions via `SystemPromptBuilder` and eliminates the previous verbose `<mood>` XML leakage.
+
+4. **Stream-first LLM architecture**: `Agent::run_streaming()` calls `llm.stream()` first and only falls back to `complete()`. This eliminates the double-request penalty.
+
+5. **Prompt cache key**: `OpenAiCompatibleLlm` injects `prompt_cache_key` into request bodies. `KimiLlm` and `KimiCodeLlm` support `set_prompt_cache_key()`.
+
+6. **Shared HTTP client**: Connection pool, 10s connect timeout, 300s request timeout via `reqwest`.
+
+## Architecture Notes & Coupling Warnings
+
+> **⚠️ The project currently has tight coupling in a few areas.** When making changes, be aware of these boundaries:
+>
+> 1. **`clarity-core` ↔ `clarity-gateway`**: `AgentController` lives in `core`, but its `Op` enum (`Op::ConversationTurn`) had to be extended to support Gateway's OpenAI-compatible message history. This means Gateway-driven requirements can ripple back into core agent abstractions.
+> 2. **`Agent::run_streaming` vs `run_streaming_with_messages`**: We now have two public entry points (`run_streaming` for TUI/simple use, `run_streaming_with_messages` for pre-built history). Consider extracting a pure "agent loop" trait in future refactors to avoid duplicating compaction / wire / memory logic.
+> 3. **`OpenAiCompatibleLlm` monolith**: Both `stream()` and `complete()` share request formatting, but the SSE parsing for tool calls is inline. A dedicated `SseToolCallAssembler` would make the LLM layer more testable.
+> 4. **`AppState` bloat**: `AppState` currently carries `agent`, `session_manager`, `tool_registry`, and `task_manager`. The `tool_registry` field is actually redundant because `agent.registry()` already holds it (kept for the admin API convenience).
+>
+> **Recommendation for future refactors**: Extract a `ChatDriver` or `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own message-building strategies without modifying core enums.
 
 ## Known Issues
 
-- **Personality system produces verbose `<mood>` XML metadata**: The current default personality generates poetic, existential `<mibe>` blocks that waste tokens and obscure tool-calling behavior. A plan to add minimal/engineering personality modes is in progress.
-- **MCP client is skeletal**: `mcp.json` loading works but dynamic server registration is not fully wired.
+- ~~Personality system produces verbose `<mood>` XML metadata~~ **Fixed** by `Direct` mode.
+- ~~MCP client is skeletal~~ **Fixed** — stdio transport and dynamic registration are working.
+- **Gateway SSE does not forward `tool_calls` deltas to the client**: The current design treats the agent as a black box; only the final text answer is streamed. If you need OpenAI-compatible `tool_calls` visible in the frontend, the SSE formatter in `handlers.rs` will need to emit `delta.tool_calls` chunks.
 
 ## Code Style
 
 - Rust edition 2021, `tokio` full, `ratatui` 0.24, `axum` 0.7.
 - Prefer minimal changes; keep diffs small.
 - When modifying `agent/mod.rs` or `llm/mod.rs`, run the full test suite before committing.
+- When modifying `AgentController` or `Op`, check all callers in `clarity-tui`, `clarity-gateway`, and integration tests.

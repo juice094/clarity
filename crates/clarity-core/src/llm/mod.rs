@@ -65,6 +65,8 @@ struct ApiMessage {
     content: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     tool_calls: Option<Vec<ApiToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -140,6 +142,29 @@ impl OpenAiCompatibleLlm {
     }
 }
 
+fn convert_api_messages(messages: &[Message]) -> Vec<ApiMessage> {
+    messages
+        .iter()
+        .map(|m| ApiMessage {
+            role: format!("{:?}", m.role).to_lowercase(),
+            content: m.content.clone(),
+            tool_calls: m.tool_calls.clone().map(|tcs| {
+                tcs.into_iter()
+                    .map(|tc| ApiToolCall {
+                        id: tc.id,
+                        call_type: tc.call_type,
+                        function: ApiFunctionCall {
+                            name: tc.function.name,
+                            arguments: tc.function.arguments,
+                        },
+                    })
+                    .collect()
+            }),
+            tool_call_id: m.tool_call_id.clone(),
+        })
+        .collect()
+}
+
 #[async_trait]
 impl LlmProvider for OpenAiCompatibleLlm {
     async fn complete(
@@ -148,14 +173,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
         // Convert internal Message to API message format
-        let api_messages: Vec<ApiMessage> = messages
-            .iter()
-            .map(|m| ApiMessage {
-                role: format!("{:?}", m.role).to_lowercase(),
-                content: m.content.clone(),
-                tool_calls: None,
-            })
-            .collect();
+        let api_messages = convert_api_messages(messages);
 
         let tools_opt = tools
             .as_array()
@@ -179,7 +197,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
             format!("{}/v1/chat/completions", base)
         };
 
-        tracing::debug!("Sending request to {}", url);
+        tracing::debug!(
+            "LLM complete request: {} messages, tools={}",
+            request_body.messages.len(),
+            serde_json::to_string(&request_body.tools).unwrap_or_default()
+        );
 
         let response = self
             .client
@@ -246,14 +268,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        let api_messages: Vec<ApiMessage> = messages
-            .iter()
-            .map(|m| ApiMessage {
-                role: format!("{:?}", m.role).to_lowercase(),
-                content: m.content.clone(),
-                tool_calls: None,
-            })
-            .collect();
+        let api_messages = convert_api_messages(messages);
 
         let tools_opt = tools
             .as_array()
@@ -268,6 +283,12 @@ impl LlmProvider for OpenAiCompatibleLlm {
             stream: true,
             prompt_cache_key: self.prompt_cache_key.clone(),
         };
+
+        tracing::debug!(
+            "LLM stream request: {} messages, tools={}",
+            request_body.messages.len(),
+            serde_json::to_string(&request_body.tools).unwrap_or_default()
+        );
 
         let base = self.base_url.trim_end_matches('/');
         let url = if base.ends_with("/v1") {
@@ -1026,6 +1047,7 @@ mod tests {
                 role: "user".into(),
                 content: "hello".into(),
                 tool_calls: None,
+                tool_call_id: None,
             }],
             tools: None,
             temperature: None,
@@ -1046,6 +1068,7 @@ mod tests {
                 role: "user".into(),
                 content: "hello".into(),
                 tool_calls: None,
+                tool_call_id: None,
             }],
             tools: None,
             temperature: None,
