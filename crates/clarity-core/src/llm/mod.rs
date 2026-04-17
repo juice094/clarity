@@ -7,9 +7,11 @@
 //! - More providers can be added by implementing the LlmProvider trait
 
 pub mod deepseek;
+pub mod kalosm;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
+pub use kalosm::KalosmProvider;
 
 use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::error::AgentError;

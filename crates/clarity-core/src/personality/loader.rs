@@ -192,20 +192,32 @@ impl PersonalityLoader {
     }
 
     /// Fill template variables
-    /// Supported variables:
+    /// Supported built-in variables:
     /// - {{agentName}} / {{agent_name}} -> agent_name
     /// - {{userName}} / {{user_name}} -> user_name
     /// - {{yuanType}} / {{yuan_type}} -> yuan_type display name
     /// - {{locale}} -> locale
+    /// Additionally, any keys from `config.template_variables` are replaced.
     pub fn fill_variables(&self, template: &str, config: &PersonalityConfig) -> String {
-        template
+        // Apply custom template variables first so they can override builtins if desired
+        let mut result = template.to_string();
+        if let Some(vars) = &config.template_variables {
+            for (key, value) in vars {
+                let placeholder = format!("{{{{{}}}}}", key);
+                result = result.replace(&placeholder, value);
+            }
+        }
+
+        result = result
             .replace("{{agentName}}", &config.agent_name)
             .replace("{{agent_name}}", &config.agent_name)
             .replace("{{userName}}", &config.user_name)
             .replace("{{user_name}}", &config.user_name)
             .replace("{{yuanType}}", config.yuan_type.display_name())
             .replace("{{yuan_type}}", config.yuan_type.display_name())
-            .replace("{{locale}}", &config.locale)
+            .replace("{{locale}}", &config.locale);
+
+        result
     }
 
     /// Get default identity template as fallback
@@ -254,6 +266,46 @@ mod tests {
         let result = loader.fill_variables(template, &config);
 
         assert_eq!(result, "Hello TestUser, I am TestAgent. Yuan: Hanako");
+    }
+
+    #[test]
+    fn test_fill_custom_template_variables() {
+        use std::collections::HashMap;
+        let loader = PersonalityLoader::new();
+        let mut vars = HashMap::new();
+        vars.insert("crop".to_string(), "水稻".to_string());
+        vars.insert("region".to_string(), "江苏".to_string());
+
+        let config = PersonalityConfig::new()
+            .with_agent_name("AgriExpert")
+            .with_user_name("Farmer")
+            .with_yuan_type(YuanType::Direct)
+            .with_locale("zh-CN")
+            .with_template_variables(vars);
+
+        let template = "作物：{{crop}}，地区：{{region}}，助手：{{agentName}}";
+        let result = loader.fill_variables(template, &config);
+
+        assert_eq!(result, "作物：水稻，地区：江苏，助手：AgriExpert");
+    }
+
+    #[test]
+    fn test_fill_variables_custom_override_builtin() {
+        use std::collections::HashMap;
+        let loader = PersonalityLoader::new();
+        let mut vars = HashMap::new();
+        // Custom vars are applied after builtins, so this can override if desired
+        vars.insert("agentName".to_string(), "OverrideAgent".to_string());
+
+        let config = PersonalityConfig::new()
+            .with_agent_name("OriginalAgent")
+            .with_template_variables(vars);
+
+        let template = "Agent: {{agentName}}";
+        let result = loader.fill_variables(template, &config);
+
+        // Custom template_variables apply after builtins, so it overrides
+        assert_eq!(result, "Agent: OverrideAgent");
     }
 
     #[test]

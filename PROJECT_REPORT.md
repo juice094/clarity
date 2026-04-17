@@ -244,9 +244,13 @@ cargo run -p clarity-gateway
 - [ ] Gateway 渠道实测（Webhook；Discord/Telegram 待上游 CVE 修复后恢复）
 - [x] 修复实测中发现的问题
 
-### Phase 2: 稳定化（当前 - 2–4 周）
+### Phase 2: 稳定化（进行中，当前 - 2–4 周）
 
 - [x] MCP 命令安全校验 / allowlist（2026-04-17）
+- [x] Dependabot 告警清零 / 依赖升级（2026-04-17）
+- [ ] PersonalityConfig `template_variables` + `DomainPersonaConfig` 解析（2026-04-18）
+- [ ] kalosm Provider 骨架文件（2026-04-18）
+- [ ] `Op::ReloadPersonality` 热重载支持（2026-04-21）
 - [ ] 错误处理完善
 - [ ] 性能基准测试
 - [ ] 跨平台测试（Linux/macOS）
@@ -255,10 +259,11 @@ cargo run -p clarity-gateway
 
 ### Phase 3: 能力扩展（未来 1–2 个月）
 
-- [ ] MCP SSE transport 实现
+- [ ] kalosm Provider 真实实现（阻塞：agri-paper 7B benchmark 数据）
+- [ ] MCP SSE transport 实现（devbase Sprint 2 承诺 W1–W2 原型）
 - [ ] 向量检索优化
 - [ ] 多 Agent Profile 管理
-- [ ] TUI 配置文件支持
+- [ ] TUI 配置文件支持 / `/workspace` 跨项目命令
 
 ### 暂缓项（风险过高）
 
@@ -314,9 +319,10 @@ cargo run -p clarity-gateway
 **Project Clarity 是一个健康、可运行的 Rust AI Agent 框架。**
 
 - ✅ 架构清晰，Workspace 组织合理
-- ✅ 测试覆盖良好（192 测试通过，0 警告）
+- ✅ 测试覆盖良好（256+ 测试通过，0 警告）
 - ✅ 核心功能已落地（Agent Loop、工具、Wire、审批、压缩、子代理 Runner）
-- ⚠️ 需进行真实环境实测（TUI、Gateway、MCP、渠道）
+- ✅ 真实环境实测已完成（TUI、Gateway、MCP stdio/HTTP、渠道 Webhook）
+- ⚠️ kalosm 本地 Provider 待集成（agri-paper 迁移中）
 
 **建议下一步**：
 1. 配置 LLM API Key，执行 TUI 端到端实测

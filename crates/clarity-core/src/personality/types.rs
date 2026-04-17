@@ -6,6 +6,7 @@
 //! - Ishiki: Detailed personality definition (behavior norms, tone guidelines)
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Three-layer personality structure
@@ -108,6 +109,8 @@ pub struct PersonalityConfig {
     pub locale: String,
     /// Optional path to agent directory for custom templates
     pub agent_dir: Option<PathBuf>,
+    /// Optional runtime template variables for custom variable interpolation
+    pub template_variables: Option<HashMap<String, String>>,
 }
 
 impl Default for PersonalityConfig {
@@ -118,6 +121,7 @@ impl Default for PersonalityConfig {
             yuan_type: YuanType::default(),
             locale: "zh-CN".to_string(),
             agent_dir: None,
+            template_variables: None,
         }
     }
 }
@@ -155,6 +159,18 @@ impl PersonalityConfig {
     /// Set agent directory for custom templates
     pub fn with_agent_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.agent_dir = Some(dir.into());
+        self
+    }
+
+    /// Set runtime template variables
+    pub fn with_template_variables(mut self, vars: HashMap<String, String>) -> Self {
+        self.template_variables = Some(vars);
+        self
+    }
+
+    /// Add a single template variable
+    pub fn with_template_variable(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.template_variables.get_or_insert_with(HashMap::new).insert(key.into(), value.into());
         self
     }
 }

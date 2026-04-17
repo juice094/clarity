@@ -25,22 +25,28 @@ $env:DEEPSEEK_API_KEY="..."
 $env:OPENAI_API_KEY="..."
 ```
 
-## Recent Major Changes (2026-04-15)
+## Recent Major Changes (2026-04-17)
 
-1. **Fixed tool-calling pipeline in Gateway chat**:
+1. **Security hardening — MCP command validation**: `validate_mcp_command()` now runs before spawning any MCP stdio server. Rejects shell metacharacters, relative paths, and non-existent absolute paths. Override via `CLARITY_MCP_ALLOWLIST` env var.
+
+2. **Dependabot alerts resolved**: `cargo audit` now reports **0 vulnerabilities**. Updated `rustls-webpki` → 0.103.12, `rand` → 0.8.6/0.9.4, and 40+ transitive deps. `discord`/`telegram` features temporarily removed from `clarity-gateway` default build due to upstream `serenity`/`rustls-webpki` CVEs.
+
+3. **Fixed tool-calling pipeline in Gateway chat**:
    - `get_skill_definitions()` now correctly parses `ToolRegistry::get_tool_schemas()` array format, so the system prompt's `# 技能` section is properly populated.
    - `OpenAiCompatibleLlm` (`complete` + `stream`) now correctly forwards `tool_calls` and `tool_call_id` fields in API messages, fixing multi-round tool execution.
+   - Disabled Kimi `thinking` mode to prevent `400 Bad Request` on multi-round tool calls.
    - Added `Op::ConversationTurn(Vec<Message>)` to `AgentController`; Gateway `/v1/chat/completions` now forwards the full message history instead of discarding everything except the last user message.
 
-2. **MCP auto-loading is live**: Gateway startup automatically loads `~/.config/clarity/mcp.json` (or env/local fallbacks) and registers MCP tools into the agent's `ToolRegistry`.
+4. **MCP auto-loading is live**: Gateway startup automatically loads `~/.config/clarity/mcp.json` (or env/local fallbacks) and registers MCP tools into the agent's `ToolRegistry`.
 
-3. **Personality system integrated**: `Direct` engineering mode is the default. It injects concise tool-calling instructions via `SystemPromptBuilder` and eliminates the previous verbose `<mood>` XML leakage.
+5. **Personality system integrated**: `Direct` engineering mode is the default. It injects concise tool-calling instructions via `SystemPromptBuilder` and eliminates the previous verbose `<mood>` XML leakage.
 
-4. **Stream-first LLM architecture**: `Agent::run_streaming()` calls `llm.stream()` first and only falls back to `complete()`. This eliminates the double-request penalty.
+6. **Stream-first LLM architecture**: `Agent::run_streaming()` calls `llm.stream()` first and only falls back to `complete()`. This eliminates the double-request penalty.
 
-5. **Prompt cache key**: `OpenAiCompatibleLlm` injects `prompt_cache_key` into request bodies. `KimiLlm` and `KimiCodeLlm` support `set_prompt_cache_key()`.
-
-6. **Shared HTTP client**: Connection pool, 10s connect timeout, 300s request timeout via `reqwest`.
+7. **Cross-project alignment (2026-04-17 meeting)**:
+   - `LlmProvider` trait confirmed as the stable interface for kalosm migration (agri-paper → clarity-core).
+   - `PersonalityConfig` will gain `template_variables` and `DomainPersonaConfig` for agricultural domain TOML parsing.
+   - `Op::ReloadPersonality` planned for AgentController to support persona hot-reload triggered by TUI/Gateway.
 
 ## Architecture Notes & Coupling Warnings
 
@@ -68,6 +74,8 @@ $env:OPENAI_API_KEY="..."
 - ~~MCP client is skeletal~~ **Fixed** — stdio/HTTP transport and dynamic registration are working.
 - ~~Web UI missing~~ **Fixed** — Gateway serves an embedded Web IDE (`chat.html`) with Monaco Editor and SSE streaming.
 - **Gateway SSE does not forward `tool_calls` deltas to the client**: The current design treats the agent as a black box; only the final text answer is streamed. If you need OpenAI-compatible `tool_calls` visible in the frontend, the SSE formatter in `handlers.rs` will need to emit `delta.tool_calls` chunks.
+- **kalosm local Provider not yet integrated**: Skeleton file planned for this sprint; real implementation blocked until agri-paper delivers 7B model benchmark data.
+- **Discord/Telegram channels disabled by default**: Blocked by upstream `rustls-webpki` CVEs in `serenity 0.12.5`. Re-enable when upstream publishes a fix.
 
 ## Code Style
 
