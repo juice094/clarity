@@ -1734,4 +1734,39 @@ mod tests {
             .expect("join error");
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_agent_update_personality_with_template_variables() {
+        use std::io::Write;
+
+        let temp = tempfile::tempdir().unwrap();
+        let identity_path = temp.path().join("identity.md");
+        let mut file = std::fs::File::create(&identity_path).unwrap();
+        file.write_all(b"# {{agentName}}\n\nExpert in {{crop}} cultivation for {{region}}.").unwrap();
+        drop(file);
+
+        let personality_config = PersonalityConfig::new()
+            .with_agent_name("AgriExpert")
+            .with_user_name("Farmer")
+            .with_agent_dir(temp.path())
+            .with_template_variable("crop", "水稻")
+            .with_template_variable("region", "江苏");
+
+        let registry = ToolRegistry::new();
+        let mut agent = Agent::with_config(registry, AgentConfig::default());
+
+        // Initial: no personality
+        assert!(agent.personality().is_none());
+
+        // Update personality with template variables
+        agent.update_personality(personality_config).unwrap();
+
+        // Verify personality loaded with template variables applied
+        let personality = agent.personality().expect("personality should be loaded");
+        assert!(personality.identity.contains("AgriExpert"));
+        assert!(personality.identity.contains("水稻"));
+        assert!(personality.identity.contains("江苏"));
+        assert!(!personality.identity.contains("{{crop}}"));
+        assert!(!personality.identity.contains("{{region}}"));
+    }
 }
