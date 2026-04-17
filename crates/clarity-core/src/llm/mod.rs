@@ -15,7 +15,7 @@ use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::error::AgentError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::env;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -57,6 +57,8 @@ struct ChatCompletionRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     prompt_cache_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,6 +69,8 @@ struct ApiMessage {
     tool_calls: Option<Vec<ApiToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -145,22 +149,31 @@ impl OpenAiCompatibleLlm {
 fn convert_api_messages(messages: &[Message]) -> Vec<ApiMessage> {
     messages
         .iter()
-        .map(|m| ApiMessage {
-            role: format!("{:?}", m.role).to_lowercase(),
-            content: m.content.clone(),
-            tool_calls: m.tool_calls.clone().map(|tcs| {
-                tcs.into_iter()
-                    .map(|tc| ApiToolCall {
-                        id: tc.id,
-                        call_type: tc.call_type,
-                        function: ApiFunctionCall {
-                            name: tc.function.name,
-                            arguments: tc.function.arguments,
-                        },
-                    })
-                    .collect()
-            }),
-            tool_call_id: m.tool_call_id.clone(),
+        .map(|m| {
+            let reasoning_content =
+                if m.role == MessageRole::Assistant && m.tool_calls.is_some() {
+                    Some("".to_string())
+                } else {
+                    None
+                };
+            ApiMessage {
+                role: format!("{:?}", m.role).to_lowercase(),
+                content: m.content.clone(),
+                tool_calls: m.tool_calls.clone().map(|tcs| {
+                    tcs.into_iter()
+                        .map(|tc| ApiToolCall {
+                            id: tc.id,
+                            call_type: tc.call_type,
+                            function: ApiFunctionCall {
+                                name: tc.function.name,
+                                arguments: tc.function.arguments,
+                            },
+                        })
+                        .collect()
+                }),
+                tool_call_id: m.tool_call_id.clone(),
+                reasoning_content,
+            }
         })
         .collect()
 }
@@ -179,6 +192,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
             .as_array()
             .filter(|a| !a.is_empty())
             .map(|_| tools.clone());
+        let thinking_opt = if self.base_url.contains("kimi.com") {
+            Some(json!({"type": "disabled"}))
+        } else {
+            None
+        };
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
@@ -187,6 +205,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             max_tokens: None,
             stream: false,
             prompt_cache_key: self.prompt_cache_key.clone(),
+            thinking: thinking_opt,
         };
 
         // Build URL: base_url should end with /v1, e.g. https://api.kimi.com/coding/v1
@@ -274,6 +293,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
             .as_array()
             .filter(|a| !a.is_empty())
             .map(|_| tools.clone());
+        let thinking_opt = if self.base_url.contains("kimi.com") {
+            Some(json!({"type": "disabled"}))
+        } else {
+            None
+        };
         let request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
@@ -282,6 +306,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             max_tokens: None,
             stream: true,
             prompt_cache_key: self.prompt_cache_key.clone(),
+            thinking: thinking_opt,
         };
 
         tracing::debug!(
@@ -1048,6 +1073,7 @@ mod tests {
                 content: "hello".into(),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_content: None,
             }],
             tools: None,
             temperature: None,
@@ -1069,6 +1095,7 @@ mod tests {
                 content: "hello".into(),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_content: None,
             }],
             tools: None,
             temperature: None,
