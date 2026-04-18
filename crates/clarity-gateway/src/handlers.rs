@@ -316,6 +316,50 @@ pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoRespons
     (StatusCode::OK, Json(ToolsResponse { tools }))
 }
 
+// ==================== Admin: List Available Models ====================
+
+#[derive(Serialize)]
+pub struct ModelsResponse {
+    pub models: Vec<ModelInfo>,
+}
+
+#[derive(Serialize)]
+pub struct ModelInfo {
+    pub alias: String,
+    pub provider: String,
+    pub model_id: String,
+    pub protocol: String,
+}
+
+pub async fn admin_models() -> impl IntoResponse {
+    let registry = match clarity_core::llm::ModelRegistry::load() {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("Failed to load model registry: {}", e);
+            return (StatusCode::OK, Json(ModelsResponse { models: vec![] }));
+        }
+    };
+
+    let models: Vec<ModelInfo> = registry
+        .list_models()
+        .into_iter()
+        .map(|m| {
+            let protocol = registry
+                .get_provider(&m.provider)
+                .map(|p| format!("{:?}", p.protocol))
+                .unwrap_or_else(|| "unknown".into());
+            ModelInfo {
+                alias: m.alias.clone(),
+                provider: m.provider.clone(),
+                model_id: m.model_id.clone(),
+                protocol,
+            }
+        })
+        .collect();
+
+    (StatusCode::OK, Json(ModelsResponse { models }))
+}
+
 // ==================== Background Tasks API ====================
 
 use clarity_core::background::{TaskResult, TaskSpec, TaskStatus};

@@ -8,10 +8,12 @@
 
 pub mod deepseek;
 pub mod kalosm;
+pub mod model_registry;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
+pub use model_registry::{ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType, ProviderConfig, build_provider_from_registry};
 
 use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::error::AgentError;
@@ -954,12 +956,28 @@ impl LlmProvider for AnthropicLlm {
 }
 
 /// Factory for creating LLM providers
+///
+/// Now backed by `ModelRegistry` for configuration-driven routing.
+/// All static methods remain backward-compatible; they first consult the
+/// registry, then fall back to legacy env-var detection.
 pub struct LlmFactory;
 
 impl LlmFactory {
-    /// Auto-detect provider from environment variables
-    /// Priority: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI > LOCAL (Kalosm)
+    /// Auto-detect provider — uses ModelRegistry if available, otherwise legacy env-var scan.
     pub async fn auto() -> Result<Box<dyn LlmProvider>, AgentError> {
+        // Try registry first
+        match ModelRegistry::load() {
+            Ok(registry) => {
+                if let Some(first) = registry.list_models().into_iter().next() {
+                    return Self::create(&first.alias).await;
+                }
+            }
+            Err(e) => {
+                tracing::debug!("ModelRegistry not available ({}), falling back to legacy auto-detect", e);
+            }
+        }
+
+        // Legacy fallback: hard-coded env-var priority
         if env::var("ANTHROPIC_AUTH_TOKEN").is_ok() {
             return Ok(Box::new(AnthropicLlm::from_env()?));
         }
@@ -969,7 +987,6 @@ impl LlmFactory {
         }
 
         if let Ok(kimi_key) = env::var("KIMI_API_KEY") {
-            // Kimi Code keys start with "sk-kimi-" and need the coding endpoint.
             if kimi_key.starts_with("sk-kimi-") {
                 let base_url = env::var("KIMI_BASE_URL")
                     .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
@@ -987,7 +1004,6 @@ impl LlmFactory {
             return Ok(Box::new(OpenAiCompatibleLlm::from_env()?));
         }
 
-        // Fallback: try local Kalosm model if no cloud provider is configured
         #[cfg(feature = "local-llm")]
         {
             let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
@@ -1005,9 +1021,53 @@ impl LlmFactory {
              - KIMI_API_KEY (for Moonshot)\n\
              - DEEPSEEK_API_KEY\n\
              - OPENAI_API_KEY\n\
-             Or place a GGUF model at C:\\Users\\22414\\Desktop\\model\\Qwen2.5-7B-Instruct.Q4_K_M.gguf (requires local-llm feature)"
-                .into(),
+             Or create ~/.config/clarity/models.toml".into(),
         ))
+    }
+
+    /// Create a provider by alias or legacy name.
+    /// First checks ModelRegistry, then falls back to hard-coded legacy names.
+    pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
+        // Try registry first
+        if let Ok(registry) = ModelRegistry::load() {
+            if let Some(entry) = registry.get(name) {
+                if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
+                    return model_registry::build_provider_from_registry(provider_cfg, &entry.model_id).await;
+                }
+            }
+        }
+
+        // Legacy fallback
+        let lower = name.to_lowercase();
+        match lower.as_str() {
+            "anthropic" | "claude" => Ok(Box::new(Self::anthropic()?)),
+            "deepseek" => Ok(Box::new(Self::deepseek()?)),
+            "openai" => Ok(Box::new(Self::openai()?)),
+            "kimi" | "kimi-code" | "moonshot" => {
+                if env::var("KIMI_CODE_API_KEY").is_ok() {
+                    Ok(Box::new(KimiCodeLlm::from_env()?))
+                } else {
+                    Ok(Box::new(Self::kimi()?))
+                }
+            }
+            "kalosm" | "local" => {
+                #[cfg(feature = "local-llm")]
+                {
+                    let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
+                    if default_local_path.exists() {
+                        let config = KalosmConfig::new(default_local_path);
+                        return Ok(Box::new(KalosmProvider::new(config).await?));
+                    }
+                }
+                Err(AgentError::Llm(
+                    "Local LLM (Kalosm) not available. Ensure the local-llm feature is enabled and a GGUF model exists at the default path.".into(),
+                ))
+            }
+            _ => Err(AgentError::Llm(format!(
+                "Unknown model alias '{}'. Create ~/.config/clarity/models.toml or use a legacy name: anthropic, kimi, deepseek, openai, kalosm",
+                name
+            ))),
+        }
     }
 
     /// Create an Anthropic provider from environment
@@ -1028,47 +1088,6 @@ impl LlmFactory {
     /// Create an OpenAI-compatible provider from environment
     pub fn openai() -> Result<OpenAiCompatibleLlm, AgentError> {
         OpenAiCompatibleLlm::from_env()
-    }
-
-    /// Create a provider by name.
-    /// Supported names (case-insensitive):
-    /// - "anthropic", "claude" → Anthropic
-    /// - "kimi", "kimi-code", "moonshot" → Kimi Code / Kimi
-    /// - "deepseek" → DeepSeek
-    /// - "openai" → OpenAI-compatible
-    /// - "kalosm", "local" → Local Kalosm (requires local-llm feature)
-    pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
-        let lower = name.to_lowercase();
-        match lower.as_str() {
-            "anthropic" | "claude" => Ok(Box::new(Self::anthropic()?)),
-            "deepseek" => Ok(Box::new(Self::deepseek()?)),
-            "openai" => Ok(Box::new(Self::openai()?)),
-            "kimi" | "kimi-code" | "moonshot" => {
-                // Try Kimi Code first, then fallback to regular Kimi
-                if env::var("KIMI_CODE_API_KEY").is_ok() {
-                    Ok(Box::new(KimiCodeLlm::from_env()?))
-                } else {
-                    Ok(Box::new(Self::kimi()?))
-                }
-            }
-            "kalosm" | "local" => {
-                #[cfg(feature = "local-llm")]
-                {
-                    let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
-                    if default_local_path.exists() {
-                        let config = KalosmConfig::new(default_local_path);
-                        return Ok(Box::new(KalosmProvider::new(config).await?));
-                    }
-                }
-                Err(AgentError::Llm(format!(
-                    "Local LLM (Kalosm) not available. Ensure the local-llm feature is enabled and a GGUF model exists at the default path."
-                )))
-            }
-            _ => Err(AgentError::Llm(format!(
-                "Unknown provider '{}'. Supported: anthropic, claude, kimi, kimi-code, deepseek, openai, kalosm, local",
-                name
-            ))),
-        }
     }
 }
 

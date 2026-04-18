@@ -577,10 +577,7 @@
             </div>
             <div class="header-right">
                 <select id="model-select" class="model-select">
-                    <option value="kimi-k2-07132k">kimi-k2-07132k</option>
-                    <option value="kimi-k2">kimi-k2</option>
-                    <option value="claude-3-sonnet">claude-3-sonnet</option>
-                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="auto">auto-detect</option>
                 </select>
             </div>
         </header>
@@ -1048,6 +1045,25 @@
                 editor.setValue('// 加载失败: ' + err.message);
             }
         };
+
+        // Load available models from registry on startup
+        (async function loadModels() {
+            try {
+                const resp = await fetch('http://127.0.0.1:18800/api/models');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.models || data.models.length === 0) return;
+                modelSelect.innerHTML = '';
+                data.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.alias;
+                    opt.textContent = `${m.alias} (${m.provider})`;
+                    modelSelect.appendChild(opt);
+                });
+            } catch (e) {
+                console.log('Failed to load model list:', e);
+            }
+        })();
     </script>
 </body>
 </html>
