@@ -261,7 +261,14 @@ impl LlmProvider for OpenAiCompatibleLlm {
         let choice = completion.choices.into_iter().next();
         let content = choice
             .as_ref()
-            .map(|c| c.message.content.clone())
+            .map(|c| {
+                // Kimi Code API may return reasoning_content instead of content
+                if c.message.content.is_empty() {
+                    c.message.reasoning_content.clone().unwrap_or_default()
+                } else {
+                    c.message.content.clone()
+                }
+            })
             .unwrap_or_default();
         let tool_calls: Vec<crate::agent::ToolCall> = choice
             .and_then(|c| c.message.tool_calls)
@@ -401,7 +408,8 @@ impl LlmProvider for OpenAiCompatibleLlm {
                             Ok(bytes) => {
                                 let text = String::from_utf8_lossy(&bytes);
                                 for line in text.lines() {
-                                    if let Some(data) = line.strip_prefix("data: ") {
+                                    if let Some(data) = line.strip_prefix("data:") {
+                                        let data = data.trim_start();
                                         if data == "[DONE]" {
                                             if let Some(call) =
                                                 flush_last(&partial_calls, last_seen_index)
@@ -433,6 +441,26 @@ impl LlmProvider for OpenAiCompatibleLlm {
                                                                     .send(Ok(StreamDelta {
                                                                         content: Some(
                                                                             content.to_string(),
+                                                                        ),
+                                                                        tool_calls: vec![],
+                                                                    }))
+                                                                    .await
+                                                                    .is_err()
+                                                            {
+                                                                return;
+                                                            }
+                                                        }
+
+                                                        // Reasoning content delta (Kimi Code API)
+                                                        if let Some(reasoning) = delta
+                                                            .get("reasoning_content")
+                                                            .and_then(|c| c.as_str())
+                                                        {
+                                                            if !reasoning.is_empty()
+                                                                && tx
+                                                                    .send(Ok(StreamDelta {
+                                                                        content: Some(
+                                                                            reasoning.to_string(),
                                                                         ),
                                                                         tool_calls: vec![],
                                                                     }))
