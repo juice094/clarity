@@ -229,6 +229,7 @@ impl ParallelExecutor {
                 max_iterations: spec.max_iterations,
                 timeout_seconds: config.timeout_secs,
                 priority: crate::background::TaskPriority::Normal,
+                model_alias: spec.model_override.clone(),
             };
 
             let task_id = self

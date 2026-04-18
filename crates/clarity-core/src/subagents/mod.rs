@@ -24,8 +24,10 @@ pub use runner::{
 };
 pub use store::{SubagentState, SubagentStatus, SubagentStore};
 
+use crate::llm::ModelRegistry;
 use crate::registry::ToolRegistry;
 use std::path::Path;
+use std::sync::Arc;
 
 /// 子代理管理器
 ///
@@ -48,6 +50,18 @@ impl SubagentManager {
         let runner = SubagentRunner::new(tool_registry, working_dir, context_dir);
 
         Self { store, runner }
+    }
+
+    /// 设置默认 LLM（builder 模式）
+    pub fn with_llm(mut self, llm: Arc<dyn crate::agent::LlmProvider>) -> Self {
+        self.runner = self.runner.with_llm(llm);
+        self
+    }
+
+    /// 设置模型注册表（支持 model_override 动态选择）
+    pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
+        self.runner = self.runner.with_registry(registry);
+        self
     }
 
     /// 运行子代理

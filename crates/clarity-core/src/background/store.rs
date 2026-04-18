@@ -91,6 +91,9 @@ pub struct TaskSpec {
     pub timeout_seconds: Option<u64>,
     #[serde(default)]
     pub priority: TaskPriority,
+    /// 模型别名覆盖（从 ModelRegistry 查找）
+    #[serde(default)]
+    pub model_alias: Option<String>,
 }
 
 impl TaskSpec {
@@ -104,6 +107,7 @@ impl TaskSpec {
             max_iterations: None,
             timeout_seconds: None,
             priority: TaskPriority::Normal,
+            model_alias: None,
         }
     }
 
@@ -128,6 +132,12 @@ impl TaskSpec {
     /// 设置超时时间（秒）
     pub fn with_timeout_seconds(mut self, seconds: u64) -> Self {
         self.timeout_seconds = Some(seconds);
+        self
+    }
+
+    /// 设置模型别名（从 ModelRegistry 动态选择 LLM）
+    pub fn with_model_alias(mut self, alias: impl Into<String>) -> Self {
+        self.model_alias = Some(alias.into());
         self
     }
 
@@ -404,6 +414,7 @@ mod tests {
             max_iterations: Some(10),
             timeout_seconds: Some(30),
             priority: TaskPriority::Normal,
+            model_alias: None,
         }
     }
 

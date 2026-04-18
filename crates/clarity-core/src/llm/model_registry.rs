@@ -43,7 +43,7 @@
 
 use crate::agent::LlmProvider;
 use crate::error::AgentError;
-use crate::llm::OpenAiCompatibleLlm;
+use crate::llm::{LlamaServerProvider, OpenAiCompatibleLlm};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -63,6 +63,8 @@ pub enum ProtocolType {
     KalosmLocal,
     /// Ollama /api/generate or /api/chat
     Ollama,
+    /// llama.cpp server (OpenAI-compatible HTTP endpoint)
+    LlamaServer,
 }
 
 /// Provider-level connection configuration
@@ -410,6 +412,14 @@ pub async fn build_provider_from_registry(
                 .unwrap_or_default();
             let llm = OpenAiCompatibleLlm::new(api_key, base_url, model_id);
             Ok(Box::new(llm))
+        }
+        ProtocolType::LlamaServer => {
+            let base_url = cfg
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "http://localhost:8080".into());
+            let provider = LlamaServerProvider::new(base_url, model_id);
+            Ok(Box::new(provider))
         }
     }
 }

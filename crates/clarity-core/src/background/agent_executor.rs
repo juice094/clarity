@@ -5,11 +5,13 @@
 
 use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
+use crate::llm::{ModelRegistry, build_provider_from_registry};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
 use async_trait::async_trait;
 use std::sync::Arc;
+use tracing::warn;
 
 /// Default executor that builds and runs an [`Agent`] from a [`TaskSpec`].
 #[derive(Clone)]
@@ -19,6 +21,7 @@ pub struct DefaultAgentTaskExecutor {
     labor_market: LaborMarket,
     memory_store: Option<Arc<dyn MemoryStore>>,
     working_dir: std::path::PathBuf,
+    registry: Option<ModelRegistry>,
 }
 
 impl std::fmt::Debug for DefaultAgentTaskExecutor {
@@ -43,7 +46,14 @@ impl DefaultAgentTaskExecutor {
             labor_market: LaborMarket::new(),
             memory_store: None,
             working_dir: working_dir.into(),
+            registry: None,
         }
+    }
+
+    /// 设置模型注册表（支持 model_alias 动态选择）
+    pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
+        self.registry = Some(registry);
+        self
     }
 
     /// Attach a memory store.
@@ -101,6 +111,45 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
 
         if let Some(ref store) = self.memory_store {
             agent = agent.with_memory(store.clone());
+        }
+
+        // 根据 model_alias 动态选择 LLM
+        if let Some(ref model_alias) = spec.model_alias {
+            if let Some(ref reg) = self.registry {
+                match reg.get(model_alias) {
+                    Some(entry) => {
+                        if let Some(provider_cfg) = reg.get_provider(&entry.provider) {
+                            match build_provider_from_registry(provider_cfg, &entry.model_id).await {
+                                Ok(new_llm) => {
+                                    agent.set_llm(Arc::from(new_llm));
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to build provider for model '{}': {}. Using default LLM.",
+                                        model_alias, e
+                                    );
+                                }
+                            }
+                        } else {
+                            warn!(
+                                "Provider '{}' for model '{}' not found. Using default LLM.",
+                                entry.provider, model_alias
+                            );
+                        }
+                    }
+                    None => {
+                        warn!(
+                            "Model alias '{}' not found in registry. Using default LLM.",
+                            model_alias
+                        );
+                    }
+                }
+            } else {
+                warn!(
+                    "model_alias '{}' specified but no registry configured. Using default LLM.",
+                    model_alias
+                );
+            }
         }
 
         let output = agent

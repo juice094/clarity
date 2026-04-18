@@ -8,11 +8,13 @@
 
 pub mod deepseek;
 pub mod kalosm;
+pub mod llama_server;
 pub mod model_registry;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
+pub use llama_server::LlamaServerProvider;
 pub use model_registry::{ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType, ProviderConfig, build_provider_from_registry};
 
 use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};

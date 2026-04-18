@@ -8,6 +8,7 @@
 //! - Rust 错误处理的最佳实践
 
 use crate::agent::{Agent, LlmProvider, Message};
+use crate::llm::{ModelRegistry, build_provider_from_registry};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};
 use crate::registry::ToolRegistry;
@@ -613,8 +614,10 @@ pub struct SubagentRunner {
     working_dir: PathBuf,
     /// 上下文目录
     context_dir: PathBuf,
-    /// LLM 提供者
+    /// LLM 提供者（默认）
     llm: Option<Arc<dyn LlmProvider>>,
+    /// 模型注册表（用于 model_override 动态选择）
+    registry: Option<ModelRegistry>,
     /// 审批运行时
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
     /// 审批模式
@@ -629,6 +632,7 @@ impl Clone for SubagentRunner {
             working_dir: self.working_dir.clone(),
             context_dir: self.context_dir.clone(),
             llm: self.llm.clone(),
+            registry: self.registry.clone(),
             approval_runtime: self.approval_runtime.clone(),
             approval_mode: self.approval_mode,
         }
@@ -648,14 +652,21 @@ impl SubagentRunner {
             working_dir: working_dir.as_ref().to_path_buf(),
             context_dir: context_dir.as_ref().to_path_buf(),
             llm: None,
+            registry: None,
             approval_runtime: None,
             approval_mode: ApprovalMode::Interactive,
         }
     }
 
-    /// 设置 LLM 提供者
+    /// 设置 LLM 提供者（默认）
     pub fn with_llm(mut self, llm: Arc<dyn LlmProvider>) -> Self {
         self.llm = Some(llm);
+        self
+    }
+
+    /// 设置模型注册表（用于 model_override 动态选择）
+    pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
+        self.registry = Some(registry);
         self
     }
 
@@ -725,6 +736,53 @@ impl SubagentRunner {
             )
             .await?;
         collector.stage("agent_built");
+
+        // 5.5 根据 model_override 动态选择 LLM
+        if let Some(ref model_alias) = spec.model_override {
+            if let Some(ref registry) = self.registry {
+                match registry.get(model_alias) {
+                    Some(entry) => {
+                        if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
+                            match build_provider_from_registry(provider_cfg, &entry.model_id).await {
+                                Ok(new_llm) => {
+                                    agent.set_llm(Arc::from(new_llm));
+                                    collector.stage(format!(
+                                        "llm_switched_to: {} (provider: {}, model: {})",
+                                        model_alias, entry.provider, entry.model_id
+                                    ));
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to build provider for model '{}': {}. Using default LLM.",
+                                        model_alias, e
+                                    );
+                                    collector.stage(format!(
+                                        "llm_switch_failed: {} (fallback to default)",
+                                        model_alias
+                                    ));
+                                }
+                            }
+                        } else {
+                            warn!(
+                                "Provider '{}' for model '{}' not found in registry. Using default LLM.",
+                                entry.provider, model_alias
+                            );
+                        }
+                    }
+                    None => {
+                        warn!(
+                            "Model alias '{}' not found in registry. Using default LLM.",
+                            model_alias
+                        );
+                    }
+                }
+            } else {
+                warn!(
+                    "model_override '{}' specified but no ModelRegistry configured. Using default LLM.",
+                    model_alias
+                );
+            }
+        }
 
         // 6. 准备提示词
         let prompt = self

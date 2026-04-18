@@ -192,11 +192,16 @@ async fn main() {
 
         let llm = agent.llm().unwrap_or_else(|| Arc::new(MockLlm));
         let registry = agent.registry().clone();
-        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+        let mut executor = DefaultAgentTaskExecutor::new(
             llm,
             registry,
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-        ));
+        );
+        // Attach ModelRegistry for per-task model selection
+        if let Ok(model_registry) = clarity_core::llm::ModelRegistry::load() {
+            executor = executor.with_registry(model_registry);
+        }
+        let executor = Arc::new(executor);
 
         Arc::new(
             BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
