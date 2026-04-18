@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use tower_http::services::ServeDir;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
@@ -17,25 +18,28 @@ use tracing::{info, warn};
 
 use crate::handlers;
 use crate::session::SessionManager;
+use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
 
 /// 应用状态
 pub struct AppState {
-    pub agent: Arc<Agent>,
+    pub agent: Arc<RwLock<Agent>>,
     pub session_manager: Arc<RwLock<SessionManager>>,
     pub tool_registry: ToolRegistry,
     pub task_manager: Arc<BackgroundTaskManager>,
+    pub activity_logger: ActivityLogger,
 }
 
 impl AppState {
     pub fn new(agent: Arc<Agent>, task_manager: Arc<BackgroundTaskManager>) -> Self {
         Self {
-            agent: agent.clone(),
-            session_manager: Arc::new(RwLock::new(SessionManager::new())),
+            agent: Arc::new(RwLock::new((*agent).clone())),
+            session_manager: Arc::new(tokio::sync::RwLock::new(SessionManager::new())),
             tool_registry: agent.registry().clone(),
             task_manager,
+            activity_logger: ActivityLogger::new(),
         }
     }
 }
@@ -105,6 +109,7 @@ pub async fn run(
 /// 嵌入的静态文件（编译时打包进二进制，避免运行时依赖工作目录）
 static INDEX_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/index.html"));
 static CHAT_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat.html"));
+static CHAT_V1_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat-v1.html"));
 
 async fn serve_index() -> impl IntoResponse {
     (
@@ -122,6 +127,14 @@ async fn serve_chat() -> impl IntoResponse {
     )
 }
 
+async fn serve_chat_v1() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        CHAT_V1_HTML,
+    )
+}
+
 /// 创建 API 路由器
 pub fn create_api_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
@@ -135,13 +148,23 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
 
+    let assets_dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/static/assets"));
+
     Router::new()
         .route("/", get(serve_chat))
         .route("/chat.html", get(serve_chat))
+        .route("/chat-v1.html", get(serve_chat_v1))
+        .nest_service("/assets", ServeDir::new(assets_dir))
         .route("/health", get(handlers::health_check))
         .route("/v1/chat/completions", post(handlers::chat_completions))
         .route("/v1/tasks", post(handlers::create_task))
         .route("/v1/tasks/:id", get(handlers::get_task).delete(handlers::cancel_task))
+        .route("/api/files/tree", get(handlers::file_tree))
+        .route("/api/files/read", get(handlers::file_read))
+        .route("/api/files/write", post(handlers::file_write))
+        .route("/api/files/glob", get(handlers::file_glob))
+        .route("/api/provider", post(handlers::admin_switch_provider))
+
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

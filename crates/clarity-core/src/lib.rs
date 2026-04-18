@@ -40,6 +40,7 @@
 //! }
 //! ```
 
+pub mod activity;
 pub mod agent;
 pub mod approval;
 pub mod background;
@@ -50,7 +51,7 @@ pub mod llm;
 pub mod mcp;
 pub mod memory;
 pub mod notifications;
-pub mod personality;
+
 pub mod registry;
 pub mod skill;
 pub mod subagents;

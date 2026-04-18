@@ -284,13 +284,6 @@ impl AgentController {
                             debug!("Controller: Compact (no-op; compaction runs automatically inside Agent)");
                         }
 
-                        Some(Op::UpdatePersonality(config)) => {
-                            debug!("Controller: UpdatePersonality ({:?})", config.yuan_type);
-                            if let Err(e) = self.agent.update_personality(config) {
-                                warn!("Failed to update personality: {}", e);
-                            }
-                        }
-
                         Some(Op::Shutdown) | None => {
                             debug!("Controller: Shutdown");
                             break;
@@ -450,26 +443,4 @@ mod tests {
         let _ = handle.await;
     }
 
-    #[tokio::test]
-    async fn test_controller_update_personality() {
-        use crate::personality::PersonalityConfig;
-        use std::collections::HashMap;
-
-        let registry = ToolRegistry::new();
-        let agent = Agent::with_config(registry, AgentConfig::default());
-        let (controller, tx) = AgentController::new_with_sender(agent);
-        let handle = tokio::spawn(controller.run());
-
-        let mut vars = HashMap::new();
-        vars.insert("crop".to_string(), "水稻".to_string());
-        let config = PersonalityConfig::new()
-            .with_agent_name("AgriExpert")
-            .with_template_variables(vars);
-
-        tx.send(Op::UpdatePersonality(config)).unwrap();
-        tx.send(Op::Shutdown).unwrap();
-
-        let result = handle.await.unwrap();
-        assert!(result.is_ok());
-    }
 }

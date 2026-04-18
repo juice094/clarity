@@ -68,10 +68,18 @@ pub fn draw(f: &mut Frame, app: &App) {
     .alignment(Alignment::Center);
 
     let session_short = &app.session_id[..8.min(app.session_id.len())];
+    let right_text = if let Some((prompt, completion, total)) = app.session_usage {
+        format!(
+            "{} │ {}↑ {}↓ {}∑",
+            session_short, prompt, completion, total
+        )
+    } else {
+        session_short.to_string()
+    };
     let right = Paragraph::new(Line::from(vec![
         Span::styled("Session: ", Style::default().fg(Color::Rgb(140, 140, 160))),
         Span::styled(
-            session_short.to_string(),
+            right_text,
             Style::default().fg(Color::Rgb(180, 180, 200)),
         ),
     ]))

@@ -48,7 +48,7 @@ impl ToolRegistry {
         use crate::tools::{
             BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool,
         };
-        use crate::tools::{PowerShellTool, WebFetchTool, WebSearchTool};
+        use crate::tools::{PowerShellTool, TaskListTool, TaskOutputTool, TaskStopTool, ThinkTool, WebFetchTool, WebSearchTool};
 
         let registry = Self::new();
 
@@ -68,6 +68,14 @@ impl ToolRegistry {
         // Register web tools
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
+
+        // Register think tool
+        let _ = registry.register(ThinkTool::new());
+
+        // Register task tools
+        let _ = registry.register(TaskListTool::new());
+        let _ = registry.register(TaskOutputTool::new());
+        let _ = registry.register(TaskStopTool::new());
 
         registry
     }

@@ -100,21 +100,19 @@ pub struct App {
     pub registry: CommandRegistry,
     /// 生成指标
     pub generation_metrics: Option<GenerationMetrics>,
-    /// 当前人格类型
-    pub current_yuan_type: String,
     /// 命令补全状态
     complete_last_prefix: String,
     complete_last_index: usize,
+    /// Session token usage
+    pub session_usage: Option<(u32, u32, u32)>,
 }
 
 impl App {
     pub fn new(
         agent: Arc<Agent>,
         model_name: impl Into<String>,
-        yuan_type: impl Into<String>,
     ) -> Self {
         let model_name = model_name.into();
-        let current_yuan_type = yuan_type.into();
 
         Self {
             messages: vec![Message::new(
@@ -137,9 +135,9 @@ impl App {
             controller_tx: None,
             registry: build_default_registry(),
             generation_metrics: None,
-            current_yuan_type,
             complete_last_prefix: String::new(),
             complete_last_index: 0,
+            session_usage: None,
         }
     }
 
@@ -510,6 +508,11 @@ impl App {
         // 可以在这里处理定时任务
     }
 
+    /// Handle usage update from agent
+    pub fn handle_usage(&mut self, prompt_tokens: u32, completion_tokens: u32, total_tokens: u32) {
+        self.session_usage = Some((prompt_tokens, completion_tokens, total_tokens));
+    }
+
     /// 窗口大小变化
     pub fn on_resize(&mut self, width: u16, height: u16) {
         self.terminal_size = (width, height);
@@ -521,7 +524,7 @@ impl Default for App {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        Self::new(agent, "default", "Direct")
+        Self::new(agent, "default")
     }
 }
 
@@ -664,7 +667,7 @@ mod tests {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        let mut app = App::new(agent, "default", "Direct");
+        let mut app = App::new(agent, "default");
         app.handle_command("/model gpt-4").await;
         assert_eq!(app.model_name, "gpt-4");
     }

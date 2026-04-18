@@ -46,6 +46,12 @@ pub enum Event {
     ToolResult(ToolCallInfo),
     /// 错误
     Error(String),
+    /// Token usage update
+    Usage {
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        total_tokens: u32,
+    },
 }
 
 /// 事件处理器

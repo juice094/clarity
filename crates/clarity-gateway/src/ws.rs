@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::server::AppState;
-use crate::session::SessionId;
+use crate::session::{EntryPoint, SessionId};
 
 /// WebSocket 升级处理器
 pub async fn ws_handler(
@@ -29,7 +29,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     // 创建会话
     {
         let mut manager = state.session_manager.write().await;
-        manager.create_session(session_id.clone());
+        manager.create_session(session_id.clone(), EntryPoint::Window);
     }
 
     let (mut sender, mut receiver) = socket.split();
@@ -101,7 +101,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     // 清理会话
     {
         let mut manager = state.session_manager.write().await;
-        manager.destroy_session(&session_id);
+        manager.destroy_session(&session_id, EntryPoint::Window);
     }
     info!("WebSocket disconnected: session_id={}", session_id);
 }
@@ -121,14 +121,14 @@ async fn handle_chat_with_wire(
     // 记录用户消息
     {
         let mut manager = state.session_manager.write().await;
-        if let Some(session) = manager.get_session_mut(session_id) {
+        if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
             session.record_message("user", &message);
         }
     }
 
     // Create wire and wire-enabled agent
     let wire = clarity_wire::Wire::new();
-    let agent = (*state.agent).clone().with_wire(Arc::new(wire.clone()));
+    let agent = state.agent.read().await.clone().with_wire(Arc::new(wire.clone()));
 
     // Run agent in background
     let message_clone = message.clone();
@@ -156,7 +156,7 @@ async fn handle_chat_with_wire(
             // 记录助手回复
             {
                 let mut manager = state.session_manager.write().await;
-                if let Some(session) = manager.get_session_mut(session_id) {
+                if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
                     session.record_message("assistant", &response_text);
                 }
             }
@@ -254,18 +254,19 @@ async fn handle_request(
             // 记录用户消息
             {
                 let mut manager = state.session_manager.write().await;
-                if let Some(session) = manager.get_session_mut(session_id) {
+                if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
                     session.record_message("user", &message);
                 }
             }
 
             // 使用 Agent 处理消息
-            match state.agent.run(&message).await {
+            let agent = state.agent.read().await.clone();
+            match agent.run(&message).await {
                 Ok(response_text) => {
                     // 记录助手回复
                     {
                         let mut manager = state.session_manager.write().await;
-                        if let Some(session) = manager.get_session_mut(session_id) {
+                        if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
                             session.record_message("assistant", &response_text);
                         }
                     }
@@ -288,7 +289,7 @@ async fn handle_request(
             let messages = {
                 let manager = state.session_manager.read().await;
                 manager
-                    .get_session(session_id)
+                    .get_session(session_id, EntryPoint::Window)
                     .map(|session| {
                         session
                             .get_messages()

@@ -35,6 +35,15 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
                 })),
                 WireMessage::StatusUpdate { message } => Some(Event::StreamResponse(message)),
                 WireMessage::TurnEnd => Some(Event::ResponseComplete),
+                WireMessage::Usage {
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens,
+                } => Some(Event::Usage {
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens,
+                }),
                 _ => None,
             };
 

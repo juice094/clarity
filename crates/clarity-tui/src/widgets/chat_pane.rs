@@ -7,6 +7,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
 
+use super::markdown::render_markdown;
+
 /// 聊天区域组件
 pub struct ChatPane<'a> {
     messages: &'a [Message],
@@ -114,11 +116,17 @@ impl<'a> Widget for ChatPane<'a> {
                         time,
                     ]));
 
-                    for line in msg.content.lines() {
-                        lines.push(Line::from(vec![
-                            Span::styled("  ▎ ", Style::default().fg(Color::Rgb(80, 180, 140))),
-                            Span::styled(line, Style::default().fg(Color::Rgb(210, 230, 220))),
-                        ]));
+                    let md_lines = render_markdown(
+                        &msg.content,
+                        Style::default().fg(Color::Rgb(210, 230, 220)),
+                    );
+                    for md_line in md_lines {
+                        let mut spans = vec![Span::styled(
+                            "  ▎ ",
+                            Style::default().fg(Color::Rgb(80, 180, 140)),
+                        )];
+                        spans.extend(md_line.spans);
+                        lines.push(Line::from(spans));
                     }
 
                     if msg.is_streaming {

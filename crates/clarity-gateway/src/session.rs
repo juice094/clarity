@@ -3,6 +3,27 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use uuid::Uuid;
 
+/// 入口类型 —— 窗口即认知边界
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntryPoint {
+    /// 生活/陪伴入口：永存且唯一
+    Claw,
+    /// 查询/问答入口：短且不唯一
+    Window,
+    /// 工程/开发入口：长且不唯一
+    Cli,
+}
+
+impl std::fmt::Display for EntryPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntryPoint::Claw => write!(f, "claw"),
+            EntryPoint::Window => write!(f, "window"),
+            EntryPoint::Cli => write!(f, "cli"),
+        }
+    }
+}
+
 /// 会话 ID
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SessionId(String);
@@ -38,6 +59,7 @@ pub struct SessionMessage {
 #[derive(Debug)]
 pub struct Session {
     pub id: SessionId,
+    pub entry: EntryPoint,
     pub created_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
     pub message_count: u64,
@@ -46,10 +68,11 @@ pub struct Session {
 
 #[allow(dead_code)]
 impl Session {
-    pub fn new(id: SessionId) -> Self {
+    pub fn new(id: SessionId, entry: EntryPoint) -> Self {
         let now = Utc::now();
         Self {
             id,
+            entry,
             created_at: now,
             last_activity: now,
             message_count: 0,
@@ -80,10 +103,12 @@ impl Session {
     }
 }
 
-/// 会话管理器
+/// 按入口隔离的会话管理器
 #[derive(Debug)]
 pub struct SessionManager {
-    sessions: HashMap<SessionId, Session>,
+    claw: HashMap<SessionId, Session>,
+    window: HashMap<SessionId, Session>,
+    cli: HashMap<SessionId, Session>,
     total_requests: AtomicU64,
     started_at: DateTime<Utc>,
 }
@@ -92,40 +117,63 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: HashMap::new(),
+            claw: HashMap::new(),
+            window: HashMap::new(),
+            cli: HashMap::new(),
             total_requests: AtomicU64::new(0),
             started_at: Utc::now(),
         }
     }
 
+    fn namespace(&self, entry: EntryPoint) -> &HashMap<SessionId, Session> {
+        match entry {
+            EntryPoint::Claw => &self.claw,
+            EntryPoint::Window => &self.window,
+            EntryPoint::Cli => &self.cli,
+        }
+    }
+
+    fn namespace_mut(&mut self, entry: EntryPoint) -> &mut HashMap<SessionId, Session> {
+        match entry {
+            EntryPoint::Claw => &mut self.claw,
+            EntryPoint::Window => &mut self.window,
+            EntryPoint::Cli => &mut self.cli,
+        }
+    }
+
     /// 创建新会话
-    pub fn create_session(&mut self, id: SessionId) -> &mut Session {
-        let session = Session::new(id.clone());
-        self.sessions.insert(id.clone(), session);
-        tracing::info!("Session created: {}", id);
-        self.sessions.get_mut(&id).unwrap()
+    pub fn create_session(&mut self, id: SessionId, entry: EntryPoint) -> &mut Session {
+        let session = Session::new(id.clone(), entry);
+        self.namespace_mut(entry).insert(id.clone(), session);
+        tracing::info!("Session created: {} ({})", id, entry);
+        self.namespace_mut(entry).get_mut(&id).unwrap()
     }
 
     /// 销毁会话
-    pub fn destroy_session(&mut self, id: &SessionId) {
-        if self.sessions.remove(id).is_some() {
-            tracing::info!("Session destroyed: {}", id);
+    pub fn destroy_session(&mut self, id: &SessionId, entry: EntryPoint) {
+        if self.namespace_mut(entry).remove(id).is_some() {
+            tracing::info!("Session destroyed: {} ({})", id, entry);
         }
     }
 
     /// 获取会话
-    pub fn get_session(&self, id: &SessionId) -> Option<&Session> {
-        self.sessions.get(id)
+    pub fn get_session(&self, id: &SessionId, entry: EntryPoint) -> Option<&Session> {
+        self.namespace(entry).get(id)
     }
 
     /// 获取可变会话
-    pub fn get_session_mut(&mut self, id: &SessionId) -> Option<&mut Session> {
-        self.sessions.get_mut(id)
+    pub fn get_session_mut(&mut self, id: &SessionId, entry: EntryPoint) -> Option<&mut Session> {
+        self.namespace_mut(entry).get_mut(id)
     }
 
-    /// 活跃会话数
+    /// 活跃会话数（全部入口）
     pub fn active_session_count(&self) -> usize {
-        self.sessions.len()
+        self.claw.len() + self.window.len() + self.cli.len()
+    }
+
+    /// 按入口的活跃会话数
+    pub fn active_session_count_by(&self, entry: EntryPoint) -> usize {
+        self.namespace(entry).len()
     }
 
     /// 记录请求
@@ -146,21 +194,28 @@ impl SessionManager {
     /// 清理过期会话
     pub fn cleanup_expired(&mut self, max_idle_minutes: i64) {
         let now = Utc::now();
-        let expired: Vec<SessionId> = self
-            .sessions
-            .iter()
-            .filter(|(_, s)| (now - s.last_activity).num_minutes() > max_idle_minutes)
-            .map(|(id, _)| id.clone())
-            .collect();
+        for entry in [EntryPoint::Claw, EntryPoint::Window, EntryPoint::Cli] {
+            let expired: Vec<SessionId> = self
+                .namespace(entry)
+                .iter()
+                .filter(|(_, s)| (now - s.last_activity).num_minutes() > max_idle_minutes)
+                .map(|(id, _)| id.clone())
+                .collect();
 
-        for id in expired {
-            self.destroy_session(&id);
+            for id in &expired {
+                self.namespace_mut(entry).remove(id);
+                tracing::info!("Session expired: {} ({})", id, entry);
+            }
         }
     }
 
     /// 获取所有会话信息
     pub fn get_all_sessions(&self) -> Vec<&Session> {
-        self.sessions.values().collect()
+        let mut all = Vec::new();
+        all.extend(self.claw.values());
+        all.extend(self.window.values());
+        all.extend(self.cli.values());
+        all
     }
 }
 
@@ -185,18 +240,34 @@ mod tests {
     fn test_session_creation() {
         let mut manager = SessionManager::new();
         let id = SessionId::new();
-        let session = manager.create_session(id.clone());
+        let session = manager.create_session(id.clone(), EntryPoint::Window);
 
         assert_eq!(session.id.0, id.0);
+        assert_eq!(session.entry, EntryPoint::Window);
         assert_eq!(session.message_count, 0);
         assert!(session.messages.is_empty());
+    }
+
+    #[test]
+    fn test_session_isolation() {
+        let mut manager = SessionManager::new();
+        let id = SessionId::new();
+
+        manager.create_session(id.clone(), EntryPoint::Window);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Window), 1);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Cli), 0);
+
+        // 同一个 ID 在不同入口可以共存
+        manager.create_session(id.clone(), EntryPoint::Cli);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Window), 1);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Cli), 1);
     }
 
     #[test]
     fn test_session_message_tracking() {
         let mut manager = SessionManager::new();
         let id = SessionId::new();
-        let session = manager.create_session(id.clone());
+        let session = manager.create_session(id.clone(), EntryPoint::Window);
 
         session.record_message("user", "Hello");
         assert_eq!(session.message_count, 1);
@@ -215,15 +286,14 @@ mod tests {
         assert_eq!(manager.active_session_count(), 0);
 
         let id1 = SessionId::new();
-        manager.create_session(id1);
+        manager.create_session(id1, EntryPoint::Window);
         assert_eq!(manager.active_session_count(), 1);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Window), 1);
 
         let id2 = SessionId::new();
-        manager.create_session(id2.clone());
+        manager.create_session(id2, EntryPoint::Claw);
         assert_eq!(manager.active_session_count(), 2);
-
-        manager.destroy_session(&id2);
-        assert_eq!(manager.active_session_count(), 1);
+        assert_eq!(manager.active_session_count_by(EntryPoint::Claw), 1);
     }
 
     #[test]

@@ -15,7 +15,6 @@ use clarity_core::mcp::{
     config::McpConfig,
     register_mcp_tools, McpClientBuilder, McpRegistry, McpServerConfig,
 };
-use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
 
@@ -59,22 +58,18 @@ async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
-    // 配置人格（默认 Direct 工程模式，可通过 CLARITY_YUAN_TYPE 覆盖）
-    let yuan_type = std::env::var("CLARITY_YUAN_TYPE")
-        .ok()
-        .and_then(|s| s.parse::<YuanType>().ok())
-        .unwrap_or(YuanType::Direct);
-    let personality_config = PersonalityConfig::new()
-        .with_agent_name("Clarity")
-        .with_user_name("User")
-        .with_yuan_type(yuan_type)
-        .with_locale("zh-CN");
+    // 配置 Agent（window 入口：方法论驱动）
+    let window_context = r#"# Methodology
+You are a methodological query assistant. When answering:
+1. Clarify the scope of the question first
+2. Reason step by step, showing your thinking
+3. Cite sources when possible; distinguish facts from speculation
+4. Explicitly state when you are uncertain"#;
 
-    // 配置 Agent
     let config = AgentConfig::new()
         .with_max_iterations(10)
         .with_read_only(false)
-        .with_personality(personality_config);
+        .with_entry_context(window_context);
 
     // 创建 Agent
     let agent = Agent::with_config(registry, config);

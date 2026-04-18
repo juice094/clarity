@@ -17,7 +17,6 @@ use clarity_core::llm::LlmFactory;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
-use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -41,8 +40,8 @@ async fn main() -> Result<()> {
 
     // 创建 Agent（若失败需先恢复终端再返回错误）
     let app_result = match create_agent().await {
-        Ok((agent, model_name, yuan_type)) => {
-            let mut app = App::new(agent, model_name, yuan_type.to_string());
+        Ok((agent, model_name)) => {
+            let mut app = App::new(agent, model_name);
             run_app(&mut terminal, &mut app).await
         }
         Err(e) => Err(e),
@@ -60,29 +59,17 @@ async fn main() -> Result<()> {
     app_result
 }
 
-async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
+async fn create_agent() -> Result<(Arc<Agent>, String)> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
     // 尝试加载 MCP 配置并注入外部工具
     load_and_register_mcp_tools(&registry).await;
 
-    // 配置人格（默认 Direct 工程模式，可通过 CLARITY_YUAN_TYPE 覆盖）
-    let yuan_type = std::env::var("CLARITY_YUAN_TYPE")
-        .ok()
-        .and_then(|s| s.parse::<YuanType>().ok())
-        .unwrap_or(YuanType::Direct);
-    let personality_config = PersonalityConfig::new()
-        .with_agent_name("Clarity")
-        .with_user_name("User")
-        .with_yuan_type(yuan_type)
-        .with_locale("zh-CN");
-
     // 创建 Agent 配置
     let config = AgentConfig::default()
         .with_max_iterations(10)
-        .with_read_only(false)
-        .with_personality(personality_config);
+        .with_read_only(false);
 
     // 从环境变量创建 LLM Provider (自动检测: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
     let mut llm =
@@ -110,7 +97,7 @@ async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {
         .with_memory(memory_store)
         .with_memory_ticker(memory_ticker);
 
-    Ok((Arc::new(agent), model_name, yuan_type))
+    Ok((Arc::new(agent), model_name))
 }
 
 /// Load `~/.config/clarity/mcp.json` and register available MCP tools.
@@ -225,6 +212,13 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Resul
             }
             events::Event::Error(err) => {
                 app.handle_error(err);
+            }
+            events::Event::Usage {
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            } => {
+                app.handle_usage(prompt_tokens, completion_tokens, total_tokens);
             }
         }
     }

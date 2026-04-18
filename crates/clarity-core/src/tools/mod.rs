@@ -15,11 +15,15 @@ use std::sync::Arc;
 pub mod file;
 pub mod search;
 pub mod shell;
+pub mod task;
+pub mod think;
 pub mod web;
 
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
 pub use search::{GlobTool, GrepTool};
 pub use shell::{BashTool, PowerShellTool};
+pub use task::{TaskListTool, TaskOutputTool, TaskStopTool};
+pub use think::ThinkTool;
 pub use web::{WebFetchTool, WebSearchTool};
 
 use crate::approval::ApprovalMode;

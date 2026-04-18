@@ -22,7 +22,6 @@ use crate::compaction::{estimate_message_tokens, CompactionConfig};
 use crate::error::{AgentError, ToolError};
 use crate::llm::StreamDelta;
 use crate::memory::{Memory, MemoryStore, MemoryTicker};
-use crate::personality::{Personality, PersonalityConfig, PersonalityLoader, SystemPromptBuilder};
 use crate::registry::ToolRegistry;
 use crate::tools::ToolContext;
 use clarity_wire::{Wire, WireMessage};
@@ -31,7 +30,7 @@ use clarity_wire::{Wire, WireMessage};
 const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -134,12 +133,14 @@ pub struct AgentConfig {
     pub working_dir: std::path::PathBuf,
     /// Read-only mode (prevents file modifications)
     pub read_only: bool,
-    /// System prompt (legacy, use personality instead)
+    /// System prompt
     pub system_prompt: String,
-    /// Personality configuration
-    pub personality_config: Option<PersonalityConfig>,
+    /// Entry-specific context appended to system prompt (methodology, persona, etc.)
+    pub entry_context: String,
     /// Optional compaction service configuration
     pub compaction_service: Option<CompactionServiceConfig>,
+    /// Directory containing Markdown prompt files
+    pub prompts_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for AgentConfig {
@@ -150,8 +151,9 @@ impl Default for AgentConfig {
             working_dir: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             read_only: false,
             system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
-            personality_config: None,
+            entry_context: String::new(),
             compaction_service: None,
+            prompts_dir: None,
         }
     }
 }
@@ -180,15 +182,15 @@ impl AgentConfig {
         self
     }
 
-    /// Set custom system prompt (legacy, use with_personality instead)
+    /// Set custom system prompt
     pub fn with_system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.system_prompt = prompt.into();
         self
     }
 
-    /// Set personality configuration
-    pub fn with_personality(mut self, config: PersonalityConfig) -> Self {
-        self.personality_config = Some(config);
+    /// Set entry-specific context appended to system prompt
+    pub fn with_entry_context(mut self, context: impl Into<String>) -> Self {
+        self.entry_context = context.into();
         self
     }
 
@@ -197,6 +199,41 @@ impl AgentConfig {
         self.compaction_service = Some(config);
         self
     }
+
+    /// Set prompts directory for Markdown prompt files
+    pub fn with_prompts_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.prompts_dir = Some(dir.into());
+        self
+    }
+}
+
+/// Load a prompt from a Markdown file, stripping YAML frontmatter if present.
+fn load_prompt_from_file(path: &std::path::Path) -> Option<String> {
+    let contents = std::fs::read_to_string(path).ok()?;
+
+    let mut lines = contents.lines();
+
+    // Check for YAML frontmatter starting with ---
+    if let Some(first) = lines.next() {
+        if first.trim() == "---" {
+            // Skip until closing ---
+            for line in lines.by_ref() {
+                if line.trim() == "---" {
+                    break;
+                }
+            }
+            // Return remaining content
+            let remaining: Vec<&str> = lines.collect();
+            let result = remaining.join("\n").trim_start().to_string();
+            if result.is_empty() {
+                return None;
+            }
+            return Some(result);
+        }
+    }
+
+    // No frontmatter, return full content
+    Some(contents)
 }
 
 /// Default system prompt for the agent
@@ -289,28 +326,20 @@ impl LlmProvider for MockLlm {
 /// ```rust,no_run
 /// use clarity_core::{Agent, ToolRegistry};
 /// use clarity_core::agent::AgentConfig;
-/// use clarity_core::personality::{PersonalityConfig, YuanType};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
 ///     let registry = ToolRegistry::with_builtin_tools();
-///     
-///     // Configure with personality
-///     let personality_config = PersonalityConfig::new()
-///         .with_agent_name("Clarity")
-///         .with_user_name("User")
-///         .with_yuan_type(YuanType::Hanako);
-///     
+///
 ///     let config = AgentConfig::new()
 ///         .with_max_iterations(10)
-///         .with_read_only(false)
-///         .with_personality(personality_config);
-///     
+///         .with_read_only(false);
+///
 ///     let agent = Agent::with_config(registry, config);
-///     
+///
 ///     // This would need an actual LLM provider
 ///     // let response = agent.run("List all Rust files").await?;
-///     
+///
 ///     Ok(())
 /// }
 /// ```
@@ -319,8 +348,6 @@ pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
     llm: Arc<std::sync::RwLock<Option<Arc<dyn LlmProvider>>>>,
-    personality: Option<Personality>,
-    system_prompt_builder: Option<SystemPromptBuilder>,
     memory_store: Option<Arc<dyn MemoryStore>>,
     memory_ticker: Option<MemoryTicker>,
     /// Optional wire for UI communication
@@ -337,6 +364,8 @@ pub struct Agent {
     compaction_service: Option<CompactionService>,
     /// Cancellation token for interrupting in-flight runs
     cancel_token: CancellationToken,
+    /// Session token usage accumulator
+    session_usage: Arc<Mutex<TokenUsage>>,
 }
 
 impl Agent {
@@ -347,29 +376,10 @@ impl Agent {
 
     /// Create a new Agent with custom configuration
     pub fn with_config(registry: ToolRegistry, config: AgentConfig) -> Self {
-        let (personality, system_prompt_builder) =
-            if let Some(ref personality_config) = config.personality_config {
-                let loader = PersonalityLoader::new();
-                match loader.load(personality_config) {
-                    Ok(personality) => {
-                        let builder = SystemPromptBuilder::new(personality.clone());
-                        (Some(personality), Some(builder))
-                    }
-                    Err(e) => {
-                        warn!("Failed to load personality: {}. Using fallback.", e);
-                        (None, None)
-                    }
-                }
-            } else {
-                (None, None)
-            };
-
         Self {
             registry,
             config: config.clone(),
             llm: Arc::new(std::sync::RwLock::new(None)),
-            personality,
-            system_prompt_builder,
             memory_store: None,
             memory_ticker: None,
             wire: None,
@@ -379,6 +389,11 @@ impl Agent {
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
             compaction_service: config.compaction_service.map(CompactionService::new),
             cancel_token: CancellationToken::new(),
+            session_usage: Arc::new(Mutex::new(TokenUsage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+            })),
         }
     }
 
@@ -469,6 +484,19 @@ impl Agent {
         self.approval_runtime.clone()
     }
 
+    /// Accumulate token usage into the session counter.
+    fn accumulate_usage(&self, prompt_tokens: u32, completion_tokens: u32) {
+        let mut usage = self.session_usage.lock().unwrap();
+        usage.prompt_tokens += prompt_tokens;
+        usage.completion_tokens += completion_tokens;
+        usage.total_tokens = usage.prompt_tokens + usage.completion_tokens;
+    }
+
+    /// Get accumulated session token usage.
+    pub fn get_session_usage(&self) -> TokenUsage {
+        self.session_usage.lock().unwrap().clone()
+    }
+
     /// Get the tool registry
     pub fn registry(&self) -> &ToolRegistry {
         &self.registry
@@ -484,21 +512,43 @@ impl Agent {
         &self.config
     }
 
-    /// Get the personality (if configured)
-    pub fn personality(&self) -> Option<&Personality> {
-        self.personality.as_ref()
-    }
-
     /// Build the system prompt
-    /// Uses personality if available, otherwise falls back to config.system_prompt
     pub fn build_system_prompt(&self) -> String {
-        if let Some(ref builder) = self.system_prompt_builder {
-            // Build with personality and optional skill definitions
-            let skills = self.get_skill_definitions();
-            builder.clone().with_skills(skills).build()
+        let skills = self.get_skill_definitions();
+
+        // Determine entry type from entry_context
+        let entry = if self.config.entry_context.contains("方法论") || self.config.entry_context.contains("科学") {
+            "window"
+        } else if self.config.entry_context.contains("工程") {
+            "cli"
         } else {
-            // Fallback to legacy system prompt
-            self.config.system_prompt.clone()
+            "claw"
+        };
+
+        // Try to load prompt from file if prompts_dir is set
+        let file_prompt = self.config.prompts_dir.as_ref().and_then(|dir| {
+            let prompt_path = dir.join(format!("{}.md", entry));
+            load_prompt_from_file(&prompt_path)
+        });
+
+        let base = if let Some(prompt) = file_prompt {
+            if skills.is_empty() {
+                prompt
+            } else {
+                format!("{}\n\n## Available Tools\n{}", prompt, skills.join("\n"))
+            }
+        } else {
+            if skills.is_empty() {
+                self.config.system_prompt.clone()
+            } else {
+                format!("{}\n\n## Available Tools\n{}", self.config.system_prompt, skills.join("\n"))
+            }
+        };
+
+        if self.config.entry_context.is_empty() {
+            base
+        } else {
+            format!("{}\n\n{}", base, self.config.entry_context)
         }
     }
 
@@ -522,22 +572,7 @@ impl Agent {
         }
     }
 
-    /// Update personality configuration (hot reload)
-    ///
-    /// This allows changing the agent's personality without recreating the agent.
-    pub fn update_personality(&mut self, config: PersonalityConfig) -> anyhow::Result<()> {
-        info!("Updating personality configuration");
 
-        let loader = PersonalityLoader::new();
-        let personality = loader.load(&config)?;
-
-        self.personality = Some(personality.clone());
-        self.system_prompt_builder = Some(SystemPromptBuilder::new(personality));
-        self.config.personality_config = Some(config);
-
-        info!("Personality updated successfully");
-        Ok(())
-    }
 
     /// Run the agent with a user query
     ///
@@ -637,12 +672,15 @@ impl Agent {
             }
 
             // Get LLM response with timeout
+            let prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
             let response = tokio::time::timeout(
                 tokio::time::Duration::from_secs(45),
                 llm.complete(&messages, &tools),
             )
             .await
             .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            let completion_tokens = response.content.len().div_ceil(4) as u32;
+            self.accumulate_usage(prompt_tokens, completion_tokens);
             final_response = response.content.clone();
 
             // If no tool calls, we're done
@@ -707,6 +745,14 @@ impl Agent {
 
         // Send TurnEnd message
         self.send_wire_message(WireMessage::TurnEnd);
+
+        // Send usage report
+        let usage = self.get_session_usage();
+        self.send_wire_message(WireMessage::Usage {
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+        });
 
         // Persist interaction to memory
         if let Some(ref store) = self.memory_store {
@@ -792,12 +838,15 @@ impl Agent {
                 }
             }
 
+            let prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
             let response = tokio::time::timeout(
                 tokio::time::Duration::from_secs(45),
                 llm.complete(&messages, &tools),
             )
             .await
             .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            let completion_tokens = response.content.len().div_ceil(4) as u32;
+            self.accumulate_usage(prompt_tokens, completion_tokens);
             final_response = response.content.clone();
 
             if response.tool_calls.is_empty() {
@@ -851,6 +900,14 @@ impl Agent {
         }
 
         self.send_wire_message(WireMessage::TurnEnd);
+
+        // Send usage report
+        let usage = self.get_session_usage();
+        self.send_wire_message(WireMessage::Usage {
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+        });
 
         if completed {
             Ok(final_response)
@@ -993,9 +1050,12 @@ impl Agent {
 
             // Stream-first: try streaming, fall back to complete() if unsupported or errors.
             let mut turn_response: Option<LlmResponse> = None;
+            let mut prompt_tokens = 0u32;
+            let mut completion_tokens = 0u32;
 
             match llm.stream(&messages, &tools) {
                 Ok(mut stream_rx) => {
+                    prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
                     // Send final content start notification
                     self.send_wire_message(WireMessage::ContentPart {
                         text: String::new(),
@@ -1024,6 +1084,7 @@ impl Agent {
                             }
                         }
                     }
+                    completion_tokens = accumulated.len().div_ceil(4) as u32;
                     turn_response = Some(LlmResponse {
                         content: accumulated,
                         tool_calls,
@@ -1041,8 +1102,15 @@ impl Agent {
             let was_streamed = turn_response.is_some();
             let response = match turn_response {
                 Some(r) => r,
-                None => llm.complete(&messages, &tools).await?,
+                None => {
+                    prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
+                    let r = llm.complete(&messages, &tools).await?;
+                    completion_tokens = r.content.len().div_ceil(4) as u32;
+                    r
+                }
             };
+
+            self.accumulate_usage(prompt_tokens, completion_tokens);
 
             if response.tool_calls.is_empty() {
                 // No tool calls: final answer.
@@ -1111,6 +1179,14 @@ impl Agent {
 
         // Send TurnEnd message
         self.send_wire_message(WireMessage::TurnEnd);
+
+        // Send usage report
+        let usage = self.get_session_usage();
+        self.send_wire_message(WireMessage::Usage {
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+        });
 
         if let Some(ref store) = self.memory_store {
             let memory_content = if completed {
@@ -1418,39 +1494,6 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_agent_with_personality() {
-        let personality_config = PersonalityConfig::new()
-            .with_agent_name("TestAgent")
-            .with_user_name("TestUser")
-            .with_yuan_type(crate::personality::YuanType::Hanako);
-
-        let config = AgentConfig::new().with_personality(personality_config);
-        let registry = ToolRegistry::new();
-        let agent = Agent::with_config(registry, config);
-
-        // Should have personality loaded
-        assert!(agent.personality().is_some());
-    }
-
-    #[test]
-    fn test_system_prompt_building() {
-        let personality_config = PersonalityConfig::new()
-            .with_agent_name("TestAgent")
-            .with_user_name("TestUser")
-            .with_yuan_type(crate::personality::YuanType::Hanako);
-
-        let config = AgentConfig::new().with_personality(personality_config);
-        let registry = ToolRegistry::new();
-        let agent = Agent::with_config(registry, config);
-
-        let system_prompt = agent.build_system_prompt();
-
-        // Should contain personality content
-        assert!(system_prompt.contains("TestAgent"));
-        assert!(system_prompt.contains("人格"));
     }
 
     #[tokio::test]
@@ -1868,38 +1911,4 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_agent_update_personality_with_template_variables() {
-        use std::io::Write;
-
-        let temp = tempfile::tempdir().unwrap();
-        let identity_path = temp.path().join("identity.md");
-        let mut file = std::fs::File::create(&identity_path).unwrap();
-        file.write_all(b"# {{agentName}}\n\nExpert in {{crop}} cultivation for {{region}}.").unwrap();
-        drop(file);
-
-        let personality_config = PersonalityConfig::new()
-            .with_agent_name("AgriExpert")
-            .with_user_name("Farmer")
-            .with_agent_dir(temp.path())
-            .with_template_variable("crop", "水稻")
-            .with_template_variable("region", "江苏");
-
-        let registry = ToolRegistry::new();
-        let mut agent = Agent::with_config(registry, AgentConfig::default());
-
-        // Initial: no personality
-        assert!(agent.personality().is_none());
-
-        // Update personality with template variables
-        agent.update_personality(personality_config).unwrap();
-
-        // Verify personality loaded with template variables applied
-        let personality = agent.personality().expect("personality should be loaded");
-        assert!(personality.identity.contains("AgriExpert"));
-        assert!(personality.identity.contains("水稻"));
-        assert!(personality.identity.contains("江苏"));
-        assert!(!personality.identity.contains("{{crop}}"));
-        assert!(!personality.identity.contains("{{region}}"));
-    }
 }

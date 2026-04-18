@@ -6,7 +6,6 @@ use clarity_core::agent::{Agent, AgentConfig, Message, MessageRole, MockLlm};
 use clarity_core::error::AgentError;
 use clarity_core::llm::LlmFactory;
 use clarity_core::memory::{Memory, MemoryStore, MemoryTicker};
-use clarity_core::personality::{PersonalityConfig, YuanType};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::tools::{BashTool, FileReadTool, Tool};
 use serde_json::json;
@@ -134,21 +133,14 @@ fn test_llm_factory_error_handling() {
 
 #[test]
 fn test_agent_config_builder_pattern() {
-    let personality = PersonalityConfig::new()
-        .with_agent_name("TestAgent")
-        .with_user_name("TestUser")
-        .with_yuan_type(YuanType::Ming);
-
     let config = AgentConfig::new()
         .with_max_iterations(15)
         .with_read_only(true)
-        .with_system_prompt("Custom prompt")
-        .with_personality(personality);
+        .with_system_prompt("Custom prompt");
 
     assert_eq!(config.max_iterations, 15);
     assert!(config.read_only);
     assert_eq!(config.system_prompt, "Custom prompt");
-    assert!(config.personality_config.is_some());
 }
 
 // ==================== Error Handling Integration ====================
@@ -219,32 +211,6 @@ fn test_tool_trait_object_safety() {
 
     // Can be converted to Arc for shared ownership
     let _shared: Arc<dyn Tool> = Arc::new(FileReadTool::new());
-}
-
-// ==================== Personality System Integration ====================
-
-#[test]
-fn test_personality_loading_integration() {
-    use clarity_core::personality::PersonalityLoader;
-
-    let config = PersonalityConfig::new()
-        .with_agent_name("Clarity")
-        .with_user_name("User")
-        .with_yuan_type(YuanType::Hanako);
-
-    let loader = PersonalityLoader::new();
-    let result = loader.load(&config);
-
-    // Should load successfully (or fail gracefully if templates missing)
-    match result {
-        Ok(personality) => {
-            // Personality has identity, yuan, and ishiki fields
-            assert!(!personality.identity.is_empty() || !personality.yuan.is_empty());
-        }
-        Err(e) => {
-            println!("Personality loading skipped: {}", e);
-        }
-    }
 }
 
 // ==================== Workspace Dependency Verification ====================

@@ -13,17 +13,23 @@ use crate::tools::{Tool, ToolContext, ToolResult};
 /// A Clarity `Tool` backed by an MCP server.
 pub struct McpToolWrapper {
     client: Arc<RwLock<McpClientInstance>>,
+    /// Display name in ToolRegistry (prefixed, e.g. "filesystem_list_directory")
     name: String,
+    /// Original MCP tool name (unprefixed, e.g. "list_directory")
+    mcp_name: String,
     description: String,
     parameters: Value,
 }
 
 impl McpToolWrapper {
     /// Create a new wrapper from an MCP tool descriptor and its client.
-    pub fn new(client: Arc<RwLock<McpClientInstance>>, tool: McpTool) -> Self {
+    /// `tool.name` should be the prefixed display name.
+    /// `mcp_name` is the original tool name expected by the MCP server.
+    pub fn new(client: Arc<RwLock<McpClientInstance>>, tool: McpTool, mcp_name: impl Into<String>) -> Self {
         Self {
             client,
             name: tool.name,
+            mcp_name: mcp_name.into(),
             description: tool.description.unwrap_or_default(),
             parameters: tool.input_schema,
         }
@@ -47,7 +53,7 @@ impl Tool for McpToolWrapper {
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let client = self.client.read().await;
         let result = client
-            .call_tool(&self.name, args)
+            .call_tool(&self.mcp_name, args)
             .await
             .map_err(|e| ToolError::ExecutionFailed(format!("MCP tool error: {}", e)))?;
 
@@ -81,14 +87,16 @@ pub async fn register_mcp_tools(
     for (server_name, client) in mcp_registry.iter() {
         let tools = client.read().await.list_tools().await?;
         for tool in tools {
+            let mcp_name = tool.name.clone();
             let name = format!("{}_{}", server_name, tool.name);
             let wrapper = McpToolWrapper::new(
                 client.clone(),
                 McpTool {
-                    name,
+                    name: name.clone(),
                     description: tool.description,
                     input_schema: tool.input_schema,
                 },
+                mcp_name,
             );
             tool_registry
                 .register(wrapper)

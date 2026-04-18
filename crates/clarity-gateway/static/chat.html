@@ -3,1467 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clarity Web IDE</title>
+    <title>Clarity — AI 助手</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-gradient-start: #0f0c29;
-            --bg-gradient-mid: #302b63;
-            --bg-gradient-end: #24243e;
-            --surface: rgba(255, 255, 255, 0.04);
-            --surface-hover: rgba(255, 255, 255, 0.08);
-            --border: rgba(255, 255, 255, 0.08);
-            --text-primary: #f0f0f5;
-            --text-secondary: #a0a0b0;
-            --accent: #8b5cf6;
-            --accent-hover: #7c3aed;
-            --user-bubble: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            --assistant-bubble: rgba(255, 255, 255, 0.06);
-            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            --radius: 16px;
-            --radius-sm: 10px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 260px;
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 20px 14px;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            padding: 0 8px 20px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-
-        .brand-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            background: var(--user-bubble);
-            display: grid;
-            place-items: center;
-            font-size: 1rem;
-        }
-
-        .new-chat-btn, .load-project-btn {
-            background: var(--surface-hover);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s;
-            margin-bottom: 8px;
-        }
-
-        .new-chat-btn:hover, .load-project-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
-
-        .settings-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 10px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 0.85rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s;
-            margin-top: auto;
-        }
-        .settings-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
-
-        .file-tree {
-            flex: 1;
-            overflow-y: auto;
-            margin: 4px -4px 12px;
-            font-size: 0.85rem;
-            user-select: none;
-        }
-        .file-tree::-webkit-scrollbar { width: 6px; }
-        .file-tree::-webkit-scrollbar-track { background: transparent; }
-        .file-tree::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-
-        .tree-node {
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 6px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            transition: background 0.15s;
-        }
-        .tree-node:hover { background: var(--surface-hover); }
-        .tree-node.file { padding-left: 26px; color: var(--text-secondary); }
-        .tree-node.folder { font-weight: 500; color: var(--text-primary); }
-        .tree-children { padding-left: 10px; }
-
-        .hint-box {
-            margin-top: auto;
-            padding: 14px;
-            background: rgba(139, 92, 246, 0.08);
-            border: 1px solid rgba(139, 92, 246, 0.15);
-            border-radius: var(--radius-sm);
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            line-height: 1.5;
-        }
-
-        .hint-box strong { color: var(--text-primary); font-weight: 500; }
-
-        /* Main area */
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            min-width: 0;
-        }
-
-        .chat-header {
-            height: 64px;
-            background: rgba(15, 12, 41, 0.6);
-            backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 24px;
-            flex-shrink: 0;
-        }
-
-        .header-left { display: flex; align-items: center; gap: 12px; }
-
-        .header-title { font-weight: 500; font-size: 1rem; }
-
-        .badge {
-            font-size: 0.75rem;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: rgba(139, 92, 246, 0.15);
-            color: #c4b5fd;
-            border: 1px solid rgba(139, 92, 246, 0.25);
-        }
-
-        .header-right { display: flex; align-items: center; gap: 12px; }
-
-        .model-select {
-            background: rgba(0,0,0,0.25);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            font-size: 0.85rem;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .model-select option { background: #1a1a2e; color: var(--text-primary); }
-
-        .provider-select {
-            background: rgba(0,0,0,0.25);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-            padding: 8px 10px;
-            border-radius: var(--radius-sm);
-            font-size: 0.8rem;
-            outline: none;
-            cursor: pointer;
-            width: 100%;
-        }
-        .provider-select option { background: #1a1a2e; color: var(--text-primary); }
-
-        .provider-label {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .provider-box {
-            padding: 10px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            margin-bottom: 10px;
-        }
-
-        .hamburger {
-            display: none;
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-size: 1.4rem;
-            cursor: pointer;
-            line-height: 1;
-            padding: 4px;
-        }
-
-        /* Split pane: editor + chat */
-        .main-split {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-
-        #editor-container {
-            flex: 2;
-            min-height: 0;
-            background: #1e1e1e;
-            border-bottom: 1px solid var(--border);
-        }
-
-        #chat-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 260px;
-            background: rgba(15, 12, 41, 0.25);
-        }
-
-        /* Messages */
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 8%;
-            scroll-behavior: smooth;
-        }
-
-        .messages::-webkit-scrollbar { width: 8px; }
-        .messages::-webkit-scrollbar-track { background: transparent; }
-        .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-
-        .message {
-            display: flex;
-            gap: 14px;
-            margin-bottom: 24px;
-            animation: fadeIn 0.35s ease;
-        }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-
-        .message.user { flex-direction: row-reverse; }
-
-        .avatar {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            display: grid;
-            place-items: center;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
-        .message.user .avatar {
-            background: var(--user-bubble);
-            color: white;
-        }
-
-        .message.assistant .avatar {
-            background: rgba(255,255,255,0.08);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-        }
-
-        .bubble-wrap {
-            max-width: 80%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .message.user .bubble-wrap { align-items: flex-end; }
-        .message.assistant .bubble-wrap { align-items: flex-start; }
-
-        .bubble {
-            padding: 14px 18px;
-            border-radius: var(--radius);
-            font-size: 0.95rem;
-            line-height: 1.7;
-            box-shadow: var(--shadow);
-            word-wrap: break-word;
-        }
-
-        .message.user .bubble {
-            background: var(--user-bubble);
-            color: white;
-            border-bottom-right-radius: 6px;
-        }
-
-        .message.assistant .bubble {
-            background: var(--assistant-bubble);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 6px;
-            backdrop-filter: blur(10px);
-        }
-
-        .bubble :is(h1,h2,h3,h4) { margin: 0.8em 0 0.4em; font-weight: 600; }
-        .bubble p { margin: 0.6em 0; }
-        .bubble p:first-child { margin-top: 0; }
-        .bubble p:last-child { margin-bottom: 0; }
-        .bubble ul, .bubble ol { margin: 0.6em 0; padding-left: 1.4em; }
-        .bubble li { margin: 0.25em 0; }
-        .bubble code {
-            font-family: 'JetBrains Mono', monospace;
-            background: rgba(0,0,0,0.25);
-            padding: 2px 6px;
-            border-radius: 5px;
-            font-size: 0.88em;
-        }
-        .bubble pre {
-            background: rgba(0,0,0,0.35);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            overflow-x: auto;
-            margin: 0.8em 0;
-        }
-        .bubble pre code {
-            background: transparent;
-            padding: 0;
-            font-size: 0.85em;
-        }
-        .bubble blockquote {
-            border-left: 3px solid var(--accent);
-            padding-left: 12px;
-            margin: 0.6em 0;
-            color: var(--text-secondary);
-        }
-        .bubble hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
-        .bubble a { color: #a78bfa; }
-        .bubble table { border-collapse: collapse; margin: 0.6em 0; width: 100%; }
-        .bubble th, .bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
-        .bubble th { background: rgba(0,0,0,0.2); }
-
-        .meta {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-top: 6px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .cursor {
-            display: inline-block;
-            width: 7px;
-            height: 1.1em;
-            background: var(--accent);
-            border-radius: 2px;
-            vertical-align: middle;
-            animation: blink 1s step-end infinite;
-            margin-left: 2px;
-        }
-
-        @keyframes blink { 50% { opacity: 0; } }
-
-        .loading-dots {
-            display: inline-flex;
-            gap: 4px;
-            align-items: center;
-        }
-        .loading-dots span {
-            width: 5px;
-            height: 5px;
-            background: var(--text-secondary);
-            border-radius: 50%;
-            animation: bounce 1.4s infinite ease-in-out both;
-        }
-        .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-
-        /* Code block actions */
-        .code-block-wrapper {
-            margin: 0.8em 0;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            overflow: hidden;
-        }
-        .code-block-wrapper pre {
-            margin: 0;
-            border: none;
-            border-radius: 0;
-        }
-        .code-toolbar {
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-            padding: 6px 10px;
-            background: rgba(0,0,0,0.35);
-            border-bottom: 1px solid var(--border);
-        }
-        .code-toolbar button {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 3px 10px;
-            border-radius: 5px;
-            font-size: 0.75rem;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .code-toolbar button:hover { color: var(--text-primary); background: var(--surface-hover); border-color: rgba(255,255,255,0.2); }
-
-        /* Tool call cards */
-        .tool-call-card {
-            margin: 0.6em 0;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
-            background: rgba(0,0,0,0.25);
-            overflow: hidden;
-            font-size: 0.85rem;
-        }
-        .tool-call-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: rgba(139, 92, 246, 0.08);
-            border-bottom: 1px solid var(--border);
-            font-weight: 500;
-            color: var(--text-primary);
-        }
-        .tool-call-header .tool-icon {
-            width: 16px;
-            height: 16px;
-            opacity: 0.8;
-        }
-        .tool-call-body {
-            padding: 8px 12px;
-            color: var(--text-secondary);
-            font-family: 'Fira Code', 'Cascadia Code', monospace;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .tool-call-body.collapsed {
-            max-height: 60px;
-            overflow: hidden;
-            mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-            -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-        }
-        .tool-call-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            margin-left: auto;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-        .tool-call-status.executing::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border: 2px solid var(--accent);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .tool-call-status.done::before {
-            content: '✓';
-            color: #34d399;
-        }
-
-        /* Input area */
-        .input-area {
-            padding: 14px 8% 20px;
-            background: linear-gradient(to top, rgba(15,12,41,0.95) 0%, rgba(15,12,41,0.6) 60%, transparent 100%);
-            flex-shrink: 0;
-        }
-
-        .input-box {
-            background: rgba(0,0,0,0.35);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            display: flex;
-            align-items: flex-end;
-            gap: 10px;
-            padding: 10px 10px 10px 18px;
-            backdrop-filter: blur(12px);
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .input-box:focus-within {
-            border-color: rgba(139, 92, 246, 0.4);
-            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-        }
-
-        .input-box textarea {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-            line-height: 1.5;
-            resize: none;
-            outline: none;
-            max-height: 140px;
-            padding: 8px 0;
-            font-family: inherit;
-        }
-
-        .input-box textarea::placeholder { color: var(--text-secondary); }
-
-        .send-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 12px;
-            border: none;
-            background: var(--accent);
-            color: white;
-            cursor: pointer;
-            display: grid;
-            place-items: center;
-            transition: background 0.2s, transform 0.1s;
-            flex-shrink: 0;
-        }
-
-        .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
-        .send-btn:active:not(:disabled) { transform: scale(0.96); }
-        .send-btn:disabled { background: rgba(255,255,255,0.1); cursor: not-allowed; }
-
-        .empty-state {
-            text-align: center;
-            color: var(--text-secondary);
-            padding: 40px 20px;
-        }
-        .empty-state h2 { font-weight: 400; font-size: 1.3rem; margin-bottom: 8px; color: var(--text-primary); }
-        .empty-state p { font-size: 0.9rem; }
-        .empty-state .suggestions {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
-        .empty-state .chip {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            padding: 8px 14px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .empty-state .chip:hover { background: var(--surface-hover); }
-
-        /* Mobile */
-        @media (max-width: 900px) {
-            .sidebar {
-                position: fixed;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                z-index: 200;
-                transform: translateX(-100%);
-                transition: transform 0.25s ease;
-            }
-            .sidebar.open { transform: translateX(0); }
-            .sidebar-overlay {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: rgba(0,0,0,0.5);
-                z-index: 199;
-            }
-            .sidebar-overlay.show { display: block; }
-            .hamburger { display: block; }
-            .messages { padding: 14px 4%; }
-            .input-area { padding: 10px 4% 14px; }
-            #chat-panel { min-height: 200px; }
-        }
-    </style>
+    <link rel="stylesheet" href="/assets/css/design-system.css">
+    <link rel="stylesheet" href="/assets/css/layout.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/editor.css">
 </head>
 <body>
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-    <aside class="sidebar" id="sidebar">
-        <div class="brand">
-            <div class="brand-icon">🜁</div>
-            <div>Clarity IDE</div>
-        </div>
-        <button class="load-project-btn" onclick="loadProject()">
-            <span>📁</span> 加载项目
-        </button>
-        <button class="new-chat-btn" onclick="newChat()">
-            <span>+</span> 新对话
-        </button>
-        <div class="file-tree" id="file-tree">
-            <div style="color:var(--text-secondary); padding: 8px;">点击“加载项目”获取文件列表</div>
-        </div>
-        <div class="provider-box">
-            <div class="provider-label">Provider</div>
-            <select id="provider-select" class="provider-select" onchange="switchProvider(this.value)">
-                <option value="auto">🤖 Auto-detect</option>
-                <option value="anthropic">🅰️ Anthropic (Claude)</option>
-                <option value="kimi-code">🌙 Kimi Code</option>
-                <option value="deepseek">🔮 DeepSeek</option>
-                <option value="openai">🤖 OpenAI</option>
-                <option value="kalosm">💻 Local (Kalosm)</option>
-            </select>
-            <div id="provider-status" style="font-size:0.7rem; color:#4ade80; margin-top:4px; display:none;">✓ 已切换</div>
-        </div>
-        <div class="hint-box">
-            <strong>提示</strong><br>
-            按 Enter 发送，Shift+Enter 换行。<br>
-            点击文件在编辑器中打开，代码块可复制或插入编辑器。
-        </div>
-        <button class="settings-btn" onclick="openSettings()" title="配置 API Key">
-            <span>⚙️</span> 设置
-        </button>
-    </aside>
-
-    <main class="chat-area">
-        <header class="chat-header">
-            <div class="header-left">
-                <button class="hamburger" onclick="toggleSidebar()" aria-label="菜单">☰</button>
-                <div class="header-title">Web IDE</div>
-                <span class="badge" id="personality-badge">IDE + Chat</span>
-            </div>
-            <div class="header-right">
-                <select id="model-select" class="model-select">
-                    <option value="auto">auto-detect</option>
-                </select>
-            </div>
-        </header>
-
-        <div class="main-split">
-            <div id="editor-container">
-                <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-secondary); font-size:0.95rem;">
-                    正在加载 Monaco Editor…
+    <div id="app" class="app">
+        <!-- ========== 左侧：文件浏览 ========== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">🜁</div>
+                    <span>Clarity</span>
                 </div>
+                <button class="sidebar-toggle" id="sidebar-toggle" title="收起侧边栏">◀</button>
             </div>
-
-            <div id="chat-panel">
-                <div class="messages" id="messages">
-                    <div class="empty-state" id="empty-state">
-                        <h2>今天想聊点什么？</h2>
-                        <p>测试 Clarity Gateway 的流式对话能力</p>
-                        <div class="suggestions">
-                            <div class="chip" onclick="sendPreset('简单自我介绍')">简单自我介绍</div>
-                            <div class="chip" onclick="sendPreset('用 Rust 写一个快速排序')">用 Rust 写一个快速排序</div>
-                            <div class="chip" onclick="sendPreset('讲一个工程师笑话')">讲一个工程师笑话</div>
-                        </div>
+            <div class="sidebar-content">
+                <div class="nav-section">
+                    <div class="nav-label">📂 文件</div>
+                    <div class="workspace-bar">
+                        <input type="text" id="workspace-path" placeholder="工作目录路径" value=".">
+                        <button id="workspace-btn" title="切换工作区">📂</button>
+                    </div>
+                    <div class="file-tree" id="file-tree">
+                        <div class="file-tree-empty">正在加载文件列表...</div>
                     </div>
                 </div>
+                <div class="nav-section">
+                    <div class="nav-label">💬 对话记录</div>
+                    <div class="session-list" id="session-list"></div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <button class="settings-btn" id="settings-btn" title="设置">⚙️</button>
+            </div>
+        </aside>
 
-                <div class="input-area">
-                    <div class="input-box">
-                        <textarea id="user-input" rows="1" placeholder="输入消息..."></textarea>
-                        <button id="send-btn" class="send-btn" aria-label="发送">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                        </button>
+        <div class="resizer" id="resizer-left"></div>
+
+        <!-- ========== 中间：编辑器 ========== -->
+        <main class="main-area">
+            <div class="editor-panel" id="editor-panel">
+                <div class="editor-tabs" id="editor-tabs"></div>
+                <div class="editor-container" id="editor-container">
+                    <div class="editor-empty">
+                        <div class="editor-empty-icon">📁</div>
+                        <div class="editor-empty-title">从左侧选择文件</div>
+                        <div class="editor-empty-hint">点击文件即可查看和编辑代码，也可以直接在聊天中让 AI 帮你写</div>
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-    <script>
-        const messagesEl = document.getElementById('messages');
-        const userInput = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-        const modelSelect = document.getElementById('model-select');
-        const emptyState = document.getElementById('empty-state');
-        const personalityBadge = document.getElementById('personality-badge');
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        <div class="resizer" id="resizer-right"></div>
 
-        let isGenerating = false;
-        let messages = [];
-        let editor = null;
-
-        // Monaco init
-        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-        require(['vs/editor/editor.main'], function () {
-            const container = document.getElementById('editor-container');
-            container.innerHTML = '';
-            editor = monaco.editor.create(container, {
-                value: '// 点击左侧“加载项目”，然后选择文件开始编辑\n// 或使用下方聊天面板与 Agent 对话',
-                language: 'plaintext',
-                theme: 'vs-dark',
-                automaticLayout: true,
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', monospace",
-                minimap: { enabled: true },
-                scrollBeyondLastLine: false,
-                padding: { top: 16 }
-            });
-        });
-
-        async function detectPersonality() {
-            try {
-                const resp = await fetch('/health');
-            } catch (e) {}
-        }
-        detectPersonality();
-
-        userInput.addEventListener('input', () => {
-            userInput.style.height = 'auto';
-            userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
-        });
-
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
-        sendBtn.addEventListener('click', sendMessage);
-
-        function escapeHtml(text) {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-        }
-
-        function renderMarkdown(text) {
-            let html = escapeHtml(text);
-            // code blocks
-            html = html.replace(/```(\w*)?\n([\s\S]*?)```/g, (_, lang, code) => {
-                return `<pre><code class="language-${lang || 'text'}">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
-            });
-            // inline code
-            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-            // bold
-            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-            // italic
-            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-            html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-            // headers
-            html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
-            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-            // blockquote
-            html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
-            // unordered list
-            html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
-            html = html.replace(/^(<li>.*<\/li>\n?)+/gim, (m) => `<ul>${m}</ul>`);
-            // ordered list (simple)
-            html = html.replace(/^\d+\.\s+(.*$)/gim, '<li>$1</li>');
-            // horizontal rule
-            html = html.replace(/^---$/gim, '<hr>');
-            // paragraphs
-            html = html.replace(/\n\n/g, '</p><p>');
-            html = html.replace(/\n/g, '<br>');
-            return '<p>' + html + '</p>';
-        }
-
-        function createMessageElement(role, htmlContent, isStreaming = false) {
-            if (emptyState) emptyState.style.display = 'none';
-            const wrapper = document.createElement('div');
-            wrapper.className = `message ${role}`;
-            const avatar = document.createElement('div');
-            avatar.className = 'avatar';
-            avatar.textContent = role === 'user' ? 'U' : 'C';
-            const bubbleWrap = document.createElement('div');
-            bubbleWrap.className = 'bubble-wrap';
-            const bubble = document.createElement('div');
-            bubble.className = 'bubble';
-            if (role === 'assistant' && isStreaming) {
-                // Structured layout: text-content + tool-calls container
-                const textContent = document.createElement('div');
-                textContent.className = 'text-content';
-                textContent.innerHTML = htmlContent;
-                bubble.appendChild(textContent);
-                const toolContainer = document.createElement('div');
-                toolContainer.className = 'tool-calls-container';
-                bubble.appendChild(toolContainer);
-            } else {
-                bubble.innerHTML = htmlContent;
-            }
-            const meta = document.createElement('div');
-            meta.className = 'meta';
-            if (isStreaming) {
-                meta.innerHTML = '<span class="loading-dots"><span></span><span></span><span></span></span>';
-                wrapper.dataset.streaming = 'true';
-            } else {
-                meta.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            }
-            bubbleWrap.appendChild(bubble);
-            bubbleWrap.appendChild(meta);
-            wrapper.appendChild(avatar);
-            wrapper.appendChild(bubbleWrap);
-            messagesEl.appendChild(wrapper);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            return { wrapper, bubble, meta };
-        }
-
-        function updateMessageContent(bubble, text, isMarkdown) {
-            const textContent = bubble.querySelector('.text-content');
-            if (textContent) {
-                if (isMarkdown) {
-                    textContent.innerHTML = renderMarkdown(text);
-                } else {
-                    textContent.innerHTML = escapeHtml(text) + '<span class="cursor"></span>';
-                }
-            } else {
-                if (isMarkdown) {
-                    bubble.innerHTML = renderMarkdown(text);
-                } else {
-                    bubble.innerHTML = escapeHtml(text) + '<span class="cursor"></span>';
-                }
-            }
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-        }
-
-        function enhanceCodeBlocks(bubble) {
-            const pres = bubble.querySelectorAll('pre');
-            pres.forEach(pre => {
-                if (pre.parentElement && pre.parentElement.classList.contains('code-block-wrapper')) return;
-                const codeEl = pre.querySelector('code');
-                const raw = codeEl ? codeEl.innerText : pre.innerText;
-                const wrapper = document.createElement('div');
-                wrapper.className = 'code-block-wrapper';
-                wrapper.dataset.code = raw;
-                const toolbar = document.createElement('div');
-                toolbar.className = 'code-toolbar';
-                toolbar.innerHTML = `
-                    <button onclick="copyCode(this)">Copy</button>
-                    <button onclick="insertToEditor(this)">Insert to Editor</button>
-                `;
-                pre.parentNode.insertBefore(wrapper, pre);
-                wrapper.appendChild(toolbar);
-                wrapper.appendChild(pre);
-            });
-        }
-
-        window.copyCode = function(btn) {
-            const wrapper = btn.closest('.code-block-wrapper');
-            const text = wrapper ? (wrapper.dataset.code || '') : '';
-            navigator.clipboard.writeText(text).then(() => {
-                const old = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = old, 1200);
-            });
-        };
-
-        window.insertToEditor = function(btn) {
-            const wrapper = btn.closest('.code-block-wrapper');
-            const text = wrapper ? (wrapper.dataset.code || '') : '';
-            if (editor) editor.setValue(text);
-        };
-
-        function finalizeMessage(meta, bubble, text) {
-            const textContent = bubble.querySelector('.text-content');
-            if (textContent) {
-                textContent.innerHTML = renderMarkdown(text);
-            } else {
-                bubble.innerHTML = renderMarkdown(text);
-            }
-            enhanceCodeBlocks(bubble);
-            meta.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-
-        async function switchProvider(provider) {
-            if (!provider || provider === 'auto') return;
-            const statusEl = document.getElementById('provider-status');
-            statusEl.style.display = 'none';
-            try {
-                const resp = await fetch('http://127.0.0.1:18800/api/provider', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider })
-                });
-                const data = await resp.json();
-                if (resp.ok) {
-                    statusEl.textContent = '✓ 已切换到 ' + provider;
-                    statusEl.style.color = '#4ade80';
-                } else {
-                    statusEl.textContent = '✗ ' + (data.message || '切换失败');
-                    statusEl.style.color = '#f87171';
-                }
-            } catch (err) {
-                statusEl.textContent = '✗ 网络错误: ' + err.message;
-                statusEl.style.color = '#f87171';
-            }
-            statusEl.style.display = 'block';
-            setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
-        }
-
-        function newChat() {
-            messages = [];
-            messagesEl.innerHTML = `
-                <div class="empty-state" id="empty-state">
+        <!-- ========== 右侧：聊天 ========== -->
+        <aside class="chat-panel" id="chat-panel">
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <span class="chat-title">Clarity 助手</span>
+                    <span class="connection-status" id="connection-status" title="连接正常">🟢</span>
+                </div>
+                <div class="chat-header-right">
+                    <button class="chat-action-btn model-selector" id="model-selector" title="切换模型">
+                        <span id="model-display-name">自动</span>
+                        <span class="model-chevron">▼</span>
+                    </button>
+                    <button class="chat-action-btn" id="new-chat-btn" title="新对话">+</button>
+                    <button class="chat-action-btn" id="collapse-chat-btn" title="收起">▶</button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🤖</div>
                     <h2>今天想聊点什么？</h2>
-                    <p>测试 Clarity Gateway 的流式对话能力</p>
-                    <div class="suggestions">
-                        <div class="chip" onclick="sendPreset('简单自我介绍')">简单自我介绍</div>
-                        <div class="chip" onclick="sendPreset('用 Rust 写一个快速排序')">用 Rust 写一个快速排序</div>
-                        <div class="chip" onclick="sendPreset('讲一个工程师笑话')">讲一个工程师笑话</div>
+                    <p>我可以帮你写代码、改文件、分析项目，或者只是聊聊天</p>
+                    <div class="suggestion-chips">
+                        <button class="chip" data-preset="简单自我介绍">📝 自我介绍</button>
+                        <button class="chip" data-preset="用 Rust 写一个快速排序">🔧 写个快排</button>
+                        <button class="chip" data-preset="分析当前项目结构">📊 分析项目</button>
                     </div>
                 </div>
-            `;
-            userInput.value = '';
-            userInput.style.height = 'auto';
-        }
-
-        window.sendPreset = function(text) {
-            userInput.value = text;
-            sendMessage();
-        };
-
-        window.newChat = newChat;
-
-        // Render a tool-call card inside the assistant bubble's tool container.
-        function renderToolCall(toolContainer, id, name, args) {
-            const card = document.createElement('div');
-            card.className = 'tool-call-card';
-            card.dataset.toolCallId = id;
-            const header = document.createElement('div');
-            header.className = 'tool-call-header';
-            header.innerHTML = `
-                <svg class="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                <span>${escapeHtml(name)}</span>
-                <span class="tool-call-status executing">执行中</span>
-            `;
-            const body = document.createElement('div');
-            body.className = 'tool-call-body collapsed';
-            body.textContent = typeof args === 'string' ? args : JSON.stringify(args, null, 2);
-            header.addEventListener('click', () => {
-                body.classList.toggle('collapsed');
-            });
-            card.appendChild(header);
-            card.appendChild(body);
-            toolContainer.appendChild(card);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            return card;
-        }
-
-        async function sendMessage() {
-            const text = userInput.value.trim();
-            if (!text || isGenerating) return;
-
-            messages.push({ role: 'user', content: text });
-            createMessageElement('user', renderMarkdown(text));
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            isGenerating = true;
-            sendBtn.disabled = true;
-
-            const { bubble, meta } = createMessageElement('assistant', '<span class="cursor"></span>', true);
-            let assistantText = '';
-            const pendingToolCards = new Map();
-            const toolContainer = bubble.querySelector('.tool-calls-container');
-
-            try {
-                const response = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelSelect.value,
-                        messages: messages,
-                        stream: true
-                    })
-                });
-
-                if (!response.ok) {
-                    const err = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${err}`);
-                }
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop();
-
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (!trimmed.startsWith('data:')) continue;
-                        const data = trimmed.slice(5).trim();
-                        if (data === '[DONE]' || !data) continue;
-                        try {
-                            const json = JSON.parse(data);
-                            // OpenAI-compatible delta (text or tool_calls)
-                            const delta = json.choices?.[0]?.delta;
-                            if (delta && delta.content) {
-                                assistantText += delta.content;
-                                updateMessageContent(bubble, assistantText, false);
-                            }
-                            if (delta && delta.tool_calls && toolContainer) {
-                                for (const tc of delta.tool_calls) {
-                                    const tcId = tc.id || tc.index;
-                                    if (!pendingToolCards.has(tcId)) {
-                                        const args = tc.function?.arguments || '{}';
-                                        const card = renderToolCall(
-                                            toolContainer,
-                                            tcId,
-                                            tc.function?.name || 'unknown',
-                                            args
-                                        );
-                                        pendingToolCards.set(tcId, card);
-                                    } else {
-                                        // Update arguments if streaming in
-                                        const card = pendingToolCards.get(tcId);
-                                        const body = card.querySelector('.tool-call-body');
-                                        const existing = body.textContent || '';
-                                        const newArgs = tc.function?.arguments || '';
-                                        if (newArgs && !existing.includes(newArgs)) {
-                                            body.textContent = existing + newArgs;
-                                        }
-                                    }
-                                }
-                            }
-                            if (json.choices?.[0]?.finish_reason) {
-                                finalizeMessage(meta, bubble, assistantText);
-                            }
-                            // Clarity extension events
-                            if (json.object === 'clarity.event') {
-                                if (json.type === 'tool_result' && toolContainer) {
-                                    const card = pendingToolCards.get(json.id);
-                                    if (card) {
-                                        const status = card.querySelector('.tool-call-status');
-                                        status.classList.remove('executing');
-                                        status.classList.add('done');
-                                        status.textContent = '完成';
-                                        const body = card.querySelector('.tool-call-body');
-                                        body.textContent = json.result;
-                                    }
-                                }
-                                if (json.type === 'step_begin' && toolContainer) {
-                                    // Optional: could show step indicator
-                                }
-                            }
-                        } catch (e) {
-                            console.warn('Parse SSE failed:', data);
-                        }
-                    }
-                }
-
-                finalizeMessage(meta, bubble, assistantText);
-                messages.push({ role: 'assistant', content: assistantText });
-            } catch (err) {
-                const textContent = bubble.querySelector('.text-content');
-                if (textContent) {
-                    textContent.innerHTML = '<p style="color:#f87171">❌ 请求失败: ' + escapeHtml(err.message) + '</p>';
-                } else {
-                    bubble.innerHTML = '<p style="color:#f87171">❌ 请求失败: ' + escapeHtml(err.message) + '</p>';
-                }
-                meta.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            } finally {
-                isGenerating = false;
-                sendBtn.disabled = false;
-                userInput.focus();
-            }
-        }
-
-        /* ---------- File tree & IDE helpers ---------- */
-
-        window.toggleSidebar = function() {
-            sidebar.classList.toggle('open');
-            sidebarOverlay.classList.toggle('show');
-        };
-
-        window.loadProject = async function() {
-            const treeEl = document.getElementById('file-tree');
-            treeEl.innerHTML = '<div style="padding:8px; color:var(--text-secondary);">加载中...</div>';
-            try {
-                const resp = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelSelect.value,
-                        messages: [{
-                            role: 'user',
-                            content: 'Use the glob tool to list all files in . (current directory) recursively and return ONLY a JSON array of relative file paths. No markdown, no explanation, just the raw JSON array.'
-                        }],
-                        stream: false
-                    })
-                });
-                if (!resp.ok) throw new Error(await resp.text());
-                const json = await resp.json();
-                let content = json.choices?.[0]?.message?.content || '';
-                // Try to extract JSON array
-                let paths = [];
-                const arrMatch = content.match(/\[[\s\S]*?\]/);
-                if (arrMatch) {
-                    try { paths = JSON.parse(arrMatch[0]); } catch (e) {}
-                }
-                if (!Array.isArray(paths) || paths.length === 0) {
-                    treeEl.innerHTML = '<div style="padding:8px; color:#f87171;">无法解析为 JSON 数组，显示原始响应：</div><pre style="padding:8px; font-size:0.75rem; overflow:auto;">' + escapeHtml(content) + '</pre>';
-                    return;
-                }
-                renderFileTree(paths);
-            } catch (err) {
-                treeEl.innerHTML = '<div style="padding:8px; color:#f87171;">加载失败: ' + escapeHtml(err.message) + '</div>';
-            }
-        };
-
-        function renderFileTree(paths) {
-            const root = {};
-            paths.forEach(p => {
-                const parts = String(p).replace(/\\/g, '/').split('/').filter(Boolean);
-                let node = root;
-                parts.forEach(part => {
-                    if (!node[part]) node[part] = {};
-                    node = node[part];
-                });
-            });
-            const treeEl = document.getElementById('file-tree');
-            treeEl.innerHTML = '';
-            function buildDom(parentObj, container, prefix) {
-                const entries = Object.keys(parentObj).sort();
-                entries.forEach(name => {
-                    const child = parentObj[name];
-                    const isFile = Object.keys(child).length === 0;
-                    const row = document.createElement('div');
-                    row.className = isFile ? 'tree-node file' : 'tree-node folder';
-                    row.textContent = (isFile ? '📄 ' : '📁 ') + name;
-                    if (isFile) {
-                        const fullPath = prefix + name;
-                        row.onclick = (e) => {
-                            e.stopPropagation();
-                            openFile(fullPath);
-                            if (window.innerWidth <= 900) toggleSidebar();
-                        };
-                        container.appendChild(row);
-                    } else {
-                        const childrenDiv = document.createElement('div');
-                        childrenDiv.className = 'tree-children';
-                        childrenDiv.style.display = 'block';
-                        row.onclick = (e) => {
-                            e.stopPropagation();
-                            childrenDiv.style.display = childrenDiv.style.display === 'none' ? 'block' : 'none';
-                        };
-                        container.appendChild(row);
-                        container.appendChild(childrenDiv);
-                        buildDom(child, childrenDiv, prefix + name + '/');
-                    }
-                });
-            }
-            buildDom(root, treeEl, '');
-        }
-
-        window.openFile = async function(path) {
-            if (!editor) return;
-            editor.setValue('// 正在加载 ' + path + ' ...');
-            try {
-                const resp = await fetch('/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: modelSelect.value,
-                        messages: [{
-                            role: 'user',
-                            content: `Read the file at "${path}" and return ONLY its raw content. Do not wrap it in markdown code blocks.`
-                        }],
-                        stream: false
-                    })
-                });
-                if (!resp.ok) throw new Error(await resp.text());
-                const json = await resp.json();
-                let content = json.choices?.[0]?.message?.content || '';
-                // Strip possible markdown wrapper
-                const m = content.match(/^```[\w]*\n?([\s\S]*?)\n?```$/);
-                if (m) content = m[1];
-                editor.setValue(content);
-                // Detect language
-                const ext = path.split('.').pop().toLowerCase();
-                const map = {
-                    rs: 'rust', js: 'javascript', ts: 'typescript', jsx: 'javascript', tsx: 'typescript',
-                    html: 'html', htm: 'html', css: 'css', scss: 'scss', sass: 'sass',
-                    json: 'json', py: 'python', go: 'go', md: 'markdown',
-                    toml: 'ini', yaml: 'yaml', yml: 'yaml', xml: 'xml',
-                    c: 'c', cpp: 'cpp', cc: 'cpp', h: 'cpp', hpp: 'cpp',
-                    java: 'java', cs: 'csharp', sh: 'shell', ps1: 'powershell',
-                    sql: 'sql', php: 'php', rb: 'ruby', kt: 'kotlin',
-                    swift: 'swift', r: 'r', dart: 'dart'
-                };
-                const lang = map[ext] || 'plaintext';
-                monaco.editor.setModelLanguage(editor.getModel(), lang);
-            } catch (err) {
-                editor.setValue('// 加载失败: ' + err.message);
-            }
-        };
-
-        // Load available models from registry on startup
-        (async function loadModels() {
-            try {
-                const resp = await fetch('http://127.0.0.1:18800/api/models');
-                if (!resp.ok) return;
-                const data = await resp.json();
-                if (!data.models || data.models.length === 0) return;
-                modelSelect.innerHTML = '';
-                data.models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.alias;
-                    opt.textContent = `${m.alias} (${m.provider})`;
-                    modelSelect.appendChild(opt);
-                });
-            } catch (e) {
-                console.log('Failed to load model list:', e);
-            }
-        })();
-    </script>
-    <!-- Settings Modal -->
-    <div class="modal-overlay" id="settings-modal" style="display:none;">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>⚙️ 配置 LLM Provider</h3>
-                <button class="modal-close" onclick="closeSettings()">×</button>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Provider</label>
-                    <select id="cfg-provider" onchange="onProviderChange()">
-                        <option value="kimi">🌙 Kimi (Moonshot)</option>
-                        <option value="kimi-code">🌙 Kimi Code</option>
-                        <option value="anthropic">🅰️ Anthropic (Claude)</option>
-                        <option value="openai">🤖 OpenAI</option>
-                        <option value="deepseek">🔮 DeepSeek</option>
-                    </select>
+            <div class="chat-input-area">
+                <div class="chat-input-box">
+                    <textarea id="chat-input" rows="1" placeholder="输入你想说的话... 按 Enter 发送"></textarea>
+                    <button class="send-btn" id="send-btn" title="发送">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label>API Key <span class="required">*</span></label>
-                    <input type="password" id="cfg-api-key" placeholder="输入你的 API Key">
-                    <div class="form-hint" id="cfg-key-hint">Kimi API Key 以 sk- 开头</div>
+                <div class="chat-input-meta">
+                    <span id="model-display">自动选择模型</span>
+                    <span id="token-display"></span>
                 </div>
-                <div class="form-group">
-                    <label>Base URL（可选）</label>
-                    <input type="text" id="cfg-base-url" placeholder="留空使用默认地址">
-                </div>
-                <div class="form-group">
-                    <label>Model（可选）</label>
-                    <input type="text" id="cfg-model" placeholder="留空使用默认模型">
-                </div>
-                <div class="form-status" id="cfg-status"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeSettings()">取消</button>
-                <button class="btn-primary" onclick="saveSettings()">保存并应用</button>
+        </aside>
+    </div>
+
+    <!-- ========== 模型选择弹窗（解决下拉溢出） ========== -->
+    <div class="popover-overlay" id="model-popover" style="display:none;">
+        <div class="popover model-popover-content">
+            <div class="popover-header">选择 AI 模型</div>
+            <div class="popover-body" id="model-options">
+                <!-- 动态填充 -->
             </div>
         </div>
     </div>
 
-    <style>
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .modal {
-            background: linear-gradient(135deg, #1a1838 0%, #24243e 100%);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            width: 100%;
-            max-width: 480px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
-        }
-        .modal-header h3 { font-size: 1rem; font-weight: 600; }
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 1.5rem;
-            cursor: pointer;
-            line-height: 1;
-        }
-        .modal-close:hover { color: var(--text-primary); }
-        .modal-body { padding: 20px; }
-        .form-group { margin-bottom: 16px; }
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: 500;
-            margin-bottom: 6px;
-            color: var(--text-primary);
-        }
-        .form-group .required { color: #f87171; }
-        .form-group input, .form-group select {
-            width: 100%;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .form-group input:focus, .form-group select:focus {
-            border-color: rgba(139, 92, 246, 0.5);
-        }
-        .form-hint {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
-        .form-status {
-            font-size: 0.85rem;
-            min-height: 20px;
-            margin-top: 8px;
-        }
-        .form-status.ok { color: #4ade80; }
-        .form-status.err { color: #f87171; }
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            padding: 14px 20px;
-            border-top: 1px solid var(--border);
-        }
-        .btn-secondary, .btn-primary {
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.15s;
-            border: none;
-        }
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text-primary);
-            border: 1px solid var(--border);
-        }
-        .btn-secondary:hover { background: var(--surface-hover); }
-        .btn-primary {
-            background: var(--accent);
-            color: white;
-        }
-        .btn-primary:hover { background: var(--accent-hover); }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-    </style>
+    <!-- ========== 命令面板（Ctrl+Shift+P / F1） ========== -->
+    <div class="command-palette-overlay" id="command-palette" style="display:none;">
+        <div class="command-palette">
+            <input type="text" id="cmd-input" placeholder="输入命令..." autocomplete="off">
+            <div class="cmd-results" id="cmd-results"></div>
+        </div>
+    </div>
 
-    <script>
-        const PROVIDER_HINTS = {
-            'kimi': 'Kimi API Key 以 sk- 开头',
-            'kimi-code': 'Kimi Code API Key',
-            'anthropic': 'Anthropic API Key',
-            'openai': 'OpenAI API Key 以 sk- 开头',
-            'deepseek': 'DeepSeek API Key'
-        };
-        function onProviderChange() {
-            const p = document.getElementById('cfg-provider').value;
-            document.getElementById('cfg-key-hint').textContent = PROVIDER_HINTS[p] || '';
-        }
-        function openSettings() {
-            document.getElementById('settings-modal').style.display = 'flex';
-            loadCurrentConfig();
-        }
-        function closeSettings() {
-            document.getElementById('settings-modal').style.display = 'none';
-            document.getElementById('cfg-status').textContent = '';
-            document.getElementById('cfg-status').className = 'form-status';
-        }
-        async function loadCurrentConfig() {
-            try {
-                const resp = await fetch('http://127.0.0.1:18800/api/config');
-                const data = await resp.json();
-                if (data.configured && data.config) {
-                    document.getElementById('cfg-provider').value = data.config.provider;
-                    document.getElementById('cfg-base-url').value = data.config.base_url || '';
-                    document.getElementById('cfg-model').value = data.config.model || '';
-                    onProviderChange();
-                }
-            } catch (e) {
-                console.warn('Failed to load config:', e);
-            }
-        }
-        async function saveSettings() {
-            const provider = document.getElementById('cfg-provider').value;
-            const apiKey = document.getElementById('cfg-api-key').value.trim();
-            const baseUrl = document.getElementById('cfg-base-url').value.trim() || null;
-            const model = document.getElementById('cfg-model').value.trim() || null;
-            const status = document.getElementById('cfg-status');
+    <!-- ========== 设置面板 ========== -->
+    <div class="modal-overlay" id="settings-modal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>⚙️ 设置</h3>
+                <button class="modal-close" id="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>AI 服务提供商</label>
+                    <select id="config-provider"></select>
+                </div>
+                <div class="form-group">
+                    <label>API 密钥 <span class="hint">（从服务商网站获取）</span></label>
+                    <input type="password" id="config-api-key" placeholder="输入你的 API 密钥">
+                </div>
+                <div class="form-group">
+                    <label>服务地址 <span class="hint">（一般不需要改）</span></label>
+                    <input type="text" id="config-base-url" placeholder="https://api.example.com/v1">
+                </div>
+                <div class="form-group">
+                    <label>模型名称 <span class="hint">（一般自动选择）</span></label>
+                    <input type="text" id="config-model" placeholder="留空使用默认">
+                </div>
+                <div class="form-group">
+                    <label>界面主题</label>
+                    <div class="theme-buttons" id="theme-buttons">
+                        <button class="theme-btn active" data-theme="dark">🌙 深色</button>
+                        <button class="theme-btn" data-theme="light">☀️ 浅色</button>
+                    </div>
+                </div>
+                <div class="form-status" id="config-status"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="config-cancel">取消</button>
+                <button class="btn btn-primary" id="config-save">保存</button>
+            </div>
+        </div>
+    </div>
 
-            if (!apiKey) {
-                status.textContent = '❌ 请输入 API Key';
-                status.className = 'form-status err';
-                return;
-            }
+    <!-- ========== 首次使用引导 ========== -->
+    <div class="onboarding-overlay" id="onboarding" style="display:none;">
+        <div class="onboarding-card">
+            <div class="onboarding-step active" data-step="1">
+                <div class="onboarding-icon">👋</div>
+                <h2>欢迎使用 Clarity</h2>
+                <p>Clarity 是你的 AI 助手，可以帮你写代码、分析文件、回答问题。</p>
+                <p>界面分为三栏：左侧文件、中间编辑器、右侧聊天。</p>
+            </div>
+            <div class="onboarding-step" data-step="2">
+                <div class="onboarding-icon">💬</div>
+                <h2>开始对话</h2>
+                <p>在右侧聊天框输入你想说的话，按 Enter 发送。</p>
+                <p>AI 会实时回复，你可以随时打断或重新开始。</p>
+            </div>
+            <div class="onboarding-step" data-step="3">
+                <div class="onboarding-icon">📁</div>
+                <h2>浏览文件</h2>
+                <p>左侧显示项目文件列表，点击即可在中间编辑器中查看和修改。</p>
+                <p>AI 也能直接操作文件，比如创建、编辑、删除。</p>
+            </div>
+            <div class="onboarding-step" data-step="4">
+                <div class="onboarding-icon">⚙️</div>
+                <h2>配置 AI</h2>
+                <p>首次使用需要配置 AI 服务。点击左下角 ⚙️ 设置按钮。</p>
+                <p>支持 Kimi、OpenAI、DeepSeek 等多种服务。</p>
+            </div>
+            <div class="onboarding-nav">
+                <button class="btn btn-secondary" id="onboarding-prev" style="display:none;">上一步</button>
+                <button class="btn btn-primary" id="onboarding-next">下一步</button>
+                <button class="btn btn-primary" id="onboarding-finish" style="display:none;">开始使用</button>
+            </div>
+            <div class="onboarding-dots" id="onboarding-dots"></div>
+        </div>
+    </div>
 
-            status.textContent = '保存中...';
-            status.className = 'form-status';
-
-            try {
-                const resp = await fetch('http://127.0.0.1:18800/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider, api_key: apiKey, base_url: baseUrl, model })
-                });
-                const data = await resp.json();
-                if (resp.ok) {
-                    status.textContent = '✅ 配置已保存并生效';
-                    status.className = 'form-status ok';
-                    setTimeout(closeSettings, 800);
-                } else {
-                    status.textContent = '❌ ' + (data.error || '保存失败');
-                    status.className = 'form-status err';
-                }
-            } catch (e) {
-                status.textContent = '❌ 网络错误: ' + e.message;
-                status.className = 'form-status err';
-            }
-        }
-        // Close modal on backdrop click
-        document.getElementById('settings-modal').addEventListener('click', function(e) {
-            if (e.target === this) closeSettings();
-        });
-    </script>
+    <script type="module" src="/assets/js/app.js"></script>
 </body>
 </html>

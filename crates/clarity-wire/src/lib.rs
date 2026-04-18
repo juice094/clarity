@@ -67,6 +67,13 @@ pub enum WireMessage {
     /// End of the current conversation turn.
     TurnEnd,
 
+    /// Token usage report for the session.
+    Usage {
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        total_tokens: u32,
+    },
+
     /// Status update message (for UI feedback).
     StatusUpdate { message: String },
 }
