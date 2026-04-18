@@ -31,12 +31,10 @@
 //! ```
 
 pub mod builder;
-pub mod domain;
 pub mod loader;
 pub mod types;
 
 // Re-export main types
 pub use builder::{presets, SystemPromptBuilder};
-pub use domain::{parse_domain_persona, parse_domain_persona_str, DomainPersonaConfig};
 pub use loader::PersonalityLoader;
 pub use types::{Personality, PersonalityConfig, YuanType};
