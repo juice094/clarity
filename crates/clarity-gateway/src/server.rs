@@ -179,6 +179,7 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/chat.html", get(serve_chat))
         .route("/api/stats", get(handlers::admin_stats))
         .route("/api/tools", get(handlers::admin_tools))
+        .route("/api/provider", post(handlers::admin_switch_provider))
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

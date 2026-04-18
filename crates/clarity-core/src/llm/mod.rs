@@ -1029,6 +1029,47 @@ impl LlmFactory {
     pub fn openai() -> Result<OpenAiCompatibleLlm, AgentError> {
         OpenAiCompatibleLlm::from_env()
     }
+
+    /// Create a provider by name.
+    /// Supported names (case-insensitive):
+    /// - "anthropic", "claude" → Anthropic
+    /// - "kimi", "kimi-code", "moonshot" → Kimi Code / Kimi
+    /// - "deepseek" → DeepSeek
+    /// - "openai" → OpenAI-compatible
+    /// - "kalosm", "local" → Local Kalosm (requires local-llm feature)
+    pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
+        let lower = name.to_lowercase();
+        match lower.as_str() {
+            "anthropic" | "claude" => Ok(Box::new(Self::anthropic()?)),
+            "deepseek" => Ok(Box::new(Self::deepseek()?)),
+            "openai" => Ok(Box::new(Self::openai()?)),
+            "kimi" | "kimi-code" | "moonshot" => {
+                // Try Kimi Code first, then fallback to regular Kimi
+                if env::var("KIMI_CODE_API_KEY").is_ok() {
+                    Ok(Box::new(KimiCodeLlm::from_env()?))
+                } else {
+                    Ok(Box::new(Self::kimi()?))
+                }
+            }
+            "kalosm" | "local" => {
+                #[cfg(feature = "local-llm")]
+                {
+                    let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
+                    if default_local_path.exists() {
+                        let config = KalosmConfig::new(default_local_path);
+                        return Ok(Box::new(KalosmProvider::new(config).await?));
+                    }
+                }
+                Err(AgentError::Llm(format!(
+                    "Local LLM (Kalosm) not available. Ensure the local-llm feature is enabled and a GGUF model exists at the default path."
+                )))
+            }
+            _ => Err(AgentError::Llm(format!(
+                "Unknown provider '{}'. Supported: anthropic, claude, kimi, kimi-code, deepseek, openai, kalosm, local",
+                name
+            ))),
+        }
+    }
 }
 
 #[cfg(test)]

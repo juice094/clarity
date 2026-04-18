@@ -318,7 +318,7 @@ impl LlmProvider for MockLlm {
 pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
-    llm: Option<Arc<dyn LlmProvider>>,
+    llm: Arc<std::sync::RwLock<Option<Arc<dyn LlmProvider>>>>,
     personality: Option<Personality>,
     system_prompt_builder: Option<SystemPromptBuilder>,
     memory_store: Option<Arc<dyn MemoryStore>>,
@@ -367,7 +367,7 @@ impl Agent {
         Self {
             registry,
             config: config.clone(),
-            llm: None,
+            llm: Arc::new(std::sync::RwLock::new(None)),
             personality,
             system_prompt_builder,
             memory_store: None,
@@ -382,10 +382,21 @@ impl Agent {
         }
     }
 
-    /// Set the LLM provider
-    pub fn with_llm(mut self, llm: Arc<dyn LlmProvider>) -> Self {
-        self.llm = Some(llm);
+    /// Set the LLM provider (builder pattern, for construction only)
+    pub fn with_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
+        *self.llm.write().unwrap() = Some(llm);
         self
+    }
+
+    /// Hot-swap the LLM provider at runtime.
+    /// All clones of this Agent will see the new provider immediately.
+    pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
+        *self.llm.write().unwrap() = Some(llm);
+    }
+
+    /// Remove the LLM provider at runtime.
+    pub fn clear_llm(&self) {
+        *self.llm.write().unwrap() = None;
     }
 
     /// Set the memory store
@@ -465,7 +476,7 @@ impl Agent {
 
     /// Get the LLM provider (if configured)
     pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
-        self.llm.clone()
+        self.llm.read().unwrap().clone()
     }
 
     /// Get the agent configuration
@@ -546,7 +557,9 @@ impl Agent {
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
         let llm = self
             .llm
-            .as_ref()
+            .read()
+            .unwrap()
+            .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
 
         let tools = self.registry.get_tool_schemas()?;
@@ -738,7 +751,9 @@ impl Agent {
     ) -> Result<String, AgentError> {
         let llm = self
             .llm
-            .as_ref()
+            .read()
+            .unwrap()
+            .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
         let tools = self.registry.get_tool_schemas()?;
 
@@ -860,7 +875,9 @@ impl Agent {
     {
         let llm = self
             .llm
-            .as_ref()
+            .read()
+            .unwrap()
+            .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
 
         let tools = self.registry.get_tool_schemas()?;
@@ -917,7 +934,9 @@ impl Agent {
     {
         let llm = self
             .llm
-            .as_ref()
+            .read()
+            .unwrap()
+            .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
 
         let tools = self.registry.get_tool_schemas()?;
@@ -1338,7 +1357,8 @@ impl Agent {
         let compactor = SimpleCompaction::new();
 
         // 调用 LLM 压缩 (如果配置了 LLM)
-        if let Some(ref llm) = self.llm {
+        let llm_opt = self.llm.read().unwrap().clone();
+        if let Some(ref llm) = llm_opt {
             let result = compactor.compact(messages, llm.as_ref()).await?;
 
             // 构建压缩后的消息列表

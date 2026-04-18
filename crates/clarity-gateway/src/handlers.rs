@@ -7,6 +7,7 @@ use axum::{
     },
 };
 use clarity_core::agent::{AgentController, ControllerEvent, Message as AgentMessage, MessageRole, Op};
+use clarity_core::llm::LlmFactory;
 use futures::stream;
 use serde::{Deserialize, Serialize};
 
@@ -421,6 +422,45 @@ pub async fn cancel_task(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": e.to_string()})),
             )
+        }
+    }
+}
+
+// ==================== Admin: Switch Provider ====================
+
+#[derive(Deserialize)]
+pub struct SwitchProviderRequest {
+    pub provider: String,
+}
+
+#[derive(Serialize)]
+pub struct SwitchProviderResponse {
+    pub provider: String,
+    pub message: String,
+}
+
+pub async fn admin_switch_provider(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SwitchProviderRequest>,
+) -> impl IntoResponse {
+    info!("Admin: switching provider to '{}'", req.provider);
+
+    match LlmFactory::create(&req.provider).await {
+        Ok(new_llm) => {
+            state.agent.set_llm(Arc::from(new_llm));
+            let resp = SwitchProviderResponse {
+                provider: req.provider,
+                message: "Provider switched successfully".to_string(),
+            };
+            (StatusCode::OK, Json(resp))
+        }
+        Err(e) => {
+            error!("Failed to switch provider: {}", e);
+            let resp = SwitchProviderResponse {
+                provider: req.provider,
+                message: format!("Failed to create provider: {}", e),
+            };
+            (StatusCode::BAD_REQUEST, Json(resp))
         }
     }
 }

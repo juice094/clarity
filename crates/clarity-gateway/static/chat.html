@@ -174,6 +174,35 @@
 
         .model-select option { background: #1a1a2e; color: var(--text-primary); }
 
+        .provider-select {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.8rem;
+            outline: none;
+            cursor: pointer;
+            width: 100%;
+        }
+        .provider-select option { background: #1a1a2e; color: var(--text-primary); }
+
+        .provider-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .provider-box {
+            padding: 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+        }
+
         .hamburger {
             display: none;
             background: transparent;
@@ -520,6 +549,18 @@
         <div class="file-tree" id="file-tree">
             <div style="color:var(--text-secondary); padding: 8px;">点击“加载项目”获取文件列表</div>
         </div>
+        <div class="provider-box">
+            <div class="provider-label">Provider</div>
+            <select id="provider-select" class="provider-select" onchange="switchProvider(this.value)">
+                <option value="auto">🤖 Auto-detect</option>
+                <option value="anthropic">🅰️ Anthropic (Claude)</option>
+                <option value="kimi-code">🌙 Kimi Code</option>
+                <option value="deepseek">🔮 DeepSeek</option>
+                <option value="openai">🤖 OpenAI</option>
+                <option value="kalosm">💻 Local (Kalosm)</option>
+            </select>
+            <div id="provider-status" style="font-size:0.7rem; color:#4ade80; margin-top:4px; display:none;">✓ 已切换</div>
+        </div>
         <div class="hint-box">
             <strong>提示</strong><br>
             按 Enter 发送，Shift+Enter 换行。<br>
@@ -753,6 +794,32 @@
             bubble.innerHTML = renderMarkdown(text);
             enhanceCodeBlocks(bubble);
             meta.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        async function switchProvider(provider) {
+            if (!provider || provider === 'auto') return;
+            const statusEl = document.getElementById('provider-status');
+            statusEl.style.display = 'none';
+            try {
+                const resp = await fetch('http://127.0.0.1:18800/api/provider', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    statusEl.textContent = '✓ 已切换到 ' + provider;
+                    statusEl.style.color = '#4ade80';
+                } else {
+                    statusEl.textContent = '✗ ' + (data.message || '切换失败');
+                    statusEl.style.color = '#f87171';
+                }
+            } catch (err) {
+                statusEl.textContent = '✗ 网络错误: ' + err.message;
+                statusEl.style.color = '#f87171';
+            }
+            statusEl.style.display = 'block';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
         }
 
         function newChat() {
