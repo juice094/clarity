@@ -730,6 +730,121 @@ impl Agent {
         }
     }
 
+    /// Run a synchronous (non-streaming) agent loop with pre-built messages.
+    /// Used by the Gateway for non-streaming chat completion requests.
+    pub async fn run_with_messages_sync(
+        &self,
+        mut messages: Vec<Message>,
+    ) -> Result<String, AgentError> {
+        let llm = self
+            .llm
+            .as_ref()
+            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+        let tools = self.registry.get_tool_schemas()?;
+
+        let mut final_response = String::new();
+        let mut completed = false;
+
+        for iteration in 0..self.config.max_iterations {
+            debug!("Sync iteration {}/{}", iteration + 1, self.config.max_iterations);
+
+            if self.cancel_token.is_cancelled() {
+                warn!("Agent run sync cancelled");
+                return Err(AgentError::Cancelled);
+            }
+
+            // Proactive compaction via CompactionService
+            if let Some(ref service) = self.compaction_service {
+                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
+                    warn!("Compaction failed: {}", e);
+                }
+            }
+
+            // Check if compaction is needed
+            if self.should_compact(&messages).await {
+                match self.compact_messages(&messages).await {
+                    Ok(compacted) => {
+                        info!(
+                            "Context compacted: {} messages -> {} messages",
+                            messages.len(),
+                            compacted.len()
+                        );
+                        messages = compacted;
+                    }
+                    Err(e) => {
+                        warn!("Failed to compact messages: {}", e);
+                    }
+                }
+            }
+
+            let response = tokio::time::timeout(
+                tokio::time::Duration::from_secs(45),
+                llm.complete(&messages, &tools),
+            )
+            .await
+            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            final_response = response.content.clone();
+
+            if response.tool_calls.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+                info!("Agent sync loop completed after {} iterations", iteration + 1);
+                completed = true;
+                break;
+            }
+
+            if !response.content.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+            }
+
+            messages.push(Message {
+                role: MessageRole::Assistant,
+                content: response.content,
+                tool_calls: Some(response.tool_calls.clone()),
+                tool_call_id: None,
+            });
+
+            for tool_call in &response.tool_calls {
+                self.send_wire_message(WireMessage::StepBegin {
+                    tool_name: tool_call.function.name.clone(),
+                });
+
+                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                    .unwrap_or_else(|_| serde_json::json!({}));
+                self.send_wire_message(WireMessage::ToolCall {
+                    id: tool_call.id.clone(),
+                    name: tool_call.function.name.clone(),
+                    arguments: args,
+                });
+
+                let result = self.execute_tool_call(tool_call).await;
+                let result_content = match result {
+                    Ok(value) => value.to_string(),
+                    Err(e) => json!({"error": e.to_string()}).to_string(),
+                };
+
+                self.send_wire_message(WireMessage::ToolResult {
+                    id: tool_call.id.clone(),
+                    result: result_content.clone(),
+                });
+
+                messages.push(Message::tool(&tool_call.id, result_content));
+            }
+        }
+
+        self.send_wire_message(WireMessage::TurnEnd);
+
+        if completed {
+            Ok(final_response)
+        } else {
+            warn!("Max iterations ({}) reached", self.config.max_iterations);
+            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+        }
+    }
+
     /// Run the agent with streaming response.
     ///
     /// Same as `run()`, but streams the final assistant response via `on_chunk`.
@@ -890,13 +1005,11 @@ impl Agent {
                             }
                         }
                     }
-                    if !accumulated.is_empty() || !tool_calls.is_empty() {
-                        turn_response = Some(LlmResponse {
-                            content: accumulated,
-                            tool_calls,
-                            is_complete: true,
-                        });
-                    }
+                    turn_response = Some(LlmResponse {
+                        content: accumulated,
+                        tool_calls,
+                        is_complete: true,
+                    });
                 }
                 Err(e) => {
                     debug!(

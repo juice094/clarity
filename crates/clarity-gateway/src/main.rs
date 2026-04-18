@@ -53,7 +53,7 @@ fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig) {
 }
 
 /// 创建并配置 Agent
-fn create_agent() -> anyhow::Result<Arc<Agent>> {
+async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     info!("Creating Agent with built-in tools...");
 
     // 创建工具注册表
@@ -80,7 +80,7 @@ fn create_agent() -> anyhow::Result<Arc<Agent>> {
     let agent = Agent::with_config(registry, config);
 
     // 尝试自动检测 LLM provider (ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
-    match LlmFactory::auto() {
+    match LlmFactory::auto().await {
         Ok(llm) => {
             info!("LLM provider initialized successfully");
             Ok(Arc::new(agent.with_llm(Arc::from(llm))))
@@ -169,7 +169,7 @@ async fn main() {
     info!("🚀 Clarity Gateway starting...");
 
     // 创建 Agent
-    let agent: Arc<Agent> = match create_agent() {
+    let agent: Arc<Agent> = match create_agent().await {
         Ok(agent) => agent,
         Err(e) => {
             error!("Failed to create agent: {}", e);
@@ -276,9 +276,9 @@ mod tests {
         assert!(!webhook.enabled);
     }
 
-    #[test]
-    fn test_agent_creation() {
-        let agent = create_agent();
+    #[tokio::test]
+    async fn test_agent_creation() {
+        let agent = create_agent().await;
         assert!(agent.is_ok());
     }
 }

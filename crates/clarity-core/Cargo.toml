@@ -46,3 +46,9 @@ anyhow = { workspace = true }
 [features]
 default = []
 mcp = ["dep:rmcp"]
+local-llm = ["dep:kalosm"]
+
+[dependencies.kalosm]
+version = "0.4"
+features = ["language", "cuda"]
+optional = true

@@ -11,7 +11,7 @@ pub mod kalosm;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
-pub use kalosm::KalosmProvider;
+pub use kalosm::{KalosmConfig, KalosmProvider};
 
 use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::error::AgentError;
@@ -19,6 +19,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
+#[cfg(feature = "local-llm")]
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -956,8 +958,8 @@ pub struct LlmFactory;
 
 impl LlmFactory {
     /// Auto-detect provider from environment variables
-    /// Priority: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI
-    pub fn auto() -> Result<Box<dyn LlmProvider>, AgentError> {
+    /// Priority: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI > LOCAL (Kalosm)
+    pub async fn auto() -> Result<Box<dyn LlmProvider>, AgentError> {
         if env::var("ANTHROPIC_AUTH_TOKEN").is_ok() {
             return Ok(Box::new(AnthropicLlm::from_env()?));
         }
@@ -985,13 +987,25 @@ impl LlmFactory {
             return Ok(Box::new(OpenAiCompatibleLlm::from_env()?));
         }
 
+        // Fallback: try local Kalosm model if no cloud provider is configured
+        #[cfg(feature = "local-llm")]
+        {
+            let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
+            if default_local_path.exists() {
+                tracing::info!("No cloud LLM configured; falling back to local Kalosm model at {}", default_local_path.display());
+                let config = KalosmConfig::new(default_local_path);
+                return Ok(Box::new(KalosmProvider::new(config).await?));
+            }
+        }
+
         Err(AgentError::Llm(
             "No LLM provider configured. Please set one of:\n\
              - ANTHROPIC_AUTH_TOKEN (for Claude)\n\
              - KIMI_CODE_API_KEY (for Kimi Code)\n\
              - KIMI_API_KEY (for Moonshot)\n\
              - DEEPSEEK_API_KEY\n\
-             - OPENAI_API_KEY"
+             - OPENAI_API_KEY\n\
+             Or place a GGUF model at C:\\Users\\22414\\Desktop\\model\\Qwen2.5-7B-Instruct.Q4_K_M.gguf (requires local-llm feature)"
                 .into(),
         ))
     }

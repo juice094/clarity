@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     println!();
     
     // 使用 LlmFactory 自动检测
-    let llm = match LlmFactory::auto() {
+    let llm = match LlmFactory::auto().await {
         Ok(llm) => llm,
         Err(e) => {
             eprintln!("❌ 配置错误: {}", e);

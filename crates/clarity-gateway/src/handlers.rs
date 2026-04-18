@@ -136,7 +136,12 @@ pub async fn chat_completions(
     let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
     tokio::spawn(controller.run());
 
-    if let Err(e) = op_tx.send(Op::ConversationTurn(messages)) {
+    let op = if req.stream {
+        Op::ConversationTurn(messages)
+    } else {
+        Op::ConversationTurnSync(messages)
+    };
+    if let Err(e) = op_tx.send(op) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
