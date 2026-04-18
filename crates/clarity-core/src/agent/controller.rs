@@ -13,6 +13,7 @@ use crate::agent::ops::Op;
 use crate::agent::Agent;
 use crate::approval::ApprovalResponse;
 use crate::error::AgentError;
+use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -26,6 +27,21 @@ pub enum ControllerEvent {
     Complete(String),
     /// The turn failed with an error.
     Error(String),
+    /// A tool call was initiated by the model (arguments fully assembled).
+    ToolCallStart {
+        id: String,
+        name: String,
+        arguments: serde_json::Value,
+    },
+    /// A tool call finished executing.
+    ToolResult {
+        id: String,
+        result: String,
+    },
+    /// A new step (tool execution) began.
+    StepBegin {
+        tool_name: String,
+    },
 }
 
 /// State machine for the controller's background agent task.
@@ -74,11 +90,46 @@ impl AgentController {
 
     /// Wrap `agent` in a new controller with an event channel for streaming
     /// output, and return both the controller and a clonable sender.
+    ///
+    /// Creates an internal [`clarity_wire::Wire`] and injects it into the agent
+    /// so that tool-calling lifecycle events (`ToolCall`, `ToolResult`, `StepBegin`)
+    /// are forwarded as [`ControllerEvent`]s.
     pub fn new_with_events(
-        agent: Agent,
+        mut agent: Agent,
         event_tx: UnboundedSender<ControllerEvent>,
     ) -> (Self, UnboundedSender<Op>) {
         let (tx, rx) = mpsc::unbounded_channel();
+
+        // Inject a wire so that tool-calling events can be observed.
+        let wire = Arc::new(clarity_wire::Wire::new());
+        agent = agent.with_wire(wire.clone());
+
+        // Spawn a background task that listens on the wire's UI side and
+        // forwards tool-related messages as ControllerEvents.
+        let wire_event_tx = event_tx.clone();
+        let mut wire_ui = wire.ui_side(false);
+        tokio::spawn(async move {
+            while let Some(msg) = wire_ui.recv().await {
+                let event = match msg {
+                    clarity_wire::WireMessage::ToolCall { id, name, arguments } => {
+                        Some(ControllerEvent::ToolCallStart { id, name, arguments })
+                    }
+                    clarity_wire::WireMessage::ToolResult { id, result } => {
+                        Some(ControllerEvent::ToolResult { id, result })
+                    }
+                    clarity_wire::WireMessage::StepBegin { tool_name } => {
+                        Some(ControllerEvent::StepBegin { tool_name })
+                    }
+                    _ => None,
+                };
+                if let Some(ev) = event {
+                    if wire_event_tx.send(ev).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
         (
             Self {
                 agent,

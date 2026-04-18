@@ -182,6 +182,51 @@ pub async fn chat_completions(
                             let event = SseEvent::default().data(data.to_string());
                             Some((Ok(event), (rx, 0)))
                         }
+                        Some(ControllerEvent::ToolCallStart { id: tc_id, name, arguments }) => {
+                            let args_str = arguments.to_string();
+                            let data = serde_json::json!({
+                                "id": &id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": &model,
+                                "choices": [{
+                                    "index": 0,
+                                    "delta": {
+                                        "tool_calls": [{
+                                            "index": 0,
+                                            "id": tc_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": name,
+                                                "arguments": args_str
+                                            }
+                                        }]
+                                    },
+                                    "finish_reason": null
+                                }]
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, 0)))
+                        }
+                        Some(ControllerEvent::ToolResult { id: tc_id, result }) => {
+                            let data = serde_json::json!({
+                                "object": "clarity.event",
+                                "type": "tool_result",
+                                "id": tc_id,
+                                "result": result
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, 0)))
+                        }
+                        Some(ControllerEvent::StepBegin { tool_name }) => {
+                            let data = serde_json::json!({
+                                "object": "clarity.event",
+                                "type": "step_begin",
+                                "tool_name": tool_name
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, 0)))
+                        }
                         Some(ControllerEvent::Complete(_))
                         | Some(ControllerEvent::Error(_))
                         | None => {
@@ -216,6 +261,10 @@ pub async fn chat_completions(
                     error_msg = Some(e);
                     break;
                 }
+                // Tool-calling events are not included in non-streaming text response.
+                ControllerEvent::ToolCallStart { .. }
+                | ControllerEvent::ToolResult { .. }
+                | ControllerEvent::StepBegin { .. } => {}
             }
         }
 
