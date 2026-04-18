@@ -6,3 +6,5 @@ agents/
 .DS_Store
 *.log
 config.yaml
+.clarity/user_config.json
+

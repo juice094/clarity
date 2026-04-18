@@ -181,6 +181,7 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/tools", get(handlers::admin_tools))
         .route("/api/models", get(handlers::admin_models))
         .route("/api/provider", post(handlers::admin_switch_provider))
+        .route("/api/config", get(handlers::admin_get_config).post(handlers::admin_set_config))
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

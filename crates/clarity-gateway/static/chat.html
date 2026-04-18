@@ -87,6 +87,23 @@
 
         .new-chat-btn:hover, .load-project-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
 
+        .settings-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            margin-top: auto;
+        }
+        .settings-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+
         .file-tree {
             flex: 1;
             overflow-y: auto;
@@ -628,6 +645,9 @@
             按 Enter 发送，Shift+Enter 换行。<br>
             点击文件在编辑器中打开，代码块可复制或插入编辑器。
         </div>
+        <button class="settings-btn" onclick="openSettings()" title="配置 API Key">
+            <span>⚙️</span> 设置
+        </button>
     </aside>
 
     <main class="chat-area">
@@ -1225,6 +1245,225 @@
                 console.log('Failed to load model list:', e);
             }
         })();
+    </script>
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>⚙️ 配置 LLM Provider</h3>
+                <button class="modal-close" onclick="closeSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Provider</label>
+                    <select id="cfg-provider" onchange="onProviderChange()">
+                        <option value="kimi">🌙 Kimi (Moonshot)</option>
+                        <option value="kimi-code">🌙 Kimi Code</option>
+                        <option value="anthropic">🅰️ Anthropic (Claude)</option>
+                        <option value="openai">🤖 OpenAI</option>
+                        <option value="deepseek">🔮 DeepSeek</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>API Key <span class="required">*</span></label>
+                    <input type="password" id="cfg-api-key" placeholder="输入你的 API Key">
+                    <div class="form-hint" id="cfg-key-hint">Kimi API Key 以 sk- 开头</div>
+                </div>
+                <div class="form-group">
+                    <label>Base URL（可选）</label>
+                    <input type="text" id="cfg-base-url" placeholder="留空使用默认地址">
+                </div>
+                <div class="form-group">
+                    <label>Model（可选）</label>
+                    <input type="text" id="cfg-model" placeholder="留空使用默认模型">
+                </div>
+                <div class="form-status" id="cfg-status"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSettings()">取消</button>
+                <button class="btn-primary" onclick="saveSettings()">保存并应用</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal {
+            background: linear-gradient(135deg, #1a1838 0%, #24243e 100%);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            width: 100%;
+            max-width: 480px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .modal-header h3 { font-size: 1rem; font-weight: 600; }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal-body { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+        .form-group .required { color: #f87171; }
+        .form-group input, .form-group select {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+        .form-hint {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        .form-status {
+            font-size: 0.85rem;
+            min-height: 20px;
+            margin-top: 8px;
+        }
+        .form-status.ok { color: #4ade80; }
+        .form-status.err { color: #f87171; }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+        }
+        .btn-secondary, .btn-primary {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+        }
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { background: var(--surface-hover); }
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+
+    <script>
+        const PROVIDER_HINTS = {
+            'kimi': 'Kimi API Key 以 sk- 开头',
+            'kimi-code': 'Kimi Code API Key',
+            'anthropic': 'Anthropic API Key',
+            'openai': 'OpenAI API Key 以 sk- 开头',
+            'deepseek': 'DeepSeek API Key'
+        };
+        function onProviderChange() {
+            const p = document.getElementById('cfg-provider').value;
+            document.getElementById('cfg-key-hint').textContent = PROVIDER_HINTS[p] || '';
+        }
+        function openSettings() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            loadCurrentConfig();
+        }
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('cfg-status').textContent = '';
+            document.getElementById('cfg-status').className = 'form-status';
+        }
+        async function loadCurrentConfig() {
+            try {
+                const resp = await fetch('http://127.0.0.1:18800/api/config');
+                const data = await resp.json();
+                if (data.configured && data.config) {
+                    document.getElementById('cfg-provider').value = data.config.provider;
+                    document.getElementById('cfg-base-url').value = data.config.base_url || '';
+                    document.getElementById('cfg-model').value = data.config.model || '';
+                    onProviderChange();
+                }
+            } catch (e) {
+                console.warn('Failed to load config:', e);
+            }
+        }
+        async function saveSettings() {
+            const provider = document.getElementById('cfg-provider').value;
+            const apiKey = document.getElementById('cfg-api-key').value.trim();
+            const baseUrl = document.getElementById('cfg-base-url').value.trim() || null;
+            const model = document.getElementById('cfg-model').value.trim() || null;
+            const status = document.getElementById('cfg-status');
+
+            if (!apiKey) {
+                status.textContent = '❌ 请输入 API Key';
+                status.className = 'form-status err';
+                return;
+            }
+
+            status.textContent = '保存中...';
+            status.className = 'form-status';
+
+            try {
+                const resp = await fetch('http://127.0.0.1:18800/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, api_key: apiKey, base_url: baseUrl, model })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    status.textContent = '✅ 配置已保存并生效';
+                    status.className = 'form-status ok';
+                    setTimeout(closeSettings, 800);
+                } else {
+                    status.textContent = '❌ ' + (data.error || '保存失败');
+                    status.className = 'form-status err';
+                }
+            } catch (e) {
+                status.textContent = '❌ 网络错误: ' + e.message;
+                status.className = 'form-status err';
+            }
+        }
+        // Close modal on backdrop click
+        document.getElementById('settings-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeSettings();
+        });
     </script>
 </body>
 </html>

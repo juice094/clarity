@@ -79,7 +79,21 @@ async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     // 创建 Agent
     let agent = Agent::with_config(registry, config);
 
-    // 尝试自动检测 LLM provider (ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
+    // 1. 优先尝试加载用户持久化配置
+    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config() {
+        info!("Found persisted user config for provider: {}", user_cfg.provider);
+        match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
+            Ok(provider) => {
+                info!("LLM provider loaded from persisted config");
+                return Ok(Arc::new(agent.with_llm(Arc::from(provider))));
+            }
+            Err(e) => {
+                warn!("Failed to build provider from persisted config: {}", e);
+            }
+        }
+    }
+
+    // 2. Fallback: 自动检测 LLM provider (ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
     match LlmFactory::auto().await {
         Ok(llm) => {
             info!("LLM provider initialized successfully");
