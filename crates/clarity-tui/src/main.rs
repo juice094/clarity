@@ -39,14 +39,14 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 创建 Agent
-    let (agent, model_name, yuan_type) = create_agent().await?;
-
-    // 创建应用
-    let mut app = App::new(agent, model_name, yuan_type.to_string());
-
-    // 运行应用
-    let result = run_app(&mut terminal, &mut app).await;
+    // 创建 Agent（若失败需先恢复终端再返回错误）
+    let app_result = match create_agent().await {
+        Ok((agent, model_name, yuan_type)) => {
+            let mut app = App::new(agent, model_name, yuan_type.to_string());
+            run_app(&mut terminal, &mut app).await
+        }
+        Err(e) => Err(e),
+    };
 
     // 恢复终端
     disable_raw_mode()?;
@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
-    result
+    app_result
 }
 
 async fn create_agent() -> Result<(Arc<Agent>, String, YuanType)> {

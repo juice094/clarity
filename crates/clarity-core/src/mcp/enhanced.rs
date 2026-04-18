@@ -630,7 +630,6 @@ impl SseMcpClientStub {
 }
 
 #[async_trait]
-#[async_trait]
 impl McpClient for SseMcpClientStub {
     async fn connect(&mut self) -> Result<(), McpError> {
         warn!(
