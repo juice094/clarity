@@ -13,7 +13,7 @@ pub struct GeneratingIndicator;
 
 impl GeneratingIndicator {
     pub fn render(f: &mut Frame, _area: Rect, metrics: Option<&GenerationMetrics>) {
-        let size = f.size();
+        let size = f.area();
         let popup_area = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

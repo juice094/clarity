@@ -13,7 +13,7 @@ use crate::widgets::{chat_pane::ChatPane, generating_indicator::GeneratingIndica
 
 /// 渲染主界面
 pub fn draw(f: &mut Frame, app: &App) {
-    let size = f.size();
+    let size = f.area();
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)

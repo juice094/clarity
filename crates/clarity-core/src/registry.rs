@@ -46,9 +46,10 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
         use crate::tools::{
-            BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool,
+            AskUserTool, BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool,
+            NotifyTool, PlanTool, PowerShellTool, TaskListTool, TaskOutputTool, TaskStopTool,
+            ThinkTool, TodoTool, WebFetchTool, WebSearchTool,
         };
-        use crate::tools::{PowerShellTool, TaskListTool, TaskOutputTool, TaskStopTool, ThinkTool, WebFetchTool, WebSearchTool};
 
         let registry = Self::new();
 
@@ -76,6 +77,18 @@ impl ToolRegistry {
         let _ = registry.register(TaskListTool::new());
         let _ = registry.register(TaskOutputTool::new());
         let _ = registry.register(TaskStopTool::new());
+
+        // Register ask_user tool
+        let _ = registry.register(AskUserTool::new());
+
+        // Register notify tool
+        let _ = registry.register(NotifyTool::new());
+
+        // Register todo tool
+        let _ = registry.register(TodoTool::new());
+
+        // Register plan tool
+        let _ = registry.register(PlanTool::new());
 
         registry
     }

@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 clarity-core = { workspace = true }
+clarity-wire = { path = "../clarity-wire" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -18,6 +19,13 @@ anyhow = { workspace = true }
 tao = "0.30"
 tray-icon = "0.19"
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+
+# Input dialog
+inputbox = "0.1"
+
+# Notifications
+notify-rust = "4"
 
 # Serialization
 serde = { workspace = true }

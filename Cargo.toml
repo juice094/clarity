@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 authors = ["Clarity Team"]
 license = "MIT"
 repository = "https://github.com/clarity/clarity"
@@ -42,9 +42,9 @@ tokio-util = "0.7"
 rmcp = { version = "0.1" }
 
 # TUI dependencies
-ratatui = "0.24"
-crossterm = "0.27"
-unicode-width = "0.1"
+ratatui = "0.30"
+crossterm = "0.29"
+unicode-width = "0.2"
 
 # Web dependencies
 axum = { version = "0.7", features = ["ws"] }

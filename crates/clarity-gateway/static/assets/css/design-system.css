@@ -112,6 +112,16 @@ textarea, input, select {
     outline: none;
 }
 
+select {
+    appearance: none;
+    background-color: var(--bg-tertiary);
+}
+
+option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
 textarea {
     resize: none;
 }

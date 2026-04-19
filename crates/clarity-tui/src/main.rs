@@ -163,7 +163,10 @@ fn detect_model_name() -> String {
     "unknown".to_string()
 }
 
-async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>
+where
+    B::Error: Send + Sync + 'static,
+{
     let mut events = events::EventHandler::new();
 
     // 设置事件发送器，用于后台任务向主循环发送事件

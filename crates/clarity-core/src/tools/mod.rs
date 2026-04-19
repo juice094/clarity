@@ -12,18 +12,26 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub mod ask_user;
 pub mod file;
+pub mod notify;
+pub mod plan;
 pub mod search;
 pub mod shell;
 pub mod task;
 pub mod think;
+pub mod todo;
 pub mod web;
 
+pub use ask_user::AskUserTool;
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
+pub use notify::NotifyTool;
+pub use plan::PlanTool;
 pub use search::{GlobTool, GrepTool};
 pub use shell::{BashTool, PowerShellTool};
 pub use task::{TaskListTool, TaskOutputTool, TaskStopTool};
 pub use think::ThinkTool;
+pub use todo::TodoTool;
 pub use web::{WebFetchTool, WebSearchTool};
 
 use crate::approval::ApprovalMode;
