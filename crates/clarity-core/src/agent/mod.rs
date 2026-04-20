@@ -77,6 +77,9 @@ struct AgentInner {
     llm: Option<Arc<dyn LlmProvider>>,
     session_usage: TokenUsage,
     active_skill: Option<String>,
+    /// Snapshotted at turn start so that mid-turn set_active_skill() calls
+    /// do not affect the in-flight turn.
+    snapshotted_skill: Option<String>,
     file_prompt_cache: Option<String>,
 }
 

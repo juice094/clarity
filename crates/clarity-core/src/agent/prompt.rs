@@ -67,8 +67,8 @@ impl Agent {
             format!("{}\n\n{}", base, self.config.entry_context)
         };
 
-        // Inject active skill context if set
-        if let Some(ref skill_id) = self.active_skill() {
+        // Inject active skill context if set (uses snapshotted value at turn start)
+        if let Some(ref skill_id) = self.snapshotted_active_skill() {
             if let Some(ref registry) = self.skill_registry {
                 if let Some(skill) = registry.get(skill_id) {
                     let skill_ctx = skill.build_context();
@@ -111,7 +111,7 @@ impl Agent {
 
     /// Return the tool whitelist for the active skill, if any.
     fn active_skill_tool_whitelist(&self) -> Option<Vec<String>> {
-        let active = self.active_skill()?;
+        let active = self.snapshotted_active_skill()?;
         let registry = self.skill_registry.as_ref()?;
         let skill = registry.get(&active)?;
         if skill.meta.tools.is_empty() {

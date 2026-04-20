@@ -44,6 +44,7 @@ impl Agent {
                     total_tokens: 0,
                 },
                 active_skill: None,
+                snapshotted_skill: None,
                 file_prompt_cache: None,
             })),
         }
@@ -257,6 +258,7 @@ impl Agent {
                     completion_tokens: 0,
                     total_tokens: 0,
                 };
+                inner.snapshotted_skill = inner.active_skill.clone();
                 Ok(token)
             }
         }
@@ -268,6 +270,12 @@ impl Agent {
         if matches!(inner.state, AgentState::Running { .. }) {
             inner.state = AgentState::Idle;
         }
+        inner.snapshotted_skill = None;
+    }
+
+    /// Internal: access the snapshotted active skill for the current turn.
+    pub(crate) fn snapshotted_active_skill(&self) -> Option<String> {
+        self.inner.read().unwrap().snapshotted_skill.clone()
     }
 
     /// Internal: access the file prompt cache.

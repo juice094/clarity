@@ -301,10 +301,10 @@ self.state = ControllerState::Running(handle);
 
 ## 8. Success Criteria
 
-- [ ] `Agent::run()` rejects overlapping calls with a typed error.
-- [ ] `Agent::run()` rejects unconfigured agents with a typed error (not deep stack `Llm` error).
-- [ ] `reset_cancel_token()` is removed from public API.
-- [ ] `session_usage` resets on every new turn.
-- [ ] `active_skill` is snapshotted at turn start.
-- [ ] `cargo test --workspace --lib` passes (342 tests).
-- [ ] No manual state synchronization in TUI or Controller.
+- [x] `Agent::run()` rejects overlapping calls with a typed error.
+- [x] `Agent::run()` rejects unconfigured agents with a typed error (not deep stack `Llm` error).
+- [x] `reset_cancel_token()` is removed from public API.
+- [x] `session_usage` resets on every new turn.
+- [x] `active_skill` is snapshotted at turn start.
+- [x] `cargo test --workspace --lib` passes (342 tests).
+- [x] No manual state synchronization in TUI or Controller.

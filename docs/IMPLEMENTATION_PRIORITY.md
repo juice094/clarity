@@ -1,6 +1,6 @@
 # Clarity 实现优先级报告（对比 Kimi CLI）
 
-> 更新日期：2026-04-04
+> 更新日期：2026-04-20
 > 状态：已重新评估
 
 ---
@@ -10,8 +10,8 @@
 | 模块 | 状态 | 测试覆盖 | 备注 |
 |------|------|----------|------|
 | SubagentRunner | ✅ **已完成** | 18 测试通过 | 今日实现 |
-| BackgroundTaskManager | ❌ 未实现 | - | 高优先级 |
-| PersistentMemoryStore | ⚠️ 占位符 | - | 高优先级 |
+| BackgroundTaskManager | ⚠️ 骨架完整 | WorkerPool + TaskStore 已实现 | 高优先级（缺自动调度循环 + TUI/Gateway 集成） |
+| PersistentMemoryStore | ✅ 已实现 | `clarity-memory` 集成，TUI 在用 | 高优先级（已完成） |
 | MCP 完整支持 | ⚠️ 骨架实现 | - | 中高优先级 |
 | 工具系统 | ✅ 8 个工具 | 完整 | 基础完成 |
 | 审批系统 | ✅ 三种模式 | 完整 | 生产就绪 |
@@ -58,22 +58,17 @@
 
 ### P0-1: PersistentMemoryStore 真实实现
 
-**为什么最高优先级？**
+**状态：✅ 已完成（2026-04-15）**
 
 ```
-当前问题：
-├── TUI 每次启动都是"全新"的对话
-├── 无法记住用户偏好和项目上下文
-├── 无法实现真正的长期记忆
-└── 严重影响可用性
+实现结果：
+├── `clarity-core/src/memory/mod.rs` 提供真实 PersistentMemoryStore
+├── TUI (`clarity-tui/src/main.rs`) 启动时自动加载 `.clarity/memory.db`
+├── `clarity-memory` HybridStore（热缓存 + FileStore 冷存储）已集成
+├── `tests/integration/tests/memory_persistence.rs` 验证持久化
+└── 向后兼容：Agent::with_memory() 接口不变
 
-实现方案：
-├── 替换 placeholder 实现
-├── 使用 clarity-memory 的 HybridStore
-├── 支持 SQLite + File 混合存储
-└── 保持向后兼容
-
-预期工作量：2-3 天
+遗留：文档标记未及时更新，本次同步修正。
 ```
 
 **参考代码**：
