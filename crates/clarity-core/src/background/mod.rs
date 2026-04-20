@@ -185,7 +185,7 @@ impl TaskScheduler {
 /// 后台任务管理器
 ///
 /// 负责任务的创建、调度、监控和生命周期管理
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BackgroundTaskManager {
     /// 任务存储
     store: TaskStore,
@@ -284,7 +284,20 @@ impl BackgroundTaskManager {
         F: FnOnce(TaskSpec) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = anyhow::Result<TaskResult>> + Send + 'static,
     {
-        let task_id = generate_task_id();
+        self.spawn_with_id(generate_task_id(), spec, task_fn).await
+    }
+
+    /// 使用指定的 task_id 启动后台任务。
+    async fn spawn_with_id<F, Fut>(
+        &self,
+        task_id: TaskId,
+        spec: TaskSpec,
+        task_fn: F,
+    ) -> anyhow::Result<TaskId>
+    where
+        F: FnOnce(TaskSpec) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<TaskResult>> + Send + 'static,
+    {
         let task_id_clone = task_id.clone();
         let task_name = spec.name.clone();
 
@@ -382,10 +395,14 @@ impl BackgroundTaskManager {
         Ok(task_id)
     }
 
-    /// 启动一个真实的 Agent 后台任务。
+    /// 启动一个真实的 Agent 后台任务，使用指定的 task_id。
     ///
     /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
-    pub async fn spawn_agent(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
+    pub async fn spawn_agent_with_id(
+        &self,
+        task_id: TaskId,
+        spec: TaskSpec,
+    ) -> anyhow::Result<TaskId> {
         let executor = self
             .agent_executor
             .as_ref()
@@ -396,7 +413,7 @@ impl BackgroundTaskManager {
             })?
             .clone();
 
-        self.spawn(spec, move |spec| async move {
+        self.spawn_with_id(task_id, spec, move |spec| async move {
             match executor.execute(&spec).await {
                 Ok((output, steps)) => Ok(TaskResult {
                     status: TaskStatus::Completed,
@@ -408,6 +425,13 @@ impl BackgroundTaskManager {
             }
         })
         .await
+    }
+
+    /// 启动一个真实的 Agent 后台任务。
+    ///
+    /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
+    pub async fn spawn_agent(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
+        self.spawn_agent_with_id(generate_task_id(), spec).await
     }
 
     /// 使用调度器安排任务
@@ -536,6 +560,45 @@ impl BackgroundTaskManager {
         for id in completed {
             running.remove(&id);
         }
+    }
+
+    /// Process the next scheduled agent task using the configured executor.
+    /// Returns the task id if one was started, None if queue is empty.
+    pub async fn process_next_agent_task(&self) -> anyhow::Result<Option<TaskId>> {
+        let scheduler = match self.scheduler.as_ref() {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        if let Some((task_id, spec)) = scheduler.next_task() {
+            self.store
+                .update_status(&task_id, TaskStatus::Running)
+                .await?;
+            self.spawn_agent_with_id(task_id.clone(), spec).await?;
+            Ok(Some(task_id))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Start a background loop that continuously processes scheduled agent tasks.
+    /// Returns a JoinHandle that can be used to abort the loop.
+    pub fn start_agent_scheduler_loop(
+        &self,
+        interval: std::time::Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        let manager = self.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(interval);
+            loop {
+                interval.tick().await;
+                match manager.process_next_agent_task().await {
+                    Ok(Some(id)) => info!("Scheduler loop started agent task: {}", id),
+                    Ok(None) => {}
+                    Err(e) => error!("Scheduler loop error: {}", e),
+                }
+            }
+        })
     }
 }
 
@@ -895,5 +958,112 @@ mod tests {
 
         assert_eq!(result.status, TaskStatus::Completed);
         assert_eq!(result.output, "This is a mock response");
+    }
+
+    #[tokio::test]
+    async fn test_process_next_agent_task_empty_queue() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        );
+
+        // No scheduler configured → returns None
+        let result = manager.process_next_agent_task().await.unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_process_next_agent_task_scheduled() {
+        use crate::agent::MockLlm;
+        use crate::background::agent_executor::DefaultAgentTaskExecutor;
+        use crate::registry::ToolRegistry;
+        use std::sync::Arc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let store = TaskStore::new(temp_dir.path().join("store"));
+        let scheduler = Arc::new(TaskScheduler::new(store));
+
+        let registry = ToolRegistry::with_builtin_tools();
+        let llm = Arc::new(MockLlm);
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+            llm,
+            registry,
+            temp_dir.path(),
+        ));
+
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        )
+        .with_scheduler(scheduler.clone())
+        .with_agent_executor(executor);
+
+        // Schedule an agent task
+        let spec = TaskSpec::new("loop_task", "Say hello").with_agent_type("coder");
+        let _scheduled_id = manager.schedule(spec).await.unwrap();
+
+        // Queue should have 1 item
+        assert_eq!(scheduler.queue_len(), 1);
+
+        // Process it
+        let started_id = manager.process_next_agent_task().await.unwrap();
+        assert!(started_id.is_some());
+
+        // Wait for completion
+        let result = manager.wait(&started_id.unwrap()).await.unwrap();
+        assert_eq!(result.status, TaskStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_start_agent_scheduler_loop() {
+        use crate::agent::MockLlm;
+        use crate::background::agent_executor::DefaultAgentTaskExecutor;
+        use crate::registry::ToolRegistry;
+        use std::sync::Arc;
+
+        let temp_dir = TempDir::new().unwrap();
+        let store = TaskStore::new(temp_dir.path().join("store"));
+        let scheduler = Arc::new(TaskScheduler::new(store));
+
+        let registry = ToolRegistry::with_builtin_tools();
+        let llm = Arc::new(MockLlm);
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+            llm,
+            registry,
+            temp_dir.path(),
+        ));
+
+        let manager = BackgroundTaskManager::new(
+            temp_dir.path().join("store"),
+            temp_dir.path().join("work"),
+            temp_dir.path().join("context"),
+        )
+        .with_scheduler(scheduler.clone())
+        .with_agent_executor(executor);
+
+        // Start the scheduler loop (tick every 100ms for fast test)
+        let handle =
+            manager.start_agent_scheduler_loop(std::time::Duration::from_millis(100));
+
+        // Schedule a task after loop starts
+        let spec = TaskSpec::new("auto_task", "Say hello").with_agent_type("coder");
+        let task_id = manager.schedule(spec).await.unwrap();
+
+        // Wait for the loop to pick it up and complete
+        let result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            manager.wait(&task_id),
+        )
+        .await
+        .expect("timeout waiting for scheduler loop")
+        .expect("wait error");
+
+        assert_eq!(result.status, TaskStatus::Completed);
+
+        // Abort the loop
+        handle.abort();
     }
 }
