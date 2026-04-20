@@ -19,6 +19,7 @@ async fn test_filesystem_only() {
             ],
             env: HashMap::new(),
             disabled: false,
+            ..Default::default()
         },
     );
 

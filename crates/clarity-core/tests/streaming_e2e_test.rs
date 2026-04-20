@@ -118,5 +118,8 @@ async fn test_openai_streaming_e2e() {
         .count();
     assert_eq!(stream_count, 1, "expected 1 stream request");
     // When streaming succeeds, run_streaming should not fall back to complete().
-    assert_eq!(complete_count, 0, "expected 0 complete request when stream succeeds");
+    assert_eq!(
+        complete_count, 0,
+        "expected 0 complete request when stream succeeds"
+    );
 }

@@ -8,13 +8,10 @@ use channels::{
     ChannelManager,
 };
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
-use clarity_core::background::BackgroundTaskManager;
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
+use clarity_core::background::BackgroundTaskManager;
 use clarity_core::llm::LlmFactory;
-use clarity_core::mcp::{
-    config::McpConfig,
-    register_mcp_tools, McpClientBuilder, McpRegistry,
-};
+use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
 
@@ -76,7 +73,10 @@ You are a methodological query assistant. When answering:
 
     // 1. 优先尝试加载用户持久化配置
     if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
-        info!("Found persisted user config for provider: {}", user_cfg.provider);
+        info!(
+            "Found persisted user config for provider: {}",
+            user_cfg.provider
+        );
         match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
             Ok(provider) => {
                 info!("LLM provider loaded from persisted config");

@@ -20,9 +20,7 @@ fn bench(name: &str, iterations: usize, f: impl Fn()) -> Duration {
     let avg = elapsed.as_secs_f64() * 1000.0 / iterations as f64;
     println!(
         "  {:<40} {:>10} iter  {:>10.3} ms/iter",
-        name,
-        iterations,
-        avg
+        name, iterations, avg
     );
     elapsed
 }

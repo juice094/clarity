@@ -41,7 +41,11 @@ pub trait MemoryStore: Send + Sync {
     ///
     /// Returns memories ranked by relevance score, highest first.
     /// Default implementation falls back to substring search with uniform scores.
-    async fn search_similar(&self, query: &str, limit: usize) -> anyhow::Result<Vec<(Memory, f32)>> {
+    async fn search_similar(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> anyhow::Result<Vec<(Memory, f32)>> {
         let memories = self.search(query, limit).await?;
         Ok(memories.into_iter().map(|m| (m, 1.0)).collect())
     }

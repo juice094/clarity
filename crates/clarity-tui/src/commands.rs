@@ -132,13 +132,12 @@ impl CommandHandler for SkillListCommand {
                     lines.push(String::new());
                     lines.push(format!("当前激活: {}", active));
                 }
-                app.messages.push(Message::new(lines.join("\n"), MessageType::System));
+                app.messages
+                    .push(Message::new(lines.join("\n"), MessageType::System));
             }
             _ => {
-                app.messages.push(Message::new(
-                    "暂无已加载的 Skills。",
-                    MessageType::System,
-                ));
+                app.messages
+                    .push(Message::new("暂无已加载的 Skills。", MessageType::System));
             }
         }
     }

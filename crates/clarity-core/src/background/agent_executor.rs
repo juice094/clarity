@@ -5,7 +5,7 @@
 
 use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
-use crate::llm::{ModelRegistry, build_provider_from_registry};
+use crate::llm::{build_provider_from_registry, ModelRegistry};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
@@ -119,7 +119,8 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
                 match reg.get(model_alias) {
                     Some(entry) => {
                         if let Some(provider_cfg) = reg.get_provider(&entry.provider) {
-                            match build_provider_from_registry(provider_cfg, &entry.model_id).await {
+                            match build_provider_from_registry(provider_cfg, &entry.model_id).await
+                            {
                                 Ok(new_llm) => {
                                     agent.set_llm(Arc::from(new_llm));
                                 }

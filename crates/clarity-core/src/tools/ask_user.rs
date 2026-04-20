@@ -67,9 +67,8 @@ impl Tool for AskUserTool {
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let question = helpers::required_str(&args, "question")?;
-        let options: Option<Vec<String>> = args.get("options")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
+        let options: Option<Vec<String>> =
+            args.get("options").and_then(|v| v.as_array()).map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect()
@@ -78,9 +77,9 @@ impl Tool for AskUserTool {
 
         info!("AskUser tool invoked: {}", question);
 
-        let options_msg = options.as_ref().map(|opts| {
-            format!("\nOptions: {}", opts.join(", "))
-        });
+        let options_msg = options
+            .as_ref()
+            .map(|opts| format!("\nOptions: {}", opts.join(", ")));
 
         let full_question = if let Some(ctx) = context {
             format!("{}\n{}", ctx, question)
@@ -126,10 +125,7 @@ mod tests {
             result["question"].as_str().unwrap(),
             "Which file should I modify?"
         );
-        assert_eq!(
-            result["status"].as_str().unwrap(),
-            "waiting_for_user"
-        );
+        assert_eq!(result["status"].as_str().unwrap(), "waiting_for_user");
     }
 
     #[tokio::test]

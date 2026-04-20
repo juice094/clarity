@@ -25,7 +25,11 @@ impl McpToolWrapper {
     /// Create a new wrapper from an MCP tool descriptor and its client.
     /// `tool.name` should be the prefixed display name.
     /// `mcp_name` is the original tool name expected by the MCP server.
-    pub fn new(client: Arc<RwLock<McpClientInstance>>, tool: McpTool, mcp_name: impl Into<String>) -> Self {
+    pub fn new(
+        client: Arc<RwLock<McpClientInstance>>,
+        tool: McpTool,
+        mcp_name: impl Into<String>,
+    ) -> Self {
         Self {
             client,
             name: tool.name,

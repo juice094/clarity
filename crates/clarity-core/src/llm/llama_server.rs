@@ -31,8 +31,8 @@
 //! preferable.
 
 use super::{OpenAiCompatibleLlm, StreamDelta};
-use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use crate::error::AgentError;
+use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -75,7 +75,8 @@ impl LlamaServerProvider {
             Ok(resp) => Err(AgentError::Llm(format!(
                 "llama-server at {} returned status {}. \
                  Ensure llama-server is running: llama-server -m model.gguf --port 8080",
-                self.base_url, resp.status()
+                self.base_url,
+                resp.status()
             ))),
             Err(e) => Err(AgentError::Llm(format!(
                 "Cannot connect to llama-server at {}: {}. \
@@ -88,7 +89,11 @@ impl LlamaServerProvider {
 
 #[async_trait]
 impl LlmProvider for LlamaServerProvider {
-    async fn complete(&self, messages: &[Message], tools: &Value) -> Result<LlmResponse, AgentError> {
+    async fn complete(
+        &self,
+        messages: &[Message],
+        tools: &Value,
+    ) -> Result<LlmResponse, AgentError> {
         self.inner.complete(messages, tools).await.map_err(|e| {
             let msg = format!("{}", e);
             if msg.contains("error sending request") || msg.contains("Connection refused") {

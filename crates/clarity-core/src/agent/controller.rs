@@ -34,14 +34,9 @@ pub enum ControllerEvent {
         arguments: serde_json::Value,
     },
     /// A tool call finished executing.
-    ToolResult {
-        id: String,
-        result: String,
-    },
+    ToolResult { id: String, result: String },
     /// A new step (tool execution) began.
-    StepBegin {
-        tool_name: String,
-    },
+    StepBegin { tool_name: String },
 }
 
 /// State machine for the controller's background agent task.
@@ -111,9 +106,15 @@ impl AgentController {
         tokio::spawn(async move {
             while let Some(msg) = wire_ui.recv().await {
                 let event = match msg {
-                    clarity_wire::WireMessage::ToolCall { id, name, arguments } => {
-                        Some(ControllerEvent::ToolCallStart { id, name, arguments })
-                    }
+                    clarity_wire::WireMessage::ToolCall {
+                        id,
+                        name,
+                        arguments,
+                    } => Some(ControllerEvent::ToolCallStart {
+                        id,
+                        name,
+                        arguments,
+                    }),
                     clarity_wire::WireMessage::ToolResult { id, result } => {
                         Some(ControllerEvent::ToolResult { id, result })
                     }
@@ -178,7 +179,7 @@ impl AgentController {
                     match op {
                         Some(Op::UserTurn(prompt)) => {
                             debug!("Controller: UserTurn (len={})", prompt.len());
-                            self.agent.reset_cancel_token();
+                            self.agent.reset();
                             let agent = self.agent.clone();
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
@@ -207,7 +208,7 @@ impl AgentController {
 
                         Some(Op::ConversationTurn(messages)) => {
                             debug!("Controller: ConversationTurn ({} messages)", messages.len());
-                            self.agent.reset_cancel_token();
+                            self.agent.reset();
                             let agent = self.agent.clone();
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
@@ -236,7 +237,7 @@ impl AgentController {
 
                         Some(Op::ConversationTurnSync(messages)) => {
                             debug!("Controller: ConversationTurnSync ({} messages)", messages.len());
-                            self.agent.reset_cancel_token();
+                            self.agent.reset();
                             let agent = self.agent.clone();
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
@@ -442,5 +443,4 @@ mod tests {
         op_tx.send(Op::Shutdown).unwrap();
         let _ = handle.await;
     }
-
 }

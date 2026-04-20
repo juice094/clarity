@@ -21,6 +21,7 @@ async fn test_real_mcp_servers() {
             ],
             env: HashMap::new(),
             disabled: false,
+            ..Default::default()
         },
     );
     config.servers.insert(
@@ -34,6 +35,7 @@ async fn test_real_mcp_servers() {
             ],
             env: HashMap::new(),
             disabled: false,
+            ..Default::default()
         },
     );
     config.servers.insert(
@@ -50,6 +52,7 @@ async fn test_real_mcp_servers() {
                 env
             },
             disabled: false,
+            ..Default::default()
         },
     );
 

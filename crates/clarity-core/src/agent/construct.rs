@@ -1,7 +1,7 @@
 //! Agent construction, configuration, and utility methods.
 
 use super::config::{AgentConfig, DEFAULT_MAX_CONTEXT_TOKENS};
-use super::Agent;
+use super::{Agent, AgentInner, AgentState};
 use crate::agent::compaction_service::CompactionService;
 use crate::agent::enhanced::TokenUsage;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
@@ -11,7 +11,7 @@ use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, MemoryTicker};
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::{Wire, WireMessage};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -26,7 +26,6 @@ impl Agent {
         Self {
             registry,
             config: config.clone(),
-            llm: Arc::new(std::sync::RwLock::new(None)),
             memory_store: None,
             memory_ticker: None,
             wire: None,
@@ -35,28 +34,39 @@ impl Agent {
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
             compaction_service: config.compaction_service.map(CompactionService::new),
-            cancel_token: CancellationToken::new(),
-            session_usage: Arc::new(Mutex::new(TokenUsage {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-            })),
             skill_registry: None,
-            active_skill: Arc::new(std::sync::RwLock::new(None)),
-            file_prompt_cache: Arc::new(std::sync::RwLock::new(None)),
+            inner: Arc::new(std::sync::RwLock::new(AgentInner {
+                state: AgentState::Unconfigured,
+                llm: None,
+                session_usage: TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                },
+                active_skill: None,
+                file_prompt_cache: None,
+            })),
         }
     }
 
     /// Set the LLM provider (builder pattern, for construction only)
     pub fn with_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
-        *self.llm.write().unwrap() = Some(llm);
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.llm = Some(llm);
+            inner.state = AgentState::Idle;
+        }
         self
     }
 
     /// Hot-swap the LLM provider at runtime.
     /// All clones of this Agent will see the new provider immediately.
     pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
-        *self.llm.write().unwrap() = Some(llm);
+        let mut inner = self.inner.write().unwrap();
+        inner.llm = Some(llm);
+        if matches!(inner.state, AgentState::Unconfigured) {
+            inner.state = AgentState::Idle;
+        }
     }
 
     /// Set the skill registry.
@@ -68,17 +78,20 @@ impl Agent {
     /// Set (or clear) the active skill by id.
     /// All clones of this Agent will see the change immediately.
     pub fn set_active_skill(&self, skill_id: Option<String>) {
-        *self.active_skill.write().unwrap() = skill_id;
+        let mut inner = self.inner.write().unwrap();
+        inner.active_skill = skill_id;
     }
 
     /// Get the currently active skill id, if any.
     pub fn active_skill(&self) -> Option<String> {
-        self.active_skill.read().unwrap().clone()
+        self.inner.read().unwrap().active_skill.clone()
     }
 
     /// Remove the LLM provider at runtime.
     pub fn clear_llm(&self) {
-        *self.llm.write().unwrap() = None;
+        let mut inner = self.inner.write().unwrap();
+        inner.llm = None;
+        inner.state = AgentState::Unconfigured;
     }
 
     /// Set the memory store
@@ -138,12 +151,21 @@ impl Agent {
 
     /// Cancel any in-flight agent run.
     pub fn cancel(&self) {
-        self.cancel_token.cancel();
+        let mut inner = self.inner.write().unwrap();
+        if let AgentState::Running { ref cancel_token } = inner.state {
+            cancel_token.cancel();
+            inner.state = AgentState::Stalled;
+        }
     }
 
-    /// Reset the cancellation token so a new turn can run.
-    pub fn reset_cancel_token(&mut self) {
-        self.cancel_token = CancellationToken::new();
+    /// Reset the agent state so a new turn can run.
+    pub fn reset(&self) {
+        let mut inner = self.inner.write().unwrap();
+        if inner.llm.is_some() {
+            inner.state = AgentState::Idle;
+        } else {
+            inner.state = AgentState::Unconfigured;
+        }
     }
 
     /// Access the configured approval runtime, if any.
@@ -153,10 +175,11 @@ impl Agent {
 
     /// Accumulate token usage into the session counter.
     pub(crate) fn accumulate_usage(&self, prompt_tokens: u32, completion_tokens: u32) {
-        let mut usage = self.session_usage.lock().unwrap();
-        usage.prompt_tokens += prompt_tokens;
-        usage.completion_tokens += completion_tokens;
-        usage.total_tokens = usage.prompt_tokens + usage.completion_tokens;
+        let mut inner = self.inner.write().unwrap();
+        inner.session_usage.prompt_tokens += prompt_tokens;
+        inner.session_usage.completion_tokens += completion_tokens;
+        inner.session_usage.total_tokens =
+            inner.session_usage.prompt_tokens + inner.session_usage.completion_tokens;
     }
 
     /// Store a conversation memory, optionally chunking long content for better retrieval.
@@ -188,7 +211,7 @@ impl Agent {
 
     /// Get accumulated session token usage.
     pub fn get_session_usage(&self) -> TokenUsage {
-        self.session_usage.lock().unwrap().clone()
+        self.inner.read().unwrap().session_usage.clone()
     }
 
     /// Get the tool registry
@@ -198,11 +221,62 @@ impl Agent {
 
     /// Get the LLM provider (if configured)
     pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
-        self.llm.read().unwrap().clone()
+        self.inner.read().unwrap().llm.clone()
     }
 
     /// Get the agent configuration
     pub fn config(&self) -> &AgentConfig {
         &self.config
+    }
+
+    /// Query the current agent state.
+    pub fn state(&self) -> AgentState {
+        self.inner.read().unwrap().state.clone()
+    }
+
+    /// Check whether the agent is currently running a turn.
+    pub fn is_running(&self) -> bool {
+        matches!(self.state(), AgentState::Running { .. })
+    }
+
+    /// Internal: atomically attempt to transition from Idle to Running.
+    /// Returns the fresh CancellationToken on success.
+    pub(crate) fn begin_turn(&self) -> Result<CancellationToken, crate::error::AgentError> {
+        let mut inner = self.inner.write().unwrap();
+        match &inner.state {
+            AgentState::Unconfigured => Err(crate::error::AgentError::Unconfigured),
+            AgentState::Running { .. } => Err(crate::error::AgentError::AlreadyRunning),
+            AgentState::Stalled => Err(crate::error::AgentError::Stalled),
+            AgentState::Idle => {
+                let token = CancellationToken::new();
+                inner.state = AgentState::Running {
+                    cancel_token: token.clone(),
+                };
+                inner.session_usage = TokenUsage {
+                    prompt_tokens: 0,
+                    completion_tokens: 0,
+                    total_tokens: 0,
+                };
+                Ok(token)
+            }
+        }
+    }
+
+    /// Internal: transition from Running to Idle.
+    pub(crate) fn finish_turn(&self) {
+        let mut inner = self.inner.write().unwrap();
+        if matches!(inner.state, AgentState::Running { .. }) {
+            inner.state = AgentState::Idle;
+        }
+    }
+
+    /// Internal: access the file prompt cache.
+    pub(crate) fn file_prompt_cache(&self) -> Option<String> {
+        self.inner.read().unwrap().file_prompt_cache.clone()
+    }
+
+    /// Internal: set the file prompt cache.
+    pub(crate) fn set_file_prompt_cache(&self, value: Option<String>) {
+        self.inner.write().unwrap().file_prompt_cache = value;
     }
 }

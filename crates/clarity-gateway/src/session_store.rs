@@ -67,9 +67,7 @@ impl PersistentSessionStore {
             Connection::open(&db_path).map_err(SessionStoreError::Database)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })??;
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))??;
 
         let store = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -150,9 +148,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(())
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })??;
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))??;
 
         info!("Session created: {}", session_id);
         Ok(())
@@ -269,7 +265,7 @@ impl PersistentSessionStore {
                 "SELECT role, content, tool_calls, tool_call_id, created_at 
                  FROM session_messages 
                  WHERE session_id = ? 
-                 ORDER BY id ASC"
+                 ORDER BY id ASC",
             )?;
             let rows = stmt.query_map([session_id], |row| {
                 let created_at_str: String = row.get(4)?;
@@ -298,9 +294,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(messages)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// List all session IDs ordered by most recently updated
@@ -323,9 +317,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(sessions)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// Delete a session and all its messages. Returns true if the session existed.
@@ -335,16 +327,11 @@ impl PersistentSessionStore {
 
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
-            let rows = conn.execute(
-                "DELETE FROM sessions WHERE session_id = ?",
-                [session_id],
-            )?;
+            let rows = conn.execute("DELETE FROM sessions WHERE session_id = ?", [session_id])?;
             Ok::<_, SessionStoreError>(rows > 0)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// Check if a session exists
@@ -362,9 +349,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(count > 0)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// Count total sessions
@@ -373,15 +358,12 @@ impl PersistentSessionStore {
 
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
-            let count: i64 = conn.query_row("SELECT COUNT(*) FROM sessions", [], |row| {
-                row.get(0)
-            })?;
+            let count: i64 =
+                conn.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
             Ok::<_, SessionStoreError>(count as usize)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// Record a request in stats
@@ -397,9 +379,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(())
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })??;
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))??;
 
         Ok(())
     }
@@ -418,9 +398,7 @@ impl PersistentSessionStore {
             Ok::<_, SessionStoreError>(count as u64)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 
     /// Delete sessions that have been idle longer than max_idle_minutes
@@ -429,21 +407,15 @@ impl PersistentSessionStore {
 
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
-            let cutoff =
-                (Utc::now() - chrono::Duration::minutes(max_idle_minutes)).to_rfc3339();
-            let rows = conn.execute(
-                "DELETE FROM sessions WHERE updated_at < ?",
-                [cutoff],
-            )?;
+            let cutoff = (Utc::now() - chrono::Duration::minutes(max_idle_minutes)).to_rfc3339();
+            let rows = conn.execute("DELETE FROM sessions WHERE updated_at < ?", [cutoff])?;
             if rows > 0 {
                 info!("Cleaned up {} expired sessions", rows);
             }
             Ok::<_, SessionStoreError>(rows)
         })
         .await
-        .map_err(|e| {
-            SessionStoreError::Io(std::io::Error::other(e.to_string()))
-        })?
+        .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))?
     }
 }
 
@@ -519,7 +491,10 @@ mod tests {
             .unwrap();
 
         let new_messages = vec![SessionMessage::new("user", "New")];
-        store.save_session("session-1", &new_messages).await.unwrap();
+        store
+            .save_session("session-1", &new_messages)
+            .await
+            .unwrap();
 
         let loaded = store.load_session("session-1").await.unwrap();
         assert_eq!(loaded.len(), 1);
@@ -600,7 +575,10 @@ mod tests {
         let loaded = store.load_session("session-t").await.unwrap();
 
         assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded[0].tool_calls, Some(r#"[{"name":"test"}]"#.to_string()));
+        assert_eq!(
+            loaded[0].tool_calls,
+            Some(r#"[{"name":"test"}]"#.to_string())
+        );
         assert_eq!(loaded[0].tool_call_id, Some("call_123".to_string()));
     }
 

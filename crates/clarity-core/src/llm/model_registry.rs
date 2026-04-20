@@ -41,14 +41,13 @@
 //! 3. `~/.config/clarity/models.toml`
 //! 4. Built-in fallback (auto-detect from env vars)
 
-use crate::llm::api::LlmProvider;
 use crate::error::AgentError;
+use crate::llm::api::LlmProvider;
 use crate::llm::{LlamaServerProvider, OpenAiCompatibleLlm};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-
 
 /// Protocol adapter type for provider communication
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -236,8 +235,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 alias: "kimi-k2".into(),
                 provider: "kimi-code".into(),
-                model_id: std::env::var("KIMI_MODEL")
-                    .unwrap_or_else(|_| "kimi-k2-07132k".into()),
+                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into()),
                 temperature: None,
                 max_tokens: None,
             });
@@ -254,8 +252,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 alias: "kimi-k2".into(),
                 provider: "kimi".into(),
-                model_id: std::env::var("KIMI_MODEL")
-                    .unwrap_or_else(|_| "kimi-k2-07132k".into()),
+                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into()),
                 temperature: None,
                 max_tokens: None,
             });
@@ -294,8 +291,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 alias: "gpt-4o".into(),
                 provider: "openai".into(),
-                model_id: std::env::var("OPENAI_MODEL")
-                    .unwrap_or_else(|_| "gpt-4o".into()),
+                model_id: std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()),
                 temperature: None,
                 max_tokens: None,
             });
@@ -308,7 +304,10 @@ impl ModelRegistry {
                 PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
             if default_path.exists() {
                 let mut extra = HashMap::new();
-                extra.insert("model_path".into(), default_path.to_string_lossy().into_owned());
+                extra.insert(
+                    "model_path".into(),
+                    default_path.to_string_lossy().into_owned(),
+                );
                 providers.insert(
                     "local".to_string(),
                     ProviderConfig {

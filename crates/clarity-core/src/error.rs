@@ -98,6 +98,18 @@ pub enum AgentError {
     /// Operation cancelled
     #[error("Operation cancelled")]
     Cancelled,
+
+    /// Agent not configured with an LLM provider
+    #[error("Agent is not configured with an LLM provider")]
+    Unconfigured,
+
+    /// Agent is already running a turn
+    #[error("Agent is already running a turn")]
+    AlreadyRunning,
+
+    /// Agent is in a stalled state and needs reset
+    #[error("Agent is in a stalled state; call reset() first")]
+    Stalled,
 }
 
 /// Result type for tool operations

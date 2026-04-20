@@ -16,7 +16,9 @@ use crate::tools::{Tool, ToolContext, ToolResult};
 fn notifications_dir() -> ToolResult<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".clarity").join("notifications"))
-        .ok_or_else(|| ToolError::execution_failed("Could not determine home directory".to_string()))
+        .ok_or_else(|| {
+            ToolError::execution_failed("Could not determine home directory".to_string())
+        })
 }
 
 /// Tool for sending notifications

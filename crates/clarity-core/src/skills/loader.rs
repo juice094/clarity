@@ -29,11 +29,7 @@ impl SkillLoader {
                 match Self::load_file(&path) {
                     Ok(skill) => skills.push(skill),
                     Err(e) => {
-                        tracing::warn!(
-                            "Failed to load skill from {}: {}",
-                            path.display(),
-                            e
-                        );
+                        tracing::warn!("Failed to load skill from {}: {}", path.display(), e);
                     }
                 }
             }

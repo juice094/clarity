@@ -28,10 +28,16 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     info!("WebSocket connected: session_id={}", session_id);
 
     // 增加活跃连接计数
-    state.active_connections.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    state
+        .active_connections
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     // 创建持久化会话
-    if let Err(e) = state.session_store.create_session(&session_id.to_string()).await {
+    if let Err(e) = state
+        .session_store
+        .create_session(&session_id.to_string())
+        .await
+    {
         error!("Failed to create session in store: {}", e);
     }
 
@@ -132,7 +138,12 @@ async fn handle_chat_with_wire(
 
     // Create wire and wire-enabled agent
     let wire = clarity_wire::Wire::new();
-    let agent = state.agent.read().await.clone().with_wire(Arc::new(wire.clone()));
+    let agent = state
+        .agent
+        .read()
+        .await
+        .clone()
+        .with_wire(Arc::new(wire.clone()));
 
     // Run agent in background
     let message_clone = message.clone();

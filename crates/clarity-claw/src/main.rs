@@ -82,9 +82,7 @@ async fn main() -> anyhow::Result<()> {
             let body = match &msg {
                 WireMessage::StatusUpdate { message } => Some(message.clone()),
                 WireMessage::ContentPart { text } => Some(text.clone()),
-                WireMessage::TurnBegin { user_input } => {
-                    Some(format!("You: {}", user_input))
-                }
+                WireMessage::TurnBegin { user_input } => Some(format!("You: {}", user_input)),
                 _ => None,
             };
 

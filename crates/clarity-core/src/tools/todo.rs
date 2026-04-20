@@ -16,7 +16,9 @@ use crate::tools::{Tool, ToolContext, ToolResult};
 fn default_todos_path() -> ToolResult<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".clarity").join("todos.json"))
-        .ok_or_else(|| ToolError::execution_failed("Could not determine home directory".to_string()))
+        .ok_or_else(|| {
+            ToolError::execution_failed("Could not determine home directory".to_string())
+        })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,12 +38,11 @@ async fn load_todos(path: &PathBuf) -> ToolResult<Vec<TodoItem>> {
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let contents = tokio::fs::read_to_string(&path).await.map_err(|e| {
-        ToolError::execution_failed(format!("Failed to read todos: {}", e))
-    })?;
-    serde_json::from_str(&contents).map_err(|e| {
-        ToolError::execution_failed(format!("Failed to parse todos: {}", e))
-    })
+    let contents = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| ToolError::execution_failed(format!("Failed to read todos: {}", e)))?;
+    serde_json::from_str(&contents)
+        .map_err(|e| ToolError::execution_failed(format!("Failed to parse todos: {}", e)))
 }
 
 async fn save_todos(path: &PathBuf, todos: &[TodoItem]) -> ToolResult<()> {
@@ -50,12 +51,11 @@ async fn save_todos(path: &PathBuf, todos: &[TodoItem]) -> ToolResult<()> {
             ToolError::execution_failed(format!("Failed to create todos dir: {}", e))
         })?;
     }
-    let json = serde_json::to_string_pretty(todos).map_err(|e| {
-        ToolError::execution_failed(format!("Failed to serialize todos: {}", e))
-    })?;
-    tokio::fs::write(&path, json).await.map_err(|e| {
-        ToolError::execution_failed(format!("Failed to write todos: {}", e))
-    })
+    let json = serde_json::to_string_pretty(todos)
+        .map_err(|e| ToolError::execution_failed(format!("Failed to serialize todos: {}", e)))?;
+    tokio::fs::write(&path, json)
+        .await
+        .map_err(|e| ToolError::execution_failed(format!("Failed to write todos: {}", e)))
 }
 
 /// Tool for managing todo items
@@ -71,11 +71,16 @@ impl TodoTool {
 
     /// Create with a custom path (useful for testing)
     pub fn with_path(path: PathBuf) -> Self {
-        Self { custom_path: Some(path) }
+        Self {
+            custom_path: Some(path),
+        }
     }
 
     fn path(&self) -> ToolResult<PathBuf> {
-        self.custom_path.clone().map(Ok).unwrap_or_else(default_todos_path)
+        self.custom_path
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(default_todos_path)
     }
 }
 
@@ -172,7 +177,11 @@ impl Tool for TodoTool {
                     })
                     .collect();
 
-                info!("Todo list: {} pending, {} completed", pending.len(), completed.len());
+                info!(
+                    "Todo list: {} pending, {} completed",
+                    pending.len(),
+                    completed.len()
+                );
                 Ok(json!({
                     "items": items,
                     "pending_count": pending.len(),
@@ -189,7 +198,10 @@ impl Tool for TodoTool {
                     item.completed_at = Some(chrono::Utc::now().to_rfc3339());
                     item.content.clone()
                 } else {
-                    return Err(ToolError::execution_failed(format!("Todo item '{}' not found", id)));
+                    return Err(ToolError::execution_failed(format!(
+                        "Todo item '{}' not found",
+                        id
+                    )));
                 };
 
                 save_todos(&path, &todos).await?;
@@ -210,7 +222,10 @@ impl Tool for TodoTool {
                 todos.retain(|t| t.id != id);
 
                 if todos.len() == original_len {
-                    return Err(ToolError::execution_failed(format!("Todo item '{}' not found", id)));
+                    return Err(ToolError::execution_failed(format!(
+                        "Todo item '{}' not found",
+                        id
+                    )));
                 }
 
                 save_todos(&path, &todos).await?;
@@ -234,7 +249,10 @@ impl Tool for TodoTool {
                     "remaining": todos.len(),
                 }))
             }
-            _ => Err(ToolError::invalid_params(format!("Unknown action: {}", action))),
+            _ => Err(ToolError::invalid_params(format!(
+                "Unknown action: {}",
+                action
+            ))),
         }
     }
 }
@@ -245,7 +263,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_todo_add_and_list() {
-        let path = std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
         let tool = TodoTool::with_path(path.clone());
         let ctx = ToolContext::new();
 
@@ -266,7 +285,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_todo_complete() {
-        let path = std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
         let tool = TodoTool::with_path(path.clone());
         let ctx = ToolContext::new();
 
@@ -286,7 +306,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_todo_delete() {
-        let path = std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("clarity_todos_{}.json", uuid::Uuid::new_v4()));
         let tool = TodoTool::with_path(path.clone());
         let ctx = ToolContext::new();
 

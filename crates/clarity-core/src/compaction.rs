@@ -18,8 +18,8 @@
 //! let should_compact = config.should_compact(7000, 8192);
 //! ```
 
-use crate::llm::api::{LlmProvider, Message, MessageRole};
 use crate::error::AgentError;
+use crate::llm::api::{LlmProvider, Message, MessageRole};
 use async_trait::async_trait;
 
 /// Default trigger ratio for compaction (80% of max tokens)

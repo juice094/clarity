@@ -51,38 +51,36 @@ pub fn render_markdown(text: &str, base_style: Style) -> Vec<Line<'static>> {
                     _ => {}
                 }
             }
-            Event::End(tag) => {
-                match tag {
-                    Tag::Heading(..) => {
-                        if !current_spans.is_empty() {
-                            lines.push(Line::from(std::mem::take(&mut current_spans)));
-                        }
-                        style_stack.pop();
+            Event::End(tag) => match tag {
+                Tag::Heading(..) => {
+                    if !current_spans.is_empty() {
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
                     }
-                    Tag::CodeBlock(_) => {
-                        if !code_block_buffer.is_empty() {
-                            let style = Style::default()
-                                .fg(Color::Rgb(210, 230, 220))
-                                .bg(Color::Rgb(30, 30, 45));
-                            for line in code_block_buffer.lines() {
-                                lines.push(Line::styled(line.to_string(), style));
-                            }
-                        }
-                        in_code_block = false;
-                        code_block_buffer.clear();
-                    }
-                    Tag::Paragraph => {
-                        if !current_spans.is_empty() {
-                            lines.push(Line::from(std::mem::take(&mut current_spans)));
-                        }
-                        just_ended_paragraph = true;
-                    }
-                    Tag::Strong | Tag::Emphasis => {
-                        style_stack.pop();
-                    }
-                    _ => {}
+                    style_stack.pop();
                 }
-            }
+                Tag::CodeBlock(_) => {
+                    if !code_block_buffer.is_empty() {
+                        let style = Style::default()
+                            .fg(Color::Rgb(210, 230, 220))
+                            .bg(Color::Rgb(30, 30, 45));
+                        for line in code_block_buffer.lines() {
+                            lines.push(Line::styled(line.to_string(), style));
+                        }
+                    }
+                    in_code_block = false;
+                    code_block_buffer.clear();
+                }
+                Tag::Paragraph => {
+                    if !current_spans.is_empty() {
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
+                    }
+                    just_ended_paragraph = true;
+                }
+                Tag::Strong | Tag::Emphasis => {
+                    style_stack.pop();
+                }
+                _ => {}
+            },
             Event::Text(text_content) => {
                 if in_code_block {
                     code_block_buffer.push_str(&text_content);

@@ -3,11 +3,11 @@
 //! window/cli 的关键操作写入 devbase，供外部子代理/本地模型整理为知识库。
 //! 只负责追加写入，不负责整理、摘要、向量化。
 
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::fs::{create_dir_all, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
 
 /// 入口类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,12 +51,16 @@ impl ActivityLogger {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(".clarity")
             .join("devbase");
-        Self { devbase_path: devbase }
+        Self {
+            devbase_path: devbase,
+        }
     }
 
     /// 指定 devbase 路径
     pub fn with_path(path: impl Into<PathBuf>) -> Self {
-        Self { devbase_path: path.into() }
+        Self {
+            devbase_path: path.into(),
+        }
     }
 
     /// 记录 Window 活动（追加到 window-YYYY-MM-DD.jsonl）
@@ -83,11 +87,7 @@ impl ActivityLogger {
             let _ = create_dir_all(&devbase);
             let date = Utc::now().format("%Y-%m-%d");
             let path = devbase.join(format!("{}-{}.jsonl", prefix, date));
-            let mut file = match OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)
-            {
+            let mut file = match OpenOptions::new().create(true).append(true).open(&path) {
                 Ok(f) => f,
                 Err(_) => return,
             };

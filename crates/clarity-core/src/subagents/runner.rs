@@ -8,10 +8,10 @@
 //! - Rust 错误处理的最佳实践
 
 use crate::agent::Agent;
-use crate::llm::api::{LlmProvider, Message};
-use crate::llm::{ModelRegistry, build_provider_from_registry};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};
+use crate::llm::api::{LlmProvider, Message};
+use crate::llm::{build_provider_from_registry, ModelRegistry};
 use crate::registry::ToolRegistry;
 use crate::subagents::builder::SubagentBuilder;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
@@ -744,7 +744,8 @@ impl SubagentRunner {
                 match registry.get(model_alias) {
                     Some(entry) => {
                         if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
-                            match build_provider_from_registry(provider_cfg, &entry.model_id).await {
+                            match build_provider_from_registry(provider_cfg, &entry.model_id).await
+                            {
                                 Ok(new_llm) => {
                                     agent.set_llm(Arc::from(new_llm));
                                     collector.stage(format!(

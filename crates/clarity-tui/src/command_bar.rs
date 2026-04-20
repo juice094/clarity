@@ -15,7 +15,7 @@ pub struct CommandInfo {
 }
 
 pub fn get_commands_for_app(app: &App) -> Vec<CommandInfo> {
-    if app.is_generating {
+    if app.is_generating() {
         vec![CommandInfo {
             name: "停止生成",
             key: "Ctrl+C",

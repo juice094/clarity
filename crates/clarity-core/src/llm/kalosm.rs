@@ -133,8 +133,14 @@ impl KalosmProvider {
             if let Some(arr) = tools.as_array() {
                 for tool in arr {
                     if let Some(func) = tool.get("function") {
-                        let name = func.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
-                        let desc = func.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                        let name = func
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        let desc = func
+                            .get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
                         system_prompt.push_str(&format!("- {}: {}\n", name, desc));
                     }
                 }
@@ -187,7 +193,9 @@ impl KalosmProvider {
                     if let Some(calls) = value.get("tool_calls").and_then(|v| v.as_array()) {
                         for (idx, call) in calls.iter().enumerate() {
                             if let (Some(name), Some(args)) = (
-                                call.get("function").and_then(|f| f.get("name")).and_then(|n| n.as_str()),
+                                call.get("function")
+                                    .and_then(|f| f.get("name"))
+                                    .and_then(|n| n.as_str()),
                                 call.get("function").and_then(|f| f.get("arguments")),
                             ) {
                                 let id = call
@@ -226,7 +234,11 @@ impl KalosmProvider {
 #[cfg(feature = "local-llm")]
 #[async_trait::async_trait]
 impl LlmProvider for KalosmProvider {
-    async fn complete(&self, messages: &[Message], tools: &Value) -> Result<LlmResponse, AgentError> {
+    async fn complete(
+        &self,
+        messages: &[Message],
+        tools: &Value,
+    ) -> Result<LlmResponse, AgentError> {
         let prompt = self.format_messages(messages, tools);
         let model = self.model.lock().await;
         let mut chat = model.chat();
@@ -316,7 +328,11 @@ impl KalosmProvider {
 #[cfg(not(feature = "local-llm"))]
 #[async_trait::async_trait]
 impl LlmProvider for KalosmProvider {
-    async fn complete(&self, _messages: &[Message], _tools: &Value) -> Result<LlmResponse, AgentError> {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &Value,
+    ) -> Result<LlmResponse, AgentError> {
         Err(AgentError::Llm(
             "Kalosm provider requires the `local-llm` feature".to_string(),
         ))

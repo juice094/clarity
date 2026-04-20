@@ -169,6 +169,9 @@ mod tests {
             meta: sample_meta(),
             body: String::new(),
         };
-        assert_eq!(skill.summary(), "test-skill — A test skill for unit testing");
+        assert_eq!(
+            skill.summary(),
+            "test-skill — A test skill for unit testing"
+        );
     }
 }

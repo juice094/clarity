@@ -71,8 +71,8 @@ pub struct App {
     pub input_pane: InputPane,
     /// 是否运行中
     pub running: bool,
-    /// 是否正在生成响应
-    pub is_generating: bool,
+    /// Whether the underlying agent is currently running a turn.
+    /// Query via `is_generating()` which reads from `agent.state()`.
     /// 当前模型名称
     pub model_name: String,
     /// 会话ID
@@ -120,7 +120,7 @@ impl App {
             )],
             input_pane: InputPane::new(),
             running: true,
-            is_generating: false,
+
             model_name,
             session_id: format!("session_{}", Local::now().timestamp()),
             scroll_offset: 0,
@@ -139,6 +139,11 @@ impl App {
             session_usage: None,
             skill_registry: None,
         }
+    }
+
+    /// Whether the underlying agent is currently running a turn.
+    pub fn is_generating(&self) -> bool {
+        self.agent.is_running()
     }
 
     /// 向后兼容的 input 访问器
@@ -170,7 +175,7 @@ impl App {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             match key.code {
                 KeyCode::Char('c') => {
-                    if self.is_generating {
+                    if self.is_generating() {
                         self.stop_generation();
                     } else {
                         // Ctrl+C when idle -> switch to Normal mode instead of quitting
@@ -359,7 +364,6 @@ impl App {
     /// 开始生成响应（统一通过 AgentController 发送 UserTurn，流式事件由
     /// clarity-wire → wire_adapter → Event 路径接收）。
     async fn start_generation(&mut self, user_input: String) {
-        self.is_generating = true;
         self.generation_metrics = Some(GenerationMetrics {
             start_time: std::time::Instant::now(),
             first_token_time: None,
@@ -375,11 +379,10 @@ impl App {
 
     /// 停止生成
     pub fn stop_generation(&mut self) {
-        if self.is_generating {
+        if self.is_generating() {
             if let Some(ref controller_tx) = self.controller_tx {
                 let _ = controller_tx.send(Op::Interrupt);
             }
-            self.is_generating = false;
             self.generation_metrics = None;
             if let Some(last) = self.messages.last_mut() {
                 last.is_streaming = false;
@@ -401,7 +404,6 @@ impl App {
 
     /// 完成生成
     pub fn finish_generation(&mut self) {
-        self.is_generating = false;
         self.generation_metrics = None;
         if let Some(last) = self.messages.last_mut() {
             last.is_streaming = false;
@@ -410,7 +412,6 @@ impl App {
 
     /// 处理错误
     pub fn handle_error(&mut self, error: String) {
-        self.is_generating = false;
         self.generation_metrics = None;
         if let Some(last) = self.messages.last_mut() {
             last.is_streaming = false;
@@ -554,7 +555,7 @@ mod tests {
         let app = test_app();
         assert_eq!(app.messages.len(), 1);
         assert!(matches!(app.messages[0].msg_type, MessageType::System));
-        assert!(!app.is_generating);
+        assert!(!app.is_generating());
         assert_eq!(app.scroll_offset, 0);
         assert_eq!(app.mode, AppMode::Input);
         assert!(app.popup.is_none());
@@ -625,20 +626,18 @@ mod tests {
         let mut app = test_app();
         app.messages
             .push(Message::new("", MessageType::Assistant).streaming());
-        app.is_generating = true;
         app.finish_generation();
-        assert!(!app.is_generating);
+        assert!(!app.is_generating());
         assert!(!app.messages.last().unwrap().is_streaming);
     }
 
     #[test]
     fn test_handle_error() {
         let mut app = test_app();
-        app.is_generating = true;
         app.messages
             .push(Message::new("", MessageType::Assistant).streaming());
         app.handle_error("boom".to_string());
-        assert!(!app.is_generating);
+        assert!(!app.is_generating());
         let last = app.messages.last().unwrap();
         assert_eq!(last.content, "boom");
         assert!(matches!(last.msg_type, MessageType::System));
@@ -750,7 +749,6 @@ mod tests {
 impl App {
     #[cfg(test)]
     fn start_generation_sync(&mut self) {
-        self.is_generating = true;
         self.generation_metrics = Some(GenerationMetrics {
             start_time: std::time::Instant::now(),
             first_token_time: None,

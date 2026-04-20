@@ -226,7 +226,7 @@ impl Agent {
         let compactor = SimpleCompaction::new();
 
         // 调用 LLM 压缩 (如果配置了 LLM)
-        let llm_opt = self.llm.read().unwrap().clone();
+        let llm_opt = self.llm();
         if let Some(ref llm) = llm_opt {
             let result = compactor.compact(messages, llm.as_ref()).await?;
 

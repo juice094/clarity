@@ -23,7 +23,7 @@ impl Agent {
         // Try to load prompt from file if prompts_dir is set.
         // Cache the result to avoid repeated disk I/O on every agent turn.
         let file_prompt = if self.config.prompts_dir.is_some() {
-            let cached = self.file_prompt_cache.read().unwrap().clone();
+            let cached = self.file_prompt_cache();
             cached.or_else(|| {
                 let prompt_path = self
                     .config
@@ -32,7 +32,7 @@ impl Agent {
                     .unwrap()
                     .join(format!("{}.md", entry));
                 let loaded = load_prompt_from_file(&prompt_path);
-                *self.file_prompt_cache.write().unwrap() = loaded.clone();
+                self.set_file_prompt_cache(loaded.clone());
                 loaded
             })
         } else {
@@ -68,7 +68,7 @@ impl Agent {
         };
 
         // Inject active skill context if set
-        if let Some(ref skill_id) = *self.active_skill.read().unwrap() {
+        if let Some(ref skill_id) = self.active_skill() {
             if let Some(ref registry) = self.skill_registry {
                 if let Some(skill) = registry.get(skill_id) {
                     let skill_ctx = skill.build_context();
@@ -111,7 +111,7 @@ impl Agent {
 
     /// Return the tool whitelist for the active skill, if any.
     fn active_skill_tool_whitelist(&self) -> Option<Vec<String>> {
-        let active = self.active_skill.read().unwrap().clone()?;
+        let active = self.active_skill()?;
         let registry = self.skill_registry.as_ref()?;
         let skill = registry.get(&active)?;
         if skill.meta.tools.is_empty() {

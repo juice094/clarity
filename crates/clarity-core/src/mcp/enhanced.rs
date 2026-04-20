@@ -249,7 +249,11 @@ pub trait McpClient: Send + Sync {
     }
 
     /// Get a prompt by name with optional arguments
-    async fn get_prompt(&self, name: &str, arguments: Option<Value>) -> Result<GetPromptResult, McpError> {
+    async fn get_prompt(
+        &self,
+        name: &str,
+        arguments: Option<Value>,
+    ) -> Result<GetPromptResult, McpError> {
         let mut params = serde_json::json!({ "name": name });
         if let Some(args) = arguments {
             params["arguments"] = args;
@@ -289,9 +293,9 @@ fn validate_mcp_command_with_allowlist(
             .filter(|s| !s.is_empty())
             .collect();
         if !allowed.is_empty() {
-            let matched = allowed.iter().any(|prefix| {
-                command == *prefix || command.starts_with(&format!("{}/", prefix))
-            });
+            let matched = allowed
+                .iter()
+                .any(|prefix| command == *prefix || command.starts_with(&format!("{}/", prefix)));
             if !matched {
                 return Err(McpError::CommandNotAllowed(format!(
                     "Command '{}' not in CLARITY_MCP_ALLOWLIST",
@@ -304,8 +308,7 @@ fn validate_mcp_command_with_allowlist(
 
     // 2. Default hardening.
     const BAD_CHARS: &[char] = &[
-        ';', '|', '&', '$', '`', '<', '>', '(', ')', '{', '}', '*', '?', '~', '\'',
-        '"',
+        ';', '|', '&', '$', '`', '<', '>', '(', ')', '{', '}', '*', '?', '~', '\'', '"',
     ];
     if command.contains("..") || command.contains(BAD_CHARS) {
         return Err(McpError::CommandNotAllowed(format!(
@@ -665,7 +668,12 @@ impl SseMcpClient {
 #[async_trait]
 impl McpClient for SseMcpClient {
     async fn connect(&mut self) -> Result<(), McpError> {
-        let McpTransport::Sse { url, timeout_seconds, .. } = &self.config.transport else {
+        let McpTransport::Sse {
+            url,
+            timeout_seconds,
+            ..
+        } = &self.config.transport
+        else {
             return Err(McpError::InvalidTransport("Expected SSE transport".into()));
         };
 
@@ -702,8 +710,12 @@ impl McpClient for SseMcpClient {
 
                             if let Some(data) = line.strip_prefix("data:") {
                                 let data = data.trim_start();
-                                if data.is_empty() { continue; }
-                                if let Ok(response) = serde_json::from_str::<JsonRpcResponse<Value>>(data) {
+                                if data.is_empty() {
+                                    continue;
+                                }
+                                if let Ok(response) =
+                                    serde_json::from_str::<JsonRpcResponse<Value>>(data)
+                                {
                                     let mut pending = pending.write().await;
                                     if let Some(sender) = pending.remove(&response.id) {
                                         let _ = sender.send(response);
@@ -753,7 +765,12 @@ impl McpClient for SseMcpClient {
             params,
         };
 
-        let McpTransport::Sse { url, timeout_seconds, .. } = &self.config.transport else {
+        let McpTransport::Sse {
+            url,
+            timeout_seconds,
+            ..
+        } = &self.config.transport
+        else {
             return Err(McpError::InvalidTransport("Expected SSE transport".into()));
         };
 
@@ -763,7 +780,8 @@ impl McpClient for SseMcpClient {
             pending.insert(id, tx);
         }
 
-        let post_result = self.client
+        let post_result = self
+            .client
             .post(url)
             .json(&request)
             .timeout(Duration::from_secs(*timeout_seconds))
@@ -797,12 +815,16 @@ impl McpClient for SseMcpClient {
                 if let Some(error) = response.error {
                     return Err(McpError::RpcError(error.message));
                 }
-                response.result.ok_or_else(|| McpError::InvalidResponse("No result in SSE response".into()))
+                response
+                    .result
+                    .ok_or_else(|| McpError::InvalidResponse("No result in SSE response".into()))
             }
             Ok(Err(_)) => {
                 let mut pending = self.pending.write().await;
                 pending.remove(&id);
-                Err(McpError::RequestFailed("SSE response channel closed".into()))
+                Err(McpError::RequestFailed(
+                    "SSE response channel closed".into(),
+                ))
             }
             Err(_) => {
                 let mut pending = self.pending.write().await;
@@ -850,7 +872,10 @@ impl McpClientBuilder {
 
     /// Build an `McpClientInstance` from an `McpServerEntry` (config-file format).
     /// Automatically selects stdio, http, or sse based on the `transport` field.
-    pub fn from_mcp_entry(name: impl Into<String>, entry: &crate::mcp::config::McpServerEntry) -> McpClientInstance {
+    pub fn from_mcp_entry(
+        name: impl Into<String>,
+        entry: &crate::mcp::config::McpServerEntry,
+    ) -> McpClientInstance {
         let name = name.into();
         match entry.transport.as_deref() {
             Some("http") | Some("Http") => {
@@ -1296,17 +1321,11 @@ mod tests {
     fn test_validate_command_allowlist_override() {
         let allowlist = "/usr/bin/npx,/opt/bin";
         // Allowed because it matches exactly
-        assert!(
-            validate_mcp_command_with_allowlist("/usr/bin/npx", Some(allowlist)).is_ok()
-        );
+        assert!(validate_mcp_command_with_allowlist("/usr/bin/npx", Some(allowlist)).is_ok());
         // Allowed because it starts with /opt/bin/
-        assert!(
-            validate_mcp_command_with_allowlist("/opt/bin/tool", Some(allowlist)).is_ok()
-        );
+        assert!(validate_mcp_command_with_allowlist("/opt/bin/tool", Some(allowlist)).is_ok());
         // Blocked
-        assert!(
-            validate_mcp_command_with_allowlist("/usr/bin/node", Some(allowlist)).is_err()
-        );
+        assert!(validate_mcp_command_with_allowlist("/usr/bin/node", Some(allowlist)).is_err());
         assert!(validate_mcp_command_with_allowlist("npx", Some(allowlist)).is_err());
     }
 
@@ -1392,6 +1411,9 @@ mod tests {
         assert_eq!(result.description.as_ref().unwrap(), "Code review prompt");
         assert_eq!(result.messages.len(), 1);
         assert!(matches!(result.messages[0].role, PromptMessageRole::User));
-        assert!(matches!(result.messages[0].content, PromptContent::Text { .. }));
+        assert!(matches!(
+            result.messages[0].content,
+            PromptContent::Text { .. }
+        ));
     }
 }

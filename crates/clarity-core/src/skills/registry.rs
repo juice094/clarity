@@ -96,8 +96,8 @@ impl SkillRegistry {
 
 #[cfg(test)]
 mod tests {
+    use super::super::SkillMeta;
     use super::*;
-    use super::super::{SkillMeta};
 
     fn make_skill(id: &str, name: &str, desc: &str, tags: &[&str]) -> Skill {
         Skill {
@@ -146,12 +146,7 @@ mod tests {
 
     #[test]
     fn test_registry_build_context() {
-        let reg = SkillRegistry::from_skills(vec![make_skill(
-            "test",
-            "Test",
-            "Testing",
-            &[],
-        )]);
+        let reg = SkillRegistry::from_skills(vec![make_skill("test", "Test", "Testing", &[])]);
         let ctx = reg.build_context("test").unwrap();
         assert!(ctx.contains("Test"));
         assert!(ctx.contains("Body."));

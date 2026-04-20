@@ -157,10 +157,13 @@ async fn test_agent_error_propagation() {
     assert!(result.is_err());
 
     match result.unwrap_err() {
+        AgentError::Unconfigured => {
+            // Agent without LLM is in Unconfigured state
+        }
         AgentError::Llm(msg) => {
             assert!(msg.contains("No LLM provider"));
         }
-        other => panic!("Expected LLM error, got: {:?}", other),
+        other => panic!("Expected Unconfigured or LLM error, got: {:?}", other),
     }
 }
 

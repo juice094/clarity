@@ -6,13 +6,13 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use tower_http::services::ServeDir;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -138,7 +138,8 @@ pub async fn run(
 /// 嵌入的静态文件（编译时打包进二进制，避免运行时依赖工作目录）
 static INDEX_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/index.html"));
 static CHAT_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat.html"));
-static CHAT_V1_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat-v1.html"));
+static CHAT_V1_HTML: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/chat-v1.html"));
 
 async fn serve_index() -> impl IntoResponse {
     (
@@ -177,7 +178,8 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
 
-    let assets_dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/static/assets"));
+    let assets_dir =
+        std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/static/assets"));
 
     Router::new()
         .route("/", get(serve_chat))
@@ -187,7 +189,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/health", get(handlers::health_check))
         .route("/v1/chat/completions", post(handlers::chat_completions))
         .route("/v1/tasks", post(handlers::create_task))
-        .route("/v1/tasks/:id", get(handlers::get_task).delete(handlers::cancel_task))
+        .route(
+            "/v1/tasks/:id",
+            get(handlers::get_task).delete(handlers::cancel_task),
+        )
         .route("/api/files/tree", get(handlers::file_tree))
         .route("/api/files/read", get(handlers::file_read))
         .route("/api/files/write", post(handlers::file_write))
@@ -232,9 +237,15 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/tools", get(handlers::admin_tools))
         .route("/api/models", get(handlers::admin_models))
         .route("/api/provider", post(handlers::admin_switch_provider))
-        .route("/api/config", get(handlers::admin_get_config).post(handlers::admin_set_config))
+        .route(
+            "/api/config",
+            get(handlers::admin_get_config).post(handlers::admin_set_config),
+        )
         .route("/api/sessions", get(handlers::list_sessions))
-        .route("/api/sessions/:id", get(handlers::get_session).delete(handlers::delete_session))
+        .route(
+            "/api/sessions/:id",
+            get(handlers::get_session).delete(handlers::delete_session),
+        )
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

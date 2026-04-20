@@ -73,7 +73,9 @@ impl Chunker {
     /// overwrite it with the real source id if needed.
     pub fn split(text: &str, config: &ChunkConfig) -> Vec<Chunk> {
         // Guard against overlap >= chunk_size which would cause infinite loops.
-        let overlap = config.chunk_overlap.min(config.chunk_size.saturating_sub(1));
+        let overlap = config
+            .chunk_overlap
+            .min(config.chunk_size.saturating_sub(1));
         let segments: Vec<&str> = text.split(&config.separator).collect();
         let mut chunk_texts: Vec<String> = Vec::new();
         let mut current = String::new();
@@ -185,7 +187,14 @@ mod tests {
         for window in chunks.windows(2) {
             let a = &window[0].content;
             let b = &window[1].content;
-            let shared: String = a.chars().rev().take(config.chunk_overlap).collect::<String>().chars().rev().collect();
+            let shared: String = a
+                .chars()
+                .rev()
+                .take(config.chunk_overlap)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
             assert!(
                 b.starts_with(&shared) || shared.chars().all(|c| b.contains(c)),
                 "Chunks should overlap"

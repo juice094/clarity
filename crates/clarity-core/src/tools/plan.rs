@@ -17,7 +17,9 @@ use crate::tools::{Tool, ToolContext, ToolResult};
 fn default_plans_dir() -> ToolResult<PathBuf> {
     dirs::home_dir()
         .map(|p| p.join(".clarity").join("plans"))
-        .ok_or_else(|| ToolError::execution_failed("Could not determine home directory".to_string()))
+        .ok_or_else(|| {
+            ToolError::execution_failed("Could not determine home directory".to_string())
+        })
 }
 
 fn plan_path(dir: &std::path::Path, plan_id: &str) -> PathBuf {
@@ -57,16 +59,15 @@ async fn load_plan(dir: &std::path::Path, plan_id: &str) -> ToolResult<Plan> {
 }
 
 async fn save_plan(dir: &PathBuf, plan: &Plan) -> ToolResult<()> {
-    tokio::fs::create_dir_all(&dir).await.map_err(|e| {
-        ToolError::execution_failed(format!("Failed to create plans dir: {}", e))
-    })?;
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| ToolError::execution_failed(format!("Failed to create plans dir: {}", e)))?;
     let path = plan_path(dir, &plan.id);
-    let json = serde_json::to_string_pretty(plan).map_err(|e| {
-        ToolError::execution_failed(format!("Failed to serialize plan: {}", e))
-    })?;
-    tokio::fs::write(&path, json).await.map_err(|e| {
-        ToolError::execution_failed(format!("Failed to write plan: {}", e))
-    })
+    let json = serde_json::to_string_pretty(plan)
+        .map_err(|e| ToolError::execution_failed(format!("Failed to serialize plan: {}", e)))?;
+    tokio::fs::write(&path, json)
+        .await
+        .map_err(|e| ToolError::execution_failed(format!("Failed to write plan: {}", e)))
 }
 
 /// Tool for managing execution plans
@@ -82,11 +83,16 @@ impl PlanTool {
 
     /// Create with a custom directory (useful for testing)
     pub fn with_dir(dir: PathBuf) -> Self {
-        Self { custom_dir: Some(dir) }
+        Self {
+            custom_dir: Some(dir),
+        }
     }
 
     fn dir(&self) -> ToolResult<PathBuf> {
-        self.custom_dir.clone().map(Ok).unwrap_or_else(default_plans_dir)
+        self.custom_dir
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(default_plans_dir)
     }
 }
 
@@ -209,7 +215,11 @@ impl Tool for PlanTool {
                     })
                     .collect();
 
-                let completed = plan.steps.iter().filter(|s| s.status == "completed").count();
+                let completed = plan
+                    .steps
+                    .iter()
+                    .filter(|s| s.status == "completed")
+                    .count();
                 let pending = plan.steps.iter().filter(|s| s.status == "pending").count();
 
                 Ok(json!({
@@ -266,7 +276,11 @@ impl Tool for PlanTool {
                         if path.extension().and_then(|s| s.to_str()) == Some("json") {
                             if let Ok(contents) = tokio::fs::read_to_string(&path).await {
                                 if let Ok(plan) = serde_json::from_str::<Plan>(&contents) {
-                                    let completed = plan.steps.iter().filter(|s| s.status == "completed").count();
+                                    let completed = plan
+                                        .steps
+                                        .iter()
+                                        .filter(|s| s.status == "completed")
+                                        .count();
                                     plans.push(json!({
                                         "plan_id": plan.id,
                                         "title": plan.title,
@@ -289,7 +303,10 @@ impl Tool for PlanTool {
                 let plan_id = helpers::required_str(&args, "plan_id")?;
                 let path = plan_path(&dir, plan_id);
                 tokio::fs::remove_file(&path).await.map_err(|e| {
-                    ToolError::execution_failed(format!("Failed to delete plan '{}': {}", plan_id, e))
+                    ToolError::execution_failed(format!(
+                        "Failed to delete plan '{}': {}",
+                        plan_id, e
+                    ))
                 })?;
 
                 info!("Plan deleted: {}", plan_id);
@@ -298,7 +315,10 @@ impl Tool for PlanTool {
                     "plan_id": plan_id,
                 }))
             }
-            _ => Err(ToolError::invalid_params(format!("Unknown action: {}", action))),
+            _ => Err(ToolError::invalid_params(format!(
+                "Unknown action: {}",
+                action
+            ))),
         }
     }
 }

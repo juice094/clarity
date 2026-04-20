@@ -34,7 +34,7 @@ use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::Wire;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 // Re-export enhanced features
@@ -53,6 +53,32 @@ pub use crate::types::{FunctionCall, ToolCall};
 
 // Re-export config
 pub use config::AgentConfig;
+
+/// Lifecycle state of an Agent instance.
+#[derive(Debug, Clone)]
+pub enum AgentState {
+    /// No LLM configured. `run()` is illegal.
+    Unconfigured,
+    /// Ready to accept a turn. `cancel_token` is guaranteed fresh.
+    Idle,
+    /// A turn is currently in progress on this (or a cloned) Agent.
+    Running {
+        /// Snapshot of the turn's token, used by `cancel()`.
+        cancel_token: CancellationToken,
+    },
+    /// Previous turn was cancelled or the inner task panicked.
+    /// Requires explicit reset (or implicit reset on next `run()` attempt).
+    Stalled,
+}
+
+/// Shared mutable runtime state of an Agent.
+struct AgentInner {
+    state: AgentState,
+    llm: Option<Arc<dyn LlmProvider>>,
+    session_usage: TokenUsage,
+    active_skill: Option<String>,
+    file_prompt_cache: Option<String>,
+}
 
 /// Simple mock LLM for testing
 pub struct MockLlm;
@@ -124,7 +150,6 @@ impl LlmProvider for MockLlm {
 pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
-    llm: Arc<std::sync::RwLock<Option<Arc<dyn LlmProvider>>>>,
     memory_store: Option<Arc<dyn MemoryStore>>,
     memory_ticker: Option<MemoryTicker>,
     /// Optional wire for UI communication
@@ -139,14 +164,8 @@ pub struct Agent {
     max_context_tokens: usize,
     /// Optional compaction service for proactive history compression
     compaction_service: Option<CompactionService>,
-    /// Cancellation token for interrupting in-flight runs
-    cancel_token: CancellationToken,
-    /// Session token usage accumulator
-    session_usage: Arc<Mutex<TokenUsage>>,
     /// Optional skill registry for orchestration
     skill_registry: Option<SkillRegistry>,
-    /// Currently active skill id (shared across clones)
-    active_skill: Arc<std::sync::RwLock<Option<String>>>,
-    /// Cached file prompt to avoid repeated disk I/O in build_system_prompt
-    file_prompt_cache: Arc<std::sync::RwLock<Option<String>>>,
+    /// Shared mutable runtime state
+    inner: Arc<std::sync::RwLock<AgentInner>>,
 }

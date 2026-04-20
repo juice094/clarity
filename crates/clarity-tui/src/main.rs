@@ -74,8 +74,9 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
         .with_read_only(false);
 
     // 从环境变量创建 LLM Provider (自动检测: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
-    let mut llm =
-        LlmFactory::auto().await.map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
+    let mut llm = LlmFactory::auto()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
     let session_id = uuid::Uuid::new_v4().to_string();
     llm.set_prompt_cache_key(&session_id);
 
@@ -123,10 +124,7 @@ fn load_skill_registry() -> Option<SkillRegistry> {
     // 2. User config directory (~/.config/clarity/skills or %APPDATA%\clarity\skills)
     let config_dir = std::env::var("APPDATA")
         .map(std::path::PathBuf::from)
-        .or_else(|_| {
-            std::env::var("HOME")
-                .map(|h| std::path::PathBuf::from(h).join(".config"))
-        })
+        .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
         .ok()?;
     let user_dir = config_dir.join("clarity").join("skills");
     if user_dir.is_dir() {

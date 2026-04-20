@@ -143,8 +143,6 @@ impl MemoryStore {
 /// Fact tuple for bulk operations: (content, tags, source, scope)
 pub type FactTuple<'a> = (&'a str, Vec<String>, Option<&'a str>, Option<&'a str>);
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;

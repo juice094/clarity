@@ -6,6 +6,7 @@ use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::types::ToolCall;
 use clarity_wire::WireMessage;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 impl Agent {
@@ -18,6 +19,7 @@ impl Agent {
         messages: &mut Vec<Message>,
         tools: &serde_json::Value,
         llm: Arc<dyn LlmProvider>,
+        cancel_token: &CancellationToken,
     ) -> Result<(String, bool), AgentError> {
         let mut final_response = String::new();
         let mut completed = false;
@@ -25,7 +27,7 @@ impl Agent {
         for iteration in 0..self.config.max_iterations {
             debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
 
-            if self.cancel_token.is_cancelled() {
+            if cancel_token.is_cancelled() {
                 warn!("Agent run cancelled");
                 return Err(AgentError::Cancelled);
             }
@@ -135,12 +137,8 @@ impl Agent {
     ///
     /// The final response from the agent
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
-        let llm = self
-            .llm
-            .read()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+        let cancel_token = self.begin_turn()?;
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
         // Build system prompt with optional memory context
@@ -177,7 +175,8 @@ impl Agent {
             user_input: query.as_ref().to_string(),
         });
 
-        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm).await?;
+        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        self.finish_turn();
 
         self.send_wire_message(WireMessage::TurnEnd);
 
@@ -223,15 +222,12 @@ impl Agent {
         &self,
         mut messages: Vec<Message>,
     ) -> Result<String, AgentError> {
-        let llm = self
-            .llm
-            .read()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+        let cancel_token = self.begin_turn()?;
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
-        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm).await?;
+        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        self.finish_turn();
 
         self.send_wire_message(WireMessage::TurnEnd);
 
@@ -265,12 +261,8 @@ impl Agent {
     where
         F: FnMut(&str) + Send + 'static,
     {
-        let llm = self
-            .llm
-            .read()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+        let cancel_token = self.begin_turn()?;
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
@@ -311,8 +303,11 @@ impl Agent {
             user_input: query.as_ref().to_string(),
         });
 
-        self.run_streaming_loop(messages, query.as_ref(), tools, llm.clone(), on_chunk)
-            .await
+        let result = self
+            .run_streaming_loop(messages, query.as_ref(), tools, llm.clone(), on_chunk, &cancel_token)
+            .await;
+        self.finish_turn();
+        result
     }
 
     /// Run the streaming agent loop with a pre-built message list.
@@ -324,12 +319,8 @@ impl Agent {
     where
         F: FnMut(&str) + Send + 'static,
     {
-        let llm = self
-            .llm
-            .read()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
+        let cancel_token = self.begin_turn()?;
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
         let tools = self.registry.get_tool_schemas()?;
 
@@ -350,8 +341,11 @@ impl Agent {
             user_input: query_hint.clone(),
         });
 
-        self.run_streaming_loop(messages, &query_hint, tools, llm.clone(), on_chunk)
-            .await
+        let result = self
+            .run_streaming_loop(messages, &query_hint, tools, llm.clone(), on_chunk, &cancel_token)
+            .await;
+        self.finish_turn();
+        result
     }
 
     async fn run_streaming_loop<F>(
@@ -361,6 +355,7 @@ impl Agent {
         tools: serde_json::Value,
         llm: Arc<dyn LlmProvider>,
         mut on_chunk: F,
+        cancel_token: &CancellationToken,
     ) -> Result<String, AgentError>
     where
         F: FnMut(&str) + Send + 'static,
@@ -371,7 +366,7 @@ impl Agent {
         for iteration in 0..self.config.max_iterations {
             debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
 
-            if self.cancel_token.is_cancelled() {
+            if cancel_token.is_cancelled() {
                 warn!("Agent run streaming cancelled");
                 return Err(AgentError::Cancelled);
             }

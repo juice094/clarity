@@ -35,8 +35,8 @@ pub fn draw(f: &mut Frame, app: &App) {
         ])
         .split(chunks[0]);
 
-    let status_dot = if app.is_generating { "◐" } else { "●" };
-    let dot_color = if app.is_generating {
+    let status_dot = if app.is_generating() { "◐" } else { "●" };
+    let dot_color = if app.is_generating() {
         Color::Rgb(255, 200, 80)
     } else {
         Color::Rgb(100, 220, 120)
@@ -69,19 +69,13 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     let session_short = &app.session_id[..8.min(app.session_id.len())];
     let right_text = if let Some((prompt, completion, total)) = app.session_usage {
-        format!(
-            "{} │ {}↑ {}↓ {}∑",
-            session_short, prompt, completion, total
-        )
+        format!("{} │ {}↑ {}↓ {}∑", session_short, prompt, completion, total)
     } else {
         session_short.to_string()
     };
     let right = Paragraph::new(Line::from(vec![
         Span::styled("Session: ", Style::default().fg(Color::Rgb(140, 140, 160))),
-        Span::styled(
-            right_text,
-            Style::default().fg(Color::Rgb(180, 180, 200)),
-        ),
+        Span::styled(right_text, Style::default().fg(Color::Rgb(180, 180, 200))),
     ]))
     .alignment(Alignment::Right);
 
@@ -101,7 +95,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     command_bar::render_command_bar(f, chunks[3], &commands);
 
     // 生成中指示器
-    if app.is_generating {
+    if app.is_generating() {
         GeneratingIndicator::render(f, size, app.generation_metrics.as_ref());
     }
 

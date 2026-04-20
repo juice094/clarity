@@ -32,22 +32,137 @@ const DEFAULT_B: f32 = 0.75;
 /// English stop words for token filtering
 fn default_stop_words() -> HashSet<String> {
     [
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need", "dare",
-        "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-        "from", "as", "into", "through", "during", "before", "after", "above",
-        "below", "between", "under", "again", "further", "then", "once",
-        "here", "there", "when", "where", "why", "how", "all", "each", "few",
-        "more", "most", "other", "some", "such", "no", "nor", "not", "only",
-        "own", "same", "so", "than", "too", "very", "just", "and", "but",
-        "if", "or", "because", "until", "while", "this", "that", "these",
-        "those", "i", "me", "my", "myself", "we", "our", "ours", "ourselves",
-        "you", "your", "yours", "yourself", "yourselves", "he", "him", "his",
-        "himself", "she", "her", "hers", "herself", "it", "its", "itself",
-        "they", "them", "their", "theirs", "themselves", "what", "which",
-        "who", "whom", "am", "been", "being", "have", "has", "had", "do",
-        "does", "did", "doing",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "dare",
+        "ought",
+        "used",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "and",
+        "but",
+        "if",
+        "or",
+        "because",
+        "until",
+        "while",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "me",
+        "my",
+        "myself",
+        "we",
+        "our",
+        "ours",
+        "ourselves",
+        "you",
+        "your",
+        "yours",
+        "yourself",
+        "yourselves",
+        "he",
+        "him",
+        "his",
+        "himself",
+        "she",
+        "her",
+        "hers",
+        "herself",
+        "it",
+        "its",
+        "itself",
+        "they",
+        "them",
+        "their",
+        "theirs",
+        "themselves",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "am",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "doing",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -457,7 +572,10 @@ mod tests {
         let score1 = index.score("programming", idx1);
         let score2 = index.score("programming", idx2);
 
-        assert!(score0 > score1, "Rust doc should score higher than Python doc");
+        assert!(
+            score0 > score1,
+            "Rust doc should score higher than Python doc"
+        );
         assert!(score0 > score2, "Rust doc should score higher than JS doc");
     }
 
@@ -555,10 +673,21 @@ mod tests {
         let index = Bm25Index::new(&docs);
 
         // "programming" should match doc 0 best
-        let scores: Vec<f32> = (0..docs.len()).map(|i| index.score("programming", i)).collect();
-        assert!(scores[0] > scores[1], "Rust doc should score higher than Python doc for 'programming'");
-        assert!(scores[0] > scores[2], "Rust doc should score higher than JS doc");
-        assert!(scores[0] > scores[3], "Rust doc should score higher than cooking doc");
+        let scores: Vec<f32> = (0..docs.len())
+            .map(|i| index.score("programming", i))
+            .collect();
+        assert!(
+            scores[0] > scores[1],
+            "Rust doc should score higher than Python doc for 'programming'"
+        );
+        assert!(
+            scores[0] > scores[2],
+            "Rust doc should score higher than JS doc"
+        );
+        assert!(
+            scores[0] > scores[3],
+            "Rust doc should score higher than cooking doc"
+        );
     }
 
     #[test]
@@ -610,7 +739,9 @@ mod tests {
         let index = Bm25Index::new(&docs);
 
         // Query with term that appears in all docs
-        let scores: Vec<f32> = (0..docs.len()).map(|i| index.score("programming", i)).collect();
+        let scores: Vec<f32> = (0..docs.len())
+            .map(|i| index.score("programming", i))
+            .collect();
         // All docs contain "programming", so IDF is low but all should have some score
         // Use is_finite to avoid NaN issues and allow very small positive scores
         assert!(
@@ -619,7 +750,10 @@ mod tests {
             scores
         );
         // At least one doc should have a positive score
-        assert!(scores.iter().any(|&s| s > 0.0), "At least one doc should score positively");
+        assert!(
+            scores.iter().any(|&s| s > 0.0),
+            "At least one doc should score positively"
+        );
     }
 
     #[test]

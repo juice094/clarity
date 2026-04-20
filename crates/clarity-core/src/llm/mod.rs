@@ -17,7 +17,10 @@ pub mod sse;
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
-pub use model_registry::{ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType, ProviderConfig, build_provider_from_registry};
+pub use model_registry::{
+    build_provider_from_registry, ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType,
+    ProviderConfig,
+};
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
 
@@ -154,12 +157,11 @@ fn convert_api_messages(messages: &[Message]) -> Vec<ApiMessage> {
     messages
         .iter()
         .map(|m| {
-            let reasoning_content =
-                if m.role == MessageRole::Assistant && m.tool_calls.is_some() {
-                    Some("".to_string())
-                } else {
-                    None
-                };
+            let reasoning_content = if m.role == MessageRole::Assistant && m.tool_calls.is_some() {
+                Some("".to_string())
+            } else {
+                None
+            };
             ApiMessage {
                 role: format!("{:?}", m.role).to_lowercase(),
                 content: m.content.clone(),
@@ -816,7 +818,10 @@ impl LlmFactory {
                 }
             }
             Err(e) => {
-                tracing::debug!("ModelRegistry not available ({}), falling back to legacy auto-detect", e);
+                tracing::debug!(
+                    "ModelRegistry not available ({}), falling back to legacy auto-detect",
+                    e
+                );
             }
         }
 
@@ -849,9 +854,13 @@ impl LlmFactory {
 
         #[cfg(feature = "local-llm")]
         {
-            let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
+            let default_local_path =
+                PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
             if default_local_path.exists() {
-                tracing::info!("No cloud LLM configured; falling back to local Kalosm model at {}", default_local_path.display());
+                tracing::info!(
+                    "No cloud LLM configured; falling back to local Kalosm model at {}",
+                    default_local_path.display()
+                );
                 let config = KalosmConfig::new(default_local_path);
                 return Ok(Box::new(KalosmProvider::new(config).await?));
             }
@@ -864,7 +873,8 @@ impl LlmFactory {
              - KIMI_API_KEY (for Moonshot)\n\
              - DEEPSEEK_API_KEY\n\
              - OPENAI_API_KEY\n\
-             Or create ~/.config/clarity/models.toml".into(),
+             Or create ~/.config/clarity/models.toml"
+                .into(),
         ))
     }
 
@@ -875,7 +885,11 @@ impl LlmFactory {
         if let Ok(registry) = ModelRegistry::load_async().await {
             if let Some(entry) = registry.get(name) {
                 if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
-                    return model_registry::build_provider_from_registry(provider_cfg, &entry.model_id).await;
+                    return model_registry::build_provider_from_registry(
+                        provider_cfg,
+                        &entry.model_id,
+                    )
+                    .await;
                 }
             }
         }
