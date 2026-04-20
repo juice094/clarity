@@ -32,9 +32,6 @@ url = "2.5"
 urlencoding = "2.1"
 html-escape = "0.2"
 
-# MCP (Model Context Protocol)
-rmcp = { workspace = true, optional = true }
-
 clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
 
@@ -46,6 +43,5 @@ anyhow = { workspace = true }
 
 [features]
 default = []
-mcp = ["dep:rmcp"]
 local-llm = []
 

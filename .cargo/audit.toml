@@ -1,0 +1,18 @@
+[advisories]
+ignore = [
+    # gtk-rs GTK3 bindings are unmaintained; clarity-claw (experimental tray
+    # app) depends on tao/tray-icon which transitively pull these in.
+    # Short-term fix: tao & tray-icon already upgraded to latest versions.
+    # Long-term fix: wait for upstream tao/tray-icon to migrate to gtk4.
+    "RUSTSEC-2024-0411", # gdkwayland-sys
+    "RUSTSEC-2024-0412", # gdk
+    "RUSTSEC-2024-0413", # atk
+    "RUSTSEC-2024-0414", # gdkx11-sys
+    "RUSTSEC-2024-0415", # gtk
+    "RUSTSEC-2024-0416", # atk-sys
+    "RUSTSEC-2024-0418", # gdk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+    "RUSTSEC-2024-0420", # gtk-sys
+    "RUSTSEC-2024-0370", # proc-macro-error (via gtk3-macros / glib-macros)
+    "RUSTSEC-2024-0429", # glib unsoundness in VariantStrIter
+]

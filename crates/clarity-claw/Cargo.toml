@@ -16,8 +16,8 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 
 # GUI / System tray
-tao = "0.30"
-tray-icon = "0.19"
+tao = "0.35"
+tray-icon = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 
