@@ -110,10 +110,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(
-        agent: Arc<Agent>,
-        model_name: impl Into<String>,
-    ) -> Self {
+    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>) -> Self {
         let model_name = model_name.into();
 
         Self {
@@ -694,6 +691,59 @@ mod tests {
         let metrics = app.generation_metrics.as_ref().unwrap();
         assert_eq!(metrics.total_chars, 5);
         assert!(metrics.first_token_time.is_some());
+    }
+
+    // =========================================================================
+    // End-to-end render + key flow (TestBackend)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_end_to_end_render_and_key_flow() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut app = test_app();
+        app.terminal_size = (40, 12);
+
+        let backend = TestBackend::new(40, 12);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // 1. Initial render — should show welcome / system message
+        terminal.draw(|f| crate::ui::draw(f, &app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let screen_text: String = buf.content.iter().map(|cell| cell.symbol()).collect();
+        assert!(
+            screen_text.contains("Clarity") || screen_text.contains("Welcome"),
+            "expected welcome text on initial render, got: {}",
+            screen_text
+        );
+
+        // 2. Type "hi" in Input mode
+        for ch in "hi".chars() {
+            let key = KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty());
+            let keep = app.handle_key(key).await.unwrap();
+            assert!(keep, "app should keep running after typing '{}'", ch);
+        }
+
+        // 3. Render after typing — input should appear
+        terminal.draw(|f| crate::ui::draw(f, &app)).unwrap();
+        let buf = terminal.backend().buffer();
+        let screen_text: String = buf.content.iter().map(|cell| cell.symbol()).collect();
+        assert!(
+            screen_text.contains('h') && screen_text.contains('i'),
+            "expected typed text 'hi' on screen, got: {}",
+            screen_text
+        );
+
+        // 4. Press Esc to switch to Normal mode
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let keep = app.handle_key(esc).await.unwrap();
+        assert!(keep, "app should keep running after Esc");
+        assert_eq!(app.mode, AppMode::Normal, "mode should switch to Normal");
+
+        // 5. Press 'q' to quit
+        let quit = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty());
+        let keep = app.handle_key(quit).await.unwrap();
+        assert!(!keep, "app should stop after 'q' in Normal mode");
     }
 }
 
