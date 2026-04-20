@@ -261,6 +261,8 @@ pub struct Agent {
     skill_registry: Option<SkillRegistry>,
     /// Currently active skill id (shared across clones)
     active_skill: Arc<std::sync::RwLock<Option<String>>>,
+    /// Cached file prompt to avoid repeated disk I/O in build_system_prompt
+    file_prompt_cache: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl Agent {
@@ -291,6 +293,7 @@ impl Agent {
             })),
             skill_registry: None,
             active_skill: Arc::new(std::sync::RwLock::new(None)),
+            file_prompt_cache: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -465,11 +468,19 @@ impl Agent {
             "claw"
         };
 
-        // Try to load prompt from file if prompts_dir is set
-        let file_prompt = self.config.prompts_dir.as_ref().and_then(|dir| {
-            let prompt_path = dir.join(format!("{}.md", entry));
-            load_prompt_from_file(&prompt_path)
-        });
+        // Try to load prompt from file if prompts_dir is set.
+        // Cache the result to avoid repeated disk I/O on every agent turn.
+        let file_prompt = if self.config.prompts_dir.is_some() {
+            let cached = self.file_prompt_cache.read().unwrap().clone();
+            cached.or_else(|| {
+                let prompt_path = self.config.prompts_dir.as_ref().unwrap().join(format!("{}.md", entry));
+                let loaded = load_prompt_from_file(&prompt_path);
+                *self.file_prompt_cache.write().unwrap() = loaded.clone();
+                loaded
+            })
+        } else {
+            None
+        };
 
         let base = if let Some(prompt) = file_prompt {
             if tool_descs.is_empty() {

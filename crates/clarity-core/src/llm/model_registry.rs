@@ -131,6 +131,14 @@ impl ModelRegistry {
         Self::from_config(Self::built_in_fallback())
     }
 
+    /// Async wrapper around [`load`] that offloads blocking file I/O to
+    /// Tokio's blocking thread pool.
+    pub async fn load_async() -> Result<Self, AgentError> {
+        tokio::task::spawn_blocking(Self::load)
+            .await
+            .map_err(|e| AgentError::Llm(format!("Model registry load panicked: {}", e)))?
+    }
+
     /// Load from an explicit file path
     pub fn load_from(path: &PathBuf) -> Result<Self, AgentError> {
         let contents = std::fs::read_to_string(path)
@@ -138,6 +146,14 @@ impl ModelRegistry {
         let config: ModelConfigFile = toml::from_str(&contents)
             .map_err(|e| AgentError::Llm(format!("Failed to parse model config: {}", e)))?;
         Self::from_config(config)
+    }
+
+    /// Async wrapper around [`load_from`].
+    pub async fn load_from_async(path: &PathBuf) -> Result<Self, AgentError> {
+        let path = path.clone();
+        tokio::task::spawn_blocking(move || Self::load_from(&path))
+            .await
+            .map_err(|e| AgentError::Llm(format!("Model registry load panicked: {}", e)))?
     }
 
     /// Build from an in-memory config (useful for tests)

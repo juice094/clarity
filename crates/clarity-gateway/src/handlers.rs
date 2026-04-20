@@ -466,7 +466,7 @@ pub struct ModelInfo {
 }
 
 pub async fn admin_models() -> impl IntoResponse {
-    let registry = match clarity_core::llm::ModelRegistry::load() {
+    let registry = match clarity_core::llm::ModelRegistry::load_async().await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("Failed to load model registry: {}", e);

@@ -809,7 +809,7 @@ impl LlmFactory {
     /// Auto-detect provider — uses ModelRegistry if available, otherwise legacy env-var scan.
     pub async fn auto() -> Result<Box<dyn LlmProvider>, AgentError> {
         // Try registry first
-        match ModelRegistry::load() {
+        match ModelRegistry::load_async().await {
             Ok(registry) => {
                 if let Some(first) = registry.list_models().into_iter().next() {
                     return Self::create(&first.alias).await;
@@ -872,7 +872,7 @@ impl LlmFactory {
     /// First checks ModelRegistry, then falls back to hard-coded legacy names.
     pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
         // Try registry first
-        if let Ok(registry) = ModelRegistry::load() {
+        if let Ok(registry) = ModelRegistry::load_async().await {
             if let Some(entry) = registry.get(name) {
                 if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
                     return model_registry::build_provider_from_registry(provider_cfg, &entry.model_id).await;
