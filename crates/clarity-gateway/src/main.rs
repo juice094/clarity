@@ -75,7 +75,7 @@ You are a methodological query assistant. When answering:
     let agent = Agent::with_config(registry, config);
 
     // 1. 优先尝试加载用户持久化配置
-    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config() {
+    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
         info!("Found persisted user config for provider: {}", user_cfg.provider);
         match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
             Ok(provider) => {
@@ -193,8 +193,8 @@ async fn main() {
             .join(".clarity");
         let store_dir = clarity_dir.join("tasks");
         let work_dir = clarity_dir.join("work");
-        std::fs::create_dir_all(&store_dir).ok();
-        std::fs::create_dir_all(&work_dir).ok();
+        let _ = tokio::fs::create_dir_all(&store_dir).await;
+        let _ = tokio::fs::create_dir_all(&work_dir).await;
 
         let llm = agent.llm().unwrap_or_else(|| Arc::new(MockLlm));
         let registry = agent.registry().clone();

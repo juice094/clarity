@@ -44,7 +44,11 @@ impl MemoryStore {
         }
     }
 
-    /// Create an in-memory store for testing
+    /// Create an in-memory store for testing.
+    ///
+    /// # Panics
+    /// Panics if called outside a Tokio runtime when the `sqlite` feature is
+    /// disabled (because FileStore initialization is async).
     pub fn new_in_memory() -> Result<Self> {
         #[cfg(feature = "sqlite")]
         {
@@ -53,12 +57,12 @@ impl MemoryStore {
         }
         #[cfg(not(feature = "sqlite"))]
         {
-            // Create a temporary directory for FileStore
+            // FileStore::new is async.  For test convenience we block_on here,
+            // but this MUST only be called from a Tokio runtime thread.
             let temp_dir =
                 std::env::temp_dir().join(format!("clarity_memory_{}", std::process::id()));
             std::fs::create_dir_all(&temp_dir).map_err(crate::types::MemoryError::Io)?;
 
-            // Use block_on for the async FileStore::new
             let inner = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(FileStore::new(&temp_dir))
             })?;
@@ -139,75 +143,7 @@ impl MemoryStore {
 /// Fact tuple for bulk operations: (content, tags, source, scope)
 pub type FactTuple<'a> = (&'a str, Vec<String>, Option<&'a str>, Option<&'a str>);
 
-// Synchronous API for backwards compatibility
-impl MemoryStore {
-    /// Save a fact synchronously (for backwards compatibility)
-    pub fn save_fact_sync(
-        &self,
-        fact: &str,
-        tags: &[String],
-        time: Option<&str>,
-        session_id: Option<&str>,
-    ) -> Result<i64> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.save_fact(fact, tags, time, session_id))
-        })
-    }
 
-    /// Search by tags synchronously
-    pub fn search_by_tags_sync(&self, tags: &[String], limit: usize) -> Result<Vec<Fact>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.search_by_tags(tags, limit))
-        })
-    }
-
-    /// Full-text search synchronously
-    pub fn search_fulltext_sync(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.search_fulltext(query, limit))
-        })
-    }
-
-    /// Hybrid search synchronously
-    pub fn search_hybrid_sync(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.search_hybrid(query, limit))
-        })
-    }
-
-    /// Get facts by session synchronously
-    pub fn get_facts_by_session_sync(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.get_facts_by_session(session_id, limit))
-        })
-    }
-
-    /// Get recent facts synchronously
-    pub fn get_recent_facts_sync(&self, limit: usize) -> Result<Vec<Fact>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.get_recent_facts(limit))
-        })
-    }
-
-    /// Clear all synchronously
-    pub fn clear_all_sync(&self) -> Result<usize> {
-        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.clear_all()))
-    }
-
-    /// Count facts synchronously
-    pub fn count_facts_sync(&self) -> Result<i64> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.count_facts())
-        })
-    }
-
-    /// Get fact synchronously
-    pub fn get_fact_sync(&self, id: i64) -> Result<Option<Fact>> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(self.get_fact(id))
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {

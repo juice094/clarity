@@ -60,31 +60,39 @@ impl ActivityLogger {
     }
 
     /// 记录 Window 活动（追加到 window-YYYY-MM-DD.jsonl）
-    pub fn log_window(&self, activity: WindowActivity) {
-        let _ = self.append_jsonl("window", &activity);
+    pub fn log_window(&self, activity: WindowActivity) -> tokio::task::JoinHandle<()> {
+        self.append_jsonl("window", &activity)
     }
 
     /// 记录 Cli 活动（追加到 cli-YYYY-MM-DD.jsonl）
-    pub fn log_cli(&self, activity: CliActivity) {
-        let _ = self.append_jsonl("cli", &activity);
+    pub fn log_cli(&self, activity: CliActivity) -> tokio::task::JoinHandle<()> {
+        self.append_jsonl("cli", &activity)
     }
 
-    fn append_jsonl<T: Serialize>(&self, prefix: &str, entry: &T) -> Result<(), String> {
-        create_dir_all(&self.devbase_path).map_err(|e| e.to_string())?;
+    fn append_jsonl<T: Serialize>(&self, prefix: &str, entry: &T) -> tokio::task::JoinHandle<()> {
+        let devbase = self.devbase_path.clone();
+        let prefix = prefix.to_string();
+        let line = match serde_json::to_string(entry) {
+            Ok(l) => l,
+            Err(_) => return tokio::spawn(async {}),
+        };
 
-        let date = Utc::now().format("%Y-%m-%d");
-        let path = self.devbase_path.join(format!("{}-{}.jsonl", prefix, date));
-
-        let line = serde_json::to_string(entry).map_err(|e| e.to_string())?;
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(|e| e.to_string())?;
-
-        writeln!(file, "{}", line).map_err(|e| e.to_string())?;
-        Ok(())
+        // Offload blocking file I/O to Tokio's blocking thread pool
+        // so that async callers (Agent loop, Gateway handlers) are not stalled.
+        tokio::task::spawn_blocking(move || {
+            let _ = create_dir_all(&devbase);
+            let date = Utc::now().format("%Y-%m-%d");
+            let path = devbase.join(format!("{}-{}.jsonl", prefix, date));
+            let mut file = match OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+            {
+                Ok(f) => f,
+                Err(_) => return,
+            };
+            let _ = writeln!(file, "{}", line);
+        })
     }
 
     /// 获取 devbase 路径
@@ -104,8 +112,8 @@ mod tests {
     use super::*;
     use std::io::BufRead;
 
-    #[test]
-    fn test_log_window_activity() {
+    #[tokio::test]
+    async fn test_log_window_activity() {
         let temp = tempfile::tempdir().unwrap();
         let logger = ActivityLogger::with_path(temp.path());
 
@@ -118,7 +126,8 @@ mod tests {
             conclusion: "Use State<Arc<AppState>>".to_string(),
         };
 
-        logger.log_window(activity);
+        let handle = logger.log_window(activity);
+        handle.await.unwrap();
 
         let date = Utc::now().format("%Y-%m-%d");
         let path = temp.path().join(format!("window-{}.jsonl", date));

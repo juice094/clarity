@@ -684,23 +684,23 @@ fn mask_key(key: &str) -> String {
 }
 
 /// Load persisted user config from JSON file
-pub fn load_persisted_config() -> Option<SetConfigRequest> {
+pub async fn load_persisted_config() -> Option<SetConfigRequest> {
     let path = config_file_path();
     if !path.exists() {
         return None;
     }
-    let contents = std::fs::read_to_string(&path).ok()?;
+    let contents = tokio::fs::read_to_string(&path).await.ok()?;
     serde_json::from_str(&contents).ok()
 }
 
 /// Save user config to JSON file
-fn save_persisted_config(cfg: &SetConfigRequest) -> Result<(), String> {
+async fn save_persisted_config(cfg: &SetConfigRequest) -> Result<(), String> {
     let path = config_file_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    tokio::fs::write(&path, json).await.map_err(|e| e.to_string())
 }
 
 /// Build an LLM provider from a user config request
@@ -746,7 +746,7 @@ pub async fn build_provider_from_config(cfg: &SetConfigRequest) -> Result<Box<dy
 }
 
 pub async fn admin_get_config() -> impl IntoResponse {
-    match load_persisted_config() {
+    match load_persisted_config().await {
         Some(cfg) => {
             let resp = ConfigResponse {
                 provider: cfg.provider.clone(),
@@ -777,7 +777,7 @@ pub async fn admin_set_config(
     match build_provider_from_config(&req).await {
         Ok(provider) => {
             // Save to file
-            if let Err(e) = save_persisted_config(&req) {
+            if let Err(e) = save_persisted_config(&req).await {
                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to save config: {}", e)})));
             }
             // Apply to agent
