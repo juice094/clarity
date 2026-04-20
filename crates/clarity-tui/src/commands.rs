@@ -187,6 +187,32 @@ impl CommandHandler for SkillUseCommand {
     }
 }
 
+pub struct TaskCommand;
+impl CommandHandler for TaskCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.messages.push(Message::new(
+            "用法: /task list | /task status <id> | /task cancel <id> | /task spawn <name> <prompt>",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "后台任务管理 (list, status, cancel, spawn)"
+    }
+}
+
+pub struct PlanCommand;
+impl CommandHandler for PlanCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.messages.push(Message::new(
+            "用法: /plan <query> — 让 Agent 生成结构化执行计划",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "生成执行计划 (plan)"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -207,6 +233,9 @@ pub fn build_default_registry() -> CommandRegistry {
     registry.register("/skill", Arc::new(SkillUseCommand));
     registry.alias("/skill use", "/skill");
     registry.register("/skills", Arc::new(SkillListCommand));
+
+    registry.register("/task", Arc::new(TaskCommand));
+    registry.register("/plan", Arc::new(PlanCommand));
 
     registry
 }

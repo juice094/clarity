@@ -12,7 +12,9 @@ mod wire_adapter;
 
 use anyhow::Result;
 use app::App;
-use clarity_core::agent::{Agent, AgentConfig};
+use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
+use clarity_core::background::BackgroundTaskManager;
 use clarity_core::llm::LlmFactory;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
@@ -42,7 +44,31 @@ async fn main() -> Result<()> {
     // 创建 Agent（若失败需先恢复终端再返回错误）
     let app_result = match create_agent().await {
         Ok((agent, model_name, skill_registry)) => {
-            let mut app = App::new(agent, model_name);
+            // 创建后台任务管理器（与 Gateway 共享存储目录）
+            let task_manager = {
+                let clarity_dir = std::env::current_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join(".clarity");
+                let store_dir = clarity_dir.join("tasks");
+                let work_dir = clarity_dir.join("work");
+                let _ = std::fs::create_dir_all(&store_dir);
+                let _ = std::fs::create_dir_all(&work_dir);
+
+                let llm = agent.llm().unwrap_or_else(|| Arc::new(MockLlm));
+                let registry = agent.registry().clone();
+                let executor = Arc::new(DefaultAgentTaskExecutor::new(
+                    llm,
+                    registry,
+                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                ));
+
+                Some(Arc::new(
+                    BackgroundTaskManager::new(&store_dir, &work_dir, &work_dir)
+                        .with_agent_executor(executor),
+                ))
+            };
+
+            let mut app = App::new(agent, model_name, task_manager);
             app.skill_registry = skill_registry;
             run_app(&mut terminal, &mut app).await
         }

@@ -19,6 +19,7 @@ pub mod ops;
 
 mod construct;
 mod execution;
+pub mod plan;
 mod prompt;
 mod run;
 

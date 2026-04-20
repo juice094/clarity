@@ -10,13 +10,15 @@
 | 模块 | 状态 | 测试覆盖 | 备注 |
 |------|------|----------|------|
 | SubagentRunner | ✅ **已完成** | 18 测试通过 | 今日实现 |
-| BackgroundTaskManager | ⚠️ 骨架完整 | WorkerPool + TaskStore 已实现 | 高优先级（缺自动调度循环 + TUI/Gateway 集成） |
+| BackgroundTaskManager | ✅ **已完成** | 自动调度循环 + Gateway/TUI 集成 | 高优先级（已完成） |
 | PersistentMemoryStore | ✅ 已实现 | `clarity-memory` 集成，TUI 在用 | 高优先级（已完成） |
+| Plan Mode | ✅ **已完成** | `Agent::plan()` + TUI `/plan` 命令 | 认知深度差异化 |
+| claw 层 | ✅ **已完成** | 系统托盘监控器：HTTP 轮询、OS 通知、tooltip | 三层差异化关键 |
 | MCP 完整支持 | ⚠️ 骨架实现 | - | 中高优先级 |
 | 工具系统 | ✅ 8 个工具 | 完整 | 基础完成 |
 | 审批系统 | ✅ 三种模式 | 完整 | 生产就绪 |
 | Wire 通信 | ✅ clarity-wire | 8 测试 | 生产就绪 |
-| Web UI | ❌ 画饼 | - | 低优先级 |
+| Web UI | ⚠️ 基础可用 | `chat.html` + `/v1/tasks` API | 低优先级 |
 
 ---
 
@@ -26,8 +28,8 @@
 
 | 排名 | 功能 | 难度 | 价值 | 理由 |
 |------|------|------|------|------|
-| **1** | **PersistentMemoryStore 真实实现** | 中 | ⭐⭐⭐⭐⭐ | **当前最大瓶颈**。TUI 记忆不持久化，严重影响用户体验。需集成 clarity-memory。
-| **2** | **BackgroundTaskManager** | 高 | ⭐⭐⭐⭐⭐ | 支持后台执行和并行子代理。参考 Kimi CLI `background/manager.py`。
+| **1** | ~~PersistentMemoryStore 真实实现~~ | 中 | ⭐⭐⭐⭐⭐ | ✅ **已完成**（2026-04-15）
+| **2** | ~~BackgroundTaskManager~~ | 高 | ⭐⭐⭐⭐⭐ | ✅ **已完成**（2026-04-20）：自动调度循环 + Gateway `/v1/tasks` CRUD + TUI `/task` 命令 + claw 托盘监控
 
 ### P1 - 短期实现（本月）
 

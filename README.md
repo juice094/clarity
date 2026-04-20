@@ -11,14 +11,14 @@
 
 ## 📋 Project Status (2026-04-20)
 
-**Phase: Architecture consolidation complete, entering capability integration.**
+**Phase: Runtime architecture activated — three-layer differentiation live.**
 
 | Metric | Status | Note |
 |--------|--------|------|
 | Build | ✅ | `cargo check --workspace` passes |
-| Tests | ✅ | **348+** lib + integration tests passed, 0 failed |
+| Tests | ✅ | **383+** lib + integration tests passed, 0 failed |
 | Lint | ✅ | `clippy --workspace --lib --bins --tests` zero warnings |
-| Codebase | ~2.9 MB | 99 Rust source files (~27,200 LOC) |
+| Codebase | ~2.9 MB | 100+ Rust source files (~28,000 LOC) |
 | Binary | ~23 MB | Release `clarity-gateway.exe` |
 | Crates | 6 | workspace layout |
 
@@ -31,12 +31,14 @@
 | **clarity-core / Compaction** | ✅ | Context compression to prevent token explosion |
 | **clarity-core / Subagents** | ✅ | LaborMarket (coder/explore/plan) + Runner; model-aware routing |
 | **clarity-core / MCP Client** | ✅ | Stdio/HTTP tested E2E with `filesystem` server; auto-injects into `ToolRegistry` via `mcp.json`; **Resources + Prompts types landed** |
-| **clarity-core / Background Tasks** | ✅ | `DefaultAgentTaskExecutor` runs real Agents in worker pool; supports per-task model selection |
+| **clarity-core / Background Tasks** | ✅ | `DefaultAgentTaskExecutor` runs real Agents in worker pool; supports per-task model selection; auto-scheduler loop active |
+| **clarity-core / Plan Mode** | ✅ | `Agent::plan(query) -> Plan` — structured step generation before execution |
+| **clarity-claw** | ✅ | System-tray runtime monitor: HTTP polling Gateway tasks, dynamic tooltip, OS notifications, quick-ask input |
 | **clarity-core / LLM Routing** | ✅ | `ModelRegistry` TOML config + `LlmFactory::create(alias)` + runtime hot-swap |
 | **clarity-core / Local LLM** | ✅ | Kalosm GGUF inference + LlamaServer HTTP bridge (zero-dependency) |
 | **clarity-core / Skill System** | ✅ | Markdown+YAML `SKILL.md` orchestration layer; loader + registry + context builder |
-| **clarity-tui** | ✅ | Terminal UI with mouse scroll, command registry, tab completion, input history, dark theme |
-| **clarity-gateway** | ✅ | OpenAI-compatible Chat Completions API with SSE streaming + structured tool events |
+| **clarity-tui** | ✅ | Terminal UI with mouse scroll, command registry, tab completion, input history, dark theme; **`/task` and `/plan` commands live** |
+| **clarity-gateway** | ✅ | OpenAI-compatible Chat Completions API with SSE streaming + structured tool events; **`/v1/tasks` CRUD API complete** |
 | **clarity-gateway / Session Store** | ✅ | SQLite-based session persistence with message append + expiration cleanup; **HTTP Chat Completions now supports `session_id`** |
 | **clarity-memory** | ✅ | File / SQLite / Hybrid backends; **BM25 + FTS5 hybrid search** |
 | **clarity-wire** | ✅ | Soul-UI broadcast channel, 8 tests passing |

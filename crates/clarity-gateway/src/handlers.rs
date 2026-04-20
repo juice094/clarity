@@ -631,6 +631,42 @@ pub async fn cancel_task(
     }
 }
 
+#[derive(Serialize)]
+pub struct TaskListResponse {
+    pub tasks: Vec<TaskDetailResponse>,
+}
+
+pub async fn list_tasks(State(state): State<Arc<AppState>>) -> Response {
+    info!("list_tasks called");
+    match state.task_manager.list().await {
+        Ok(tasks) => {
+            let response = TaskListResponse {
+                tasks: tasks
+                    .into_iter()
+                    .map(|info| TaskDetailResponse {
+                        task_id: info.id,
+                        name: info.spec.name,
+                        status: info.status,
+                        prompt: info.spec.prompt,
+                        created_at: info.created_at,
+                        updated_at: info.updated_at,
+                        result: None,
+                    })
+                    .collect(),
+            };
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to list tasks: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
 // ==================== Admin: Switch Provider ====================
 
 #[derive(Deserialize)]

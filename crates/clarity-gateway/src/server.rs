@@ -188,7 +188,7 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .nest_service("/assets", ServeDir::new(assets_dir))
         .route("/health", get(handlers::health_check))
         .route("/v1/chat/completions", post(handlers::chat_completions))
-        .route("/v1/tasks", post(handlers::create_task))
+        .route("/v1/tasks", post(handlers::create_task).get(handlers::list_tasks))
         .route(
             "/v1/tasks/:id",
             get(handlers::get_task).delete(handlers::cancel_task),

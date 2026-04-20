@@ -6,6 +6,7 @@ use crate::popups::{diff_popup::DiffPopup, HelpPopup, ToolResultPopup};
 use anyhow::Result;
 use chrono::Local;
 use clarity_core::agent::{Agent, AgentController, Op};
+use clarity_core::background::BackgroundTaskManager;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
@@ -107,10 +108,16 @@ pub struct App {
     pub session_usage: Option<(u32, u32, u32)>,
     /// Skill registry for listing and selection
     pub skill_registry: Option<clarity_core::skills::SkillRegistry>,
+    /// Background task manager (shared with Gateway if running)
+    pub task_manager: Option<Arc<BackgroundTaskManager>>,
 }
 
 impl App {
-    pub fn new(agent: Arc<Agent>, model_name: impl Into<String>) -> Self {
+    pub fn new(
+        agent: Arc<Agent>,
+        model_name: impl Into<String>,
+        task_manager: Option<Arc<BackgroundTaskManager>>,
+    ) -> Self {
         let model_name = model_name.into();
 
         Self {
@@ -138,6 +145,7 @@ impl App {
             complete_last_index: 0,
             session_usage: None,
             skill_registry: None,
+            task_manager,
         }
     }
 
@@ -351,6 +359,18 @@ impl App {
             return;
         }
 
+        // /task subcommands need async BackgroundTaskManager access
+        if parts[0] == "/task" {
+            self.handle_task_command(&parts[1..]).await;
+            return;
+        }
+
+        // /plan needs async LLM access
+        if parts[0] == "/plan" {
+            self.handle_plan_command(&parts[1..]).await;
+            return;
+        }
+
         if let Some(handler) = self.registry.get(parts[0]) {
             handler.execute(self, &parts[1..]);
         } else {
@@ -358,6 +378,209 @@ impl App {
                 format!("未知命令: {}。输入 /help 查看可用命令。", parts[0]),
                 MessageType::System,
             ));
+        }
+    }
+
+    async fn handle_task_command(&mut self, args: &[&str]) {
+        match args.first().copied() {
+            Some("list") | None => {
+                match &self.task_manager {
+                    Some(tm) => match tm.list().await {
+                        Ok(tasks) => {
+                            if tasks.is_empty() {
+                                self.messages.push(Message::new(
+                                    "暂无后台任务。",
+                                    MessageType::System,
+                                ));
+                            } else {
+                                let mut lines = vec!["后台任务列表:".to_string()];
+                                for t in tasks {
+                                    lines.push(format!(
+                                        "  {} | {:?} | {}",
+                                        t.id, t.status, t.spec.name
+                                    ));
+                                }
+                                self.messages.push(Message::new(
+                                    lines.join("\n"),
+                                    MessageType::System,
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            self.messages.push(Message::new(
+                                format!("获取任务列表失败: {}", e),
+                                MessageType::System,
+                            ));
+                        }
+                    },
+                    None => {
+                        self.messages.push(Message::new(
+                            "后台任务管理器未初始化。",
+                            MessageType::System,
+                        ));
+                    }
+                }
+            }
+            Some("status") => {
+                if args.len() < 2 {
+                    self.messages.push(Message::new(
+                        "用法: /task status <task-id>",
+                        MessageType::System,
+                    ));
+                    return;
+                }
+                let id = args[1].to_string();
+                match &self.task_manager {
+                    Some(tm) => match tm.status(&id).await {
+                        Ok(status) => {
+                            self.messages.push(Message::new(
+                                format!("任务 {} 状态: {:?}", id, status),
+                                MessageType::System,
+                            ));
+                        }
+                        Err(e) => {
+                            self.messages.push(Message::new(
+                                format!("查询任务状态失败: {}", e),
+                                MessageType::System,
+                            ));
+                        }
+                    },
+                    None => {
+                        self.messages.push(Message::new(
+                            "后台任务管理器未初始化。",
+                            MessageType::System,
+                        ));
+                    }
+                }
+            }
+            Some("cancel") => {
+                if args.len() < 2 {
+                    self.messages.push(Message::new(
+                        "用法: /task cancel <task-id>",
+                        MessageType::System,
+                    ));
+                    return;
+                }
+                let id = args[1].to_string();
+                match &self.task_manager {
+                    Some(tm) => match tm.cancel(&id).await {
+                        Ok(()) => {
+                            self.messages.push(Message::new(
+                                format!("已取消任务 {}", id),
+                                MessageType::System,
+                            ));
+                        }
+                        Err(e) => {
+                            self.messages.push(Message::new(
+                                format!("取消任务失败: {}", e),
+                                MessageType::System,
+                            ));
+                        }
+                    },
+                    None => {
+                        self.messages.push(Message::new(
+                            "后台任务管理器未初始化。",
+                            MessageType::System,
+                        ));
+                    }
+                }
+            }
+            Some("spawn") => {
+                if args.len() < 3 {
+                    self.messages.push(Message::new(
+                        "用法: /task spawn <name> <prompt...>",
+                        MessageType::System,
+                    ));
+                    return;
+                }
+                let name = args[1].to_string();
+                let prompt = args[2..].join(" ");
+                match &self.task_manager {
+                    Some(tm) => {
+                        let spec = clarity_core::background::TaskSpec::new(name, prompt)
+                            .with_agent_type("default")
+                            .with_max_iterations(10);
+                        match tm.spawn_agent(spec).await {
+                            Ok(id) => {
+                                self.messages.push(Message::new(
+                                    format!("已创建后台任务 {}", id),
+                                    MessageType::System,
+                                ));
+                            }
+                            Err(e) => {
+                                self.messages.push(Message::new(
+                                    format!("创建任务失败: {}", e),
+                                    MessageType::System,
+                                ));
+                            }
+                        }
+                    }
+                    None => {
+                        self.messages.push(Message::new(
+                            "后台任务管理器未初始化。",
+                            MessageType::System,
+                        ));
+                    }
+                }
+            }
+            Some(sub) => {
+                self.messages.push(Message::new(
+                    format!(
+                        "未知 /task 子命令: {}。可用: list, status, cancel, spawn",
+                        sub
+                    ),
+                    MessageType::System,
+                ));
+            }
+        }
+    }
+
+    async fn handle_plan_command(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            self.messages.push(Message::new(
+                "用法: /plan <query> — 让 Agent 生成执行计划",
+                MessageType::System,
+            ));
+            return;
+        }
+        if self.is_generating() {
+            self.messages.push(Message::new(
+                "Agent 正在运行中，请等待当前任务完成后再使用 /plan。",
+                MessageType::System,
+            ));
+            return;
+        }
+        let query = args.join(" ");
+        self.messages.push(Message::new(
+            format!("📝 正在生成计划: {}...", query),
+            MessageType::System,
+        ));
+        match self.agent.plan(&query).await {
+            Ok(plan) => {
+                let mut lines = vec![format!("📋 计划: {}", plan.title)];
+                if plan.is_empty() {
+                    lines.push("无需执行任何步骤。".to_string());
+                } else {
+                    for step in &plan.steps {
+                        lines.push(format!(
+                            "  {}. {} (`{}`)",
+                            step.id, step.description, step.tool_name
+                        ));
+                    }
+                    lines.push(String::new());
+                    lines.push("输入确认消息以执行此计划。".to_string());
+                }
+                self.messages.push(Message::new(
+                    lines.join("\n"),
+                    MessageType::System,
+                ));
+            }
+            Err(e) => {
+                self.messages.push(Message::new(
+                    format!("生成计划失败: {}", e),
+                    MessageType::System,
+                ));
+            }
         }
     }
 
@@ -535,7 +758,7 @@ impl Default for App {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        Self::new(agent, "default")
+        Self::new(agent, "default", None)
     }
 }
 
@@ -676,7 +899,7 @@ mod tests {
         let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
         let config = clarity_core::agent::AgentConfig::default();
         let agent = Arc::new(Agent::with_config(registry, config));
-        let mut app = App::new(agent, "default");
+        let mut app = App::new(agent, "default", None);
         app.handle_command("/model gpt-4").await;
         assert_eq!(app.model_name, "gpt-4");
     }
