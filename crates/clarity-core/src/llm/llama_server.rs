@@ -31,7 +31,7 @@
 //! preferable.
 
 use super::{OpenAiCompatibleLlm, StreamDelta};
-use crate::agent::{LlmProvider, LlmResponse, Message};
+use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use crate::error::AgentError;
 use async_trait::async_trait;
 use serde_json::Value;

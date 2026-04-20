@@ -20,7 +20,7 @@ fn default_plans_dir() -> ToolResult<PathBuf> {
         .ok_or_else(|| ToolError::execution_failed("Could not determine home directory".to_string()))
 }
 
-fn plan_path(dir: &PathBuf, plan_id: &str) -> PathBuf {
+fn plan_path(dir: &std::path::Path, plan_id: &str) -> PathBuf {
     dir.join(format!("{}.json", plan_id))
 }
 
@@ -46,7 +46,7 @@ struct Plan {
     updated_at: Option<String>,
 }
 
-async fn load_plan(dir: &PathBuf, plan_id: &str) -> ToolResult<Plan> {
+async fn load_plan(dir: &std::path::Path, plan_id: &str) -> ToolResult<Plan> {
     let path = plan_path(dir, plan_id);
     let contents = tokio::fs::read_to_string(&path).await.map_err(|e| {
         ToolError::execution_failed(format!("Failed to read plan '{}': {}", plan_id, e))

@@ -1,6 +1,6 @@
 //! Operations that can be dispatched to an AgentController.
 
-use crate::agent::Message;
+use crate::llm::api::Message;
 
 /// An operation submitted to the controller.
 #[derive(Debug, Clone)]

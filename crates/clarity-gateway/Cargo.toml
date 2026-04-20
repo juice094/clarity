@@ -25,6 +25,10 @@ anyhow = { workspace = true }
 # Internal dependencies
 clarity-core = { workspace = true }
 clarity-wire = { path = "../clarity-wire" }
+clarity-memory = { path = "../clarity-memory", features = ["sqlite"] }
+
+# SQLite for persistent session store
+rusqlite = { version = "0.34", features = ["bundled-full"] }
 
 # Web dependencies
 axum = { workspace = true }
@@ -42,6 +46,7 @@ base64 = "0.22"
 tokio-tungstenite = "0.24"
 http-body-util = "0.1"
 tower = "0.5"
+tempfile = "3.9"
 
 [features]
 default = ["webhook"]

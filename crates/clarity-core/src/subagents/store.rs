@@ -2,7 +2,7 @@
 //!
 //! Manages persistent state for subagent instances.
 
-use crate::agent::Message;
+use crate::llm::api::Message;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

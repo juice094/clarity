@@ -143,9 +143,9 @@ impl ExecutionTracer {
     }
 
     /// Export trace to JSON
-    pub async fn export_json(&self) -> anyhow::Result<String> {
+    pub async fn export_json(&self) -> Result<String, serde_json::Error> {
         let steps = self.steps.read().await;
-        Ok(serde_json::to_string_pretty(&*steps)?)
+        serde_json::to_string_pretty(&*steps)
     }
 
     /// Clear trace

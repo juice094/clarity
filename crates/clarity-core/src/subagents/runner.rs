@@ -7,7 +7,8 @@
 //! - std::io 的读写抽象
 //! - Rust 错误处理的最佳实践
 
-use crate::agent::{Agent, LlmProvider, Message};
+use crate::agent::Agent;
+use crate::llm::api::{LlmProvider, Message};
 use crate::llm::{ModelRegistry, build_provider_from_registry};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};

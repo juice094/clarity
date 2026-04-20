@@ -9,18 +9,18 @@
 
 ---
 
-## 📋 Project Status (2026-04-18)
+## 📋 Project Status (2026-04-20)
 
-**Phase: Core features landed, entering integration hardening.**
+**Phase: Architecture consolidation complete, entering capability integration.**
 
 | Metric | Status | Note |
 |--------|--------|------|
 | Build | ✅ | `cargo check --workspace` passes |
-| Tests | ✅ | **420+** passed, 0 failed |
+| Tests | ✅ | **348+** lib + integration tests passed, 0 failed |
 | Lint | ✅ | `clippy --workspace --lib --bins --tests` zero warnings |
-| Codebase | ~2.7 MB | 122 Rust files (82 library sources) |
+| Codebase | ~2.9 MB | 99 Rust source files (~27,200 LOC) |
 | Binary | ~23 MB | Release `clarity-gateway.exe` |
-| Crates | 5 | workspace layout |
+| Crates | 6 | workspace layout |
 
 ### Feature Matrix
 
@@ -30,13 +30,15 @@
 | **clarity-core / Approval** | ✅ | Interactive / Yolo / Plan modes |
 | **clarity-core / Compaction** | ✅ | Context compression to prevent token explosion |
 | **clarity-core / Subagents** | ✅ | LaborMarket (coder/explore/plan) + Runner; model-aware routing |
-| **clarity-core / MCP Client** | ✅ | Stdio/HTTP tested E2E with `filesystem` server; auto-injects into `ToolRegistry` via `mcp.json` |
+| **clarity-core / MCP Client** | ✅ | Stdio/HTTP tested E2E with `filesystem` server; auto-injects into `ToolRegistry` via `mcp.json`; **Resources + Prompts types landed** |
 | **clarity-core / Background Tasks** | ✅ | `DefaultAgentTaskExecutor` runs real Agents in worker pool; supports per-task model selection |
 | **clarity-core / LLM Routing** | ✅ | `ModelRegistry` TOML config + `LlmFactory::create(alias)` + runtime hot-swap |
 | **clarity-core / Local LLM** | ✅ | Kalosm GGUF inference + LlamaServer HTTP bridge (zero-dependency) |
+| **clarity-core / Skill System** | ✅ | Markdown+YAML `SKILL.md` orchestration layer; loader + registry + context builder |
 | **clarity-tui** | ✅ | Terminal UI with mouse scroll, command registry, tab completion, input history, dark theme |
 | **clarity-gateway** | ✅ | OpenAI-compatible Chat Completions API with SSE streaming + structured tool events |
-| **clarity-memory** | ✅ | File / SQLite / Hybrid backends, 57 tests passing |
+| **clarity-gateway / Session Store** | ✅ | SQLite-based session persistence with message append + expiration cleanup; **HTTP Chat Completions now supports `session_id`** |
+| **clarity-memory** | ✅ | File / SQLite / Hybrid backends; **BM25 + FTS5 hybrid search** |
 | **clarity-wire** | ✅ | Soul-UI broadcast channel, 8 tests passing |
 | Gateway Channels | ⚠️ | Webhook ready; Discord / Telegram temporarily excluded from default build due to upstream `rustls-webpki` advisories |
 | Web UI | ✅ | Embedded Web IDE (`chat.html`) with tool-call cards + config modal |
@@ -65,6 +67,7 @@
 │  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
 │         │                │                                   │
 │  ┌──────▼────────────────▼─────────────────────┐             │
+│  │   Skill       - Markdown+YAML orchestration │             │
 │  │   Wire        - Soul-UI communication      │             │
 │  │   Approval    - Tool-call approval flow    │             │
 │  │   Compaction  - Context compression        │             │
@@ -79,7 +82,8 @@
 │                     clarity-memory                           │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │  FileStore  │  │ SqliteStore │  │    HybridStore      │  │
-│  │  (JSON)     │  │(SQLite+FTS5)│  │  (Cache + Archive)  │  │
+│  │  (JSON)     │  │(SQLite+FTS5+│  │  (Cache + Archive)  │  │
+│  │             │  │   BM25)     │  │                     │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -113,6 +117,14 @@
 - Backends: File, SQLite (with FTS5), Hybrid.
 - `PersistentMemoryStore`: Integrated into `clarity-core`.
 - `MemoryTicker`: Threshold-based memory triggers.
+
+### Skill System (`clarity-core/src/skills/`)
+
+- **Markdown + YAML `SKILL.md`**: Human-readable skill definitions with frontmatter metadata (`id`, `name`, `tools`, `tags`, `priority`, `triggers`) and a Markdown body for contextual instructions.
+- **`SkillLoader`**: Parses YAML frontmatter and Markdown body from `.md` files.
+- **`SkillRegistry`**: Thread-safe, read-only registry loaded from a `skills/` directory; supports keyword search (`find_relevant`).
+- **Context Builder**: `Skill::build_context()` generates injection text for the system prompt, including allowed tool whitelists.
+- **Built-in Examples**: `deploy-rust-service`, `code-review`, `bug-investigate`.
 
 ### Tool System
 
@@ -277,7 +289,7 @@ To prevent command-injection attacks, stdio commands are validated before execut
 
 ## 🗓 Roadmap
 
-### Phase 1: Integration Hardening (Current)
+### Phase 1: Integration Hardening (Completed)
 - [x] TUI real-LLM validation (Kimi Code / Moonshot)
 - [x] Stream-first + Prompt Cache
 - [x] Personality refactor (`Direct` persona)
@@ -287,25 +299,38 @@ To prevent command-injection attacks, stdio commands are validated before execut
 - [x] Gateway Chat tool-calling pipeline fixed (full message history + `tool_calls`)
 - [x] BackgroundTaskManager real-agent execution
 - [x] Embedded Web IDE (`chat.html`) in Gateway
-- [x] **ModelRegistry config-driven routing**
-- [x] **Runtime LLM provider hot-swap**
-- [x] **User-configurable provider via Web UI / Admin API**
-- [x] **Local LLM support (Kalosm + LlamaServer)**
-- [x] **SSE structured tool-call events (tool_call_start/delta/result)**
+- [x] ModelRegistry config-driven routing
+- [x] Runtime LLM provider hot-swap
+- [x] User-configurable provider via Web UI / Admin API
+- [x] Local LLM support (Kalosm + LlamaServer)
+- [x] SSE structured tool-call events (tool_call_start/delta/result)
+
+### Phase 2: Architecture Consolidation (Completed 2026-04-20)
+- [x] **Cyclic dependency decoupling**: Extracted `types.rs` (ToolCall/FunctionCall) and `llm/api.rs` (Message/LlmProvider/LlmResponse/StreamDelta), breaking `agent ↔ approval`, `agent ↔ llm`, `agent ↔ compaction` cycles.
+- [x] **SSE parsing extraction**: Dedicated `llm/sse.rs` state machine (~150 LOC) with incremental tool-call delta assembly; `llm/mod.rs` slimmed from ~1212 → ~970 LOC.
+- [x] **Run-loop deduplication**: Extracted `Agent::run_sync_loop()` shared by `run()` and `run_with_messages_sync()`, eliminating ~120 LOC of duplication.
+- [x] **BM25 + Hybrid Search**: Replaced O(n) full-table TF-IDF scan in `SqliteStore::search_similar` with FTS5 recall + in-memory BM25 re-ranking; 63 + 264 tests passing.
+- [x] **Gateway Session Store**: SQLite-backed session persistence with CRUD, message append, request counting, and expiration cleanup.
+- [x] **RAG Chunking**: Document chunking utility with configurable size, overlap, and source tracking (`Chunker::split_with_source`).
+- [x] **Old Skill system removal**: Deleted `skill/` trait-based dead code (54 orphaned tests removed); unified terminology to `get_tool_descriptions()`.
+- [x] **New Skill orchestration layer**: Markdown+YAML `SKILL.md` parser (`SkillLoader`), thread-safe `SkillRegistry`, and context builder; 12 new tests passing.
+- [x] MCP command validation / allowlist (security hardening)
+- [x] Code quality fixes: `Error::new` → `Error::other`, `&PathBuf` → `&Path`, wildcard pattern elimination
+
+### Phase 3: Capability Integration (Completed)
+- [x] **Agent loop Skill integration**: `default_skill` injection, `/skill list|use` TUI commands, tool whitelist filtering in `Agent::run_sync_loop`
+- [x] **MCP Resources / Prompts types**: `list_resources`, `read_resource`, `list_prompts`, `get_prompt` protocol types and trait methods
+- [x] **Gateway HTTP Session persistence**: `/v1/chat/completions` accepts `session_id`, loads history, saves turns; auto-generates session ID when omitted
+- [x] **CI matrix expansion**: `check`, `clippy`, `fmt` now run on `ubuntu-latest`, `windows-latest`, `macos-latest`
+- [ ] MCP SSE transport
 - [ ] Gateway channel end-to-end testing (Webhook active; Discord/Telegram blocked by upstream CVEs)
 
-### Phase 2: Stabilization (Next 2–4 weeks)
-- [x] MCP command validation / allowlist (security hardening)
-- [ ] Error handling polish
+### Phase 4: Stabilization (Next 2–4 weeks)
+- [ ] Error handling polish (`anyhow` containment in core)
 - [ ] Performance benchmarks
 - [ ] Cross-platform CI matrix
 - [ ] English documentation expansion
-
-### Phase 3: Capability Expansion (1–2 months)
-- [ ] MCP SSE transport
-- [ ] Vector search optimization
-- [ ] Multi-agent profile management
-- [ ] TUI configuration file support
+- [ ] `std::sync::RwLock` → `tokio::sync::RwLock` migration in async contexts
 
 ---
 

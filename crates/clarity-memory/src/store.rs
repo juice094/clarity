@@ -87,6 +87,14 @@ impl MemoryStore {
         self.inner.search_fulltext(query, limit).await
     }
 
+    /// Hybrid search: FTS5 recall + BM25 reranking
+    ///
+    /// Uses FTS5 for fast candidate retrieval, then reranks using BM25 scoring
+    /// for better relevance on short-text documents (facts).
+    pub async fn search_hybrid(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
+        self.inner.search_similar(query, limit).await
+    }
+
     /// Get facts by session ID
     pub async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
         self.inner.get_facts_by_session(session_id, limit).await
@@ -157,6 +165,13 @@ impl MemoryStore {
     pub fn search_fulltext_sync(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.search_fulltext(query, limit))
+        })
+    }
+
+    /// Hybrid search synchronously
+    pub fn search_hybrid_sync(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(self.search_hybrid(query, limit))
         })
     }
 

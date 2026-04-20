@@ -20,15 +20,14 @@ use crate::agent::compaction_service::{CompactionService, CompactionServiceConfi
 use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalRuntime, ApprovalSource};
 use crate::compaction::{estimate_message_tokens, CompactionConfig};
 use crate::error::{AgentError, ToolError};
-use crate::llm::StreamDelta;
-use crate::memory::{Memory, MemoryStore, MemoryTicker};
+use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, MemoryTicker};
 use crate::registry::ToolRegistry;
+use crate::skills::SkillRegistry;
 use crate::tools::ToolContext;
 use clarity_wire::{Wire, WireMessage};
 
 /// Default max context size in tokens (approximate)
 const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
@@ -43,84 +42,10 @@ pub use enhanced::{
 };
 pub use ops::Op;
 
-/// LLM message role
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageRole {
-    System,
-    User,
-    Assistant,
-    Tool,
-}
-
-/// A message in the conversation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: MessageRole,
-    pub content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-}
-
-impl Message {
-    /// Create a system message
-    pub fn system(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::System,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create a user message
-    pub fn user(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::User,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create an assistant message
-    pub fn assistant(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create a tool response message
-    pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::Tool,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: Some(tool_call_id.into()),
-        }
-    }
-}
-
-/// A tool call from the LLM
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolCall {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub call_type: String,
-    pub function: FunctionCall,
-}
-
-/// Function call details
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FunctionCall {
-    pub name: String,
-    pub arguments: String, // JSON string
-}
+// Re-export core API types from their canonical locations for backwards compatibility.
+// New code should import directly from `crate::types` or `crate::llm::api`.
+pub use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
+pub use crate::types::{FunctionCall, ToolCall};
 
 /// Configuration for the Agent
 #[derive(Debug, Clone)]
@@ -246,40 +171,6 @@ After receiving the tool result, provide a helpful response to the user.
 Available tools will be provided at the start of each conversation.
 "#;
 
-/// LLM Provider trait - implement this to integrate with different LLMs
-#[async_trait::async_trait]
-pub trait LlmProvider: Send + Sync {
-    /// Generate a response from the LLM
-    async fn complete(
-        &self,
-        messages: &[Message],
-        tools: &Value,
-    ) -> Result<LlmResponse, AgentError>;
-
-    /// Stream the response as text chunks.
-    /// Returns a receiver that yields chunks of the response.
-    /// The receiver closes when the stream ends.
-    fn stream(
-        &self,
-        messages: &[Message],
-        tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>;
-
-    /// Set a prompt cache key for provider-side cache routing.
-    fn set_prompt_cache_key(&mut self, key: &str);
-}
-
-/// Response from an LLM
-#[derive(Debug, Clone)]
-pub struct LlmResponse {
-    /// The text content of the response
-    pub content: String,
-    /// Tool calls to execute (if any)
-    pub tool_calls: Vec<ToolCall>,
-    /// Whether this is the final response
-    pub is_complete: bool,
-}
-
 /// Simple mock LLM for testing
 pub struct MockLlm;
 
@@ -366,6 +257,10 @@ pub struct Agent {
     cancel_token: CancellationToken,
     /// Session token usage accumulator
     session_usage: Arc<Mutex<TokenUsage>>,
+    /// Optional skill registry for orchestration
+    skill_registry: Option<SkillRegistry>,
+    /// Currently active skill id (shared across clones)
+    active_skill: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl Agent {
@@ -394,6 +289,8 @@ impl Agent {
                 completion_tokens: 0,
                 total_tokens: 0,
             })),
+            skill_registry: None,
+            active_skill: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -407,6 +304,23 @@ impl Agent {
     /// All clones of this Agent will see the new provider immediately.
     pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
         *self.llm.write().unwrap() = Some(llm);
+    }
+
+    /// Set the skill registry.
+    pub fn with_skill_registry(mut self, registry: SkillRegistry) -> Self {
+        self.skill_registry = Some(registry);
+        self
+    }
+
+    /// Set (or clear) the active skill by id.
+    /// All clones of this Agent will see the change immediately.
+    pub fn set_active_skill(&self, skill_id: Option<String>) {
+        *self.active_skill.write().unwrap() = skill_id;
+    }
+
+    /// Get the currently active skill id, if any.
+    pub fn active_skill(&self) -> Option<String> {
+        self.active_skill.read().unwrap().clone()
     }
 
     /// Remove the LLM provider at runtime.
@@ -492,6 +406,32 @@ impl Agent {
         usage.total_tokens = usage.prompt_tokens + usage.completion_tokens;
     }
 
+    /// Store a conversation memory, optionally chunking long content for better retrieval.
+    async fn store_conversation_memory(&self, content: impl Into<String>) {
+        let content = content.into();
+        if let Some(ref store) = self.memory_store {
+            // Store the full memory for context completeness
+            let full_memory = Memory::new(content.clone()).with_tags(vec!["conversation".to_string()]);
+            if let Err(e) = store.store(full_memory).await {
+                warn!("Failed to store memory: {}", e);
+            }
+
+            // If content is long, also store chunks for granular retrieval
+            const CHUNK_THRESHOLD: usize = 1024;
+            if content.len() > CHUNK_THRESHOLD {
+                let config = ChunkConfig::new().with_chunk_size(512).with_overlap(50);
+                let chunks = Chunker::split(&content, &config);
+                for chunk in chunks {
+                    let chunk_memory = Memory::new(chunk.content)
+                        .with_tags(vec!["conversation".to_string(), "chunk".to_string()]);
+                    if let Err(e) = store.store(chunk_memory).await {
+                        warn!("Failed to store memory chunk: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
     /// Get accumulated session token usage.
     pub fn get_session_usage(&self) -> TokenUsage {
         self.session_usage.lock().unwrap().clone()
@@ -514,7 +454,7 @@ impl Agent {
 
     /// Build the system prompt
     pub fn build_system_prompt(&self) -> String {
-        let skills = self.get_skill_definitions();
+        let tool_descs = self.get_tool_descriptions();
 
         // Determine entry type from entry_context
         let entry = if self.config.entry_context.contains("方法论") || self.config.entry_context.contains("科学") {
@@ -532,36 +472,54 @@ impl Agent {
         });
 
         let base = if let Some(prompt) = file_prompt {
-            if skills.is_empty() {
+            if tool_descs.is_empty() {
                 prompt
             } else {
-                format!("{}\n\n## Available Tools\n{}", prompt, skills.join("\n"))
+                format!("{}\n\n## Available Tools\n{}", prompt, tool_descs.join("\n"))
             }
         } else {
-            if skills.is_empty() {
+            if tool_descs.is_empty() {
                 self.config.system_prompt.clone()
             } else {
-                format!("{}\n\n## Available Tools\n{}", self.config.system_prompt, skills.join("\n"))
+                format!("{}\n\n## Available Tools\n{}", self.config.system_prompt, tool_descs.join("\n"))
             }
         };
 
-        if self.config.entry_context.is_empty() {
+        let with_entry = if self.config.entry_context.is_empty() {
             base
         } else {
             format!("{}\n\n{}", base, self.config.entry_context)
+        };
+
+        // Inject active skill context if set
+        if let Some(ref skill_id) = *self.active_skill.read().unwrap() {
+            if let Some(ref registry) = self.skill_registry {
+                if let Some(skill) = registry.get(skill_id) {
+                    let skill_ctx = skill.build_context();
+                    return format!("{}\n\n{}", with_entry, skill_ctx);
+                }
+            }
         }
+
+        with_entry
     }
 
-    /// Get skill definitions from the tool registry
-    fn get_skill_definitions(&self) -> Vec<String> {
-        // Convert tool schemas to skill descriptions
+    /// Get tool descriptions from the registry for the system prompt.
+    fn get_tool_descriptions(&self) -> Vec<String> {
+        // Convert tool schemas to descriptions
         match self.registry.get_tool_schemas() {
             Ok(schemas) => {
+                let allowed = self.active_skill_tool_whitelist();
                 schemas.as_array().map(|arr| {
                     arr.iter()
                         .filter_map(|f| {
                             let func = f.get("function")?;
                             let name = func.get("name")?.as_str()?;
+                            if let Some(ref whitelist) = allowed {
+                                if !whitelist.iter().any(|w| w == name) {
+                                    return None;
+                                }
+                            }
                             let description = func.get("description")?.as_str()?;
                             Some(format!("- {}: {}", name, description))
                         })
@@ -569,6 +527,44 @@ impl Agent {
                 }).unwrap_or_default()
             }
             Err(_) => vec![],
+        }
+    }
+
+    /// Return the tool whitelist for the active skill, if any.
+    fn active_skill_tool_whitelist(&self) -> Option<Vec<String>> {
+        let active = self.active_skill.read().unwrap().clone()?;
+        let registry = self.skill_registry.as_ref()?;
+        let skill = registry.get(&active)?;
+        if skill.meta.tools.is_empty() {
+            None
+        } else {
+            Some(skill.meta.tools.clone())
+        }
+    }
+
+    /// Filter a tools JSON value to only include tools in the active skill whitelist.
+    fn filter_tools_value(&self, tools: &Value) -> Value {
+        let allowed = match self.active_skill_tool_whitelist() {
+            Some(w) => w,
+            None => return tools.clone(),
+        };
+        let allowed_set: std::collections::HashSet<String> = allowed.into_iter().collect();
+        match tools.as_array() {
+            Some(arr) => {
+                let filtered: Vec<Value> = arr
+                    .iter()
+                    .filter(|v| {
+                        v.get("function")
+                            .and_then(|f| f.get("name"))
+                            .and_then(|n| n.as_str())
+                            .map(|name| allowed_set.contains(name))
+                            .unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect();
+                Value::Array(filtered)
+            }
+            None => tools.clone(),
         }
     }
 
@@ -589,6 +585,114 @@ impl Agent {
     /// # Returns
     ///
     /// The final response from the agent
+    /// Shared core of the non-streaming agent loop.
+    ///
+    /// Iterates up to `max_iterations`, calling the LLM and executing any tool
+    /// calls. Returns `(final_response, completed)`.
+    async fn run_sync_loop(
+        &self,
+        messages: &mut Vec<Message>,
+        tools: &serde_json::Value,
+        llm: Arc<dyn LlmProvider>,
+    ) -> Result<(String, bool), AgentError> {
+        let mut final_response = String::new();
+        let mut completed = false;
+
+        for iteration in 0..self.config.max_iterations {
+            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
+
+            if self.cancel_token.is_cancelled() {
+                warn!("Agent run cancelled");
+                return Err(AgentError::Cancelled);
+            }
+
+            // Proactive compaction via CompactionService
+            if let Some(ref service) = self.compaction_service {
+                if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
+                    warn!("Compaction failed: {}", e);
+                }
+            }
+
+            if self.should_compact(messages).await {
+                match self.compact_messages(messages).await {
+                    Ok(compacted) => {
+                        info!(
+                            "Context compacted: {} messages -> {} messages",
+                            messages.len(),
+                            compacted.len()
+                        );
+                        *messages = compacted;
+                    }
+                    Err(e) => {
+                        warn!("Failed to compact messages: {}", e);
+                    }
+                }
+            }
+
+            let prompt_tokens = CompactionService::estimate_tokens(messages) as u32;
+            let response = tokio::time::timeout(
+                tokio::time::Duration::from_secs(45),
+                llm.complete(messages, tools),
+            )
+            .await
+            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            let completion_tokens = response.content.len().div_ceil(4) as u32;
+            self.accumulate_usage(prompt_tokens, completion_tokens);
+            final_response = response.content.clone();
+
+            if response.tool_calls.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+                info!("Agent loop completed after {} iterations", iteration + 1);
+                completed = true;
+                break;
+            }
+
+            if !response.content.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: response.content.clone(),
+                });
+            }
+
+            messages.push(Message {
+                role: MessageRole::Assistant,
+                content: response.content,
+                tool_calls: Some(response.tool_calls.clone()),
+                tool_call_id: None,
+            });
+
+            for tool_call in &response.tool_calls {
+                self.send_wire_message(WireMessage::StepBegin {
+                    tool_name: tool_call.function.name.clone(),
+                });
+
+                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                    .unwrap_or_else(|_| serde_json::json!({}));
+                self.send_wire_message(WireMessage::ToolCall {
+                    id: tool_call.id.clone(),
+                    name: tool_call.function.name.clone(),
+                    arguments: args,
+                });
+
+                let result = self.execute_tool_call(tool_call).await;
+                let result_content = match result {
+                    Ok(value) => value.to_string(),
+                    Err(e) => json!({"error": e.to_string()}).to_string(),
+                };
+
+                self.send_wire_message(WireMessage::ToolResult {
+                    id: tool_call.id.clone(),
+                    result: result_content.clone(),
+                });
+
+                messages.push(Message::tool(&tool_call.id, result_content));
+            }
+        }
+
+        Ok((final_response, completed))
+    }
+
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
         let llm = self
             .llm
@@ -596,8 +700,7 @@ impl Agent {
             .unwrap()
             .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
-
-        let tools = self.registry.get_tool_schemas()?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
         // Build system prompt with optional memory context
         let base_system_prompt = self.build_system_prompt();
@@ -622,7 +725,6 @@ impl Agent {
             }
         }
 
-        // Initialize conversation
         let mut messages = vec![
             Message::system(system_prompt),
             Message::user(query.as_ref()),
@@ -630,123 +732,14 @@ impl Agent {
 
         info!("Starting agent loop for query: {}", query.as_ref());
 
-        // Send TurnBegin message
         self.send_wire_message(WireMessage::TurnBegin {
             user_input: query.as_ref().to_string(),
         });
 
-        // Agent loop
-        let mut final_response = String::new();
-        let mut completed = false;
+        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm).await?;
 
-        for iteration in 0..self.config.max_iterations {
-            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
-
-            if self.cancel_token.is_cancelled() {
-                warn!("Agent run cancelled");
-                return Err(AgentError::Cancelled);
-            }
-
-            // Proactive compaction via CompactionService
-            if let Some(ref service) = self.compaction_service {
-                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
-                    warn!("Compaction failed: {}", e);
-                }
-            }
-
-            // 检查是否需要压缩
-            if self.should_compact(&messages).await {
-                match self.compact_messages(&messages).await {
-                    Ok(compacted) => {
-                        info!(
-                            "Context compacted: {} messages -> {} messages",
-                            messages.len(),
-                            compacted.len()
-                        );
-                        messages = compacted;
-                    }
-                    Err(e) => {
-                        warn!("Failed to compact messages: {}", e);
-                    }
-                }
-            }
-
-            // Get LLM response with timeout
-            let prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
-            let response = tokio::time::timeout(
-                tokio::time::Duration::from_secs(45),
-                llm.complete(&messages, &tools),
-            )
-            .await
-            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
-            let completion_tokens = response.content.len().div_ceil(4) as u32;
-            self.accumulate_usage(prompt_tokens, completion_tokens);
-            final_response = response.content.clone();
-
-            // If no tool calls, we're done
-            if response.tool_calls.is_empty() {
-                // Send final content as ContentPart
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-
-                info!("Agent loop completed after {} iterations", iteration + 1);
-                completed = true;
-                break;
-            }
-
-            // Send assistant content as ContentPart (if any)
-            if !response.content.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-            }
-
-            // Add assistant message with tool calls
-            messages.push(Message {
-                role: MessageRole::Assistant,
-                content: response.content,
-                tool_calls: Some(response.tool_calls.clone()),
-                tool_call_id: None,
-            });
-
-            // Execute tool calls
-            for tool_call in &response.tool_calls {
-                // Send StepBegin message
-                self.send_wire_message(WireMessage::StepBegin {
-                    tool_name: tool_call.function.name.clone(),
-                });
-
-                // Send ToolCall message
-                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                    .unwrap_or_else(|_| serde_json::json!({}));
-                self.send_wire_message(WireMessage::ToolCall {
-                    id: tool_call.id.clone(),
-                    name: tool_call.function.name.clone(),
-                    arguments: args,
-                });
-
-                let result = self.execute_tool_call(tool_call).await;
-
-                let result_content = match result {
-                    Ok(value) => value.to_string(),
-                    Err(e) => json!({"error": e.to_string()}).to_string(),
-                };
-
-                // Send ToolResult message
-                self.send_wire_message(WireMessage::ToolResult {
-                    id: tool_call.id.clone(),
-                    result: result_content.clone(),
-                });
-
-                messages.push(Message::tool(&tool_call.id, result_content));
-            }
-        }
-
-        // Send TurnEnd message
         self.send_wire_message(WireMessage::TurnEnd);
 
-        // Send usage report
         let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,
@@ -755,23 +748,17 @@ impl Agent {
         });
 
         // Persist interaction to memory
-        if let Some(ref store) = self.memory_store {
-            let memory_content = if completed {
-                format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
-            } else {
-                format!(
-                    "User: {}\nAssistant: [max iterations reached] {}",
-                    query.as_ref(),
-                    final_response
-                )
-            };
-            let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
-            if let Err(e) = store.store(memory).await {
-                warn!("Failed to store memory: {}", e);
-            }
-        }
+        let memory_content = if completed {
+            format!("User: {}\nAssistant: {}", query.as_ref(), final_response)
+        } else {
+            format!(
+                "User: {}\nAssistant: [max iterations reached] {}",
+                query.as_ref(),
+                final_response
+            )
+        };
+        self.store_conversation_memory(memory_content).await;
 
-        // Trigger memory ticker
         if let Some(ref ticker) = self.memory_ticker {
             match ticker.tick().await {
                 true => info!("Memory ticker triggered"),
@@ -801,107 +788,12 @@ impl Agent {
             .unwrap()
             .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
-        let tools = self.registry.get_tool_schemas()?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
-        let mut final_response = String::new();
-        let mut completed = false;
-
-        for iteration in 0..self.config.max_iterations {
-            debug!("Sync iteration {}/{}", iteration + 1, self.config.max_iterations);
-
-            if self.cancel_token.is_cancelled() {
-                warn!("Agent run sync cancelled");
-                return Err(AgentError::Cancelled);
-            }
-
-            // Proactive compaction via CompactionService
-            if let Some(ref service) = self.compaction_service {
-                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
-                    warn!("Compaction failed: {}", e);
-                }
-            }
-
-            // Check if compaction is needed
-            if self.should_compact(&messages).await {
-                match self.compact_messages(&messages).await {
-                    Ok(compacted) => {
-                        info!(
-                            "Context compacted: {} messages -> {} messages",
-                            messages.len(),
-                            compacted.len()
-                        );
-                        messages = compacted;
-                    }
-                    Err(e) => {
-                        warn!("Failed to compact messages: {}", e);
-                    }
-                }
-            }
-
-            let prompt_tokens = CompactionService::estimate_tokens(&messages) as u32;
-            let response = tokio::time::timeout(
-                tokio::time::Duration::from_secs(45),
-                llm.complete(&messages, &tools),
-            )
-            .await
-            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
-            let completion_tokens = response.content.len().div_ceil(4) as u32;
-            self.accumulate_usage(prompt_tokens, completion_tokens);
-            final_response = response.content.clone();
-
-            if response.tool_calls.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-                info!("Agent sync loop completed after {} iterations", iteration + 1);
-                completed = true;
-                break;
-            }
-
-            if !response.content.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-            }
-
-            messages.push(Message {
-                role: MessageRole::Assistant,
-                content: response.content,
-                tool_calls: Some(response.tool_calls.clone()),
-                tool_call_id: None,
-            });
-
-            for tool_call in &response.tool_calls {
-                self.send_wire_message(WireMessage::StepBegin {
-                    tool_name: tool_call.function.name.clone(),
-                });
-
-                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                    .unwrap_or_else(|_| serde_json::json!({}));
-                self.send_wire_message(WireMessage::ToolCall {
-                    id: tool_call.id.clone(),
-                    name: tool_call.function.name.clone(),
-                    arguments: args,
-                });
-
-                let result = self.execute_tool_call(tool_call).await;
-                let result_content = match result {
-                    Ok(value) => value.to_string(),
-                    Err(e) => json!({"error": e.to_string()}).to_string(),
-                };
-
-                self.send_wire_message(WireMessage::ToolResult {
-                    id: tool_call.id.clone(),
-                    result: result_content.clone(),
-                });
-
-                messages.push(Message::tool(&tool_call.id, result_content));
-            }
-        }
+        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm).await?;
 
         self.send_wire_message(WireMessage::TurnEnd);
 
-        // Send usage report
         let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,
@@ -937,7 +829,7 @@ impl Agent {
             .clone()
             .ok_or_else(|| AgentError::Llm("No LLM provider configured".to_string()))?;
 
-        let tools = self.registry.get_tool_schemas()?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
         let base_system_prompt = self.build_system_prompt();
         let mut system_prompt = base_system_prompt;
@@ -1188,21 +1080,16 @@ impl Agent {
             total_tokens: usage.total_tokens,
         });
 
-        if let Some(ref store) = self.memory_store {
-            let memory_content = if completed {
-                format!("User: {}\nAssistant: {}", query_hint, final_response)
-            } else {
-                format!(
-                    "User: {}\nAssistant: [max iterations reached] {}",
-                    query_hint,
-                    final_response
-                )
-            };
-            let memory = Memory::new(memory_content).with_tags(vec!["conversation".to_string()]);
-            if let Err(e) = store.store(memory).await {
-                warn!("Failed to store memory: {}", e);
-            }
-        }
+        let memory_content = if completed {
+            format!("User: {}\nAssistant: {}", query_hint, final_response)
+        } else {
+            format!(
+                "User: {}\nAssistant: [max iterations reached] {}",
+                query_hint,
+                final_response
+            )
+        };
+        self.store_conversation_memory(memory_content).await;
 
         if let Some(ref ticker) = self.memory_ticker {
             match ticker.tick().await {

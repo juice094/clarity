@@ -10,7 +10,7 @@
 //! export DEEPSEEK_MODEL="deepseek-chat"  # or "deepseek-reasoner"
 //! ```
 
-use crate::agent::{LlmProvider, LlmResponse, Message};
+use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use crate::error::AgentError;
 use crate::llm::OpenAiCompatibleLlm;
 use async_trait::async_trait;

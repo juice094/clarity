@@ -119,6 +119,75 @@ impl CommandHandler for StopCommand {
     }
 }
 
+pub struct SkillListCommand;
+impl CommandHandler for SkillListCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        match &app.skill_registry {
+            Some(reg) if !reg.is_empty() => {
+                let mut lines = vec!["可用 Skills:".to_string()];
+                for summary in reg.list_summaries() {
+                    lines.push(format!("  • {}", summary));
+                }
+                if let Some(active) = app.active_skill() {
+                    lines.push(String::new());
+                    lines.push(format!("当前激活: {}", active));
+                }
+                app.messages.push(Message::new(lines.join("\n"), MessageType::System));
+            }
+            _ => {
+                app.messages.push(Message::new(
+                    "暂无已加载的 Skills。",
+                    MessageType::System,
+                ));
+            }
+        }
+    }
+    fn description(&self) -> &str {
+        "列出可用的 Skills"
+    }
+}
+
+pub struct SkillUseCommand;
+impl CommandHandler for SkillUseCommand {
+    fn execute(&self, app: &mut App, args: &[&str]) {
+        if args.is_empty() {
+            match app.active_skill() {
+                Some(id) => {
+                    app.messages.push(Message::new(
+                        format!("当前 Skill: {}", id),
+                        MessageType::System,
+                    ));
+                }
+                None => {
+                    app.messages.push(Message::new(
+                        "未激活任何 Skill。用法: /skill use <id>",
+                        MessageType::System,
+                    ));
+                }
+            }
+            return;
+        }
+        let id = args.join(" ");
+        if let Some(ref reg) = app.skill_registry {
+            if reg.contains(&id) {
+                app.set_active_skill(Some(id.clone()));
+                app.messages.push(Message::new(
+                    format!("已激活 Skill: {}", id),
+                    MessageType::System,
+                ));
+                return;
+            }
+        }
+        app.messages.push(Message::new(
+            format!("未找到 Skill: {}", id),
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "激活或查看当前 Skill"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -136,6 +205,10 @@ pub fn build_default_registry() -> CommandRegistry {
 
     registry.register("/stop", Arc::new(StopCommand));
 
+    registry.register("/skill", Arc::new(SkillUseCommand));
+    registry.alias("/skill use", "/skill");
+    registry.register("/skills", Arc::new(SkillListCommand));
+
     registry
 }
 
@@ -149,6 +222,8 @@ mod tests {
         let names = registry.names();
         assert!(!names.is_empty());
         assert!(names.contains(&"/help"));
+        assert!(names.contains(&"/skill"));
+        assert!(names.contains(&"/skills"));
 
         let handler = registry.get("/help").unwrap();
         assert!(!handler.description().is_empty());

@@ -29,7 +29,7 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
 
 #[tokio::test]
 async fn test_health_check() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_api_router(state);
 
     let response = app
@@ -51,7 +51,7 @@ async fn test_health_check() {
 
 #[tokio::test]
 async fn test_chat_completions() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_api_router(state);
 
     let request_body = serde_json::json!({
@@ -82,7 +82,7 @@ async fn test_chat_completions() {
 
 #[tokio::test]
 async fn test_admin_stats() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_admin_router(state);
 
     let response = app
@@ -106,7 +106,7 @@ async fn test_admin_stats() {
 
 #[tokio::test]
 async fn test_admin_tools() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_admin_router(state);
 
     let response = app
@@ -125,4 +125,100 @@ async fn test_admin_tools() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert!(body.get("tools").is_some());
     assert!(body["tools"].is_array());
+}
+
+
+#[tokio::test]
+async fn test_list_sessions() {
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let app = create_admin_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(body.get("sessions").is_some());
+    assert!(body["sessions"].is_array());
+}
+
+#[tokio::test]
+async fn test_session_crud() {
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+
+    // Create a session via the store directly
+    state
+        .session_store
+        .create_session("test-session-123")
+        .await
+        .unwrap();
+    state
+        .session_store
+        .append_message(
+            "test-session-123",
+            &clarity_gateway::session_store::SessionMessage::new("user", "Hello"),
+        )
+        .await
+        .unwrap();
+
+    // Get session
+    let admin_app = create_admin_router(state.clone());
+    let response = admin_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions/test-session-123")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["session_id"], "test-session-123");
+    assert!(body["messages"].is_array());
+    assert_eq!(body["messages"].as_array().unwrap().len(), 1);
+
+    // Delete session
+    let response = admin_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions/test-session-123")
+                .method("DELETE")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["deleted"], true);
+
+    // Verify deletion
+    let response = admin_app
+        .oneshot(
+            Request::builder()
+                .uri("/api/sessions/test-session-123")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Getting a deleted session returns empty messages, not an error
+    assert_eq!(response.status(), StatusCode::OK);
 }

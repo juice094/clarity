@@ -51,7 +51,7 @@ pub mod tools;
 pub use enhanced::{
     HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance, McpError,
     McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig,
-    SseClientBuilder, SseMcpClientStub, StdioClientBuilder, StdioMcpClient, ToolCallResult,
+    SseClientBuilder, SseMcpClient, StdioClientBuilder, StdioMcpClient, ToolCallResult,
     ToolContent,
 };
 
@@ -602,6 +602,7 @@ mod tests {
                 args: vec![],
                 env: HashMap::new(),
                 disabled: true,
+                ..Default::default()
             },
         );
         config.servers.insert(
@@ -611,6 +612,7 @@ mod tests {
                 args: vec![],
                 env: HashMap::new(),
                 disabled: false,
+                ..Default::default()
             },
         );
 

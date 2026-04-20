@@ -1,16 +1,61 @@
 //! SQLite storage backend with FTS5
 use crate::backends::StorageBackend;
+use crate::bm25::IncrementalBm25Index;
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use parking_lot::RwLock;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info, instrument};
 
+/// Cached incremental BM25 index paired with fact ID mappings.
+#[derive(Debug, Clone)]
+struct Bm25Cache {
+    index: IncrementalBm25Index,
+    /// Maps doc_idx -> fact_id
+    fact_ids: Vec<i64>,
+    /// Maps fact_id -> doc_idx (live docs only)
+    id_to_idx: HashMap<i64, usize>,
+}
+
+impl Bm25Cache {
+    fn new() -> Self {
+        Self {
+            index: IncrementalBm25Index::new(),
+            fact_ids: Vec::new(),
+            id_to_idx: HashMap::new(),
+        }
+    }
+
+    fn add_fact(&mut self, id: i64, text: &str) {
+        let idx = self.index.add_document(text);
+        if idx < self.fact_ids.len() {
+            self.fact_ids[idx] = id;
+        } else {
+            self.fact_ids.push(id);
+        }
+        self.id_to_idx.insert(id, idx);
+    }
+
+    fn remove_fact(&mut self, id: i64) {
+        if let Some(idx) = self.id_to_idx.remove(&id) {
+            self.index.remove_document(idx);
+        }
+    }
+
+    fn score(&self, query: &str, id: i64) -> Option<f32> {
+        let idx = self.id_to_idx.get(&id)?;
+        Some(self.index.score(query, *idx))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SqliteStore {
     conn: Arc<Mutex<Connection>>,
+    bm25_cache: Arc<RwLock<Option<Bm25Cache>>>,
 }
 
 impl SqliteStore {
@@ -27,6 +72,7 @@ impl SqliteStore {
         info!("Initializing SqliteStore at {}", db_path_str);
         let store = Self {
             conn: Arc::new(Mutex::new(conn)),
+            bm25_cache: Arc::new(RwLock::new(None)),
         };
         store.init_schema()?;
         Ok(store)
@@ -36,6 +82,7 @@ impl SqliteStore {
         let conn = Connection::open_in_memory().map_err(MemoryError::Database)?;
         let store = Self {
             conn: Arc::new(Mutex::new(conn)),
+            bm25_cache: Arc::new(RwLock::new(None)),
         };
         store.init_schema()?;
         Ok(store)
@@ -145,14 +192,22 @@ impl StorageBackend for SqliteStore {
         let session_id = session_id.map(|s| s.to_string());
         let conn = self.conn.clone();
 
+        let fact_for_db = fact.clone();
         let id = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
             conn.execute(
                 "INSERT INTO facts (fact, tags, time, session_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![fact, tags_json, time, session_id, now],
+                params![fact_for_db, tags_json, time, session_id, now],
             )?;
             Ok::<_, MemoryError>(conn.last_insert_rowid())
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+        {
+            let mut cache = self.bm25_cache.write();
+            if let Some(ref mut c) = *cache {
+                c.add_fact(id, &fact);
+            }
+        }
 
         info!("Saved fact with id={}, tags={:?}", id, tags);
         Ok(id)
@@ -177,13 +232,22 @@ impl StorageBackend for SqliteStore {
 
     async fn delete_fact(&self, id: i64) -> Result<bool> {
         let conn = self.conn.clone();
-        tokio::task::spawn_blocking(move || {
+        let deleted = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
             let rows = conn.execute("DELETE FROM facts WHERE id = ?", [id])?;
             Ok::<_, MemoryError>(rows > 0)
         })
         .await
-        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+        if deleted {
+            let mut cache = self.bm25_cache.write();
+            if let Some(ref mut c) = *cache {
+                c.remove_fact(id);
+            }
+        }
+
+        Ok(deleted)
     }
 
     async fn search_by_tags(&self, tags: &[String], limit: usize) -> Result<Vec<Fact>> {
@@ -312,50 +376,83 @@ impl StorageBackend for SqliteStore {
 
     async fn search_similar(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
         let query = query.to_string();
-        let conn = self.conn.clone();
 
-        let facts = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
-            let mut stmt =
-                conn.prepare("SELECT id, fact, tags, time, session_id, created_at FROM facts")?;
-            let rows = stmt.query_map([], Self::row_to_fact)?;
-            let mut facts = Vec::new();
-            for row in rows {
-                facts.push(row?);
-            }
-            Ok::<_, MemoryError>(facts)
-        })
-        .await
-        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+        // Step 1: FTS5 recall — fetch candidate documents (5x limit for reranking pool)
+        let candidates = self.search_fulltext(&query, limit * 5).await?;
 
-        if facts.is_empty() {
+        if candidates.is_empty() {
             return Ok(Vec::new());
         }
 
-        let fact_tuples: Vec<(i64, String)> =
-            facts.iter().map(|f| (f.id, f.fact.clone())).collect();
-        let mut vector_store = crate::embedding::VectorStore::new();
-        vector_store.index_facts(&fact_tuples);
-        let results = vector_store.search(&query, limit);
+        // Step 2: Build or reuse cached incremental BM25 index
+        let cache_empty = {
+            let cache = self.bm25_cache.read();
+            cache.is_none()
+        };
 
-        let fact_map: std::collections::HashMap<i64, Fact> =
-            facts.into_iter().map(|f| (f.id, f)).collect();
-        Ok(results
-            .into_iter()
-            .filter_map(|(id, _, score)| fact_map.get(&id).cloned().map(|f| (f, score)))
-            .collect())
+        if cache_empty {
+            let conn = self.conn.clone();
+            let all_facts: Vec<(i64, String)> = tokio::task::spawn_blocking(move || {
+                let conn = conn.lock().unwrap();
+                let mut stmt = conn.prepare("SELECT id, fact FROM facts")?;
+                let rows = stmt.query_map([], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                })?;
+                let mut facts = Vec::new();
+                for row in rows {
+                    facts.push(row?);
+                }
+                Ok::<_, MemoryError>(facts)
+            })
+            .await
+            .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+            let mut cache_guard = self.bm25_cache.write();
+            if cache_guard.is_none() {
+                let mut cache = Bm25Cache::new();
+                for (id, text) in all_facts {
+                    cache.add_fact(id, &text);
+                }
+                *cache_guard = Some(cache);
+            }
+        }
+
+        // Step 3: Rerank candidates using the cached index
+        let cache = self.bm25_cache.read();
+        let mut scored: Vec<(Fact, f32)> = if let Some(ref c) = *cache {
+            candidates
+                .into_iter()
+                .map(|fact| {
+                    let score = c.score(&query, fact.id).unwrap_or(0.0);
+                    (fact, score)
+                })
+                .collect()
+        } else {
+            candidates.into_iter().map(|f| (f, 1.0)).collect()
+        };
+        drop(cache);
+
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+
+        Ok(scored)
     }
 
     async fn clear_all(&self) -> Result<usize> {
         let conn = self.conn.clone();
 
-        tokio::task::spawn_blocking(move || {
+        let rows = tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
             let rows = conn.execute("DELETE FROM facts", [])?;
             Ok::<_, MemoryError>(rows)
         })
         .await
-        .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+        let mut cache = self.bm25_cache.write();
+        *cache = None;
+
+        Ok(rows)
     }
 
     async fn bulk_save_facts(

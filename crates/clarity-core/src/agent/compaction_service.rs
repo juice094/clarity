@@ -3,8 +3,8 @@
 //! This module provides `CompactionService`, which proactively compresses
 //! old messages before the conversation hits token limits.
 
-use crate::agent::{LlmProvider, Message, MessageRole};
-use anyhow::Result;
+use crate::error::AgentError;
+use crate::llm::api::{LlmProvider, Message, MessageRole};
 
 /// Configuration for the compaction service
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +53,7 @@ impl CompactionService {
         &self,
         messages: &mut Vec<Message>,
         llm: &dyn LlmProvider,
-    ) -> Result<()> {
+    ) -> Result<(), AgentError> {
         if !self.needs_compaction(messages) {
             return Ok(());
         }

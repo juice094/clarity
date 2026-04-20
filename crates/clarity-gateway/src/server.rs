@@ -8,6 +8,7 @@ use axum::{
 };
 use tower_http::services::ServeDir;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::RwLock;
@@ -17,7 +18,8 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::handlers;
-use crate::session::SessionManager;
+use crate::session_store::PersistentSessionStore;
+use chrono::{DateTime, Utc};
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
@@ -26,20 +28,46 @@ use clarity_core::registry::ToolRegistry;
 /// 应用状态
 pub struct AppState {
     pub agent: Arc<RwLock<Agent>>,
-    pub session_manager: Arc<RwLock<SessionManager>>,
+    pub session_store: Arc<PersistentSessionStore>,
     pub tool_registry: ToolRegistry,
     pub task_manager: Arc<BackgroundTaskManager>,
     pub activity_logger: ActivityLogger,
+    pub started_at: DateTime<Utc>,
+    pub active_connections: AtomicUsize,
 }
 
 impl AppState {
-    pub fn new(agent: Arc<Agent>, task_manager: Arc<BackgroundTaskManager>) -> Self {
+    pub async fn new(agent: Arc<Agent>, task_manager: Arc<BackgroundTaskManager>) -> Self {
+        let db_path = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."))
+            .join(".clarity")
+            .join("sessions.db");
+
+        let session_store = match PersistentSessionStore::new(&db_path).await {
+            Ok(store) => {
+                info!("Persistent session store initialized at {:?}", db_path);
+                Arc::new(store)
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to create persistent session store at {:?}: {}. Falling back to in-memory store.",
+                    db_path, e
+                );
+                Arc::new(
+                    PersistentSessionStore::new_in_memory()
+                        .expect("Failed to create in-memory session store"),
+                )
+            }
+        };
+
         Self {
             agent: Arc::new(RwLock::new((*agent).clone())),
-            session_manager: Arc::new(tokio::sync::RwLock::new(SessionManager::new())),
+            session_store,
             tool_registry: agent.registry().clone(),
             task_manager,
             activity_logger: ActivityLogger::new(),
+            started_at: Utc::now(),
+            active_connections: AtomicUsize::new(0),
         }
     }
 }
@@ -49,7 +77,7 @@ pub async fn run(
     agent: Arc<Agent>,
     task_manager: Arc<BackgroundTaskManager>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let state = Arc::new(AppState::new(agent, task_manager));
+    let state = Arc::new(AppState::new(agent, task_manager).await);
 
     // 启动会话清理后台任务
     let cleanup_state = state.clone();
@@ -57,8 +85,9 @@ pub async fn run(
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
         loop {
             interval.tick().await;
-            let mut manager = cleanup_state.session_manager.write().await;
-            manager.cleanup_expired(10);
+            if let Err(e) = cleanup_state.session_store.cleanup_expired(10).await {
+                warn!("Session cleanup error: {}", e);
+            }
         }
     });
 
@@ -164,7 +193,6 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/api/files/write", post(handlers::file_write))
         .route("/api/files/glob", get(handlers::file_glob))
         .route("/api/provider", post(handlers::admin_switch_provider))
-
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -205,6 +233,8 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/models", get(handlers::admin_models))
         .route("/api/provider", post(handlers::admin_switch_provider))
         .route("/api/config", get(handlers::admin_get_config).post(handlers::admin_set_config))
+        .route("/api/sessions", get(handlers::list_sessions))
+        .route("/api/sessions/:id", get(handlers::get_session).delete(handlers::delete_session))
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

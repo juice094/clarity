@@ -74,6 +74,8 @@
 //! ```
 
 pub mod backends;
+pub mod bm25;
+pub mod chunking;
 pub mod compiler;
 pub mod embedding;
 pub mod extractor;
@@ -88,6 +90,7 @@ pub use backends::SqliteStore;
 pub use backends::{BackendConfig, StorageBackend, StorageFactory};
 pub use backends::{FileStore, HybridStore};
 
+pub use bm25::{Bm25Index, IncrementalBm25Index};
 pub use compiler::MemoryCompiler;
 pub use embedding::{CosineIndex, SparseVector, TfidfVectorizer, VectorStore};
 pub use extractor::{FactExtractor, LlmClient};

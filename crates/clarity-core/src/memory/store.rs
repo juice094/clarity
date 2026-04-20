@@ -26,7 +26,7 @@ pub trait MemoryStore: Send + Sync {
     /// Get memory count
     async fn count(&self) -> anyhow::Result<usize>;
 
-    /// Search memories by query string
+    /// Search memories by query string (keyword/substring search)
     async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Memory>> {
         let memories = self.retrieve(0.0).await?;
         let filtered: Vec<Memory> = memories
@@ -35,6 +35,15 @@ pub trait MemoryStore: Send + Sync {
             .take(limit)
             .collect();
         Ok(filtered)
+    }
+
+    /// Search memories by semantic similarity (hybrid BM25 + FTS5 when available)
+    ///
+    /// Returns memories ranked by relevance score, highest first.
+    /// Default implementation falls back to substring search with uniform scores.
+    async fn search_similar(&self, query: &str, limit: usize) -> anyhow::Result<Vec<(Memory, f32)>> {
+        let memories = self.search(query, limit).await?;
+        Ok(memories.into_iter().map(|m| (m, 1.0)).collect())
     }
 
     /// Summarize memories into a formatted string

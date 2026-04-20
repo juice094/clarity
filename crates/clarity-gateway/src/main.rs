@@ -13,7 +13,7 @@ use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::llm::LlmFactory;
 use clarity_core::mcp::{
     config::McpConfig,
-    register_mcp_tools, McpClientBuilder, McpRegistry, McpServerConfig,
+    register_mcp_tools, McpClientBuilder, McpRegistry,
 };
 use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
@@ -142,10 +142,7 @@ async fn load_and_register_mcp_tools(agent: &Agent) {
             info!("MCP server '{}' is disabled, skipping", name);
             continue;
         }
-        let server_config = McpServerConfig::stdio(name, &entry.command)
-            .with_args(entry.args.clone())
-            .with_envs(entry.env.clone());
-        let client = McpClientBuilder::from_config(server_config);
+        let client = McpClientBuilder::from_mcp_entry(name, entry);
         mcp_registry.register(name, client);
     }
 

@@ -51,11 +51,11 @@ pub mod llm;
 pub mod mcp;
 pub mod memory;
 pub mod notifications;
-
 pub mod registry;
-pub mod skill;
+pub mod skills;
 pub mod subagents;
 pub mod tools;
+pub mod types;
 
 // Re-export core types
 pub use agent::Agent;

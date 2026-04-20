@@ -11,7 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::server::AppState;
-use crate::session::{EntryPoint, SessionId};
+use crate::session::SessionId;
+use crate::session_store::SessionMessage;
 
 /// WebSocket 升级处理器
 pub async fn ws_handler(
@@ -26,10 +27,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let session_id = SessionId::new();
     info!("WebSocket connected: session_id={}", session_id);
 
-    // 创建会话
-    {
-        let mut manager = state.session_manager.write().await;
-        manager.create_session(session_id.clone(), EntryPoint::Window);
+    // 增加活跃连接计数
+    state.active_connections.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+    // 创建持久化会话
+    if let Err(e) = state.session_store.create_session(&session_id.to_string()).await {
+        error!("Failed to create session in store: {}", e);
     }
 
     let (mut sender, mut receiver) = socket.split();
@@ -98,11 +101,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    // 清理会话
-    {
-        let mut manager = state.session_manager.write().await;
-        manager.destroy_session(&session_id, EntryPoint::Window);
-    }
+    // 减少活跃连接计数（保留 SQLite 中的会话历史）
+    state
+        .active_connections
+        .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     info!("WebSocket disconnected: session_id={}", session_id);
 }
 
@@ -118,12 +120,14 @@ async fn handle_chat_with_wire(
         session_id, message
     );
 
-    // 记录用户消息
+    // 记录用户消息到持久化存储
+    let user_msg = SessionMessage::new("user", &message);
+    if let Err(e) = state
+        .session_store
+        .append_message(&session_id.to_string(), &user_msg)
+        .await
     {
-        let mut manager = state.session_manager.write().await;
-        if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
-            session.record_message("user", &message);
-        }
+        error!("Failed to append user message: {}", e);
     }
 
     // Create wire and wire-enabled agent
@@ -153,12 +157,14 @@ async fn handle_chat_with_wire(
     // Wait for agent to complete
     match agent_task.await {
         Ok(Ok(response_text)) => {
-            // 记录助手回复
+            // 记录助手回复到持久化存储
+            let assistant_msg = SessionMessage::new("assistant", &response_text);
+            if let Err(e) = state
+                .session_store
+                .append_message(&session_id.to_string(), &assistant_msg)
+                .await
             {
-                let mut manager = state.session_manager.write().await;
-                if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
-                    session.record_message("assistant", &response_text);
-                }
+                error!("Failed to append assistant message: {}", e);
             }
         }
         Ok(Err(e)) => {
@@ -251,24 +257,28 @@ async fn handle_request(
                 session_id, message
             );
 
-            // 记录用户消息
+            // 记录用户消息到持久化存储
+            let user_msg = SessionMessage::new("user", &message);
+            if let Err(e) = state
+                .session_store
+                .append_message(&session_id.to_string(), &user_msg)
+                .await
             {
-                let mut manager = state.session_manager.write().await;
-                if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
-                    session.record_message("user", &message);
-                }
+                error!("Failed to append user message: {}", e);
             }
 
             // 使用 Agent 处理消息
             let agent = state.agent.read().await.clone();
             match agent.run(&message).await {
                 Ok(response_text) => {
-                    // 记录助手回复
+                    // 记录助手回复到持久化存储
+                    let assistant_msg = SessionMessage::new("assistant", &response_text);
+                    if let Err(e) = state
+                        .session_store
+                        .append_message(&session_id.to_string(), &assistant_msg)
+                        .await
                     {
-                        let mut manager = state.session_manager.write().await;
-                        if let Some(session) = manager.get_session_mut(session_id, EntryPoint::Window) {
-                            session.record_message("assistant", &response_text);
-                        }
+                        error!("Failed to append assistant message: {}", e);
                     }
 
                     WsResponse::Chat {
@@ -286,23 +296,18 @@ async fn handle_request(
         }
         WsRequest::Ping => WsResponse::Pong,
         WsRequest::GetHistory => {
-            let messages = {
-                let manager = state.session_manager.read().await;
-                manager
-                    .get_session(session_id, EntryPoint::Window)
-                    .map(|session| {
-                        session
-                            .get_messages()
-                            .iter()
-                            .map(|m| ChatMessage {
-                                role: m.role.clone(),
-                                content: m.content.clone(),
-                                timestamp: m.timestamp.to_rfc3339(),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            };
+            let messages = state
+                .session_store
+                .load_session(&session_id.to_string())
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| ChatMessage {
+                    role: m.role,
+                    content: m.content,
+                    timestamp: m.created_at.to_rfc3339(),
+                })
+                .collect();
 
             WsResponse::History { messages }
         }

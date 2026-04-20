@@ -3,7 +3,7 @@
 //! This module provides an asynchronous approval system for tool calls,
 //! supporting different approval modes and both foreground and background contexts.
 
-use crate::agent::ToolCall;
+use crate::types::ToolCall;
 use crate::error::AgentError;
 use async_trait::async_trait;
 use std::collections::HashMap;

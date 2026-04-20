@@ -41,7 +41,7 @@
 //! 3. `~/.config/clarity/models.toml`
 //! 4. Built-in fallback (auto-detect from env vars)
 
-use crate::agent::LlmProvider;
+use crate::llm::api::LlmProvider;
 use crate::error::AgentError;
 use crate::llm::{LlamaServerProvider, OpenAiCompatibleLlm};
 use serde::{Deserialize, Serialize};

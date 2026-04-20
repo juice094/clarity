@@ -2,7 +2,8 @@
 //!
 //! Builds Agent instances for subagents.
 
-use crate::agent::{Agent, AgentConfig, Message};
+use crate::agent::{Agent, AgentConfig};
+use crate::llm::api::Message;
 use crate::registry::ToolRegistry;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
 use crate::subagents::store::SubagentStore;

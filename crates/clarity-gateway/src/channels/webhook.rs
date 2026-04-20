@@ -76,10 +76,8 @@ impl WebhookChannel {
         }
     }
 
-    /// 启动 HTTP 服务器接收 webhook
-    async fn start_server(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
-        let addr = format!("0.0.0.0:{}", self.port);
-
+    /// 构建 webhook router（可复用于测试）
+    pub fn create_router(&self, agent: Arc<Agent>) -> Result<Router, ChannelError> {
         let app_state = WebhookAppState {
             agent: Arc::new(RwLock::new((*agent).clone())),
             auth_header: self.auth_header.clone(),
@@ -87,10 +85,17 @@ impl WebhookChannel {
             webhook_secret: self.webhook_secret.clone(),
         };
 
-        let app = Router::new()
+        Ok(Router::new()
             .route("/webhook", post(webhook_handler))
             .route("/webhook/:platform", post(webhook_handler_with_platform))
-            .with_state(Arc::new(app_state));
+            .with_state(Arc::new(app_state)))
+    }
+
+    /// 启动 HTTP 服务器接收 webhook
+    async fn start_server(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
+        let addr = format!("0.0.0.0:{}", self.port);
+
+        let app = self.create_router(agent)?;
 
         let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| {
             ChannelError::ConnectionFailed(format!("Failed to bind to {}: {}", addr, e))
@@ -175,7 +180,7 @@ struct WebhookAppState {
 }
 
 /// 通用 Webhook 请求
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct WebhookRequest {
     /// 消息内容
     pub message: Option<String>,
@@ -192,7 +197,7 @@ pub struct WebhookRequest {
 }
 
 /// Webhook 响应
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WebhookResponse {
     pub success: bool,
     pub message: Option<String>,

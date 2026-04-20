@@ -12,18 +12,18 @@ use tower_http::trace::TraceLayer;
 
 /// Build the same API router that the gateway uses, but wired to a fresh
 /// `AppState` so we can exercise it without spawning a real server.
-fn test_api_router() -> Router {
+async fn test_api_router() -> Router {
     let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
     let config = clarity_core::agent::AgentConfig::new();
     let agent = Arc::new(clarity_core::agent::Agent::with_config(registry, config));
     let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&temp);
     let task_manager = Arc::new(BackgroundTaskManager::new(
-        &temp.join("store"),
-        &temp.join("work"),
-        &temp.join("context"),
+        temp.join("store"),
+        temp.join("work"),
+        temp.join("context"),
     ));
-    let state = Arc::new(AppState::new(agent, task_manager));
+    let state = Arc::new(AppState::new(agent, task_manager).await);
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -41,7 +41,7 @@ fn test_api_router() -> Router {
 /// Scenario D — Health check should return 200 with a JSON payload.
 #[tokio::test]
 async fn test_gateway_health_check() {
-    let app = test_api_router();
+    let app = test_api_router().await;
     let response = app
         .oneshot(
             Request::builder()
@@ -63,7 +63,7 @@ async fn test_gateway_health_check() {
 /// This exercises the handler input validation without requiring a live LLM.
 #[tokio::test]
 async fn test_gateway_chat_completions_missing_user_message() {
-    let app = test_api_router();
+    let app = test_api_router().await;
     let response = app
         .oneshot(
             Request::builder()
@@ -88,7 +88,7 @@ async fn test_gateway_chat_completions_missing_user_message() {
 /// or the contract changes.
 #[tokio::test]
 async fn test_gateway_chat_completions_well_formed_request() {
-    let app = test_api_router();
+    let app = test_api_router().await;
     let response = app
         .oneshot(
             Request::builder()
@@ -130,7 +130,7 @@ async fn test_gateway_websocket_wire_forwarding() {
         &temp.join("work"),
         &temp.join("context"),
     ));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager));
+    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -214,7 +214,7 @@ async fn test_tui_wire_to_gateway_websocket() {
         &temp.join("work"),
         &temp.join("context"),
     ));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager));
+    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

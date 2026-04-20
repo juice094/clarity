@@ -8,7 +8,7 @@
 //!
 //! ```rust,no_run
 //! use clarity_core::compaction::{CompactionConfig, SimpleCompaction, estimate_text_tokens};
-//! use clarity_core::agent::{Message, MessageRole};
+//! use clarity_core::llm::api::{Message, MessageRole};
 //!
 //! // Estimate token count for text
 //! let tokens = estimate_text_tokens("Hello, world!");
@@ -18,7 +18,7 @@
 //! let should_compact = config.should_compact(7000, 8192);
 //! ```
 
-use crate::agent::{LlmProvider, Message, MessageRole};
+use crate::llm::api::{LlmProvider, Message, MessageRole};
 use crate::error::AgentError;
 use async_trait::async_trait;
 

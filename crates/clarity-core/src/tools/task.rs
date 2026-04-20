@@ -66,7 +66,7 @@ impl Tool for TaskListTool {
             "running" => store.list_by_status(TaskStatus::Running).await,
             "completed" => store.list_by_status(TaskStatus::Completed).await,
             "failed" => store.list_by_status(TaskStatus::Failed).await,
-            "all" | _ => store.list_all().await,
+            _ => store.list_all().await,
         }
         .map_err(|e| ToolError::execution_failed(format!("Failed to list tasks: {}", e)))?;
 

@@ -26,6 +26,7 @@ tokio-util = { workspace = true }
 rand = "0.8"
 uuid = { workspace = true }
 toml = "0.8"
+serde_yaml = "0.9"
 dirs = "5.0"
 url = "2.5"
 urlencoding = "2.1"

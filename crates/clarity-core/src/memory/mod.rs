@@ -17,6 +17,7 @@ use tokio::sync::RwLock;
 mod store;
 
 pub use store::{InMemoryStore, MemoryStore};
+pub use clarity_memory::chunking::{Chunk, ChunkConfig, Chunker};
 
 /// A single memory entry
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -203,6 +204,15 @@ impl MemoryStore for PersistentMemoryStore {
         Ok(facts
             .into_iter()
             .map(|f| fact_to_memory(f, &scores))
+            .collect())
+    }
+
+    async fn search_similar(&self, query: &str, limit: usize) -> anyhow::Result<Vec<(Memory, f32)>> {
+        let results = self.inner.search_hybrid(query, limit).await?;
+        let scores = self.importance_scores.read().await;
+        Ok(results
+            .into_iter()
+            .map(|(fact, score)| (fact_to_memory(fact, &scores), score))
             .collect())
     }
 

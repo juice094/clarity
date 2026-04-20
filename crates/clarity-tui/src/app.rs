@@ -105,6 +105,8 @@ pub struct App {
     complete_last_index: usize,
     /// Session token usage
     pub session_usage: Option<(u32, u32, u32)>,
+    /// Skill registry for listing and selection
+    pub skill_registry: Option<clarity_core::skills::SkillRegistry>,
 }
 
 impl App {
@@ -138,6 +140,7 @@ impl App {
             complete_last_prefix: String::new(),
             complete_last_index: 0,
             session_usage: None,
+            skill_registry: None,
         }
     }
 
@@ -387,6 +390,16 @@ impl App {
             self.messages
                 .push(Message::new("⏹️ 生成已停止。", MessageType::System));
         }
+    }
+
+    /// Set the active skill on the underlying agent.
+    pub fn set_active_skill(&self, skill_id: Option<String>) {
+        self.agent.set_active_skill(skill_id);
+    }
+
+    /// Get the currently active skill id from the underlying agent.
+    pub fn active_skill(&self) -> Option<String> {
+        self.agent.active_skill()
     }
 
     /// 完成生成

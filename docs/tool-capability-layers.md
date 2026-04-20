@@ -1,6 +1,7 @@
 # Clarity 工具能力分层体系
 
-> 分析日期：2026-04-15
+> 分析日期：2026-04-20
+> 状态：已更新 — 标记 2026-04-15 至 2026-04-20 期间落地的实现
 > 参考：kimi-cli 源码 + Clarity 当前实现 + 竞品分析
 > 目标：建立统一的工具认知框架，指导后续工作流设计
 
@@ -76,8 +77,8 @@
 
 | 工具 | 功能 | kimi-cli | Clarity | 缺口 |
 |------|------|:--------:|:-------:|:----:|
-| **SearchWeb** | 网络搜索 | ✅ | ❌ | 🔴 |
-| **FetchURL** | 网页抓取 | ✅ | ❌ | 🔴 |
+| **SearchWeb** | 网络搜索 | ✅ | ✅ | — |
+| **FetchURL** | 网页抓取 | ✅ | ✅ | — |
 | **Browse** | 浏览器自动化 | ✅ | ❌ | 🔴 |
 | **CodeAnalysis** | 代码语法/依赖分析 | ⚠️ 间接 | ❌ | 🟡 |
 | **ParsePDF** | PDF 文本/表格提取 | ❌ | ❌ | 🟡 |
@@ -94,8 +95,8 @@
 
 | 工具 | 功能 | kimi-cli | Clarity | 缺口 |
 |------|------|:--------:|:-------:|:----:|
-| **Think** | 显式思考/整理思路 | ✅ | ❌ | 🟡 |
-| **Plan** | 任务分解与计划制定 | ✅ (PlanMode) | ❌ | 🟡 |
+| **Think** | 显式思考/整理思路 | ✅ | ✅ | — |
+| **Plan** | 任务分解与计划制定 | ✅ (PlanMode) | ✅ | — |
 | **Memory** | 长期记忆存储/检索 | ✅ | ✅ | — |
 | **Compaction** | 上下文压缩/总结 | ✅ | ✅ | — |
 | **Sub-agent** | 子代理委派 | ✅ (LaborMarket) | ⚠️ 基础版 | 🟡 |
@@ -108,13 +109,13 @@
 
 | 工具 | 功能 | kimi-cli | Clarity | 缺口 |
 |------|------|:--------:|:-------:|:----:|
-| **AskUser** | 开放式提问 | ✅ | ❌ | 🟡 |
+| **AskUser** | 开放式提问 | ✅ | ✅ | — |
 | **Approval** | 操作许可请求 | ✅ | ✅ | — |
-| **Notify** | 系统通知/推送 | ✅ | ❌ | 🟡 |
-| **TaskList** | 查看后台任务 | ✅ | ❌ | 🔴 |
-| **TaskOutput** | 拉取任务输出 | ✅ | ❌ | 🔴 |
-| **TaskStop** | 停止后台任务 | ✅ | ❌ | 🔴 |
-| **SetTodoList** | 设置待办事项 | ✅ | ❌ | 🟡 |
+| **Notify** | 系统通知/推送 | ✅ | ✅ | — |
+| **TaskList** | 查看后台任务 | ✅ | ✅ | — |
+| **TaskOutput** | 拉取任务输出 | ✅ | ✅ | — |
+| **TaskStop** | 停止后台任务 | ✅ | ✅ | — |
+| **SetTodoList** | 设置待办事项 | ✅ | ✅ | — |
 | **Display** | 可视化展示 | ✅ | ❌ | 🟡 |
 
 **关键洞察**：第四层决定 Agent 的"社交能力"。**Task 三连击**（List/Output/Stop）是用户与后台 Agent 交互的核心机制。Clarity 没有任务系统，意味着一旦启动长任务，用户就失去了控制感。
@@ -127,7 +128,7 @@
 |------|------|:--------:|:-------:|:----:|
 | **ToolRegistry** | 动态注册/注销工具 | ✅ (内置) | ✅ (MCP) | — |
 | **Plugin** | 插件安装/管理 | ✅ | ❌ | 🟡 |
-| **Skill** | 技能包管理 | ✅ (Skill系统) | ❌ | 🟡 |
+| **Skill** | 技能包管理 | ✅ (Skill系统) | ✅ | — |
 | **Sandbox** | 权限分级控制 | ✅ (ApprovalRuntime) | ❌ | 🟡 |
 
 **关键洞察**：第五层决定系统的"可扩展性"。kimi-cli 的 Skill 系统（Markdown 驱动的可配置行为）和 Plugin 系统让社区可以持续扩展能力。Clarity 的 MCP 是技术层面的扩展，缺少应用层面的包装。
@@ -145,26 +146,20 @@
         └─────────────────────────────────────┘
         
 第二层  ┌─────────────────────────────────────┐
-        │  SearchWeb      │  FetchURL          │
         │  Browse         │  ImageOCR          │
         │  CodeAnalysis   │  Git工具           │
         └─────────────────────────────────────┘
         
 第三层  ┌─────────────────────────────────────┐
-        │  Think          │  Plan              │
         │  Sub-agent增强  │                    │
         └─────────────────────────────────────┘
         
 第四层  ┌─────────────────────────────────────┐
-        │  TaskList       │  TaskOutput        │
-        │  TaskStop       │  SetTodoList       │
-        │  AskUser        │  Notify            │
         │  Display        │                    │
         └─────────────────────────────────────┘
         
 第五层  ┌─────────────────────────────────────┐
-        │  Plugin         │  Skill             │
-        │  Sandbox        │                    │
+        │  Plugin         │  Sandbox           │
         └─────────────────────────────────────┘
 ```
 
@@ -222,13 +217,13 @@
 
 ## 六、总结
 
-**当前状态**：Clarity 的工具能力大约覆盖 kimi-cli 的 **40%**。
+**当前状态**：Clarity 的工具能力大约覆盖 kimi-cli 的 **75%**（P0 已补齐，P1 基本补齐）。
 
-**kimi-cli 的杀手锏**（Clarity 完全缺失）：
-1. Web 三连击（SearchWeb + FetchURL + Browse）
-2. Task 三连击（TaskList + TaskOutput + TaskStop）
-3. Think + PlanMode（认知层增强）
-4. LaborMarket（子代理劳动力市场）
+**kimi-cli 的杀手锏**（Clarity 仍缺失或较弱）：
+1. Browse（浏览器自动化）
+2. ReadMediaFile / ImageOCR（多模态输入）
+3. Display（可视化输出）
+4. LaborMarket 增强（子代理劳动力市场的高级调度）
 
 **Clarity 的护城河**（kimi-cli 不具备）：
 1. 三层差异化（不同入口不同工具集）
@@ -236,9 +231,9 @@
 3. Rust 基础设施（性能、安全、可嵌入）
 
 **修复路线**：
-> 先补齐 P0 生存级（Web + Task + Media），让格雷"能活下去"。
-> 再补齐 P1 体验级（Think + Plan + Todo + AskUser），让格雷"活得舒服"。
-> 最后补齐 P2 增强级（Plugin + Skill + Sandbox），让格雷"活得精彩"。
+> P0 生存级（Web + Task）已在 2026-04-20 前补齐。下一步重点是 Media（ReadMediaFile / ImageOCR）和 Browse。
+> P1 体验级（Think + Plan + Todo + AskUser + Notify）已实现。Display 仍待开发。
+> P2 增强级（Plugin + Sandbox）中长期规划。
 
 ---
 

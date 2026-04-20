@@ -6,10 +6,12 @@
 //! - OpenAI
 //! - More providers can be added by implementing the LlmProvider trait
 
+pub mod api;
 pub mod deepseek;
 pub mod kalosm;
 pub mod llama_server;
 pub mod model_registry;
+pub mod sse;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
@@ -17,7 +19,8 @@ pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
 pub use model_registry::{ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType, ProviderConfig, build_provider_from_registry};
 
-use crate::agent::{LlmProvider, LlmResponse, Message, MessageRole};
+pub use api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
+
 use crate::error::AgentError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -27,13 +30,6 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-
-/// Delta emitted by a streaming LLM response.
-#[derive(Debug, Clone, Default)]
-pub struct StreamDelta {
-    pub content: Option<String>,
-    pub tool_calls: Vec<crate::agent::ToolCall>,
-}
 
 static SHARED_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
@@ -270,11 +266,11 @@ impl LlmProvider for OpenAiCompatibleLlm {
                 }
             })
             .unwrap_or_default();
-        let tool_calls: Vec<crate::agent::ToolCall> = choice
+        let tool_calls: Vec<crate::types::ToolCall> = choice
             .and_then(|c| c.message.tool_calls)
             .map(|tcs| {
                 tcs.into_iter()
-                    .map(|tc| crate::agent::ToolCall {
+                    .map(|tc| crate::types::ToolCall {
                         id: tc.id,
                         call_type: if tc.call_type.is_empty() {
                             "function".to_string()
@@ -342,44 +338,6 @@ impl LlmProvider for OpenAiCompatibleLlm {
         let (tx, rx) = tokio::sync::mpsc::channel(128);
 
         tokio::spawn(async move {
-            #[derive(Default)]
-            struct PartialToolCall {
-                id: String,
-                call_type: String,
-                name: String,
-                arguments: String,
-            }
-
-            let assemble = |ptc: &PartialToolCall| -> crate::agent::ToolCall {
-                crate::agent::ToolCall {
-                    id: ptc.id.clone(),
-                    call_type: if ptc.call_type.is_empty() {
-                        "function".to_string()
-                    } else {
-                        ptc.call_type.clone()
-                    },
-                    function: crate::agent::FunctionCall {
-                        name: ptc.name.clone(),
-                        arguments: ptc.arguments.clone(),
-                    },
-                }
-            };
-
-            let flush_last =
-                |pc: &[PartialToolCall], lsi: Option<usize>| -> Option<crate::agent::ToolCall> {
-                    let idx = lsi?;
-                    let ptc = pc.get(idx)?;
-                    let call = assemble(ptc);
-                    if call.id.is_empty() || call.function.name.is_empty() {
-                        None
-                    } else {
-                        Some(call)
-                    }
-                };
-
-            let mut partial_calls: Vec<PartialToolCall> = Vec::new();
-            let mut last_seen_index: Option<usize> = None;
-
             let response = client
                 .post(&url)
                 .header("Authorization", format!("Bearer {}", api_key))
@@ -402,6 +360,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
                     let mut stream = resp.bytes_stream();
                     use futures::StreamExt;
+                    let mut parser = sse::SseParser::new();
 
                     while let Some(chunk) = stream.next().await {
                         match chunk {
@@ -410,155 +369,14 @@ impl LlmProvider for OpenAiCompatibleLlm {
                                 for line in text.lines() {
                                     if let Some(data) = line.strip_prefix("data:") {
                                         let data = data.trim_start();
-                                        if data == "[DONE]" {
-                                            if let Some(call) =
-                                                flush_last(&partial_calls, last_seen_index)
-                                            {
-                                                let _ = tx
-                                                    .send(Ok(StreamDelta {
-                                                        content: None,
-                                                        tool_calls: vec![call],
-                                                    }))
-                                                    .await;
+                                        let deltas = parser.process_line(data);
+                                        for delta in deltas {
+                                            if tx.send(Ok(delta)).await.is_err() {
+                                                return;
                                             }
-                                            return;
                                         }
-                                        if let Ok(event) =
-                                            serde_json::from_str::<serde_json::Value>(data)
-                                        {
-                                            if let Some(choices) =
-                                                event.get("choices").and_then(|c| c.as_array())
-                                            {
-                                                for choice in choices {
-                                                    if let Some(delta) = choice.get("delta") {
-                                                        // Content delta
-                                                        if let Some(content) = delta
-                                                            .get("content")
-                                                            .and_then(|c| c.as_str())
-                                                        {
-                                                            if !content.is_empty()
-                                                                && tx
-                                                                    .send(Ok(StreamDelta {
-                                                                        content: Some(
-                                                                            content.to_string(),
-                                                                        ),
-                                                                        tool_calls: vec![],
-                                                                    }))
-                                                                    .await
-                                                                    .is_err()
-                                                            {
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        // Reasoning content delta (Kimi Code API)
-                                                        if let Some(reasoning) = delta
-                                                            .get("reasoning_content")
-                                                            .and_then(|c| c.as_str())
-                                                        {
-                                                            if !reasoning.is_empty()
-                                                                && tx
-                                                                    .send(Ok(StreamDelta {
-                                                                        content: Some(
-                                                                            reasoning.to_string(),
-                                                                        ),
-                                                                        tool_calls: vec![],
-                                                                    }))
-                                                                    .await
-                                                                    .is_err()
-                                                            {
-                                                                return;
-                                                            }
-                                                        }
-
-                                                        // Tool call deltas
-                                                        if let Some(tool_calls) = delta
-                                                            .get("tool_calls")
-                                                            .and_then(|t| t.as_array())
-                                                        {
-                                                            for tc_delta in tool_calls {
-                                                                if let Some(index) = tc_delta
-                                                                    .get("index")
-                                                                    .and_then(|i| i.as_u64())
-                                                                    .map(|i| i as usize)
-                                                                {
-                                                                    // Flush previous index when a new one appears
-                                                                    if let Some(last) =
-                                                                        last_seen_index
-                                                                    {
-                                                                        if index > last {
-                                                                            if let Some(call) =
-                                                                                flush_last(
-                                                                                    &partial_calls,
-                                                                                    last_seen_index,
-                                                                                )
-                                                                            {
-                                                                                if tx.send(Ok(StreamDelta {
-                                                                                    content: None,
-                                                                                    tool_calls: vec![call],
-                                                                                })).await.is_err() {
-                                                                                    return;
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-
-                                                                    last_seen_index = Some(index);
-
-                                                                    if index >= partial_calls.len()
-                                                                    {
-                                                                        partial_calls.resize_with(index + 1, PartialToolCall::default);
-                                                                    }
-
-                                                                    if let Some(id) = tc_delta
-                                                                        .get("id")
-                                                                        .and_then(|i| i.as_str())
-                                                                    {
-                                                                        partial_calls[index]
-                                                                            .id
-                                                                            .push_str(id);
-                                                                    }
-                                                                    if let Some(call_type) =
-                                                                        tc_delta
-                                                                            .get("type")
-                                                                            .and_then(|t| {
-                                                                                t.as_str()
-                                                                            })
-                                                                    {
-                                                                        partial_calls[index]
-                                                                            .call_type
-                                                                            .push_str(call_type);
-                                                                    }
-                                                                    if let Some(func) =
-                                                                        tc_delta.get("function")
-                                                                    {
-                                                                        if let Some(name) = func
-                                                                            .get("name")
-                                                                            .and_then(|n| {
-                                                                                n.as_str()
-                                                                            })
-                                                                        {
-                                                                            partial_calls[index]
-                                                                                .name
-                                                                                .push_str(name);
-                                                                        }
-                                                                        if let Some(args) = func
-                                                                            .get("arguments")
-                                                                            .and_then(|a| {
-                                                                                a.as_str()
-                                                                            })
-                                                                        {
-                                                                            partial_calls[index]
-                                                                                .arguments
-                                                                                .push_str(args);
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                        if data == "[DONE]" {
+                                            return;
                                         }
                                     }
                                 }
@@ -573,13 +391,8 @@ impl LlmProvider for OpenAiCompatibleLlm {
                     }
 
                     // Flush any remaining completed tool call when stream ends without [DONE]
-                    if let Some(call) = flush_last(&partial_calls, last_seen_index) {
-                        let _ = tx
-                            .send(Ok(StreamDelta {
-                                content: None,
-                                tool_calls: vec![call],
-                            }))
-                            .await;
+                    if let Some(delta) = parser.flush() {
+                        let _ = tx.send(Ok(delta)).await;
                     }
                 }
                 Err(e) => {

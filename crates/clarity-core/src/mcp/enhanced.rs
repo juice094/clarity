@@ -228,6 +228,35 @@ pub trait McpClient: Send + Sync {
         let result = self.request_raw("tools/call", Some(params)).await?;
         serde_json::from_value(result).map_err(McpError::Serialization)
     }
+
+    /// List available resources
+    async fn list_resources(&self) -> Result<ListResourcesResult, McpError> {
+        let result = self.request_raw("resources/list", None).await?;
+        serde_json::from_value(result).map_err(McpError::Serialization)
+    }
+
+    /// Read a resource by URI
+    async fn read_resource(&self, uri: &str) -> Result<ReadResourceResult, McpError> {
+        let params = serde_json::json!({ "uri": uri });
+        let result = self.request_raw("resources/read", Some(params)).await?;
+        serde_json::from_value(result).map_err(McpError::Serialization)
+    }
+
+    /// List available prompts
+    async fn list_prompts(&self) -> Result<ListPromptsResult, McpError> {
+        let result = self.request_raw("prompts/list", None).await?;
+        serde_json::from_value(result).map_err(McpError::Serialization)
+    }
+
+    /// Get a prompt by name with optional arguments
+    async fn get_prompt(&self, name: &str, arguments: Option<Value>) -> Result<GetPromptResult, McpError> {
+        let mut params = serde_json::json!({ "name": name });
+        if let Some(args) = arguments {
+            params["arguments"] = args;
+        }
+        let result = self.request_raw("prompts/get", Some(params)).await?;
+        serde_json::from_value(result).map_err(McpError::Serialization)
+    }
 }
 
 // =============================================================================
@@ -613,33 +642,105 @@ impl McpClient for HttpMcpClient {
 /// `request_raw()` sends plain HTTP POST requests instead of using the
 /// Server-Sent Events protocol. A proper SSE implementation is tracked as a
 /// known limitation (P1).
-pub struct SseMcpClientStub {
+pub struct SseMcpClient {
     config: McpServerConfig,
     client: reqwest::Client,
     request_id: AtomicU64,
+    pending: Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse<Value>>>>>,
+    sse_task: Option<tokio::task::JoinHandle<()>>,
 }
 
-impl SseMcpClientStub {
+impl SseMcpClient {
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
             client: reqwest::Client::new(),
             request_id: AtomicU64::new(1),
+            pending: Arc::new(RwLock::new(HashMap::new())),
+            sse_task: None,
         }
     }
 }
 
 #[async_trait]
-impl McpClient for SseMcpClientStub {
+impl McpClient for SseMcpClient {
     async fn connect(&mut self) -> Result<(), McpError> {
-        warn!(
-            "SSE MCP client '{}' connect() is a stub (no-op)",
-            self.config.name
-        );
+        let McpTransport::Sse { url, timeout_seconds, .. } = &self.config.transport else {
+            return Err(McpError::InvalidTransport("Expected SSE transport".into()));
+        };
+
+        let client = self.client.clone();
+        let pending = self.pending.clone();
+        let url = url.clone();
+        let timeout = *timeout_seconds;
+
+        let task = tokio::spawn(async move {
+            let response = match client
+                .get(&url)
+                .timeout(Duration::from_secs(timeout))
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("SSE connection failed: {}", e);
+                    return;
+                }
+            };
+
+            let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
+            use futures::StreamExt;
+
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        buffer.push_str(&String::from_utf8_lossy(&bytes));
+                        while let Some(pos) = buffer.find('\n') {
+                            let line = buffer[..pos].trim_end_matches('\r').to_string();
+                            buffer = buffer[pos + 1..].to_string();
+
+                            if let Some(data) = line.strip_prefix("data:") {
+                                let data = data.trim_start();
+                                if data.is_empty() { continue; }
+                                if let Ok(response) = serde_json::from_str::<JsonRpcResponse<Value>>(data) {
+                                    let mut pending = pending.write().await;
+                                    if let Some(sender) = pending.remove(&response.id) {
+                                        let _ = sender.send(response);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("SSE stream error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        self.sse_task = Some(task);
+
+        // Perform initialization handshake via POST
+        let init_params = serde_json::json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "clarity-core",
+                "version": env!("CARGO_PKG_VERSION")
+            }
+        });
+        let _ = self.request_raw("initialize", Some(init_params)).await?;
+        let _ = self.request_raw("notifications/initialized", None).await;
+
         Ok(())
     }
 
     async fn disconnect(&mut self) -> Result<(), McpError> {
+        if let Some(task) = self.sse_task.take() {
+            task.abort();
+        }
         Ok(())
     }
 
@@ -652,36 +753,63 @@ impl McpClient for SseMcpClientStub {
             params,
         };
 
-        let McpTransport::Sse {
-            url,
-            timeout_seconds,
-            ..
-        } = &self.config.transport
-        else {
+        let McpTransport::Sse { url, timeout_seconds, .. } = &self.config.transport else {
             return Err(McpError::InvalidTransport("Expected SSE transport".into()));
         };
 
-        let response = self
-            .client
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut pending = self.pending.write().await;
+            pending.insert(id, tx);
+        }
+
+        let post_result = self.client
             .post(url)
             .json(&request)
             .timeout(Duration::from_secs(*timeout_seconds))
             .send()
-            .await
-            .map_err(|e| McpError::RequestFailed(e.to_string()))?;
+            .await;
 
-        let rpc_response: JsonRpcResponse<Value> = response
-            .json()
-            .await
-            .map_err(|e| McpError::InvalidResponse(e.to_string()))?;
-
-        if let Some(error) = rpc_response.error {
-            return Err(McpError::RpcError(error.message));
+        match post_result {
+            Ok(response) => {
+                // Try to parse direct JSON-RPC response from POST body
+                if let Ok(body) = response.json::<JsonRpcResponse<Value>>().await {
+                    if let Some(error) = body.error {
+                        return Err(McpError::RpcError(error.message));
+                    }
+                    if let Some(result) = body.result {
+                        let mut pending = self.pending.write().await;
+                        pending.remove(&id);
+                        return Ok(result);
+                    }
+                }
+            }
+            Err(e) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                return Err(McpError::RequestFailed(e.to_string()));
+            }
         }
 
-        rpc_response
-            .result
-            .ok_or_else(|| McpError::InvalidResponse("No result in response".into()))
+        // Wait for response via SSE stream
+        match tokio::time::timeout(Duration::from_secs(*timeout_seconds), rx).await {
+            Ok(Ok(response)) => {
+                if let Some(error) = response.error {
+                    return Err(McpError::RpcError(error.message));
+                }
+                response.result.ok_or_else(|| McpError::InvalidResponse("No result in SSE response".into()))
+            }
+            Ok(Err(_)) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                Err(McpError::RequestFailed("SSE response channel closed".into()))
+            }
+            Err(_) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                Err(McpError::RequestTimeout)
+            }
+        }
     }
 }
 
@@ -698,7 +826,7 @@ impl McpClientBuilder {
                 McpClientInstance::Stdio(Box::new(StdioMcpClient::new(config)))
             }
             McpTransport::Http { .. } => McpClientInstance::Http(HttpMcpClient::new(config)),
-            McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClientStub::new(config)),
+            McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClient::new(config)),
         }
     }
 
@@ -717,6 +845,40 @@ impl McpClientBuilder {
     pub fn sse(name: impl Into<String>, url: impl Into<String>) -> SseClientBuilder {
         SseClientBuilder {
             config: McpServerConfig::sse(name, url),
+        }
+    }
+
+    /// Build an `McpClientInstance` from an `McpServerEntry` (config-file format).
+    /// Automatically selects stdio, http, or sse based on the `transport` field.
+    pub fn from_mcp_entry(name: impl Into<String>, entry: &crate::mcp::config::McpServerEntry) -> McpClientInstance {
+        let name = name.into();
+        match entry.transport.as_deref() {
+            Some("http") | Some("Http") => {
+                let url = entry.url.clone().unwrap_or_default();
+                let mut builder = Self::http(&name, url);
+                for (k, v) in &entry.headers {
+                    builder = builder.header(k, v);
+                }
+                builder.build()
+            }
+            Some("sse") | Some("Sse") => {
+                let url = entry.url.clone().unwrap_or_default();
+                let mut builder = Self::sse(&name, url);
+                for (k, v) in &entry.headers {
+                    builder = builder.header(k, v);
+                }
+                builder.build()
+            }
+            _ => {
+                let mut builder = Self::stdio(&name, &entry.command);
+                for arg in &entry.args {
+                    builder = builder.arg(arg);
+                }
+                for (k, v) in &entry.env {
+                    builder = builder.env(k, v);
+                }
+                builder.build()
+            }
         }
     }
 }
@@ -781,7 +943,7 @@ impl SseClientBuilder {
     }
 
     pub fn build(self) -> McpClientInstance {
-        McpClientInstance::Sse(SseMcpClientStub::new(self.config))
+        McpClientInstance::Sse(SseMcpClient::new(self.config))
     }
 }
 
@@ -826,6 +988,112 @@ pub struct McpResource {
 }
 
 // =============================================================================
+// Resource Types
+// =============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpResourceMeta {
+    pub uri: String,
+    pub name: Option<String>,
+    pub mime_type: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListResourcesResult {
+    pub resources: Vec<McpResourceMeta>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextResourceContents {
+    pub uri: String,
+    pub mime_type: Option<String>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlobResourceContents {
+    pub uri: String,
+    pub mime_type: Option<String>,
+    pub blob: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ResourceContents {
+    Text(TextResourceContents),
+    Blob(BlobResourceContents),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadResourceResult {
+    pub contents: Vec<ResourceContents>,
+}
+
+// =============================================================================
+// Prompt Types
+// =============================================================================
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptArgument {
+    pub name: String,
+    pub description: Option<String>,
+    pub required: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpPrompt {
+    pub name: String,
+    pub description: Option<String>,
+    pub arguments: Option<Vec<PromptArgument>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListPromptsResult {
+    pub prompts: Vec<McpPrompt>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptMessageRole {
+    User,
+    Assistant,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type")]
+pub enum PromptContent {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "image")]
+    Image { data: String, mime_type: String },
+    #[serde(rename = "resource")]
+    Resource { resource: McpResource },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptMessage {
+    pub role: PromptMessageRole,
+    pub content: PromptContent,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPromptResult {
+    pub description: Option<String>,
+    pub messages: Vec<PromptMessage>,
+}
+
+// =============================================================================
 // Error Types
 // =============================================================================
 
@@ -866,7 +1134,7 @@ pub enum McpError {
 pub enum McpClientInstance {
     Stdio(Box<StdioMcpClient>),
     Http(HttpMcpClient),
-    Sse(SseMcpClientStub),
+    Sse(SseMcpClient),
 }
 
 #[async_trait]
@@ -1040,5 +1308,90 @@ mod tests {
             validate_mcp_command_with_allowlist("/usr/bin/node", Some(allowlist)).is_err()
         );
         assert!(validate_mcp_command_with_allowlist("npx", Some(allowlist)).is_err());
+    }
+
+    #[test]
+    fn test_resource_types_deserialize() {
+        let json = serde_json::json!({
+            "resources": [
+                {
+                    "uri": "file:///tmp/test.txt",
+                    "name": "test.txt",
+                    "mimeType": "text/plain",
+                    "description": "A test file"
+                }
+            ]
+        });
+        let result: ListResourcesResult = serde_json::from_value(json).unwrap();
+        assert_eq!(result.resources.len(), 1);
+        assert_eq!(result.resources[0].uri, "file:///tmp/test.txt");
+        assert_eq!(result.resources[0].name.as_ref().unwrap(), "test.txt");
+    }
+
+    #[test]
+    fn test_read_resource_result_deserialize() {
+        let json = serde_json::json!({
+            "contents": [
+                {
+                    "uri": "file:///tmp/test.txt",
+                    "mimeType": "text/plain",
+                    "text": "Hello, world!"
+                }
+            ]
+        });
+        let result: ReadResourceResult = serde_json::from_value(json).unwrap();
+        assert_eq!(result.contents.len(), 1);
+        match &result.contents[0] {
+            ResourceContents::Text(t) => {
+                assert_eq!(t.text, "Hello, world!");
+            }
+            _ => panic!("Expected text resource"),
+        }
+    }
+
+    #[test]
+    fn test_prompt_types_deserialize() {
+        let json = serde_json::json!({
+            "prompts": [
+                {
+                    "name": "code-review",
+                    "description": "Review code changes",
+                    "arguments": [
+                        {
+                            "name": "pr_number",
+                            "description": "The PR number",
+                            "required": true
+                        }
+                    ]
+                }
+            ]
+        });
+        let result: ListPromptsResult = serde_json::from_value(json).unwrap();
+        assert_eq!(result.prompts.len(), 1);
+        assert_eq!(result.prompts[0].name, "code-review");
+        let args = result.prompts[0].arguments.as_ref().unwrap();
+        assert_eq!(args[0].name, "pr_number");
+        assert_eq!(args[0].required, Some(true));
+    }
+
+    #[test]
+    fn test_get_prompt_result_deserialize() {
+        let json = serde_json::json!({
+            "description": "Code review prompt",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": "Please review this code."
+                    }
+                }
+            ]
+        });
+        let result: GetPromptResult = serde_json::from_value(json).unwrap();
+        assert_eq!(result.description.as_ref().unwrap(), "Code review prompt");
+        assert_eq!(result.messages.len(), 1);
+        assert!(matches!(result.messages[0].role, PromptMessageRole::User));
+        assert!(matches!(result.messages[0].content, PromptContent::Text { .. }));
     }
 }

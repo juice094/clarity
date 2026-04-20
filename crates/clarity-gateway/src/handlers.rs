@@ -6,6 +6,7 @@ use axum::{
         IntoResponse, Response,
     },
 };
+use chrono::Utc;
 use std::path::{Path, PathBuf};
 use clarity_core::activity::WindowActivity;
 use clarity_core::agent::{AgentController, ControllerEvent, Message as AgentMessage, MessageRole, Op};
@@ -51,6 +52,10 @@ pub struct ChatCompletionRequest {
     pub temperature: Option<f32>,
     #[serde(default)]
     pub max_tokens: Option<u32>,
+    /// Optional session ID for persisting the conversation.
+    /// If provided, the assistant's reply will be appended to the session.
+    #[serde(default)]
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -67,6 +72,8 @@ pub struct ChatCompletionResponse {
     pub model: String,
     pub choices: Vec<Choice>,
     pub usage: Usage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -93,7 +100,12 @@ pub async fn chat_completions(
     );
     debug!("Request messages: {:?}", req.messages);
 
-    state.session_manager.read().await.record_request();
+    let _ = state.session_store.record_request().await;
+
+    // Resolve or create session id
+    let session_id = req.session_id.clone().or_else(|| {
+        Some(format!("http-{}", uuid::Uuid::new_v4().simple()))
+    });
 
     // Validate that there is at least one user message
     let has_user = req.messages.iter().any(|m| m.role == "user");
@@ -112,8 +124,35 @@ pub async fn chat_completions(
 
     // Build the internal message list:
     // 1. Agent system prompt
-    // 2. All non-system messages from the request
+    // 2. Session history (if session_id provided and session exists)
+    // 3. All non-system messages from the request
     let mut messages: Vec<AgentMessage> = vec![AgentMessage::system(agent.build_system_prompt())];
+
+    // Load session history if a session_id was explicitly provided
+    if let Some(ref sid) = req.session_id {
+        match state.session_store.load_session(sid).await {
+            Ok(history) => {
+                for msg in history {
+                    let role = match msg.role.as_str() {
+                        "user" => MessageRole::User,
+                        "assistant" => MessageRole::Assistant,
+                        "tool" => MessageRole::Tool,
+                        _ => MessageRole::User,
+                    };
+                    messages.push(AgentMessage {
+                        role,
+                        content: msg.content,
+                        tool_calls: msg.tool_calls.map(|s| serde_json::from_str(&s).unwrap_or_default()),
+                        tool_call_id: msg.tool_call_id,
+                    });
+                }
+            }
+            Err(e) => {
+                debug!("Failed to load session {}: {}. Starting fresh.", sid, e);
+            }
+        }
+    }
+
     for msg in &req.messages {
         if msg.role == "system" {
             continue;
@@ -159,11 +198,19 @@ pub async fn chat_completions(
         let created = chrono::Utc::now().timestamp();
         let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
 
+        // Clone session store for background persistence in streaming mode
+        let store = state.session_store.clone();
+        let sid = session_id.clone();
+        let last_user_content = req.messages.iter().rev().find(|m| m.role == "user").map(|m| m.content.clone());
+
         let sse_stream = stream::unfold(
             (event_rx, 0u8),
             move |(mut rx, step)| {
                 let model = model.clone();
                 let id = id.clone();
+                let store = store.clone();
+                let sid = sid.clone();
+                let last_user_content = last_user_content.clone();
                 async move {
                     if step == 2 {
                         return None;
@@ -229,8 +276,25 @@ pub async fn chat_completions(
                             let event = SseEvent::default().data(data.to_string());
                             Some((Ok(event), (rx, 0)))
                         }
-                        Some(ControllerEvent::Complete(_))
-                        | Some(ControllerEvent::Error(_))
+                        Some(ControllerEvent::Complete(final_text)) => {
+                            // Persist the turn in the background
+                            if let (Some(s), Some(uc)) = (sid, last_user_content) {
+                                tokio::spawn(async move {
+                                    let _ = store.append_message(&s, &crate::session_store::SessionMessage::new("user", &uc)).await;
+                                    let _ = store.append_message(&s, &crate::session_store::SessionMessage::new("assistant", &final_text)).await;
+                                });
+                            }
+                            let data = serde_json::json!({
+                                "id": &id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": &model,
+                                "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
+                            });
+                            let event = SseEvent::default().data(data.to_string());
+                            Some((Ok(event), (rx, 1)))
+                        }
+                        Some(ControllerEvent::Error(_))
                         | None => {
                             let data = serde_json::json!({
                                 "id": &id,
@@ -282,6 +346,14 @@ pub async fn chat_completions(
 
         let completion_tokens = content.len() as u32 / 4;
 
+        // Persist the turn to the session store (non-streaming)
+        if let Some(ref sid) = session_id {
+            if let Some(last_user) = req.messages.iter().rev().find(|m| m.role == "user") {
+                let _ = state.session_store.append_message(sid, &crate::session_store::SessionMessage::new("user", &last_user.content)).await;
+            }
+            let _ = state.session_store.append_message(sid, &crate::session_store::SessionMessage::new("assistant", &content)).await;
+        }
+
         let response = ChatCompletionResponse {
             id: format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
             object: "chat.completion".to_string(),
@@ -300,6 +372,7 @@ pub async fn chat_completions(
                 completion_tokens,
                 total_tokens: prompt_tokens + completion_tokens,
             },
+            session_id,
         };
 
         (StatusCode::OK, Json(response)).into_response()
@@ -316,11 +389,21 @@ pub struct StatsResponse {
 }
 
 pub async fn admin_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let session_manager = state.session_manager.read().await;
+    let active_sessions = state
+        .session_store
+        .session_count()
+        .await
+        .unwrap_or(0);
+    let total_requests = state
+        .session_store
+        .total_requests()
+        .await
+        .unwrap_or(0);
+    let uptime_seconds = (Utc::now() - state.started_at).num_seconds() as u64;
     let stats = StatsResponse {
-        active_sessions: session_manager.active_session_count(),
-        total_requests: session_manager.total_requests(),
-        uptime_seconds: session_manager.uptime_seconds(),
+        active_sessions,
+        total_requests,
+        uptime_seconds,
     };
     (StatusCode::OK, Json(stats))
 }
@@ -956,3 +1039,68 @@ pub async fn file_glob(
 }
 
 
+
+// ==================== Admin: Session Management ====================
+
+pub async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.session_store.list_sessions().await {
+        Ok(sessions) => (
+            StatusCode::OK,
+            Json(json!({ "sessions": sessions })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        ),
+    }
+}
+
+pub async fn get_session(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    match state.session_store.load_session(&session_id).await {
+        Ok(messages) => {
+            let msgs: Vec<_> = messages
+                .into_iter()
+                .map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": m.content,
+                        "tool_calls": m.tool_calls,
+                        "tool_call_id": m.tool_call_id,
+                        "created_at": m.created_at.to_rfc3339(),
+                    })
+                })
+                .collect();
+            (
+                StatusCode::OK,
+                Json(json!({ "session_id": session_id, "messages": msgs })),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        ),
+    }
+}
+
+pub async fn delete_session(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    match state.session_store.delete_session(&session_id).await {
+        Ok(true) => (
+            StatusCode::OK,
+            Json(json!({ "deleted": true })),
+        ),
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Session not found" })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        ),
+    }
+}

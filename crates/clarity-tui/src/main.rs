@@ -18,6 +18,7 @@ use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
 use clarity_core::registry::ToolRegistry;
+use clarity_core::skills::SkillRegistry;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -40,8 +41,9 @@ async fn main() -> Result<()> {
 
     // 创建 Agent（若失败需先恢复终端再返回错误）
     let app_result = match create_agent().await {
-        Ok((agent, model_name)) => {
+        Ok((agent, model_name, skill_registry)) => {
             let mut app = App::new(agent, model_name);
+            app.skill_registry = skill_registry;
             run_app(&mut terminal, &mut app).await
         }
         Err(e) => Err(e),
@@ -59,7 +61,7 @@ async fn main() -> Result<()> {
     app_result
 }
 
-async fn create_agent() -> Result<(Arc<Agent>, String)> {
+async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
@@ -91,13 +93,50 @@ async fn create_agent() -> Result<(Arc<Agent>, String)> {
     // 创建记忆触发器（每 5 轮对话触发一次）
     let memory_ticker = MemoryTicker::new(5);
 
+    // 加载 SkillRegistry（尝试多个路径）
+    let skill_registry = load_skill_registry();
+
     // 创建 Agent
-    let agent = Agent::with_config(registry, config)
+    let mut agent = Agent::with_config(registry, config)
         .with_llm(Arc::from(llm))
         .with_memory(memory_store)
         .with_memory_ticker(memory_ticker);
 
-    Ok((Arc::new(agent), model_name))
+    if let Some(ref reg) = skill_registry {
+        agent = agent.with_skill_registry(reg.clone());
+    }
+
+    Ok((Arc::new(agent), model_name, skill_registry))
+}
+
+/// Attempt to load skills from well-known directories.
+fn load_skill_registry() -> Option<SkillRegistry> {
+    // 1. Project-local skills/ directory
+    let local_dir = std::path::PathBuf::from("skills");
+    if local_dir.is_dir() {
+        match SkillRegistry::load_from_dir(&local_dir) {
+            Ok(reg) if !reg.is_empty() => return Some(reg),
+            _ => {}
+        }
+    }
+
+    // 2. User config directory (~/.config/clarity/skills or %APPDATA%\clarity\skills)
+    let config_dir = std::env::var("APPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|_| {
+            std::env::var("HOME")
+                .map(|h| std::path::PathBuf::from(h).join(".config"))
+        })
+        .ok()?;
+    let user_dir = config_dir.join("clarity").join("skills");
+    if user_dir.is_dir() {
+        match SkillRegistry::load_from_dir(&user_dir) {
+            Ok(reg) if !reg.is_empty() => return Some(reg),
+            _ => {}
+        }
+    }
+
+    None
 }
 
 /// Load `~/.config/clarity/mcp.json` and register available MCP tools.
@@ -116,10 +155,7 @@ async fn load_and_register_mcp_tools(registry: &ToolRegistry) {
             println!("MCP server '{}' is disabled, skipping", name);
             continue;
         }
-        let server_config = clarity_core::mcp::McpServerConfig::stdio(name, &entry.command)
-            .with_args(entry.args.clone())
-            .with_envs(entry.env.clone());
-        let client = McpClientBuilder::from_config(server_config);
+        let client = McpClientBuilder::from_mcp_entry(name, entry);
         mcp_registry.register(name, client);
     }
 

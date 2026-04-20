@@ -12,6 +12,7 @@ pub struct McpConfig {
 /// Per-server configuration entry inside `mcpServers`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct McpServerEntry {
+    #[serde(default)]
     pub command: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -19,6 +20,12 @@ pub struct McpServerEntry {
     pub env: HashMap<String, String>,
     #[serde(default)]
     pub disabled: bool,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub transport: Option<String>,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
 }
 
 impl McpConfig {
@@ -94,6 +101,51 @@ mod tests {
         let config: McpConfig = serde_json::from_str(json).unwrap();
         let git = config.servers.get("git").unwrap();
         assert!(git.disabled);
+    }
+
+    #[test]
+    fn test_parse_sse_config() {
+        let json = r#"
+        {
+            "mcpServers": {
+                "remote": {
+                    "transport": "sse",
+                    "url": "http://localhost:3001/sse",
+                    "headers": { "Authorization": "Bearer token" }
+                }
+            }
+        }
+        "#;
+        let config: McpConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.servers.len(), 1);
+        let remote = config.servers.get("remote").unwrap();
+        assert_eq!(remote.transport.as_deref().unwrap(), "sse");
+        assert_eq!(remote.url.as_deref().unwrap(), "http://localhost:3001/sse");
+        assert_eq!(
+            remote.headers.get("Authorization"),
+            Some(&"Bearer token".to_string())
+        );
+        assert!(!remote.disabled);
+    }
+
+    #[test]
+    fn test_parse_http_config() {
+        let json = r#"
+        {
+            "mcpServers": {
+                "api": {
+                    "transport": "http",
+                    "url": "https://api.example.com/mcp",
+                    "headers": { "X-Api-Key": "secret" }
+                }
+            }
+        }
+        "#;
+        let config: McpConfig = serde_json::from_str(json).unwrap();
+        let api = config.servers.get("api").unwrap();
+        assert_eq!(api.transport.as_deref().unwrap(), "http");
+        assert_eq!(api.url.as_deref().unwrap(), "https://api.example.com/mcp");
+        assert_eq!(api.headers.get("X-Api-Key"), Some(&"secret".to_string()));
     }
 
     #[test]

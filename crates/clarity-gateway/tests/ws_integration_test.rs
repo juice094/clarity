@@ -27,7 +27,7 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
 
 #[tokio::test]
 async fn test_websocket_upgrade_and_ping_pong() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -63,7 +63,7 @@ async fn test_websocket_upgrade_and_ping_pong() {
 
 #[tokio::test]
 async fn test_websocket_chat() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -101,7 +101,7 @@ async fn test_websocket_chat() {
 
 #[tokio::test]
 async fn test_websocket_get_history() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()));
+    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
