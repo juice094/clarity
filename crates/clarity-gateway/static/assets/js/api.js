@@ -174,3 +174,7 @@ export async function getTask(id) {
 export async function cancelTask(id) {
     return fetch(`${BASE_URL}/v1/tasks/${id}`, { method: 'DELETE' });
 }
+
+export async function listTasks() {
+    return request('/v1/tasks');
+}

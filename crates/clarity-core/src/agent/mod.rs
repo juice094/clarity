@@ -20,6 +20,7 @@ pub mod ops;
 mod construct;
 mod execution;
 pub mod plan;
+pub use plan::{Plan, PlanResult, PlanStep};
 mod prompt;
 mod run;
 

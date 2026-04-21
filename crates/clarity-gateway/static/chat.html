@@ -69,6 +69,7 @@
                     <span class="connection-status" id="connection-status" title="连接正常">🟢</span>
                 </div>
                 <div class="chat-header-right">
+                    <span class="task-badge" id="task-badge" style="display:none; background:#3b82f6; color:white; padding:2px 8px; border-radius:12px; font-size:12px; margin-right:6px; cursor:pointer;" title="后台任务">0</span>
                     <button class="chat-action-btn model-selector" id="model-selector" title="切换模型">
                         <span id="model-display-name">自动</span>
                         <span class="model-chevron">▼</span>
@@ -199,5 +200,29 @@
     </div>
 
     <script type="module" src="/assets/js/app.js"></script>
+    <script type="module">
+        import { listTasks } from '/assets/js/api.js';
+        const badge = document.getElementById('task-badge');
+        async function refreshTasks() {
+            try {
+                const data = await listTasks();
+                const tasks = data?.tasks || [];
+                const running = tasks.filter(t => t.status === 'Running').length;
+                if (running > 0) {
+                    badge.textContent = running;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (e) {
+                badge.style.display = 'none';
+            }
+        }
+        refreshTasks();
+        setInterval(refreshTasks, 5000);
+        badge.addEventListener('click', () => {
+            alert('后台任务功能即将在 Web UI 中完整呈现。当前请使用 TUI /task 命令或 Gateway API。');
+        });
+    </script>
 </body>
 </html>

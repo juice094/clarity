@@ -110,6 +110,8 @@ pub struct App {
     pub skill_registry: Option<clarity_core::skills::SkillRegistry>,
     /// Background task manager (shared with Gateway if running)
     pub task_manager: Option<Arc<BackgroundTaskManager>>,
+    /// Most recently generated plan, awaiting user confirmation.
+    pub pending_plan: Option<clarity_core::agent::Plan>,
 }
 
 impl App {
@@ -146,6 +148,7 @@ impl App {
             session_usage: None,
             skill_registry: None,
             task_manager,
+            pending_plan: None,
         }
     }
 
@@ -371,6 +374,12 @@ impl App {
             return;
         }
 
+        // /execute runs the pending plan
+        if parts[0] == "/execute" {
+            self.handle_execute_command().await;
+            return;
+        }
+
         if let Some(handler) = self.registry.get(parts[0]) {
             handler.execute(self, &parts[1..]);
         } else {
@@ -568,8 +577,9 @@ impl App {
                         ));
                     }
                     lines.push(String::new());
-                    lines.push("输入确认消息以执行此计划。".to_string());
+                    lines.push("输入 /execute 执行此计划，或继续对话。".to_string());
                 }
+                self.pending_plan = Some(plan);
                 self.messages.push(Message::new(
                     lines.join("\n"),
                     MessageType::System,
@@ -578,6 +588,53 @@ impl App {
             Err(e) => {
                 self.messages.push(Message::new(
                     format!("生成计划失败: {}", e),
+                    MessageType::System,
+                ));
+            }
+        }
+    }
+
+    async fn handle_execute_command(&mut self) {
+        match self.pending_plan.take() {
+            Some(plan) => {
+                if self.is_generating() {
+                    self.messages.push(Message::new(
+                        "Agent 正在运行中，请等待当前任务完成后再执行。",
+                        MessageType::System,
+                    ));
+                    self.pending_plan = Some(plan);
+                    return;
+                }
+                self.messages.push(Message::new(
+                    format!("▶️ 开始执行计划: {} ({} 步)", plan.title, plan.len()),
+                    MessageType::System,
+                ));
+                match self.agent.execute_plan(&plan).await {
+                    Ok(results) => {
+                        let mut lines = vec!["✅ 计划执行完成:".to_string()];
+                        for r in &results {
+                            let icon = if r.success { "✓" } else { "✗" };
+                            lines.push(format!(
+                                "  {} {}: {}",
+                                icon, r.step_id, r.output
+                            ));
+                        }
+                        self.messages.push(Message::new(
+                            lines.join("\n"),
+                            MessageType::System,
+                        ));
+                    }
+                    Err(e) => {
+                        self.messages.push(Message::new(
+                            format!("执行计划失败: {}", e),
+                            MessageType::System,
+                        ));
+                    }
+                }
+            }
+            None => {
+                self.messages.push(Message::new(
+                    "没有待执行的计划。先用 /plan <query> 生成计划。",
                     MessageType::System,
                 ));
             }

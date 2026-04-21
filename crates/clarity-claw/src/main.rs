@@ -12,6 +12,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder},
     window::WindowBuilder,
 };
+use notify::Watcher;
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     MouseButton, TrayIconBuilder, TrayIconEvent,
@@ -126,6 +127,10 @@ async fn main() -> anyhow::Result<()> {
     // ------------------------------------------------------------------
     let poll_proxy = proxy.clone();
     let poll_url = format!("{}/v1/tasks", gateway_url);
+    let tasks_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(".clarity")
+        .join("tasks");
     tokio::spawn(async move {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -133,8 +138,36 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| reqwest::Client::new());
         let mut last_running: Vec<String> = Vec::new();
 
+        // Filesystem watcher: accelerates notification when local tasks change
+        let (fs_tx, mut fs_rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(10);
+        let _watcher = if tasks_dir.exists() {
+            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                let _ = fs_tx.try_send(res);
+            }) {
+                Ok(mut w) => {
+                    let _ = w.watch(&tasks_dir, notify::RecursiveMode::NonRecursive);
+                    tracing::info!("Filesystem watcher active on {:?}", tasks_dir);
+                    Some(w)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create filesystem watcher: {}", e);
+                    None
+                }
+            }
+        } else {
+            tracing::warn!("Tasks directory {:?} does not exist, filesystem watcher disabled", tasks_dir);
+            None
+        };
+
         loop {
-            tokio::time::sleep(Duration::from_secs(POLL_INTERVAL_SECS)).await;
+            // Wait for either the polling interval or a filesystem event
+            let timeout = tokio::time::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+            tokio::select! {
+                _ = timeout => {}
+                _ = fs_rx.recv() => {
+                    tracing::debug!("Filesystem change detected, refreshing tasks immediately");
+                }
+            }
 
             match client.get(&poll_url).send().await {
                 Ok(resp) if resp.status().is_success() => {

@@ -34,3 +34,6 @@ chrono = { workspace = true }
 
 # HTTP client for Gateway API
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Filesystem watch for real-time task notifications
+notify = { version = "7", default-features = false, features = ["macos_fsevent", "crossbeam-channel"] }

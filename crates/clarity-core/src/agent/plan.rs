@@ -32,6 +32,17 @@ pub struct Plan {
     pub steps: Vec<PlanStep>,
 }
 
+/// Result of executing a single plan step.
+#[derive(Debug, Clone)]
+pub struct PlanResult {
+    /// The step that was executed.
+    pub step_id: String,
+    /// Whether the tool call succeeded.
+    pub success: bool,
+    /// Stringified tool output (or error message).
+    pub output: String,
+}
+
 impl Plan {
     /// Render the plan as human-readable Markdown.
     pub fn to_markdown(&self) -> String {
@@ -157,6 +168,42 @@ Rules:
 
         self.finish_turn();
         Ok(plan)
+    }
+
+    /// Execute a previously-generated plan step-by-step.
+    ///
+    /// Each step is run through `ToolRegistry::execute` with the same
+    /// `ToolContext` that the Agent uses during a normal turn.
+    /// Errors on individual steps are captured in `PlanResult` rather than
+    /// aborting the whole plan, so the caller can see partial progress.
+    pub async fn execute_plan(&self, plan: &Plan) -> Result<Vec<PlanResult>, AgentError> {
+        let _cancel_token = self.begin_turn()?;
+
+        let ctx = crate::tools::ToolContext::new()
+            .with_working_dir(&self.config.working_dir)
+            .with_read_only(self.config.read_only)
+            .with_timeout(self.config.tool_timeout_secs)
+            .with_approval_mode(self.approval_mode);
+
+        let mut results = Vec::with_capacity(plan.steps.len());
+        for step in &plan.steps {
+            let output = match self
+                .registry
+                .execute(&step.tool_name, step.tool_params.clone(), ctx.clone())
+                .await
+            {
+                Ok(val) => val.to_string(),
+                Err(e) => format!("Error: {}", e),
+            };
+            results.push(PlanResult {
+                step_id: step.id.clone(),
+                success: !output.starts_with("Error:"),
+                output,
+            });
+        }
+
+        self.finish_turn();
+        Ok(results)
     }
 }
 

@@ -213,6 +213,19 @@ impl CommandHandler for PlanCommand {
     }
 }
 
+pub struct ExecuteCommand;
+impl CommandHandler for ExecuteCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.messages.push(Message::new(
+            "用法: /execute — 执行最近一次 /plan 生成的计划",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "执行待处理计划 (execute)"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -236,6 +249,7 @@ pub fn build_default_registry() -> CommandRegistry {
 
     registry.register("/task", Arc::new(TaskCommand));
     registry.register("/plan", Arc::new(PlanCommand));
+    registry.register("/execute", Arc::new(ExecuteCommand));
 
     registry
 }
