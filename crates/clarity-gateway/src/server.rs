@@ -193,6 +193,7 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "/v1/tasks/:id",
             get(handlers::get_task).delete(handlers::cancel_task),
         )
+        .route("/v1/parallel", post(handlers::run_parallel))
         .route("/api/files/tree", get(handlers::file_tree))
         .route("/api/files/read", get(handlers::file_read))
         .route("/api/files/write", post(handlers::file_write))

@@ -178,3 +178,14 @@ export async function cancelTask(id) {
 export async function listTasks() {
     return request('/v1/tasks');
 }
+
+// ==================== Parallel Subagents ====================
+
+export async function runParallel(tasks, maxConcurrency) {
+    const body = { tasks };
+    if (maxConcurrency !== undefined) body.max_concurrency = maxConcurrency;
+    return request('/v1/parallel', {
+        method: 'POST',
+        body: JSON.stringify(body),
+    });
+}

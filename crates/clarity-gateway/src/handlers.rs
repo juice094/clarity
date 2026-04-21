@@ -667,6 +667,116 @@ pub async fn list_tasks(State(state): State<Arc<AppState>>) -> Response {
     }
 }
 
+// ==================== Parallel Subagent Execution API ====================
+
+#[derive(Debug, Deserialize)]
+pub struct ParallelTaskSpec {
+    pub agent_type: String,
+    pub prompt: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RunParallelRequest {
+    pub tasks: Vec<ParallelTaskSpec>,
+    #[serde(default)]
+    pub max_concurrency: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParallelTaskResult {
+    pub agent_id: String,
+    pub agent_type: String,
+    pub status: String,
+    pub summary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParallelFailure {
+    pub task_id: String,
+    pub error: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RunParallelResponse {
+    pub success_rate: f64,
+    pub total_elapsed_ms: u64,
+    pub results: Vec<ParallelTaskResult>,
+    pub failures: Vec<ParallelFailure>,
+}
+
+pub async fn run_parallel(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RunParallelRequest>,
+) -> Response {
+    if req.tasks.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "No tasks provided"})),
+        )
+            .into_response();
+    }
+
+    let specs: Vec<clarity_core::subagents::RunSpec> = req
+        .tasks
+        .into_iter()
+        .map(|t| {
+            clarity_core::subagents::RunSpec::new(
+                format!("parallel-{}", t.agent_type),
+                t.prompt,
+            )
+            .with_type(&t.agent_type)
+        })
+        .collect();
+
+    let config = clarity_core::subagents::ParallelConfig::new()
+        .with_max_concurrency(req.max_concurrency.unwrap_or(4).max(1));
+
+    let agent = state.agent.read().await.clone();
+
+    match agent.run_parallel(specs, config).await {
+        Ok(result) => {
+            let success_rate = result.success_rate();
+            let total_elapsed_ms = result.total_elapsed_ms;
+
+            let results: Vec<ParallelTaskResult> = result
+                .results
+                .into_iter()
+                .map(|r| ParallelTaskResult {
+                    agent_id: r.agent_id,
+                    agent_type: r.agent_type,
+                    status: format!("{:?}", r.status),
+                    summary: r.summary,
+                })
+                .collect();
+
+            let failures: Vec<ParallelFailure> = result
+                .failures
+                .into_iter()
+                .map(|(id, err)| ParallelFailure {
+                    task_id: id,
+                    error: err,
+                })
+                .collect();
+
+            let response = RunParallelResponse {
+                success_rate,
+                total_elapsed_ms,
+                results,
+                failures,
+            };
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        Err(e) => {
+            error!("Parallel execution failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
 // ==================== Admin: Switch Provider ====================
 
 #[derive(Deserialize)]
