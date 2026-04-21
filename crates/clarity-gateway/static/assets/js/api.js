@@ -158,6 +158,17 @@ export async function getTools() {
     return request('/api/tools');
 }
 
+export async function getApprovalMode() {
+    return request('/api/approval-mode');
+}
+
+export async function setApprovalMode(mode) {
+    return request('/api/approval-mode', {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+    });
+}
+
 // ==================== Tasks ====================
 
 export async function createTask(spec) {

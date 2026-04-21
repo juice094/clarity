@@ -1,352 +1,130 @@
-# Project Clarity
+# Clarity — Personal AI Standard Runtime
 
-[![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange?logo=rust)](https://www.rust-lang.org)
+> An opinionated, multi-entry AI runtime: plan → execute → monitor → remember.
 
-> **Local-first AI Agent runtime in Rust.**  
-> 一个基于 Rust 的本地优先 AI Agent 框架，支持多模型、MCP 工具生态与数据主权。
-
----
-
-## 📋 Project Status (2026-04-20)
-
-**Phase: Runtime architecture activated — three-layer differentiation live.**
-
-| Metric | Status | Note |
-|--------|--------|------|
-| Build | ✅ | `cargo check --workspace` passes |
-| Tests | ✅ | **383+** lib + integration tests passed, 0 failed |
-| Lint | ✅ | `clippy --workspace --lib --bins --tests` zero warnings |
-| Codebase | ~2.9 MB | 100+ Rust source files (~28,000 LOC) |
-| Binary | ~23 MB | Release `clarity-gateway.exe` |
-| Crates | 6 | workspace layout |
-
-### Feature Matrix
-
-| Module | Status | Description |
-|--------|--------|-------------|
-| **clarity-core / Agent** | ✅ | ReAct loop, tool calling, stream-first responses |
-| **clarity-core / Approval** | ✅ | Interactive / Yolo / Plan modes |
-| **clarity-core / Compaction** | ✅ | Context compression to prevent token explosion |
-| **clarity-core / Subagents** | ✅ | LaborMarket (coder/explore/plan) + Runner; model-aware routing |
-| **clarity-core / MCP Client** | ✅ | Stdio/HTTP tested E2E with `filesystem` server; auto-injects into `ToolRegistry` via `mcp.json`; **Resources + Prompts types landed** |
-| **clarity-core / Background Tasks** | ✅ | `DefaultAgentTaskExecutor` runs real Agents in worker pool; supports per-task model selection; auto-scheduler loop active |
-| **clarity-core / Plan Mode** | ✅ | `Agent::plan(query) -> Plan` — structured step generation before execution |
-| **clarity-claw** | ✅ | System-tray runtime monitor: HTTP polling Gateway tasks, dynamic tooltip, OS notifications, quick-ask input |
-| **clarity-core / LLM Routing** | ✅ | `ModelRegistry` TOML config + `LlmFactory::create(alias)` + runtime hot-swap |
-| **clarity-core / Local LLM** | ✅ | Kalosm GGUF inference + LlamaServer HTTP bridge (zero-dependency) |
-| **clarity-core / Skill System** | ✅ | Markdown+YAML `SKILL.md` orchestration layer; loader + registry + context builder |
-| **clarity-tui** | ✅ | Terminal UI with mouse scroll, command registry, tab completion, input history, dark theme; **`/task` and `/plan` commands live** |
-| **clarity-gateway** | ✅ | OpenAI-compatible Chat Completions API with SSE streaming + structured tool events; **`/v1/tasks` CRUD API complete** |
-| **clarity-gateway / Session Store** | ✅ | SQLite-based session persistence with message append + expiration cleanup; **HTTP Chat Completions now supports `session_id`** |
-| **clarity-memory** | ✅ | File / SQLite / Hybrid backends; **BM25 + FTS5 hybrid search** |
-| **clarity-wire** | ✅ | Soul-UI broadcast channel, 8 tests passing |
-| Gateway Channels | ⚠️ | Webhook ready; Discord / Telegram temporarily excluded from default build due to upstream `rustls-webpki` advisories |
-| Web UI | ✅ | Embedded Web IDE (`chat.html`) with tool-call cards + config modal |
-
----
-
-## 🏗 Architecture
+Clarity is not another chat client. It is a **personal AI standard runtime** that orchestrates LLMs, tools, and sub-agents across three entry points — a system-tray monitor, a web IDE, and a full TUI — with persistent memory, structured planning, and parallel execution.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Application Layer                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ clarity-tui │  │clarity-gateway│ │   Web IDE           │  │
-│  │  (Terminal) │  │  (HTTP API)   │ │   (chat.html)       │  │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
-└─────────┼────────────────┼──────────────────────────────────┘
-          │                │
-          ▼                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Core Engine                           │
-│                      clarity-core                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │    Agent    │  │ ToolRegistry│  │   LlmProvider       │  │
-│  │   (ReAct)   │  │  (Tools)    │  │ (Multi-provider +   │  │
-│  │             │  │             │  │  ModelRegistry)     │  │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
-│         │                │                                   │
-│  ┌──────▼────────────────▼─────────────────────┐             │
-│  │   Skill       - Markdown+YAML orchestration │             │
-│  │   Wire        - Soul-UI communication      │             │
-│  │   Approval    - Tool-call approval flow    │             │
-│  │   Compaction  - Context compression        │             │
-│  │   Subagents   - Agent delegation           │             │
-│  │   MCP Client  - External tool servers      │             │
-│  └─────────────────────────────────────────────┘             │
-└─────────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Storage Layer                         │
-│                     clarity-memory                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │  FileStore  │  │ SqliteStore │  │    HybridStore      │  │
-│  │  (JSON)     │  │(SQLite+FTS5+│  │  (Cache + Archive)  │  │
-│  │             │  │   BM25)     │  │                     │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+│                        CLARITY RUNTIME                       │
+├─────────────┬─────────────────┬─────────────────────────────┤
+│   claw      │     window      │           cli               │
+│  (托盘)      │   (Web IDE)     │      (TUI 终端)            │
+│             │                 │                             │
+│ • 实时通知   │ • 文件浏览器    │ • 完整交互式会话            │
+│ • 任务徽章   │ • Monaco 编辑器 │ • /plan /parallel /task     │
+│ • 系统托盘   │ • SSE 流式对话  │ • 快捷键 + 弹窗审批         │
+└──────┬──────┴────────┬────────┴────────────┬────────────────┘
+       │               │                     │
+       └───────────────┴─────────────────────┘
+                       │
+         ┌─────────────┴─────────────┐
+         │      clarity-core         │
+         │  • Agent (ReAct / Plan)   │
+         │  • ToolRegistry (built-in + MCP)
+         │  • BackgroundTaskManager  │
+         │  • Memory (BM25 + vector) │
+         │  • Subagent (parallel)    │
+         └───────────────────────────┘
 ```
 
----
+## Features
 
-## ✨ Core Features
+| Feature | Description |
+|---------|-------------|
+| **Plan Mode** | LLM generates a structured execution plan first; runs steps in batch without per-tool approval. |
+| **Parallel Subagents** | Split work across multiple specialized agents (coder, explore, plan) and execute concurrently. |
+| **Background Tasks** | Long-running agent tasks survive TUI/Web closure; monitored in real-time by the system-tray app. |
+| **MCP Ecosystem** | Stdio, HTTP, and SSE transports for Model Context Protocol servers. |
+| **Persistent Memory** | BM25 + vector hybrid search across conversation history. |
+| **Skills** | Markdown+YAML skill files that inject context and whitelist tools into the system prompt. |
+| **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
 
-### Agent Engine (`clarity-core`)
+## Quick Start
 
-- **ReAct Loop**: Full think-act-observe cycle with cancellation support.
-- **Stream-first**: Prefers `stream()`, falls back to `complete()` automatically. No double requests.
-- **Wire Communication**: Decouples execution (Soul) from UI via broadcast channels.
-- **Context Compaction**: Auto-compresses long conversations before token limits are hit.
-- **Approval Modes**: Interactive, Yolo, or Plan-level control over dangerous tools.
-- **Multi-LLM**: Kimi, Kimi Code, Anthropic, OpenAI-compatible, DeepSeek, **local GGUF via Kalosm**, **llama-server bridge**.
-- **ModelRegistry**: TOML-driven provider/model configuration; per-subagent/per-task model selection.
-- **Runtime Hot-swap**: Switch LLM provider without restarting via Admin API or TUI.
-- **Prompt Cache Key**: Session-aware cache routing for supported providers.
-- **Personality Hot-swap**: Default `Direct` engineering persona; switch via `/personality [direct|hanako|butter|ming]`.
-
-### Subagent System (`clarity-core/src/subagents/`)
-
-- **LaborMarket**: Type registry for `coder`, `explore`, `plan` subagents.
-- **SubagentStore**: State persistence.
-- **SubagentBuilder**: Config-driven builder with Git context injection.
-- **Runner**: Foreground, background, and resume execution — **each can target a different model alias**.
-
-### Memory System (`clarity-memory`)
-
-- Backends: File, SQLite (with FTS5), Hybrid.
-- `PersistentMemoryStore`: Integrated into `clarity-core`.
-- `MemoryTicker`: Threshold-based memory triggers.
-
-### Skill System (`clarity-core/src/skills/`)
-
-- **Markdown + YAML `SKILL.md`**: Human-readable skill definitions with frontmatter metadata (`id`, `name`, `tools`, `tags`, `priority`, `triggers`) and a Markdown body for contextual instructions.
-- **`SkillLoader`**: Parses YAML frontmatter and Markdown body from `.md` files.
-- **`SkillRegistry`**: Thread-safe, read-only registry loaded from a `skills/` directory; supports keyword search (`find_relevant`).
-- **Context Builder**: `Skill::build_context()` generates injection text for the system prompt, including allowed tool whitelists.
-- **Built-in Examples**: `deploy-rust-service`, `code-review`, `bug-investigate`.
-
-### Tool System
-
-- **9 Built-in Tools**: `file_read`, `file_write`, `file_edit`, `glob`, `grep`, `bash`, `powershell`, `web_search`, `web_fetch`.
-- **MCP Integration**: Load external MCP servers via `~/.config/clarity/mcp.json`; tools are automatically namespaced and injected into the registry.
-- **Tool Approval**: Dangerous ops require confirmation (unless in Yolo mode).
-
-### Gateway Web IDE (`chat.html`)
-
-- OpenAI-compatible `/v1/chat/completions` endpoint (SSE streaming supported).
-- **Structured tool-call events**: `tool_call_start` / `tool_call_delta` / `tool_result` rendered as collapsible cards.
-- **User-configurable provider**: Click ⚙️ to set provider, API key, base URL, and model — persisted to `.clarity/user_config.json`.
-- Admin API at `http://127.0.0.1:18800` for provider management and config inspection.
-
----
-
-## 🖼 TUI Demo
-
-A quick look at Clarity in action — asking the agent to read a file via the MCP filesystem server:
-
-![Clarity TUI Demo](assets/tui_demo.png)
-
----
-
-## 🚀 Quick Start
-
-### Requirements
-
-- Rust 1.75+
-- Windows / Linux / macOS
-- Node.js + `npx` (only if you want to use MCP stdio servers like `@modelcontextprotocol/server-filesystem`)
-
-### Build & Test
+### 1. Install
 
 ```bash
-cd clarity
-cargo build --workspace
-cargo test --workspace --lib --tests  # ~420+ tests passing
-cargo clippy --workspace              # zero warnings
+# TUI (full interactive experience)
+cargo install --path crates/clarity-tui
+
+# Gateway (Web IDE + API server)
+cargo install --path crates/clarity-gateway
+
+# claw (system-tray monitor)
+cargo install --path crates/clarity-claw
 ```
 
-### Configure LLM Provider (3 ways)
+### 2. Configure API Key
 
-**Option 1: Environment Variables** (ephemeral)
-```powershell
-# Kimi Code API (recommended for coding tasks)
-$env:KIMI_CODE_API_KEY="sk-kimi-your-key"
-
-# Or standard Moonshot / OpenAI / DeepSeek / Anthropic
-$env:KIMI_API_KEY="sk-xxx"
-$env:OPENAI_API_KEY="sk-xxx"
-$env:DEEPSEEK_API_KEY="sk-xxx"
-$env:ANTHROPIC_AUTH_TOKEN="sk-ant-xxx"
+```bash
+# Kimi Code (recommended for coding tasks)
+mkdir -p .clarity
+cat > .clarity/user_config.json << 'EOF'
+{
+  "provider": "kimi-code",
+  "api_key": "sk-kimi-..."
+}
+EOF
 ```
 
-**Option 2: Web IDE Config Modal** (persisted)
-```
-1. Open http://127.0.0.1:18790
-2. Click the ⚙️ (settings) button
-3. Select provider (kimi-code / moonshot / openai / deepseek / anthropic)
-4. Enter API key → Save
-```
+Supported providers: `kimi`, `kimi-code`, `openai`, `anthropic`, `deepseek`.
 
-**Option 3: Admin API** (persisted)
-```powershell
-# Get current config
-curl http://127.0.0.1:18800/api/config
+### 3. Run
 
-# Save new config
-curl -X POST http://127.0.0.1:18800/api/config `
-  -H "Content-Type: application/json" `
-  -d '{"provider":"kimi-code","api_key":"sk-xxx"}'
+```bash
+# Start the Gateway (serves Web UI on http://127.0.0.1:18800)
+clarity-gateway
+
+# In another terminal, start the TUI
+clarity-tui
+
+# Optional: start the tray monitor
+clarity-claw
 ```
 
-**Option 4: ModelRegistry TOML** (advanced, multi-model)
-```toml
-# ~/.config/clarity/models.toml
-[[provider]]
-name = "kimi-code"
-type = "kimi"
-base_url = "https://api.kimi.com/coding/v1"
-api_key = "sk-xxx"
+## TUI Commands
 
-[[model]]
-name = "kimi-k2"
-provider = "kimi-code"
-model_id = "kimi-k2-07132k"
-
-[[model]]
-name = "local-qwen"
-provider = "llama-server"
-base_url = "http://localhost:8080"
+```
+/plan <query>          Generate a structured execution plan
+/execute               Execute the pending plan
+/parallel <type>:<prompt> [| ...]   Run subagents in parallel
+/task list             List background tasks
+/task spawn <name> <prompt>         Spawn a background task
+/skill list            List available skills
+/skill use <id>        Activate a skill
+/model <name>          Switch LLM model
+/help                  Show all commands
 ```
 
-### Run the TUI
+## Architecture
 
-```powershell
+```
+crates/
+├── clarity-core      # Agent loop, tools, memory, MCP, subagents
+├── clarity-memory    # BM25 + vector hybrid search, chunking
+├── clarity-gateway   # Axum HTTP server, Web UI, session store
+├── clarity-tui       # ratatui terminal interface
+├── clarity-claw      # System-tray background monitor
+└── clarity-wire      # UI↔Agent event bus
+```
+
+## Development
+
+```bash
+# Run all tests
+cargo test --workspace --lib          # 352+ tests
+
+# Run clippy
+cargo clippy --workspace --lib --bins --tests
+
+# Run Gateway for local development
+cargo run -p clarity-gateway
+
+# Run TUI
 cargo run -p clarity-tui
 ```
 
-### Run the Gateway
+## License
 
-```powershell
-cargo run -p clarity-gateway
-# API:    http://localhost:18790
-# Admin:  http://127.0.0.1:18800
-```
-
-### TUI Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message / confirm input |
-| `Esc` | Return to Normal mode |
-| `↑/↓` | Browse history (Input mode) or scroll chat (Normal mode) |
-| Mouse wheel | Scroll chat |
-| `Tab` | Auto-complete `/` commands |
-| `Ctrl+C` | Stop generation (when generating) or return to Normal mode |
-| `Ctrl+D` | Quit |
-| `/help` | List commands: `/model`, `/stop`, `/clear`, `/personality` |
-
----
-
-## 🔧 MCP Configuration
-
-Create `~/.config/clarity/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
-    }
-  }
-}
-```
-
-On startup, Clarity will connect to the server and register tools (e.g. `filesystem_read_file`) into the agent's tool registry automatically.
-
-### Security: MCP Command Allowlist
-
-To prevent command-injection attacks, stdio commands are validated before execution:
-- Shell metacharacters and relative paths are rejected by default.
-- Absolute paths are allowed only if they exist.
-- Bare names (e.g. `npx`, `uvx`, `node`) are allowed and resolved via `PATH`.
-- You can override restrictions with the environment variable:
-  ```powershell
-  $env:CLARITY_MCP_ALLOWLIST="/usr/bin/npx,/opt/bin"
-  ```
-
----
-
-## 📚 Documentation
-
-- [`docs/mcp_integration_guide.md`](docs/mcp_integration_guide.md) — MCP design & integration
-- [`docs/channel_architecture.md`](docs/channel_architecture.md) — Gateway channel architecture
-- [`docs/archive/`](docs/archive/) — Historical phase reports and reality-check documents
-- [`AGENTS.md`](AGENTS.md) — Agent development guidelines and conventions
-
----
-
-## 🗓 Roadmap
-
-### Phase 1: Integration Hardening (Completed)
-- [x] TUI real-LLM validation (Kimi Code / Moonshot)
-- [x] Stream-first + Prompt Cache
-- [x] Personality refactor (`Direct` persona)
-- [x] TUI interaction polish (commands, history, safe Ctrl+C)
-- [x] MCP Client + filesystem server E2E
-- [x] Gateway Chat Completions SSE streaming
-- [x] Gateway Chat tool-calling pipeline fixed (full message history + `tool_calls`)
-- [x] BackgroundTaskManager real-agent execution
-- [x] Embedded Web IDE (`chat.html`) in Gateway
-- [x] ModelRegistry config-driven routing
-- [x] Runtime LLM provider hot-swap
-- [x] User-configurable provider via Web UI / Admin API
-- [x] Local LLM support (Kalosm + LlamaServer)
-- [x] SSE structured tool-call events (tool_call_start/delta/result)
-
-### Phase 2: Architecture Consolidation (Completed 2026-04-20)
-- [x] **Cyclic dependency decoupling**: Extracted `types.rs` (ToolCall/FunctionCall) and `llm/api.rs` (Message/LlmProvider/LlmResponse/StreamDelta), breaking `agent ↔ approval`, `agent ↔ llm`, `agent ↔ compaction` cycles.
-- [x] **SSE parsing extraction**: Dedicated `llm/sse.rs` state machine (~150 LOC) with incremental tool-call delta assembly; `llm/mod.rs` slimmed from ~1212 → ~970 LOC.
-- [x] **Run-loop deduplication**: Extracted `Agent::run_sync_loop()` shared by `run()` and `run_with_messages_sync()`, eliminating ~120 LOC of duplication.
-- [x] **BM25 + Hybrid Search**: Replaced O(n) full-table TF-IDF scan in `SqliteStore::search_similar` with FTS5 recall + in-memory BM25 re-ranking; 63 + 264 tests passing.
-- [x] **Gateway Session Store**: SQLite-backed session persistence with CRUD, message append, request counting, and expiration cleanup.
-- [x] **RAG Chunking**: Document chunking utility with configurable size, overlap, and source tracking (`Chunker::split_with_source`).
-- [x] **Old Skill system removal**: Deleted `skill/` trait-based dead code (54 orphaned tests removed); unified terminology to `get_tool_descriptions()`.
-- [x] **New Skill orchestration layer**: Markdown+YAML `SKILL.md` parser (`SkillLoader`), thread-safe `SkillRegistry`, and context builder; 12 new tests passing.
-- [x] MCP command validation / allowlist (security hardening)
-- [x] Code quality fixes: `Error::new` → `Error::other`, `&PathBuf` → `&Path`, wildcard pattern elimination
-
-### Phase 3: Capability Integration (Completed)
-- [x] **Agent loop Skill integration**: `default_skill` injection, `/skill list|use` TUI commands, tool whitelist filtering in `Agent::run_sync_loop`
-- [x] **MCP Resources / Prompts types**: `list_resources`, `read_resource`, `list_prompts`, `get_prompt` protocol types and trait methods
-- [x] **Gateway HTTP Session persistence**: `/v1/chat/completions` accepts `session_id`, loads history, saves turns; auto-generates session ID when omitted
-- [x] **CI matrix expansion**: `check`, `clippy`, `fmt` now run on `ubuntu-latest`, `windows-latest`, `macos-latest`
-- [ ] MCP SSE transport
-- [ ] Gateway channel end-to-end testing (Webhook active; Discord/Telegram blocked by upstream CVEs)
-
-### Phase 4: Stabilization (Next 2–4 weeks)
-- [ ] Error handling polish (`anyhow` containment in core)
-- [ ] Performance benchmarks
-- [ ] Cross-platform CI matrix
-- [ ] English documentation expansion
-- [ ] `std::sync::RwLock` → `tokio::sync::RwLock` migration in async contexts
-
----
-
-## 🤝 Contributing
-
-Issues and PRs are welcome. If you find a discrepancy between the docs and the code, believe the code — and please open an issue so we can fix the docs.
-
----
-
-## 📜 License
-
-MIT — see [LICENSE](LICENSE).
-
----
-
-*Last updated: 2026-04-18*  
-*Maintained by the Clarity Team and AI Assistant.*
+MIT

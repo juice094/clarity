@@ -210,6 +210,14 @@ async function loadConfigIntoForm() {
     } catch (e) {
         console.error('Failed to load config:', e);
     }
+    try {
+        const modeData = await api.getApprovalMode();
+        if (modeData.mode) {
+            document.getElementById('config-approval-mode').value = modeData.mode;
+        }
+    } catch (e) {
+        console.error('Failed to load approval mode:', e);
+    }
 }
 
 configSave.addEventListener('click', async () => {
@@ -230,6 +238,8 @@ configSave.addEventListener('click', async () => {
 
     try {
         await api.setConfig({ provider, api_key: apiKey, base_url: baseUrl, model });
+        const approvalMode = document.getElementById('config-approval-mode').value;
+        await api.setApprovalMode(approvalMode);
         status.textContent = '保存成功';
         status.className = 'form-status success';
         store.config.provider = provider;

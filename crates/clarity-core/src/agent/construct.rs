@@ -132,6 +132,16 @@ impl Agent {
         self
     }
 
+    /// Set the approval mode at runtime.
+    pub fn set_approval_mode(&mut self, mode: ApprovalMode) {
+        self.approval_mode = mode;
+    }
+
+    /// Get the current approval mode.
+    pub fn approval_mode(&self) -> ApprovalMode {
+        self.approval_mode
+    }
+
     /// Set the compaction configuration
     pub fn with_compaction_config(mut self, config: CompactionConfig) -> Self {
         self.compaction_config = config;

@@ -448,7 +448,7 @@ pub struct ToolInfo {
 }
 
 pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let tools = match state.tool_registry.get_tool_schemas() {
+    let tools = match state.agent.read().await.registry().get_tool_schemas() {
         Ok(schemas) => {
             if let Some(functions) = schemas.as_array() {
                 functions
@@ -775,6 +775,52 @@ pub async fn run_parallel(
                 .into_response()
         }
     }
+}
+
+// ==================== Admin: Approval Mode ====================
+
+#[derive(Deserialize)]
+pub struct SetApprovalModeRequest {
+    pub mode: String,
+}
+
+#[derive(Serialize)]
+pub struct ApprovalModeResponse {
+    pub mode: String,
+}
+
+pub async fn admin_set_approval_mode(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SetApprovalModeRequest>,
+) -> Response {
+    use clarity_core::approval::ApprovalMode;
+
+    let mode = match req.mode.to_lowercase().as_str() {
+        "interactive" => ApprovalMode::Interactive,
+        "yolo" => ApprovalMode::Yolo,
+        "plan" => ApprovalMode::Plan,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Invalid mode. Use: interactive, yolo, plan"})),
+            )
+                .into_response();
+        }
+    };
+
+    state.agent.write().await.set_approval_mode(mode);
+    let resp = ApprovalModeResponse {
+        mode: format!("{:?}", mode).to_lowercase(),
+    };
+    (StatusCode::OK, Json(resp)).into_response()
+}
+
+pub async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mode = state.agent.read().await.approval_mode();
+    let resp = ApprovalModeResponse {
+        mode: format!("{:?}", mode).to_lowercase(),
+    };
+    (StatusCode::OK, Json(resp))
 }
 
 // ==================== Admin: Switch Provider ====================

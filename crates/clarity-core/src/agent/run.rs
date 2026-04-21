@@ -330,7 +330,7 @@ impl Agent {
     }
 
     /// Run the streaming agent loop with a pre-built message list.
-    pub async fn run_streaming_with_messages<F>(
+    pub(crate) async fn run_streaming_with_messages<F>(
         &self,
         messages: Vec<Message>,
         on_chunk: F,

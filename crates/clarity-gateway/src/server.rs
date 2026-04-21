@@ -23,13 +23,11 @@ use chrono::{DateTime, Utc};
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_core::registry::ToolRegistry;
 
 /// 应用状态
 pub struct AppState {
     pub agent: Arc<RwLock<Agent>>,
     pub session_store: Arc<PersistentSessionStore>,
-    pub tool_registry: ToolRegistry,
     pub task_manager: Arc<BackgroundTaskManager>,
     pub activity_logger: ActivityLogger,
     pub started_at: DateTime<Utc>,
@@ -63,7 +61,6 @@ impl AppState {
         Self {
             agent: Arc::new(RwLock::new((*agent).clone())),
             session_store,
-            tool_registry: agent.registry().clone(),
             task_manager,
             activity_logger: ActivityLogger::new(),
             started_at: Utc::now(),
@@ -238,6 +235,10 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/tools", get(handlers::admin_tools))
         .route("/api/models", get(handlers::admin_models))
         .route("/api/provider", post(handlers::admin_switch_provider))
+        .route(
+            "/api/approval-mode",
+            get(handlers::admin_get_approval_mode).post(handlers::admin_set_approval_mode),
+        )
         .route(
             "/api/config",
             get(handlers::admin_get_config).post(handlers::admin_set_config),
