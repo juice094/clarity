@@ -163,6 +163,25 @@
         </div>
     </div>
 
+    <!-- ========== 任务列表面板 ========== -->
+    <div class="modal-overlay" id="tasks-modal" style="display:none;">
+        <div class="modal" style="max-width:640px;">
+            <div class="modal-header">
+                <h3>📋 后台任务</h3>
+                <button class="modal-close" id="tasks-modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="tasks-list" style="max-height:400px;overflow-y:auto;">
+                    <div style="text-align:center;color:var(--text-secondary);padding:24px;">正在加载...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="tasks-refresh">🔄 刷新</button>
+                <button class="btn btn-primary" id="tasks-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ========== 并行执行面板 ========== -->
     <div class="modal-overlay" id="parallel-modal" style="display:none;">
         <div class="modal" style="max-width:520px;">
@@ -234,29 +253,5 @@
     </div>
 
     <script type="module" src="/assets/js/app.js"></script>
-    <script type="module">
-        import { listTasks } from '/assets/js/api.js';
-        const badge = document.getElementById('task-badge');
-        async function refreshTasks() {
-            try {
-                const data = await listTasks();
-                const tasks = data?.tasks || [];
-                const running = tasks.filter(t => t.status === 'Running').length;
-                if (running > 0) {
-                    badge.textContent = running;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            } catch (e) {
-                badge.style.display = 'none';
-            }
-        }
-        refreshTasks();
-        setInterval(refreshTasks, 5000);
-        badge.addEventListener('click', () => {
-            alert('后台任务功能即将在 Web UI 中完整呈现。当前请使用 TUI /task 命令或 Gateway API。');
-        });
-    </script>
 </body>
 </html>

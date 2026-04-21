@@ -571,6 +571,134 @@ parallelRun?.addEventListener('click', async () => {
     }
 });
 
+// ==================== Tasks Modal ====================
+
+const tasksModal = document.getElementById('tasks-modal');
+const tasksModalClose = document.getElementById('tasks-modal-close');
+const tasksRefresh = document.getElementById('tasks-refresh');
+const tasksCloseBtn = document.getElementById('tasks-close');
+const tasksList = document.getElementById('tasks-list');
+const taskBadge = document.getElementById('task-badge');
+
+function openTasksModal() {
+    tasksModal.style.display = 'flex';
+    renderTasksList();
+}
+
+function closeTasksModal() {
+    tasksModal.style.display = 'none';
+}
+
+tasksModalClose?.addEventListener('click', closeTasksModal);
+tasksCloseBtn?.addEventListener('click', closeTasksModal);
+tasksModal?.addEventListener('click', (e) => {
+    if (e.target === tasksModal) closeTasksModal();
+});
+tasksRefresh?.addEventListener('click', renderTasksList);
+
+async function renderTasksList() {
+    if (!tasksList) return;
+    tasksList.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:24px;">正在加载...</div>';
+    try {
+        const data = await api.listTasks();
+        const tasks = data?.tasks || [];
+        if (tasks.length === 0) {
+            tasksList.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:24px;">暂无后台任务</div>';
+            return;
+        }
+
+        const isTerminal = (s) => s === 'Completed' || s === 'Failed' || s === 'Cancelled';
+        const statusIcon = (s) => {
+            if (s === 'Completed') return '✅';
+            if (s === 'Running') return '🔄';
+            if (s === 'Failed') return '❌';
+            if (s === 'Cancelled') return '🚫';
+            return '⏳';
+        };
+
+        const rows = tasks.map(t => {
+            const date = new Date(t.created_at * 1000).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const canCancel = !isTerminal(t.status);
+            return `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);gap:12px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div>
+                        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${statusIcon(t.status)} ${t.status} · ${date}</div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-shrink:0;">
+                        ${canCancel ? `<button class="task-cancel-btn" data-id="${t.task_id}" style="padding:4px 10px;border-radius:4px;border:1px solid var(--error);background:transparent;color:var(--error);font-size:12px;cursor:pointer;">取消</button>` : ''}
+                        <button class="task-detail-btn" data-id="${t.task_id}" style="padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;">详情</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        tasksList.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">${rows}</div>`;
+
+        tasksList.querySelectorAll('.task-cancel-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.id;
+                btn.disabled = true;
+                btn.textContent = '...';
+                try {
+                    await api.cancelTask(id);
+                    toast(`已取消任务 ${id.slice(0, 8)}...`, 'info');
+                    renderTasksList();
+                } catch (e) {
+                    toast(`取消失败: ${e.message}`, 'error');
+                    btn.disabled = false;
+                    btn.textContent = '取消';
+                }
+            });
+        });
+
+        tasksList.querySelectorAll('.task-detail-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.id;
+                try {
+                    const detail = await api.getTask(id);
+                    const lines = [
+                        `ID: ${detail.task_id}`,
+                        `名称: ${detail.name}`,
+                        `状态: ${detail.status}`,
+                        `提示词: ${detail.prompt}`,
+                    ];
+                    if (detail.result) {
+                        lines.push(`结果: ${detail.result.output?.slice(0, 500) || '无输出'}`);
+                        lines.push(`耗时: ${detail.result.elapsed_ms}ms`);
+                    }
+                    alert(lines.join('\n'));
+                } catch (e) {
+                    toast(`获取详情失败: ${e.message}`, 'error');
+                }
+            });
+        });
+    } catch (e) {
+        tasksList.innerHTML = `<div style="text-align:center;color:var(--error);padding:24px;">加载失败: ${e.message}</div>`;
+    }
+}
+
+// Task badge polling
+taskBadge?.addEventListener('click', openTasksModal);
+
+async function refreshTaskBadge() {
+    try {
+        const data = await api.listTasks();
+        const tasks = data?.tasks || [];
+        const running = tasks.filter(t => t.status === 'Running').length;
+        if (running > 0) {
+            taskBadge.textContent = running;
+            taskBadge.style.display = 'inline-block';
+        } else {
+            taskBadge.style.display = 'none';
+        }
+    } catch (e) {
+        taskBadge.style.display = 'none';
+    }
+}
+refreshTaskBadge();
+setInterval(refreshTaskBadge, 5000);
+
 // ==================== Initialization ====================
 
 async function init() {

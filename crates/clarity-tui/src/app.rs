@@ -650,35 +650,44 @@ impl App {
 
         match self.agent.run_parallel(specs, config).await {
             Ok(result) => {
-                let mut lines = vec![format!(
-                    "✅ 并行执行完成 | 成功率: {:.0}% | 耗时: {}ms",
-                    result.success_rate() * 100.0,
-                    result.total_elapsed_ms
-                )];
+                let elapsed_s = result.total_elapsed_ms as f64 / 1000.0;
+                let total = result.results.len() + result.failures.len();
+                let mut lines = vec![
+                    format!("┌─────────────────────────────────────────────┐"),
+                    format!("│ 🚀 并行执行完成  {} 个任务  {:.1}s          │", total, elapsed_s),
+                    format!("│ 成功率: {:>3.0}%                                  │", result.success_rate() * 100.0),
+                    format!("└─────────────────────────────────────────────┘"),
+                ];
+
                 if !result.results.is_empty() {
                     lines.push(String::new());
-                    lines.push("成功结果:".to_string());
+                    lines.push("✅ 成功结果:".to_string());
+                    lines.push(format!("  {:<10} {:<10} {}", "代理ID", "类型", "摘要"));
+                    lines.push(format!("  {:<10} {:<10} {}", "──────", "────", "────"));
                     for r in &result.results {
-                        lines.push(format!(
-                            "  ✓ {} ({}): {}",
-                            r.agent_id, r.agent_type, r.summary
-                        ));
+                        let id = if r.agent_id.len() > 8 { &r.agent_id[..8] } else { &r.agent_id };
+                        let summary = r.summary.lines().next().unwrap_or("No summary");
+                        let summary = if summary.len() > 36 { &summary[..36] } else { summary };
+                        lines.push(format!("  {:<10} {:<10} {}", id, r.agent_type, summary));
                     }
                 }
+
                 if !result.failures.is_empty() {
                     lines.push(String::new());
-                    lines.push("失败任务:".to_string());
+                    lines.push("❌ 失败任务:".to_string());
                     for (id, err) in &result.failures {
-                        lines.push(format!("  ✗ {}: {}", id, err));
+                        lines.push(format!("  • {}: {}", id, err.lines().next().unwrap_or("")));
                     }
                 }
+
                 if let Some(ref summary) = result.aggregated_summary {
                     lines.push(String::new());
-                    lines.push("聚合摘要:".to_string());
+                    lines.push("📋 聚合摘要:".to_string());
                     for line in summary.lines() {
                         lines.push(format!("  {}", line));
                     }
                 }
+
                 self.messages.push(Message::new(
                     lines.join("\n"),
                     MessageType::System,
