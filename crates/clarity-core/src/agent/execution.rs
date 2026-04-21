@@ -132,57 +132,11 @@ impl Agent {
                     // Yolo 模式跳过审批
                 }
                 ApprovalMode::Plan => {
-                    // Plan 模式下暂时按 Interactive 处理
-                    let turn_id = uuid::Uuid::new_v4().to_string();
-                    let request_id = runtime
-                        .create_request(
-                            &tool_call_for_approval,
-                            ApprovalSource::ForegroundTurn { turn_id },
-                            description,
-                        )
-                        .await
-                        .map_err(|e| {
-                            ToolError::execution_failed(format!("Approval error: {}", e))
-                        })?;
-
-                    let approval_result = tokio::time::timeout(
-                        tokio::time::Duration::from_secs(300),
-                        runtime.wait_for_response(&request_id),
-                    )
-                    .await;
-
-                    match approval_result {
-                        Ok(Ok(ApprovalResponse::Approve)) => {
-                            // 继续执行
-                        }
-                        Ok(Ok(ApprovalResponse::ApproveForSession)) => {
-                            if let Err(e) = runtime
-                                .resolve(&request_id, ApprovalResponse::ApproveForSession)
-                                .await
-                            {
-                                return Err(ToolError::execution_failed(format!(
-                                    "Approval error: {}",
-                                    e
-                                )));
-                            }
-                        }
-                        Ok(Ok(ApprovalResponse::Reject)) => {
-                            return Err(ToolError::execution_failed(
-                                "Tool call rejected by user".to_string(),
-                            ));
-                        }
-                        Ok(Err(e)) => {
-                            return Err(ToolError::execution_failed(format!(
-                                "Approval error: {}",
-                                e
-                            )));
-                        }
-                        Err(_) => {
-                            return Err(ToolError::execution_failed(
-                                "Approval timeout after 300 seconds".to_string(),
-                            ));
-                        }
-                    }
+                    // Plan mode's approval is handled at the run() level:
+                    // run() bypasses the ReAct loop and uses plan-driven execution
+                    // (generate plan → execute steps). If we reach here inside
+                    // run_sync_loop, auto-approve to avoid blocking on per-tool
+                    // approvals after the plan has already been vetted.
                 }
             }
         }

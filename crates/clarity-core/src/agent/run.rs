@@ -137,6 +137,25 @@ impl Agent {
     ///
     /// The final response from the agent
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
+        // Plan mode: bypass the ReAct loop and use plan-driven execution.
+        // This avoids the LLM "thinking step-by-step" and instead runs a
+        // pre-generated structured plan step-by-step.
+        if self.approval_mode == crate::approval::ApprovalMode::Plan {
+            let plan = self.plan(query.as_ref()).await?;
+            self.send_wire_message(WireMessage::TurnBegin {
+                user_input: query.as_ref().to_string(),
+            });
+            if !plan.is_empty() {
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: format!("📋 Executing plan: {}\n{}", plan.title, plan.to_markdown()),
+                });
+            }
+            let results = self.execute_plan(&plan).await?;
+            let final_response = format_plan_results(&results);
+            self.send_wire_message(WireMessage::TurnEnd);
+            return Ok(final_response);
+        }
+
         let cancel_token = self.begin_turn()?;
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
@@ -550,4 +569,16 @@ impl Agent {
             ))
         }
     }
+}
+
+fn format_plan_results(results: &[crate::agent::PlanResult]) -> String {
+    if results.is_empty() {
+        return "Plan executed with no steps.".to_string();
+    }
+    let mut lines = vec!["Plan execution results:".to_string()];
+    for r in results {
+        let icon = if r.success { "✅" } else { "❌" };
+        lines.push(format!("{} {}: {}", icon, r.step_id, r.output));
+    }
+    lines.join("\n")
 }
