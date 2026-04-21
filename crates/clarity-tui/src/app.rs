@@ -380,6 +380,12 @@ impl App {
             return;
         }
 
+        // /parallel runs multiple subagents concurrently
+        if parts[0] == "/parallel" {
+            self.handle_parallel_command(&parts[1..]).await;
+            return;
+        }
+
         if let Some(handler) = self.registry.get(parts[0]) {
             handler.execute(self, &parts[1..]);
         } else {
@@ -588,6 +594,99 @@ impl App {
             Err(e) => {
                 self.messages.push(Message::new(
                     format!("生成计划失败: {}", e),
+                    MessageType::System,
+                ));
+            }
+        }
+    }
+
+    async fn handle_parallel_command(&mut self, args: &[&str]) {
+        if args.is_empty() {
+            self.messages.push(Message::new(
+                "用法: /parallel <type>:<prompt> [| <type>:<prompt>...]\n示例: /parallel coder:实现斐波那契函数 | explore:查找所有测试文件",
+                MessageType::System,
+            ));
+            return;
+        }
+        if self.is_generating() {
+            self.messages.push(Message::new(
+                "Agent 正在运行中，请等待当前任务完成后再使用 /parallel。",
+                MessageType::System,
+            ));
+            return;
+        }
+
+        let raw = args.join(" ");
+        let segments: Vec<&str> = raw.split('|').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        if segments.is_empty() {
+            self.messages.push(Message::new(
+                "未指定任何子代理任务。",
+                MessageType::System,
+            ));
+            return;
+        }
+
+        let mut specs = Vec::new();
+        for seg in segments {
+            let (agent_type, prompt) = match seg.find(':') {
+                Some(idx) => (&seg[..idx], &seg[idx + 1..]),
+                None => ("coder", seg),
+            };
+            let spec = clarity_core::subagents::RunSpec::new(
+                format!("parallel-{}", agent_type),
+                prompt.trim(),
+            )
+            .with_type(agent_type.trim());
+            specs.push(spec);
+        }
+
+        self.messages.push(Message::new(
+            format!("🚀 启动并行执行 ({} 个子代理)...", specs.len()),
+            MessageType::System,
+        ));
+
+        let config = clarity_core::subagents::ParallelConfig::new()
+            .with_max_concurrency(specs.len().min(4));
+
+        match self.agent.run_parallel(specs, config).await {
+            Ok(result) => {
+                let mut lines = vec![format!(
+                    "✅ 并行执行完成 | 成功率: {:.0}% | 耗时: {}ms",
+                    result.success_rate() * 100.0,
+                    result.total_elapsed_ms
+                )];
+                if !result.results.is_empty() {
+                    lines.push(String::new());
+                    lines.push("成功结果:".to_string());
+                    for r in &result.results {
+                        lines.push(format!(
+                            "  ✓ {} ({}): {}",
+                            r.agent_id, r.agent_type, r.summary
+                        ));
+                    }
+                }
+                if !result.failures.is_empty() {
+                    lines.push(String::new());
+                    lines.push("失败任务:".to_string());
+                    for (id, err) in &result.failures {
+                        lines.push(format!("  ✗ {}: {}", id, err));
+                    }
+                }
+                if let Some(ref summary) = result.aggregated_summary {
+                    lines.push(String::new());
+                    lines.push("聚合摘要:".to_string());
+                    for line in summary.lines() {
+                        lines.push(format!("  {}", line));
+                    }
+                }
+                self.messages.push(Message::new(
+                    lines.join("\n"),
+                    MessageType::System,
+                ));
+            }
+            Err(e) => {
+                self.messages.push(Message::new(
+                    format!("并行执行失败: {}", e),
                     MessageType::System,
                 ));
             }

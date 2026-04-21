@@ -287,4 +287,37 @@ impl Agent {
     pub(crate) fn set_file_prompt_cache(&self, value: Option<String>) {
         self.inner.write().unwrap().file_prompt_cache = value;
     }
+
+    /// Run multiple subagents in parallel.
+    ///
+    /// Creates a temporary `SubagentManager` with the agent's tool registry,
+    /// working directory, and LLM configuration, then executes the given
+    /// specs concurrently.
+    pub async fn run_parallel(
+        &self,
+        specs: Vec<crate::subagents::RunSpec>,
+        config: crate::subagents::ParallelConfig,
+    ) -> anyhow::Result<crate::subagents::ParallelResult> {
+        use crate::subagents::SubagentManager;
+
+        let mut manager = SubagentManager::new(
+            self.registry.clone(),
+            &self.config.working_dir,
+            self.config.working_dir.join("subagent_context"),
+        );
+
+        if let Some(llm) = self.llm() {
+            manager = manager.with_llm(llm);
+        }
+
+        self.send_wire_message(WireMessage::TurnBegin {
+            user_input: format!("parallel execution ({} tasks)", specs.len()),
+        });
+
+        let result = manager.run_parallel(specs, config).await;
+
+        self.send_wire_message(WireMessage::TurnEnd);
+
+        result
+    }
 }

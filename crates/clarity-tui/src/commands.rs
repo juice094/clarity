@@ -226,6 +226,19 @@ impl CommandHandler for ExecuteCommand {
     }
 }
 
+pub struct ParallelCommand;
+impl CommandHandler for ParallelCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.messages.push(Message::new(
+            "用法: /parallel <type>:<prompt> [| <type>:<prompt>...]\n示例: /parallel coder:实现斐波那契函数 | explore:查找所有测试文件",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "并行执行多个子代理 (parallel)"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -250,6 +263,7 @@ pub fn build_default_registry() -> CommandRegistry {
     registry.register("/task", Arc::new(TaskCommand));
     registry.register("/plan", Arc::new(PlanCommand));
     registry.register("/execute", Arc::new(ExecuteCommand));
+    registry.register("/parallel", Arc::new(ParallelCommand));
 
     registry
 }
