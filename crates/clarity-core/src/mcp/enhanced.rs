@@ -643,14 +643,20 @@ impl McpClient for HttpMcpClient {
 ///
 /// **WARNING**: This is not a real SSE client. `connect()` is a no-op and
 /// `request_raw()` sends plain HTTP POST requests instead of using the
-/// Server-Sent Events protocol. A proper SSE implementation is tracked as a
-/// known limitation (P1).
+/// Server-Sent Events protocol (MCP-over-SSE).
+///
+/// Protocol flow:
+/// 1. GET /sse → SSE stream
+/// 2. event: endpoint → data: /messages?sid=xxx
+/// 3. POST /messages?sid=xxx (JSON-RPC request)
+/// 4. Response arrives via SSE event: message → data: {jsonrpc:"2.0", id, result}
 pub struct SseMcpClient {
     config: McpServerConfig,
     client: reqwest::Client,
     request_id: AtomicU64,
     pending: Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse<Value>>>>>,
     sse_task: Option<tokio::task::JoinHandle<()>>,
+    message_endpoint: Arc<RwLock<Option<String>>>,
 }
 
 impl SseMcpClient {
@@ -661,6 +667,7 @@ impl SseMcpClient {
             request_id: AtomicU64::new(1),
             pending: Arc::new(RwLock::new(HashMap::new())),
             sse_task: None,
+            message_endpoint: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -671,7 +678,8 @@ impl McpClient for SseMcpClient {
         let McpTransport::Sse {
             url,
             timeout_seconds,
-            ..
+            headers,
+            reconnect_delay_ms,
         } = &self.config.transport
         else {
             return Err(McpError::InvalidTransport("Expected SSE transport".into()));
@@ -679,62 +687,114 @@ impl McpClient for SseMcpClient {
 
         let client = self.client.clone();
         let pending = self.pending.clone();
+        let message_endpoint = self.message_endpoint.clone();
         let url = url.clone();
+        let headers = headers.clone();
         let timeout = *timeout_seconds;
+        let reconnect_delay = *reconnect_delay_ms;
 
         let task = tokio::spawn(async move {
-            let response = match client
-                .get(&url)
-                .timeout(Duration::from_secs(timeout))
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!("SSE connection failed: {}", e);
-                    return;
+            loop {
+                let mut req = client.get(&url).timeout(Duration::from_secs(timeout));
+                for (k, v) in &headers {
+                    req = req.header(k, v);
                 }
-            };
+                let response = match req.send().await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        warn!("SSE connection failed: {}", e);
+                        tokio::time::sleep(Duration::from_millis(reconnect_delay)).await;
+                        continue;
+                    }
+                };
 
-            let mut stream = response.bytes_stream();
-            let mut buffer = String::new();
-            use futures::StreamExt;
+                let mut stream = response.bytes_stream();
+                let mut buffer = String::new();
+                let mut current_event = String::new();
+                let mut current_data = String::new();
+                use futures::StreamExt;
 
-            while let Some(chunk) = stream.next().await {
-                match chunk {
-                    Ok(bytes) => {
-                        buffer.push_str(&String::from_utf8_lossy(&bytes));
-                        while let Some(pos) = buffer.find('\n') {
-                            let line = buffer[..pos].trim_end_matches('\r').to_string();
-                            buffer = buffer[pos + 1..].to_string();
+                while let Some(chunk) = stream.next().await {
+                    match chunk {
+                        Ok(bytes) => {
+                            buffer.push_str(&String::from_utf8_lossy(&bytes));
+                            while let Some(pos) = buffer.find('\n') {
+                                let line = buffer[..pos].trim_end_matches('\r').to_string();
+                                buffer = buffer[pos + 1..].to_string();
 
-                            if let Some(data) = line.strip_prefix("data:") {
-                                let data = data.trim_start();
-                                if data.is_empty() {
-                                    continue;
-                                }
-                                if let Ok(response) =
-                                    serde_json::from_str::<JsonRpcResponse<Value>>(data)
-                                {
-                                    let mut pending = pending.write().await;
-                                    if let Some(sender) = pending.remove(&response.id) {
-                                        let _ = sender.send(response);
+                                if line.is_empty() {
+                                    // Event boundary — dispatch accumulated event
+                                    if !current_data.is_empty() {
+                                        let data = current_data.trim_start().to_string();
+                                        if current_event == "endpoint" {
+                                            let resolved = if data.starts_with("http://") || data.starts_with("https://") {
+                                                data
+                                            } else {
+                                                match url::Url::parse(&url).and_then(|base| base.join(&data)) {
+                                                    Ok(u) => u.to_string(),
+                                                    Err(e) => {
+                                                        warn!("Failed to resolve endpoint URL '{}': {}", data, e);
+                                                        String::new()
+                                                    }
+                                                }
+                                            };
+                                            if !resolved.is_empty() {
+                                                let mut ep = message_endpoint.write().await;
+                                                *ep = Some(resolved);
+                                                info!("SSE message endpoint discovered: {}", ep.as_ref().unwrap());
+                                            }
+                                        } else if current_event == "message" || current_event.is_empty() {
+                                            if let Ok(response) = serde_json::from_str::<JsonRpcResponse<Value>>(&data) {
+                                                let mut pending = pending.write().await;
+                                                if let Some(sender) = pending.remove(&response.id) {
+                                                    let _ = sender.send(response);
+                                                }
+                                            }
+                                        }
                                     }
+                                    current_event.clear();
+                                    current_data.clear();
+                                } else if let Some(evt) = line.strip_prefix("event:") {
+                                    current_event = evt.trim_start().to_string();
+                                } else if let Some(data) = line.strip_prefix("data:") {
+                                    if !current_data.is_empty() {
+                                        current_data.push('\n');
+                                    }
+                                    current_data.push_str(data);
                                 }
                             }
                         }
-                    }
-                    Err(e) => {
-                        warn!("SSE stream error: {}", e);
-                        break;
+                        Err(e) => {
+                            warn!("SSE stream error: {}", e);
+                            break;
+                        }
                     }
                 }
+
+                warn!("SSE stream ended, reconnecting after {}ms", reconnect_delay);
+                tokio::time::sleep(Duration::from_millis(reconnect_delay)).await;
             }
         });
 
         self.sse_task = Some(task);
 
-        // Perform initialization handshake via POST
+        // Wait for endpoint to be discovered before proceeding
+        let endpoint_timeout = Duration::from_secs(*timeout_seconds);
+        let start = std::time::Instant::now();
+        loop {
+            {
+                let ep = self.message_endpoint.read().await;
+                if ep.is_some() {
+                    break;
+                }
+            }
+            if start.elapsed() > endpoint_timeout {
+                return Err(McpError::RequestTimeout);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        // Perform initialization handshake
         let init_params = serde_json::json!({
             "protocolVersion": "2024-11-05",
             "capabilities": {},
@@ -753,6 +813,8 @@ impl McpClient for SseMcpClient {
         if let Some(task) = self.sse_task.take() {
             task.abort();
         }
+        let mut ep = self.message_endpoint.write().await;
+        *ep = None;
         Ok(())
     }
 
@@ -766,8 +828,8 @@ impl McpClient for SseMcpClient {
         };
 
         let McpTransport::Sse {
-            url,
             timeout_seconds,
+            headers,
             ..
         } = &self.config.transport
         else {
@@ -780,33 +842,40 @@ impl McpClient for SseMcpClient {
             pending.insert(id, tx);
         }
 
-        let post_result = self
-            .client
-            .post(url)
-            .json(&request)
-            .timeout(Duration::from_secs(*timeout_seconds))
-            .send()
-            .await;
-
-        match post_result {
-            Ok(response) => {
-                // Try to parse direct JSON-RPC response from POST body
-                if let Ok(body) = response.json::<JsonRpcResponse<Value>>().await {
-                    if let Some(error) = body.error {
-                        return Err(McpError::RpcError(error.message));
-                    }
-                    if let Some(result) = body.result {
-                        let mut pending = self.pending.write().await;
-                        pending.remove(&id);
-                        return Ok(result);
+        // Wait for message endpoint to be discovered
+        let post_url = {
+            let start = std::time::Instant::now();
+            let timeout = Duration::from_secs(*timeout_seconds);
+            loop {
+                {
+                    let ep = self.message_endpoint.read().await;
+                    if let Some(url) = ep.as_ref() {
+                        break url.clone();
                     }
                 }
+                if start.elapsed() > timeout {
+                    let mut pending = self.pending.write().await;
+                    pending.remove(&id);
+                    return Err(McpError::RequestTimeout);
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
-            Err(e) => {
-                let mut pending = self.pending.write().await;
-                pending.remove(&id);
-                return Err(McpError::RequestFailed(e.to_string()));
-            }
+        };
+
+        // POST the JSON-RPC request to the message endpoint
+        let mut req = self
+            .client
+            .post(&post_url)
+            .json(&request)
+            .timeout(Duration::from_secs(*timeout_seconds));
+        for (k, v) in headers {
+            req = req.header(k, v);
+        }
+
+        if let Err(e) = req.send().await {
+            let mut pending = self.pending.write().await;
+            pending.remove(&id);
+            return Err(McpError::RequestFailed(e.to_string()));
         }
 
         // Wait for response via SSE stream

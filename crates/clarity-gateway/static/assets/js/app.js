@@ -310,6 +310,7 @@ const COMMANDS = [
     { id: 'switch-model', name: '切换 AI 模型', icon: '🤖', key: '', action: () => { openModelPopover(); closeCommandPalette(); } },
     { id: 'toggle-theme', name: '切换深色/浅色主题', icon: '🌙', key: '', action: () => { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); closeCommandPalette(); } },
     { id: 'help', name: '查看快捷键帮助', icon: '❓', key: '', action: () => { toast('快捷键: Ctrl+Shift+P 命令面板 | Ctrl+Enter 发送 | Ctrl+S 保存 | Ctrl+K 聚焦输入', 'info', 5000); closeCommandPalette(); } },
+    { id: 'run-parallel', name: '并行执行子代理', icon: '🚀', key: '', action: () => { openParallelModal(); closeCommandPalette(); } },
 ];
 
 function openCommandPalette() {
@@ -469,6 +470,106 @@ export function toast(message, type = 'info', duration = 3000) {
         setTimeout(() => el.remove(), 300);
     }, duration);
 }
+
+// ==================== Parallel Execution Modal ====================
+
+const parallelModal = document.getElementById('parallel-modal');
+const parallelModalClose = document.getElementById('parallel-modal-close');
+const parallelCancel = document.getElementById('parallel-cancel');
+const parallelRun = document.getElementById('parallel-run');
+const parallelAddTask = document.getElementById('parallel-add-task');
+const parallelTasks = document.getElementById('parallel-tasks');
+const parallelConcurrency = document.getElementById('parallel-concurrency');
+const parallelStatus = document.getElementById('parallel-status');
+
+function openParallelModal() {
+    parallelModal.style.display = 'flex';
+    parallelStatus.textContent = '';
+}
+
+function closeParallelModal() {
+    parallelModal.style.display = 'none';
+}
+
+parallelModalClose?.addEventListener('click', closeParallelModal);
+parallelCancel?.addEventListener('click', closeParallelModal);
+parallelModal?.addEventListener('click', (e) => {
+    if (e.target === parallelModal) closeParallelModal();
+});
+
+parallelAddTask?.addEventListener('click', () => {
+    const rows = parallelTasks.querySelectorAll('.parallel-task-row');
+    const idx = rows.length;
+    const div = document.createElement('div');
+    div.className = 'parallel-task-row';
+    div.dataset.index = idx;
+    div.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <label style="font-size:12px;">任务 ${idx + 1}</label>
+            <button class="parallel-remove-task" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:14px;">×</button>
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px;">类型</label>
+            <input type="text" class="parallel-type" placeholder="coder / explore / plan" value="coder" style="width:100%;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
+        </div>
+        <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px;">任务描述</label>
+            <textarea class="parallel-prompt" rows="2" placeholder="输入任务描述..." style="width:100%;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);resize:vertical;"></textarea>
+        </div>
+    `;
+    parallelTasks.appendChild(div);
+    div.querySelector('.parallel-remove-task')?.addEventListener('click', () => {
+        div.remove();
+        // renumber
+        parallelTasks.querySelectorAll('.parallel-task-row').forEach((row, i) => {
+            const lbl = row.querySelector('label');
+            if (lbl) lbl.textContent = `任务 ${i + 1}`;
+        });
+    });
+});
+
+parallelRun?.addEventListener('click', async () => {
+    const rows = parallelTasks.querySelectorAll('.parallel-task-row');
+    const tasks = [];
+    for (const row of rows) {
+        const type = row.querySelector('.parallel-type')?.value.trim();
+        const prompt = row.querySelector('.parallel-prompt')?.value.trim();
+        if (!type || !prompt) continue;
+        tasks.push({ agent_type: type, prompt });
+    }
+    if (tasks.length === 0) {
+        parallelStatus.textContent = '请至少填写一个任务';
+        return;
+    }
+
+    parallelStatus.textContent = '正在执行...';
+    parallelRun.disabled = true;
+    try {
+        const result = await api.runParallel(tasks, parseInt(parallelConcurrency.value, 10));
+        closeParallelModal();
+        // Show result in chat
+        const lines = [`🚀 并行执行完成 | 成功率: ${(result.success_rate * 100).toFixed(0)}% | 耗时: ${result.total_elapsed_ms}ms`];
+        if (result.results?.length) {
+            lines.push('');
+            lines.push('✅ 成功结果:');
+            for (const r of result.results) {
+                lines.push(`• ${r.agent_id} (${r.agent_type}): ${r.summary}`);
+            }
+        }
+        if (result.failures?.length) {
+            lines.push('');
+            lines.push('❌ 失败任务:');
+            for (const f of result.failures) {
+                lines.push(`• ${f.task_id}: ${f.error}`);
+            }
+        }
+        chat.addSystemMessage(lines.join('\n'));
+    } catch (e) {
+        parallelStatus.textContent = `执行失败: ${e.message}`;
+    } finally {
+        parallelRun.disabled = false;
+    }
+});
 
 // ==================== Initialization ====================
 

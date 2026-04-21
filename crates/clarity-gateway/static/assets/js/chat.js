@@ -316,6 +316,15 @@ export function renderMessages() {
     }
 }
 
+// ==================== System Messages ====================
+
+export function addSystemMessage(text) {
+    const session = getActiveSession();
+    if (!session) return;
+    addMessage(session.id, { role: 'system', content: text });
+    createMessageElement('system', text);
+}
+
 // ==================== Init ====================
 
 export function init() {

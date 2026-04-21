@@ -440,18 +440,16 @@ impl McpManager {
                 tracing::info!("MCP server '{}' is disabled, skipping", name);
                 continue;
             }
-            let server_config = McpServerConfig {
-                name: name.clone(),
-                transport: McpTransport::Stdio {
-                    command: entry.command.clone(),
-                    args: entry.args.clone(),
-                    env: entry.env.clone(),
-                },
-                oauth: None,
-            };
+            let client = McpClientBuilder::from_mcp_entry(name.clone(), entry);
             let name = name.clone();
             tasks.push(async move {
-                let result = Self::connect_inner(name.clone(), server_config).await;
+                let mut c = client;
+                let result: Result<(Arc<tokio::sync::Mutex<McpClientInstance>>, Vec<McpTool>), McpError> = async {
+                    c.connect().await?;
+                    let tools = c.list_tools().await?;
+                    Ok((Arc::new(tokio::sync::Mutex::new(c)), tools))
+                }
+                .await;
                 (name, result)
             });
         }

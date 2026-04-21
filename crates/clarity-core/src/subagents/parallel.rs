@@ -275,9 +275,10 @@ impl ParallelExecutor {
         // 收集结果
         let mut results = Vec::new();
         let mut failures = Vec::new();
+        let mut should_cancel_others = false;
 
-        for task_id in task_ids {
-            match self.task_manager.wait(&task_id).await {
+        for task_id in &task_ids {
+            match self.task_manager.wait(task_id).await {
                 Ok(task_result) => {
                     if task_result.status == TaskStatus::Completed {
                         if let Ok(subagent_result) =
@@ -285,20 +286,29 @@ impl ParallelExecutor {
                         {
                             results.push(subagent_result);
                         } else {
-                            failures.push((task_id, "Failed to parse subagent result".to_string()));
+                            failures.push((task_id.clone(), "Failed to parse subagent result".to_string()));
                         }
+                    } else if task_result.status == TaskStatus::Cancelled {
+                        failures.push((task_id.clone(), "Task was cancelled".to_string()));
                     } else {
-                        failures.push((task_id, format!("task failed: {}", task_result.output)));
+                        failures.push((task_id.clone(), format!("task failed: {}", task_result.output)));
 
-                        // 如果需要，取消其他任务
-                        if config.cancel_on_error {
+                        // 如果需要，取消其他正在运行的任务
+                        if config.cancel_on_error && !should_cancel_others {
+                            should_cancel_others = true;
                             warn!("Canceling remaining tasks due to failure");
-                            // 实现取消逻辑
+                            for remaining in &task_ids {
+                                if remaining != task_id {
+                                    if let Err(e) = self.task_manager.cancel(remaining).await {
+                                        warn!("Failed to cancel task {}: {}", remaining, e);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 Err(e) => {
-                    failures.push((task_id, format!("wait failed: {}", e)));
+                    failures.push((task_id.clone(), format!("wait failed: {}", e)));
                 }
             }
         }
