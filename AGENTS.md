@@ -4,7 +4,7 @@
 
 ```bash
 cd C:\Users\<user>\Desktop\clarity
-cargo test --workspace --lib          # 334+ tests
+cargo test --workspace --lib          # 350+ tests
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
 cargo run -p clarity-gateway           # run Gateway (needs API key)
@@ -25,7 +25,39 @@ $env:DEEPSEEK_API_KEY="..."
 $env:OPENAI_API_KEY="..."
 ```
 
-## Recent Major Changes (2026-04-20)
+## Recent Major Changes (2026-04-21)
+
+1. **Plan Mode — "先规划、后执行"工作流**:
+   - `Agent::plan()` 调用 LLM 生成结构化 JSON 计划（`Plan` / `PlanStep`）。
+   - `Agent::execute_plan()` 按步骤批量执行工具，错误隔离，结果聚合为 `PlanResult`。
+   - `ApprovalMode::Plan` 接入 `Agent::run()`：检测到 Plan 模式时自动生成并执行计划，绕过标准 ReAct 循环的逐工具审批。
+   - TUI `/plan <query>` 生成计划，`/execute` 执行 pending plan。
+   - `execution.rs` Plan 分支改为自动通过（计划级审批已在 `run()` 完成）。
+
+2. **并行子代理（Parallel Subagents）**:
+   - `Agent::run_parallel()`：一键并发执行多个子代理，基于 `SubagentManager` + `BackgroundTaskManager`。
+   - `ParallelConfig` 支持并发数、超时、失败时取消、结果聚合。
+   - TUI `/parallel <type>:<prompt> [| <type>:<prompt>...]` 命令，结果用对齐列展示。
+   - Gateway `POST /v1/parallel` JSON API，Web UI 并行执行面板（命令面板入口，动态任务表单，结果回显到聊天）。
+   - `cancel_on_error` 占位 TODO 已实现：失败时通过 `task_manager.cancel()` 取消剩余任务。
+
+3. **后台任务系统完善 + claw 托盘实时通知**:
+   - Gateway `POST/GET/DELETE /v1/tasks` 完整 handlers + 路由。
+   - TUI `/task list/status/cancel/spawn` 命令。
+   - claw（系统托盘常驻应用）使用 `notify` crate 实时监控 `.clarity/tasks/` 目录变化，触发即时 OS 通知 + 动态 tooltip。
+   - Web UI 右上角任务 badge 实时显示运行中任务数，点击弹出任务列表面板（支持刷新、取消、查看详情）。
+
+4. **MCP SSE transport 完整实现**:
+   - `SseMcpClient` 重写：完整 MCP-over-SSE 协议（endpoint 发现、相对 URL 解析、重连循环）。
+   - `McpManager::from_config()` 修复：不再硬编码 Stdio，尊重 `mcp.json` 中的 `transport` 字段（stdio/http/sse）。
+   - E2E 验证：Gateway 启动时自动注册 22 个 MCP 工具（filesystem、web search 等）。
+
+5. **E2E 真实 LLM 联调通过（kimi-code）**:
+   - Chat completions：7.8s 正常响应。
+   - 后台任务：2.4s 完成，filesystem 工具调用正常。
+   - 并行子代理：2 任务并发，8.4s，成功率 100%。
+
+## Previous Major Changes (2026-04-20)
 
 1. **Agent loop Skill integration (Phase 3)**:
    - `Agent` now holds an optional `SkillRegistry` and a shared `active_skill` (`Arc<RwLock<Option<String>>>`).
@@ -111,7 +143,8 @@ $env:OPENAI_API_KEY="..."
 ## Known Issues
 
 - ~~Personality system produces verbose `<mood>` XML metadata~~ **Fixed** by `Direct` mode.
-- ~~MCP client is skeletal~~ **Fixed** — stdio/HTTP transport and dynamic registration are working.
+- ~~MCP client is skeletal~~ **Fixed** — stdio/HTTP/SSE transport and dynamic registration are working.
+- ~~MCP SSE not implemented~~ **Fixed** (2026-04-21) — `SseMcpClient` supports full MCP-over-SSE protocol with endpoint discovery and reconnect.
 - ~~Web UI missing~~ **Fixed** — Gateway serves an embedded Web IDE (`chat.html`) with Monaco Editor and SSE streaming.
 - ~~`agent ↔ approval` / `agent ↔ llm` / `agent ↔ compaction` cyclic dependencies~~ **Fixed** (2026-04-20).
 - ~~Old Skill system dead code~~ **Fixed** — removed `skill/` module; new `skills/` orchestration layer landed.

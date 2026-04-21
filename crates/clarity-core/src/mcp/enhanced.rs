@@ -1485,4 +1485,104 @@ mod tests {
             PromptContent::Text { .. }
         ));
     }
+
+    #[tokio::test]
+    async fn test_sse_connect_timeout_without_endpoint() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 1024];
+            let _ = socket.read(&mut buf).await;
+            // Send SSE stream but NEVER send endpoint event
+            let headers = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n";
+            socket.write_all(headers.as_bytes()).await.unwrap();
+            // Keep connection open long enough for timeout
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        let config = McpServerConfig {
+            name: "test".to_string(),
+            transport: McpTransport::Sse {
+                url: format!("http://127.0.0.1:{}/sse", port),
+                headers: HashMap::new(),
+                timeout_seconds: 1,
+                reconnect_delay_ms: 5000,
+            },
+            oauth: None,
+        };
+        let mut client = SseMcpClient::new(config);
+
+        let result = client.connect().await;
+        assert!(result.is_err(), "Expected timeout when endpoint is not sent");
+        assert!(matches!(result.unwrap_err(), McpError::RequestTimeout));
+    }
+
+    #[tokio::test]
+    async fn test_sse_full_handshake() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let base = format!("http://127.0.0.1:{}", port);
+
+        tokio::spawn(async move {
+            // SSE connection
+            let (mut sse_socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 1024];
+            let n = sse_socket.read(&mut buf).await.unwrap();
+            assert!(String::from_utf8_lossy(&buf[..n]).contains("GET /sse"));
+
+            sse_socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n").await.unwrap();
+            sse_socket.write_all(b"event: endpoint\r\ndata: /messages?sid=abc\r\n\r\n").await.unwrap();
+
+            // POST for initialize (id=1)
+            let (mut post1, _) = listener.accept().await.unwrap();
+            let mut buf1 = vec![0u8; 4096];
+            let n1 = post1.read(&mut buf1).await.unwrap();
+            let req1 = String::from_utf8_lossy(&buf1[..n1]);
+            assert!(req1.contains("POST /messages?sid=abc"));
+            assert!(req1.contains("initialize"));
+            post1.write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+            drop(post1);
+
+            // Send initialize response via SSE
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            let init_resp = r#"data: {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"test","version":"1.0"}}}"#.to_string() + "\r\n\r\n";
+            sse_socket.write_all(init_resp.as_bytes()).await.unwrap();
+
+            // POST for notifications/initialized (id=2) — fire-and-forget
+            let (mut post2, _) = listener.accept().await.unwrap();
+            let mut buf2 = vec![0u8; 4096];
+            let n2 = post2.read(&mut buf2).await.unwrap();
+            let req2 = String::from_utf8_lossy(&buf2[..n2]);
+            assert!(req2.contains("notifications/initialized"));
+            post2.write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+            drop(post2);
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        let config = McpServerConfig {
+            name: "test".to_string(),
+            transport: McpTransport::Sse {
+                url: format!("{}/sse", base),
+                headers: HashMap::new(),
+                timeout_seconds: 10,
+                reconnect_delay_ms: 5000,
+            },
+            oauth: None,
+        };
+        let mut client = SseMcpClient::new(config);
+
+        let result = client.connect().await;
+        assert!(result.is_ok(), "connect failed: {:?}", result.err());
+
+        client.disconnect().await.unwrap();
+    }
 }
