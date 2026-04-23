@@ -452,7 +452,7 @@ fn parse_wecom_request(body: &[u8]) -> Option<String> {
 }
 
 /// 验证平台特定的认证
-fn verify_platform_auth(
+pub fn verify_platform_auth(
     platform: &str,
     headers: &HeaderMap,
     body: &[u8],
@@ -487,7 +487,7 @@ fn verify_platform_auth(
 
             let computed = compute_hmac_sha256_base64(secret, &sign_string);
 
-            if computed != signature {
+            if !constant_time_str_eq(&computed, signature) {
                 return Err(ChannelError::AuthFailed(
                     "Invalid Feishu signature".to_string(),
                 ));
@@ -516,7 +516,7 @@ fn verify_platform_auth(
             let sign_string = format!("{}\n{}", timestamp, secret);
             let computed = compute_hmac_sha256_base64(secret, &sign_string);
 
-            if computed != sign {
+            if !constant_time_str_eq(&computed, &sign) {
                 return Err(ChannelError::AuthFailed(
                     "Invalid DingTalk signature".to_string(),
                 ));
@@ -536,7 +536,7 @@ fn verify_platform_auth(
 }
 
 /// 计算 HMAC-SHA256 并进行 Base64 编码
-fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
+pub fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
     use base64::Engine;
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
@@ -549,6 +549,20 @@ fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
     let result = mac.finalize();
     let bytes = result.into_bytes();
     base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// Constant-time string comparison to mitigate timing attacks.
+fn constant_time_str_eq(a: &str, b: &str) -> bool {
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    if a_bytes.len() != b_bytes.len() {
+        return false;
+    }
+    let mut result = 0u8;
+    for (x, y) in a_bytes.iter().zip(b_bytes.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
 }
 
 /// 格式化平台特定的响应
