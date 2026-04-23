@@ -250,13 +250,132 @@ pub mod helpers {
             })
     }
 
-    /// Resolve a path relative to the working directory
-    pub fn resolve_path(ctx: &ToolContext, path: &str) -> PathBuf {
-        let path = PathBuf::from(path);
-        if path.is_absolute() {
-            path
-        } else {
-            ctx.working_dir.join(path)
+    /// Normalize a path by resolving `.` and `..` components.
+    /// Does not require the path to exist and does not add UNC prefixes.
+    pub(crate) fn normalize_path(path: &std::path::Path) -> PathBuf {
+        let mut result = PathBuf::new();
+        for component in path.components() {
+            match component {
+                std::path::Component::Prefix(p) => result.push(p.as_os_str()),
+                std::path::Component::RootDir => result.push(component),
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    result.pop();
+                }
+                std::path::Component::Normal(name) => {
+                    result.push(name);
+                }
+            }
         }
+        result
+    }
+
+    /// Resolve a path relative to the working directory.
+    ///
+    /// Returns an error if the resolved path escapes the working directory
+    /// (e.g. via `..` traversal or an absolute path outside the working directory).
+    pub fn resolve_path(ctx: &ToolContext, path: &str) -> Result<PathBuf, ToolError> {
+        let base = &ctx.working_dir;
+        let input = PathBuf::from(path);
+
+        // Ensure base is absolute for reliable comparison
+        let base_abs = if base.is_absolute() {
+            base.clone()
+        } else {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(base)
+        };
+
+        let resolved = if input.is_absolute() {
+            input.clone()
+        } else {
+            base_abs.join(&input)
+        };
+
+        let base_norm = normalize_path(&base_abs);
+        let resolved_norm = normalize_path(&resolved);
+
+        if !resolved_norm.starts_with(&base_norm) {
+            return Err(ToolError::invalid_params(format!(
+                "Path '{}' is outside working directory '{}'",
+                path,
+                base.display()
+            )));
+        }
+
+        Ok(resolved)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tools::helpers::{normalize_path, resolve_path};
+    use crate::tools::ToolContext;
+    use std::path::PathBuf;
+
+    fn test_base() -> PathBuf {
+        // Use current_dir for a real absolute path cross-platform
+        std::env::current_dir().unwrap().join("test_project")
+    }
+
+    #[test]
+    fn test_resolve_path_allows_relative_within_base() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base.clone());
+        let result = resolve_path(&ctx, "src/main.rs").unwrap();
+        assert!(result.starts_with(&base));
+    }
+
+    #[test]
+    fn test_resolve_path_rejects_parent_traversal() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base);
+        let result = resolve_path(&ctx, "../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_path_rejects_absolute_outside_base() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base);
+        #[cfg(unix)]
+        let result = resolve_path(&ctx, "/etc/passwd");
+        #[cfg(windows)]
+        let result = resolve_path(&ctx, r"C:\Windows\System32\calc.exe");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_path_allows_absolute_within_base() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base.clone());
+        let abs = base.join("src/main.rs");
+        let result = resolve_path(&ctx, abs.to_str().unwrap()).unwrap();
+        assert!(result.starts_with(&base));
+    }
+
+    #[test]
+    fn test_resolve_path_rejects_deep_traversal() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base);
+        let result = resolve_path(&ctx, "src/../../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_path_allows_dot_relative() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base.clone());
+        let result = resolve_path(&ctx, "./src/main.rs").unwrap();
+        assert!(result.starts_with(&base));
+    }
+
+    #[test]
+    fn test_normalize_path_resolves_dotdot() {
+        let path = PathBuf::from("/a/b/c/../../d");
+        let norm = normalize_path(&path);
+        let expected = PathBuf::from("/a/d");
+        assert_eq!(norm, expected);
     }
 }

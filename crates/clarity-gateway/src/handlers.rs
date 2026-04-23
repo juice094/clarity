@@ -1103,6 +1103,17 @@ fn sanitize_path(raw: &str) -> Result<PathBuf, String> {
     let canonical = abs
         .canonicalize()
         .map_err(|e| format!("Invalid path: {}", e))?;
+
+    // Security: restrict to working directory
+    let cwd = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from("."));
+
+    if !canonical.starts_with(&cwd) {
+        return Err("Path is outside working directory".to_string());
+    }
+
     Ok(canonical)
 }
 
@@ -1359,6 +1370,29 @@ pub async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoRespo
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": e.to_string() })),
         ),
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_path_rejects_parent_traversal() {
+        let result = sanitize_path("../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_rejects_deep_traversal() {
+        let result = sanitize_path("src/../../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_allows_relative() {
+        let result = sanitize_path("src/main.rs");
+        assert!(result.is_ok());
     }
 }
 

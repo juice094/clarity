@@ -194,7 +194,7 @@ impl Tool for FileReadTool {
 
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value> {
         let path_str = helpers::required_str(&args, "path")?;
-        let path = helpers::resolve_path(&ctx, path_str);
+        let path = helpers::resolve_path(&ctx, path_str)?;
 
         let offset = args
             .get("offset")
@@ -289,7 +289,7 @@ impl Tool for FileWriteTool {
 
         let path_str = helpers::required_str(&args, "path")?;
         let content = helpers::required_str(&args, "content")?;
-        let path = helpers::resolve_path(&ctx, path_str);
+        let path = helpers::resolve_path(&ctx, path_str)?;
 
         let is_sensitive = is_sensitive_file(&path);
 
@@ -394,7 +394,7 @@ impl Tool for FileEditTool {
         let new_string = helpers::required_str(&args, "new_string")?;
         let replace_all = helpers::optional_bool(&args, "replace_all", false);
 
-        let path = helpers::resolve_path(&ctx, path_str);
+        let path = helpers::resolve_path(&ctx, path_str)?;
 
         let is_sensitive = is_sensitive_file(&path);
 
