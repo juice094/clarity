@@ -16,6 +16,11 @@ pub struct McpServerEntry {
     pub command: String,
     #[serde(default)]
     pub args: Vec<String>,
+    /// Environment variables passed to the MCP server process.
+    ///
+    /// Example for devbase tier filtering:
+    /// `"DEVBASE_MCP_TOOL_TIERS": "stable,beta"` exposes only stable
+    /// and beta tools (13 total), filtering out experimental ones.
     #[serde(default)]
     pub env: HashMap<String, String>,
     #[serde(default)]

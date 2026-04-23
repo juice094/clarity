@@ -462,6 +462,31 @@ let search_tool: Box<dyn Tool> = if let Ok(client) = connect_search_server().awa
 }
 ```
 
+### 工具分级过滤（devbase 示例）
+
+devbase MCP server 支持通过 `DEVBASE_MCP_TOOL_TIERS` 环境变量按工具成熟度分级暴露：
+
+```json
+{
+  "mcpServers": {
+    "devbase": {
+      "command": "devbase",
+      "args": ["mcp"],
+      "env": {
+        "DEVBASE_MCP_TOOL_TIERS": "stable,beta"
+      }
+    }
+  }
+}
+```
+
+**分级说明**：
+- `stable`：无已知 bug、schema 冻结、单元测试覆盖（5 tools）
+- `beta`：功能已验证但 schema 可能微调（8 tools）
+- `experimental`：新功能、待生产验证（5 tools）
+
+配置 `"DEVBASE_MCP_TOOL_TIERS": "stable,beta"` 时，devbase 仅暴露 13 个 tools，experimental 的 5 个 tools 被过滤，从而减少 Clarity system prompt 的 tool description 膨胀。
+
 ### 加载配置
 
 ```rust

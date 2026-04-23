@@ -44,6 +44,7 @@
 //! ```
 
 pub mod config;
+pub mod devkit;
 pub mod enhanced;
 pub mod tools;
 
