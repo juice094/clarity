@@ -420,13 +420,8 @@ pub async fn build_provider_from_registry(
                 .base_url
                 .clone()
                 .unwrap_or_else(|| "http://localhost:11434".into());
-            let api_key = cfg
-                .api_key_env
-                .as_ref()
-                .and_then(|env_var| std::env::var(env_var).ok())
-                .unwrap_or_default();
-            let llm = OpenAiCompatibleLlm::new(api_key, base_url, model_id);
-            Ok(Box::new(llm))
+            let provider = super::ollama::OllamaProvider::new(base_url, model_id);
+            Ok(Box::new(provider))
         }
         ProtocolType::LlamaServer => {
             let base_url = cfg

@@ -12,7 +12,7 @@
 //! cargo run --example ollama_demo
 //! ```
 
-use clarity_core::{Agent, AgentConfig, OpenAiCompatibleLlm, ToolRegistry};
+use clarity_core::{Agent, AgentConfig, OllamaProvider, ToolRegistry};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -35,8 +35,8 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     
-    // 创建 Ollama LLM（使用 OpenAI 兼容接口）
-    let llm = OpenAiCompatibleLlm::ollama("llama3.2");
+    // 创建 Ollama LLM（使用原生 /api/chat 接口）
+    let llm = OllamaProvider::new("http://localhost:11434", "llama3.2");
     println!("✅ 使用模型: llama3.2\n");
     
     // 创建工具注册表（本地模型可能不支持工具调用，使用空注册表）

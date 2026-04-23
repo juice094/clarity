@@ -11,12 +11,14 @@ pub mod deepseek;
 pub mod kalosm;
 pub mod llama_server;
 pub mod model_registry;
+pub mod ollama;
 pub mod sse;
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
+pub use ollama::OllamaProvider;
 pub use model_registry::{
     build_provider_from_registry, ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType,
     ProviderConfig,

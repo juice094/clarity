@@ -60,7 +60,7 @@ pub mod types;
 // Re-export core types
 pub use agent::Agent;
 pub use error::{AgentError, ToolError};
-pub use llm::{AnthropicLlm, KimiLlm, LlmFactory, OpenAiCompatibleLlm};
+pub use llm::{AnthropicLlm, KimiLlm, LlmFactory, OllamaProvider, OpenAiCompatibleLlm};
 pub use registry::ToolRegistry;
 pub use tools::{Tool, ToolContext, ToolResult};
 
