@@ -171,6 +171,15 @@ pub struct Agent {
     compaction_service: Option<CompactionService>,
     /// Optional skill registry for orchestration
     skill_registry: Option<SkillRegistry>,
-    /// Shared mutable runtime state
+    /// Shared mutable runtime state.
+    ///
+    /// **Design choice: `std::sync::RwLock` is intentional.**
+    /// `Agent` methods (getters/setters/cancel/reset) are synchronous and may
+    /// be called from non-async contexts (e.g. TUI event loop, Gateway
+    /// handlers). Migrating to `tokio::sync::RwLock` would force every
+    /// lightweight accessor to become `async`, breaking the builder pattern
+    /// and polluting the entire call-graph. All critical sections are
+    /// short (field reads/writes only) and audit-confirmed safe (no await
+    /// while holding the lock).
     inner: Arc<std::sync::RwLock<AgentInner>>,
 }

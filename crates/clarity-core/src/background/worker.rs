@@ -72,9 +72,9 @@ pub struct WorkerPool {
     /// 工作线程数
     worker_count: usize,
     /// 工作句柄
-    handles: std::sync::Mutex<Vec<JoinHandle<()>>>,
+    handles: Mutex<Vec<JoinHandle<()>>>,
     /// 关闭信号发送器
-    shutdown_tx: std::sync::Mutex<Option<mpsc::Sender<()>>>,
+    shutdown_tx: Mutex<Option<mpsc::Sender<()>>>,
     /// 工作线程实时统计信息
     worker_stats: Arc<RwLock<Vec<Option<WorkerStats>>>>,
     /// 可选的 Agent 任务执行器
@@ -89,7 +89,7 @@ impl WorkerPool {
         let shutdown_rx = Arc::new(Mutex::new(shutdown_rx));
 
         let notification_manager: Option<Arc<NotificationManager>> = None;
-        let handles = std::sync::Mutex::new(Vec::with_capacity(worker_count));
+        let handles = Mutex::new(Vec::with_capacity(worker_count));
 
         // 使用 Arc<Mutex<Receiver>> 允许多个 worker 共享接收器
         let work_rx = Arc::new(Mutex::new(work_rx));
@@ -105,7 +105,7 @@ impl WorkerPool {
             _notification_manager: notification_manager.clone(),
             worker_count,
             handles,
-            shutdown_tx: std::sync::Mutex::new(Some(shutdown_tx)),
+            shutdown_tx: Mutex::new(Some(shutdown_tx)),
             worker_stats: worker_stats.clone(),
             agent_executor: None,
         });
@@ -256,7 +256,7 @@ impl WorkerPool {
                 info!("Worker {} stopped", id);
             });
 
-            pool.handles.lock().unwrap().push(handle);
+            pool.handles.lock().await.push(handle);
         }
 
         pool
@@ -300,8 +300,8 @@ impl WorkerPool {
             store: self.store.clone(),
             _notification_manager: Some(manager),
             worker_count: self.worker_count,
-            handles: std::sync::Mutex::new(Vec::new()),
-            shutdown_tx: std::sync::Mutex::new(None),
+            handles: Mutex::new(Vec::new()),
+            shutdown_tx: Mutex::new(None),
             worker_stats: self.worker_stats.clone(),
             agent_executor: self.agent_executor.clone(),
         })
@@ -317,8 +317,8 @@ impl WorkerPool {
             store: self.store.clone(),
             _notification_manager: self._notification_manager.clone(),
             worker_count: self.worker_count,
-            handles: std::sync::Mutex::new(Vec::new()),
-            shutdown_tx: std::sync::Mutex::new(None),
+            handles: Mutex::new(Vec::new()),
+            shutdown_tx: Mutex::new(None),
             worker_stats: self.worker_stats.clone(),
             agent_executor: Some(executor),
         })
@@ -379,13 +379,13 @@ impl WorkerPool {
         );
 
         // 发送关闭信号
-        let tx = self.shutdown_tx.lock().unwrap().take();
+        let tx = self.shutdown_tx.lock().await.take();
         if let Some(tx) = tx {
             let _ = tx.send(()).await;
         }
 
         // 等待所有工作线程完成
-        let handles: Vec<_> = std::mem::take(&mut *self.handles.lock().unwrap());
+        let handles: Vec<_> = std::mem::take(&mut *self.handles.lock().await);
         for handle in handles {
             let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await;
         }

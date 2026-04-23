@@ -29,8 +29,8 @@ pub trait AgentTaskExecutor: Send + Sync + std::fmt::Debug {
 use crate::notifications::{task_status_notification, NotificationManager};
 use std::collections::BinaryHeap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
-use tokio::sync::RwLock as AsyncRwLock;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
 
 /// 调度任务项（用于优先级队列）
@@ -78,20 +78,20 @@ impl Ord for ScheduledTask {
 #[derive(Debug)]
 pub struct TaskScheduler {
     /// 优先级队列
-    queue: StdMutex<BinaryHeap<ScheduledTask>>,
+    queue: Mutex<BinaryHeap<ScheduledTask>>,
     /// 任务存储
     store: TaskStore,
     /// 序列号生成器（用于 FIFO 排序）
-    sequence: StdRwLock<u64>,
+    sequence: RwLock<u64>,
 }
 
 impl TaskScheduler {
     /// 创建新的任务调度器
     pub fn new(store: TaskStore) -> Self {
         Self {
-            queue: StdMutex::new(BinaryHeap::new()),
+            queue: Mutex::new(BinaryHeap::new()),
             store,
-            sequence: StdRwLock::new(0),
+            sequence: RwLock::new(0),
         }
     }
 
@@ -102,7 +102,7 @@ impl TaskScheduler {
 
         // 生成序列号
         let seq = {
-            let mut seq = self.sequence.write().unwrap();
+            let mut seq = self.sequence.write().await;
             *seq += 1;
             *seq
         };
@@ -115,7 +115,7 @@ impl TaskScheduler {
             spec: spec.clone(),
         };
 
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().await;
         queue.push(scheduled);
 
         info!(
@@ -126,26 +126,26 @@ impl TaskScheduler {
     }
 
     /// 获取下一个任务
-    pub fn next_task(&self) -> Option<(TaskId, TaskSpec)> {
-        let mut queue = self.queue.lock().unwrap();
+    pub async fn next_task(&self) -> Option<(TaskId, TaskSpec)> {
+        let mut queue = self.queue.lock().await;
         queue.pop().map(|t| (t.task_id, t.spec))
     }
 
     /// 查看下一个任务（不弹出）
-    pub fn peek_task(&self) -> Option<(TaskId, TaskSpec)> {
-        let queue = self.queue.lock().unwrap();
+    pub async fn peek_task(&self) -> Option<(TaskId, TaskSpec)> {
+        let queue = self.queue.lock().await;
         queue.peek().map(|t| (t.task_id.clone(), t.spec.clone()))
     }
 
     /// 获取队列长度
-    pub fn queue_len(&self) -> usize {
-        let queue = self.queue.lock().unwrap();
+    pub async fn queue_len(&self) -> usize {
+        let queue = self.queue.lock().await;
         queue.len()
     }
 
     /// 检查队列是否为空
-    pub fn is_empty(&self) -> bool {
-        let queue = self.queue.lock().unwrap();
+    pub async fn is_empty(&self) -> bool {
+        let queue = self.queue.lock().await;
         queue.is_empty()
     }
 
@@ -161,12 +161,12 @@ impl TaskScheduler {
 
         // 生成序列号
         let seq = {
-            let mut seq = self.sequence.write().unwrap();
+            let mut seq = self.sequence.write().await;
             *seq += 1;
             *seq
         };
 
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.lock().await;
         for info in pending {
             let scheduled = ScheduledTask {
                 priority_value: info.spec.priority.value(),
@@ -196,7 +196,7 @@ pub struct BackgroundTaskManager {
     #[allow(dead_code)]
     context_dir: PathBuf,
     /// 运行中的任务
-    running_tasks: Arc<AsyncRwLock<std::collections::HashMap<TaskId, TaskHandle>>>,
+    running_tasks: Arc<RwLock<std::collections::HashMap<TaskId, TaskHandle>>>,
     /// 最大并发数
     max_concurrency: usize,
     /// 信号量
@@ -221,7 +221,7 @@ impl BackgroundTaskManager {
             store: TaskStore::new(store_dir),
             work_dir: work_dir.as_ref().to_path_buf(),
             context_dir: context_dir.as_ref().to_path_buf(),
-            running_tasks: Arc::new(AsyncRwLock::new(std::collections::HashMap::new())),
+            running_tasks: Arc::new(RwLock::new(std::collections::HashMap::new())),
             max_concurrency,
             semaphore: Arc::new(tokio::sync::Semaphore::new(max_concurrency)),
             notification_manager: None,
@@ -462,7 +462,7 @@ impl BackgroundTaskManager {
             None => return Ok(None),
         };
 
-        if let Some((task_id, spec)) = scheduler.next_task() {
+        if let Some((task_id, spec)) = scheduler.next_task().await {
             // 更新状态为运行中
             self.store
                 .update_status(&task_id, TaskStatus::Running)
@@ -570,7 +570,7 @@ impl BackgroundTaskManager {
             None => return Ok(None),
         };
 
-        if let Some((task_id, spec)) = scheduler.next_task() {
+        if let Some((task_id, spec)) = scheduler.next_task().await {
             self.store
                 .update_status(&task_id, TaskStatus::Running)
                 .await?;
@@ -777,21 +777,21 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(scheduler.queue_len(), 2);
+        assert_eq!(scheduler.queue_len().await, 2);
 
         // 验证高优先级任务先出队
-        let (next_id, next_spec) = scheduler.peek_task().unwrap();
+        let (next_id, next_spec) = scheduler.peek_task().await.unwrap();
         assert_eq!(next_id, "task_2");
         assert_eq!(next_spec.priority, TaskPriority::High);
 
         // 弹出并验证
-        let (popped_id, _) = scheduler.next_task().unwrap();
+        let (popped_id, _) = scheduler.next_task().await.unwrap();
         assert_eq!(popped_id, "task_2");
 
-        let (popped_id, _) = scheduler.next_task().unwrap();
+        let (popped_id, _) = scheduler.next_task().await.unwrap();
         assert_eq!(popped_id, "task_1");
 
-        assert!(scheduler.is_empty());
+        assert!(scheduler.is_empty().await);
     }
 
     #[tokio::test]
@@ -812,7 +812,7 @@ mod tests {
         let task_id = manager.schedule(spec).await.unwrap();
 
         assert!(task_id.starts_with("task_"));
-        assert_eq!(scheduler.queue_len(), 1);
+        assert_eq!(scheduler.queue_len().await, 1);
     }
 
     #[tokio::test]
@@ -895,12 +895,12 @@ mod tests {
         }
 
         // 验证出队顺序
-        let order: Vec<String> = (0..5)
-            .filter_map(|_| {
-                let _rt = tokio::runtime::Handle::current();
-                scheduler.next_task().map(|(id, _)| id)
-            })
-            .collect();
+        let mut order = Vec::new();
+        for _ in 0..5 {
+            if let Some((id, _)) = scheduler.next_task().await {
+                order.push(id);
+            }
+        }
 
         assert_eq!(
             order,
@@ -1006,7 +1006,7 @@ mod tests {
         let _scheduled_id = manager.schedule(spec).await.unwrap();
 
         // Queue should have 1 item
-        assert_eq!(scheduler.queue_len(), 1);
+        assert_eq!(scheduler.queue_len().await, 1);
 
         // Process it
         let started_id = manager.process_next_agent_task().await.unwrap();
