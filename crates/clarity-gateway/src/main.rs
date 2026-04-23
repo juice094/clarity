@@ -66,6 +66,12 @@ fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig, Chann
 async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     info!("Creating Agent with built-in tools...");
 
+    // 加载 TOML 配置（默认 → ~/.config/clarity/ → .clarity.toml → 环境变量覆盖）
+    // 然后将配置中的凭证导出到 provider 特定的环境变量，供 LlmFactory::auto() 读取
+    if let Ok(config) = clarity_core::config::Config::load() {
+        config.export_to_env();
+    }
+
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 

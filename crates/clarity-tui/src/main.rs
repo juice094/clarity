@@ -89,6 +89,11 @@ async fn main() -> Result<()> {
 }
 
 async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
+    // 加载 TOML 配置并导出凭证到环境变量
+    if let Ok(config) = clarity_core::config::Config::load() {
+        config.export_to_env();
+    }
+
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
