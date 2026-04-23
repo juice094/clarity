@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_resolve_gateway_url_default() {
         // Ensure env var is not set (or clear it)
-        let _ = std::env::remove_var("CLARITY_GATEWAY_URL");
+        std::env::remove_var("CLARITY_GATEWAY_URL");
         assert_eq!(resolve_gateway_url(), GATEWAY_URL);
     }
 
