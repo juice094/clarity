@@ -637,19 +637,21 @@ impl McpClient for HttpMcpClient {
 }
 
 // =============================================================================
-// SSE Client Stub
+// SSE Client
 // =============================================================================
-/// Stub implementation for SSE MCP client.
-///
-/// **WARNING**: This is not a real SSE client. `connect()` is a no-op and
-/// `request_raw()` sends plain HTTP POST requests instead of using the
-/// Server-Sent Events protocol (MCP-over-SSE).
+/// Full SSE MCP client implementing the MCP-over-SSE protocol.
 ///
 /// Protocol flow:
 /// 1. GET /sse → SSE stream
 /// 2. event: endpoint → data: /messages?sid=xxx
 /// 3. POST /messages?sid=xxx (JSON-RPC request)
 /// 4. Response arrives via SSE event: message → data: {jsonrpc:"2.0", id, result}
+///
+/// Features:
+/// - Automatic endpoint discovery from SSE stream
+/// - JSON-RPC response correlation via pending request map
+/// - Automatic reconnection with configurable delay
+/// - Full initialization handshake (initialize + notifications/initialized)
 pub struct SseMcpClient {
     config: McpServerConfig,
     client: reqwest::Client,

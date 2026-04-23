@@ -268,7 +268,7 @@ if let Some(skill) = relevant.first() {
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │  MCP Client Layer                                                 │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────────┐  │  │
-│  │  │ StdioClient │  │ HttpClient  │  │ SseClientStub (TODO)     │  │  │
+│  │  │ StdioClient │  │ HttpClient  │  │ SseClient                │  │  │
 │  │  └──────┬──────┘  └──────┬──────┘  └────────────┬─────────────┘  │  │
 │  │         │                │                      │                │  │
 │  │         └────────────────┴──────────────────────┘                │  │
@@ -322,7 +322,7 @@ if let Some(skill) = relevant.first() {
 ### Phase 4：MCP 能力补全
 
 - [ ] 实现 `resources/list`、`resources/read`（当前仅实现 `tools/*`）
-- [ ] 实现 SSE Transport（当前为 Stub）
+- [x] 实现 SSE Transport（`SseMcpClient`：endpoint discovery + reconnection + handshake）
 - [ ] 在 Skill 中支持引用 MCP Resource URI（如 `resource://github-repo/PRs`）
 
 ---

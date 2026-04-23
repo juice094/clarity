@@ -115,8 +115,9 @@
 
 | 债务项 | 严重程度 | 说明 | 计划 |
 |--------|----------|------|------|
-| `std::sync::RwLock` → `tokio::sync::RwLock` | 🟢 低 | 当前无 correctness bug（锁不跨 await），防御性重构 | Phase 2 |
-| MCP HTTP E2E 验证 | 🟢 低 | 已实现但未用真实 HTTP MCP server 验证 | Phase 2 |
+| `std::sync::RwLock` → `tokio::sync::RwLock` | ✅ 已解决 | `background/` 模块已完成迁移（`1141ba9`） | — |
+| MCP HTTP E2E 验证 | ✅ 已解决 | Axum 最小 server E2E 测试通过（`8db4db3`） | — |
+| MCP SSE Transport | ✅ 已解决 | 完整 SSE 协议实现（endpoint discovery + reconnection + handshake），注释已同步 | — |
 | Gateway handler 单元测试 | ✅ 已解决 | mock 测试已覆盖（v0.1.1） | — |
 | 文档过时 | ✅ 已解决 | docs 目录已全面整理（v0.1.1） | — |
 
@@ -150,10 +151,10 @@
 
 | 优先级 | 工作项 | 工作量 | 价值 |
 |--------|--------|--------|------|
-| P2 | RwLock 防御性迁移 | 1-2 天 | 防止未来阻塞 executor |
-| P2 | MCP HTTP E2E 验证 | 0.5-1 天 | 验证 SSE/HTTP transport |
-| P3 | Channels 原型（Telegram/Slack） | 2-4 周 | 向 OpenClaw 功能靠近 |
-| P3 | 本地模型支持（ollama 集成） | 1-2 周 | 减少 API 依赖 |
+| P2 | Channels Webhook E2E 验证 | 1-2 周 | 飞书/钉钉/企业微信端到端验证，解锁 IM 入口 |
+| P3 | 性能基准测试（Criterion） | 1 周 | Agent::run() / ToolRegistry / Chunker / BM25 可量化基准 |
+| P3 | Channels 原型（Telegram/Discord） | 2-4 周 | 依赖 rustls-webpki 安全修复，暂排期 |
+| P3 | 本地模型支持（ollama 集成） | 1-2 周 | 减少 API 依赖，用户确认后启动 |
 
 ---
 
