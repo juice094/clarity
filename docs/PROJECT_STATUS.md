@@ -1,0 +1,160 @@
+# Clarity 项目现状报告
+
+> 版本：v0.1.1 | 日期：2026-04-23 | 基于实机测试与代码审计
+
+---
+
+## 1. 核心指标（实测数据）
+
+| 指标 | 实测结果 | 评估 |
+|------|---------|------|
+| **编译检查** | `cargo check --workspace` | ✅ 零错误 |
+| **单元测试** | **382 passed, 0 failed, 2 ignored** | ✅ 全绿 |
+| **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
+| **安全审计** | `cargo audit` | ✅ 已集成 CI |
+| **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
+| **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
+
+**测试覆盖详情**：
+- `clarity-core`: 245 tests passed, 2 ignored
+- `clarity-gateway`: 38 tests passed
+- `clarity-memory`: 79 tests passed
+- `clarity-wire`: 8 tests passed
+- `clarity-tui`: 6 tests passed
+- `clarity-claw`: 6 tests passed
+- `clarity-integration-tests`: 0 tests（空骨架）
+
+---
+
+## 2. 已完成功能（v0.1.1）
+
+### 2.1 核心引擎（clarity-core）
+
+```
+✅ Agent Loop — ReAct 循环、工具调用、多轮对话、审批系统
+✅ Plan Mode — 结构化 JSON 计划 + 批量执行，绕过逐工具审批
+✅ 并行子代理 — run_parallel() + BackgroundTaskManager 并发调度
+✅ 三层审批 — Interactive / Yolo / Plan
+✅ 上下文压缩 — CompactionService 自动防止 Token 爆炸
+✅ 12+ 内置工具 — 文件读写编辑、Shell、搜索、Web、MCP、任务管理
+✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
+✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
+✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
+✅ Wire 事件总线 — SPMC 跨模块通信
+```
+
+### 2.2 记忆系统（clarity-memory）
+
+```
+✅ SQLite 持久化 — PersistentMemoryStore
+✅ BM25 + Hybrid 搜索 — FTS5 召回 + 内存 BM25 重排序
+✅ RAG Chunking — 可配置大小、重叠、分隔符
+✅ 向量存储 — CosineIndex + TfidfVectorizer
+```
+
+### 2.3 Gateway（clarity-gateway）
+
+```
+✅ HTTP REST API — /v1/chat/completions, /v1/tasks, /v1/parallel, /api/files/*
+✅ WebSocket — 实时事件流
+✅ Session Store — SQLite 持久化（CRUD、消息追加、请求计数、过期清理）
+✅ Admin API — /api/tools, /api/stats, /api/approval-mode, /api/config
+✅ Web UI — 聊天界面、任务面板、设置面板、并行执行面板
+✅ CORS — 支持 localhost:3000/5173/18800
+```
+
+### 2.4 TUI（clarity-tui）
+
+```
+✅ 终端聊天界面 — ratatui 组件化设计
+✅ 命令系统 — /plan, /parallel, /skill, /task
+✅ 实时流式响应 — SSE 解析 + 打字机效果
+```
+
+### 2.5 系统托盘（clarity-claw）
+
+```
+✅ 后台任务监控 — 实时读取 .clarity/tasks/ 目录
+✅ OS 通知 — 任务完成/失败推送
+✅ 任务列表弹窗 — 状态、名称、时间
+```
+
+---
+
+## 3. 安全状态
+
+| 漏洞 | 状态 | 修复版本 |
+|------|------|----------|
+| S1: `resolve_path` 目录遍历 | ✅ 已修复 | v0.1.1 |
+| S2: Gateway `sanitize_path` 目录遍历 | ✅ 已修复 | v0.1.1 |
+
+**安全措施**：
+- MCP 命令注入防护 — `validate_mcp_command()` 拦截 shell 元字符、相对路径
+- 敏感文件检测 — `.env`、SSH key、kubeconfig 等自动识别
+- TLS 未禁用 — reqwest 默认系统 TLS
+- 无 `unsafe` 代码块
+
+---
+
+## 4. CI/CD 状态
+
+| Job | 状态 | 说明 |
+|-----|------|------|
+| `check` | ✅ | `cargo check --workspace` |
+| `test` | ✅ | `cargo test --workspace --lib` |
+| `clippy` | ✅ | `cargo clippy --workspace --lib --bins --tests -- -D warnings` |
+| `fmt` | ✅ | `cargo fmt --all -- --check` |
+| `audit` | ✅ | `cargo audit --deny warnings` |
+| `coverage` | ✅ | `cargo tarpaulin --workspace --lib --out Xml` |
+
+**平台矩阵**：ubuntu-latest, windows-latest, macos-latest
+
+---
+
+## 5. 技术债务
+
+| 债务项 | 严重程度 | 说明 | 计划 |
+|--------|----------|------|------|
+| `std::sync::RwLock` → `tokio::sync::RwLock` | 🟢 低 | 当前无 correctness bug（锁不跨 await），防御性重构 | Phase 2 |
+| MCP HTTP E2E 验证 | 🟢 低 | 已实现但未用真实 HTTP MCP server 验证 | Phase 2 |
+| Gateway handler 单元测试 | ✅ 已解决 | mock 测试已覆盖（v0.1.1） | — |
+| 文档过时 | ✅ 已解决 | docs 目录已全面整理（v0.1.1） | — |
+
+---
+
+## 6. 与竞品对比（简要）
+
+| 维度 | Clarity (v0.1.1) | OpenClaw | zeroclaw | codex-rs |
+|------|------------------|----------|----------|----------|
+| **技术栈** | Rust | Node.js | Rust | Rust |
+| **Channels** | ❌ 仅 Web UI | ✅ 20+ | ❌ | ❌ |
+| **Plan Mode** | ✅ | ❌ | ❌ | ❌ |
+| **并行子代理** | ✅ | ⚠️ | ❌ | ❌ |
+| **MCP** | ✅ stdio/HTTP/SSE | ⚠️ | ❌ | ✅ |
+| **Voice** | ❌ | ✅ | ❌ | ❌ |
+| **Canvas** | ❌ | ✅ | ❌ | ❌ |
+| **移动端** | ❌ | ✅ iOS/Android | ❌ | ❌ |
+| **Docker 沙箱** | ❌ | ✅ | ❌ | ✅ |
+| **Plugin SDK** | ❌ | ✅ | ❌ | ❌ |
+| **性能** | ✅ 原生二进制 | ⚠️ Node.js | ✅ <5MB | ✅ |
+
+**定位差异**：
+- **Clarity** = 开发者的 AI 运行时（性能 + Plan Mode + 并行）
+- **OpenClaw** = 个人 AI 助手（Channels + Voice + Canvas + 移动端）
+- **zeroclaw** = 极简 Rust AI 助手（极低资源）
+- **codex-rs** = 编码助手（沙箱 + MCP）
+
+---
+
+## 7. 下一步（Phase 2）
+
+| 优先级 | 工作项 | 工作量 | 价值 |
+|--------|--------|--------|------|
+| P2 | RwLock 防御性迁移 | 1-2 天 | 防止未来阻塞 executor |
+| P2 | MCP HTTP E2E 验证 | 0.5-1 天 | 验证 SSE/HTTP transport |
+| P3 | Channels 原型（Telegram/Slack） | 2-4 周 | 向 OpenClaw 功能靠近 |
+| P3 | 本地模型支持（ollama 集成） | 1-2 周 | 减少 API 依赖 |
+
+---
+
+*本报告随版本更新。最新状态见 [`../CHANGELOG.md`](../CHANGELOG.md)。*

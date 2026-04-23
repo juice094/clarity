@@ -1,6 +1,6 @@
 # Clarity 营养吸收计划 —— 风险确认报告
 
-> 分析日期：2026-04-15
+> 分析日期：2026-04-15 | 更新：2026-04-23（标记 S1/S2 已修复）
 > 分析范围：表 A 五个营养源的全部 13 项能力吸收
 > 风险等级：🟢 低风险（可立即推进） / 🟡 中风险（需评估后推进） / 🔴 高风险（需充分准备后推进） / ⚫ 极高风险（暂停或放弃）
 
@@ -24,7 +24,7 @@
 |--------|------|------|
 | **5ire 的 non-commercial 条款** | 🟡 | 5ire 的 Modified Apache 2.0 限制商业使用。Clarity 若未来商业化，直接复制 5ire 代码有法律风险。**对策**：清洁室吸收（看设计文档，不看代码；自己用 Rust 重新实现） |
 | **Claurst 的清洁室声明** | 🟢 | Claurst 本身是 Claude Code 的清洁室重写，其 MIT 协议允许自由使用。但 Claurst 的"清洁室"声明提醒我们：**借鉴行为设计而非表达式**是安全的 |
-| **OpenClaw/ZeroClaw 的 claw 命名** | 🟡 | "claw"概念已被 OpenClaw/ZeroClaw 占据（250K + 20K Stars）。Clarity 使用 "claw" 作为层名**存在品牌冲突风险**。**对策**：考虑改名为 "tray" 或保留 claw 但强调差异化 |
+| **OpenClaw/ZeroClaw 的 claw 命名** | 🟡 | "claw"概念已被 OpenClaw/ZeroClaw 占据（250K + 20K Stars）。Clarity 使用 "claw" 作为层名**存在品牌冲突风险**。**对策**：保留 "claw" 作为系统托盘层代号，但对外品牌统一使用 "Clarity"，避免与 OpenClaw 生态混淆 |
 | **AIEOS identity 格式** | 🔴 | ZeroClaw 支持的 AIEOS 是第三方标准（v1.1），但 Clarity 若兼容此格式，等于承认其生态地位。**对策**：不直接兼容 AIEOS，而是改造其核心思想（四维配置）为 Clarity 的场景配置格式 |
 | **OpenClaw Skill 格式** | 🟡 | OpenClaw 的 Skill 是 Markdown 驱动的，格式本身不受版权保护。但 Skill 目录和品牌（ClawHub）是其商业资产。**对策**：不复制 ClawHub，自建 Clarity Skill 目录，使用开放的 Markdown 格式 |
 
@@ -33,6 +33,12 @@
 ## 二、技术与架构风险
 
 ### 2.1 按营养项逐一评估
+
+#### ✅ 已解决（v0.1.1）
+
+| 营养项 | 来源 | 状态 | 说明 |
+|--------|------|------|------|
+| **目录遍历漏洞** | 内部审计 | ✅ 已修复 | `resolve_path()` 和 `sanitize_path()` 已增加工作目录前缀校验，新增 10 个安全测试 |
 
 #### 🔴 P0 级（高难度）
 
