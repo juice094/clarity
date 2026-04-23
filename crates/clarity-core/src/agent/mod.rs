@@ -31,7 +31,7 @@ use crate::agent::compaction_service::CompactionService;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
 use crate::error::AgentError;
-use crate::memory::{MemoryStore, MemoryTicker};
+use crate::memory::{MemoryStore, SharedMemoryTicker};
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::Wire;
@@ -156,7 +156,7 @@ pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
     memory_store: Option<Arc<dyn MemoryStore>>,
-    memory_ticker: Option<MemoryTicker>,
+    memory_ticker: Option<SharedMemoryTicker>,
     /// Optional wire for UI communication
     wire: Option<Arc<Wire>>,
     /// Approval runtime for tool execution control

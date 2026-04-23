@@ -19,7 +19,7 @@ pub use crate::backends::{FileStore, HybridStore};
 ///
 /// This is the primary storage implementation used by clarity-memory.
 /// It provides efficient full-text search and structured storage.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryStore {
     #[cfg(feature = "sqlite")]
     inner: SqliteStore,

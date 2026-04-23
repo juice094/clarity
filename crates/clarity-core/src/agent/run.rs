@@ -219,9 +219,16 @@ impl Agent {
         self.store_conversation_memory(memory_content).await;
 
         if let Some(ref ticker) = self.memory_ticker {
-            match ticker.tick().await {
-                true => info!("Memory ticker triggered"),
-                false => debug!("Memory ticker not triggered yet"),
+            match ticker.notify_turn_and_wait("default").await {
+                Some(Ok(results)) => {
+                    info!("Memory ticker triggered, compilation results: {:?}", results);
+                }
+                Some(Err(e)) => {
+                    warn!("Memory ticker compilation failed: {}", e);
+                }
+                None => {
+                    debug!("Memory ticker not triggered yet");
+                }
             }
         }
 
@@ -554,9 +561,16 @@ impl Agent {
         self.store_conversation_memory(memory_content).await;
 
         if let Some(ref ticker) = self.memory_ticker {
-            match ticker.tick().await {
-                true => info!("Memory ticker triggered"),
-                false => debug!("Memory ticker not triggered yet"),
+            match ticker.notify_turn_and_wait("default").await {
+                Some(Ok(results)) => {
+                    info!("Memory ticker triggered, compilation results: {:?}", results);
+                }
+                Some(Err(e)) => {
+                    warn!("Memory ticker compilation failed: {}", e);
+                }
+                None => {
+                    debug!("Memory ticker not triggered yet");
+                }
             }
         }
 

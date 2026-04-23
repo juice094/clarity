@@ -147,14 +147,29 @@
 
 ---
 
-## 7. 下一步（Phase 2）
+## 7. 下一步（Phase 3）
 
-| 优先级 | 工作项 | 工作量 | 价值 |
-|--------|--------|--------|------|
-| P2 | Channels Webhook E2E 验证 | 1-2 周 | 飞书/钉钉/企业微信端到端验证，解锁 IM 入口 |
-| P3 | 性能基准测试（Criterion） | 1 周 | Agent::run() / ToolRegistry / Chunker / BM25 可量化基准 |
-| P3 | Channels 原型（Telegram/Discord） | 2-4 周 | 依赖 rustls-webpki 安全修复，暂排期 |
-| P3 | 本地模型支持（ollama 集成） | 1-2 周 | 减少 API 依赖，用户确认后启动 |
+### 7.1 已完成（v0.1.1 交付）
+
+| 工作项 | 状态 | Commit |
+|--------|------|--------|
+| Channels Webhook E2E 验证 | ✅ 已完成 | `dedb6bd` — 18 个集成测试覆盖飞书/钉钉/企业微信/通用端点 |
+| 性能基准测试（Criterion） | ✅ 已完成 | `dedb6bd` — ToolRegistry 31.5µs / AgentPrompt 89.2µs / SkillContext 158ns |
+| MCP SSE Transport | ✅ 已完成 | 完整实现（endpoint discovery + reconnection + handshake） |
+| Channels 原型（Telegram/Discord/Webhook） | ✅ 已实现 | Gateway 已集成 Telegram、Discord、Webhook 三渠道 |
+| 本地模型支持（ollama） | ❌ 已移除 | 残留清理完成，聚焦云端 LLM 提供商 |
+
+### 7.2 进行中 / 待启动
+
+| 优先级 | 工作项 | 工作量 | 说明 | Track |
+|--------|--------|--------|------|-------|
+| **P1** | MemoryTicker 版本统一 | 2-3 天 | `clarity-core` 简化版 ticker → `clarity-memory` 完整版（含 callback、session 隔离） | A2 |
+| **P1** | Gateway Memory 激活 | 1-2 天 | `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker` | A3 |
+| **P1** | MemoryCompiler 接入 run loop | 2-3 天 | 四级编译管道（today/week/longterm/facts）在 ticker 触发时自动执行 | A4 |
+| **P2** | Slack 渠道 | 3-4 天 | Socket Mode 实现，参考 Telegram/Discord 模式 | B1 |
+| **P2** | 统一配置系统（TOML） | 3-5 天 | 三层配置：默认 → `~/.config/clarity/` → `.clarity/` → 环境变量 | C1/C2 |
+| P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
+| P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 
 ---
 

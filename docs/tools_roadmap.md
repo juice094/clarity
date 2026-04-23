@@ -4,7 +4,7 @@
 
 ## 现状分析
 
-### 当前内置工具（6个）
+### 当前内置工具（15+ 个）
 
 | 工具 | 类别 | 状态 | 说明 |
 |------|------|------|------|
@@ -14,7 +14,17 @@
 | `glob` | 搜索 | ✅ 稳定 | 文件模式匹配 |
 | `grep` | 搜索 | ✅ 稳定 | 内容搜索，支持 regex |
 | `bash` | Shell | ✅ 稳定 | Bash 命令执行 |
-| `powershell` | Shell | ⚠️ 缺失 | **已实现但未注册到 Registry** |
+| `powershell` | Shell | ✅ 稳定 | PowerShell 命令执行（Windows） |
+| `web_search` | 网络 | ✅ 稳定 | DuckDuckGo 网页搜索 |
+| `web_fetch` | 网络 | ✅ 稳定 | 网页内容获取（支持 markdown/text/html） |
+| `think` | 思考 | ✅ 稳定 | 结构化思考工具 |
+| `task_list` | 任务 | ✅ 稳定 | 列出后台任务 |
+| `task_output` | 任务 | ✅ 稳定 | 获取任务输出 |
+| `task_stop` | 任务 | ✅ 稳定 | 停止后台任务 |
+| `ask_user` | 交互 | ✅ 稳定 | 向用户提问 |
+| `notify` | 通知 | ✅ 稳定 | 发送系统通知 |
+| `todo` | 待办 | ✅ 稳定 | 待办事项管理 |
+| `plan` | 规划 | ✅ 稳定 | 结构化计划执行 |
 
 ### MCP 实现状态
 
@@ -33,89 +43,47 @@
 
 这些工具是 AI 助手日常工作的基础，必须作为内置工具实现。
 
-#### 1. Web Search Tool 🌐
+#### 1. Web Search Tool 🌐 ✅ 已实现
 
-**需求**：搜索互联网获取最新信息
+**实现位置**: `crates/clarity-core/src/tools/web.rs`（第 56 行起）
 
-```rust
-pub struct WebSearchTool;
-
-// 参数
+**参数**:
+```json
 {
     "query": "Rust async runtime comparison",
-    "num_results": 5,      // 返回结果数量
-    "recency_days": 7      // 可选：只返回 N 天内的结果
-}
-
-// 返回
-{
-    "results": [
-        {
-            "title": "...",
-            "url": "...",
-            "snippet": "...",
-            "source": "duckduckgo"
-        }
-    ]
+    "num_results": 5,
+    "recency_days": 7
 }
 ```
 
-**实现方案**：
-- **首选**: DuckDuckGo HTML 端点（无需 API key）
-- **备选**: SearxNG 实例（用户自建）
-- **未来**: Google Custom Search, Bing API
-
-**状态**: 📋 待实现（本文档交付物之一）
+**状态**: ✅ 已实现并注册（`registry.rs` 第 70 行）
 
 ---
 
-#### 2. Web Fetch Tool 📄
+#### 2. Web Fetch Tool 📄 ✅ 已实现
 
-**需求**：获取网页内容并提取主要文本
+**实现位置**: `crates/clarity-core/src/tools/web.rs`（第 373 行起）
 
-```rust
-pub struct WebFetchTool;
-
-// 参数
+**参数**:
+```json
 {
     "url": "https://example.com/article",
-    "format": "markdown",  // "markdown" | "text" | "html"
-    "max_length": 5000     // 最大字符数
-}
-
-// 返回
-{
-    "title": "Article Title",
-    "content": "...",      // markdown/text 格式
-    "url": "https://...",
-    "fetch_time_ms": 1234
+    "format": "markdown",
+    "max_length": 5000
 }
 ```
 
-**实现方案**：
-- 使用 `reqwest` 获取页面
-- 使用 `readable` 或 `html2md` 提取主要内容
-- 处理 JavaScript 渲染（可选，使用 headless browser）
-
-**状态**: 📋 待实现
+**状态**: ✅ 已实现并注册（`registry.rs` 第 71 行）
 
 ---
 
-#### 3. PowerShell Tool 注册修复 🔧
+#### 3. PowerShell Tool 🔧 ✅ 已修复
 
-**问题**: `PowerShellTool` 已实现但未在 `ToolRegistry::with_builtin_tools()` 中注册
+**实现位置**: `crates/clarity-core/src/tools/shell.rs`（第 180 行起）
 
-**修复**: 在 `registry.rs` 第 47-65 行添加：
+**注册位置**: `registry.rs` 第 67 行 `let _ = registry.register(PowerShellTool::new());`
 
-```rust
-use crate::tools::{..., PowerShellTool};
-
-// ...
-#[cfg(target_os = "windows")]
-let _ = registry.register(PowerShellTool::new());
-```
-
-**状态**: 🐛 Bug 修复
+**状态**: ✅ 已实现并注册（Windows 平台自动启用）
 
 ---
 

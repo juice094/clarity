@@ -17,7 +17,7 @@ pub const DEFAULT_TURNS_PER_SUMMARY: u32 = 6;
 /// Note: This doesn't require Send because SQLite connections are not Send.
 /// The callback will be executed on the same thread.
 pub type CompileCallback = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>>>> + Send + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>> + Send + Sync,
 >;
 
 /// Turn-based memory compilation trigger
@@ -40,7 +40,7 @@ pub struct MemoryTicker {
 /// Future type returned by notify_turn
 ///
 /// Note: This doesn't require Send because SQLite connections are not Send.
-pub type CompilationFuture = Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>>>>;
+pub type CompilationFuture = Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>>;
 
 impl MemoryTicker {
     /// Create a new MemoryTicker without a compile callback
@@ -60,7 +60,7 @@ impl MemoryTicker {
     pub fn set_compile_callback<F, Fut>(&mut self, callback: F)
     where
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<HashMap<String, CompileStatus>>> + 'static,
+        Fut: Future<Output = Result<HashMap<String, CompileStatus>>> + Send + 'static,
     {
         self.compile_callback = Some(Arc::new(move || Box::pin(callback()) as CompilationFuture));
     }
@@ -227,7 +227,7 @@ impl SharedMemoryTicker {
     pub async fn set_compile_callback<F, Fut>(&self, callback: F)
     where
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<HashMap<String, CompileStatus>>> + 'static,
+        Fut: Future<Output = Result<HashMap<String, CompileStatus>>> + Send + 'static,
     {
         let mut ticker = self.inner.lock().await;
         ticker.set_compile_callback(callback);

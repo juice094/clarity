@@ -7,7 +7,9 @@ use crate::agent::enhanced::TokenUsage;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
 use crate::llm::api::LlmProvider;
-use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, MemoryTicker};
+use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, SharedMemoryTicker};
+use std::collections::HashMap;
+use std::future::Future;
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::{Wire, WireMessage};
@@ -101,8 +103,9 @@ impl Agent {
         self
     }
 
-    /// Set the memory ticker
-    pub fn with_memory_ticker(mut self, ticker: MemoryTicker) -> Self {
+    /// Set the memory ticker (uses `clarity_memory::SharedMemoryTicker` for
+    /// thread-safe async operation with per-session turn counting).
+    pub fn with_memory_ticker(mut self, ticker: SharedMemoryTicker) -> Self {
         self.memory_ticker = Some(ticker);
         self
     }
@@ -152,6 +155,21 @@ impl Agent {
     pub fn with_max_context_tokens(mut self, max_tokens: usize) -> Self {
         self.max_context_tokens = max_tokens;
         self
+    }
+
+    /// Set the memory compilation callback on the ticker, if one is configured.
+    ///
+    /// This allows the agent to perform OpenHanako-style four-level memory
+    /// compilation (today → week → long-term → facts) when the turn threshold
+    /// is reached.
+    pub async fn set_memory_compile_callback<F, Fut>(&self, callback: F)
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = clarity_memory::Result<HashMap<String, clarity_memory::CompileStatus>>> + Send + 'static,
+    {
+        if let Some(ref ticker) = self.memory_ticker {
+            ticker.set_compile_callback(callback).await;
+        }
     }
 
     /// Set the compaction service

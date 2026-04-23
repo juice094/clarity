@@ -19,7 +19,7 @@ use clarity_core::background::BackgroundTaskManager;
 use clarity_core::llm::LlmFactory;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
-use clarity_core::memory::{MemoryTicker, PersistentMemoryStore};
+use clarity_core::memory::{MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::skills::SkillRegistry;
 use crossterm::{
@@ -119,7 +119,11 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
     let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path).await?);
 
     // 创建记忆触发器（每 5 轮对话触发一次）
-    let memory_ticker = MemoryTicker::new(5);
+    let compiled_dir = memory_db_path.parent().unwrap().join("compiled");
+    let _ = std::fs::create_dir_all(&compiled_dir);
+    let memory_ticker = SharedMemoryTicker::new(
+        MemoryTicker::new(&compiled_dir, Some(5))
+    );
 
     // 加载 SkillRegistry（尝试多个路径）
     let skill_registry = load_skill_registry();

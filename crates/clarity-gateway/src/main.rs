@@ -11,6 +11,7 @@ use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::llm::LlmFactory;
+use clarity_core::memory::{LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};
 use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
@@ -68,11 +69,30 @@ You are a methodological query assistant. When answering:
         .with_read_only(false)
         .with_entry_context(window_context);
 
-    // 创建 Agent
-    let agent = Agent::with_config(registry, config);
+    // 创建持久化记忆存储
+    let clarity_dir = std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(".clarity");
+    let memory_db = clarity_dir.join("memory.db");
+    let _ = tokio::fs::create_dir_all(&clarity_dir).await;
+
+    let memory_store = Arc::new(
+        PersistentMemoryStore::new(&memory_db)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Failed to create persistent memory store: {}, using in-memory", e);
+                PersistentMemoryStore::new_in_memory().expect("in-memory store should not fail")
+            }),
+    );
+
+    let compiled_dir = clarity_dir.join("compiled");
+    let _ = tokio::fs::create_dir_all(&compiled_dir).await;
+    let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
     // 1. 优先尝试加载用户持久化配置
-    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
+    let llm: Arc<dyn clarity_core::llm::api::LlmProvider> = if let Some(user_cfg) =
+        clarity_gateway::handlers::load_persisted_config().await
+    {
         info!(
             "Found persisted user config for provider: {}",
             user_cfg.provider
@@ -80,24 +100,67 @@ You are a methodological query assistant. When answering:
         match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
             Ok(provider) => {
                 info!("LLM provider loaded from persisted config");
-                return Ok(Arc::new(agent.with_llm(Arc::from(provider))));
+                Arc::from(provider)
             }
             Err(e) => {
                 warn!("Failed to build provider from persisted config: {}", e);
+                load_llm_fallback().await
             }
+        }
+    } else {
+        load_llm_fallback().await
+    };
+
+    // 创建 Agent
+    let agent = Agent::with_config(registry, config)
+        .with_memory(memory_store.clone())
+        .with_memory_ticker(memory_ticker)
+        .with_llm(llm.clone());
+
+    // 设置 MemoryCompiler callback（OpenHanako 四级编译管道）
+    let sessions_dir = clarity_dir.join("sessions");
+    let _ = tokio::fs::create_dir_all(&sessions_dir).await;
+    match clarity_memory::SessionStore::new(&sessions_dir) {
+        Ok(session_store) => {
+            let compiler = clarity_memory::MemoryCompiler::new(
+                memory_store.inner().clone(),
+                session_store,
+                Arc::new(LlmProviderBridge::new(llm)),
+                clarity_memory::CompileConfig::default(),
+            );
+            let compiler = Arc::new(tokio::sync::Mutex::new(compiler));
+            let compiled_dir_clone = compiled_dir.clone();
+            agent
+                .set_memory_compile_callback(move || {
+                    let compiler = compiler.clone();
+                    let compiled_dir = compiled_dir_clone.clone();
+                    async move {
+                        let mut compiler = compiler.lock().await;
+                        compiler.compile_all(&compiled_dir).await
+                    }
+                })
+                .await;
+            info!("Memory compiler callback registered");
+        }
+        Err(e) => {
+            warn!("Failed to create session store: {}, memory compiler disabled", e);
         }
     }
 
-    // 2. Fallback: 自动检测 LLM provider (ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
+    Ok(Arc::new(agent))
+}
+
+/// Fallback LLM provider auto-detection.
+async fn load_llm_fallback() -> Arc<dyn clarity_core::llm::api::LlmProvider> {
     match LlmFactory::auto().await {
         Ok(llm) => {
             info!("LLM provider initialized successfully");
-            Ok(Arc::new(agent.with_llm(Arc::from(llm))))
+            Arc::from(llm)
         }
         Err(e) => {
             warn!("Failed to create LLM provider: {}", e);
             warn!("Agent will use mock responses (MockLlm)");
-            Ok(Arc::new(agent.with_llm(Arc::new(MockLlm))))
+            Arc::new(MockLlm)
         }
     }
 }
