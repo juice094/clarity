@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.1.1 | 日期：2026-04-23 | 基于实机测试与代码审计
+> 版本：v0.1.2 | 日期：2026-04-20 | 基于实机测试与代码审计
 
 ---
 
@@ -9,15 +9,15 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **382 passed, 0 failed, 2 ignored** | ✅ 全绿 |
+| **单元测试** | **402 passed, 0 failed, 2 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
-- `clarity-core`: 245 tests passed, 2 ignored
-- `clarity-gateway`: 38 tests passed
+- `clarity-core`: 260 tests passed, 2 ignored
+- `clarity-gateway`: 43 tests passed
 - `clarity-memory`: 79 tests passed
 - `clarity-wire`: 8 tests passed
 - `clarity-tui`: 6 tests passed
@@ -128,7 +128,7 @@
 | 维度 | Clarity (v0.1.1) | OpenClaw | zeroclaw | codex-rs |
 |------|------------------|----------|----------|----------|
 | **技术栈** | Rust | Node.js | Rust | Rust |
-| **Channels** | ❌ 仅 Web UI | ✅ 20+ | ❌ | ❌ |
+| **Channels** | ✅ Telegram/Discord/Slack/Webhook | ✅ 20+ | ❌ | ❌ |
 | **Plan Mode** | ✅ | ❌ | ❌ | ❌ |
 | **并行子代理** | ✅ | ⚠️ | ❌ | ❌ |
 | **MCP** | ✅ stdio/HTTP/SSE | ⚠️ | ❌ | ✅ |
@@ -149,7 +149,7 @@
 
 ## 7. 下一步（Phase 3）
 
-### 7.1 已完成（v0.1.1 交付）
+### 7.1 已完成（v0.1.2 交付）
 
 | 工作项 | 状态 | Commit |
 |--------|------|--------|
@@ -158,16 +158,16 @@
 | MCP SSE Transport | ✅ 已完成 | 完整实现（endpoint discovery + reconnection + handshake） |
 | Channels 原型（Telegram/Discord/Webhook） | ✅ 已实现 | Gateway 已集成 Telegram、Discord、Webhook 三渠道 |
 | 本地模型支持（ollama） | ❌ 已移除 | 残留清理完成，聚焦云端 LLM 提供商 |
+| **MemoryTicker 版本统一** | ✅ 已完成 | `5514209` — 删除 `clarity-core` 简化版，全项目统一为 `clarity-memory::SharedMemoryTicker`（session 隔离 + compile callback + 防重入） |
+| **Gateway Memory 激活** | ✅ 已完成 | `5514209` — `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker`，默认 5 turns 触发 |
+| **MemoryCompiler 四级编译管道** | ✅ 已完成 | `5514209` — today→week→longterm→facts，LLM 自动摘要 + 事实提取 + 去重 |
+| **Slack 渠道** | ✅ 已完成 | `4a3d2e0` — Web API 实现（长消息分块、HMAC-SHA256 签名验证、Events API challenge） |
+| **统一配置系统（TOML）** | ✅ 已完成 | `cfcc24c` — 三层配置加载 + `export_to_env()` + Gateway/TUI 双端接入，向后兼容 |
 
 ### 7.2 进行中 / 待启动
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| **P1** | MemoryTicker 版本统一 | 2-3 天 | `clarity-core` 简化版 ticker → `clarity-memory` 完整版（含 callback、session 隔离） | A2 |
-| **P1** | Gateway Memory 激活 | 1-2 天 | `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker` | A3 |
-| **P1** | MemoryCompiler 接入 run loop | 2-3 天 | 四级编译管道（today/week/longterm/facts）在 ticker 触发时自动执行 | A4 |
-| **P2** | Slack 渠道 | 3-4 天 | Socket Mode 实现，参考 Telegram/Discord 模式 | B1 |
-| **P2** | 统一配置系统（TOML） | 3-5 天 | 三层配置：默认 → `~/.config/clarity/` → `.clarity/` → 环境变量 | C1/C2 |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
 | P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 

@@ -12,4 +12,5 @@ test_output.txt
 subagent_context/
 tasks/
 .clarity/tasks/
+.clarity/devbase/
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2] — 2026-04-20
+
+### Added
+
+- **Memory Depth Integration** — `clarity-core` now uses `clarity-memory::SharedMemoryTicker` exclusively. Gateway `create_agent()` wires up `PersistentMemoryStore` + `SharedMemoryTicker` with a 5-turn default trigger. `MemoryCompiler` four-level pipeline (today → week → longterm → facts) runs automatically on ticker callback via `LlmProviderBridge`.
+- **Slack Channel** — New `SlackChannel` implementing the `Channel` trait. Supports `chat.postMessage` with automatic 4000-char chunking, Slack Events API challenge verification, and HMAC-SHA256 signature validation (`verify_signature`). Enabled via `SLACK_ENABLED` / `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` env vars.
+- **TOML Config System** — `Config::load()` reads three-layer TOML (defaults → `~/.config/clarity/config.toml` → `.clarity.toml`). `export_to_env()` writes profile credentials to provider-specific env vars (`ANTHROPIC_AUTH_TOKEN`, `KIMI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`) only when not already set. Integrated into both Gateway and TUI `create_agent()`.
+
+### Fixed
+
+- **Documentation Drift** — `PROJECT_STATUS.md` and `tools_roadmap.md` corrected 6 falsely-claimed limitations (PowerShellTool, WebSearchTool, WebFetchTool, SseMcpClient, AgentController streaming, Gateway Session persistence) that were already implemented.
+- **Send Safety** — `clarity-memory::CompilationFuture` and `CompileCallback` tightened with `+ Send` bounds to compile inside `tokio::spawn` async blocks.
+
+---
+
 ## [0.1.1] — 2026-04-23
 
 ### Security
