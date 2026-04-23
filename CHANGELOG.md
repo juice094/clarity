@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.1] — 2026-04-23
+
+### Security
+
+- **Directory Traversal Fix** — `resolve_path()` in `clarity-core` now validates that resolved paths stay within the working directory, preventing `..` escapes and absolute-path traversal.
+- **Gateway Path Sanitization** — `sanitize_path()` in `clarity-gateway` restricts all file API access to the current working directory prefix after `canonicalize()`.
+
+### Added
+
+- **Crate Documentation** — README + `AGENTS.md` for all 6 crates (`clarity-core`, `clarity-gateway`, `clarity-memory`, `clarity-wire`, `clarity-tui`, `clarity-claw`).
+- **Gateway Handler Tests** — 8 mock integration tests covering `health_check`, `file_tree`, `file_read`, `admin_tools`, `admin_get_approval_mode`, `admin_set_approval_mode`.
+- **Claw & TUI Lib Split** — Binary crates now expose testable `lib.rs` modules with 6 tests each (tooltip formatting, gateway URL resolution, command parsing).
+- **CI Hardening** — `cargo audit` (security scan) and `cargo tarpaulin` (coverage report) jobs added to GitHub Actions.
+- **Hybrid Store Tests** — 5 new unit tests for `HybridStore` cache behavior; 2 previously-ignored integration tests re-enabled.
+
+### Fixed
+
+- **Clippy Clean** — Zero warnings across the entire workspace (`-D warnings`).
+- **File Cleanup** — Removed untracked artifacts (`hello.rs`, `test_output.txt`, `subagent_context/`).
+
+---
+
 ## [0.1.0] — 2026-04-21
 
 ### Added
