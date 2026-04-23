@@ -202,8 +202,10 @@ impl StorageBackend for HybridStore {
 
     async fn get_fact(&self, id: i64) -> Result<Option<Fact>> {
         if let Some(entry) = self.hot_cache.get(&id) {
+            let fact = entry.fact.clone();
+            drop(entry);
             self.touch_cache(id);
-            return Ok(Some(entry.fact.clone()));
+            return Ok(Some(fact));
         }
         if let Some(fact) = self.cold_storage.get_fact(id).await? {
             self.promote_to_cache(fact.clone());
@@ -274,5 +276,33 @@ impl StorageBackend for HybridStore {
     async fn clear_all(&self) -> Result<usize> {
         self.hot_cache.clear();
         self.cold_storage.clear_all().await
+    }
+}
+
+
+#[cfg(test)]
+mod simple_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_hybrid_store_backend() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = HybridStore::new(100, temp_dir.path(), 0).await.unwrap();
+
+        let id = store
+            .save_fact("Hybrid store test", &["test".to_string()], None, None)
+            .await
+            .unwrap();
+
+        let fact = store
+            .get_fact(id)
+            .await
+            .unwrap()
+            .expect("Fact should exist");
+        assert_eq!(fact.fact, "Hybrid store test");
+
+        let stats = store.cache_stats();
+        assert_eq!(stats.cache_size, 1);
     }
 }

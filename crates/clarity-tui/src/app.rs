@@ -632,8 +632,8 @@ impl App {
         }
 
         let raw = args.join(" ");
-        let segments: Vec<&str> = raw.split('|').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        if segments.is_empty() {
+        let parsed = crate::parse::parse_parallel_args(&raw);
+        if parsed.is_empty() {
             self.messages.push(Message::new(
                 "未指定任何子代理任务。",
                 MessageType::System,
@@ -641,19 +641,16 @@ impl App {
             return;
         }
 
-        let mut specs = Vec::new();
-        for seg in segments {
-            let (agent_type, prompt) = match seg.find(':') {
-                Some(idx) => (&seg[..idx], &seg[idx + 1..]),
-                None => ("coder", seg),
-            };
-            let spec = clarity_core::subagents::RunSpec::new(
-                format!("parallel-{}", agent_type),
-                prompt.trim(),
-            )
-            .with_type(agent_type.trim());
-            specs.push(spec);
-        }
+        let specs: Vec<clarity_core::subagents::RunSpec> = parsed
+            .into_iter()
+            .map(|(agent_type, prompt)| {
+                clarity_core::subagents::RunSpec::new(
+                    format!("parallel-{}", &agent_type),
+                    prompt,
+                )
+                .with_type(&agent_type)
+            })
+            .collect();
 
         self.messages.push(Message::new(
             format!("🚀 启动并行执行 ({} 个子代理)...", specs.len()),

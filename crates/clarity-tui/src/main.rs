@@ -4,6 +4,7 @@ mod command_bar;
 mod commands;
 mod diff;
 mod events;
+mod parse;
 mod popup;
 mod popups;
 mod ui;

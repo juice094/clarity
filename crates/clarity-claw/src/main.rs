@@ -18,8 +18,7 @@ use tray_icon::{
     MouseButton, TrayIconBuilder, TrayIconEvent,
 };
 
-const GATEWAY_URL: &str = "http://127.0.0.1:18790";
-const POLL_INTERVAL_SECS: u64 = 5;
+use clarity_claw::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
 
 /// 自定义事件，用于 Tao 事件循环的跨线程通信。
 ///
@@ -35,21 +34,6 @@ enum UserEvent {
     TaskUpdate(Vec<TaskSummary>),
 }
 
-/// Gateway `/v1/tasks` 返回的任务摘要（最小化反序列化结构）。
-#[derive(Clone, Debug, serde::Deserialize)]
-struct TaskSummary {
-    #[serde(rename = "task_id")]
-    task_id: String,
-    name: String,
-    status: String,
-}
-
-/// Gateway 任务列表响应体。
-#[derive(Clone, Debug, serde::Deserialize)]
-struct TaskListPayload {
-    tasks: Vec<TaskSummary>,
-}
-
 /// Clarity Claw 入口。
 ///
 /// 初始化日志、创建系统托盘、启动后台任务轮询与 Wire 监听，
@@ -62,8 +46,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("🐾 Clarity Claw starting...");
 
-    let gateway_url =
-        std::env::var("CLARITY_GATEWAY_URL").unwrap_or_else(|_| GATEWAY_URL.to_string());
+    let gateway_url = clarity_claw::resolve_gateway_url();
 
     // ------------------------------------------------------------------
     // Backend communication channel (wire — reserved for future Soul link)
@@ -283,16 +266,7 @@ async fn main() -> anyhow::Result<()> {
                 UserEvent::TaskUpdate(tasks) => {
                     let running = tasks.iter().filter(|t| t.status == "Running").count();
                     let pending = tasks.iter().filter(|t| t.status == "Pending").count();
-                    let tooltip = if tasks.is_empty() {
-                        "Clarity Claw — idle (no tasks)".to_string()
-                    } else {
-                        format!(
-                            "Clarity Claw — {} running, {} pending ({} total)",
-                            running,
-                            pending,
-                            tasks.len()
-                        )
-                    };
+                    let tooltip = clarity_claw::format_tooltip(running, pending, tasks.len());
                     let _ = tray_icon.set_tooltip(Some(&tooltip));
                 }
             }
