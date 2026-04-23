@@ -41,8 +41,21 @@ tempfile = "3.9"
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
+criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
 default = []
 local-llm = []
+
+[[bench]]
+name = "tool_registry"
+harness = false
+
+[[bench]]
+name = "skill_context"
+harness = false
+
+[[bench]]
+name = "agent_prompt"
+harness = false
 

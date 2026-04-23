@@ -556,6 +556,7 @@ dependencies = [
  "chrono",
  "clarity-memory",
  "clarity-wire",
+ "criterion",
  "dirs 5.0.1",
  "futures",
  "glob",
