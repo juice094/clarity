@@ -126,9 +126,9 @@ async fn test_gateway_websocket_wire_forwarding() {
     let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&temp);
     let task_manager = Arc::new(BackgroundTaskManager::new(
-        &temp.join("store"),
-        &temp.join("work"),
-        &temp.join("context"),
+        temp.join("store"),
+        temp.join("work"),
+        temp.join("context"),
     ));
     let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
     let app = create_api_router(state);
@@ -210,9 +210,9 @@ async fn test_tui_wire_to_gateway_websocket() {
     let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&temp);
     let task_manager = Arc::new(BackgroundTaskManager::new(
-        &temp.join("store"),
-        &temp.join("work"),
-        &temp.join("context"),
+        temp.join("store"),
+        temp.join("work"),
+        temp.join("context"),
     ));
     let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
     let app = create_api_router(state);

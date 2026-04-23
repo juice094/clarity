@@ -21,7 +21,10 @@ use tray_icon::{
 const GATEWAY_URL: &str = "http://127.0.0.1:18790";
 const POLL_INTERVAL_SECS: u64 = 5;
 
-/// Custom events sent into the Tao event loop from other threads.
+/// 自定义事件，用于 Tao 事件循环的跨线程通信。
+///
+/// 后台任务（Wire 监听、Gateway 轮询、输入框结果）通过 `EventLoopProxy` 发送这些事件，
+/// 由主事件循环统一处理。
 #[derive(Clone, Debug)]
 enum UserEvent {
     /// A message arrived from the backend wire.
@@ -32,7 +35,7 @@ enum UserEvent {
     TaskUpdate(Vec<TaskSummary>),
 }
 
-/// Minimal task info deserialized from Gateway `/v1/tasks`.
+/// Gateway `/v1/tasks` 返回的任务摘要（最小化反序列化结构）。
 #[derive(Clone, Debug, serde::Deserialize)]
 struct TaskSummary {
     #[serde(rename = "task_id")]
@@ -41,12 +44,16 @@ struct TaskSummary {
     status: String,
 }
 
-/// Gateway task list payload.
+/// Gateway 任务列表响应体。
 #[derive(Clone, Debug, serde::Deserialize)]
 struct TaskListPayload {
     tasks: Vec<TaskSummary>,
 }
 
+/// Clarity Claw 入口。
+///
+/// 初始化日志、创建系统托盘、启动后台任务轮询与 Wire 监听，
+/// 最终进入 Tao 事件循环，直至用户选择 Quit。
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -294,25 +301,21 @@ async fn main() -> anyhow::Result<()> {
         // --------------------------------------------------------------
         // 2. Tray icon events (left click → quick input)
         // --------------------------------------------------------------
-        if let Ok(tray_event) = tray_channel.try_recv() {
-            match tray_event {
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    ..
-                } => {
-                    let proxy = proxy.clone();
-                    tokio::task::spawn_blocking(move || {
-                        let result = inputbox::InputBox::new()
-                            .title("Clarity")
-                            .prompt("Enter command or question:")
-                            .show();
-                        if let Ok(Some(text)) = result {
-                            let _ = proxy.send_event(UserEvent::InputResult(text));
-                        }
-                    });
+        if let Ok(TrayIconEvent::Click {
+            button: MouseButton::Left,
+            ..
+        }) = tray_channel.try_recv()
+        {
+            let proxy = proxy.clone();
+            tokio::task::spawn_blocking(move || {
+                let result = inputbox::InputBox::new()
+                    .title("Clarity")
+                    .prompt("Enter command or question:")
+                    .show();
+                if let Ok(Some(text)) = result {
+                    let _ = proxy.send_event(UserEvent::InputResult(text));
                 }
-                _ => {}
-            }
+            });
         }
 
         // --------------------------------------------------------------
@@ -324,14 +327,14 @@ async fn main() -> anyhow::Result<()> {
                     tracing::info!("Menu: New Chat");
                     let url = format!("{}/chat.html", gateway_url);
                     let _ = std::process::Command::new("cmd")
-                        .args(&["/C", "start", "", &url])
+                        .args(["/C", "start", "", &url])
                         .spawn();
                 }
                 id if id == view_tasks_item.id() => {
                     tracing::info!("Menu: View Tasks");
                     let url = format!("{}/chat.html", gateway_url);
                     let _ = std::process::Command::new("cmd")
-                        .args(&["/C", "start", "", &url])
+                        .args(["/C", "start", "", &url])
                         .spawn();
                 }
                 id if id == open_window_item.id() => {
@@ -352,17 +355,15 @@ async fn main() -> anyhow::Result<()> {
         // --------------------------------------------------------------
         // 4. Window events
         // --------------------------------------------------------------
-        match event {
-            Event::WindowEvent {
-                event: tao::event::WindowEvent::CloseRequested,
-                ..
-            } => {
-                // Hide window instead of quitting
-                if let Some(ref win) = window {
-                    win.set_visible(false);
-                }
+        if let Event::WindowEvent {
+            event: tao::event::WindowEvent::CloseRequested,
+            ..
+        } = event
+        {
+            // Hide window instead of quitting
+            if let Some(ref win) = window {
+                win.set_visible(false);
             }
-            _ => {}
         }
     });
 }

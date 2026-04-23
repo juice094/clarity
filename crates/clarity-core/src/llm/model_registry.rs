@@ -47,7 +47,7 @@ use crate::llm::{LlamaServerProvider, OpenAiCompatibleLlm};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Protocol adapter type for provider communication
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -148,8 +148,8 @@ impl ModelRegistry {
     }
 
     /// Async wrapper around [`load_from`].
-    pub async fn load_from_async(path: &PathBuf) -> Result<Self, AgentError> {
-        let path = path.clone();
+    pub async fn load_from_async(path: &Path) -> Result<Self, AgentError> {
+        let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || Self::load_from(&path))
             .await
             .map_err(|e| AgentError::Llm(format!("Model registry load panicked: {}", e)))?

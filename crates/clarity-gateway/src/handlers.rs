@@ -414,6 +414,29 @@ pub async fn chat_completions(
     }
 }
 
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_path_rejects_parent_traversal() {
+        let result = sanitize_path("../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_rejects_deep_traversal() {
+        let result = sanitize_path("src/../../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sanitize_path_allows_relative() {
+        let result = sanitize_path("src/main.rs");
+        assert!(result.is_ok());
+    }
+}
+
 // ==================== Admin API ====================
 
 #[derive(Serialize)]
@@ -1370,29 +1393,6 @@ pub async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoRespo
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": e.to_string() })),
         ),
-    }
-}
-
-#[cfg(test)]
-mod security_tests {
-    use super::*;
-
-    #[test]
-    fn test_sanitize_path_rejects_parent_traversal() {
-        let result = sanitize_path("../etc/passwd");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_sanitize_path_rejects_deep_traversal() {
-        let result = sanitize_path("src/../../../../etc/passwd");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_sanitize_path_allows_relative() {
-        let result = sanitize_path("src/main.rs");
-        assert!(result.is_ok());
     }
 }
 

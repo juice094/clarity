@@ -19,9 +19,9 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
     let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&temp);
     Arc::new(BackgroundTaskManager::new(
-        &temp.join("store"),
-        &temp.join("work"),
-        &temp.join("context"),
+        temp.join("store"),
+        temp.join("work"),
+        temp.join("context"),
     ))
 }
 

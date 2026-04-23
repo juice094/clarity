@@ -1,0 +1,29 @@
+# Agent 指引 — clarity-gateway
+
+## 构建
+
+```bash
+cargo build -p clarity-gateway
+```
+
+## 测试
+
+```bash
+cargo test -p clarity-gateway --lib
+```
+
+## 关键文件
+
+- `src/lib.rs` — 模块声明
+- `src/server.rs` — 双端口服务器、`AppState`、路由构造器
+- `src/handlers.rs` — 所有 Axum handler（chat、tasks、admin、files）
+- `src/session_store.rs` — SQLite 持久化会话存储
+- `src/ws.rs` — WebSocket handler
+- `static/` — 内嵌 Web UI 静态文件
+
+## 约定
+
+- 错误处理使用 `AgentError` / `ToolError`
+- 异步使用 `tokio`
+- 共享状态通过 `Arc<AppState>` 注入 handler
+- Admin 端口（18800）仅限本地回环，可配置 `CLARITY_ADMIN_TOKEN` 认证

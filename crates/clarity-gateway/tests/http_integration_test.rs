@@ -26,14 +26,14 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
         clarity_core::background::agent_executor::DefaultAgentTaskExecutor::new(
             llm,
             registry,
-            &temp.join("work"),
+            temp.join("work"),
         ),
     );
     Arc::new(
         BackgroundTaskManager::new(
-            &temp.join("store"),
-            &temp.join("work"),
-            &temp.join("context"),
+            temp.join("store"),
+            temp.join("work"),
+            temp.join("context"),
         )
         .with_agent_executor(executor),
     )

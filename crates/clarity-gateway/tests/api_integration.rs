@@ -170,6 +170,6 @@ async fn test_webhook_empty_message() {
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     let body: WebhookResponse =
         serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
-    assert_eq!(body.success, false);
+    assert!(!body.success);
     assert!(body.error.as_ref().unwrap().contains("Empty message"));
 }

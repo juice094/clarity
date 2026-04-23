@@ -7,4 +7,9 @@ agents/
 *.log
 config.yaml
 .clarity/user_config.json
+hello.rs
+test_output.txt
+subagent_context/
+tasks/
+.clarity/tasks/
 

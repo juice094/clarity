@@ -64,7 +64,10 @@ pub enum AppMode {
     Input,
 }
 
-/// 应用状态
+/// TUI 应用状态机。
+///
+/// 持有聊天历史、输入框、Agent 实例、事件发送器与命令注册表，
+/// 负责按键路由、命令解析、滚动控制与生成生命周期管理。
 pub struct App {
     /// 聊天历史
     pub messages: Vec<Message>,
@@ -115,6 +118,10 @@ pub struct App {
 }
 
 impl App {
+    /// 创建新的 TUI 应用实例。
+    ///
+    /// 初始化聊天历史（含系统欢迎语）、输入框、默认命令注册表，
+    /// 并绑定 Agent 与可选的后台任务管理器。
     pub fn new(
         agent: Arc<Agent>,
         model_name: impl Into<String>,
@@ -169,7 +176,10 @@ impl App {
         self.input_pane.cursor_position()
     }
 
-    /// 设置事件发送器
+    /// 设置事件发送器，并启动 Wire 适配器与 AgentController。
+    ///
+    /// 此方法会创建一个 `clarity_wire::Wire`，将 UI 端连接到事件通道，
+    /// 同时启动 `AgentController` 在后台运行 Agent 循环。
     pub fn set_event_sender(&mut self, tx: UnboundedSender<Event>) {
         self.event_tx = Some(tx.clone());
         let wire = std::sync::Arc::new(clarity_wire::Wire::new());
@@ -180,7 +190,12 @@ impl App {
         self.controller_tx = Some(controller_tx);
     }
 
-    /// 处理按键事件
+    /// 处理终端按键事件。
+    ///
+    /// 全局快捷键（Ctrl+C 停止生成、Ctrl+D 退出）优先处理，
+    /// 随后将事件路由给当前弹窗，最后根据 `AppMode` 分发给 Normal 或 Input 模式处理。
+    ///
+    /// 返回 `Ok(true)` 表示继续运行，`Ok(false)` 表示退出应用。
     pub async fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
         // 全局快捷键（Ctrl+C / Ctrl+D）
         if key.modifiers.contains(KeyModifiers::CONTROL) {

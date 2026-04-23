@@ -234,12 +234,13 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[ignore = "Timeout issue - needs investigation"]
     async fn test_hybrid_store_backend() {
         use crate::backends::HybridStore;
 
         let temp_dir = TempDir::new().unwrap();
-        let store = HybridStore::new(100, temp_dir.path(), 1).await.unwrap();
+        // Use sync_interval_secs=0 to avoid spawning a background sync task,
+        // which can cause test-runtime shutdown to hang on Windows.
+        let store = HybridStore::new(100, temp_dir.path(), 0).await.unwrap();
 
         let id = store
             .save_fact("Hybrid store test", &["test".to_string()], None, None)
