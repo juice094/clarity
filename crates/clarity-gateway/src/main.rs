@@ -4,8 +4,8 @@ use tracing::{error, info, warn};
 use clarity_gateway::{channels, server};
 
 use channels::{
-    discord::DiscordChannel, telegram::TelegramChannel, webhook::WebhookChannel, ChannelConfig,
-    ChannelManager,
+    discord::DiscordChannel, slack::SlackChannel, telegram::TelegramChannel,
+    webhook::WebhookChannel, ChannelConfig, ChannelManager,
 };
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
@@ -17,7 +17,7 @@ use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
 
 /// 从环境变量加载渠道配置
-fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig) {
+fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig, ChannelConfig) {
     // Telegram 配置
     let telegram_config = if std::env::var("TELEGRAM_ENABLED").unwrap_or_default() == "true" {
         ChannelConfig::new()
@@ -46,7 +46,20 @@ fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig) {
         ChannelConfig::new()
     };
 
-    (telegram_config, discord_config, webhook_config)
+    // Slack 配置
+    let slack_config = if std::env::var("SLACK_ENABLED").unwrap_or_default() == "true" {
+        ChannelConfig::new()
+            .enabled()
+            .with_token(std::env::var("SLACK_BOT_TOKEN").unwrap_or_default())
+            .with_extra(serde_json::json!({
+                "app_token": std::env::var("SLACK_APP_TOKEN").unwrap_or_default(),
+                "signing_secret": std::env::var("SLACK_SIGNING_SECRET").unwrap_or_default()
+            }))
+    } else {
+        ChannelConfig::new()
+    };
+
+    (telegram_config, discord_config, webhook_config, slack_config)
 }
 
 /// 创建并配置 Agent
@@ -279,7 +292,7 @@ async fn main() {
     };
 
     // 加载渠道配置
-    let (telegram_config, discord_config, webhook_config) = load_channel_configs();
+    let (telegram_config, discord_config, webhook_config, slack_config) = load_channel_configs();
 
     // 创建渠道管理器
     let mut channel_manager = ChannelManager::new();
@@ -306,6 +319,14 @@ async fn main() {
         channel_manager.register(Box::new(WebhookChannel::new(webhook_config)));
     } else {
         info!("🔗 Webhook channel disabled (set WEBHOOK_ENABLED=true to enable)");
+    }
+
+    // 注册 Slack 渠道
+    if slack_config.enabled {
+        info!("💼 Slack channel enabled");
+        channel_manager.register(Box::new(SlackChannel::new(slack_config)));
+    } else {
+        info!("💼 Slack channel disabled (set SLACK_ENABLED=true to enable)");
     }
 
     // 启动所有渠道（在后台任务中运行）
@@ -343,11 +364,12 @@ mod tests {
     #[test]
     fn test_channel_config_loading() {
         // 测试默认配置（禁用状态）
-        let (telegram, discord, webhook) = load_channel_configs();
+        let (telegram, discord, webhook, slack) = load_channel_configs();
 
         assert!(!telegram.enabled);
         assert!(!discord.enabled);
         assert!(!webhook.enabled);
+        assert!(!slack.enabled);
     }
 
     #[tokio::test]

@@ -6,6 +6,7 @@
 //! - 通用 Webhook（适用于飞书/钉钉等）
 
 pub mod discord;
+pub mod slack;
 pub mod telegram;
 pub mod webhook;
 
@@ -138,6 +139,11 @@ impl ChannelConfig {
 
     pub fn with_webhook_secret(mut self, secret: impl Into<String>) -> Self {
         self.webhook_secret = Some(secret.into());
+        self
+    }
+
+    pub fn with_extra(mut self, extra: serde_json::Value) -> Self {
+        self.extra = Some(extra);
         self
     }
 }
