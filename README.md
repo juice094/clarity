@@ -42,6 +42,7 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **Push Notifications** | Multi-channel alerts (filesystem + webhook) for task completions and important events. |
 | **Daemon Runtime** | Cross-platform PID lockfile + graceful shutdown for long-running background processes. |
 | **AutoDream** | Nightly memory consolidation scheduler — automatically compiles and archives memories. |
+| **Lazy Master** | Heavy components (LLM, MemoryStore, SkillRegistry) are initialized on first `run()`, not at startup. |
 | **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
 
 ## Quick Start

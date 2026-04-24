@@ -28,7 +28,6 @@ impl Agent {
         Self {
             registry,
             config: config.clone(),
-            memory_store: None,
             memory_ticker: None,
             wire: None,
             approval_runtime: None,
@@ -36,13 +35,15 @@ impl Agent {
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
             compaction_service: config.compaction_service.map(CompactionService::new),
-            skill_registry: None,
             hook_registry: None,
             llm_factory: None,
             memory_factory: None,
+            skill_factory: None,
             inner: Arc::new(std::sync::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
+                memory_store: None,
+                skill_registry: None,
                 session_usage: TokenUsage {
                     prompt_tokens: 0,
                     completion_tokens: 0,
@@ -77,8 +78,11 @@ impl Agent {
     }
 
     /// Set the skill registry.
-    pub fn with_skill_registry(mut self, registry: SkillRegistry) -> Self {
-        self.skill_registry = Some(registry);
+    pub fn with_skill_registry(self, registry: SkillRegistry) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.skill_registry = Some(registry);
+        }
         self
     }
 
@@ -114,8 +118,11 @@ impl Agent {
     }
 
     /// Set the memory store
-    pub fn with_memory(mut self, store: Arc<dyn MemoryStore>) -> Self {
-        self.memory_store = Some(store);
+    pub fn with_memory(self, store: Arc<dyn MemoryStore>) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.memory_store = Some(store);
+        }
         self
     }
 
@@ -218,10 +225,16 @@ impl Agent {
         self
     }
 
+    /// Set a lazy SkillRegistry factory — called on first `run()` if no registry is set.
+    pub fn with_skill_factory(mut self, factory: super::SkillFactoryFn) -> Self {
+        self.skill_factory = Some(factory);
+        self
+    }
+
     /// Ensure all lazy-initialized components are ready.
     ///
     /// Called automatically at the start of every `run()` variant.
-    /// If an LLM factory is configured but the LLM is not yet initialized,
+    /// If a factory is configured but its component is not yet initialized,
     /// this method will call the factory and install the result.
     pub async fn ensure_initialized(&self) -> Result<(), AgentError> {
         // Initialize LLM if needed
@@ -233,6 +246,32 @@ impl Agent {
             if let Some(ref factory) = self.llm_factory {
                 let llm = factory().await?;
                 self.set_llm(llm);
+            }
+        }
+
+        // Initialize MemoryStore if needed
+        let needs_memory_init = {
+            let inner = self.inner.read().unwrap();
+            inner.memory_store.is_none() && self.memory_factory.is_some()
+        };
+        if needs_memory_init {
+            if let Some(ref factory) = self.memory_factory {
+                let store = factory().await?;
+                let mut inner = self.inner.write().unwrap();
+                inner.memory_store = Some(store);
+            }
+        }
+
+        // Initialize SkillRegistry if needed
+        let needs_skill_init = {
+            let inner = self.inner.read().unwrap();
+            inner.skill_registry.is_none() && self.skill_factory.is_some()
+        };
+        if needs_skill_init {
+            if let Some(ref factory) = self.skill_factory {
+                let registry = factory().await?;
+                let mut inner = self.inner.write().unwrap();
+                inner.skill_registry = Some(registry);
             }
         }
 
@@ -284,7 +323,7 @@ impl Agent {
     /// Store a conversation memory, optionally chunking long content for better retrieval.
     pub(crate) async fn store_conversation_memory(&self, content: impl Into<String>) {
         let content = content.into();
-        if let Some(ref store) = self.memory_store {
+        if let Some(ref store) = self.memory_store() {
             // Store the full memory for context completeness
             let full_memory =
                 Memory::new(content.clone()).with_tags(vec!["conversation".to_string()]);
@@ -321,6 +360,16 @@ impl Agent {
     /// Get the LLM provider (if configured)
     pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
         self.inner.read().unwrap().llm.clone()
+    }
+
+    /// Get the memory store (if configured)
+    pub fn memory_store(&self) -> Option<Arc<dyn MemoryStore>> {
+        self.inner.read().unwrap().memory_store.clone()
+    }
+
+    /// Get the skill registry (if configured)
+    pub fn skill_registry(&self) -> Option<SkillRegistry> {
+        self.inner.read().unwrap().skill_registry.clone()
     }
 
     /// Get the agent configuration

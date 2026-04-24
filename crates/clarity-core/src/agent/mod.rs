@@ -79,6 +79,8 @@ pub enum AgentState {
 struct AgentInner {
     state: AgentState,
     llm: Option<Arc<dyn LlmProvider>>,
+    memory_store: Option<Arc<dyn MemoryStore>>,
+    skill_registry: Option<SkillRegistry>,
     session_usage: TokenUsage,
     active_skill: Option<String>,
     /// Snapshotted at turn start so that mid-turn set_active_skill() calls
@@ -170,11 +172,17 @@ pub type MemoryFactoryFn = Arc<
         + Sync,
 >;
 
+/// Factory type for lazy SkillRegistry initialization
+pub type SkillFactoryFn = Arc<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<SkillRegistry, AgentError>> + Send>>
+        + Send
+        + Sync,
+>;
+
 #[derive(Clone)]
 pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,
-    memory_store: Option<Arc<dyn MemoryStore>>,
     memory_ticker: Option<SharedMemoryTicker>,
     /// Optional wire for UI communication
     wire: Option<Arc<Wire>>,
@@ -188,14 +196,14 @@ pub struct Agent {
     max_context_tokens: usize,
     /// Optional compaction service for proactive history compression
     compaction_service: Option<CompactionService>,
-    /// Optional skill registry for orchestration
-    skill_registry: Option<SkillRegistry>,
     /// Optional hook registry for lifecycle interception
     hook_registry: Option<crate::hooks::HookRegistry>,
     /// Lazy LLM factory — called on first `run()` if no LLM is set
     llm_factory: Option<LlmFactoryFn>,
     /// Lazy MemoryStore factory — called on first `run()` if no store is set
     memory_factory: Option<MemoryFactoryFn>,
+    /// Lazy SkillRegistry factory — called on first `run()` if no registry is set
+    skill_factory: Option<SkillFactoryFn>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `std::sync::RwLock` is intentional.**

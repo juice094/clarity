@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.1.2 → v0.2.0-dev | 日期：2026-04-24 | 基于实机测试与代码审计
+> 版本：v0.1.2 → v0.2.0-dev | 日期：2026-04-25 | 基于实机测试与代码审计
 
 ---
 
@@ -41,6 +41,7 @@
 ✅ AutoDream — 夜间记忆整合调度器（cron 触发 + timeout 保护）
 ✅ Server 模块 — JSON-RPC over stdio，暴露 AgentController（零网络，单客户端）
 ✅ ChannelSendTool — 飞书/钉钉/Slack/Webhook 主动消息发送（含 HMAC-SHA256）
+✅ Lazy Master — 重型组件（LLM / MemoryStore / SkillRegistry）首次 run() 时按需初始化
 ✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
@@ -174,6 +175,7 @@
 |--------|--------|--------|------|-------|
 | P2 | Gateway 多标签 | 3-5 天 | Web UI 多会话标签页 | — |
 | P2 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
+| P3 | LSP 协议支持 | 1-2 周 | Language Server Protocol over stdio | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
 | P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 

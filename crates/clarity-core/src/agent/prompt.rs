@@ -71,7 +71,7 @@ impl Agent {
 
         // Inject snapshotted active skill context if set
         if let Some(ref skill_id) = self.snapshotted_active_skill() {
-            if let Some(ref registry) = self.skill_registry {
+            if let Some(ref registry) = self.skill_registry() {
                 if let Some(skill) = registry.get(skill_id) {
                     skill_contexts.push(skill.build_context());
                 }
@@ -79,7 +79,7 @@ impl Agent {
         }
 
         // Inject dynamically activated skill contexts
-        if let Some(ref registry) = self.skill_registry {
+        if let Some(ref registry) = self.skill_registry() {
             for id in registry.active_ids() {
                 if Some(&id) != self.snapshotted_active_skill().as_ref() {
                     if let Some(skill) = registry.get(&id) {
@@ -128,7 +128,7 @@ impl Agent {
     /// Return the tool whitelist for the active skill, if any.
     fn active_skill_tool_whitelist(&self) -> Option<Vec<String>> {
         let active = self.snapshotted_active_skill()?;
-        let registry = self.skill_registry.as_ref()?;
+        let registry = self.skill_registry()?;
         let skill = registry.get(&active)?;
         if skill.meta.tools.is_empty() {
             None

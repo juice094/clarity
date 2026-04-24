@@ -163,7 +163,7 @@ impl Agent {
         let cancel_token = self.begin_turn()?;
 
         // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry {
+        if let Some(ref registry) = self.skill_registry() {
             registry.discover_for_path(&self.config.working_dir);
             let paths = self.active_file_paths();
             if !paths.is_empty() {
@@ -178,7 +178,7 @@ impl Agent {
         let base_system_prompt = self.build_system_prompt();
         let mut system_prompt = base_system_prompt;
 
-        if let Some(ref store) = self.memory_store {
+        if let Some(ref store) = self.memory_store() {
             match store.search(query.as_ref(), 5).await {
                 Ok(memories) => {
                     if !memories.is_empty() {
@@ -291,7 +291,7 @@ impl Agent {
         let cancel_token = self.begin_turn()?;
 
         // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry {
+        if let Some(ref registry) = self.skill_registry() {
             registry.discover_for_path(&self.config.working_dir);
             let paths = self.active_file_paths();
             if !paths.is_empty() {
@@ -352,7 +352,7 @@ impl Agent {
         let cancel_token = self.begin_turn()?;
 
         // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry {
+        if let Some(ref registry) = self.skill_registry() {
             registry.discover_for_path(&self.config.working_dir);
             let paths = self.active_file_paths();
             if !paths.is_empty() {
@@ -367,7 +367,7 @@ impl Agent {
         let base_system_prompt = self.build_system_prompt();
         let mut system_prompt = base_system_prompt;
 
-        if let Some(ref store) = self.memory_store {
+        if let Some(ref store) = self.memory_store() {
             match store.search(query.as_ref(), 5).await {
                 Ok(memories) => {
                     if !memories.is_empty() {
@@ -420,7 +420,7 @@ impl Agent {
         let cancel_token = self.begin_turn()?;
 
         // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry {
+        if let Some(ref registry) = self.skill_registry() {
             registry.discover_for_path(&self.config.working_dir);
             let paths = self.active_file_paths();
             if !paths.is_empty() {
