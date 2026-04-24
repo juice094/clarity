@@ -88,6 +88,9 @@ impl Default for MemoryConfig {
 // usage, or MemoryTicker directly for single-threaded scenarios.
 pub use clarity_memory::{MemoryTicker, SharedMemoryTicker};
 
+pub mod extraction;
+pub use extraction::TurnMemoryExtractor;
+
 /// Persistent memory store backed by `clarity-memory`
 #[derive(Debug)]
 pub struct PersistentMemoryStore {
