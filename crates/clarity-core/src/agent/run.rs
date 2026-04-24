@@ -20,9 +20,10 @@ impl Agent {
         tools: &serde_json::Value,
         llm: Arc<dyn LlmProvider>,
         cancel_token: &CancellationToken,
-    ) -> Result<(String, bool), AgentError> {
+    ) -> Result<(String, bool, Vec<String>), AgentError> {
         let mut final_response = String::new();
         let mut completed = false;
+        let mut tool_names = Vec::new();
 
         for iteration in 0..self.config.max_iterations {
             debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
@@ -91,6 +92,7 @@ impl Agent {
             });
 
             for tool_call in &response.tool_calls {
+                tool_names.push(tool_call.function.name.clone());
                 self.send_wire_message(WireMessage::StepBegin {
                     tool_name: tool_call.function.name.clone(),
                 });
@@ -118,7 +120,7 @@ impl Agent {
             }
         }
 
-        Ok((final_response, completed))
+        Ok((final_response, completed, tool_names))
     }
 
     /// Run the agent with a user query
@@ -204,12 +206,15 @@ impl Agent {
             user_input: query.as_ref().to_string(),
         });
 
-        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        let (final_response, completed, tool_names) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
         self.finish_turn();
+
+        // Auto-classify delivery tier based on tools used this turn
+        let tier = crate::hooks::classify_delivery_tier(&tool_names);
 
         // Run PreDeliveryHook pipeline if configured
         let final_response = if let Some(ref hooks) = self.hook_registry {
-            hooks.run_pre_delivery(&final_response, crate::hooks::DeliveryTier::P1).await?
+            hooks.run_pre_delivery(&final_response, tier).await?
         } else {
             final_response
         };
@@ -293,12 +298,15 @@ impl Agent {
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
-        let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        let (final_response, completed, tool_names) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
         self.finish_turn();
+
+        // Auto-classify delivery tier based on tools used this turn
+        let tier = crate::hooks::classify_delivery_tier(&tool_names);
 
         // Run PreDeliveryHook pipeline if configured
         let final_response = if let Some(ref hooks) = self.hook_registry {
-            hooks.run_pre_delivery(&final_response, crate::hooks::DeliveryTier::P1).await?
+            hooks.run_pre_delivery(&final_response, tier).await?
         } else {
             final_response
         };

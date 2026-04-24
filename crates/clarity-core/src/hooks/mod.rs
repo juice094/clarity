@@ -251,6 +251,46 @@ impl HookRegistry {
     }
 }
 
+/// Auto-classify a delivery tier based on the tools invoked in a turn.
+///
+/// Rules (most restrictive wins):
+/// - **P2** if any side-effect tool was used (`file_write`, `file_edit`, `bash`,
+///   `powershell`, `computer_use`, `notify`).
+/// - **P1** if any read-only tool was used (`file_read`, `glob`, `grep`, `web_search`,
+///   `web_fetch`, `search`, `shell` read-only variants) or if the list is empty
+///   (a pure text response with no tools).
+/// - **P0** if *only* non-invasive tools were used (`think`, `ask_user`, `plan`,
+///   `todo`, `task_list`).
+///
+/// This function is intentionally simple; future iterations may use an LLM-based
+/// classifier or heuristics based on argument contents.
+pub fn classify_delivery_tier(tool_names: &[String]) -> DeliveryTier {
+    if tool_names.is_empty() {
+        return DeliveryTier::P1;
+    }
+
+    let p2_tools: &[&str] = &[
+        "file_write",
+        "file_edit",
+        "bash",
+        "powershell",
+        "computer_use",
+        "notify",
+    ];
+    let p0_tools: &[&str] = &["think", "ask_user", "plan", "todo", "task_list"];
+
+    let has_p2 = tool_names.iter().any(|n| p2_tools.contains(&n.as_str()));
+    let all_p0 = tool_names.iter().all(|n| p0_tools.contains(&n.as_str()));
+
+    if has_p2 {
+        DeliveryTier::P2
+    } else if all_p0 {
+        DeliveryTier::P0
+    } else {
+        DeliveryTier::P1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,5 +402,28 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_classify_empty() {
+        assert_eq!(classify_delivery_tier(&[]), DeliveryTier::P1);
+    }
+
+    #[test]
+    fn test_classify_p0_only() {
+        let tools = vec!["think".to_string(), "ask_user".to_string()];
+        assert_eq!(classify_delivery_tier(&tools), DeliveryTier::P0);
+    }
+
+    #[test]
+    fn test_classify_p2_wins() {
+        let tools = vec!["think".to_string(), "file_write".to_string()];
+        assert_eq!(classify_delivery_tier(&tools), DeliveryTier::P2);
+    }
+
+    #[test]
+    fn test_classify_p1_mixed() {
+        let tools = vec!["file_read".to_string(), "glob".to_string()];
+        assert_eq!(classify_delivery_tier(&tools), DeliveryTier::P1);
     }
 }
