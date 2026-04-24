@@ -55,6 +55,7 @@ pub mod mcp;
 pub mod memory;
 pub mod notifications;
 pub mod registry;
+pub mod server;
 pub mod skills;
 pub mod subagents;
 pub mod tools;

@@ -32,6 +32,9 @@ dirs = "5.0"
 url = "2.5"
 urlencoding = "2.1"
 html-escape = "0.2"
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
 
 clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
