@@ -12,9 +12,9 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `570c83d` |
+| HEAD | `52e38cf` |
 | 分支 | main |
-| 测试 | `cargo test --workspace --lib` = **464 passed, 0 failed, 2 ignored** |
+| 测试 | `cargo test --workspace --lib` = **474 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
 | 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite |
 
@@ -61,11 +61,11 @@
 ✅ P2-3 PushNotificationTool（file + webhook 双通道）
 ✅ P2-4 Daemon 模式（lockfile + signal handling）
 ✅ P2-5 AutoDream（夜间记忆整合调度器）
+✅ P2-6 Server 模块（JSON-RPC over stdio）
+✅ P2-7 Channel Adapter（ChannelSendTool：飞书/钉钉/Slack/Webhook）
 ⏳ P1-9 Lazy Master
 ⏳ P2-10 Gateway 多标签
 ⏳ P2-11 Bridge 远程控制
-⏳ P2-6 Server 模块
-⏳ P2-7 Channel Adapter（Telegram/飞书 Bot）
 ```
 
 **执行策略**：

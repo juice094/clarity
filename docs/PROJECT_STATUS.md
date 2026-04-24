@@ -9,7 +9,7 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **464 passed, 0 failed, 2 ignored** | ✅ 全绿 |
+| **单元测试** | **474 passed, 0 failed, 2 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
@@ -39,6 +39,8 @@
 ✅ 17+ 内置工具 — 文件读写编辑、Shell、搜索、Web、MCP、任务管理、团队管理、推送通知
 ✅ Daemon 运行时 — 跨平台 PID lockfile + graceful shutdown
 ✅ AutoDream — 夜间记忆整合调度器（cron 触发 + timeout 保护）
+✅ Server 模块 — JSON-RPC over stdio，暴露 AgentController（零网络，单客户端）
+✅ ChannelSendTool — 飞书/钉钉/Slack/Webhook 主动消息发送（含 HMAC-SHA256）
 ✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
@@ -170,8 +172,8 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | Server 模块 | 5-7 天 | core 内 JSON-RPC over stdio 暴露 `AgentController` | [`server_channel_design_analysis.md`](server_channel_design_analysis.md) |
-| P2 | Channel Adapter | 1 周 | core 内 `ChannelSendTool` 独立 HTTP 发送 | [`server_channel_design_analysis.md`](server_channel_design_analysis.md) |
+| P2 | Gateway 多标签 | 3-5 天 | Web UI 多会话标签页 | — |
+| P2 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
 | P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 
