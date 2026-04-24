@@ -43,9 +43,11 @@
 pub mod activity;
 pub mod agent;
 pub mod approval;
+pub mod autodream;
 pub mod background;
 pub mod compaction;
 pub mod config;
+pub mod daemon;
 pub mod error;
 pub mod hooks;
 pub mod llm;
