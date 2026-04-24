@@ -13,6 +13,7 @@ pub mod builder;
 mod parallel;
 pub mod registry;
 pub mod runner;
+pub mod team;
 pub mod token;
 mod store;
 
@@ -23,6 +24,7 @@ pub use runner::{
     collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
     SubagentError, SubagentResult, SubagentRunner,
 };
+pub use team::{AgentTeam, Mailbox, MailboxError, MailboxMessage, MessagePayload, TeamCoordinator, TeamResult};
 pub use token::{CapabilityToken, TokenError};
 pub use store::{SubagentState, SubagentStatus, SubagentStore};
 
@@ -89,6 +91,20 @@ impl SubagentManager {
 
         let mut executor = ParallelExecutor::new(task_manager, self.runner.clone());
         executor.execute(batch).await
+    }
+
+    /// Execute an [`AgentTeam`] and return a unified [`TeamResult`].
+    pub async fn run_team(&mut self, team: AgentTeam) -> anyhow::Result<TeamResult> {
+        use crate::background::BackgroundTaskManager;
+
+        let task_manager = BackgroundTaskManager::new(
+            self.runner.working_dir().join("tasks"),
+            self.runner.working_dir(),
+            self.runner.working_dir().join("context"),
+        );
+
+        let mut coordinator = TeamCoordinator::new(task_manager, self.runner.clone());
+        coordinator.execute_team(team).await
     }
 
     /// 获取存储
