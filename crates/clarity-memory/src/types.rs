@@ -207,4 +207,29 @@ pub enum MemoryError {
     Storage(String),
 }
 
+/// Structured notes extracted from a single conversation turn.
+/// Used by TurnMemoryExtractor to persist key information.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SessionNotes {
+    pub session_id: String,
+    pub current_state: String,
+    pub errors: Vec<String>,
+    pub learnings: Vec<String>,
+    pub key_results: Vec<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl SessionNotes {
+    pub fn new(session_id: impl Into<String>) -> Self {
+        Self {
+            session_id: session_id.into(),
+            current_state: String::new(),
+            errors: Vec::new(),
+            learnings: Vec::new(),
+            key_results: Vec::new(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
 pub type Result<T> = std::result::Result<T, MemoryError>;

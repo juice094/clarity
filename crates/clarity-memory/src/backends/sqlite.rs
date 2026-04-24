@@ -96,6 +96,29 @@ impl SqliteStore {
         Ok(())
     }
 
+    pub async fn save_session_note(
+        &self,
+        session_id: &str,
+        section: &str,
+        content: &str,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        let section = section.to_string();
+        let content = content.to_string();
+        let conn = self.conn.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO session_notes (session_id, section, content) VALUES (?1, ?2, ?3)",
+                params![session_id, section, content],
+            )?;
+            Ok::<_, MemoryError>(())
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+        Ok(())
+    }
+
     fn init_schema(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
@@ -113,6 +136,17 @@ impl SqliteStore {
         conn.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
                 fact, content='facts', content_rowid='id'
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS session_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                section TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )",
             [],
         )?;

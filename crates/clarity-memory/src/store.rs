@@ -138,6 +138,17 @@ impl MemoryStore {
     pub async fn bulk_save_facts(&self, facts: &[FactTuple<'_>]) -> Result<Vec<i64>> {
         self.inner.bulk_save_facts(facts).await
     }
+
+    /// Save a session note section to the store.
+    #[cfg(feature = "sqlite")]
+    pub async fn save_session_note(
+        &self,
+        session_id: &str,
+        section: &str,
+        content: &str,
+    ) -> Result<()> {
+        self.inner.save_session_note(session_id, section, content).await
+    }
 }
 
 /// Fact tuple for bulk operations: (content, tags, source, scope)
