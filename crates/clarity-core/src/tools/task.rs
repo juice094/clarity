@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use serde_json::Value;
 
-use crate::background::store::{TaskStatus, TaskStore};
+use crate::background::store::{TaskSpec, TaskStatus, TaskStore};
 use crate::error::ToolError;
 use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
@@ -147,6 +147,130 @@ impl Tool for TaskOutputTool {
             "output": output,
             "elapsed_ms": result.elapsed_ms,
             "steps": result.steps,
+        }))
+    }
+}
+
+/// Tool for creating a new background task
+///
+/// Use this when the user wants to defer work to run asynchronously,
+/// schedule a recurring analysis, or spawn a long-running sub-agent.
+pub struct TaskCreateTool;
+
+impl TaskCreateTool {
+    /// Create a new TaskCreateTool instance
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for TaskCreateTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl Tool for TaskCreateTool {
+    fn name(&self) -> &str {
+        "task_create"
+    }
+
+    fn description(&self) -> &str {
+        "Create a new background task that will be executed asynchronously. \
+         Returns the task ID and initial status. Use this for long-running \
+         operations, scheduled work, or delegating to a sub-agent."
+    }
+
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Short name for the task"
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "The prompt or instruction for the agent to execute"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Optional longer description of what the task does"
+                },
+                "agent_type": {
+                    "type": "string",
+                    "description": "Agent type to use: explore, coder, plan, or default (default: default)"
+                },
+                "max_iterations": {
+                    "type": "integer",
+                    "description": "Maximum number of agent iterations (default: 10)"
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "description": "Timeout in seconds (default: 300)"
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["background", "low", "normal", "high", "critical"],
+                    "description": "Task priority (default: normal)"
+                },
+                "model_alias": {
+                    "type": "string",
+                    "description": "Optional model alias override"
+                }
+            },
+            "required": ["name", "prompt"]
+        })
+    }
+
+    async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
+        let name = helpers::required_str(&args, "name")?;
+        let prompt = helpers::required_str(&args, "prompt")?;
+
+        let mut spec = TaskSpec::new(name, prompt);
+
+        if let Some(desc) = helpers::optional_str(&args, "description") {
+            spec = spec.with_description(desc);
+        }
+        if let Some(agent_type) = helpers::optional_str(&args, "agent_type") {
+            spec = spec.with_agent_type(agent_type);
+        }
+        if let Some(max) = args.get("max_iterations").and_then(|v| v.as_u64()) {
+            spec = spec.with_max_iterations(max as usize);
+        }
+        if let Some(timeout) = args.get("timeout_seconds").and_then(|v| v.as_u64()) {
+            spec = spec.with_timeout_seconds(timeout);
+        }
+        if let Some(alias) = helpers::optional_str(&args, "model_alias") {
+            spec = spec.with_model_alias(alias);
+        }
+
+        let priority = helpers::optional_str(&args, "priority").unwrap_or("normal");
+        let priority_enum = match priority {
+            "background" => crate::background::store::TaskPriority::Background,
+            "low" => crate::background::store::TaskPriority::Low,
+            "normal" => crate::background::store::TaskPriority::Normal,
+            "high" => crate::background::store::TaskPriority::High,
+            "critical" => crate::background::store::TaskPriority::Critical,
+            _ => crate::background::store::TaskPriority::Normal,
+        };
+        spec = spec.with_priority(priority_enum);
+
+        let task_id = uuid::Uuid::new_v4().to_string();
+        let store = TaskStore::new(task_store_path()?);
+
+        store
+            .create(&task_id, spec)
+            .await
+            .map_err(|e| ToolError::execution_failed(format!("Failed to create task: {}", e)))?;
+
+        Ok(json!({
+            "success": true,
+            "task_id": task_id,
+            "name": name,
+            "status": "pending",
+            "message": format!("Task '{}' created with ID {}", name, task_id)
         }))
     }
 }

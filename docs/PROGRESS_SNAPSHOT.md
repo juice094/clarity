@@ -14,7 +14,7 @@
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
 | HEAD | `147e49f` |
 | 分支 | main |
-| 测试 | `cargo test --workspace --lib` = **443 passed, 0 failed, 2 ignored** |
+| 测试 | `cargo test --workspace --lib` = **456 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
 | 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite |
 
@@ -57,7 +57,6 @@
 ✅ P1-7 P0-P3 交付分级（自动分类器）
 ✅ P1-8 Agent Teams + Mailbox（协作子代理执行）
 ⏳ P1-9 Lazy Master
-⏳ P1-8 Agent Teams + Mailbox
 ⏳ P2-10 Gateway 多标签
 ⏳ P2-11 Bridge 远程控制
 ⏳ P2-12 AutoDream
