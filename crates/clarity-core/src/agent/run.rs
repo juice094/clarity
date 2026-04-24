@@ -226,7 +226,8 @@ impl Agent {
                 final_response
             )
         };
-        self.store_conversation_memory(memory_content).await;
+        self.store_conversation_memory(memory_content.clone()).await;
+        self.maybe_extract_memories(memory_content);
 
         if let Some(ref ticker) = self.memory_ticker {
             match ticker.notify_turn_and_wait("default").await {
@@ -243,6 +244,8 @@ impl Agent {
         }
 
         if completed {
+            let transcript = serde_json::to_string(&messages).unwrap_or_default();
+            self.maybe_extract_memories(transcript);
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);

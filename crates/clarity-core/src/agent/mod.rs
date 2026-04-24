@@ -186,3 +186,28 @@ pub struct Agent {
     /// while holding the lock).
     inner: Arc<std::sync::RwLock<AgentInner>>,
 }
+
+impl Agent {
+    /// Spawn an async background task to extract structured notes from a turn transcript.
+    /// Does nothing if `extract_memories` is disabled or no LLM is configured.
+    pub(crate) fn maybe_extract_memories(&self, transcript: String) {
+        if !self.config.extract_memories {
+            return;
+        }
+        if let Some(ref llm) = self.inner.read().unwrap().llm {
+            let llm = llm.clone();
+            let working_dir = self.config.working_dir.clone();
+            tokio::spawn(async move {
+                let extractor = crate::memory::TurnMemoryExtractor::new(llm, working_dir);
+                match extractor.extract(&transcript).await {
+                    Ok(notes) => {
+                        tracing::info!("Extracted session notes: {:?}", notes);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Memory extraction failed: {}", e);
+                    }
+                }
+            });
+        }
+    }
+}

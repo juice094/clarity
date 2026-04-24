@@ -26,6 +26,8 @@ pub struct AgentConfig {
     pub prompts_dir: Option<std::path::PathBuf>,
     /// Optional capability token for subagent permission isolation
     pub capability_token: Option<crate::subagents::token::CapabilityToken>,
+    /// Whether to enable automatic memory extraction after each turn.
+    pub extract_memories: bool,
 }
 
 impl Default for AgentConfig {
@@ -40,6 +42,7 @@ impl Default for AgentConfig {
             compaction_service: None,
             prompts_dir: None,
             capability_token: None,
+            extract_memories: false,
         }
     }
 }
@@ -98,6 +101,12 @@ impl AgentConfig {
         token: Option<crate::subagents::token::CapabilityToken>,
     ) -> Self {
         self.capability_token = token;
+        self
+    }
+
+    /// Enable or disable automatic memory extraction after each turn.
+    pub fn with_extract_memories(mut self, enabled: bool) -> Self {
+        self.extract_memories = enabled;
         self
     }
 }
