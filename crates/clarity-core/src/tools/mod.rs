@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub mod ask_user;
+pub mod computer;
 pub mod cron;
 pub mod file;
 pub mod notify;
@@ -25,6 +26,7 @@ pub mod todo;
 pub mod web;
 
 pub use ask_user::AskUserTool;
+pub use computer::ComputerUseTool;
 pub use cron::{CancelCronTool, ListCronTool, ScheduleCronTool};
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
 pub use notify::NotifyTool;
