@@ -36,6 +36,8 @@ use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::Wire;
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -154,6 +156,20 @@ impl LlmProvider for MockLlm {
 ///     Ok(())
 /// }
 /// ```
+/// Factory type for lazy LLM initialization
+pub type LlmFactoryFn = Arc<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<Arc<dyn LlmProvider>, AgentError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+/// Factory type for lazy MemoryStore initialization
+pub type MemoryFactoryFn = Arc<
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<Arc<dyn MemoryStore>, AgentError>> + Send>>
+        + Send
+        + Sync,
+>;
+
 #[derive(Clone)]
 pub struct Agent {
     registry: ToolRegistry,
@@ -176,6 +192,10 @@ pub struct Agent {
     skill_registry: Option<SkillRegistry>,
     /// Optional hook registry for lifecycle interception
     hook_registry: Option<crate::hooks::HookRegistry>,
+    /// Lazy LLM factory — called on first `run()` if no LLM is set
+    llm_factory: Option<LlmFactoryFn>,
+    /// Lazy MemoryStore factory — called on first `run()` if no store is set
+    memory_factory: Option<MemoryFactoryFn>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `std::sync::RwLock` is intentional.**

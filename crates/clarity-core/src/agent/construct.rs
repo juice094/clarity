@@ -1,7 +1,7 @@
 //! Agent construction, configuration, and utility methods.
 
 use super::config::{AgentConfig, DEFAULT_MAX_CONTEXT_TOKENS};
-use super::{Agent, AgentInner, AgentState};
+use super::{Agent, AgentError, AgentInner, AgentState};
 use crate::agent::compaction_service::CompactionService;
 use crate::agent::enhanced::TokenUsage;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
@@ -38,6 +38,8 @@ impl Agent {
             compaction_service: config.compaction_service.map(CompactionService::new),
             skill_registry: None,
             hook_registry: None,
+            llm_factory: None,
+            memory_factory: None,
             inner: Arc::new(std::sync::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
@@ -196,6 +198,45 @@ impl Agent {
     pub fn with_hook_registry(mut self, registry: crate::hooks::HookRegistry) -> Self {
         self.hook_registry = Some(registry);
         self
+    }
+
+    /// Set a lazy LLM factory — called on first `run()` if no LLM is set.
+    ///
+    /// This allows deferring heavy LLM initialization (e.g. model loading,
+    /// API key validation) until the agent is actually used.
+    pub fn with_llm_factory(mut self, factory: super::LlmFactoryFn) -> Self {
+        self.llm_factory = Some(factory);
+        self
+    }
+
+    /// Set a lazy MemoryStore factory — called on first `run()` if no store is set.
+    ///
+    /// This allows deferring SQLite connection and FTS5 index creation
+    /// until the agent is actually used.
+    pub fn with_memory_factory(mut self, factory: super::MemoryFactoryFn) -> Self {
+        self.memory_factory = Some(factory);
+        self
+    }
+
+    /// Ensure all lazy-initialized components are ready.
+    ///
+    /// Called automatically at the start of every `run()` variant.
+    /// If an LLM factory is configured but the LLM is not yet initialized,
+    /// this method will call the factory and install the result.
+    pub async fn ensure_initialized(&self) -> Result<(), AgentError> {
+        // Initialize LLM if needed
+        let needs_llm_init = {
+            let inner = self.inner.read().unwrap();
+            inner.llm.is_none() && self.llm_factory.is_some()
+        };
+        if needs_llm_init {
+            if let Some(ref factory) = self.llm_factory {
+                let llm = factory().await?;
+                self.set_llm(llm);
+            }
+        }
+
+        Ok(())
     }
 
     /// Set capability token for subagent permission isolation

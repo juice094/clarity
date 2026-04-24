@@ -46,6 +46,38 @@ async fn test_agent_direct_tool_execution() {
 }
 
 #[tokio::test]
+async fn test_agent_lazy_llm_factory() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let registry = ToolRegistry::with_builtin_tools();
+    let agent = Agent::with_config(registry, AgentConfig::default());
+
+    // Agent starts unconfigured (no LLM)
+    assert!(agent.llm().is_none());
+
+    let call_count = Arc::new(AtomicUsize::new(0));
+    let call_count_clone = call_count.clone();
+
+    // Set a lazy factory that returns MockLlm
+    let agent = agent.with_llm_factory(Arc::new(move || {
+        let count = call_count_clone.clone();
+        Box::pin(async move {
+            count.fetch_add(1, Ordering::SeqCst);
+            Ok(Arc::new(MockLlm) as Arc<dyn LlmProvider>)
+        })
+    }));
+
+    // First call to ensure_initialized triggers the factory
+    agent.ensure_initialized().await.unwrap();
+    assert!(agent.llm().is_some());
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
+
+    // Second call does NOT trigger the factory again
+    agent.ensure_initialized().await.unwrap();
+    assert_eq!(call_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn test_agent_run_streaming() {
     use std::sync::{Arc, Mutex};
 
