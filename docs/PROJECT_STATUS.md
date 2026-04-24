@@ -42,6 +42,8 @@
 ✅ Server 模块 — JSON-RPC over stdio，暴露 AgentController（零网络，单客户端）
 ✅ ChannelSendTool — 飞书/钉钉/Slack/Webhook 主动消息发送（含 HMAC-SHA256）
 ✅ Lazy Master — 重型组件（LLM / MemoryStore / SkillRegistry）首次 run() 时按需初始化
+✅ 多 LLM 支持
+✅ 技术栈决策 — UI 层采用 Dioxus（纯 Rust，Web + Desktop 统一）
 ✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
@@ -130,22 +132,28 @@
 
 ## 6. 与竞品对比（简要）
 
-| 维度 | Clarity (v0.1.1) | OpenClaw | zeroclaw | codex-rs |
-|------|------------------|----------|----------|----------|
-| **技术栈** | Rust | Node.js | Rust | Rust |
-| **Task/Team 工具暴露** | ✅ TaskCreate + TeamCreate/Delete/List + PushNotify | ❌ | ❌ | ❌ |
-| **Plan Mode** | ✅ | ❌ | ❌ | ❌ |
-| **并行子代理** | ✅ | ⚠️ | ❌ | ❌ |
-| **MCP** | ✅ stdio/HTTP/SSE | ⚠️ | ❌ | ✅ |
-| **Voice** | ❌ | ✅ | ❌ | ❌ |
-| **Canvas** | ❌ | ✅ | ❌ | ❌ |
-| **移动端** | ❌ | ✅ iOS/Android | ❌ | ❌ |
-| **Docker 沙箱** | ❌ | ✅ | ❌ | ✅ |
-| **Plugin SDK** | ❌ | ✅ | ❌ | ❌ |
-| **性能** | ✅ 原生二进制 | ⚠️ Node.js | ✅ <5MB | ✅ |
+| 维度 | Clarity (v0.2.0-dev) | cc-haha | OpenClaw | zeroclaw | codex-rs |
+|------|----------------------|---------|----------|----------|----------|
+| **技术栈** | Rust (Dioxus UI) | Bun/TS (Tauri UI) | Node.js | Rust | Rust |
+| **Task/Team 工具暴露** | ✅ TaskCreate + TeamCreate/Delete/List + PushNotify | ✅ | ❌ | ❌ | ❌ |
+| **Plan Mode** | ✅ | ✅ (5 阶段) | ❌ | ❌ | ❌ |
+| **并行子代理** | ✅ | ✅ (Coordinator) | ⚠️ | ❌ | ❌ |
+| **MCP** | ✅ stdio/HTTP/SSE | ✅ + OAuth + Channel 协议 | ⚠️ | ❌ | ✅ |
+| **Voice** | ❌ | ✅ | ✅ | ❌ | ❌ |
+| **Desktop GUI** | 🔄 Dioxus (进行中) | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
+| **多标签** | 🔄 进行中 | ✅ | ❌ | ❌ | ❌ |
+| **LSP** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
+| **Vim** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
+| **Sandbox** | 🔄 计划中 | ✅ OS-level | ❌ | ❌ | ✅ Docker |
+| **Plugin SDK** | 🔄 计划中 | ✅ | ✅ | ❌ | ❌ |
+| **审批系统** | ✅ 3 层 | ✅ 7 层 + AI 分类器 | ❌ | ❌ | ❌ |
+| **Memory 深度** | ✅ SQLite + BM25 + 四级编译 | ⚠️ 文件目录 | ❌ | ❌ | ❌ |
+| **性能** | ✅ 原生二进制 <10MB | ⚠️ Bun runtime | ⚠️ Node.js | ✅ <5MB | ✅ |
+| **代码合法性** | ✅ 自研 | ⚠️ 泄露源码补丁 | ✅ | ✅ | ✅ |
 
 **定位差异**：
-- **Clarity** = 开发者的 AI 运行时（性能 + Plan Mode + 并行）
+- **Clarity** = 开发者的 AI 标准运行时（Rust 全栈 + Plan Mode + Memory 深度）
+- **cc-haha** = 个人 AI 编码助手（功能全面但架构沉重，法律风险）
 - **OpenClaw** = 个人 AI 助手（Channels + Voice + Canvas + 移动端）
 - **zeroclaw** = 极简 Rust AI 助手（极低资源）
 - **codex-rs** = 编码助手（沙箱 + MCP）
@@ -173,11 +181,15 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | Gateway 多标签 | 3-5 天 | Web UI 多会话标签页 | — |
-| P2 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
-| P3 | LSP 协议支持 | 1-2 周 | Language Server Protocol over stdio | — |
+| P2 | clarity-dioxus Desktop GUI | 2 周 | 多标签多会话 + 聊天面板 + 任务面板（Dioxus 0.7） | — |
+| P2 | 审批系统增强 | 2-3 周 | AI 分类器 + 规则引擎 + 远程审批中继 | — |
+| P2 | LSP 支持 | 1-2 周 | Language Server Protocol（tower-lsp） | — |
+| P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
-| P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
+| P3 | WebBrowserTool | 1 周 | headless_chrome / fantoccini | — |
+| P3 | Vim 集成 | 1-2 周 | Vim 键位引擎 | — |
+| P3 | Sandbox | 1-2 周 | landlock (Linux) + Windows 沙箱 API | — |
+| P3 | Plugin SDK | 2-3 周 | Rust dylib 插件系统 | — |
 
 ---
 

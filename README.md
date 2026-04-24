@@ -2,7 +2,9 @@
 
 > An opinionated, multi-entry AI runtime: plan → execute → monitor → remember.
 
-Clarity is not another chat client. It is a **personal AI standard runtime** that orchestrates LLMs, tools, and sub-agents across three entry points — a system-tray monitor, a web IDE, and a full TUI — with persistent memory, structured planning, and parallel execution.
+Clarity is not another chat client. It is a **personal AI standard runtime** that orchestrates LLMs, tools, and sub-agents across multiple entry points — system-tray monitor, web IDE, desktop GUI, and full TUI — with persistent memory, structured planning, and parallel execution.
+
+**All UI layers are Rust-native** (Dioxus for Desktop/Web, ratatui for TUI) — no JavaScript frontend, no Electron, no webview tax.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -44,6 +46,7 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **AutoDream** | Nightly memory consolidation scheduler — automatically compiles and archives memories. |
 | **Lazy Master** | Heavy components (LLM, MemoryStore, SkillRegistry) are initialized on first `run()`, not at startup. |
 | **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
+| **Rust-Native UI** | Web + Desktop GUI powered by [Dioxus](https://dioxuslabs.com/) — pure Rust, no JavaScript. |
 
 ## Quick Start
 

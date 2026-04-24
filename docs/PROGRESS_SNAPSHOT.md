@@ -1,6 +1,7 @@
 # Clarity 项目进度快照
 
-> 生成时间：2026-04-25  
+> 生成时间：2026-04-25
+> 最新决策：UI 技术栈选型 Dioxus（纯 Rust，见 `docs/tech_stack_decision_ui.md`）  
 > 用途：上下文压缩防护，供后续会话快速恢复状态  
 > 项目路径：`C:\Users\22414\dev\third_party\clarity`  
 > GitHub：`juice094/clarity`  
@@ -16,7 +17,7 @@
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **474 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
-| 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite |
+| 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite, Dioxus (UI) |
 
 ---
 
@@ -64,8 +65,10 @@
 ✅ P2-6 Server 模块（JSON-RPC over stdio）
 ✅ P2-7 Channel Adapter（ChannelSendTool：飞书/钉钉/Slack/Webhook）
 ✅ P1-9 Lazy Master（组件级延迟初始化）
-⏳ P2-10 Gateway 多标签
-⏳ P2-11 Bridge 远程控制
+⏳ P2-10 clarity-dioxus Desktop GUI（多标签多会话）
+⏳ P2-11 审批系统增强（AI 分类器 + 远程中继）
+⏳ P2-12 LSP 支持
+⏳ P2-13 Bridge 远程控制
 ```
 
 **执行策略**：
