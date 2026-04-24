@@ -117,7 +117,7 @@ crates/
 
 ```bash
 # Run all tests
-cargo test --workspace --lib          # 459+ tests
+cargo test --workspace --lib          # 464+ tests
 
 # Run clippy
 cargo clippy --workspace --lib --bins --tests

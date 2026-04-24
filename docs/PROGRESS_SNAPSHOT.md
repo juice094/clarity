@@ -1,6 +1,6 @@
 # Clarity 项目进度快照
 
-> 生成时间：2026-04-20  
+> 生成时间：2026-04-24  
 > 用途：上下文压缩防护，供后续会话快速恢复状态  
 > 项目路径：`C:\Users\22414\dev\third_party\clarity`  
 > GitHub：`juice094/clarity`  
@@ -12,7 +12,7 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `74a056f` |
+| HEAD | `570c83d` |
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **464 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
@@ -68,7 +68,10 @@
 ⏳ P2-7 Channel Adapter（Telegram/飞书 Bot）
 ```
 
-**执行策略**：串行子代理（每次 1 个），完成后主代理审核 → commit → 启动下一个。避免工作区冲突。
+**执行策略**：
+- **并行阶段**：无依赖关系的模块可同时编写（修改不同文件），最后统一注册
+- **串行阶段**：共享文件（如 `lib.rs`, `mod.rs`）的修改必须串行，避免冲突
+- **Git 节奏**：每完成一批功能 → `cargo test` + `clippy` → `git commit` → `git push` → 再启动下一批
 
 ---
 
