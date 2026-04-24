@@ -43,7 +43,7 @@
 ✅ ChannelSendTool — 飞书/钉钉/Slack/Webhook 主动消息发送（含 HMAC-SHA256）
 ✅ Lazy Master — 重型组件（LLM / MemoryStore / SkillRegistry）首次 run() 时按需初始化
 ✅ 多 LLM 支持
-✅ 技术栈决策 — UI 层采用 Dioxus（纯 Rust，Web + Desktop 统一）
+✅ 技术栈决策 — UI 层采用 Tauri 2.10.x（全平台 Desktop + Mobile + Web）
 ✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
@@ -134,7 +134,7 @@
 
 | 维度 | Clarity (v0.2.0-dev) | cc-haha | OpenClaw | zeroclaw | codex-rs |
 |------|----------------------|---------|----------|----------|----------|
-| **技术栈** | Rust (Dioxus UI) | Bun/TS (Tauri UI) | Node.js | Rust | Rust |
+| **技术栈** | Rust (Tauri 2 UI) | Bun/TS (Tauri UI) | Node.js | Rust | Rust |
 | **Task/Team 工具暴露** | ✅ TaskCreate + TeamCreate/Delete/List + PushNotify | ✅ | ❌ | ❌ | ❌ |
 | **Plan Mode** | ✅ | ✅ (5 阶段) | ❌ | ❌ | ❌ |
 | **并行子代理** | ✅ | ✅ (Coordinator) | ⚠️ | ❌ | ❌ |

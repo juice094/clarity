@@ -4,7 +4,7 @@
 
 Clarity is not another chat client. It is a **personal AI standard runtime** that orchestrates LLMs, tools, and sub-agents across multiple entry points — system-tray monitor, web IDE, desktop GUI, and full TUI — with persistent memory, structured planning, and parallel execution.
 
-**All UI layers are Rust-native** (Dioxus for Desktop/Web, ratatui for TUI) — no JavaScript frontend, no Electron, no webview tax.
+**Rust drives the core** (Agent/Memory/Tools), **Tauri 2 drives the GUI** (Desktop + Mobile + Web), **ratatui drives the TUI** — native performance across all platforms.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -46,7 +46,7 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **AutoDream** | Nightly memory consolidation scheduler — automatically compiles and archives memories. |
 | **Lazy Master** | Heavy components (LLM, MemoryStore, SkillRegistry) are initialized on first `run()`, not at startup. |
 | **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
-| **Rust-Native UI** | Web + Desktop GUI powered by [Dioxus](https://dioxuslabs.com/) — pure Rust, no JavaScript. |
+| **Cross-Platform GUI** | Desktop + Mobile powered by [Tauri 2](https://v2.tauri.app/) — Rust core, React/Vue frontend. |
 
 ## Quick Start
 

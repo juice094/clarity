@@ -1,7 +1,7 @@
 # Clarity 项目进度快照
 
 > 生成时间：2026-04-25
-> 最新决策：UI 技术栈选型 Dioxus（纯 Rust，见 `docs/tech_stack_decision_ui.md`）  
+> 最新决策：UI 技术栈选型 Tauri 2.10.x（全平台 Desktop + Mobile + Web，见 `docs/tech_stack_decision_ui.md`）  
 > 用途：上下文压缩防护，供后续会话快速恢复状态  
 > 项目路径：`C:\Users\22414\dev\third_party\clarity`  
 > GitHub：`juice094/clarity`  
@@ -17,7 +17,7 @@
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **474 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
-| 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite, Dioxus (UI) |
+| 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite, Tauri 2 (UI) |
 
 ---
 
