@@ -140,7 +140,7 @@
 | **并行子代理** | ✅ | ✅ (Coordinator) | ⚠️ | ❌ | ❌ |
 | **MCP** | ✅ stdio/HTTP/SSE | ✅ + OAuth + Channel 协议 | ⚠️ | ❌ | ✅ |
 | **Voice** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **Desktop GUI** | 🔄 Dioxus (进行中) | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
+| **Desktop GUI** | 🔄 Tauri 2 (进行中) | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
 | **多标签** | 🔄 进行中 | ✅ | ❌ | ❌ | ❌ |
 | **LSP** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
 | **Vim** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
@@ -181,7 +181,7 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | clarity-dioxus Desktop GUI | 2 周 | 多标签多会话 + 聊天面板 + 任务面板（Dioxus 0.7） | — |
+| P2 | clarity-tauri Desktop GUI | 2 周 | 多标签多会话 + 聊天面板 + 任务面板（Tauri 2.10） | — |
 | P2 | 审批系统增强 | 2-3 周 | AI 分类器 + 规则引擎 + 远程审批中继 | — |
 | P2 | LSP 支持 | 1-2 周 | Language Server Protocol（tower-lsp） | — |
 | P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |

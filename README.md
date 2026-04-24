@@ -7,27 +7,27 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 **Rust drives the core** (Agent/Memory/Tools), **Tauri 2 drives the GUI** (Desktop + Mobile + Web), **ratatui drives the TUI** — native performance across all platforms.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        CLARITY RUNTIME                       │
-├─────────────┬─────────────────┬─────────────────────────────┤
-│   claw      │     window      │           cli               │
-│  (托盘)      │   (Web IDE)     │      (TUI 终端)            │
-│             │                 │                             │
-│ • 实时通知   │ • 文件浏览器    │ • 完整交互式会话            │
-│ • 任务徽章   │ • Monaco 编辑器 │ • /plan /parallel /task     │
-│ • 系统托盘   │ • SSE 流式对话  │ • 快捷键 + 弹窗审批         │
-└──────┬──────┴────────┬────────┴────────────┬────────────────┘
-       │               │                     │
-       └───────────────┴─────────────────────┘
-                       │
-         ┌─────────────┴─────────────┐
-         │      clarity-core         │
-         │  • Agent (ReAct / Plan)   │
-         │  • ToolRegistry (built-in + MCP)
-         │  • BackgroundTaskManager  │
-         │  • Memory (BM25 + vector) │
-         │  • Subagent (parallel)    │
-         └───────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         CLARITY RUNTIME                              │
+├──────────┬──────────┬──────────────┬────────────────────────────────┤
+│  mobile  │ desktop  │    web       │           cli                  │
+│  (APP)   │  (GUI)   │  (Browser)   │      (TUI 终端)               │
+│          │          │              │                                │
+│• iOS/安卓│• 多标签   │• 即开即用    │• 完整交互式会话                │
+│• 推送通知│• 本地Agent│• REST + WS   │• /plan /parallel /task         │
+│• 生物识别│• 系统集成 │• 多设备访问  │• 快捷键 + 弹窗审批             │
+└─────┬────┴────┬─────┴──────┬───────┴──────────┬─────────────────────┘
+      │         │            │                  │
+      └─────────┴────────────┴──────────────────┘
+                        │
+          ┌─────────────┴─────────────┐
+          │      clarity-core         │
+          │  • Agent (ReAct / Plan)   │
+          │  • ToolRegistry (built-in + MCP)
+          │  • BackgroundTaskManager  │
+          │  • Memory (BM25 + vector) │
+          │  • Subagent (parallel)    │
+          └───────────────────────────┘
 ```
 
 ## Features
@@ -45,7 +45,7 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **Daemon Runtime** | Cross-platform PID lockfile + graceful shutdown for long-running background processes. |
 | **AutoDream** | Nightly memory consolidation scheduler — automatically compiles and archives memories. |
 | **Lazy Master** | Heavy components (LLM, MemoryStore, SkillRegistry) are initialized on first `run()`, not at startup. |
-| **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
+| **Four Entries** | mobile (iOS/Android), desktop (Tauri 2), web (browser), cli (ratatui). Use the right tool for the job. |
 | **Cross-Platform GUI** | Desktop + Mobile powered by [Tauri 2](https://v2.tauri.app/) — Rust core, React/Vue frontend. |
 
 ## Quick Start
@@ -112,6 +112,7 @@ crates/
 ├── clarity-core      # Agent loop, tools, memory, MCP, subagents
 ├── clarity-memory    # BM25 + vector hybrid search, chunking
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
+├── clarity-tauri     # Tauri 2 Desktop + Mobile GUI (React frontend)
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
 └── clarity-wire      # UI↔Agent event bus

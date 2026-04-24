@@ -13,7 +13,7 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `b66c6b3` |
+| HEAD | `48b55e7` |
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **474 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
@@ -65,7 +65,7 @@
 ✅ P2-6 Server 模块（JSON-RPC over stdio）
 ✅ P2-7 Channel Adapter（ChannelSendTool：飞书/钉钉/Slack/Webhook）
 ✅ P1-9 Lazy Master（组件级延迟初始化）
-⏳ P2-10 clarity-dioxus Desktop GUI（多标签多会话）
+⏳ P2-10 clarity-tauri Desktop GUI（多标签多会话）
 ⏳ P2-11 审批系统增强（AI 分类器 + 远程中继）
 ⏳ P2-12 LSP 支持
 ⏳ P2-13 Bridge 远程控制
@@ -81,11 +81,11 @@
 
 ## 4. 关键架构决策
 
-### 4.1 三端策略
-- **TUI（ratatui）**：保留，开发者核心场景
-- **Web UI（Gateway）**：升级为响应式 PWA，覆盖 PC 云 + Mobile
-- **Desktop**：未来用 Tauri + Sidecar（Axum Gateway 作为 Sidecar）
-- **Mobile**：不开发独立 App，走 PWA + Push Notification
+### 4.1 四端策略
+- **TUI（ratatui）**：保留，开发者核心场景，快捷键密集
+- **Desktop（Tauri 2）**：主力 GUI，多标签多会话，本地 Agent 实例
+- **Mobile（Tauri 2）**：iOS/Android 原生 APP，替代 Kimi/DeepSeek APP
+- **Web（Gateway）**：浏览器即开即用，通过 REST/WebSocket 连接
 
 ### 4.2 云端部署（Kimi 云）
 - claw 托盘 → **claw-server**（无 UI 守护进程）
@@ -104,14 +104,13 @@
 
 | 项目 | 路径 | 用途 |
 |------|------|------|
-| cc-haha | `C:\Users\22414\dev\third_party\cc-haha` | Claude Code 魔改版，功能借鉴源 |
+| cc-haha | `C:\Users\22414\dev\third_party\cc-haha` | Claude Code 泄露源码修复版，功能设计参考源（仅借鉴思想，不碰代码） |
 
-**cc-haha 关键借鉴点**：
-- Memory：forked agent 提取、AutoDream 夜间整合
-- Skills：动态发现、条件激活（paths frontmatter）
-- Teams：TeamFile + Mailbox + Leader 集中审批
-- Desktop：Tauri 2 + Sidecar 模式
-- Computer Use：Python 桥（pyautogui/mss）+ MCP 封装
+**参考策略**：
+- **功能设计**：借鉴其功能清单和 UX 流程（思想不受版权保护）
+- **工程理论**：以成熟美学与工程理论（Fitt's Law、渐进披露、Sidecar Pattern 等）指导独立实现
+- **代码边界**：绝不查看/复制 cc-haha 的具体代码实现
+- **技术选型**：Tauri 2 架构、MCP 协议、LSP 协议均为公开标准
 
 ---
 
