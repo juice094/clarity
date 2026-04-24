@@ -37,6 +37,7 @@ impl Agent {
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
             compaction_service: config.compaction_service.map(CompactionService::new),
             skill_registry: None,
+            hook_registry: None,
             inner: Arc::new(std::sync::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
@@ -188,6 +189,12 @@ impl Agent {
     /// Set the compaction service
     pub fn with_compaction_service(mut self, service: CompactionService) -> Self {
         self.compaction_service = Some(service);
+        self
+    }
+
+    /// Set the hook registry for lifecycle interception.
+    pub fn with_hook_registry(mut self, registry: crate::hooks::HookRegistry) -> Self {
+        self.hook_registry = Some(registry);
         self
     }
 

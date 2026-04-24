@@ -207,6 +207,13 @@ impl Agent {
         let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
         self.finish_turn();
 
+        // Run PreDeliveryHook pipeline if configured
+        let final_response = if let Some(ref hooks) = self.hook_registry {
+            hooks.run_pre_delivery(&final_response, crate::hooks::DeliveryTier::P1).await?
+        } else {
+            final_response
+        };
+
         self.send_wire_message(WireMessage::TurnEnd);
 
         let usage = self.get_session_usage();
@@ -246,6 +253,17 @@ impl Agent {
         if completed {
             let transcript = serde_json::to_string(&messages).unwrap_or_default();
             self.maybe_extract_memories(transcript);
+
+            // Run SessionTerminationHook if configured
+            if let Some(ref hooks) = self.hook_registry {
+                let summary = serde_json::json!({
+                    "query": query.as_ref(),
+                    "response": &final_response,
+                    "completed": true,
+                });
+                hooks.run_session_termination(&summary.to_string()).await;
+            }
+
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);
@@ -277,6 +295,13 @@ impl Agent {
 
         let (final_response, completed) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
         self.finish_turn();
+
+        // Run PreDeliveryHook pipeline if configured
+        let final_response = if let Some(ref hooks) = self.hook_registry {
+            hooks.run_pre_delivery(&final_response, crate::hooks::DeliveryTier::P1).await?
+        } else {
+            final_response
+        };
 
         self.send_wire_message(WireMessage::TurnEnd);
 

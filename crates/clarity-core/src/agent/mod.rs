@@ -174,6 +174,8 @@ pub struct Agent {
     compaction_service: Option<CompactionService>,
     /// Optional skill registry for orchestration
     skill_registry: Option<SkillRegistry>,
+    /// Optional hook registry for lifecycle interception
+    hook_registry: Option<crate::hooks::HookRegistry>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `std::sync::RwLock` is intentional.**

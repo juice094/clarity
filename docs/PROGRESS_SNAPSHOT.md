@@ -12,7 +12,7 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `3ec2fa8` |
+| HEAD | `4514815` |
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **443 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
@@ -52,7 +52,7 @@
 ✅ P0-2C Agent::run() 集成
 ✅ P0-5A ComputerUseTool
 ✅ P0-5B computer_bridge.py（Python 脚本）
-⏳ P0-5C 审批标记（强制审批）
+✅ P0-5C 审批标记（强制审批）
 ⏳ P1-6A Hook trait 定义
 ⏳ P1-6B HookRegistry
 ⏳ P1-6C Agent 集成

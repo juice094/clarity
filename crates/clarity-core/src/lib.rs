@@ -47,6 +47,7 @@ pub mod background;
 pub mod compaction;
 pub mod config;
 pub mod error;
+pub mod hooks;
 pub mod llm;
 pub mod mcp;
 pub mod memory;
