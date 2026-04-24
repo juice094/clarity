@@ -40,6 +40,8 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **Skills** | Markdown+YAML skill files that inject context and whitelist tools into the system prompt. |
 | **Agent Teams** | Dynamically create collaborative teams of sub-agents with shared mailbox coordination. |
 | **Push Notifications** | Multi-channel alerts (filesystem + webhook) for task completions and important events. |
+| **Daemon Runtime** | Cross-platform PID lockfile + graceful shutdown for long-running background processes. |
+| **AutoDream** | Nightly memory consolidation scheduler — automatically compiles and archives memories. |
 | **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
 
 ## Quick Start

@@ -9,7 +9,7 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **459 passed, 0 failed, 2 ignored** | ✅ 全绿 |
+| **单元测试** | **464 passed, 0 failed, 2 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
@@ -37,6 +37,8 @@
 ✅ 三层审批 — Interactive / Yolo / Plan
 ✅ 上下文压缩 — CompactionService 自动防止 Token 爆炸
 ✅ 17+ 内置工具 — 文件读写编辑、Shell、搜索、Web、MCP、任务管理、团队管理、推送通知
+✅ Daemon 运行时 — 跨平台 PID lockfile + graceful shutdown
+✅ AutoDream — 夜间记忆整合调度器（cron 触发 + timeout 保护）
 ✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
@@ -168,9 +170,8 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | Daemon 模式 | 3-5 天 | lockfile + signal handling，后台常驻 | — |
-| P2 | AutoDream | 1 周 | 夜间记忆整合，Cron + MemoryCompiler 已就绪 | — |
 | P2 | Server 模块 | 5-7 天 | 本地 HTTP API 暴露核心能力 | — |
+| P2 | Channel Adapter（Telegram/飞书 Bot） | 1 周 | IM 渠道工具化，Agent 能主动发消息 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
 | P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 

@@ -12,9 +12,9 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `a67524d` |
+| HEAD | `74a056f` |
 | 分支 | main |
-| 测试 | `cargo test --workspace --lib` = **459 passed, 0 failed, 2 ignored** |
+| 测试 | `cargo test --workspace --lib` = **464 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
 | 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite |
 
@@ -59,10 +59,13 @@
 ✅ P2-1 TaskCreateTool / TaskListTool / TaskOutputTool / TaskStopTool
 ✅ P2-2 TeamCreateTool / TeamDeleteTool / TeamListTool
 ✅ P2-3 PushNotificationTool（file + webhook 双通道）
+✅ P2-4 Daemon 模式（lockfile + signal handling）
+✅ P2-5 AutoDream（夜间记忆整合调度器）
 ⏳ P1-9 Lazy Master
 ⏳ P2-10 Gateway 多标签
 ⏳ P2-11 Bridge 远程控制
-⏳ P2-12 AutoDream
+⏳ P2-6 Server 模块
+⏳ P2-7 Channel Adapter（Telegram/飞书 Bot）
 ```
 
 **执行策略**：串行子代理（每次 1 个），完成后主代理审核 → commit → 启动下一个。避免工作区冲突。
