@@ -72,6 +72,7 @@
 - **并行阶段**：无依赖关系的模块可同时编写（修改不同文件），最后统一注册
 - **串行阶段**：共享文件（如 `lib.rs`, `mod.rs`）的修改必须串行，避免冲突
 - **Git 节奏**：每完成一批功能 → `cargo test` + `clippy` → `git commit` → `git push` → 再启动下一批
+- **分析先行**：重大设计决策前，先参考成熟工程理论和竞品实现，写入分析文档（`docs/server_channel_design_analysis.md`）
 
 ---
 

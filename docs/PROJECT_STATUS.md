@@ -170,8 +170,8 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | Server 模块 | 5-7 天 | 本地 HTTP API 暴露核心能力 | — |
-| P2 | Channel Adapter（Telegram/飞书 Bot） | 1 周 | IM 渠道工具化，Agent 能主动发消息 | — |
+| P2 | Server 模块 | 5-7 天 | core 内 JSON-RPC over stdio 暴露 `AgentController` | [`server_channel_design_analysis.md`](server_channel_design_analysis.md) |
+| P2 | Channel Adapter | 1 周 | core 内 `ChannelSendTool` 独立 HTTP 发送 | [`server_channel_design_analysis.md`](server_channel_design_analysis.md) |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
 | P3 | Gateway Session 跨实例共享 | 3-5 天 | 当前 SQLite 已单机持久化，多实例共享需外部存储 | — |
 
