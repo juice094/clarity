@@ -6,7 +6,7 @@
 use clarity_core::agent::{Agent, AgentConfig, LlmProvider, Message, MockLlm};
 use clarity_core::error::{AgentError, ToolError};
 use clarity_core::llm::LlmFactory;
-use clarity_core::memory::{InMemoryStore, MemoryStore, MemoryTicker};
+use clarity_core::memory::{InMemoryStore, MemoryStore, MemoryTicker, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::tools::{FileReadTool, Tool, ToolContext};
 use std::sync::Arc;
@@ -77,7 +77,7 @@ fn test_agent_builder_methods() {
     let _agent = Agent::with_config(registry, config)
         .with_llm(Arc::new(MockLlm) as Arc<dyn LlmProvider>)
         .with_memory(Arc::new(InMemoryStore::new()) as Arc<dyn MemoryStore>)
-        .with_memory_ticker(MemoryTicker::new(5));
+        .with_memory_ticker(SharedMemoryTicker::new(MemoryTicker::new("/tmp", Some(5))));
 }
 
 // ==================== ToolRegistry API Stability ====================

@@ -13,6 +13,7 @@ pub mod builder;
 mod parallel;
 pub mod registry;
 pub mod runner;
+pub mod token;
 mod store;
 
 pub use builder::SubagentBuilder;
@@ -22,6 +23,7 @@ pub use runner::{
     collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
     SubagentError, SubagentResult, SubagentRunner,
 };
+pub use token::{CapabilityToken, TokenError};
 pub use store::{SubagentState, SubagentStatus, SubagentStore};
 
 use crate::llm::ModelRegistry;

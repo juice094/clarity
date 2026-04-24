@@ -2,6 +2,7 @@
 //!
 //! 负责任务定义、状态和结果的持久化存储
 
+use crate::background::cron::CronTask;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -390,6 +391,56 @@ impl TaskStore {
     fn task_dir(&self, task_id: impl AsRef<str>) -> PathBuf {
         self.root_dir.join(task_id.as_ref())
     }
+
+    /// Cron 任务存储文件路径
+    fn cron_file(&self) -> PathBuf {
+        self.root_dir.join("cron_tasks.json")
+    }
+
+    /// 保存 cron 任务
+    pub async fn save_cron(&self, task: &CronTask) -> anyhow::Result<()> {
+        let mut tasks = self.list_cron().await?;
+        // 去重：如果存在相同 task_id，先移除旧条目
+        tasks.retain(|t: &CronTask| t.task_id != task.task_id);
+        tasks.push(task.clone());
+
+        let json = serde_json::to_string_pretty(&tasks)?;
+        fs::create_dir_all(&self.root_dir).await?;
+        fs::write(self.cron_file(), json).await?;
+
+        info!("Saved cron task: {}", task.task_id);
+        Ok(())
+    }
+
+    /// 列出所有 cron 任务
+    pub async fn list_cron(&self) -> anyhow::Result<Vec<CronTask>> {
+        let path = self.cron_file();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let json = fs::read_to_string(&path).await?;
+        let tasks: Vec<CronTask> = serde_json::from_str(&json)?;
+        Ok(tasks)
+    }
+
+    /// 删除 cron 任务
+    pub async fn remove_cron(&self, task_id: impl AsRef<str>) -> anyhow::Result<()> {
+        let task_id = task_id.as_ref();
+        let mut tasks = self.list_cron().await?;
+        let original_len = tasks.len();
+        tasks.retain(|t| t.task_id != task_id);
+
+        if tasks.len() == original_len {
+            return Err(anyhow::anyhow!("Cron task not found: {}", task_id));
+        }
+
+        let json = serde_json::to_string_pretty(&tasks)?;
+        fs::write(self.cron_file(), json).await?;
+
+        info!("Removed cron task: {}", task_id);
+        Ok(())
+    }
 }
 
 /// 获取当前时间戳
@@ -599,5 +650,73 @@ mod tests {
         assert_eq!(pending[0].spec.name, "critical");
         assert_eq!(pending[1].spec.name, "high");
         assert_eq!(pending[2].spec.name, "low");
+    }
+
+    #[tokio::test]
+    async fn test_save_and_list_cron() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = TaskStore::new(temp_dir.path());
+
+        let spec = TaskSpec::new("daily", "backup");
+        let task = CronTask {
+            task_id: "cron_001".to_string(),
+            task_spec: spec,
+            schedule: crate::background::cron::CronSchedule::new("0 0 2 * * *").unwrap(),
+            enabled: true,
+        };
+
+        store.save_cron(&task).await.unwrap();
+
+        let list = store.list_cron().await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].task_id, "cron_001");
+        assert!(list[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn test_remove_cron() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = TaskStore::new(temp_dir.path());
+
+        let spec = TaskSpec::new("daily", "backup");
+        let task = CronTask {
+            task_id: "cron_002".to_string(),
+            task_spec: spec,
+            schedule: crate::background::cron::CronSchedule::new("0 0 2 * * *").unwrap(),
+            enabled: true,
+        };
+
+        store.save_cron(&task).await.unwrap();
+        assert_eq!(store.list_cron().await.unwrap().len(), 1);
+
+        store.remove_cron("cron_002").await.unwrap();
+        assert!(store.list_cron().await.unwrap().is_empty());
+
+        // Removing non-existent should fail
+        assert!(store.remove_cron("nonexistent").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_save_cron_updates_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = TaskStore::new(temp_dir.path());
+
+        let spec1 = TaskSpec::new("daily", "backup");
+        let mut task1 = CronTask {
+            task_id: "cron_003".to_string(),
+            task_spec: spec1,
+            schedule: crate::background::cron::CronSchedule::new("0 0 2 * * *").unwrap(),
+            enabled: true,
+        };
+
+        store.save_cron(&task1).await.unwrap();
+
+        // Update the same task_id
+        task1.enabled = false;
+        store.save_cron(&task1).await.unwrap();
+
+        let list = store.list_cron().await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(!list[0].enabled);
     }
 }

@@ -149,4 +149,22 @@ description: ""
         assert_eq!(skill.meta.id, "minimal");
         assert!(skill.body.is_empty());
     }
+
+    #[test]
+    fn test_parse_paths() {
+        let content = r#"---
+id: rust-skill
+name: Rust Skill
+paths:
+  - "src/**/*.rs"
+  - "Cargo.toml"
+---
+
+Body.
+"#;
+        let skill = SkillLoader::parse(content).unwrap();
+        assert_eq!(skill.meta.id, "rust-skill");
+        let paths = skill.meta.paths.unwrap();
+        assert_eq!(paths, vec!["src/**/*.rs", "Cargo.toml"]);
+    }
 }

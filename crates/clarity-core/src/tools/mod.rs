@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub mod ask_user;
+pub mod cron;
 pub mod file;
 pub mod notify;
 pub mod plan;
@@ -24,6 +25,7 @@ pub mod todo;
 pub mod web;
 
 pub use ask_user::AskUserTool;
+pub use cron::{CancelCronTool, ListCronTool, ScheduleCronTool};
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
 pub use notify::NotifyTool;
 pub use plan::PlanTool;
@@ -36,6 +38,7 @@ pub use web::{WebFetchTool, WebSearchTool};
 
 use crate::approval::ApprovalMode;
 use crate::error::ToolError;
+use crate::subagents::token::CapabilityToken;
 
 /// Result type for tool execution
 pub type ToolResult<T> = Result<T, ToolError>;
@@ -63,6 +66,9 @@ pub struct ToolContext {
 
     /// Current approval mode
     pub approval_mode: ApprovalMode,
+
+    /// Optional capability token for permission isolation
+    pub capability_token: Option<CapabilityToken>,
 }
 
 impl ToolContext {
@@ -75,6 +81,7 @@ impl ToolContext {
             max_output_size: 1024 * 1024, // 1MB
             read_only: false,
             approval_mode: ApprovalMode::Interactive,
+            capability_token: None,
         }
     }
 
@@ -105,6 +112,12 @@ impl ToolContext {
     /// Set approval mode
     pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
         self.approval_mode = mode;
+        self
+    }
+
+    /// Set capability token for permission isolation
+    pub fn with_capability_token(mut self, token: Option<CapabilityToken>) -> Self {
+        self.capability_token = token;
         self
     }
 }

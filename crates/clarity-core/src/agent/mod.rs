@@ -83,6 +83,9 @@ struct AgentInner {
     /// do not affect the in-flight turn.
     snapshotted_skill: Option<String>,
     file_prompt_cache: Option<String>,
+    /// File paths representing the user's current operation.
+    /// Used to dynamically activate skills whose `paths` patterns match.
+    active_file_paths: Vec<std::path::PathBuf>,
 }
 
 /// Simple mock LLM for testing

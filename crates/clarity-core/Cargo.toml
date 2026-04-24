@@ -21,6 +21,7 @@ tracing = { workspace = true }
 regex = { workspace = true }
 glob = { workspace = true }
 chrono = { workspace = true }
+cron = "0.15"
 futures = { workspace = true }
 tokio-util = { workspace = true }
 rand = "0.8"

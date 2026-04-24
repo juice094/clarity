@@ -67,17 +67,33 @@ impl Agent {
             format!("{}\n\n{}", base, self.config.entry_context)
         };
 
-        // Inject active skill context if set (uses snapshotted value at turn start)
+        let mut skill_contexts = Vec::new();
+
+        // Inject snapshotted active skill context if set
         if let Some(ref skill_id) = self.snapshotted_active_skill() {
             if let Some(ref registry) = self.skill_registry {
                 if let Some(skill) = registry.get(skill_id) {
-                    let skill_ctx = skill.build_context();
-                    return format!("{}\n\n{}", with_entry, skill_ctx);
+                    skill_contexts.push(skill.build_context());
                 }
             }
         }
 
-        with_entry
+        // Inject dynamically activated skill contexts
+        if let Some(ref registry) = self.skill_registry {
+            for id in registry.active_ids() {
+                if Some(&id) != self.snapshotted_active_skill().as_ref() {
+                    if let Some(skill) = registry.get(&id) {
+                        skill_contexts.push(skill.build_context());
+                    }
+                }
+            }
+        }
+
+        if !skill_contexts.is_empty() {
+            format!("{}\n\n{}", with_entry, skill_contexts.join("\n\n"))
+        } else {
+            with_entry
+        }
     }
 
     /// Get tool descriptions from the registry for the system prompt.

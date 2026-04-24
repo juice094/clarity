@@ -5,7 +5,7 @@
 use clarity_core::agent::{Agent, AgentConfig, Message, MessageRole, MockLlm};
 use clarity_core::error::AgentError;
 use clarity_core::llm::LlmFactory;
-use clarity_core::memory::{Memory, MemoryStore, MemoryTicker};
+use clarity_core::memory::{Memory, MemoryStore, MemoryTicker, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::tools::{BashTool, FileReadTool, Tool};
 use serde_json::json;
@@ -20,7 +20,7 @@ async fn test_agent_with_persistent_memory() {
     // Create in-memory persistent store for testing
     let memory_store: Arc<dyn MemoryStore> =
         Arc::new(PersistentMemoryStore::new_in_memory().unwrap());
-    let ticker = MemoryTicker::new(3);
+    let ticker = SharedMemoryTicker::new(MemoryTicker::new("/tmp", Some(3)));
 
     let registry = ToolRegistry::new();
     let config = AgentConfig::new().with_max_iterations(2);

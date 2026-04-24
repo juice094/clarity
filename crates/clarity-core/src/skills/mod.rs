@@ -40,7 +40,9 @@
 
 mod loader;
 mod registry;
+pub mod discovery;
 
+pub use discovery::SkillDiscovery;
 pub use loader::SkillLoader;
 pub use registry::SkillRegistry;
 
@@ -92,6 +94,10 @@ pub struct SkillMeta {
     /// Tags for discovery and categorization
     #[serde(default)]
     pub tags: Vec<String>,
+
+    /// File path patterns that trigger activation of this skill (gitignore-style globs)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paths: Option<Vec<String>>,
 }
 
 /// A loaded skill template.
@@ -148,6 +154,7 @@ mod tests {
             description: "A test skill for unit testing".to_string(),
             tools: vec!["tool_a".to_string(), "tool_b".to_string()],
             tags: vec!["test".to_string()],
+            paths: None,
         }
     }
 

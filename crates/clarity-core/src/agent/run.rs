@@ -157,6 +157,16 @@ impl Agent {
         }
 
         let cancel_token = self.begin_turn()?;
+
+        // Discover project-local skills and activate those matching current file paths.
+        if let Some(ref registry) = self.skill_registry {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
+
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
@@ -249,6 +259,16 @@ impl Agent {
         mut messages: Vec<Message>,
     ) -> Result<String, AgentError> {
         let cancel_token = self.begin_turn()?;
+
+        // Discover project-local skills and activate those matching current file paths.
+        if let Some(ref registry) = self.skill_registry {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
+
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
@@ -288,6 +308,16 @@ impl Agent {
         F: FnMut(&str) + Send + 'static,
     {
         let cancel_token = self.begin_turn()?;
+
+        // Discover project-local skills and activate those matching current file paths.
+        if let Some(ref registry) = self.skill_registry {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
+
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
@@ -346,6 +376,16 @@ impl Agent {
         F: FnMut(&str) + Send + 'static,
     {
         let cancel_token = self.begin_turn()?;
+
+        // Discover project-local skills and activate those matching current file paths.
+        if let Some(ref registry) = self.skill_registry {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
+
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
         let tools = self.registry.get_tool_schemas()?;

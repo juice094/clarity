@@ -16,6 +16,7 @@ use crate::registry::ToolRegistry;
 use crate::subagents::builder::SubagentBuilder;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
 use crate::subagents::store::{SubagentStatus, SubagentStore};
+use crate::subagents::token::CapabilityToken;
 use clarity_wire::{Wire, WireMessage};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -176,6 +177,8 @@ pub struct RunSpec {
     pub max_iterations: Option<usize>,
     /// 是否启用 Git 上下文
     pub git_context: bool,
+    /// 能力令牌（可选）
+    pub capability_token: Option<CapabilityToken>,
 }
 
 impl RunSpec {
@@ -189,6 +192,7 @@ impl RunSpec {
             resume: None,
             max_iterations: None,
             git_context: true,
+            capability_token: None,
         }
     }
 
@@ -221,6 +225,12 @@ impl RunSpec {
         self.git_context = false;
         self
     }
+
+    /// 设置能力令牌
+    pub fn with_capability_token(mut self, token: CapabilityToken) -> Self {
+        self.capability_token = Some(token);
+        self
+    }
 }
 
 // =============================================================================
@@ -239,6 +249,8 @@ pub struct ExecutionContext {
     system_prompt: Option<String>,
     /// 消息历史
     history: Vec<Message>,
+    /// 能力令牌
+    capability_token: Option<CapabilityToken>,
 }
 
 impl ExecutionContext {
@@ -249,6 +261,7 @@ impl ExecutionContext {
             agent_id: agent_id.into(),
             system_prompt: None,
             history: Vec::new(),
+            capability_token: None,
         }
     }
 
@@ -375,6 +388,16 @@ impl ExecutionContext {
     /// 获取输出路径
     pub fn get_output_path(&self) -> PathBuf {
         self.output_path()
+    }
+
+    /// 设置能力令牌
+    pub fn set_capability_token(&mut self, token: Option<CapabilityToken>) {
+        self.capability_token = token;
+    }
+
+    /// 获取能力令牌
+    pub fn capability_token(&self) -> Option<&CapabilityToken> {
+        self.capability_token.as_ref()
     }
 }
 
@@ -720,6 +743,7 @@ impl SubagentRunner {
 
         // 3. 创建执行上下文
         let mut context = ExecutionContext::new(&self.context_dir, &agent_id);
+        context.set_capability_token(spec.capability_token.clone());
         context.restore().await?;
 
         // 4. 创建输出收集器
@@ -734,6 +758,7 @@ impl SubagentRunner {
                 spec.max_iterations,
                 store,
                 spec.git_context,
+                spec.capability_token.clone(),
             )
             .await?;
         collector.stage("agent_built");
@@ -892,6 +917,7 @@ impl SubagentRunner {
         max_iterations_override: Option<usize>,
         _store: &SubagentStore,
         enable_git_context: bool,
+        capability_token: Option<CapabilityToken>,
     ) -> Result<Agent, SubagentError> {
         let git_ctx = if enable_git_context {
             GitContext::collect(&self.working_dir)
@@ -901,8 +927,12 @@ impl SubagentRunner {
             None
         };
 
-        let builder = SubagentBuilder::new(self.tool_registry.clone(), &self.working_dir)
+        let mut builder = SubagentBuilder::new(self.tool_registry.clone(), &self.working_dir)
             .with_git_context(git_ctx);
+
+        if let Some(token) = capability_token {
+            builder = builder.with_capability_token(token);
+        }
 
         let mut store_for_build = SubagentStore::new(&self.context_dir);
         store_for_build.create(agent_id.to_string(), type_def.name.clone());

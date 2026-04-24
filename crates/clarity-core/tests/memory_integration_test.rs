@@ -8,7 +8,7 @@ use clarity_core::memory::{
 };
 use clarity_core::registry::ToolRegistry;
 use std::sync::Arc;
-
+use tempfile::TempDir;
 // ==================== Memory Store Implementations ====================
 
 #[tokio::test]
@@ -187,41 +187,47 @@ async fn test_persistent_memory_store_with_config() {
 
 #[tokio::test]
 async fn test_memory_ticker_basic() {
-    let ticker = MemoryTicker::new(3);
+    let temp_dir = TempDir::new().unwrap();
+    let mut ticker = MemoryTicker::new(temp_dir.path(), Some(3));
+    ticker.set_compile_callback(|| async { Ok(std::collections::HashMap::new()) });
 
-    // First 2 ticks should return false
-    assert!(!ticker.tick().await);
-    assert!(!ticker.tick().await);
+    // First 2 turns should not trigger
+    assert!(ticker.notify_turn("session-1").is_none());
+    assert!(ticker.notify_turn("session-1").is_none());
 
-    // 3rd tick should return true
-    assert!(ticker.tick().await);
+    // 3rd turn should trigger
+    assert!(ticker.notify_turn("session-1").is_some());
 
     // Reset
-    ticker.reset().await;
-    assert_eq!(ticker.count().await, 0);
+    ticker.reset_turn_count("session-1");
+    assert_eq!(ticker.get_turn_count("session-1"), 0);
 }
 
 #[tokio::test]
 async fn test_memory_ticker_cycles() {
-    let ticker = MemoryTicker::new(2);
+    let temp_dir = TempDir::new().unwrap();
+    let mut ticker = MemoryTicker::new(temp_dir.path(), Some(2));
+    ticker.set_compile_callback(|| async { Ok(std::collections::HashMap::new()) });
 
     // Cycle through
-    assert!(!ticker.tick().await); // 1
-    assert!(ticker.tick().await); // 2 - trigger
-    assert!(!ticker.tick().await); // 3
-    assert!(ticker.tick().await); // 4 - trigger
-    assert!(!ticker.tick().await); // 5
+    assert!(ticker.notify_turn("session-1").is_none()); // 1
+    assert!(ticker.notify_turn("session-1").is_some()); // 2 - trigger
+    assert!(ticker.notify_turn("session-1").is_none()); // 3
+    assert!(ticker.notify_turn("session-1").is_some()); // 4 - trigger
+    assert!(ticker.notify_turn("session-1").is_none()); // 5
 }
 
 #[tokio::test]
 async fn test_memory_ticker_default() {
-    let ticker: MemoryTicker = Default::default();
+    let temp_dir = TempDir::new().unwrap();
+    let mut ticker = MemoryTicker::new(temp_dir.path(), None);
+    ticker.set_compile_callback(|| async { Ok(std::collections::HashMap::new()) });
 
-    // Default interval is 5
-    for _ in 0..4 {
-        assert!(!ticker.tick().await);
+    // Default threshold is 6
+    for _ in 0..5 {
+        assert!(ticker.notify_turn("session-1").is_none());
     }
-    assert!(ticker.tick().await);
+    assert!(ticker.notify_turn("session-1").is_some());
 }
 
 // ==================== Memory Struct ====================

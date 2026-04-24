@@ -46,9 +46,10 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
         use crate::tools::{
-            AskUserTool, BashTool, FileEditTool, FileReadTool, FileWriteTool, GlobTool, GrepTool,
-            NotifyTool, PlanTool, PowerShellTool, TaskListTool, TaskOutputTool, TaskStopTool,
-            ThinkTool, TodoTool, WebFetchTool, WebSearchTool,
+            AskUserTool, BashTool, CancelCronTool, FileEditTool, FileReadTool, FileWriteTool,
+            GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool, PowerShellTool,
+            ScheduleCronTool, TaskListTool, TaskOutputTool, TaskStopTool, ThinkTool, TodoTool,
+            WebFetchTool, WebSearchTool,
         };
 
         let registry = Self::new();
@@ -89,6 +90,11 @@ impl ToolRegistry {
 
         // Register plan tool
         let _ = registry.register(PlanTool::new());
+
+        // Register cron scheduling tools
+        let _ = registry.register(ScheduleCronTool::new());
+        let _ = registry.register(ListCronTool::new());
+        let _ = registry.register(CancelCronTool::new());
 
         registry
     }
@@ -265,6 +271,13 @@ impl ToolRegistry {
             .get(name)
             .map_err(|e| ToolError::execution_failed(format!("Registry error: {}", e)))?
             .ok_or_else(|| ToolError::not_found(name))?;
+
+        // Verify capability token if present
+        if let Some(ref token) = ctx.capability_token {
+            if let Err(e) = token.verify(name, &ctx) {
+                return Err(ToolError::PermissionDenied(e.to_string()));
+            }
+        }
 
         debug!("Executing tool '{}' with args: {:?}", name, args);
 

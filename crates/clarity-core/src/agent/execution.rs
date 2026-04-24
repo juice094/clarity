@@ -145,7 +145,8 @@ impl Agent {
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
             .with_timeout(self.config.tool_timeout_secs)
-            .with_approval_mode(self.approval_mode);
+            .with_approval_mode(self.approval_mode)
+            .with_capability_token(self.config.capability_token.clone());
 
         self.registry.execute(name, args, ctx).await
     }
@@ -158,7 +159,8 @@ impl Agent {
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
             .with_timeout(self.config.tool_timeout_secs)
-            .with_approval_mode(self.approval_mode);
+            .with_approval_mode(self.approval_mode)
+            .with_capability_token(self.config.capability_token.clone());
 
         self.registry.execute(name, args, ctx).await
     }

@@ -7,6 +7,7 @@ use crate::llm::api::Message;
 use crate::registry::ToolRegistry;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
 use crate::subagents::store::SubagentStore;
+use crate::subagents::token::CapabilityToken;
 
 /// Builder for subagent instances
 pub struct SubagentBuilder {
@@ -14,6 +15,7 @@ pub struct SubagentBuilder {
     tool_registry: ToolRegistry,
     parent_working_dir: std::path::PathBuf,
     git_context: Option<String>,
+    capability_token: Option<CapabilityToken>,
 }
 
 impl SubagentBuilder {
@@ -27,12 +29,19 @@ impl SubagentBuilder {
             tool_registry,
             parent_working_dir: parent_working_dir.into(),
             git_context: None,
+            capability_token: None,
         }
     }
 
     /// Attach an optional Git context string to prepend to the system prompt
     pub fn with_git_context(mut self, git_context: Option<String>) -> Self {
         self.git_context = git_context;
+        self
+    }
+
+    /// Attach a capability token for permission isolation
+    pub fn with_capability_token(mut self, token: CapabilityToken) -> Self {
+        self.capability_token = Some(token);
         self
     }
 
@@ -56,11 +65,33 @@ impl SubagentBuilder {
             type_def.system_prompt.clone()
         };
 
+        // Determine working directory (sandbox takes precedence)
+        let working_dir = if let Some(ref token) = self.capability_token {
+            if let Some(ref sandbox) = token.sandbox_dir {
+                if sandbox.is_absolute() {
+                    sandbox.clone()
+                } else {
+                    self.parent_working_dir.join(sandbox)
+                }
+            } else {
+                self.parent_working_dir.clone()
+            }
+        } else {
+            self.parent_working_dir.clone()
+        };
+
         // Build agent config
+        let max_iterations = if let Some(ref token) = self.capability_token {
+            token.max_iterations.unwrap_or(type_def.max_iterations)
+        } else {
+            type_def.max_iterations
+        };
+
         let config = AgentConfig::new()
-            .with_max_iterations(type_def.max_iterations)
-            .with_working_dir(&self.parent_working_dir)
-            .with_system_prompt(&system_prompt);
+            .with_max_iterations(max_iterations)
+            .with_working_dir(&working_dir)
+            .with_system_prompt(&system_prompt)
+            .with_capability_token(self.capability_token.clone());
 
         let agent = Agent::with_config(filtered_registry, config);
 

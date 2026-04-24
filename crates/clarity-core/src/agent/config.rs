@@ -24,6 +24,8 @@ pub struct AgentConfig {
     pub compaction_service: Option<CompactionServiceConfig>,
     /// Directory containing Markdown prompt files
     pub prompts_dir: Option<std::path::PathBuf>,
+    /// Optional capability token for subagent permission isolation
+    pub capability_token: Option<crate::subagents::token::CapabilityToken>,
 }
 
 impl Default for AgentConfig {
@@ -37,6 +39,7 @@ impl Default for AgentConfig {
             entry_context: String::new(),
             compaction_service: None,
             prompts_dir: None,
+            capability_token: None,
         }
     }
 }
@@ -86,6 +89,15 @@ impl AgentConfig {
     /// Set prompts directory for Markdown prompt files
     pub fn with_prompts_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
         self.prompts_dir = Some(dir.into());
+        self
+    }
+
+    /// Set capability token for permission isolation
+    pub fn with_capability_token(
+        mut self,
+        token: Option<crate::subagents::token::CapabilityToken>,
+    ) -> Self {
+        self.capability_token = token;
         self
     }
 }

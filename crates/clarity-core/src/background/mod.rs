@@ -9,9 +9,11 @@
 //! - 通知集成
 
 pub mod agent_executor;
+pub mod cron;
 pub mod store;
 pub mod worker;
 
+pub use cron::{CronError, CronSchedule, CronScheduler, CronTask};
 pub use store::{TaskId, TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore};
 pub use worker::{Worker, WorkerPool, WorkerStats};
 
@@ -32,6 +34,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info};
+
+// Re-export chrono DateTime/Utc for cron consumers
+pub use chrono::{DateTime, Utc};
 
 /// 调度任务项（用于优先级队列）
 #[derive(Debug, Clone)]
@@ -207,6 +212,8 @@ pub struct BackgroundTaskManager {
     scheduler: Option<Arc<TaskScheduler>>,
     /// Agent 任务执行器
     agent_executor: Option<Arc<dyn AgentTaskExecutor>>,
+    /// Cron 任务调度器
+    cron_scheduler: Option<Arc<tokio::sync::Mutex<CronScheduler>>>,
 }
 
 impl BackgroundTaskManager {
@@ -227,6 +234,7 @@ impl BackgroundTaskManager {
             notification_manager: None,
             scheduler: None,
             agent_executor: None,
+            cron_scheduler: None,
         }
     }
 
@@ -255,6 +263,12 @@ impl BackgroundTaskManager {
         self
     }
 
+    /// 设置 Cron 任务调度器
+    pub fn with_cron_scheduler(mut self, scheduler: Arc<tokio::sync::Mutex<CronScheduler>>) -> Self {
+        self.cron_scheduler = Some(scheduler);
+        self
+    }
+
     /// 获取通知管理器
     pub fn notification_manager(&self) -> Option<Arc<NotificationManager>> {
         self.notification_manager.clone()
@@ -268,6 +282,11 @@ impl BackgroundTaskManager {
     /// 获取 Agent 任务执行器
     pub fn agent_executor(&self) -> Option<Arc<dyn AgentTaskExecutor>> {
         self.agent_executor.clone()
+    }
+
+    /// 获取 Cron 任务调度器
+    pub fn cron_scheduler(&self) -> Option<Arc<tokio::sync::Mutex<CronScheduler>>> {
+        self.cron_scheduler.clone()
     }
 
     /// 发送任务状态变更通知
@@ -596,6 +615,129 @@ impl BackgroundTaskManager {
                     Ok(Some(id)) => info!("Scheduler loop started agent task: {}", id),
                     Ok(None) => {}
                     Err(e) => error!("Scheduler loop error: {}", e),
+                }
+            }
+        })
+    }
+
+    /// Schedule a recurring agent task using a cron expression.
+    ///
+    /// Returns the generated cron task id, or an error if the expression is invalid
+    /// or the cron scheduler is not configured.
+    pub async fn schedule_cron(
+        &self,
+        spec: TaskSpec,
+        cron_expr: &str,
+    ) -> anyhow::Result<String> {
+        let cron = self
+            .cron_scheduler
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Cron scheduler not configured"))?;
+
+        let mut guard = cron.lock().await;
+        let task_id = guard
+            .add_task(spec.clone(), cron_expr)
+            .map_err(|e| anyhow::anyhow!("Failed to schedule cron task: {}", e))?;
+        drop(guard);
+
+        // Persist to TaskStore
+        let schedule = crate::background::cron::CronSchedule::new(cron_expr)
+            .map_err(|e| anyhow::anyhow!("Invalid cron expression: {}", e))?;
+        let cron_task = crate::background::cron::CronTask {
+            task_id: task_id.clone(),
+            task_spec: spec,
+            schedule,
+            enabled: true,
+        };
+        self.store.save_cron(&cron_task).await?;
+
+        Ok(task_id)
+    }
+
+    /// List all cron tasks from the scheduler.
+    pub async fn list_cron_tasks(&self) -> anyhow::Result<Vec<crate::background::cron::CronTask>> {
+        let cron = self
+            .cron_scheduler
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Cron scheduler not configured"))?;
+
+        let guard = cron.lock().await;
+        Ok(guard.tasks().to_vec())
+    }
+
+    /// Cancel (remove) a cron task by its id.
+    pub async fn cancel_cron(&self, task_id: &str) -> anyhow::Result<()> {
+        let cron = self
+            .cron_scheduler
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Cron scheduler not configured"))?;
+
+        let mut guard = cron.lock().await;
+        if !guard.remove_task(task_id) {
+            return Err(anyhow::anyhow!("Cron task not found: {}", task_id));
+        }
+        drop(guard);
+
+        // Also remove from persistent store (best-effort)
+        let _ = self.store.remove_cron(task_id).await;
+
+        info!("Cancelled cron task: {}", task_id);
+        Ok(())
+    }
+
+    /// Check for due cron tasks and spawn them.
+    ///
+    /// Returns the number of tasks that were spawned.
+    async fn check_cron_tasks(&self) -> anyhow::Result<usize> {
+        let cron = match self.cron_scheduler.as_ref() {
+            Some(c) => c,
+            None => return Ok(0),
+        };
+
+        let now = Utc::now();
+        let mut guard = cron.lock().await;
+        let specs = guard.tick(now);
+        drop(guard);
+
+        let mut count = 0;
+        for spec in specs {
+            self.spawn_agent(spec).await?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// Start a background loop that periodically checks for due cron tasks
+    /// and spawns agent executions for them.
+    ///
+    /// The loop checks the provided `cancel_token` every tick and exits gracefully
+    /// when the token is cancelled.
+    ///
+    /// Returns a [`tokio::task::JoinHandle`] that can be awaited or aborted.
+    pub fn start_cron_loop(
+        &self,
+        interval: std::time::Duration,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> tokio::task::JoinHandle<()> {
+        let manager = self.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(interval);
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {}
+                    _ = cancel_token.cancelled() => {
+                        info!("Cron loop shutting down gracefully");
+                        break;
+                    }
+                }
+
+                match manager.check_cron_tasks().await {
+                    Ok(count) => {
+                        if count > 0 {
+                            info!("Cron loop spawned {} agent task(s)", count);
+                        }
+                    }
+                    Err(e) => error!("Cron loop error: {}", e),
                 }
             }
         })

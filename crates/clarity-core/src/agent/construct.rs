@@ -48,6 +48,7 @@ impl Agent {
                 active_skill: None,
                 snapshotted_skill: None,
                 file_prompt_cache: None,
+                active_file_paths: Vec::new(),
             })),
         }
     }
@@ -88,6 +89,18 @@ impl Agent {
     /// Get the currently active skill id, if any.
     pub fn active_skill(&self) -> Option<String> {
         self.inner.read().unwrap().active_skill.clone()
+    }
+
+    /// Set the file paths representing the current user operation.
+    /// These paths are used to dynamically activate skills at turn start.
+    pub fn set_active_file_paths(&self, paths: Vec<std::path::PathBuf>) {
+        let mut inner = self.inner.write().unwrap();
+        inner.active_file_paths = paths;
+    }
+
+    /// Get the currently set active file paths.
+    pub fn active_file_paths(&self) -> Vec<std::path::PathBuf> {
+        self.inner.read().unwrap().active_file_paths.clone()
     }
 
     /// Remove the LLM provider at runtime.
@@ -175,6 +188,15 @@ impl Agent {
     /// Set the compaction service
     pub fn with_compaction_service(mut self, service: CompactionService) -> Self {
         self.compaction_service = Some(service);
+        self
+    }
+
+    /// Set capability token for subagent permission isolation
+    pub fn with_capability_token(
+        mut self,
+        token: crate::subagents::token::CapabilityToken,
+    ) -> Self {
+        self.config.capability_token = Some(token);
         self
     }
 
