@@ -12,9 +12,9 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `147e49f` |
+| HEAD | `a67524d` |
 | 分支 | main |
-| 测试 | `cargo test --workspace --lib` = **456 passed, 0 failed, 2 ignored** |
+| 测试 | `cargo test --workspace --lib` = **459 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
 | 技术栈 | Rust 1.85, edition 2021, Tokio, Axum, ratatui, SQLite |
 
@@ -56,6 +56,9 @@
 ✅ P1-6 Hook Registry（trait + registry + Agent 集成）
 ✅ P1-7 P0-P3 交付分级（自动分类器）
 ✅ P1-8 Agent Teams + Mailbox（协作子代理执行）
+✅ P2-1 TaskCreateTool / TaskListTool / TaskOutputTool / TaskStopTool
+✅ P2-2 TeamCreateTool / TeamDeleteTool / TeamListTool
+✅ P2-3 PushNotificationTool（file + webhook 双通道）
 ⏳ P1-9 Lazy Master
 ⏳ P2-10 Gateway 多标签
 ⏳ P2-11 Bridge 远程控制

@@ -38,6 +38,8 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **MCP Ecosystem** | Stdio, HTTP, and SSE transports for Model Context Protocol servers. |
 | **Persistent Memory** | BM25 + vector hybrid search across conversation history. |
 | **Skills** | Markdown+YAML skill files that inject context and whitelist tools into the system prompt. |
+| **Agent Teams** | Dynamically create collaborative teams of sub-agents with shared mailbox coordination. |
+| **Push Notifications** | Multi-channel alerts (filesystem + webhook) for task completions and important events. |
 | **Three Entries** | claw (tray), window (browser), cli (ratatui terminal). Use the right tool for the job. |
 
 ## Quick Start
@@ -113,7 +115,7 @@ crates/
 
 ```bash
 # Run all tests
-cargo test --workspace --lib          # 352+ tests
+cargo test --workspace --lib          # 459+ tests
 
 # Run clippy
 cargo clippy --workspace --lib --bins --tests
