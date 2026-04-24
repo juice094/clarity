@@ -55,6 +55,10 @@ impl Tool for ComputerUseTool {
          Use screenshot to see the current state, then click/type to interact."
     }
 
+    fn requires_approval(&self) -> bool {
+        true
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

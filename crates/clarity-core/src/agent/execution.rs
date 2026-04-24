@@ -1,13 +1,14 @@
 //! Tool execution, approval flow, and context compaction.
 
 use super::Agent;
-use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalSource};
+use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalRuntime, ApprovalSource};
 use crate::compaction::estimate_message_tokens;
 use crate::error::{AgentError, ToolError};
 use crate::llm::api::Message;
 use crate::tools::ToolContext;
 use crate::types::ToolCall;
 use serde_json::Value;
+use std::sync::Arc;
 use tracing::info;
 
 impl Agent {
@@ -46,6 +47,51 @@ impl Agent {
         None
     }
 
+    /// Wait for user approval of a tool call, with timeout handling.
+    async fn wait_for_tool_approval(
+        &self,
+        runtime: &Arc<dyn ApprovalRuntime>,
+        tool_call: &ToolCall,
+        description: Option<String>,
+    ) -> Result<(), ToolError> {
+        let turn_id = uuid::Uuid::new_v4().to_string();
+        let request_id = runtime
+            .create_request(
+                tool_call,
+                ApprovalSource::ForegroundTurn { turn_id },
+                description,
+            )
+            .await
+            .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+
+        let approval_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(300),
+            runtime.wait_for_response(&request_id),
+        )
+        .await;
+
+        match approval_result {
+            Ok(Ok(ApprovalResponse::Approve)) => Ok(()),
+            Ok(Ok(ApprovalResponse::Reject)) => Err(ToolError::execution_failed(
+                "Tool call rejected by user".to_string(),
+            )),
+            Ok(Ok(ApprovalResponse::ApproveForSession)) => {
+                runtime
+                    .resolve(&request_id, ApprovalResponse::ApproveForSession)
+                    .await
+                    .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+                Ok(())
+            }
+            Ok(Err(e)) => Err(ToolError::execution_failed(format!(
+                "Approval error: {}",
+                e
+            ))),
+            Err(_) => Err(ToolError::execution_failed(
+                "Approval timeout after 300 seconds".to_string(),
+            )),
+        }
+    }
+
     /// Execute a single tool call
     pub(crate) async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<Value, ToolError> {
         let name = &tool_call.function.name;
@@ -56,17 +102,38 @@ impl Agent {
 
         let sensitive_path = self.detect_sensitive_access(name, &args);
 
+        // 检查工具是否强制审批
+        let tool_requires_approval = self
+            .registry
+            .get(name)
+            .ok()
+            .flatten()
+            .map(|t| t.requires_approval())
+            .unwrap_or(false);
+
         // 如果配置了审批运行时，先请求审批
         if let Some(ref runtime) = self.approval_runtime {
-            let description = sensitive_path
+            let mut description = sensitive_path
                 .as_ref()
                 .map(|p| format!("Sensitive file access: {}", p));
 
-            let tool_call_for_approval = if sensitive_path.is_some() {
+            if tool_requires_approval {
+                description = Some(description.unwrap_or_else(|| {
+                    "This tool directly controls the computer desktop and requires explicit approval.".to_string()
+                }));
+            }
+
+            let tool_call_for_approval = if sensitive_path.is_some() || tool_requires_approval {
                 let mut tc = tool_call.clone();
                 let mut approval_args = args.clone();
-                approval_args["_sensitive_file_warning"] =
-                    serde_json::json!("This operation accesses a sensitive file");
+                if tool_requires_approval {
+                    approval_args["_requires_approval_warning"] =
+                        serde_json::json!("This tool directly controls the computer desktop.");
+                }
+                if sensitive_path.is_some() {
+                    approval_args["_sensitive_file_warning"] =
+                        serde_json::json!("This operation accesses a sensitive file");
+                }
                 tc.function.arguments = approval_args.to_string();
                 tc
             } else {
@@ -75,61 +142,15 @@ impl Agent {
 
             match self.approval_mode {
                 ApprovalMode::Interactive => {
-                    // 创建审批请求
-                    let turn_id = uuid::Uuid::new_v4().to_string();
-                    let request_id = runtime
-                        .create_request(
-                            &tool_call_for_approval,
-                            ApprovalSource::ForegroundTurn { turn_id },
-                            description,
-                        )
-                        .await
-                        .map_err(|e| {
-                            ToolError::execution_failed(format!("Approval error: {}", e))
-                        })?;
-
-                    // 等待审批结果，带超时
-                    let approval_result = tokio::time::timeout(
-                        tokio::time::Duration::from_secs(300),
-                        runtime.wait_for_response(&request_id),
-                    )
-                    .await;
-
-                    match approval_result {
-                        Ok(Ok(ApprovalResponse::Approve)) => {
-                            // 继续执行
-                        }
-                        Ok(Ok(ApprovalResponse::Reject)) => {
-                            return Err(ToolError::execution_failed(
-                                "Tool call rejected by user".to_string(),
-                            ));
-                        }
-                        Ok(Ok(ApprovalResponse::ApproveForSession)) => {
-                            if let Err(e) = runtime
-                                .resolve(&request_id, ApprovalResponse::ApproveForSession)
-                                .await
-                            {
-                                return Err(ToolError::execution_failed(format!(
-                                    "Approval error: {}",
-                                    e
-                                )));
-                            }
-                        }
-                        Ok(Err(e)) => {
-                            return Err(ToolError::execution_failed(format!(
-                                "Approval error: {}",
-                                e
-                            )));
-                        }
-                        Err(_) => {
-                            return Err(ToolError::execution_failed(
-                                "Approval timeout after 300 seconds".to_string(),
-                            ));
-                        }
-                    }
+                    self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
+                        .await?;
                 }
                 ApprovalMode::Yolo => {
-                    // Yolo 模式跳过审批
+                    if tool_requires_approval {
+                        self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
+                            .await?;
+                    }
+                    // 否则跳过审批（原有 Yolo 行为）
                 }
                 ApprovalMode::Plan => {
                     // Plan mode's approval is handled at the run() level:

@@ -12,7 +12,7 @@
 | 项 | 值 |
 |---|---|
 | 版本 | v0.1.2 → v0.2.0-dev（开发中） |
-| HEAD | `1052939` |
+| HEAD | `3ec2fa8` |
 | 分支 | main |
 | 测试 | `cargo test --workspace --lib` = **443 passed, 0 failed, 2 ignored** |
 | Clippy | 零 warning（`-D warnings`） |
@@ -37,7 +37,7 @@
 - **Dynamic Skill Discovery**：运行时扫描 `.clarity/skills/` 和 `.claude/skills/`，`paths` frontmatter 条件匹配，SkillRegistry 热更新
 - **Cron Scheduler**：`cron` crate 解析，`BackgroundTaskManager` 扩展，`ScheduleCronTool`/`ListCronTool`/`CancelCronTool`
 - **extractMemories**：每轮 turn 后 `tokio::spawn` 轻量子代理提取 `SessionNotes`（current_state/errors/learnings/key_results），默认关闭
-- **ComputerUseTool**：screenshot/click/type/scroll，通过 `std::process::Command` 调用 Python 桥（P0-5B 待实现脚本）
+- **ComputerUseTool**：screenshot/click/type/scroll，通过 `std::process::Command` 调用 Python 桥 `computer_bridge.py`（mss/pyautogui）
 
 ---
 
@@ -51,8 +51,8 @@
 ✅ P0-2B TurnMemoryExtractor
 ✅ P0-2C Agent::run() 集成
 ✅ P0-5A ComputerUseTool
-⏳ P0-5B computer_bridge.py（Python 脚本）
-⏳ P0-5C 注册 + 审批标记
+✅ P0-5B computer_bridge.py（Python 脚本）
+⏳ P0-5C 审批标记（强制审批）
 ⏳ P1-6A Hook trait 定义
 ⏳ P1-6B HookRegistry
 ⏳ P1-6C Agent 集成

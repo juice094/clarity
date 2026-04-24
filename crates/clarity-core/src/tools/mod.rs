@@ -202,6 +202,14 @@ pub trait Tool: Send + Sync {
     ///
     /// The result of the execution as a JSON Value
     async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value>;
+
+    /// Whether this tool requires explicit user approval regardless of global approval mode.
+    ///
+    /// Tools that directly interact with the OS GUI (e.g. `computer_use`) should return `true`.
+    /// The default is `false`.
+    fn requires_approval(&self) -> bool {
+        false
+    }
 }
 
 /// Type-erased tool wrapper for storage in collections
