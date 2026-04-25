@@ -11,16 +11,15 @@ use tracing::info;
 
 /// Application state shared across Tauri commands.
 pub struct AppState {
-    /// Placeholder for the Agent instance pool.
-    /// In production this will hold multiple Agent instances (one per tab).
-    pub agent_count: std::sync::atomic::AtomicUsize,
+    /// The Agent instance driving conversations.
+    pub agent: clarity_core::Agent,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self {
-            agent_count: std::sync::atomic::AtomicUsize::new(0),
-        }
+        let registry = clarity_core::ToolRegistry::with_builtin_tools();
+        let agent = clarity_core::Agent::new(registry);
+        Self { agent }
     }
 }
 
@@ -44,6 +43,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::agent::greet,
             commands::agent::get_app_version,
+            commands::agent::agent_run,
+            commands::agent::agent_interrupt,
+            commands::agent::get_agent_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
