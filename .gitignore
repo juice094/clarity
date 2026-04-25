@@ -3,6 +3,7 @@
 *.db-journal
 sessions/
 agents/
+.agents/
 .DS_Store
 *.log
 config.yaml
