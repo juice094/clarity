@@ -913,27 +913,62 @@ mod tests {
         assert_eq!(calls[0].function.name, "read_file");
     }
 
-    /// End-to-end test: load a real GGUF model and verify it can initialize.
-    /// Requires:
-    ///   - C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf
-    ///   - C:\Users\22414\Desktop\model\tokenizer.json
+    /// End-to-end benchmark: load a real GGUF model, generate tokens, and measure latency.
+    /// Requires a GGUF model at the path resolved by `resolve_local_model_path()`.
     #[tokio::test]
     #[ignore = "Requires local GGUF model"]
     async fn test_local_gguf_loads_real_model() {
-        let model_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
+        let model_path = crate::llm::resolve_local_model_path().unwrap_or_else(|| {
+            PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf")
+        });
         if !model_path.exists() {
             eprintln!("Skipping e2e test: model not found at {}", model_path.display());
             return;
         }
 
-        let config = LocalGgufConfig::new(&model_path)
-            .with_tokenizer_path(r"C:\Users\22414\Desktop\model\tokenizer.json")
+        // Try tokenizer.json next to model, else hf-hub fallback
+        let tokenizer_path = model_path.with_file_name("tokenizer.json");
+        let mut config = LocalGgufConfig::new(&model_path)
             .with_max_tokens(30)
             .with_temperature(0.7);
+        if tokenizer_path.exists() {
+            config = config.with_tokenizer_path(&tokenizer_path);
+        }
 
-        let _provider = LocalGgufProvider::new(config).await.expect("failed to load model");
+        // Measure load time
+        let load_start = std::time::Instant::now();
+        let provider = LocalGgufProvider::new(config).await.expect("failed to load model");
+        let load_ms = load_start.elapsed().as_millis();
+        println!("[BENCH] Model loaded in {} ms", load_ms);
 
-        // Model loaded successfully if we got here.
-        println!("Model loaded successfully");
+        // Measure generation time
+        let messages = vec![
+            Message::system("You are a helpful assistant."),
+            Message::user("What is 2+2? Answer with a single number."),
+        ];
+        let gen_start = std::time::Instant::now();
+        let response = provider.complete(&messages, &serde_json::json!([])).await.expect("generation failed");
+        let gen_ms = gen_start.elapsed().as_millis() as f64;
+
+        // Estimate token count from response length (rough heuristic: 1 token ≈ 4 chars for English)
+        let output_len = response.content.len();
+        let estimated_tokens = (output_len / 4).max(1);
+        let ms_per_token = gen_ms / estimated_tokens as f64;
+
+        println!("[BENCH] Generated {} chars (~{} tokens) in {} ms", output_len, estimated_tokens, gen_ms as u64);
+        println!("[BENCH] Latency: {:.1} ms/token", ms_per_token);
+        println!("[BENCH] Output: {:?}", response.content);
+
+        // Assert generation produced something reasonable
+        assert!(!response.content.is_empty(), "Generated text was empty");
+        // NOTE: CPU mode typically yields 3000-6000 ms/token for 7B models.
+        // The real acceptance criteria is CUDA mode: target < 200 ms/token.
+        println!("[BENCH] Device: {:?}", provider.device);
+        println!(
+            "[BENCH] {} mode verdict: {} ms/token — {}",
+            if format!("{:?}", provider.device).contains("Cuda") { "CUDA" } else { "CPU" },
+            ms_per_token,
+            if ms_per_token < 300.0 { "EXCELLENT" } else if ms_per_token < 800.0 { "ACCEPTABLE" } else { "TOO SLOW — consider CUDA or smaller model" }
+        );
     }
 }
