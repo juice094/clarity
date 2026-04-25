@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import TaskPanel from "./components/TaskPanel";
 import "./App.css";
 
 interface Message {
@@ -14,6 +15,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("unconfigured");
   const [version, setVersion] = useState("");
+  const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
 
@@ -121,11 +123,20 @@ function App() {
         <div className="header-meta">
           <span className="version">v{version}</span>
           <span className={`status-badge ${status}`}>{status}</span>
+          <button
+            className="task-toggle-btn"
+            onClick={() => setTaskPanelOpen((prev) => !prev)}
+            title="Toggle task panel"
+            aria-label="Toggle task panel"
+          >
+            ⚡
+          </button>
         </div>
       </header>
 
-      <div className="messages">
-        {messages.length === 0 && (
+      <div className="main-content">
+        <div className="messages">
+          {messages.length === 0 && (
           <div className="welcome">
             <h2>Welcome to Clarity</h2>
             <p>
@@ -146,7 +157,9 @@ function App() {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
+        <TaskPanel isOpen={taskPanelOpen} onClose={() => setTaskPanelOpen(false)} />
       </div>
 
       <div className="input-area">

@@ -47,6 +47,8 @@ pub fn run() {
             commands::agent::agent_run_streaming,
             commands::agent::agent_interrupt,
             commands::agent::get_agent_status,
+            commands::task::list_tasks,
+            commands::task::cancel_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
