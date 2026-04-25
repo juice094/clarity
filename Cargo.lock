@@ -908,11 +908,13 @@ name = "clarity-tauri"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clarity-core",
  "clarity-wire",
  "dirs 5.0.1",
  "serde",
  "serde_json",
+ "similar",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",

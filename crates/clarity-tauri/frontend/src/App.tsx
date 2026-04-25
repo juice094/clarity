@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import TaskPanel from "./components/TaskPanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
 import FileBrowser from "./components/FileBrowser";
+import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -14,6 +15,27 @@ import "./App.css";
 interface MessageData {
   role: string;
   content: string;
+}
+
+function DiffPanel({ isOpen, hunks, onClose }: { isOpen: boolean; hunks: DiffHunk[]; onClose: () => void }) {
+  if (!isOpen) return null;
+  return (
+    <div className="diff-panel">
+      <div className="diff-panel-header">
+        <h2>Diff Preview</h2>
+        <button className="diff-panel-close" onClick={onClose} aria-label="Close diff panel">
+          ✕
+        </button>
+      </div>
+      <div className="diff-panel-body">
+        {hunks.length === 0 ? (
+          <div className="diff-empty">No diff to display</div>
+        ) : (
+          <DiffViewer hunks={hunks} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface SessionData {
@@ -41,9 +63,12 @@ function App() {
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+  const [diffPanelOpen, setDiffPanelOpen] = useState(false);
+  const [diffHunks, setDiffHunks] = useState<DiffHunk[]>([]);
   const [theme, setTheme] = useState("dark");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  const taskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion);
@@ -180,6 +205,10 @@ function App() {
       streamingRef.current = false;
       setIsLoading(false);
       refreshStatus();
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "completed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }).then((u) => unlisteners.push(u));
 
     listen<string>("agent:error", (event) => {
@@ -190,6 +219,10 @@ function App() {
         { role: "agent", content: `Error: ${event.payload}` },
       ]);
       refreshStatus();
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -207,6 +240,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     setActiveSessionId(id);
     const session = sessions.find((s) => s.id === id);
@@ -220,6 +257,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     const newSession = createNewSession();
     setSessions((prev) => [newSession, ...prev]);
@@ -241,6 +282,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     const newSessions = sessions.filter((s) => s.id !== id);
     if (newSessions.length === 0) {
@@ -285,6 +330,14 @@ function App() {
     streamingRef.current = true;
     await refreshStatus();
 
+    // Create task record
+    try {
+      const taskId = await invoke<string>("create_task", { name: query.slice(0, 30) });
+      taskIdRef.current = taskId;
+    } catch (e) {
+      console.error("Failed to create task:", e);
+    }
+
     // Placeholder for the streaming response
     setMessages((prev) => [...prev, { role: "agent", content: "" }]);
 
@@ -308,6 +361,10 @@ function App() {
           }
           return updated;
         });
+        if (taskIdRef.current) {
+          invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+          taskIdRef.current = null;
+        }
         await refreshStatus();
       }
     }
@@ -365,6 +422,22 @@ function App() {
               ⚡
             </button>
             <button
+              className="diff-toggle-btn"
+              onClick={() => {
+                if (!diffPanelOpen) {
+                  invoke<DiffHunk[]>("compute_diff", {
+                    oldText: "line1\nline2\nline3\n",
+                    newText: "line1\nmodified\nline3\n",
+                  }).then(setDiffHunks);
+                }
+                setDiffPanelOpen((prev) => !prev);
+              }}
+              title="Toggle diff panel"
+              aria-label="Toggle diff panel"
+            >
+              📝
+            </button>
+            <button
               className="settings-toggle-btn"
               onClick={() => setSettingsPanelOpen((prev) => !prev)}
               title="Toggle settings"
@@ -413,6 +486,7 @@ function App() {
             isOpen={taskPanelOpen}
             onClose={() => setTaskPanelOpen(false)}
           />
+          <DiffPanel isOpen={diffPanelOpen} hunks={diffHunks} onClose={() => setDiffPanelOpen(false)} />
           <SettingsPanel
             isOpen={settingsPanelOpen}
             onClose={() => setSettingsPanelOpen(false)}
