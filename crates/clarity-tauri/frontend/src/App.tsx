@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import TaskPanel from "./components/TaskPanel";
+import SettingsPanel from "./components/SettingsPanel";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -27,6 +28,7 @@ function App() {
   const [status, setStatus] = useState("unconfigured");
   const [version, setVersion] = useState("");
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
 
@@ -216,6 +218,14 @@ function App() {
             >
               ⚡
             </button>
+            <button
+              className="settings-toggle-btn"
+              onClick={() => setSettingsPanelOpen((prev) => !prev)}
+              title="Toggle settings"
+              aria-label="Toggle settings"
+            >
+              ⚙️
+            </button>
           </div>
         </header>
 
@@ -248,6 +258,10 @@ function App() {
           <TaskPanel
             isOpen={taskPanelOpen}
             onClose={() => setTaskPanelOpen(false)}
+          />
+          <SettingsPanel
+            isOpen={settingsPanelOpen}
+            onClose={() => setSettingsPanelOpen(false)}
           />
         </div>
 
