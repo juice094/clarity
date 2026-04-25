@@ -21,7 +21,7 @@ You have a dozen AI tools: chat UIs, coding assistants, task runners, memory plu
 
 **Clarity is a single runtime that orchestrates LLMs, tools, and memory across every entry point you use** — terminal, desktop, browser, headless scripts, system tray. One agent core, multiple surfaces. Your sessions, memory, and tasks persist and travel with you.
 
-Built in Rust. Runs natively. Works offline with local GGUF models.
+Built in Rust. The core engine and CLI tools ship as single binaries with **zero runtime dependencies**. The desktop GUI (Tauri 2) reuses the system WebView engine — no bundled browser, but WebView2/WebKit must be present on the target system.
 
 ---
 
@@ -32,15 +32,15 @@ Built in Rust. Runs natively. Works offline with local GGUF models.
 git clone https://github.com/juice094/clarity.git && cd clarity
 
 # 2. Install a binary (pick one)
-cargo install --path crates/clarity-tui       # Terminal UI
-cargo install --path crates/clarity-gateway   # Web IDE (http://127.0.0.1:18800)
-cargo install --path crates/clarity-headless  # CLI for scripts
+cargo install --path crates/clarity-tui       # Terminal UI — zero runtime deps
+cargo install --path crates/clarity-gateway   # Web IDE — zero runtime deps
+cargo install --path crates/clarity-headless  # CLI for scripts — zero runtime deps
 
 # 3. Run
 clarity-tui
 ```
 
-**Desktop GUI** (requires Node.js for frontend dev server):
+**Desktop GUI** (requires Node.js for build; runtime needs system WebView):
 ```bash
 cd crates/clarity-tauri/frontend && npm install && npm run dev
 # In another terminal:
