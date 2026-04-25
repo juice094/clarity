@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-interface GuiSettings {
+export interface GuiSettings {
   model: string;
   provider: string;
   approval_mode: string;
@@ -82,6 +82,13 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
   function handleReset() {
     setSettings(savedSettings);
+    const t = savedSettings.theme;
+    if (t === "auto") {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+    } else {
+      document.documentElement.setAttribute("data-theme", t);
+    }
   }
 
   if (!isOpen) return null;
@@ -168,12 +175,17 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                 name="theme"
                 value={key}
                 checked={settings.theme === key}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    theme: e.target.value,
-                  }))
-                }
+                onChange={(e) => {
+                  const newTheme = e.target.value;
+                  setSettings((prev) => ({ ...prev, theme: newTheme }));
+                  // 立即应用主题预览
+                  if (newTheme === "auto") {
+                    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+                  } else {
+                    document.documentElement.setAttribute("data-theme", newTheme);
+                  }
+                }}
               />
               <span>{display}</span>
             </label>

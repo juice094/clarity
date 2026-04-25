@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import TaskPanel from "./components/TaskPanel";
-import SettingsPanel from "./components/SettingsPanel";
+import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -29,6 +29,7 @@ function App() {
   const [version, setVersion] = useState("");
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
 
@@ -36,6 +37,38 @@ function App() {
     invoke<string>("get_app_version").then(setVersion);
     refreshStatus();
   }, []);
+
+  // 加载设置中的 theme
+  useEffect(() => {
+    invoke<GuiSettings>("get_settings").then((s) => {
+      const t = s.theme;
+      if (t === "auto") {
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        setTheme(prefersDark ? "dark" : "light");
+      } else {
+        setTheme(t);
+      }
+    });
+  }, []);
+
+  // 监听系统主题变化（Auto 模式）
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      invoke<GuiSettings>("get_settings").then((s) => {
+        if (s.theme === "auto") {
+          setTheme(e.matches ? "dark" : "light");
+        }
+      });
+    };
+    media.addEventListener("change", handler);
+    return () => media.removeEventListener("change", handler);
+  }, []);
+
+  // 应用主题到 document
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
