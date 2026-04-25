@@ -193,7 +193,8 @@ cargo tauri dev
 - [x] GUI Desktop — Approval system runtime sync
 - [x] GUI Desktop — File browser panel
 - [x] GUI Desktop — Session persistence (JSON backend)
-- [ ] GUI Desktop — Diff view for file edits
+- [x] GUI Desktop — Diff view for file edits
+- [x] GUI Desktop — TaskPanel real tasks
 - [ ] Computer Use (screenshot / mouse / keyboard)
 - [ ] Headless mode (`--print`)
 - [ ] LSP integration

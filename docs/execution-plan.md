@@ -87,7 +87,7 @@
 
 ---
 
-### Phase 2 🔄 — 双轨并行（当前窗口）
+### Phase 2 ✅ — 双轨并行（已完成）
 
 #### 2A: TaskPanel 真实对接
 
@@ -100,6 +100,8 @@
 | **关键改动** | `AppState` 增加 `BackgroundTaskManager`；`list_tasks`/`cancel_task` 对接真实数据 |
 
 #### 2B: Diff view
+
+**实际提交**: `66aa2d3`
 
 | 属性 | 值 |
 |------|-----|
@@ -288,8 +290,8 @@ git stash pop
 | Phase | 任务 | 子代理 | 分支 | 状态 | 阻塞 |
 |-------|------|--------|------|------|------|
 | **Phase 1** | Session persistence | Subagent-G | `subagent/session-persist-2026-0425` | ✅ Done (`95bf6fb`) | — |
-| **Phase 2A** | **TaskPanel 真实对接** | **Subagent-I** | **`subagent/task-real-2026-0425`** | 🔄 **Running** | Phase 1 |
-| **Phase 2B** | **Diff view** | **Subagent-H** | **`subagent/diff-view-2026-0425`** | 🔄 **Running** | Phase 1 |
+| **Phase 2A** | **TaskPanel 真实对接** | **Subagent-I** | **`subagent/task-real-2026-0425`** | ✅ **Done** (`6b8ffec`) | Phase 1 |
+| **Phase 2B** | **Diff view** | **Subagent-H** | **`subagent/diff-view-2026-0425`** | ✅ **Done** (`66aa2d3`) | Phase 1 |
 | Phase 2C | Headless mode | — | — | ⏸️ Pending | — |
 | Phase 3A | Computer Use | — | — | ⏸️ Pending | Phase 2 |
 | Phase 3B | 设置面板增强 | — | — | ⏸️ Pending | — |

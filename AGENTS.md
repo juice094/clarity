@@ -217,15 +217,14 @@ Both projects fork from the same Claude Code leaked source but diverge significa
 
 完整的依赖关系编排和 Git 安全机制见 [`docs/execution-plan.md`](./docs/execution-plan.md)。
 
-**当前 Phase**：Phase 2 — TaskPanel 真实对接 + Diff view（并行双轨）
-**上一 Phase**：Phase 1 — Session persistence ✅ 已完成（commit `95bf6fb`）
+**当前 Phase**：Phase 3 — Computer Use 调研 + 设置面板增强 + Gateway Web IDE 完善（并行三轨）
+**上一 Phase**：Phase 2 — TaskPanel 真实对接 + Diff view ✅ 已完成
 
 ## Active Subagent Tasks
 
 | Subagent | Task | Branch | Status |
 |----------|------|--------|--------|
-| Subagent-H | Diff view — `compute_diff` Command + `DiffViewer` 组件 | `subagent/diff-view-2026-0425` | 🔄 Running |
-| Subagent-I | TaskPanel 真实对接 — GUI 任务记录存储 | `subagent/task-real-2026-0425` | 🔄 Running |
+| — | — | — | — |
 
 **Merge policy**: Subagent completes → main session reviews → `cargo test` + `npm run build` → merge to `main` → push.
 
