@@ -1,7 +1,7 @@
-use tracing::info;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tracing::info;
 
 /// Task view model exposed to the frontend.
 #[derive(serde::Serialize)]
@@ -47,10 +47,8 @@ impl TaskRecord {
 
     pub fn save_all(tasks: &[TaskRecord]) -> Result<(), String> {
         let path = Self::tasks_file();
-        std::fs::create_dir_all(path.parent().unwrap())
-            .map_err(|e| e.to_string())?;
-        let json = serde_json::to_string_pretty(tasks)
-            .map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        let json = serde_json::to_string_pretty(tasks).map_err(|e| e.to_string())?;
         std::fs::write(path, json).map_err(|e| e.to_string())
     }
 }

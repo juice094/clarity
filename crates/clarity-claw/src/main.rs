@@ -7,12 +7,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use clarity_wire::{Wire, WireMessage};
+use notify::Watcher;
 use tao::{
     event::Event,
     event_loop::{ControlFlow, EventLoopBuilder},
     window::WindowBuilder,
 };
-use notify::Watcher;
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     MouseButton, TrayIconBuilder, TrayIconEvent,
@@ -145,7 +145,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         } else {
-            tracing::warn!("Tasks directory {:?} does not exist, filesystem watcher disabled", tasks_dir);
+            tracing::warn!(
+                "Tasks directory {:?} does not exist, filesystem watcher disabled",
+                tasks_dir
+            );
             None
         };
 
@@ -177,12 +180,15 @@ async fn main() -> anyhow::Result<()> {
                                 {
                                     let (summary, urgency) = match task.status.as_str() {
                                         "Completed" => ("✅ Task completed", None),
-                                        "Failed" => ("❌ Task failed", Some(notify_rust::Urgency::Critical)),
+                                        "Failed" => {
+                                            ("❌ Task failed", Some(notify_rust::Urgency::Critical))
+                                        }
                                         "Cancelled" => ("🚫 Task cancelled", None),
                                         _ => ("Task finished", None),
                                     };
                                     let mut notif = notify_rust::Notification::new();
-                                    notif.summary(&format!("Clarity — {}", task.name))
+                                    notif
+                                        .summary(&format!("Clarity — {}", task.name))
                                         .body(summary);
                                     if let Some(u) = urgency {
                                         notif.urgency(u);

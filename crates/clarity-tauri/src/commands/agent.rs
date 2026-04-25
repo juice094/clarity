@@ -1,6 +1,6 @@
+use clarity_core::AgentError;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
-use clarity_core::AgentError;
 
 /// Simple echo command for smoke-testing the IPC bridge.
 #[tauri::command]
@@ -25,11 +25,7 @@ pub fn get_agent_count(state: State<crate::AppState>) -> usize {
 }
 
 /// Check whether the currently bound LLM matches the desired configuration.
-fn binding_matches(
-    binding: &Option<crate::LlmBinding>,
-    provider: &str,
-    path: &str,
-) -> bool {
+fn binding_matches(binding: &Option<crate::LlmBinding>, provider: &str, path: &str) -> bool {
     matches!(binding, Some(b) if b.provider == provider && b.local_model_path == path)
 }
 
@@ -78,8 +74,7 @@ pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
     // Fast path: check without blocking other async tasks
     {
         let guard = state.llm_binding.lock().unwrap();
-        if binding_matches(&guard, &desired_provider, &desired_path)
-            && state.agent.llm().is_some()
+        if binding_matches(&guard, &desired_provider, &desired_path) && state.agent.llm().is_some()
         {
             return Ok(());
         }
@@ -92,8 +87,7 @@ pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
     // the desired model while we were waiting.
     {
         let guard = state.llm_binding.lock().unwrap();
-        if binding_matches(&guard, &desired_provider, &desired_path)
-            && state.agent.llm().is_some()
+        if binding_matches(&guard, &desired_provider, &desired_path) && state.agent.llm().is_some()
         {
             return Ok(());
         }
@@ -126,10 +120,7 @@ pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
                         ));
                     }
                 }
-                tracing::info!(
-                    "Using local tokenizer at {}",
-                    sibling_tokenizer.display()
-                );
+                tracing::info!("Using local tokenizer at {}", sibling_tokenizer.display());
                 config = config.with_tokenizer_path(&sibling_tokenizer);
             }
 
@@ -181,10 +172,7 @@ pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
 /// If no LLM is configured, attempts to auto-configure from GuiSettings
 /// (provider + local_model_path) or falls back to environment variables.
 #[tauri::command]
-pub async fn agent_run(
-    query: String,
-    state: State<'_, crate::AppState>,
-) -> Result<String, String> {
+pub async fn agent_run(query: String, state: State<'_, crate::AppState>) -> Result<String, String> {
     ensure_llm(&state).await?;
 
     match state.agent.run(&query).await {

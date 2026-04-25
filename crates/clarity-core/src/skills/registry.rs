@@ -57,12 +57,7 @@ impl SkillRegistry {
 
     /// List all skill ids.
     pub fn list_ids(&self) -> Vec<String> {
-        self.skills
-            .read()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect()
+        self.skills.read().unwrap().keys().cloned().collect()
     }
 
     /// List summaries for all skills.

@@ -20,7 +20,10 @@ fn find_bridge_script() -> Option<PathBuf> {
             let candidates = [
                 exe_dir.join("computer_bridge.py"),
                 exe_dir.join("scripts").join("computer_bridge.py"),
-                exe_dir.join("..").join("scripts").join("computer_bridge.py"),
+                exe_dir
+                    .join("..")
+                    .join("scripts")
+                    .join("computer_bridge.py"),
                 exe_dir
                     .join("..")
                     .join("clarity-core")

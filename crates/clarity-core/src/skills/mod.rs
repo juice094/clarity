@@ -38,9 +38,9 @@
 //! - **Skill** does **not** directly interact with **MCP**; it works through ToolRegistry
 //! - **Plugin** (`claw`/`cli`/`window`) binds Skills to specific entry points
 
+pub mod discovery;
 mod loader;
 mod registry;
-pub mod discovery;
 
 pub use discovery::SkillDiscovery;
 pub use loader::SkillLoader;

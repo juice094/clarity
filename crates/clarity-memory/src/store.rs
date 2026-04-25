@@ -147,7 +147,9 @@ impl MemoryStore {
         section: &str,
         content: &str,
     ) -> Result<()> {
-        self.inner.save_session_note(session_id, section, content).await
+        self.inner
+            .save_session_note(session_id, section, content)
+            .await
     }
 }
 

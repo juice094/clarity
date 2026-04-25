@@ -181,10 +181,7 @@ pub fn run() {
                     let state = handle.state::<AppState>();
                     let mut guard = state.prewarm_error.lock().unwrap();
                     *guard = Some(e.clone());
-                    let _ = handle.emit(
-                        "llm:config_error",
-                        serde_json::json!({ "message": e }),
-                    );
+                    let _ = handle.emit("llm:config_error", serde_json::json!({ "message": e }));
                 }
                 network_monitor(handle).await;
             });

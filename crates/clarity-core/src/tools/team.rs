@@ -164,8 +164,14 @@ impl Tool for TeamCreateTool {
             });
         }
 
-        let max_concurrency = args.get("max_concurrency").and_then(|v| v.as_u64()).unwrap_or(4) as usize;
-        let timeout_secs = args.get("timeout_secs").and_then(|v| v.as_u64()).unwrap_or(300);
+        let max_concurrency = args
+            .get("max_concurrency")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(4) as usize;
+        let timeout_secs = args
+            .get("timeout_secs")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(300);
 
         let config = TeamConfig {
             name: team_name.to_string(),
@@ -180,12 +186,15 @@ impl Tool for TeamCreateTool {
             ToolError::execution_failed(format!("Failed to create teams directory: {}", e))
         })?;
 
-        config
-            .save(&dir)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to save team config: {}", e)))?;
+        config.save(&dir).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to save team config: {}", e))
+        })?;
 
-        info!("Created team '{}' with {} members", team_name, config.members.len());
+        info!(
+            "Created team '{}' with {} members",
+            team_name,
+            config.members.len()
+        );
 
         Ok(json!({
             "success": true,
@@ -311,11 +320,9 @@ impl Tool for TeamListTool {
         })?;
 
         let mut teams = Vec::new();
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to read directory entry: {}", e)))?
-        {
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to read directory entry: {}", e))
+        })? {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;

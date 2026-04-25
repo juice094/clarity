@@ -14,7 +14,10 @@ pub struct TurnMemoryExtractor {
 }
 
 impl TurnMemoryExtractor {
-    pub fn new(llm: Arc<dyn crate::llm::api::LlmProvider>, working_dir: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        llm: Arc<dyn crate::llm::api::LlmProvider>,
+        working_dir: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             llm,
             working_dir: working_dir.into(),

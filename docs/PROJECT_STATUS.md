@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.1.2 → v0.2.0-dev | 日期：2026-04-25 | 基于实机测试与代码审计
+> 版本：v0.2.0 | 日期：2026-04-25 | 基于实机测试与代码审计
 
 ---
 
@@ -9,14 +9,14 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **492 passed, 0 failed, 3 ignored** (496 with `--features local-llm`) | ✅ 全绿 |
+| **单元测试** | **502 passed, 0 failed, 4 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~125 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
-- `clarity-core`: 260 tests passed, 2 ignored
+- `clarity-core`: 360 tests passed, 4 ignored
 - `clarity-gateway`: 43 tests passed
 - `clarity-memory`: 79 tests passed
 - `clarity-wire`: 8 tests passed
@@ -42,12 +42,14 @@
 ✅ Server 模块 — JSON-RPC over stdio，暴露 AgentController（零网络，单客户端）
 ✅ ChannelSendTool — 飞书/钉钉/Slack/Webhook 主动消息发送（含 HMAC-SHA256）
 ✅ Lazy Master — 重型组件（LLM / MemoryStore / SkillRegistry）首次 run() 时按需初始化
-✅ 多 LLM 支持
-✅ 技术栈决策 — UI 层采用 Tauri 2.10.x（全平台 Desktop + Mobile + Web）
-✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama
+✅ 本地 LLM 推理 — Candle 原生 GGUF（Qwen2/DeepSeek-R1-Distill），无需 Ollama
+✅ 多 LLM 支持 — Anthropic、Kimi、OpenAI、DeepSeek、Ollama、Local (GGUF)
 ✅ MCP 生态 — stdio / HTTP / SSE 三协议完整实现
+✅ 离线模式 — 网络探测 + 自动 fallback 到本地模型 + 恢复后切回
 ✅ Skill 系统 — Markdown+YAML 编排，关键字搜索，工具白名单
 ✅ Wire 事件总线 — SPMC 跨模块通信
+✅ LSP 代理 — rust-analyzer 等语言服务器进程管理 + JSON-RPC 调试
+✅ Computer Use — 远程桌面控制面板（截图/点击/输入/滚动）
 ```
 
 ### 2.2 记忆系统（clarity-memory）
@@ -84,6 +86,20 @@
 ✅ 后台任务监控 — 实时读取 .clarity/tasks/ 目录
 ✅ OS 通知 — 任务完成/失败推送
 ✅ 任务列表弹窗 — 状态、名称、时间
+```
+
+### 2.6 桌面 GUI（clarity-tauri）
+
+```
+✅ Chat Panel — 多会话聊天 + 流式响应
+✅ Session Sidebar — 创建/切换/删除/重命名
+✅ Task Panel — 任务列表与状态追踪
+✅ Settings Panel — Provider 选择 + 本地模型扫描 + 主题 + 网络探测配置
+✅ File Browser — 工作目录树 + @path 引用
+✅ Diff Viewer — 代码变更预览
+✅ LSP Panel — 语言服务器调试
+✅ Computer Use Panel — 远程桌面控制
+✅ 离线状态 banner — 自动 fallback / 恢复提示
 ```
 
 ---
@@ -140,9 +156,9 @@
 | **并行子代理** | ✅ | ✅ (Coordinator) | ⚠️ | ❌ | ❌ |
 | **MCP** | ✅ stdio/HTTP/SSE | ✅ + OAuth + Channel 协议 | ⚠️ | ❌ | ✅ |
 | **Voice** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **Desktop GUI** | 🔄 Tauri 2 (进行中) | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
+| **Desktop GUI** | ✅ Tauri 2 + React | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
 | **多标签** | 🔄 进行中 | ✅ | ❌ | ❌ | ❌ |
-| **LSP** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
+| **LSP** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Vim** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
 | **Sandbox** | 🔄 计划中 | ✅ OS-level | ❌ | ❌ | ✅ Docker |
 | **Plugin SDK** | 🔄 计划中 | ✅ | ✅ | ❌ | ❌ |
@@ -182,8 +198,8 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | clarity-tauri Desktop GUI | 2 周 | Sprint 1-2 已完成：Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；Settings 新增本地模型配置 | — |
-| P2 | 审批系统增强 | 2-3 周 | AI 分类器 + 规则引擎 + 远程审批中继 | — |
+| P2 | clarity-tauri Desktop GUI | ✅ 已完成 | Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；离线 fallback + 预加载 + Settings 缓存 | — |
+| P2 | 审批系统增强 | ⏸️ 未启动 | AI 分类器 + 规则引擎 + 远程审批中继（设计完成，代码未动工） | — |
 | P2 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel（rust-analyzer 等进程管理 + JSON-RPC 调试） | — |
 | P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |

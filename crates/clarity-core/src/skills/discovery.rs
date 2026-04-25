@@ -22,11 +22,7 @@ impl SkillDiscovery {
                 match SkillLoader::load_dir(dir) {
                     Ok(mut found) => skills.append(&mut found),
                     Err(e) => {
-                        tracing::warn!(
-                            "Failed to load skills from {}: {}",
-                            dir.display(),
-                            e
-                        );
+                        tracing::warn!("Failed to load skills from {}: {}", dir.display(), e);
                     }
                 }
             }
@@ -115,14 +111,8 @@ mod tests {
 
     #[test]
     fn test_path_matches_glob_star() {
-        assert!(path_matches_pattern(
-            Path::new("src/main.rs"),
-            "*.rs"
-        ));
-        assert!(!path_matches_pattern(
-            Path::new("src/main.rs"),
-            "*.toml"
-        ));
+        assert!(path_matches_pattern(Path::new("src/main.rs"), "*.rs"));
+        assert!(!path_matches_pattern(Path::new("src/main.rs"), "*.toml"));
     }
 
     #[test]
@@ -139,10 +129,7 @@ mod tests {
             Path::new("/home/user/project/Cargo.toml"),
             "Cargo.toml"
         ));
-        assert!(path_matches_pattern(
-            Path::new("Cargo.toml"),
-            "Cargo.toml"
-        ));
+        assert!(path_matches_pattern(Path::new("Cargo.toml"), "Cargo.toml"));
     }
 
     #[test]

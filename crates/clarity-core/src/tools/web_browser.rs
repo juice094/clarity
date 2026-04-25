@@ -174,20 +174,22 @@ impl WebBrowserTool {
     // ------------------------------------------------------------------
 
     fn current_html(&self) -> ToolResult<String> {
-        let state = self.state.lock().map_err(|_| {
-            ToolError::execution_failed("Browser state lock poisoned".to_string())
-        })?;
-        state
-            .current_html
-            .clone()
-            .ok_or_else(|| ToolError::execution_failed("No page loaded. Use 'navigate' first.".to_string()))
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ToolError::execution_failed("Browser state lock poisoned".to_string()))?;
+        state.current_html.clone().ok_or_else(|| {
+            ToolError::execution_failed("No page loaded. Use 'navigate' first.".to_string())
+        })
     }
 
     fn extract_title(html: &str) -> Option<String> {
         let re = Regex::new(r"<title[^>]*>([^<]*)</title>").ok()?;
-        re.captures(html)
-            .and_then(|cap| cap.get(1))
-            .map(|m| html_escape::decode_html_entities(m.as_str()).trim().to_string())
+        re.captures(html).and_then(|cap| cap.get(1)).map(|m| {
+            html_escape::decode_html_entities(m.as_str())
+                .trim()
+                .to_string()
+        })
     }
 
     fn extract_element_text(html: &str, selector: &str) -> ToolResult<String> {
@@ -418,7 +420,10 @@ mod tests {
     #[test]
     fn test_extract_title() {
         let html = "<html><head><title>Test Page</title></head><body></body></html>";
-        assert_eq!(WebBrowserTool::extract_title(html), Some("Test Page".to_string()));
+        assert_eq!(
+            WebBrowserTool::extract_title(html),
+            Some("Test Page".to_string())
+        );
 
         let no_title = "<html><body>No title</body></html>";
         assert!(WebBrowserTool::extract_title(no_title).is_none());

@@ -23,7 +23,11 @@ async fn test_devbase_tool_tier_filtering() {
     println!("=== devbase tools/list (stable+beta) ===");
     println!("Total tools returned: {}", tools.len());
     for tool in &tools {
-        println!("  - {}: {}", tool.name, tool.description.as_deref().unwrap_or("(no desc)"));
+        println!(
+            "  - {}: {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("(no desc)")
+        );
     }
 
     // 3. Verify count: stable+beta tier filter active
@@ -74,10 +78,16 @@ async fn test_devbase_tool_tier_filtering() {
 
     // Soft assertions (log warnings, don't fail)
     if empty_desc_count > 0 {
-        eprintln!("WARNING: {} tools have empty descriptions", empty_desc_count);
+        eprintln!(
+            "WARNING: {} tools have empty descriptions",
+            empty_desc_count
+        );
     }
     if short_desc_count > 3 {
-        eprintln!("WARNING: {} tools have very short descriptions", short_desc_count);
+        eprintln!(
+            "WARNING: {} tools have very short descriptions",
+            short_desc_count
+        );
     }
 
     client.disconnect().await.ok();

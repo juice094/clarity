@@ -40,21 +40,33 @@ mod tests {
     #[test]
     fn test_parse_parallel_single() {
         let specs = parse_parallel_args("coder:实现斐波那契函数");
-        assert_eq!(specs, vec![("coder".to_string(), "实现斐波那契函数".to_string())]);
+        assert_eq!(
+            specs,
+            vec![("coder".to_string(), "实现斐波那契函数".to_string())]
+        );
     }
 
     #[test]
     fn test_parse_parallel_multiple() {
         let specs = parse_parallel_args("coder:实现斐波那契函数 | explore:查找所有测试文件");
         assert_eq!(specs.len(), 2);
-        assert_eq!(specs[0], ("coder".to_string(), "实现斐波那契函数".to_string()));
-        assert_eq!(specs[1], ("explore".to_string(), "查找所有测试文件".to_string()));
+        assert_eq!(
+            specs[0],
+            ("coder".to_string(), "实现斐波那契函数".to_string())
+        );
+        assert_eq!(
+            specs[1],
+            ("explore".to_string(), "查找所有测试文件".to_string())
+        );
     }
 
     #[test]
     fn test_parse_parallel_no_type() {
         let specs = parse_parallel_args("just a prompt");
-        assert_eq!(specs, vec![("coder".to_string(), "just a prompt".to_string())]);
+        assert_eq!(
+            specs,
+            vec![("coder".to_string(), "just a prompt".to_string())]
+        );
     }
 
     #[test]

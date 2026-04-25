@@ -217,7 +217,11 @@ impl HookRegistry {
     ///
     /// Returns the most restrictive result (`Fail` > `Partial` > `Pass`).
     /// If no hooks are registered, returns [`AuditResult::Pass`].
-    pub async fn run_goal_audit(&self, goal: &str, result: &str) -> Result<AuditResult, AgentError> {
+    pub async fn run_goal_audit(
+        &self,
+        goal: &str,
+        result: &str,
+    ) -> Result<AuditResult, AgentError> {
         let mut audit = AuditResult::Pass;
         for hook in &self.goal_audit {
             let r = hook.audit(goal, result).await?;
@@ -372,8 +376,14 @@ mod tests {
     #[tokio::test]
     async fn test_pre_delivery_block() {
         let registry = HookRegistry::new().register_pre_delivery(BlockP2Hook);
-        assert!(registry.run_pre_delivery("x", DeliveryTier::P2).await.is_err());
-        assert!(registry.run_pre_delivery("x", DeliveryTier::P1).await.is_ok());
+        assert!(registry
+            .run_pre_delivery("x", DeliveryTier::P2)
+            .await
+            .is_err());
+        assert!(registry
+            .run_pre_delivery("x", DeliveryTier::P1)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]

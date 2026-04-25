@@ -9,9 +9,9 @@
 pub mod api;
 pub mod deepseek;
 pub mod kalosm;
+pub mod llama_server;
 #[cfg(feature = "local-llm")]
 pub mod local_gguf;
-pub mod llama_server;
 pub mod model_registry;
 pub mod ollama;
 pub mod sse;
@@ -19,14 +19,14 @@ pub mod sse;
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
+pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
-pub use llama_server::LlamaServerProvider;
-pub use ollama::OllamaProvider;
 pub use model_registry::{
     build_provider_from_registry, ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType,
     ProviderConfig,
 };
+pub use ollama::OllamaProvider;
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
 
@@ -917,8 +917,7 @@ impl LlmFactory {
             );
             let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
                 .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
-            let config = LocalGgufConfig::new(model_path)
-                .with_tokenizer_repo(repo);
+            let config = LocalGgufConfig::new(model_path).with_tokenizer_repo(repo);
             return Ok(Box::new(LocalGgufProvider::new(config).await?));
         }
 
@@ -930,8 +929,9 @@ impl LlmFactory {
              - DEEPSEEK_API_KEY\n\
              - OPENAI_API_KEY\n\
              Or create ~/.config/clarity/models.toml\n\
-             Or use local inference:\n".to_string()
-             + LOCAL_MODEL_HELP,
+             Or use local inference:\n"
+                .to_string()
+                + LOCAL_MODEL_HELP,
         ))
     }
 

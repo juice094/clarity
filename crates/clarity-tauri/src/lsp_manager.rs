@@ -215,7 +215,6 @@ impl LspManager {
         *id += 1;
         format!("lsp-{id}")
     }
-
 }
 
 /// Encode a JSON body into an LSP message with Content-Length header.
@@ -263,7 +262,7 @@ async fn read_lsp_message<R: AsyncBufReadExt + Unpin>(
         .await
         .map_err(|e| format!("Failed to read LSP body: {e}"))?;
 
-    let body = String::from_utf8(body_buf)
-        .map_err(|e| format!("LSP body is not valid UTF-8: {e}"))?;
+    let body =
+        String::from_utf8(body_buf).map_err(|e| format!("LSP body is not valid UTF-8: {e}"))?;
     Ok(Some(body))
 }

@@ -8,11 +8,11 @@ use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
 use crate::llm::api::LlmProvider;
 use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, SharedMemoryTicker};
-use std::collections::HashMap;
-use std::future::Future;
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use clarity_wire::{Wire, WireMessage};
+use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -181,7 +181,9 @@ impl Agent {
     pub async fn set_memory_compile_callback<F, Fut>(&self, callback: F)
     where
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = clarity_memory::Result<HashMap<String, clarity_memory::CompileStatus>>> + Send + 'static,
+        Fut: Future<Output = clarity_memory::Result<HashMap<String, clarity_memory::CompileStatus>>>
+            + Send
+            + 'static,
     {
         if let Some(ref ticker) = self.memory_ticker {
             ticker.set_compile_callback(callback).await;

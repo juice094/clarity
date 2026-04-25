@@ -80,7 +80,9 @@ async fn test_webhook_generic_auth_failure() {
         "auth_header": "X-Webhook-Token",
         "auth_token": "secret_token"
     });
-    let config = ChannelConfig::new().enabled().with_webhook_secret("secret_token");
+    let config = ChannelConfig::new()
+        .enabled()
+        .with_webhook_secret("secret_token");
     // 手动构造 config 以设置 extra
     let mut config = config;
     config.extra = Some(extra);

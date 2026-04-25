@@ -14,7 +14,9 @@ fn validate_path(input: &str, cwd: &Path) -> Result<PathBuf, String> {
         cwd.join(input)
     };
 
-    let canonical = path.canonicalize().map_err(|e| format!("Failed to resolve path: {e}"))?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve path: {e}"))?;
 
     let canonical_cwd = cwd
         .canonicalize()
@@ -118,7 +120,8 @@ pub async fn read_file(
     let cwd = std::env::current_dir().map_err(|e| format!("Failed to get current dir: {e}"))?;
     let target = validate_path(&path, &cwd)?;
 
-    let metadata = std::fs::metadata(&target).map_err(|e| format!("Failed to read metadata: {e}"))?;
+    let metadata =
+        std::fs::metadata(&target).map_err(|e| format!("Failed to read metadata: {e}"))?;
     if metadata.is_dir() {
         return Err("Path is a directory, not a file".to_string());
     }
@@ -134,7 +137,9 @@ pub async fn read_file(
 
     let buffer = if let Some(lim) = limit {
         let mut buf = vec![0u8; lim as usize];
-        let n = file.read(&mut buf).map_err(|e| format!("Failed to read file: {e}"))?;
+        let n = file
+            .read(&mut buf)
+            .map_err(|e| format!("Failed to read file: {e}"))?;
         buf.truncate(n);
         buf
     } else {

@@ -236,11 +236,12 @@ impl Tool for PushNotificationTool {
                     }));
                 }
                 "webhook" => {
-                    let webhook_url = helpers::optional_str(&args, "webhook_url").ok_or_else(|| {
-                        ToolError::invalid_params(
-                            "webhook_url is required when 'webhook' is in channels",
-                        )
-                    })?;
+                    let webhook_url =
+                        helpers::optional_str(&args, "webhook_url").ok_or_else(|| {
+                            ToolError::invalid_params(
+                                "webhook_url is required when 'webhook' is in channels",
+                            )
+                        })?;
 
                     let payload = json!({
                         "id": id,
@@ -251,11 +252,7 @@ impl Tool for PushNotificationTool {
                     });
 
                     let client = reqwest::Client::new();
-                    let resp = client
-                        .post(webhook_url)
-                        .json(&payload)
-                        .send()
-                        .await;
+                    let resp = client.post(webhook_url).json(&payload).send().await;
 
                     match resp {
                         Ok(r) => {

@@ -286,12 +286,18 @@ impl ParallelExecutor {
                         {
                             results.push(subagent_result);
                         } else {
-                            failures.push((task_id.clone(), "Failed to parse subagent result".to_string()));
+                            failures.push((
+                                task_id.clone(),
+                                "Failed to parse subagent result".to_string(),
+                            ));
                         }
                     } else if task_result.status == TaskStatus::Cancelled {
                         failures.push((task_id.clone(), "Task was cancelled".to_string()));
                     } else {
-                        failures.push((task_id.clone(), format!("task failed: {}", task_result.output)));
+                        failures.push((
+                            task_id.clone(),
+                            format!("task failed: {}", task_result.output),
+                        ));
 
                         // 如果需要，取消其他正在运行的任务
                         if config.cancel_on_error && !should_cancel_others {

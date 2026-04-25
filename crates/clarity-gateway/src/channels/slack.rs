@@ -121,7 +121,11 @@ impl SlackChannel {
         if computed.len() != signature.len() {
             return false;
         }
-        computed.bytes().zip(signature.bytes()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0
+        computed
+            .bytes()
+            .zip(signature.bytes())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0
     }
 }
 
@@ -162,9 +166,7 @@ mod tests {
 
     #[test]
     fn test_slack_channel_new() {
-        let config = ChannelConfig::new()
-            .enabled()
-            .with_token("xoxb-test-token");
+        let config = ChannelConfig::new().enabled().with_token("xoxb-test-token");
         let channel = SlackChannel::new(config);
         assert!(channel.bot_token.is_some());
     }

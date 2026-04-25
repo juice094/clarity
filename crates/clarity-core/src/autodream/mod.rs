@@ -193,24 +193,24 @@ impl AutoDream {
         // Simple loop: sleep until next scheduled time, then run
         loop {
             let now = chrono::Utc::now();
-            let next = schedule
-                .upcoming(chrono::Utc)
-                .next()
-                .ok_or_else(|| AutoDreamError::SchedulerError("No upcoming schedule time".to_string()))?;
+            let next = schedule.upcoming(chrono::Utc).next().ok_or_else(|| {
+                AutoDreamError::SchedulerError("No upcoming schedule time".to_string())
+            })?;
 
             let wait_duration = (next - now).to_std().unwrap_or(Duration::from_secs(60));
-            info!("AutoDream next run at {} (waiting {:?})", next, wait_duration);
+            info!(
+                "AutoDream next run at {} (waiting {:?})",
+                next, wait_duration
+            );
 
             tokio::time::sleep(wait_duration).await;
 
             info!("AutoDream starting consolidation run...");
             let start = std::time::Instant::now();
 
-            let result = tokio::time::timeout(
-                Duration::from_secs(self.config.timeout_secs),
-                consolidate(),
-            )
-            .await;
+            let result =
+                tokio::time::timeout(Duration::from_secs(self.config.timeout_secs), consolidate())
+                    .await;
 
             match result {
                 Ok(Ok(report)) => {
@@ -248,11 +248,9 @@ impl AutoDream {
         info!("AutoDream running single consolidation...");
         let start = std::time::Instant::now();
 
-        let result = tokio::time::timeout(
-            Duration::from_secs(self.config.timeout_secs),
-            consolidate(),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(Duration::from_secs(self.config.timeout_secs), consolidate())
+                .await;
 
         match result {
             Ok(Ok(report)) => {
@@ -326,7 +324,9 @@ mod tests {
         let autodream = AutoDream::new(AutoDreamConfig::default());
         let result = autodream
             .run_once(|| async {
-                Ok(DreamReport::success("Consolidated 5 sessions").with_sessions(5).with_facts(12))
+                Ok(DreamReport::success("Consolidated 5 sessions")
+                    .with_sessions(5)
+                    .with_facts(12))
             })
             .await;
 
@@ -393,10 +393,6 @@ mod tests {
         handle.abort();
 
         let count = counter.load(Ordering::SeqCst);
-        assert!(
-            count >= 1,
-            "Expected at least 1 trigger, got {}",
-            count
-        );
+        assert!(count >= 1, "Expected at least 1 trigger, got {}", count);
     }
 }

@@ -248,11 +248,8 @@ impl LocalGgufConfig {
     /// Create config with a model path.
     pub fn new(model_path: impl Into<PathBuf>) -> Self {
         let path = model_path.into();
-        let template = ChatTemplate::detect(
-            path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(""),
-        );
+        let template =
+            ChatTemplate::detect(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));
         Self {
             model_path: path,
             chat_template: template,
@@ -319,7 +316,11 @@ impl TokenOutputStream {
             .map_err(|e| AgentError::Llm(format!("Tokenizer decode error: {}", e)))?;
         let new_text = text.strip_prefix(&prev_text).unwrap_or(&text).to_string();
         self.prev_tokens.push(token);
-        Ok(if new_text.is_empty() { None } else { Some(new_text) })
+        Ok(if new_text.is_empty() {
+            None
+        } else {
+            Some(new_text)
+        })
     }
 
     fn decode_rest(&self) -> Result<Option<String>, AgentError> {
@@ -355,9 +356,8 @@ impl LocalGgufProvider {
             )));
         }
 
-        let device = pick_device().map_err(|e| {
-            AgentError::Llm(format!("Failed to initialize compute device: {}", e))
-        })?;
+        let device = pick_device()
+            .map_err(|e| AgentError::Llm(format!("Failed to initialize compute device: {}", e)))?;
         tracing::info!("LocalGgufProvider using device: {:?}", device);
 
         // Load model (blocking I/O + heavy computation)
@@ -621,7 +621,13 @@ impl LlmProvider for LocalGgufProvider {
         tokio::spawn(async move {
             // Run generation with cloned state
             let result = generate_with_state(
-                model, tokenizer, device, config, &prompt, max_tokens, Some(tx.clone()),
+                model,
+                tokenizer,
+                device,
+                config,
+                &prompt,
+                max_tokens,
+                Some(tx.clone()),
             )
             .await;
 
@@ -874,15 +880,15 @@ mod tests {
             ChatTemplate::detect("Qwen2.5-7B-Instruct.Q4_K_M.gguf"),
             ChatTemplate::Qwen2
         );
-        assert_eq!(ChatTemplate::detect("something-else.gguf"), ChatTemplate::Qwen2);
+        assert_eq!(
+            ChatTemplate::detect("something-else.gguf"),
+            ChatTemplate::Qwen2
+        );
     }
 
     #[test]
     fn test_qwen2_format() {
-        let messages = vec![
-            Message::system("You are helpful."),
-            Message::user("Hello"),
-        ];
+        let messages = vec![Message::system("You are helpful."), Message::user("Hello")];
         let prompt = ChatTemplate::Qwen2.format(&messages, &serde_json::json!([]));
         assert!(prompt.contains("<|im_start|>system"));
         assert!(prompt.contains("You are helpful."));
@@ -893,10 +899,7 @@ mod tests {
 
     #[test]
     fn test_deepseek_r1_format() {
-        let messages = vec![
-            Message::system("You are helpful."),
-            Message::user("Hello"),
-        ];
+        let messages = vec![Message::system("You are helpful."), Message::user("Hello")];
         let prompt = ChatTemplate::DeepSeekR1.format(&messages, &serde_json::json!([]));
         assert!(prompt.contains("You are helpful."));
         assert!(prompt.contains("<｜User｜>Hello"));
@@ -922,7 +925,10 @@ mod tests {
             PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf")
         });
         if !model_path.exists() {
-            eprintln!("Skipping e2e test: model not found at {}", model_path.display());
+            eprintln!(
+                "Skipping e2e test: model not found at {}",
+                model_path.display()
+            );
             return;
         }
 
@@ -937,7 +943,9 @@ mod tests {
 
         // Measure load time
         let load_start = std::time::Instant::now();
-        let provider = LocalGgufProvider::new(config).await.expect("failed to load model");
+        let provider = LocalGgufProvider::new(config)
+            .await
+            .expect("failed to load model");
         let load_ms = load_start.elapsed().as_millis();
         println!("[BENCH] Model loaded in {} ms", load_ms);
 
@@ -947,7 +955,10 @@ mod tests {
             Message::user("What is 2+2? Answer with a single number."),
         ];
         let gen_start = std::time::Instant::now();
-        let response = provider.complete(&messages, &serde_json::json!([])).await.expect("generation failed");
+        let response = provider
+            .complete(&messages, &serde_json::json!([]))
+            .await
+            .expect("generation failed");
         let gen_ms = gen_start.elapsed().as_millis() as f64;
 
         // Estimate token count from response length (rough heuristic: 1 token ≈ 4 chars for English)
@@ -955,7 +966,10 @@ mod tests {
         let estimated_tokens = (output_len / 4).max(1);
         let ms_per_token = gen_ms / estimated_tokens as f64;
 
-        println!("[BENCH] Generated {} chars (~{} tokens) in {} ms", output_len, estimated_tokens, gen_ms as u64);
+        println!(
+            "[BENCH] Generated {} chars (~{} tokens) in {} ms",
+            output_len, estimated_tokens, gen_ms as u64
+        );
         println!("[BENCH] Latency: {:.1} ms/token", ms_per_token);
         println!("[BENCH] Output: {:?}", response.content);
 
@@ -966,9 +980,19 @@ mod tests {
         println!("[BENCH] Device: {:?}", provider.device);
         println!(
             "[BENCH] {} mode verdict: {} ms/token — {}",
-            if format!("{:?}", provider.device).contains("Cuda") { "CUDA" } else { "CPU" },
+            if format!("{:?}", provider.device).contains("Cuda") {
+                "CUDA"
+            } else {
+                "CPU"
+            },
             ms_per_token,
-            if ms_per_token < 300.0 { "EXCELLENT" } else if ms_per_token < 800.0 { "ACCEPTABLE" } else { "TOO SLOW — consider CUDA or smaller model" }
+            if ms_per_token < 300.0 {
+                "EXCELLENT"
+            } else if ms_per_token < 800.0 {
+                "ACCEPTABLE"
+            } else {
+                "TOO SLOW — consider CUDA or smaller model"
+            }
         );
     }
 }

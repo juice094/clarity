@@ -97,7 +97,9 @@ pub use extractor::{FactExtractor, LlmClient};
 pub use session_store::SessionStore;
 pub use store::MemoryStore;
 pub use ticker::{MemoryTicker, SharedMemoryTicker, DEFAULT_TURNS_PER_SUMMARY};
-pub use types::{CompileConfig, CompileStatus, Fact, MemoryError, Message, MetaFact, Result, SessionNotes};
+pub use types::{
+    CompileConfig, CompileStatus, Fact, MemoryError, Message, MetaFact, Result, SessionNotes,
+};
 
 #[cfg(test)]
 mod integration_tests {

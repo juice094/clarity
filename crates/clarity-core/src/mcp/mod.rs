@@ -445,7 +445,10 @@ impl McpManager {
             let name = name.clone();
             tasks.push(async move {
                 let mut c = client;
-                let result: Result<(Arc<tokio::sync::Mutex<McpClientInstance>>, Vec<McpTool>), McpError> = async {
+                let result: Result<
+                    (Arc<tokio::sync::Mutex<McpClientInstance>>, Vec<McpTool>),
+                    McpError,
+                > = async {
                     c.connect().await?;
                     let tools = c.list_tools().await?;
                     Ok((Arc::new(tokio::sync::Mutex::new(c)), tools))

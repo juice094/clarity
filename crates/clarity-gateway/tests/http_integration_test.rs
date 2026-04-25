@@ -30,12 +30,8 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
         ),
     );
     Arc::new(
-        BackgroundTaskManager::new(
-            temp.join("store"),
-            temp.join("work"),
-            temp.join("context"),
-        )
-        .with_agent_executor(executor),
+        BackgroundTaskManager::new(temp.join("store"), temp.join("work"), temp.join("context"))
+            .with_agent_executor(executor),
     )
 }
 

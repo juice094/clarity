@@ -216,9 +216,7 @@ impl StdioServer {
                     .get("prompt")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
-                        StdioServerError::InvalidRequest(
-                            "Missing 'prompt' parameter".to_string(),
-                        )
+                        StdioServerError::InvalidRequest("Missing 'prompt' parameter".to_string())
                     })?;
 
                 op_tx
@@ -256,11 +254,13 @@ impl StdioServer {
     fn event_to_notification(event: ControllerEvent) -> JsonRpcNotification {
         let (event_type, data) = match event {
             ControllerEvent::Chunk(text) => ("chunk", json!({"text": text})),
-            ControllerEvent::Complete(response) => {
-                ("complete", json!({"response": response}))
-            }
+            ControllerEvent::Complete(response) => ("complete", json!({"response": response})),
             ControllerEvent::Error(error) => ("error", json!({"error": error})),
-            ControllerEvent::ToolCallStart { id, name, arguments } => (
+            ControllerEvent::ToolCallStart {
+                id,
+                name,
+                arguments,
+            } => (
                 "tool_call_start",
                 json!({"id": id, "name": name, "arguments": arguments}),
             ),

@@ -48,7 +48,10 @@ struct ServerState {
     // Could hold shared counters, etc.
 }
 
-async fn mcp_handler(State(_state): State<ServerState>, Json(req): Json<JsonRpcReq>) -> Json<JsonRpcResp> {
+async fn mcp_handler(
+    State(_state): State<ServerState>,
+    Json(req): Json<JsonRpcReq>,
+) -> Json<JsonRpcResp> {
     let result = match req.method.as_str() {
         "initialize" => Some(serde_json::json!({
             "protocolVersion": "2024-11-05",
@@ -130,9 +133,11 @@ async fn spawn_test_server() -> (String, oneshot::Sender<()>) {
     let (tx, rx) = oneshot::channel();
     tokio::spawn(async move {
         let server = axum::serve(listener, app);
-        let _ = server.with_graceful_shutdown(async {
-            let _ = rx.await;
-        }).await;
+        let _ = server
+            .with_graceful_shutdown(async {
+                let _ = rx.await;
+            })
+            .await;
     });
 
     // Give the server a moment to start accepting connections
@@ -164,12 +169,19 @@ async fn test_http_mcp_transport_e2e() {
 
     // Verify tools were discovered
     let tools = manager.tools();
-    assert_eq!(tools.len(), 1, "Expected exactly one tool from HTTP MCP server");
+    assert_eq!(
+        tools.len(),
+        1,
+        "Expected exactly one tool from HTTP MCP server"
+    );
     assert_eq!(tools[0].name(), "echo");
 
     // Exercise tool via McpToolAdapter (executes call_tool internally)
     let result = tools[0]
-        .execute(serde_json::json!({ "message": "hello" }), ToolContext::new())
+        .execute(
+            serde_json::json!({ "message": "hello" }),
+            ToolContext::new(),
+        )
         .await;
     assert!(result.is_ok(), "Tool execution failed: {:?}", result.err());
     assert_eq!(result.unwrap(), "echo: hello");
@@ -182,7 +194,11 @@ async fn test_http_mcp_transport_e2e() {
     let direct = guard
         .call_tool("echo", serde_json::json!({ "message": "world" }))
         .await;
-    assert!(direct.is_ok(), "Direct call_tool failed: {:?}", direct.err());
+    assert!(
+        direct.is_ok(),
+        "Direct call_tool failed: {:?}",
+        direct.err()
+    );
     let direct_result = direct.unwrap();
     assert_eq!(direct_result.content.len(), 1);
     match &direct_result.content[0] {

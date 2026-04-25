@@ -13,9 +13,9 @@ pub mod builder;
 mod parallel;
 pub mod registry;
 pub mod runner;
+mod store;
 pub mod team;
 pub mod token;
-mod store;
 
 pub use builder::SubagentBuilder;
 pub use parallel::{run_parallel, ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch};
@@ -24,9 +24,11 @@ pub use runner::{
     collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
     SubagentError, SubagentResult, SubagentRunner,
 };
-pub use team::{AgentTeam, Mailbox, MailboxError, MailboxMessage, MessagePayload, TeamCoordinator, TeamResult};
-pub use token::{CapabilityToken, TokenError};
 pub use store::{SubagentState, SubagentStatus, SubagentStore};
+pub use team::{
+    AgentTeam, Mailbox, MailboxError, MailboxMessage, MessagePayload, TeamCoordinator, TeamResult,
+};
+pub use token::{CapabilityToken, TokenError};
 
 use crate::llm::ModelRegistry;
 use crate::registry::ToolRegistry;

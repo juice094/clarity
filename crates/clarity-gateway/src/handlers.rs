@@ -1,4 +1,4 @@
-﻿use axum::{
+use axum::{
     extract::{Json, Query, State},
     http::StatusCode,
     response::{
@@ -720,11 +720,8 @@ pub async fn run_parallel(
         .tasks
         .into_iter()
         .map(|t| {
-            clarity_core::subagents::RunSpec::new(
-                format!("parallel-{}", t.agent_type),
-                t.prompt,
-            )
-            .with_type(&t.agent_type)
+            clarity_core::subagents::RunSpec::new(format!("parallel-{}", t.agent_type), t.prompt)
+                .with_type(&t.agent_type)
         })
         .collect();
 
@@ -1420,7 +1417,6 @@ pub async fn delete_session(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1441,7 +1437,8 @@ mod tests {
             .with_read_only(false);
         let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
 
-        let temp = std::env::temp_dir().join(format!("clarity-gateway-test-{}", std::process::id()));
+        let temp =
+            std::env::temp_dir().join(format!("clarity-gateway-test-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&temp);
         let task_manager = Arc::new(BackgroundTaskManager::new(
             temp.join("store"),

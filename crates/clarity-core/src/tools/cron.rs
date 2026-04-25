@@ -15,9 +15,11 @@ use crate::tools::{Tool, ToolContext, ToolResult};
 fn require_manager(
     manager: &Option<Arc<BackgroundTaskManager>>,
 ) -> ToolResult<Arc<BackgroundTaskManager>> {
-    manager
-        .clone()
-        .ok_or_else(|| ToolError::execution_failed("BackgroundTaskManager not configured for cron tool.".to_string()))
+    manager.clone().ok_or_else(|| {
+        ToolError::execution_failed(
+            "BackgroundTaskManager not configured for cron tool.".to_string(),
+        )
+    })
 }
 
 /// Tool for scheduling recurring agent tasks via cron expressions.
@@ -87,13 +89,12 @@ impl Tool for ScheduleCronTool {
 
         let manager = require_manager(&self.manager)?;
 
-        let spec = crate::background::store::TaskSpec::new(task_name, prompt)
-            .with_agent_type("default");
+        let spec =
+            crate::background::store::TaskSpec::new(task_name, prompt).with_agent_type("default");
 
-        let task_id = manager
-            .schedule_cron(spec, cron_expr)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to schedule cron task: {}", e)))?;
+        let task_id = manager.schedule_cron(spec, cron_expr).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to schedule cron task: {}", e))
+        })?;
 
         Ok(json!({
             "task_id": task_id,
@@ -149,10 +150,9 @@ impl Tool for ListCronTool {
     async fn execute(&self, _args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let manager = require_manager(&self.manager)?;
 
-        let tasks = manager
-            .list_cron_tasks()
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to list cron tasks: {}", e)))?;
+        let tasks = manager.list_cron_tasks().await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to list cron tasks: {}", e))
+        })?;
 
         let items: Vec<Value> = tasks
             .into_iter()
@@ -224,10 +224,9 @@ impl Tool for CancelCronTool {
 
         let manager = require_manager(&self.manager)?;
 
-        manager
-            .cancel_cron(task_id)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to cancel cron task: {}", e)))?;
+        manager.cancel_cron(task_id).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to cancel cron task: {}", e))
+        })?;
 
         Ok(json!({
             "task_id": task_id,
@@ -306,7 +305,10 @@ mod tests {
 
         let result = tool.execute(json!({}), ctx).await.unwrap();
         assert_eq!(result["count"], 1);
-        assert!(result["tasks"].as_array().unwrap()[0]["task_id"].as_str().unwrap().starts_with("cron_"));
+        assert!(result["tasks"].as_array().unwrap()[0]["task_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("cron_"));
     }
 
     #[tokio::test]
@@ -326,7 +328,10 @@ mod tests {
         let tool = CancelCronTool::with_manager(Arc::new(manager));
         let ctx = ToolContext::new();
 
-        let result = tool.execute(json!({"task_id": task_id}), ctx).await.unwrap();
+        let result = tool
+            .execute(json!({"task_id": task_id}), ctx)
+            .await
+            .unwrap();
         assert_eq!(result["status"], "cancelled");
     }
 }

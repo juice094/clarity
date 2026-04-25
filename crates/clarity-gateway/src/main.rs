@@ -11,8 +11,10 @@ use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::llm::LlmFactory;
-use clarity_core::memory::{LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};
 use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
+use clarity_core::memory::{
+    LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker,
+};
 use clarity_core::registry::ToolRegistry;
 use std::path::PathBuf;
 
@@ -59,7 +61,12 @@ fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig, Chann
         ChannelConfig::new()
     };
 
-    (telegram_config, discord_config, webhook_config, slack_config)
+    (
+        telegram_config,
+        discord_config,
+        webhook_config,
+        slack_config,
+    )
 }
 
 /// 创建并配置 Agent
@@ -99,7 +106,10 @@ You are a methodological query assistant. When answering:
         PersistentMemoryStore::new(&memory_db)
             .await
             .unwrap_or_else(|e| {
-                warn!("Failed to create persistent memory store: {}, using in-memory", e);
+                warn!(
+                    "Failed to create persistent memory store: {}, using in-memory",
+                    e
+                );
                 PersistentMemoryStore::new_in_memory().expect("in-memory store should not fail")
             }),
     );
@@ -109,26 +119,25 @@ You are a methodological query assistant. When answering:
     let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
     // 1. 优先尝试加载用户持久化配置
-    let llm: Arc<dyn clarity_core::llm::api::LlmProvider> = if let Some(user_cfg) =
-        clarity_gateway::handlers::load_persisted_config().await
-    {
-        info!(
-            "Found persisted user config for provider: {}",
-            user_cfg.provider
-        );
-        match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
-            Ok(provider) => {
-                info!("LLM provider loaded from persisted config");
-                Arc::from(provider)
+    let llm: Arc<dyn clarity_core::llm::api::LlmProvider> =
+        if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
+            info!(
+                "Found persisted user config for provider: {}",
+                user_cfg.provider
+            );
+            match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
+                Ok(provider) => {
+                    info!("LLM provider loaded from persisted config");
+                    Arc::from(provider)
+                }
+                Err(e) => {
+                    warn!("Failed to build provider from persisted config: {}", e);
+                    load_llm_fallback().await
+                }
             }
-            Err(e) => {
-                warn!("Failed to build provider from persisted config: {}", e);
-                load_llm_fallback().await
-            }
-        }
-    } else {
-        load_llm_fallback().await
-    };
+        } else {
+            load_llm_fallback().await
+        };
 
     // 创建 Agent
     let agent = Agent::with_config(registry, config)
@@ -162,7 +171,10 @@ You are a methodological query assistant. When answering:
             info!("Memory compiler callback registered");
         }
         Err(e) => {
-            warn!("Failed to create session store: {}, memory compiler disabled", e);
+            warn!(
+                "Failed to create session store: {}, memory compiler disabled",
+                e
+            );
         }
     }
 

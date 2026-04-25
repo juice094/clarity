@@ -488,12 +488,10 @@ async fn test_agent_run_streaming_with_wire() {
     assert!(result.is_ok());
 }
 
-
 #[test]
 fn test_active_skill_snapshotted_at_turn_start() {
     let registry = ToolRegistry::new();
-    let agent = Agent::with_config(registry, AgentConfig::new())
-        .with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(MockLlm));
 
     // Set active skill before turn
     agent.set_active_skill(Some("test-skill".to_string()));
@@ -520,8 +518,7 @@ fn test_active_skill_snapshotted_at_turn_start() {
 #[test]
 fn test_active_skill_snapshot_none_when_not_set() {
     let registry = ToolRegistry::new();
-    let agent = Agent::with_config(registry, AgentConfig::new())
-        .with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(MockLlm));
 
     let _token = agent.begin_turn().expect("begin_turn should succeed");
     assert_eq!(agent.snapshotted_active_skill(), None);

@@ -5,14 +5,14 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
+#[cfg(feature = "local-llm")]
+use clarity_core::llm::{LocalGgufConfig, LocalGgufProvider};
 use clarity_core::{
-    Agent, ToolRegistry,
     agent::{AgentConfig, TokenUsage},
     approval::ApprovalMode,
     llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm},
+    Agent, ToolRegistry,
 };
-#[cfg(feature = "local-llm")]
-use clarity_core::llm::{LocalGgufConfig, LocalGgufProvider};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -20,7 +20,11 @@ use std::time::Instant;
 
 /// Headless mode CLI arguments
 #[derive(Parser, Debug)]
-#[command(name = "clarity-headless", version, about = "Headless CLI for Clarity Agent")]
+#[command(
+    name = "clarity-headless",
+    version,
+    about = "Headless CLI for Clarity Agent"
+)]
 struct Args {
     /// User prompt / instruction
     #[arg(short, long)]
@@ -101,7 +105,9 @@ async fn async_main() -> Result<()> {
 
     let prompt = read_prompt(&args).context("Failed to read prompt")?;
 
-    let provider = build_provider(&args).await.context("Failed to build LLM provider")?;
+    let provider = build_provider(&args)
+        .await
+        .context("Failed to build LLM provider")?;
 
     let approval_mode = if args.plan {
         ApprovalMode::Plan

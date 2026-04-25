@@ -126,9 +126,7 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
     // 创建记忆触发器（每 5 轮对话触发一次）
     let compiled_dir = memory_db_path.parent().unwrap().join("compiled");
     let _ = std::fs::create_dir_all(&compiled_dir);
-    let memory_ticker = SharedMemoryTicker::new(
-        MemoryTicker::new(&compiled_dir, Some(5))
-    );
+    let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
     // 加载 SkillRegistry（尝试多个路径）
     let skill_registry = load_skill_registry();

@@ -11,10 +11,7 @@ pub async fn lsp_start(
     args: Vec<String>,
     root_path: String,
 ) -> Result<String, String> {
-    state
-        .lsp_manager
-        .start(server_path, args, root_path)
-        .await
+    state.lsp_manager.start(server_path, args, root_path).await
 }
 
 /// Send an LSP JSON-RPC message to the server.

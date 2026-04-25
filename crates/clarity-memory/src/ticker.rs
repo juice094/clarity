@@ -17,7 +17,9 @@ pub const DEFAULT_TURNS_PER_SUMMARY: u32 = 6;
 /// Note: This doesn't require Send because SQLite connections are not Send.
 /// The callback will be executed on the same thread.
 pub type CompileCallback = Arc<
-    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>> + Send + Sync,
+    dyn Fn() -> Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>>
+        + Send
+        + Sync,
 >;
 
 /// Turn-based memory compilation trigger
@@ -40,7 +42,8 @@ pub struct MemoryTicker {
 /// Future type returned by notify_turn
 ///
 /// Note: This doesn't require Send because SQLite connections are not Send.
-pub type CompilationFuture = Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>>;
+pub type CompilationFuture =
+    Pin<Box<dyn Future<Output = Result<HashMap<String, CompileStatus>>> + Send>>;
 
 impl MemoryTicker {
     /// Create a new MemoryTicker without a compile callback

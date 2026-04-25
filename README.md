@@ -38,7 +38,7 @@ crates/
  cargo install --path crates/clarity-gateway  # Gateway + Web IDE
  cargo install --path crates/clarity-headless # Headless CLI
 
-# Configure API key (or use local GGUF via --features local-llm)
+# Configure API key (or use local GGUF, no key needed)
 mkdir -p .clarity
 cat > .clarity/user_config.json << 'EOF'
 { "provider": "kimi-code", "api_key": "sk-kimi-..." }
@@ -47,14 +47,30 @@ EOF
 # Run
 clarity-gateway   # http://127.0.0.1:18800
 clarity-tui       # in another terminal
+
+# Desktop GUI (Tauri 2)
+cd crates/clarity-tauri/frontend && npm install && npm run build
+cargo tauri dev   # or cargo tauri build --features cuda for CUDA acceleration
 ```
+
+### Local LLM (offline, no API key)
+
+Place a `.gguf` model and its `tokenizer.json` in `~/models/`:
+
+```bash
+mkdir -p ~/models
+cp Qwen2.5-7B-Instruct.Q4_K_M.gguf ~/models/
+cp tokenizer.json ~/models/
+```
+
+Then select **Local (GGUF)** in Settings Panel. The app automatically falls back to local inference when offline.
 
 Supported providers: `kimi`, `kimi-code`, `openai`, `anthropic`, `deepseek`, `ollama`, `local` (GGUF via Candle).
 
 ## Development
 
 ```bash
-cargo test --workspace --lib          # 498+ tests, 0 failed
+cargo test --workspace --lib          # 502+ tests, 0 failed
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo run -p clarity-tui
 cargo run -p clarity-gateway

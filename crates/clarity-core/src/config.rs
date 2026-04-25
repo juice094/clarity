@@ -219,9 +219,7 @@ impl Config {
                     }
                 }
                 "kimi" | "kimi-code" | "moonshot" => {
-                    if env::var("KIMI_API_KEY").is_err()
-                        && env::var("KIMI_CODE_API_KEY").is_err()
-                    {
+                    if env::var("KIMI_API_KEY").is_err() && env::var("KIMI_CODE_API_KEY").is_err() {
                         env::set_var("KIMI_API_KEY", api_key);
                         info!("Exported KIMI_API_KEY from config profile");
                     }

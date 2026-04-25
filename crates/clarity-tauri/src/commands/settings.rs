@@ -76,7 +76,11 @@ fn scan_local_models() -> Vec<(String, String)> {
     let mut seen = HashSet::new();
 
     // Helper to collect .gguf files from a directory
-    fn add_ggufs_from_dir(dir: &PathBuf, results: &mut Vec<(String, String)>, seen: &mut HashSet<String>) {
+    fn add_ggufs_from_dir(
+        dir: &PathBuf,
+        results: &mut Vec<(String, String)>,
+        seen: &mut HashSet<String>,
+    ) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let path = entry.path();
@@ -146,9 +150,7 @@ fn validate_probe_url(probe: &str) -> Result<(), String> {
     // Split from the right so IPv6 literals (if ever supported) won't break us.
     let parts: Vec<&str> = probe.rsplitn(2, ':').collect();
     if parts.len() != 2 {
-        return Err(
-            "Probe URL must contain a port, e.g. 1.1.1.1:443".to_string(),
-        );
+        return Err("Probe URL must contain a port, e.g. 1.1.1.1:443".to_string());
     }
     let port: u16 = parts[0]
         .parse()
@@ -203,11 +205,7 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
             "Ollama".into(),
             vec!["llama3.2".into(), "qwen2.5".into()],
         ),
-        (
-            "local".into(),
-            "Local (GGUF)".into(),
-            local_model_names,
-        ),
+        ("local".into(), "Local (GGUF)".into(), local_model_names),
     ]
 }
 
@@ -236,9 +234,6 @@ pub fn get_approval_modes() -> Vec<(String, String)> {
             "Interactive — Approve each tool call".into(),
         ),
         ("yolo".into(), "Yolo — Auto-approve all".into()),
-        (
-            "plan".into(),
-            "Plan — Review plan before execution".into(),
-        ),
+        ("plan".into(), "Plan — Review plan before execution".into()),
     ]
 }

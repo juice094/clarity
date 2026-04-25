@@ -90,11 +90,7 @@ impl Agent {
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
         // Build a compact list of available tools for the planning prompt.
-        let tool_names = self
-            .registry
-            .list_tools()
-            .unwrap_or_default()
-            .join(", ");
+        let tool_names = self.registry.list_tools().unwrap_or_default().join(", ");
 
         let system_prompt = format!(
             r#"You are a planning assistant.
@@ -122,10 +118,7 @@ Rules:
 - If the request needs no tools, return an empty `steps` array."#
         );
 
-        let messages = vec![
-            Message::system(system_prompt),
-            Message::user(query),
-        ];
+        let messages = vec![Message::system(system_prompt), Message::user(query)];
 
         // We pass an empty tools object because the planning prompt itself
         // enumerates the tools; we do not want the LLM to emit function_call
@@ -152,9 +145,7 @@ Rules:
                 .trim_end_matches("```")
                 .trim()
         } else if raw.starts_with("```") {
-            raw.trim_start_matches("```")
-                .trim_end_matches("```")
-                .trim()
+            raw.trim_start_matches("```").trim_end_matches("```").trim()
         } else {
             raw
         };
@@ -237,8 +228,10 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &serde_json::Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>, AgentError>
-            {
+            ) -> Result<
+                tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>,
+                AgentError,
+            > {
                 let (_, rx) = tokio::sync::mpsc::channel(1);
                 Ok(rx)
             }
@@ -246,8 +239,7 @@ mod tests {
         }
 
         let registry = ToolRegistry::with_builtin_tools();
-        let agent = Agent::with_config(registry, AgentConfig::new())
-            .with_llm(Arc::new(PlanMock));
+        let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(PlanMock));
 
         let plan = agent.plan("do something").await.unwrap();
         assert_eq!(plan.title, "Test Plan");
@@ -282,8 +274,10 @@ mod tests {
                 &self,
                 _messages: &[Message],
                 _tools: &serde_json::Value,
-            ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>, AgentError>
-            {
+            ) -> Result<
+                tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>,
+                AgentError,
+            > {
                 let (_, rx) = tokio::sync::mpsc::channel(1);
                 Ok(rx)
             }
@@ -291,8 +285,7 @@ mod tests {
         }
 
         let registry = ToolRegistry::with_builtin_tools();
-        let agent = Agent::with_config(registry, AgentConfig::new())
-            .with_llm(Arc::new(BadMock));
+        let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(BadMock));
 
         let err = agent.plan("test").await.unwrap_err();
         assert!(matches!(err, AgentError::Llm(_)));

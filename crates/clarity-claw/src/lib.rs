@@ -84,10 +84,7 @@ mod tests {
 
     #[test]
     fn test_format_tooltip_idle() {
-        assert_eq!(
-            format_tooltip(0, 0, 0),
-            "Clarity Claw — idle (no tasks)"
-        );
+        assert_eq!(format_tooltip(0, 0, 0), "Clarity Claw — idle (no tasks)");
     }
 
     #[test]
@@ -100,12 +97,18 @@ mod tests {
 
     #[test]
     fn test_classify_task_status() {
-        assert_eq!(classify_task_status("Completed"), ("✅ Task completed", None));
+        assert_eq!(
+            classify_task_status("Completed"),
+            ("✅ Task completed", None)
+        );
         assert_eq!(
             classify_task_status("Failed"),
             ("❌ Task failed", Some(notify_rust::Urgency::Critical))
         );
-        assert_eq!(classify_task_status("Cancelled"), ("🚫 Task cancelled", None));
+        assert_eq!(
+            classify_task_status("Cancelled"),
+            ("🚫 Task cancelled", None)
+        );
         assert_eq!(classify_task_status("Unknown"), ("Task finished", None));
     }
 

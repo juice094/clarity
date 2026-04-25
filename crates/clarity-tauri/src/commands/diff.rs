@@ -2,7 +2,7 @@ use serde::Serialize;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct DiffLine {
-    pub tag: String,  // "equal", "delete", "insert"
+    pub tag: String, // "equal", "delete", "insert"
     pub content: String,
 }
 
@@ -26,17 +26,34 @@ pub fn compute_diff(old_text: String, new_text: String) -> Vec<DiffHunk> {
                 let text = change.value().to_string();
                 match change.tag() {
                     similar::ChangeTag::Delete => {
-                        if old_start.is_none() { old_start = change.old_index().map(|i| i + 1); }
-                        lines.push(DiffLine { tag: "delete".into(), content: text });
+                        if old_start.is_none() {
+                            old_start = change.old_index().map(|i| i + 1);
+                        }
+                        lines.push(DiffLine {
+                            tag: "delete".into(),
+                            content: text,
+                        });
                     }
                     similar::ChangeTag::Insert => {
-                        if new_start.is_none() { new_start = change.new_index().map(|i| i + 1); }
-                        lines.push(DiffLine { tag: "insert".into(), content: text });
+                        if new_start.is_none() {
+                            new_start = change.new_index().map(|i| i + 1);
+                        }
+                        lines.push(DiffLine {
+                            tag: "insert".into(),
+                            content: text,
+                        });
                     }
                     similar::ChangeTag::Equal => {
-                        if old_start.is_none() { old_start = change.old_index().map(|i| i + 1); }
-                        if new_start.is_none() { new_start = change.new_index().map(|i| i + 1); }
-                        lines.push(DiffLine { tag: "equal".into(), content: text });
+                        if old_start.is_none() {
+                            old_start = change.old_index().map(|i| i + 1);
+                        }
+                        if new_start.is_none() {
+                            new_start = change.new_index().map(|i| i + 1);
+                        }
+                        lines.push(DiffLine {
+                            tag: "equal".into(),
+                            content: text,
+                        });
                     }
                 }
             }

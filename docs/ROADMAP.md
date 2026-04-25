@@ -34,9 +34,9 @@
 ### 当前可执行动作
 
 - ✅ Settings Panel 中本地模型路径配置 + 自动扫描
-- 离线模式检测（无网络时自动 fallback 到 LocalGgufProvider）
-- 单二进制打包调研（cargo-bundle / tauri-bundler）
-- `clarity-tauri` 默认启用 `local-llm` feature（当前默认构建不包含 LocalGgufProvider，GUI 配置无法作用于运行时）
+- ✅ 离线模式检测（无网络时自动 fallback 到 LocalGgufProvider）
+- ✅ `clarity-tauri` 默认启用 `local-llm` feature
+- ⏸️ 单二进制打包调研（cargo-bundle / tauri-bundler）
 
 ### 风险对冲
 
@@ -58,7 +58,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
-| 审批系统增强 | 🔄 进行中 | AI 分类器 + 规则引擎 |
+| 审批系统增强 | ⏸️ 未启动 | AI 分类器 + 规则引擎（设计完成，代码未动工） |
 | 文件浏览器集成 | ✅ 已完成 | 工作目录树 + `@path` 引用 |
 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel |
 | WebBrowserTool | ✅ 已完成 | reqwest+scraper 轻量实现 |
@@ -101,11 +101,11 @@ cargo audit                       # 无高危漏洞
 ## 里程碑时间线
 
 ```
-2026-04 ── v0.2.0      基础功能完备（当前）
+2026-04 ── v0.2.0      本地优先标杆（当前）— Local LLM + 离线 fallback + Desktop GUI
     │
-2026-05 ── v0.3.0-alpha  本地 LLM 完善 + Desktop GUI 功能完整
+2026-05 ── v0.3.0-alpha  零依赖发行 — 单二进制打包 + 嵌入式模型
     │
-2026-06 ── v0.4.0-beta   LSP + 性能优化 + 打包
+2026-06 ── v0.4.0-beta   性能优化 + 快捷键 + 搜索增强 + 审批系统增强
     │
 2026-07 ── v0.5.0-beta   Mobile iOS/Android 适配
     │

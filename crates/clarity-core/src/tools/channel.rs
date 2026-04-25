@@ -156,11 +156,7 @@ impl Tool for ChannelSendTool {
 
         // Send HTTP POST
         let client = reqwest::Client::new();
-        let resp = client
-            .post(webhook_url)
-            .json(&payload)
-            .send()
-            .await;
+        let resp = client.post(webhook_url).json(&payload).send().await;
 
         match resp {
             Ok(response) => {

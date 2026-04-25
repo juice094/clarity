@@ -279,7 +279,6 @@ impl StorageBackend for HybridStore {
     }
 }
 
-
 #[cfg(test)]
 mod simple_tests {
     use super::*;

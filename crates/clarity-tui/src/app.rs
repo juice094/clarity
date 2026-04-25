@@ -413,44 +413,36 @@ impl App {
 
     async fn handle_task_command(&mut self, args: &[&str]) {
         match args.first().copied() {
-            Some("list") | None => {
-                match &self.task_manager {
-                    Some(tm) => match tm.list().await {
-                        Ok(tasks) => {
-                            if tasks.is_empty() {
-                                self.messages.push(Message::new(
-                                    "暂无后台任务。",
-                                    MessageType::System,
-                                ));
-                            } else {
-                                let mut lines = vec!["后台任务列表:".to_string()];
-                                for t in tasks {
-                                    lines.push(format!(
-                                        "  {} | {:?} | {}",
-                                        t.id, t.status, t.spec.name
-                                    ));
-                                }
-                                self.messages.push(Message::new(
-                                    lines.join("\n"),
-                                    MessageType::System,
-                                ));
+            Some("list") | None => match &self.task_manager {
+                Some(tm) => match tm.list().await {
+                    Ok(tasks) => {
+                        if tasks.is_empty() {
+                            self.messages
+                                .push(Message::new("暂无后台任务。", MessageType::System));
+                        } else {
+                            let mut lines = vec!["后台任务列表:".to_string()];
+                            for t in tasks {
+                                lines
+                                    .push(format!("  {} | {:?} | {}", t.id, t.status, t.spec.name));
                             }
+                            self.messages
+                                .push(Message::new(lines.join("\n"), MessageType::System));
                         }
-                        Err(e) => {
-                            self.messages.push(Message::new(
-                                format!("获取任务列表失败: {}", e),
-                                MessageType::System,
-                            ));
-                        }
-                    },
-                    None => {
+                    }
+                    Err(e) => {
                         self.messages.push(Message::new(
-                            "后台任务管理器未初始化。",
+                            format!("获取任务列表失败: {}", e),
                             MessageType::System,
                         ));
                     }
+                },
+                None => {
+                    self.messages.push(Message::new(
+                        "后台任务管理器未初始化。",
+                        MessageType::System,
+                    ));
                 }
-            }
+            },
             Some("status") => {
                 if args.len() < 2 {
                     self.messages.push(Message::new(
@@ -601,10 +593,8 @@ impl App {
                     lines.push("输入 /execute 执行此计划，或继续对话。".to_string());
                 }
                 self.pending_plan = Some(plan);
-                self.messages.push(Message::new(
-                    lines.join("\n"),
-                    MessageType::System,
-                ));
+                self.messages
+                    .push(Message::new(lines.join("\n"), MessageType::System));
             }
             Err(e) => {
                 self.messages.push(Message::new(
@@ -634,21 +624,16 @@ impl App {
         let raw = args.join(" ");
         let parsed = crate::parse::parse_parallel_args(&raw);
         if parsed.is_empty() {
-            self.messages.push(Message::new(
-                "未指定任何子代理任务。",
-                MessageType::System,
-            ));
+            self.messages
+                .push(Message::new("未指定任何子代理任务。", MessageType::System));
             return;
         }
 
         let specs: Vec<clarity_core::subagents::RunSpec> = parsed
             .into_iter()
             .map(|(agent_type, prompt)| {
-                clarity_core::subagents::RunSpec::new(
-                    format!("parallel-{}", &agent_type),
-                    prompt,
-                )
-                .with_type(&agent_type)
+                clarity_core::subagents::RunSpec::new(format!("parallel-{}", &agent_type), prompt)
+                    .with_type(&agent_type)
             })
             .collect();
 
@@ -657,8 +642,8 @@ impl App {
             MessageType::System,
         ));
 
-        let config = clarity_core::subagents::ParallelConfig::new()
-            .with_max_concurrency(specs.len().min(4));
+        let config =
+            clarity_core::subagents::ParallelConfig::new().with_max_concurrency(specs.len().min(4));
 
         match self.agent.run_parallel(specs, config).await {
             Ok(result) => {
@@ -666,8 +651,14 @@ impl App {
                 let total = result.results.len() + result.failures.len();
                 let mut lines = vec![
                     format!("┌─────────────────────────────────────────────┐"),
-                    format!("│ 🚀 并行执行完成  {} 个任务  {:.1}s          │", total, elapsed_s),
-                    format!("│ 成功率: {:>3.0}%                                  │", result.success_rate() * 100.0),
+                    format!(
+                        "│ 🚀 并行执行完成  {} 个任务  {:.1}s          │",
+                        total, elapsed_s
+                    ),
+                    format!(
+                        "│ 成功率: {:>3.0}%                                  │",
+                        result.success_rate() * 100.0
+                    ),
                     format!("└─────────────────────────────────────────────┘"),
                 ];
 
@@ -677,9 +668,17 @@ impl App {
                     lines.push(format!("  {:<10} {:<10} {}", "代理ID", "类型", "摘要"));
                     lines.push(format!("  {:<10} {:<10} {}", "──────", "────", "────"));
                     for r in &result.results {
-                        let id = if r.agent_id.len() > 8 { &r.agent_id[..8] } else { &r.agent_id };
+                        let id = if r.agent_id.len() > 8 {
+                            &r.agent_id[..8]
+                        } else {
+                            &r.agent_id
+                        };
                         let summary = r.summary.lines().next().unwrap_or("No summary");
-                        let summary = if summary.len() > 36 { &summary[..36] } else { summary };
+                        let summary = if summary.len() > 36 {
+                            &summary[..36]
+                        } else {
+                            summary
+                        };
                         lines.push(format!("  {:<10} {:<10} {}", id, r.agent_type, summary));
                     }
                 }
@@ -700,10 +699,8 @@ impl App {
                     }
                 }
 
-                self.messages.push(Message::new(
-                    lines.join("\n"),
-                    MessageType::System,
-                ));
+                self.messages
+                    .push(Message::new(lines.join("\n"), MessageType::System));
             }
             Err(e) => {
                 self.messages.push(Message::new(
@@ -734,15 +731,10 @@ impl App {
                         let mut lines = vec!["✅ 计划执行完成:".to_string()];
                         for r in &results {
                             let icon = if r.success { "✓" } else { "✗" };
-                            lines.push(format!(
-                                "  {} {}: {}",
-                                icon, r.step_id, r.output
-                            ));
+                            lines.push(format!("  {} {}: {}", icon, r.step_id, r.output));
                         }
-                        self.messages.push(Message::new(
-                            lines.join("\n"),
-                            MessageType::System,
-                        ));
+                        self.messages
+                            .push(Message::new(lines.join("\n"), MessageType::System));
                     }
                     Err(e) => {
                         self.messages.push(Message::new(

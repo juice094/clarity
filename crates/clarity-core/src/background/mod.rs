@@ -264,7 +264,10 @@ impl BackgroundTaskManager {
     }
 
     /// 设置 Cron 任务调度器
-    pub fn with_cron_scheduler(mut self, scheduler: Arc<tokio::sync::Mutex<CronScheduler>>) -> Self {
+    pub fn with_cron_scheduler(
+        mut self,
+        scheduler: Arc<tokio::sync::Mutex<CronScheduler>>,
+    ) -> Self {
         self.cron_scheduler = Some(scheduler);
         self
     }
@@ -624,11 +627,7 @@ impl BackgroundTaskManager {
     ///
     /// Returns the generated cron task id, or an error if the expression is invalid
     /// or the cron scheduler is not configured.
-    pub async fn schedule_cron(
-        &self,
-        spec: TaskSpec,
-        cron_expr: &str,
-    ) -> anyhow::Result<String> {
+    pub async fn schedule_cron(&self, spec: TaskSpec, cron_expr: &str) -> anyhow::Result<String> {
         let cron = self
             .cron_scheduler
             .as_ref()
@@ -1187,21 +1186,18 @@ mod tests {
         .with_agent_executor(executor);
 
         // Start the scheduler loop (tick every 100ms for fast test)
-        let handle =
-            manager.start_agent_scheduler_loop(std::time::Duration::from_millis(100));
+        let handle = manager.start_agent_scheduler_loop(std::time::Duration::from_millis(100));
 
         // Schedule a task after loop starts
         let spec = TaskSpec::new("auto_task", "Say hello").with_agent_type("coder");
         let task_id = manager.schedule(spec).await.unwrap();
 
         // Wait for the loop to pick it up and complete
-        let result = tokio::time::timeout(
-            tokio::time::Duration::from_secs(5),
-            manager.wait(&task_id),
-        )
-        .await
-        .expect("timeout waiting for scheduler loop")
-        .expect("wait error");
+        let result =
+            tokio::time::timeout(tokio::time::Duration::from_secs(5), manager.wait(&task_id))
+                .await
+                .expect("timeout waiting for scheduler loop")
+                .expect("wait error");
 
         assert_eq!(result.status, TaskStatus::Completed);
 

@@ -209,7 +209,9 @@ impl Agent {
             user_input: query.as_ref().to_string(),
         });
 
-        let (final_response, completed, tool_names) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        let (final_response, completed, tool_names) = self
+            .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
+            .await?;
         self.finish_turn();
 
         // Auto-classify delivery tier based on tools used this turn
@@ -247,7 +249,10 @@ impl Agent {
         if let Some(ref ticker) = self.memory_ticker {
             match ticker.notify_turn_and_wait("default").await {
                 Some(Ok(results)) => {
-                    info!("Memory ticker triggered, compilation results: {:?}", results);
+                    info!(
+                        "Memory ticker triggered, compilation results: {:?}",
+                        results
+                    );
                 }
                 Some(Err(e)) => {
                     warn!("Memory ticker compilation failed: {}", e);
@@ -303,7 +308,9 @@ impl Agent {
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
-        let (final_response, completed, tool_names) = self.run_sync_loop(&mut messages, &tools, llm, &cancel_token).await?;
+        let (final_response, completed, tool_names) = self
+            .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
+            .await?;
         self.finish_turn();
 
         // Auto-classify delivery tier based on tools used this turn
@@ -403,7 +410,14 @@ impl Agent {
         });
 
         let result = self
-            .run_streaming_loop(messages, query.as_ref(), tools, llm.clone(), on_chunk, &cancel_token)
+            .run_streaming_loop(
+                messages,
+                query.as_ref(),
+                tools,
+                llm.clone(),
+                on_chunk,
+                &cancel_token,
+            )
             .await;
         self.finish_turn();
         result
@@ -451,7 +465,14 @@ impl Agent {
         });
 
         let result = self
-            .run_streaming_loop(messages, &query_hint, tools, llm.clone(), on_chunk, &cancel_token)
+            .run_streaming_loop(
+                messages,
+                &query_hint,
+                tools,
+                llm.clone(),
+                on_chunk,
+                &cancel_token,
+            )
             .await;
         self.finish_turn();
         result
@@ -646,7 +667,10 @@ impl Agent {
         if let Some(ref ticker) = self.memory_ticker {
             match ticker.notify_turn_and_wait("default").await {
                 Some(Ok(results)) => {
-                    info!("Memory ticker triggered, compilation results: {:?}", results);
+                    info!(
+                        "Memory ticker triggered, compilation results: {:?}",
+                        results
+                    );
                 }
                 Some(Err(e)) => {
                     warn!("Memory ticker compilation failed: {}", e);

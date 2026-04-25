@@ -271,7 +271,7 @@ mod tests {
 
         // Cycle through turns
         assert!(shared.notify_turn("session-1").await.is_none()); // 1
-        // Trigger and wait to reset the compiling flag
+                                                                  // Trigger and wait to reset the compiling flag
         assert!(shared.notify_turn_and_wait("session-1").await.is_some()); // 2 - trigger
         assert!(shared.notify_turn("session-1").await.is_none()); // 3
         assert!(shared.notify_turn_and_wait("session-1").await.is_some()); // 4 - trigger

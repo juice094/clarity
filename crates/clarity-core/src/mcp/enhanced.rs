@@ -729,10 +729,14 @@ impl McpClient for SseMcpClient {
                                     if !current_data.is_empty() {
                                         let data = current_data.trim_start().to_string();
                                         if current_event == "endpoint" {
-                                            let resolved = if data.starts_with("http://") || data.starts_with("https://") {
+                                            let resolved = if data.starts_with("http://")
+                                                || data.starts_with("https://")
+                                            {
                                                 data
                                             } else {
-                                                match url::Url::parse(&url).and_then(|base| base.join(&data)) {
+                                                match url::Url::parse(&url)
+                                                    .and_then(|base| base.join(&data))
+                                                {
                                                     Ok(u) => u.to_string(),
                                                     Err(e) => {
                                                         warn!("Failed to resolve endpoint URL '{}': {}", data, e);
@@ -743,10 +747,19 @@ impl McpClient for SseMcpClient {
                                             if !resolved.is_empty() {
                                                 let mut ep = message_endpoint.write().await;
                                                 *ep = Some(resolved);
-                                                info!("SSE message endpoint discovered: {}", ep.as_ref().unwrap());
+                                                info!(
+                                                    "SSE message endpoint discovered: {}",
+                                                    ep.as_ref().unwrap()
+                                                );
                                             }
-                                        } else if current_event == "message" || current_event.is_empty() {
-                                            if let Ok(response) = serde_json::from_str::<JsonRpcResponse<Value>>(&data) {
+                                        } else if current_event == "message"
+                                            || current_event.is_empty()
+                                        {
+                                            if let Ok(response) =
+                                                serde_json::from_str::<JsonRpcResponse<Value>>(
+                                                    &data,
+                                                )
+                                            {
                                                 let mut pending = pending.write().await;
                                                 if let Some(sender) = pending.remove(&response.id) {
                                                     let _ = sender.send(response);
@@ -1521,7 +1534,10 @@ mod tests {
         let mut client = SseMcpClient::new(config);
 
         let result = client.connect().await;
-        assert!(result.is_err(), "Expected timeout when endpoint is not sent");
+        assert!(
+            result.is_err(),
+            "Expected timeout when endpoint is not sent"
+        );
         assert!(matches!(result.unwrap_err(), McpError::RequestTimeout));
     }
 
@@ -1540,8 +1556,14 @@ mod tests {
             let n = sse_socket.read(&mut buf).await.unwrap();
             assert!(String::from_utf8_lossy(&buf[..n]).contains("GET /sse"));
 
-            sse_socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n").await.unwrap();
-            sse_socket.write_all(b"event: endpoint\r\ndata: /messages?sid=abc\r\n\r\n").await.unwrap();
+            sse_socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n")
+                .await
+                .unwrap();
+            sse_socket
+                .write_all(b"event: endpoint\r\ndata: /messages?sid=abc\r\n\r\n")
+                .await
+                .unwrap();
 
             // POST for initialize (id=1)
             let (mut post1, _) = listener.accept().await.unwrap();
@@ -1550,7 +1572,10 @@ mod tests {
             let req1 = String::from_utf8_lossy(&buf1[..n1]);
             assert!(req1.contains("POST /messages?sid=abc"));
             assert!(req1.contains("initialize"));
-            post1.write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+            post1
+                .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n")
+                .await
+                .unwrap();
             drop(post1);
 
             // Send initialize response via SSE
@@ -1564,7 +1589,10 @@ mod tests {
             let n2 = post2.read(&mut buf2).await.unwrap();
             let req2 = String::from_utf8_lossy(&buf2[..n2]);
             assert!(req2.contains("notifications/initialized"));
-            post2.write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n").await.unwrap();
+            post2
+                .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n")
+                .await
+                .unwrap();
             drop(post2);
         });
 

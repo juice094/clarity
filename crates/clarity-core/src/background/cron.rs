@@ -89,7 +89,10 @@ impl CronScheduler {
     pub fn add_task(&mut self, task_spec: TaskSpec, cron_expr: &str) -> Result<String, CronError> {
         let schedule = CronSchedule::new(cron_expr)?;
 
-        let task_id = format!("cron_{}", &uuid::Uuid::new_v4().to_string().replace('-', "")[..12]);
+        let task_id = format!(
+            "cron_{}",
+            &uuid::Uuid::new_v4().to_string().replace('-', "")[..12]
+        );
 
         let cron_task = CronTask {
             task_spec,
@@ -165,7 +168,10 @@ mod tests {
         let spec = TaskSpec::new("bad", "test");
         let result = scheduler.add_task(spec, "not a cron");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CronError::InvalidExpression(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            CronError::InvalidExpression(_)
+        ));
     }
 
     #[test]

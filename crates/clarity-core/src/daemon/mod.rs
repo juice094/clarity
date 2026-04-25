@@ -62,7 +62,11 @@ impl DaemonLock {
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let pid_file = dirs::home_dir()
-            .map(|p| p.join(".clarity").join("daemon").join(format!("{}.pid", name)))
+            .map(|p| {
+                p.join(".clarity")
+                    .join("daemon")
+                    .join(format!("{}.pid", name))
+            })
             .unwrap_or_else(|| PathBuf::from(format!("{}.pid", name)));
         Self { name, pid_file }
     }
@@ -101,9 +105,8 @@ impl DaemonLock {
         let timestamp = now_secs();
         let content = format!("{}\n{}\n", pid, timestamp);
 
-        std::fs::write(&self.pid_file, content).map_err(|e| {
-            DaemonError::LockfileError(format!("Failed to write lockfile: {}", e))
-        })?;
+        std::fs::write(&self.pid_file, content)
+            .map_err(|e| DaemonError::LockfileError(format!("Failed to write lockfile: {}", e)))?;
 
         info!("Daemon lock acquired: {} (PID {})", self.name, pid);
         Ok(())
@@ -226,11 +229,7 @@ impl DaemonRuntime {
     ///
     /// * `task` — The long-running async work to execute. Receives a shutdown receiver.
     /// * `timeout` — Maximum time to wait for graceful shutdown after signal
-    pub async fn run<F, Fut>(
-        &self,
-        task: F,
-        timeout: Option<Duration>,
-    ) -> Result<(), DaemonError>
+    pub async fn run<F, Fut>(&self, task: F, timeout: Option<Duration>) -> Result<(), DaemonError>
     where
         F: FnOnce(tokio::sync::broadcast::Receiver<()>) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<(), DaemonError>> + Send + 'static,
@@ -256,7 +255,10 @@ impl DaemonRuntime {
                 }
                 Ok(Err(join_err)) => {
                     warn!("Daemon task panicked: {}", join_err);
-                    Err(DaemonError::SignalError(format!("Task panicked: {}", join_err)))
+                    Err(DaemonError::SignalError(format!(
+                        "Task panicked: {}",
+                        join_err
+                    )))
                 }
                 Err(_) => {
                     warn!("Graceful shutdown timed out after {:?}", timeout);
@@ -282,9 +284,8 @@ impl DaemonRuntime {
     /// Wait for OS shutdown signal (Ctrl+C / SIGTERM)
     #[cfg(unix)]
     async fn wait_for_shutdown_signal() -> Result<(), DaemonError> {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .map_err(|e| DaemonError::SignalError(format!("SIGTERM setup failed: {}", e)))?;
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .map_err(|e| DaemonError::SignalError(format!("SIGTERM setup failed: {}", e)))?;
         let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
             .map_err(|e| DaemonError::SignalError(format!("SIGINT setup failed: {}", e)))?;
 
@@ -334,7 +335,10 @@ mod tests {
         let lock2 = DaemonLock::new("test-daemon-1");
         let result = lock2.acquire();
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), DaemonError::AlreadyRunning(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            DaemonError::AlreadyRunning(_)
+        ));
 
         // Release and re-acquire should succeed
         lock.release().unwrap();

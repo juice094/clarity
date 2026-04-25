@@ -278,10 +278,7 @@ impl LlmProvider for OllamaProvider {
                     if !resp.status().is_success() {
                         let err = resp.text().await.unwrap_or_default();
                         let _ = tx
-                            .send(Err(AgentError::Llm(format!(
-                                "Ollama API error: {}",
-                                err
-                            ))))
+                            .send(Err(AgentError::Llm(format!("Ollama API error: {}", err))))
                             .await;
                         return;
                     }
@@ -319,11 +316,9 @@ impl LlmProvider for OllamaProvider {
                                                     .into_iter()
                                                     .map(|tc| ToolCall {
                                                         id: tc.id.unwrap_or_else(next_tool_call_id),
-                                                        call_type: tc
-                                                            .call_type
-                                                            .unwrap_or_else(|| {
-                                                                "function".to_string()
-                                                            }),
+                                                        call_type: tc.call_type.unwrap_or_else(
+                                                            || "function".to_string(),
+                                                        ),
                                                         function: FunctionCall {
                                                             name: tc.function.name,
                                                             arguments: tc.function.arguments,
@@ -355,10 +350,7 @@ impl LlmProvider for OllamaProvider {
                             }
                             Err(e) => {
                                 let _ = tx
-                                    .send(Err(AgentError::Llm(format!(
-                                        "Stream error: {}",
-                                        e
-                                    ))))
+                                    .send(Err(AgentError::Llm(format!("Stream error: {}", e))))
                                     .await;
                                 return;
                             }
@@ -529,7 +521,8 @@ mod tests {
 
     #[test]
     fn test_ollama_stream_chunk_deserialization() {
-        let json_str = r#"{"model":"llama3","message":{"role":"assistant","content":"Hello"},"done":false}"#;
+        let json_str =
+            r#"{"model":"llama3","message":{"role":"assistant","content":"Hello"},"done":false}"#;
         let chunk: OllamaStreamChunk = serde_json::from_str(json_str).unwrap();
         assert!(!chunk.done);
         assert_eq!(chunk.message.content, "Hello");
@@ -537,10 +530,7 @@ mod tests {
 
     #[test]
     fn test_convert_messages() {
-        let messages = vec![
-            Message::system("You are helpful"),
-            Message::user("Hello"),
-        ];
+        let messages = vec![Message::system("You are helpful"), Message::user("Hello")];
         let api_msgs = convert_messages(&messages);
         assert_eq!(api_msgs.len(), 2);
         assert_eq!(api_msgs[0].role, "system");
@@ -602,7 +592,10 @@ Content-Type: application/json
         });
 
         let llm = OllamaProvider::new(format!("http://127.0.0.1:{}", port), "llama3");
-        let result = llm.complete(&[Message::user("Hello")], &json!({})).await.unwrap();
+        let result = llm
+            .complete(&[Message::user("Hello")], &json!({}))
+            .await
+            .unwrap();
 
         assert_eq!(result.content, "Hi there!");
         assert!(result.tool_calls.is_empty());
