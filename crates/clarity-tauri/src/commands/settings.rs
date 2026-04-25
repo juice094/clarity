@@ -15,6 +15,8 @@ pub struct GuiSettings {
     /// When None the default "1.1.1.1:443" is used.
     #[serde(default)]
     pub network_probe_url: Option<String>,
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 impl GuiSettings {
@@ -65,6 +67,7 @@ impl Default for GuiSettings {
             theme: "dark".into(),
             local_model_path: None,
             network_probe_url: None,
+            language: Some("zh".into()),
         }
     }
 }

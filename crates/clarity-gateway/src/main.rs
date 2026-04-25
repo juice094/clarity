@@ -240,10 +240,19 @@ async fn load_and_register_mcp_tools(agent: &Agent) {
         mcp_registry.register(name, client);
     }
 
-    if let Err(e) = mcp_registry.connect_all().await {
-        warn!("Failed to connect to one or more MCP servers: {}", e);
-        // Graceful degradation: continue with built-in tools only
-        return;
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        mcp_registry.connect_all()
+    ).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            warn!("Failed to connect to one or more MCP servers: {}", e);
+            return;
+        }
+        Err(_) => {
+            warn!("MCP server connection timed out after 10s; continuing with built-in tools only");
+            return;
+        }
     }
 
     let registry = agent.registry();

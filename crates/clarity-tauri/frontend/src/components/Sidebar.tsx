@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface Message {
   role: "user" | "agent";
@@ -38,12 +39,15 @@ export function createNewSession(): Session {
   };
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const diff = Math.floor((Date.now() - timestamp) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+function useFormatRelativeTime() {
+  const { t } = useTranslation();
+  return (timestamp: number): string => {
+    const diff = Math.floor((Date.now() - timestamp) / 1000);
+    if (diff < 60) return t("sidebar.justNow");
+    if (diff < 3600) return t("sidebar.minutesAgo", { count: Math.floor(diff / 60) });
+    if (diff < 86400) return t("sidebar.hoursAgo", { count: Math.floor(diff / 3600) });
+    return t("sidebar.daysAgo", { count: Math.floor(diff / 86400) });
+  };
 }
 
 export default function Sidebar({
@@ -56,6 +60,8 @@ export default function Sidebar({
   onDelete,
   onRename,
 }: SidebarProps) {
+  const { t } = useTranslation();
+  const formatRelativeTime = useFormatRelativeTime();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -99,14 +105,14 @@ export default function Sidebar({
         <button
           className="sidebar-toggle-btn"
           onClick={onToggle}
-          title={collapsed ? "Expand" : "Collapse"}
+          title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
         >
           {collapsed ? "→" : "←"}
         </button>
         {!collapsed && (
           <>
             <span className="sidebar-title">Clarity</span>
-            <button className="sidebar-new-btn" onClick={onNew} title="New session">
+            <button className="sidebar-new-btn" onClick={onNew} title={t("sidebar.newSession")}>
               +
             </button>
           </>
@@ -154,7 +160,7 @@ export default function Sidebar({
                         e.stopPropagation();
                         startRename(session);
                       }}
-                      title="Rename"
+                      title={t("sidebar.rename")}
                     >
                       ✎
                     </button>
@@ -164,7 +170,7 @@ export default function Sidebar({
                         e.stopPropagation();
                         onDelete(session.id);
                       }}
-                      title="Delete"
+                      title={t("sidebar.delete")}
                     >
                       ×
                     </button>

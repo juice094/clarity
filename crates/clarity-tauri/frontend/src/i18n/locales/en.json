@@ -1,0 +1,94 @@
+{
+  "sidebar": {
+    "title": "Clarity",
+    "newChat": "New Chat",
+    "newSession": "New session",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "rename": "Rename",
+    "delete": "Delete",
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "app": {
+    "diffPreview": "Diff Preview",
+    "noDiff": "No diff to display",
+    "sending": "Sending...",
+    "thinking": "Agent is thinking...",
+    "placeholder": "Type your message...",
+    "send": "Send",
+    "version": "Version",
+    "tasks": "Tasks",
+    "computerUse": "Computer Use",
+    "settings": "Settings",
+    "files": "Files",
+    "diff": "Diff",
+    "lsp": "LSP",
+    "loadSessionsFailed": "Failed to load sessions",
+    "offlineBanner": "Connection failed, switched to offline mode",
+    "restoredBanner": "Network restored, switching back to cloud provider",
+    "errorBanner": "Startup config error: {{message}}"
+  },
+  "settings": {
+    "title": "Settings",
+    "saved": "Settings saved",
+    "model": "Model",
+    "provider": "Provider",
+    "approvalMode": "Approval Mode",
+    "theme": "Theme",
+    "localModelPath": "Local Model Path",
+    "networkProbeUrl": "Network Probe URL",
+    "language": "Language",
+    "dark": "Dark",
+    "light": "Light",
+    "auto": "Auto",
+    "autoDetected": "Auto-detected from ~/models/",
+    "noModels": "No .gguf models found — place models in ~/models/",
+    "scan": "Scan",
+    "close": "Close",
+    "save": "Save",
+    "reset": "Reset",
+    "cancel": "Cancel"
+  },
+  "taskPanel": {
+    "title": "Tasks",
+    "close": "Close",
+    "listFailed": "Failed to list tasks",
+    "cancelFailed": "Failed to cancel task"
+  },
+  "fileBrowser": {
+    "title": "File Browser",
+    "close": "Close",
+    "loadFailed": "Failed to load file tree"
+  },
+  "lspPanel": {
+    "title": "LSP Servers",
+    "close": "Close",
+    "refresh": "Refresh list",
+    "serverPathRequired": "Server Path and Root Path are required",
+    "processIdMessageRequired": "Process ID and message are required",
+    "processIdRequired": "Process ID is required"
+  },
+  "computerUse": {
+    "title": "Computer Use",
+    "close": "Close",
+    "pythonUnavailable": "Python bridge unavailable. Click \"Check Env\" to verify.",
+    "checkEnv": "Check Env",
+    "screenshot": "Screenshot",
+    "click": "Click",
+    "type": "Type",
+    "scroll": "Scroll",
+    "x": "X",
+    "y": "Y",
+    "textToType": "Text to type...",
+    "amount": "Amount",
+    "invalidScroll": "Invalid scroll coordinates or amount",
+    "invalidClick": "Invalid click coordinates"
+  },
+  "diffViewer": {
+    "oldStart": "Old start",
+    "newStart": "New start"
+  }
+}

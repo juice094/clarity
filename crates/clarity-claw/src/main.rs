@@ -28,8 +28,8 @@ use clarity_claw::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
 enum UserEvent {
     /// A message arrived from the backend wire.
     WireMsg(WireMessage),
-    /// The user submitted text via the quick-input dialog.
-    InputResult(String),
+    /// Open Gateway Web UI in browser.
+    OpenGateway,
     /// Task list update from Gateway polling.
     TaskUpdate(Vec<TaskSummary>),
 }
@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     // Backend communication channel (wire — reserved for future Soul link)
     // ------------------------------------------------------------------
     let wire = Wire::new();
-    let soul = wire.soul_side().clone();
+    let _soul = wire.soul_side().clone();
     let mut ui_side = wire.ui_side(true);
 
     // ------------------------------------------------------------------
@@ -264,10 +264,11 @@ async fn main() -> anyhow::Result<()> {
                         msgs.remove(0);
                     }
                 }
-                UserEvent::InputResult(text) => {
-                    soul.send(WireMessage::TurnBegin {
-                        user_input: text.clone(),
-                    });
+                UserEvent::OpenGateway => {
+                    let gateway = clarity_claw::resolve_gateway_url();
+                    let _ = std::process::Command::new("cmd")
+                        .args(["/C", "start", "", &gateway])
+                        .spawn();
                 }
                 UserEvent::TaskUpdate(tasks) => {
                     let running = tasks.iter().filter(|t| t.status == "Running").count();
@@ -287,15 +288,7 @@ async fn main() -> anyhow::Result<()> {
         }) = tray_channel.try_recv()
         {
             let proxy = proxy.clone();
-            tokio::task::spawn_blocking(move || {
-                let result = inputbox::InputBox::new()
-                    .title("Clarity")
-                    .prompt("Enter command or question:")
-                    .show();
-                if let Ok(Some(text)) = result {
-                    let _ = proxy.send_event(UserEvent::InputResult(text));
-                }
-            });
+            let _ = proxy.send_event(UserEvent::OpenGateway);
         }
 
         // --------------------------------------------------------------

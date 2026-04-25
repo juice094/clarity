@@ -21,9 +21,6 @@ tray-icon = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
 
-# Input dialog
-inputbox = "0.1"
-
 # Notifications
 notify-rust = "4"
 

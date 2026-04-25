@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
@@ -20,18 +21,19 @@ interface MessageData {
 }
 
 function DiffPanel({ isOpen, hunks, onClose }: { isOpen: boolean; hunks: DiffHunk[]; onClose: () => void }) {
+  const { t } = useTranslation();
   if (!isOpen) return null;
   return (
     <div className="diff-panel">
       <div className="diff-panel-header">
-        <h2>Diff Preview</h2>
-        <button className="diff-panel-close" onClick={onClose} aria-label="Close diff panel">
+        <h2>{t("app.diffPreview")}</h2>
+        <button className="diff-panel-close" onClick={onClose} aria-label={t("settings.close")}>
           ✕
         </button>
       </div>
       <div className="diff-panel-body">
         {hunks.length === 0 ? (
-          <div className="diff-empty">No diff to display</div>
+          <div className="diff-empty">{t("app.noDiff")}</div>
         ) : (
           <DiffViewer hunks={hunks} />
         )}
