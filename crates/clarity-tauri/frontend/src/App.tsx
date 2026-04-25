@@ -136,6 +136,11 @@ function App() {
   }
 
   function handleSelectSession(id: string) {
+    if (streamingRef.current && id !== activeSessionId) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     setActiveSessionId(id);
     const session = sessions.find((s) => s.id === id);
     if (session) {
@@ -144,6 +149,11 @@ function App() {
   }
 
   function handleNewSession() {
+    if (streamingRef.current) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     const newSession = createNewSession();
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
@@ -151,6 +161,11 @@ function App() {
   }
 
   function handleDeleteSession(id: string) {
+    if (streamingRef.current && id === activeSessionId) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     const newSessions = sessions.filter((s) => s.id !== id);
     if (newSessions.length === 0) {
       const newSession = createNewSession();
