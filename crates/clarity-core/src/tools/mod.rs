@@ -26,6 +26,7 @@ pub mod team;
 pub mod think;
 pub mod todo;
 pub mod web;
+pub mod web_browser;
 
 pub use ask_user::AskUserTool;
 pub use channel::ChannelSendTool;
@@ -41,6 +42,7 @@ pub use team::{TeamCreateTool, TeamDeleteTool, TeamListTool};
 pub use think::ThinkTool;
 pub use todo::TodoTool;
 pub use web::{WebFetchTool, WebSearchTool};
+pub use web_browser::WebBrowserTool;
 
 use crate::approval::ApprovalMode;
 use crate::error::ToolError;

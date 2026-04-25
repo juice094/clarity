@@ -49,7 +49,7 @@ impl ToolRegistry {
             AskUserTool, BashTool, CancelCronTool, ComputerUseTool, FileEditTool, FileReadTool,
             FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool, PowerShellTool,
             ScheduleCronTool, TaskListTool, TaskOutputTool, TaskStopTool, ThinkTool, TodoTool,
-            WebFetchTool, WebSearchTool,
+            WebBrowserTool, WebFetchTool, WebSearchTool,
         };
 
         let registry = Self::new();
@@ -70,6 +70,7 @@ impl ToolRegistry {
         // Register web tools
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
+        let _ = registry.register(WebBrowserTool::new());
 
         // Register think tool
         let _ = registry.register(ThinkTool::new());
