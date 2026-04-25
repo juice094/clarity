@@ -203,6 +203,11 @@ function App() {
   }
 
   function handleSelectSession(id: string) {
+    if (streamingRef.current && id !== activeSessionId) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     setActiveSessionId(id);
     const session = sessions.find((s) => s.id === id);
     if (session) {
@@ -211,19 +216,47 @@ function App() {
   }
 
   function handleNewSession() {
+    if (streamingRef.current) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     const newSession = createNewSession();
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
     setMessages([]);
+    invoke("save_session", {
+      session: {
+        id: newSession.id,
+        title: newSession.title,
+        created_at: newSession.created_at,
+        updated_at: newSession.updated_at,
+        messages: newSession.messages,
+      },
+    }).catch((e) => console.error("Failed to save new session:", e));
   }
 
   function handleDeleteSession(id: string) {
+    if (streamingRef.current && id === activeSessionId) {
+      invoke("agent_interrupt");
+      streamingRef.current = false;
+      setIsLoading(false);
+    }
     const newSessions = sessions.filter((s) => s.id !== id);
     if (newSessions.length === 0) {
       const newSession = createNewSession();
       setSessions([newSession]);
       setActiveSessionId(newSession.id);
       setMessages([]);
+      invoke("save_session", {
+        session: {
+          id: newSession.id,
+          title: newSession.title,
+          created_at: newSession.created_at,
+          updated_at: newSession.updated_at,
+          messages: newSession.messages,
+        },
+      }).catch((e) => console.error("Failed to save session:", e));
     } else {
       setSessions(newSessions);
       if (id === activeSessionId) {
@@ -232,6 +265,9 @@ function App() {
         setMessages(next.messages);
       }
     }
+    invoke("delete_session", { id }).catch((e) =>
+      console.error("Failed to delete session:", e)
+    );
   }
 
   function handleRenameSession(id: string, newTitle: string) {

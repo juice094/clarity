@@ -223,10 +223,17 @@ Both projects fork from the same Claude Code leaked source but diverge significa
 
 | Subagent | Task | Branch | Status |
 |----------|------|--------|--------|
-| Subagent-E | Approval system runtime sync (`set_approval_mode` Command + Agent inner refactor) | `subagent/approval-2026-0420` | 🔄 Running |
-| Subagent-F | File browser panel (`get_file_tree`/`read_file` Commands + `FileBrowser.tsx`) | `subagent/filebrowser-2026-0420` | 🔄 Running |
+| Subagent-G | Session persistence — GUI 会话 JSON 持久化 | `subagent/session-persist-2026-0425` | 🔄 Running |
 
 **Merge policy**: Subagent completes → main session reviews → `cargo test` + `npm run build` → merge to `main` → push.
+
+## Completed Subagent Tasks (Sprint 1-2)
+
+| Subagent | Task | Commit |
+|----------|------|--------|
+| Subagent-D | 暗色主题系统化 | `1641572` |
+| Subagent-E | 审批系统运行时切换对接 | `1e8b0fe` |
+| Subagent-F | 文件浏览器面板 | `cda98d4` |
 
 ## Known Issues
 
