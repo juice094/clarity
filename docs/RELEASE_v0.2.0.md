@@ -50,7 +50,7 @@ cargo install --path crates/clarity-tui
 ## Test Coverage
 
 ```
-488 tests passed, 0 failed, 3 ignored
+498 tests passed, 0 failed, 3 ignored
 ```
 
 ---
@@ -59,9 +59,9 @@ cargo install --path crates/clarity-tui
 
 ### v0.3.0 (Next)
 - GUI Monaco editor integration
-- Ollama model list auto-discovery
+- LocalGgufProvider model selector + onboarding flow
 - Computer Use vision integration (AI reads screenshots)
-- Enhanced local-LLM onboarding
+- Enhanced local-LLM onboarding (Candle GGUF auto-discovery)
 
 ---
 

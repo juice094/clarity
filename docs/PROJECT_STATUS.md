@@ -9,7 +9,7 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **474 passed, 0 failed, 2 ignored** | ✅ 全绿 |
+| **单元测试** | **498 passed, 0 failed, 3 ignored** (502 with `--features local-llm`) | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
@@ -170,7 +170,7 @@
 | 性能基准测试（Criterion） | ✅ 已完成 | `dedb6bd` — ToolRegistry 31.5µs / AgentPrompt 89.2µs / SkillContext 158ns |
 | MCP SSE Transport | ✅ 已完成 | 完整实现（endpoint discovery + reconnection + handshake） |
 | Channels 原型（Telegram/Discord/Webhook） | ✅ 已实现 | Gateway 已集成 Telegram、Discord、Webhook 三渠道 |
-| 本地模型支持（ollama） | ❌ 已移除 | 残留清理完成，聚焦云端 LLM 提供商 |
+| 本地模型支持（Candle GGUF） | ✅ 已实现 | `LocalGgufProvider` 原生推理，无需 Ollama；E2E 测试通过 |
 | **MemoryTicker 版本统一** | ✅ 已完成 | `5514209` — 删除 `clarity-core` 简化版，全项目统一为 `clarity-memory::SharedMemoryTicker`（session 隔离 + compile callback + 防重入） |
 | **Gateway Memory 激活** | ✅ 已完成 | `5514209` — `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker`，默认 5 turns 触发 |
 | **MemoryCompiler 四级编译管道** | ✅ 已完成 | `5514209` — today→week→longterm→facts，LLM 自动摘要 + 事实提取 + 去重 |
@@ -181,12 +181,12 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | clarity-tauri Desktop GUI | 2 周 | 多标签多会话 + 聊天面板 + 任务面板（Tauri 2.10） | — |
+| P2 | clarity-tauri Desktop GUI | 2 周 | Sprint 1-2 已完成：Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP | — |
 | P2 | 审批系统增强 | 2-3 周 | AI 分类器 + 规则引擎 + 远程审批中继 | — |
-| P2 | LSP 支持 | 1-2 周 | Language Server Protocol（tower-lsp） | — |
+| P2 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel（rust-analyzer 等进程管理 + JSON-RPC 调试） | — |
 | P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
-| P3 | WebBrowserTool | 1 周 | headless_chrome / fantoccini | — |
+| P3 | WebBrowserTool | ✅ 已完成 | 轻量级 reqwest+scraper 实现（navigate/get_text/get_html） | — |
 | P3 | Vim 集成 | 1-2 周 | Vim 键位引擎 | — |
 | P3 | Sandbox | 1-2 周 | landlock (Linux) + Windows 沙箱 API | — |
 | P3 | Plugin SDK | 2-3 周 | Rust dylib 插件系统 | — |

@@ -76,7 +76,7 @@
 | **子代理** | Subagent-G |
 | **分支** | `subagent/session-persist-2026-0425` |
 | **范围** | `commands/session.rs` + `lib.rs` + `App.tsx` + `Cargo.toml` |
-| **验收标准** | 刷新页面后会话不丢失；481 tests 全绿；clippy zero warning |
+| **验收标准** | 刷新页面后会话不丢失；`cargo test --workspace --lib` 全绿；clippy zero warning |
 | **实际提交** | `95bf6fb` |
 
 **为什么串行？**
@@ -198,7 +198,7 @@ git status  # 应为空或仅有预期文件
 
 ```bash
 # Rust 侧
-cargo test --workspace --lib        # 必须: 481 passed, 0 failed
+cargo test --workspace --lib        # 必须: 全绿通过
 cargo clippy --workspace --lib -- -D warnings  # 必须: zero warning
 cargo audit                          # 允许: 已知 Tauri 上游警告
 

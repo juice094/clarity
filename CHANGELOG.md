@@ -1,19 +1,34 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- **Local GGUF Inference** — `LocalGgufProvider` using Candle for zero-dependency native GGUF model loading. Supports Qwen2/Qwen2.5/DeepSeek-R1-Distill-Qwen architectures with auto chat-template detection and streaming via `tokio::mpsc`.
+- **Headless CLI Local Provider** — `clarity-headless --provider local` with `CLARITY_LOCAL_MODEL_PATH` and `CLARITY_LOCAL_TOKENIZER_REPO` env vars.
+- **Model Path Resolution** — `resolve_local_model_path()` replaces all hardcoded paths; uses `CLARITY_LOCAL_MODEL_PATH` env var or auto-scans `~/models/`.
+
+### Changed
+
+- **Kalosm Deprecation** — Old `KalosmProvider` stubbed to redirect users to `LocalGgufProvider`. `ProtocolType::KalosmLocal` now builds `LocalGgufProvider`.
+
 ## [0.1.2] — 2026-04-20
 
 ### Added
 
 - **Memory Depth Integration** — `clarity-core` now uses `clarity-memory::SharedMemoryTicker` exclusively. Gateway `create_agent()` wires up `PersistentMemoryStore` + `SharedMemoryTicker` with a 5-turn default trigger. `MemoryCompiler` four-level pipeline (today → week → longterm → facts) runs automatically on ticker callback via `LlmProviderBridge`.
 - **Slack Channel** — New `SlackChannel` implementing the `Channel` trait. Supports `chat.postMessage` with automatic 4000-char chunking, Slack Events API challenge verification, and HMAC-SHA256 signature validation (`verify_signature`). Enabled via `SLACK_ENABLED` / `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` env vars.
-- **TOML Config System** — `Config::load()` reads three-layer TOML (defaults → `~/.config/clarity/config.toml` → `.clarity.toml`). `export_to_env()` writes profile credentials to provider-specific env vars (`ANTHROPIC_AUTH_TOKEN`, `KIMI_API_KEY`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`) only when not already set. Integrated into both Gateway and TUI `create_agent()`.
+- **TOML Config System** — `Config::load()` reads three-layer TOML (defaults → `~/.config/clarity/config.toml` → `.clarity.toml`). `export_to_env()` writes profile credentials to provider-specific env vars only when not already set. Integrated into both Gateway and TUI `create_agent()`.
 
 ### Fixed
 
-- **Documentation Drift** — `PROJECT_STATUS.md` and `tools_roadmap.md` corrected 6 falsely-claimed limitations (PowerShellTool, WebSearchTool, WebFetchTool, SseMcpClient, AgentController streaming, Gateway Session persistence) that were already implemented.
+- **Documentation Drift** — `PROJECT_STATUS.md` and `tools_roadmap.md` corrected 6 falsely-claimed limitations that were already implemented.
 - **Send Safety** — `clarity-memory::CompilationFuture` and `CompileCallback` tightened with `+ Send` bounds to compile inside `tokio::spawn` async blocks.
-
----
 
 ## [0.1.1] — 2026-04-23
 
@@ -24,18 +39,16 @@
 
 ### Added
 
-- **Crate Documentation** — README + `AGENTS.md` for all 6 crates (`clarity-core`, `clarity-gateway`, `clarity-memory`, `clarity-wire`, `clarity-tui`, `clarity-claw`).
+- **Crate Documentation** — README + `AGENTS.md` for all 6 crates.
 - **Gateway Handler Tests** — 8 mock integration tests covering `health_check`, `file_tree`, `file_read`, `admin_tools`, `admin_get_approval_mode`, `admin_set_approval_mode`.
-- **Claw & TUI Lib Split** — Binary crates now expose testable `lib.rs` modules with 6 tests each (tooltip formatting, gateway URL resolution, command parsing).
-- **CI Hardening** — `cargo audit` (security scan) and `cargo tarpaulin` (coverage report) jobs added to GitHub Actions.
+- **Claw & TUI Lib Split** — Binary crates now expose testable `lib.rs` modules with 6 tests each.
+- **CI Hardening** — `cargo audit` and `cargo tarpaulin` jobs added to GitHub Actions.
 - **Hybrid Store Tests** — 5 new unit tests for `HybridStore` cache behavior; 2 previously-ignored integration tests re-enabled.
 
 ### Fixed
 
 - **Clippy Clean** — Zero warnings across the entire workspace (`-D warnings`).
-- **File Cleanup** — Removed untracked artifacts (`hello.rs`, `test_output.txt`, `subagent_context/`).
-
----
+- **File Cleanup** — Removed untracked artifacts.
 
 ## [0.1.0] — 2026-04-21
 
@@ -54,8 +67,6 @@
 - Plan mode no longer triggers per-tool interactive approval in `execution.rs` (plan-level vetting happens in `run()`).
 - `cancel_on_error` in parallel execution now actually cancels remaining tasks via `task_manager.cancel()`.
 
----
-
 ## [0.0.9] — 2026-04-20
 
 ### Added
@@ -71,8 +82,6 @@
 - Cyclic dependency decoupling: `ToolCall`/`FunctionCall` → `types.rs`; `Message`/`LlmProvider` → `llm/api.rs`.
 - `run()` / `run_with_messages_sync()` duplication eliminated via `Agent::run_sync_loop()`.
 - Gateway SSE now forwards `tool_calls` deltas as structured events (`ToolCallStart`, `ToolResult`, `StepBegin`).
-
----
 
 ## [0.0.8] — 2026-04-17
 
