@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
-use clarity_core::{AgentError, OpenAiCompatibleLlm};
+use clarity_core::AgentError;
 
 /// Simple echo command for smoke-testing the IPC bridge.
 #[tauri::command]
@@ -24,28 +24,66 @@ pub fn get_agent_count(state: State<crate::AppState>) -> usize {
     }
 }
 
+/// Ensure the agent has an LLM configured, initializing from GuiSettings if needed.
+async fn ensure_llm(agent: &clarity_core::Agent) -> Result<(), String> {
+    if agent.llm().is_some() {
+        return Ok(());
+    }
+
+    let settings = crate::commands::settings::GuiSettings::load();
+    let provider = settings.provider.as_str();
+
+    let llm: Arc<dyn clarity_core::llm::LlmProvider> = match provider {
+        "local" => {
+            let model_path = settings
+                .local_model_path
+                .or_else(|| {
+                    clarity_core::llm::resolve_local_model_path()
+                        .map(|p| p.to_string_lossy().into_owned())
+                })
+                .ok_or_else(|| {
+                    "No local model configured. Place .gguf in ~/models/ or set CLARITY_LOCAL_MODEL_PATH.".to_string()
+                })?;
+
+            let config = clarity_core::llm::LocalGgufConfig::new(&model_path)
+                .with_tokenizer_repo("Qwen/Qwen2.5-7B-Instruct");
+            let provider = clarity_core::llm::LocalGgufProvider::new(config)
+                .await
+                .map_err(|e| format!("Failed to load local model: {}", e))?;
+            Arc::new(provider)
+        }
+        _ => {
+            // Try named provider first, fallback to auto-detect
+            match clarity_core::llm::LlmFactory::create_arc(provider).await {
+                Ok(llm) => llm,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to create provider '{}': {}, falling back to auto",
+                        provider,
+                        e
+                    );
+                    clarity_core::llm::LlmFactory::auto_arc()
+                        .await
+                        .map_err(|e| format!("LLM initialization failed: {}", e))?
+                }
+            }
+        }
+    };
+
+    agent.set_llm(llm);
+    Ok(())
+}
+
 /// Run a single-turn agent query (non-streaming).
 ///
-/// If no LLM is configured, attempts to auto-configure from the
-/// `OPENAI_API_KEY` environment variable.
+/// If no LLM is configured, attempts to auto-configure from GuiSettings
+/// (provider + local_model_path) or falls back to environment variables.
 #[tauri::command]
 pub async fn agent_run(
     query: String,
     state: State<'_, crate::AppState>,
 ) -> Result<String, String> {
-    if state.agent.llm().is_none() {
-        match OpenAiCompatibleLlm::from_env() {
-            Ok(llm) => {
-                let llm: Arc<dyn clarity_core::llm::LlmProvider> = Arc::new(llm);
-                state.agent.set_llm(llm);
-            }
-            Err(_) => {
-                return Err(
-                    "LLM not configured. Please set OPENAI_API_KEY environment variable.".into(),
-                );
-            }
-        }
-    }
+    ensure_llm(&state.agent).await?;
 
     match state.agent.run(&query).await {
         Ok(response) => Ok(response),
@@ -64,19 +102,7 @@ pub async fn agent_run_streaming(
     app: AppHandle,
     state: State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    if state.agent.llm().is_none() {
-        match OpenAiCompatibleLlm::from_env() {
-            Ok(llm) => {
-                let llm: Arc<dyn clarity_core::llm::LlmProvider> = Arc::new(llm);
-                state.agent.set_llm(llm);
-            }
-            Err(_) => {
-                return Err(
-                    "LLM not configured. Please set OPENAI_API_KEY environment variable.".into(),
-                );
-            }
-        }
-    }
+    ensure_llm(&state.agent).await?;
 
     let app_for_chunk = app.clone();
     let result = state

@@ -54,7 +54,7 @@ axum = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
-default = []
+default = ["local-llm"]
 local-llm = ["dep:candle-core", "dep:candle-transformers", "dep:hf-hub", "dep:tokenizers"]
 local-llm-cuda = ["local-llm", "candle-core/cuda"]
 

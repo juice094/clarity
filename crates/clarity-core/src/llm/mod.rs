@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 /// Resolve a local model path from environment or default search directory.
@@ -934,6 +935,11 @@ impl LlmFactory {
         ))
     }
 
+    /// Auto-detect provider, returning an `Arc` for direct use with `Agent::set_llm`.
+    pub async fn auto_arc() -> Result<Arc<dyn LlmProvider>, AgentError> {
+        Self::auto().await.map(Arc::from)
+    }
+
     /// Create a provider by alias or legacy name.
     /// First checks ModelRegistry, then falls back to hard-coded legacy names.
     pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
@@ -982,6 +988,11 @@ impl LlmFactory {
                 name
             ))),
         }
+    }
+
+    /// Create a provider by alias, returning an `Arc` for direct use with `Agent::set_llm`.
+    pub async fn create_arc(name: &str) -> Result<Arc<dyn LlmProvider>, AgentError> {
+        Self::create(name).await.map(Arc::from)
     }
 
     /// Create an Anthropic provider from environment
