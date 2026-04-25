@@ -708,10 +708,10 @@ impl SubagentRunner {
 
     /// 生成代理 ID
     fn generate_agent_id(&self) -> String {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
+        use rand::RngExt;
+        let mut rng = rand::rng();
         let id: String = (0..8)
-            .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+            .map(|_| rng.sample(rand::distr::Alphanumeric) as char)
             .collect();
         format!("a{}", id.to_lowercase())
     }

@@ -766,10 +766,10 @@ impl TaskHandle {
 
 /// 生成任务 ID
 fn generate_task_id() -> TaskId {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
+    use rand::RngExt;
+    let mut rng = rand::rng();
     let id: String = (0..12)
-        .map(|_| rng.sample(rand::distributions::Alphanumeric) as char)
+        .map(|_| rng.sample(rand::distr::Alphanumeric) as char)
         .collect();
     format!("task_{}", id.to_lowercase())
 }
