@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod computer;
 pub mod diff;
 pub mod file;
 pub mod session;
