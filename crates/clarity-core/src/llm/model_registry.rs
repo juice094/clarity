@@ -299,32 +299,31 @@ impl ModelRegistry {
 
         // Local fallback
         #[cfg(feature = "local-llm")]
-        {
-            let default_path =
-                PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
-            if default_path.exists() {
-                let mut extra = HashMap::new();
-                extra.insert(
-                    "model_path".into(),
-                    default_path.to_string_lossy().into_owned(),
-                );
-                providers.insert(
-                    "local".to_string(),
-                    ProviderConfig {
-                        protocol: ProtocolType::KalosmLocal,
-                        base_url: None,
-                        api_key_env: None,
-                        extra,
-                    },
-                );
-                models.push(ModelEntry {
-                    alias: "local-qwen".into(),
-                    provider: "local".into(),
-                    model_id: "Qwen2.5-7B-Instruct".into(),
-                    temperature: None,
-                    max_tokens: None,
-                });
+        if let Some(model_path) = super::resolve_local_model_path() {
+            let mut extra = HashMap::new();
+            extra.insert(
+                "model_path".into(),
+                model_path.to_string_lossy().into_owned(),
+            );
+            if let Ok(repo) = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO") {
+                extra.insert("tokenizer_repo".into(), repo);
             }
+            providers.insert(
+                "local".to_string(),
+                ProviderConfig {
+                    protocol: ProtocolType::KalosmLocal,
+                    base_url: None,
+                    api_key_env: None,
+                    extra,
+                },
+            );
+            models.push(ModelEntry {
+                alias: "local-qwen".into(),
+                provider: "local".into(),
+                model_id: "Qwen2.5-7B-Instruct".into(),
+                temperature: None,
+                max_tokens: None,
+            });
         }
 
         ModelConfigFile { providers, models }
@@ -405,13 +404,17 @@ pub async fn build_provider_from_registry(
                 .extra
                 .get("model_path")
                 .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    PathBuf::from(
-                        r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf",
-                    )
-                });
-            let kalosm_config = super::kalosm::KalosmConfig::new(model_path);
-            let provider = super::kalosm::KalosmProvider::new(kalosm_config).await?;
+                .or_else(super::resolve_local_model_path)
+                .ok_or_else(|| AgentError::Llm(
+                    "No local model path configured.\n".to_string()
+                    + super::LOCAL_MODEL_HELP
+                ))?;
+            let tokenizer_repo = cfg.extra.get("tokenizer_repo").cloned();
+            let mut gguf_config = super::local_gguf::LocalGgufConfig::new(model_path);
+            if let Some(repo) = tokenizer_repo {
+                gguf_config = gguf_config.with_tokenizer_repo(repo);
+            }
+            let provider = super::local_gguf::LocalGgufProvider::new(gguf_config).await?;
             Ok(Box::new(provider))
         }
         // KalosmLocal is cfg-gated; when local-llm is disabled it won't appear in matches

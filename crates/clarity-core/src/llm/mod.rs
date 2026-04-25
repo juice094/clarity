@@ -9,6 +9,8 @@
 pub mod api;
 pub mod deepseek;
 pub mod kalosm;
+#[cfg(feature = "local-llm")]
+pub mod local_gguf;
 pub mod llama_server;
 pub mod model_registry;
 pub mod ollama;
@@ -17,6 +19,8 @@ pub mod sse;
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
+#[cfg(feature = "local-llm")]
+pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use llama_server::LlamaServerProvider;
 pub use ollama::OllamaProvider;
 pub use model_registry::{
@@ -31,9 +35,59 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
-#[cfg(feature = "local-llm")]
 use std::path::PathBuf;
 use std::sync::OnceLock;
+
+/// Resolve a local model path from environment or default search directory.
+///
+/// Priority:
+/// 1. `CLARITY_LOCAL_MODEL_PATH` environment variable
+/// 2. First `.gguf` file found in `~/models/`
+///
+/// Returns `None` if no model is found, allowing callers to provide
+/// a helpful error message instead of a hard-coded personal path.
+pub fn resolve_local_model_path() -> Option<PathBuf> {
+    // 1. Explicit env var
+    if let Ok(path) = env::var("CLARITY_LOCAL_MODEL_PATH") {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // 2. Auto-discover in ~/models/
+    if let Some(home) = dirs::home_dir() {
+        let models_dir = home.join("models");
+        if models_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&models_dir) {
+                // Pick the first .gguf file (sorted for stability)
+                let mut ggufs: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| ext.eq_ignore_ascii_case("gguf"))
+                            .unwrap_or(false)
+                    })
+                    .map(|e| e.path())
+                    .collect();
+                ggufs.sort();
+                if let Some(first) = ggufs.into_iter().next() {
+                    return Some(first);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Help text shown when no local model is found.
+const LOCAL_MODEL_HELP: &str = "No local model found. To use local inference:\n\
+    1. Download a GGUF model (e.g. from https://huggingface.co)\n\
+    2. Place it in ~/models/ or set CLARITY_LOCAL_MODEL_PATH to its full path\n\
+    3. Optionally set CLARITY_LOCAL_TOKENIZER_REPO to a HuggingFace repo ID for the tokenizer";
 use std::time::Duration;
 
 static SHARED_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -855,17 +909,16 @@ impl LlmFactory {
         }
 
         #[cfg(feature = "local-llm")]
-        {
-            let default_local_path =
-                PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
-            if default_local_path.exists() {
-                tracing::info!(
-                    "No cloud LLM configured; falling back to local Kalosm model at {}",
-                    default_local_path.display()
-                );
-                let config = KalosmConfig::new(default_local_path);
-                return Ok(Box::new(KalosmProvider::new(config).await?));
-            }
+        if let Some(model_path) = resolve_local_model_path() {
+            tracing::info!(
+                "No cloud LLM configured; falling back to local GGUF model at {}",
+                model_path.display()
+            );
+            let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
+                .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
+            let config = LocalGgufConfig::new(model_path)
+                .with_tokenizer_repo(repo);
+            return Ok(Box::new(LocalGgufProvider::new(config).await?));
         }
 
         Err(AgentError::Llm(
@@ -875,8 +928,9 @@ impl LlmFactory {
              - KIMI_API_KEY (for Moonshot)\n\
              - DEEPSEEK_API_KEY\n\
              - OPENAI_API_KEY\n\
-             Or create ~/.config/clarity/models.toml"
-                .into(),
+             Or create ~/.config/clarity/models.toml\n\
+             Or use local inference:\n".to_string()
+             + LOCAL_MODEL_HELP,
         ))
     }
 
@@ -911,15 +965,16 @@ impl LlmFactory {
             }
             "kalosm" | "local" => {
                 #[cfg(feature = "local-llm")]
-                {
-                    let default_local_path = PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf");
-                    if default_local_path.exists() {
-                        let config = KalosmConfig::new(default_local_path);
-                        return Ok(Box::new(KalosmProvider::new(config).await?));
-                    }
+                if let Some(model_path) = resolve_local_model_path() {
+                    let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
+                        .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
+                    let config = LocalGgufConfig::new(model_path)
+                        .with_tokenizer_repo(repo);
+                    return Ok(Box::new(LocalGgufProvider::new(config).await?));
                 }
                 Err(AgentError::Llm(
-                    "Local LLM (Kalosm) not available. Ensure the local-llm feature is enabled and a GGUF model exists at the default path.".into(),
+                    "Local LLM not available. Ensure the local-llm feature is enabled.\n".to_string()
+                    + LOCAL_MODEL_HELP,
                 ))
             }
             _ => Err(AgentError::Llm(format!(

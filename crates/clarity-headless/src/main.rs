@@ -11,6 +11,8 @@ use clarity_core::{
     approval::ApprovalMode,
     llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm},
 };
+#[cfg(feature = "local-llm")]
+use clarity_core::llm::{LocalGgufConfig, LocalGgufProvider};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -74,6 +76,8 @@ enum ProviderType {
     Deepseek,
     Ollama,
     Kimi,
+    #[cfg(feature = "local-llm")]
+    Local,
 }
 
 #[derive(Debug, Clone, ValueEnum, PartialEq)]
@@ -97,7 +101,7 @@ async fn async_main() -> Result<()> {
 
     let prompt = read_prompt(&args).context("Failed to read prompt")?;
 
-    let provider = build_provider(&args).context("Failed to build LLM provider")?;
+    let provider = build_provider(&args).await.context("Failed to build LLM provider")?;
 
     let approval_mode = if args.plan {
         ApprovalMode::Plan
@@ -159,7 +163,7 @@ fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
-fn build_provider(args: &Args) -> Result<Arc<dyn clarity_core::agent::LlmProvider>> {
+async fn build_provider(args: &Args) -> Result<Arc<dyn clarity_core::agent::LlmProvider>> {
     let provider: Arc<dyn clarity_core::agent::LlmProvider> = match args.provider {
         ProviderType::Openai => {
             let api_key = args
@@ -220,6 +224,41 @@ fn build_provider(args: &Args) -> Result<Arc<dyn clarity_core::agent::LlmProvide
                 .clone()
                 .unwrap_or_else(|| env_or("OLLAMA_MODEL", "llama3"));
             Arc::new(OllamaProvider::new(base_url, model))
+        }
+        #[cfg(feature = "local-llm")]
+        ProviderType::Local => {
+            let model_path = std::env::var("CLARITY_LOCAL_MODEL_PATH")
+                .map(PathBuf::from)
+                .ok()
+                .or_else(|| {
+                    if let Some(home) = dirs::home_dir() {
+                        let models_dir = home.join("models");
+                        if let Ok(entries) = std::fs::read_dir(&models_dir) {
+                            let mut ggufs: Vec<_> = entries
+                                .filter_map(|e| e.ok())
+                                .filter(|e| {
+                                    e.path()
+                                        .extension()
+                                        .and_then(|ext| ext.to_str())
+                                        .map(|ext| ext.eq_ignore_ascii_case("gguf"))
+                                        .unwrap_or(false)
+                                })
+                                .map(|e| e.path())
+                                .collect();
+                            ggufs.sort();
+                            return ggufs.into_iter().next();
+                        }
+                    }
+                    None
+                })
+                .context("No local model found. Set CLARITY_LOCAL_MODEL_PATH or place a .gguf file in ~/models/")?;
+            let tokenizer_repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO").ok();
+            let mut config = LocalGgufConfig::new(model_path);
+            if let Some(repo) = tokenizer_repo {
+                config = config.with_tokenizer_repo(repo);
+            }
+            let provider = LocalGgufProvider::new(config).await?;
+            Arc::new(provider)
         }
     };
     Ok(provider)
@@ -292,6 +331,15 @@ mod tests {
             Args::try_parse_from(["clarity-headless", "--provider", "kimi", "--prompt", "hi"])
                 .unwrap();
         assert_eq!(args.provider, ProviderType::Kimi);
+    }
+
+    #[test]
+    #[cfg(feature = "local-llm")]
+    fn test_args_parse_provider_local() {
+        let args =
+            Args::try_parse_from(["clarity-headless", "--provider", "local", "--prompt", "hi"])
+                .unwrap();
+        assert_eq!(args.provider, ProviderType::Local);
     }
 
     #[test]
