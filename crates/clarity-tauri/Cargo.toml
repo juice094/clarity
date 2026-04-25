@@ -28,6 +28,10 @@ similar = "2"
 [build-dependencies]
 tauri-build = { version = "~2.5", features = [] }
 
+[features]
+default = []
+cuda = ["clarity-core/local-llm-cuda"]
+
 [[bin]]
 name = "clarity-tauri"
 path = "src/main.rs"

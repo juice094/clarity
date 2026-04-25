@@ -24,53 +24,155 @@ pub fn get_agent_count(state: State<crate::AppState>) -> usize {
     }
 }
 
+/// Check whether the currently bound LLM matches the desired configuration.
+fn binding_matches(
+    binding: &Option<crate::LlmBinding>,
+    provider: &str,
+    path: &str,
+) -> bool {
+    matches!(binding, Some(b) if b.provider == provider && b.local_model_path == path)
+}
+
 /// Ensure the agent has an LLM configured, initializing from GuiSettings if needed.
-async fn ensure_llm(agent: &clarity_core::Agent) -> Result<(), String> {
-    if agent.llm().is_some() {
-        return Ok(());
+///
+/// This function also handles:
+/// - **Configuration drift**: If the user changes provider or local_model_path in Settings,
+///   the next request will automatically rebind to the new LLM.
+/// - **Offline fallback**: When `network_available` is `false` and the preferred provider
+///   is not local, it transparently switches to the local GGUF model.
+/// - **Concurrent-load safety**: Multiple simultaneous requests (or the network monitor)
+///   cannot trigger redundant model loads thanks to `llm_load_lock`.
+pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+
+    let settings = {
+        let guard = state.cached_settings.lock().unwrap();
+        guard.clone()
+    };
+    let network_available = state.network_available.load(Ordering::Relaxed);
+
+    // Determine which provider we should be using right now
+    let desired_provider = if !network_available && settings.provider != "local" {
+        tracing::info!(
+            "Network unavailable (preferred={}); falling back to local",
+            settings.provider
+        );
+        "local".to_string()
+    } else {
+        settings.provider.clone()
+    };
+
+    let desired_path = if desired_provider == "local" {
+        settings
+            .local_model_path
+            .clone()
+            .or_else(|| {
+                clarity_core::llm::resolve_local_model_path()
+                    .map(|p| p.to_string_lossy().into_owned())
+            })
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    // Fast path: check without blocking other async tasks
+    {
+        let guard = state.llm_binding.lock().unwrap();
+        if binding_matches(&guard, &desired_provider, &desired_path)
+            && state.agent.llm().is_some()
+        {
+            return Ok(());
+        }
     }
 
-    let settings = crate::commands::settings::GuiSettings::load();
-    let provider = settings.provider.as_str();
+    // Slow path: serialize actual loading so only one task loads the model.
+    let _load_guard = state.llm_load_lock.lock().await;
 
-    let llm: Arc<dyn clarity_core::llm::LlmProvider> = match provider {
+    // Re-check after acquiring the lock — another task may have loaded
+    // the desired model while we were waiting.
+    {
+        let guard = state.llm_binding.lock().unwrap();
+        if binding_matches(&guard, &desired_provider, &desired_path)
+            && state.agent.llm().is_some()
+        {
+            return Ok(());
+        }
+    }
+
+    // Load the desired provider
+    let llm: Arc<dyn clarity_core::llm::LlmProvider> = match desired_provider.as_str() {
         "local" => {
-            let model_path = settings
-                .local_model_path
-                .or_else(|| {
-                    clarity_core::llm::resolve_local_model_path()
-                        .map(|p| p.to_string_lossy().into_owned())
-                })
-                .ok_or_else(|| {
-                    "No local model configured. Place .gguf in ~/models/ or set CLARITY_LOCAL_MODEL_PATH.".to_string()
-                })?;
+            if desired_path.is_empty() {
+                return Err(
+                    "No local model configured. Place .gguf in ~/models/ or set CLARITY_LOCAL_MODEL_PATH.".to_string(),
+                );
+            }
+            let model_path = std::path::PathBuf::from(&desired_path);
+            let sibling_tokenizer = model_path.with_file_name("tokenizer.json");
 
-            let config = clarity_core::llm::LocalGgufConfig::new(&model_path)
+            let mut config = clarity_core::llm::LocalGgufConfig::new(&desired_path)
                 .with_tokenizer_repo("Qwen/Qwen2.5-7B-Instruct");
+
+            // If a tokenizer.json sits next to the model, use it locally so
+            // offline fallback works even when HuggingFace is unreachable.
+            if sibling_tokenizer.exists() {
+                if let Ok(meta) = std::fs::metadata(&sibling_tokenizer) {
+                    if meta.len() < 1024 {
+                        return Err(format!(
+                            "Tokenizer file {} seems corrupted (size {} bytes). \
+                             Please re-download a valid tokenizer.json.",
+                            sibling_tokenizer.display(),
+                            meta.len()
+                        ));
+                    }
+                }
+                tracing::info!(
+                    "Using local tokenizer at {}",
+                    sibling_tokenizer.display()
+                );
+                config = config.with_tokenizer_path(&sibling_tokenizer);
+            }
+
             let provider = clarity_core::llm::LocalGgufProvider::new(config)
                 .await
                 .map_err(|e| format!("Failed to load local model: {}", e))?;
             Arc::new(provider)
         }
         _ => {
-            // Try named provider first, fallback to auto-detect
-            match clarity_core::llm::LlmFactory::create_arc(provider).await {
+            match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
                 Ok(llm) => llm,
                 Err(e) => {
-                    tracing::warn!(
-                        "Failed to create provider '{}': {}, falling back to auto",
-                        provider,
-                        e
-                    );
-                    clarity_core::llm::LlmFactory::auto_arc()
-                        .await
-                        .map_err(|e| format!("LLM initialization failed: {}", e))?
+                    // Only auto-detect when the user explicitly asked for it or left
+                    // the provider unconfigured. If they named a specific provider,
+                    // surface the error directly so they know what to fix.
+                    if desired_provider == "auto" || desired_provider.is_empty() {
+                        tracing::warn!(
+                            "Failed to auto-detect provider: {}, trying legacy fallback",
+                            e
+                        );
+                        clarity_core::llm::LlmFactory::auto_arc()
+                            .await
+                            .map_err(|e| format!("LLM initialization failed: {}", e))?
+                    } else {
+                        return Err(format!(
+                            "Failed to create provider '{}': {}. \
+                             Please check your API key and network connection.",
+                            desired_provider, e
+                        ));
+                    }
                 }
             }
         }
     };
 
-    agent.set_llm(llm);
+    state.agent.set_llm(llm);
+
+    let mut guard = state.llm_binding.lock().unwrap();
+    *guard = Some(crate::LlmBinding {
+        provider: desired_provider,
+        local_model_path: desired_path,
+    });
+
     Ok(())
 }
 
@@ -83,7 +185,7 @@ pub async fn agent_run(
     query: String,
     state: State<'_, crate::AppState>,
 ) -> Result<String, String> {
-    ensure_llm(&state.agent).await?;
+    ensure_llm(&state).await?;
 
     match state.agent.run(&query).await {
         Ok(response) => Ok(response),
@@ -102,7 +204,7 @@ pub async fn agent_run_streaming(
     app: AppHandle,
     state: State<'_, crate::AppState>,
 ) -> Result<(), String> {
-    ensure_llm(&state.agent).await?;
+    ensure_llm(&state).await?;
 
     let app_for_chunk = app.clone();
     let result = state
@@ -145,4 +247,11 @@ pub fn get_agent_status(state: State<crate::AppState>) -> String {
         AgentState::Running { .. } => "running".into(),
         AgentState::Stalled => "stalled".into(),
     }
+}
+
+/// Return the last prewarm error, if any, so the frontend can display it
+/// after mount (startup events may have been missed).
+#[tauri::command]
+pub fn get_prewarm_status(state: State<crate::AppState>) -> Option<String> {
+    state.prewarm_error.lock().unwrap().clone()
 }

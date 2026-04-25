@@ -10,6 +10,11 @@ pub struct GuiSettings {
     pub theme: String,
     #[serde(default)]
     pub local_model_path: Option<String>,
+    /// Custom TCP probe endpoint for network reachability checks.
+    /// Format: "host:port" (e.g. "1.1.1.1:443").
+    /// When None the default "1.1.1.1:443" is used.
+    #[serde(default)]
+    pub network_probe_url: Option<String>,
 }
 
 impl GuiSettings {
@@ -59,6 +64,7 @@ impl Default for GuiSettings {
             approval_mode: "interactive".into(),
             theme: "dark".into(),
             local_model_path: None,
+            network_probe_url: None,
         }
     }
 }
@@ -128,13 +134,43 @@ fn scan_local_models() -> Vec<(String, String)> {
 }
 
 #[tauri::command]
-pub fn get_settings() -> GuiSettings {
-    GuiSettings::load()
+pub fn get_settings(state: tauri::State<crate::AppState>) -> GuiSettings {
+    state.cached_settings.lock().unwrap().clone()
+}
+
+/// Validate that a network probe URL looks like `host:port`.
+fn validate_probe_url(probe: &str) -> Result<(), String> {
+    if probe.is_empty() {
+        return Ok(());
+    }
+    // Split from the right so IPv6 literals (if ever supported) won't break us.
+    let parts: Vec<&str> = probe.rsplitn(2, ':').collect();
+    if parts.len() != 2 {
+        return Err(
+            "Probe URL must contain a port, e.g. 1.1.1.1:443".to_string(),
+        );
+    }
+    let port: u16 = parts[0]
+        .parse()
+        .map_err(|_| "Invalid port in probe URL".to_string())?;
+    if port == 0 {
+        return Err("Port cannot be 0".to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn save_settings(settings: GuiSettings) -> Result<(), String> {
-    settings.save()
+pub fn save_settings(
+    settings: GuiSettings,
+    state: tauri::State<crate::AppState>,
+) -> Result<(), String> {
+    if let Some(ref probe) = settings.network_probe_url {
+        validate_probe_url(probe)?;
+    }
+    settings.save()?;
+    let mut guard = state.cached_settings.lock().unwrap();
+    *guard = settings;
+    Ok(())
 }
 
 #[tauri::command]

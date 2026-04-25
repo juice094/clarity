@@ -7,6 +7,7 @@ export interface GuiSettings {
   approval_mode: string;
   theme: string;
   local_model_path?: string;
+  network_probe_url?: string;
 }
 
 interface SettingsPanelProps {
@@ -263,6 +264,28 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               <span>{display}</span>
             </label>
           ))}
+        </div>
+
+        {/* Network Group */}
+        <div className="settings-group">
+          <h3>Network</h3>
+          <label className="settings-label">Probe Endpoint</label>
+          <input
+            className="settings-input"
+            type="text"
+            value={settings.network_probe_url ?? ""}
+            placeholder="1.1.1.1:443"
+            onChange={(e) =>
+              setSettings((prev) => ({
+                ...prev,
+                network_probe_url: e.target.value || undefined,
+              }))
+            }
+          />
+          <p className="settings-hint">
+            TCP probe used for offline detection. Format: <code>host:port</code>.
+            Leave empty to use the default.
+          </p>
         </div>
       </div>
 

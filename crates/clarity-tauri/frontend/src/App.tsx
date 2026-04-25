@@ -70,6 +70,8 @@ function App() {
   const [diffHunks, setDiffHunks] = useState<DiffHunk[]>([]);
   const [lspPanelOpen, setLspPanelOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [networkStatus, setNetworkStatus] = useState<"offline" | "restored" | "error" | null>(null);
+  const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
@@ -77,6 +79,13 @@ function App() {
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion);
     refreshStatus();
+    invoke<string | null>("get_prewarm_status").then((err) => {
+      if (err) {
+        setNetworkErrorMsg(err);
+        setNetworkStatus("error");
+        setTimeout(() => setNetworkStatus((s) => (s === "error" ? null : s)), 8000);
+      }
+    });
   }, []);
 
   // 加载持久化会话
@@ -227,6 +236,28 @@ function App() {
         invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
         taskIdRef.current = null;
       }
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ fallback: boolean; reason: string }>("llm:fallback", (event) => {
+      if (event.payload.fallback) {
+        setNetworkStatus("offline");
+      } else {
+        setNetworkStatus("restored");
+        // Auto-dismiss restored banner after 5s
+        setTimeout(() => setNetworkStatus((s) => (s === "restored" ? null : s)), 5000);
+      }
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ message: string; context: string }>("llm:fallback_error", (event) => {
+      setNetworkErrorMsg(event.payload.message);
+      setNetworkStatus("error");
+      setTimeout(() => setNetworkStatus((s) => (s === "error" ? null : s)), 8000);
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ message: string }>("llm:config_error", (event) => {
+      setNetworkErrorMsg(event.payload.message);
+      setNetworkStatus("error");
+      setTimeout(() => setNetworkStatus((s) => (s === "error" ? null : s)), 8000);
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -394,6 +425,15 @@ function App() {
         onRename={handleRenameSession}
       />
       <div className="chat-container">
+        {networkStatus && (
+          <div className={`network-banner ${networkStatus}`}>
+            {networkStatus === "offline"
+              ? "⚠️ Network unavailable — switched to local model"
+              : networkStatus === "restored"
+              ? "✅ Network restored — switched back to preferred provider"
+              : `❌ ${networkErrorMsg}`}
+          </div>
+        )}
         <header className="chat-header">
           <div className="header-left">
             <button
