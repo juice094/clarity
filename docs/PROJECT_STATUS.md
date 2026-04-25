@@ -9,10 +9,10 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **498 passed, 0 failed, 3 ignored** (502 with `--features local-llm`) | ✅ 全绿 |
+| **单元测试** | **492 passed, 0 failed, 3 ignored** (496 with `--features local-llm`) | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
-| **代码规模** | ~122 个 Rust 源文件 | 持续增长 |
+| **代码规模** | ~125 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
@@ -172,6 +172,7 @@
 | Channels 原型（Telegram/Discord/Webhook） | ✅ 已实现 | Gateway 已集成 Telegram、Discord、Webhook 三渠道 |
 | 本地模型支持（Candle GGUF） | ✅ 已实现 | `LocalGgufProvider` 原生推理，无需 Ollama；E2E 测试通过 |
 | **MemoryTicker 版本统一** | ✅ 已完成 | `5514209` — 删除 `clarity-core` 简化版，全项目统一为 `clarity-memory::SharedMemoryTicker`（session 隔离 + compile callback + 防重入） |
+| **Settings Panel 本地模型配置** | ✅ 已完成 | `1b2ded2` — `get_local_models()` 扫描 `~/models/` + `CLARITY_LOCAL_MODEL_PATH`；前端增加 `Local (GGUF)` provider 选择器 + 路径显示 + 无模型提示 |
 | **Gateway Memory 激活** | ✅ 已完成 | `5514209` — `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker`，默认 5 turns 触发 |
 | **MemoryCompiler 四级编译管道** | ✅ 已完成 | `5514209` — today→week→longterm→facts，LLM 自动摘要 + 事实提取 + 去重 |
 | **Slack 渠道** | ✅ 已完成 | `4a3d2e0` — Web API 实现（长消息分块、HMAC-SHA256 签名验证、Events API challenge） |
@@ -181,7 +182,7 @@
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | clarity-tauri Desktop GUI | 2 周 | Sprint 1-2 已完成：Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP | — |
+| P2 | clarity-tauri Desktop GUI | 2 周 | Sprint 1-2 已完成：Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；Settings 新增本地模型配置 | — |
 | P2 | 审批系统增强 | 2-3 周 | AI 分类器 + 规则引擎 + 远程审批中继 | — |
 | P2 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel（rust-analyzer 等进程管理 + JSON-RPC 调试） | — |
 | P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |

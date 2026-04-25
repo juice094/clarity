@@ -82,6 +82,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 |-------|--------|------|
 | Discord/Telegram channels disabled by default | 🔒 等待上游 | `rustls-webpki` CVEs in `serenity 0.12.5` |
 | Gateway HTTP Chat Completions stateless by default | 📝 设计如此 | WebSocket has full session support; HTTP endpoint supports optional `session_id` |
+| `clarity-tauri` 默认未启用 `local-llm` feature | ⚠️ 架构债务 | Settings Panel 已支持 local provider 配置，但默认 Tauri 构建不含 `LocalGgufProvider`；需为 `clarity-core` workspace 依赖启用 `local-llm` feature，或改为默认 feature |
 
 已修复的历史问题见 [`CHANGELOG.md`](./CHANGELOG.md)。
 

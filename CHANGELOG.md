@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Local GGUF Inference** — `LocalGgufProvider` using Candle for zero-dependency native GGUF model loading. Supports Qwen2/Qwen2.5/DeepSeek-R1-Distill-Qwen architectures with auto chat-template detection and streaming via `tokio::mpsc`.
 - **Headless CLI Local Provider** — `clarity-headless --provider local` with `CLARITY_LOCAL_MODEL_PATH` and `CLARITY_LOCAL_TOKENIZER_REPO` env vars.
 - **Model Path Resolution** — `resolve_local_model_path()` replaces all hardcoded paths; uses `CLARITY_LOCAL_MODEL_PATH` env var or auto-scans `~/models/`.
+- **Settings Panel Local Model Config** — `clarity-tauri` Settings Panel now supports selecting `Local (GGUF)` provider with auto-scanned `.gguf` models from `~/models/` and `CLARITY_LOCAL_MODEL_PATH`. Path persisted in `gui-settings.json`.
 
 ### Changed
 

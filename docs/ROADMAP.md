@@ -33,9 +33,10 @@
 
 ### 当前可执行动作
 
-- Settings Panel 中本地模型路径配置 + 自动扫描
+- ✅ Settings Panel 中本地模型路径配置 + 自动扫描
 - 离线模式检测（无网络时自动 fallback 到 LocalGgufProvider）
 - 单二进制打包调研（cargo-bundle / tauri-bundler）
+- `clarity-tauri` 默认启用 `local-llm` feature（当前默认构建不包含 LocalGgufProvider，GUI 配置无法作用于运行时）
 
 ### 风险对冲
 
