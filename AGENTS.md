@@ -213,6 +213,12 @@ Both projects fork from the same Claude Code leaked source but diverge significa
   - Bare names (e.g. `npx`, `uvx`) are allowed and resolved via `PATH`.
   - Override with the `CLARITY_MCP_ALLOWLIST` environment variable (comma-separated absolute paths or prefixes).
 
+## 子代理串并行执行计划
+
+完整的依赖关系编排和 Git 安全机制见 [`docs/execution-plan.md`](./docs/execution-plan.md)。
+
+**当前 Phase**：Phase 1 — Session persistence（串行单轨）
+
 ## Active Subagent Tasks
 
 | Subagent | Task | Branch | Status |

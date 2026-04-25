@@ -11,13 +11,23 @@ import Sidebar, {
 } from "./components/Sidebar";
 import "./App.css";
 
-const initialSession = createNewSession();
+interface MessageData {
+  role: string;
+  content: string;
+}
+
+interface SessionData {
+  id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  messages: MessageData[];
+}
 
 function App() {
-  const [sessions, setSessions] = useState<Session[]>([initialSession]);
-  const [activeSessionId, setActiveSessionId] = useState<string>(
-    initialSession.id
-  );
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -39,6 +49,63 @@ function App() {
     invoke<string>("get_app_version").then(setVersion);
     refreshStatus();
   }, []);
+
+  // 加载持久化会话
+  useEffect(() => {
+    invoke<SessionData[]>("list_sessions")
+      .then((data) => {
+        if (data.length > 0) {
+          const loaded = data.map((s) => ({
+            id: s.id,
+            title: s.title,
+            created_at: s.created_at,
+            updated_at: s.updated_at,
+            messages: s.messages.map((m) => ({
+              role: m.role as "user" | "agent",
+              content: m.content,
+            })),
+          }));
+          setSessions(loaded);
+          setActiveSessionId(loaded[0].id);
+          setMessages(loaded[0].messages);
+        } else {
+          const initial = createNewSession();
+          setSessions([initial]);
+          setActiveSessionId(initial.id);
+          setMessages([]);
+        }
+        setHasLoaded(true);
+      })
+      .catch((e) => {
+        console.error("Failed to load sessions:", e);
+        const initial = createNewSession();
+        setSessions([initial]);
+        setActiveSessionId(initial.id);
+        setMessages([]);
+        setHasLoaded(true);
+      });
+  }, []);
+
+  // 自动保存当前会话（debounce 500ms）
+  useEffect(() => {
+    if (!hasLoaded) return;
+    const activeSession = sessions.find((s) => s.id === activeSessionId);
+    if (!activeSession) return;
+
+    const timeout = setTimeout(() => {
+      invoke("save_session", {
+        session: {
+          id: activeSession.id,
+          title: activeSession.title,
+          created_at: activeSession.created_at,
+          updated_at: activeSession.updated_at,
+          messages: activeSession.messages,
+        },
+      }).catch((e) => console.error("Failed to save session:", e));
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [sessions, activeSessionId, hasLoaded]);
 
   // 加载设置中的 theme
   useEffect(() => {
