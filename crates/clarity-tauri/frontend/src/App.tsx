@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import TaskPanel from "./components/TaskPanel";
+import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
 import FileBrowser from "./components/FileBrowser";
 import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
@@ -61,6 +62,7 @@ function App() {
   const [status, setStatus] = useState("unconfigured");
   const [version, setVersion] = useState("");
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+  const [computerPanelOpen, setComputerPanelOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
@@ -422,6 +424,14 @@ function App() {
               ⚡
             </button>
             <button
+              className="computer-toggle-btn"
+              onClick={() => setComputerPanelOpen((prev) => !prev)}
+              title="Toggle computer use panel"
+              aria-label="Toggle computer use panel"
+            >
+              🖥️
+            </button>
+            <button
               className="diff-toggle-btn"
               onClick={() => {
                 if (!diffPanelOpen) {
@@ -485,6 +495,10 @@ function App() {
           <TaskPanel
             isOpen={taskPanelOpen}
             onClose={() => setTaskPanelOpen(false)}
+          />
+          <ComputerUsePanel
+            isOpen={computerPanelOpen}
+            onClose={() => setComputerPanelOpen(false)}
           />
           <DiffPanel isOpen={diffPanelOpen} hunks={diffHunks} onClose={() => setDiffPanelOpen(false)} />
           <SettingsPanel
