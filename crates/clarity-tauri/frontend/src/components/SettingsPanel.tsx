@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface GuiSettings {
@@ -56,6 +56,21 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     fetchSettings();
     fetchMeta();
   }, [isOpen, fetchSettings, fetchMeta]);
+
+  // 关闭面板时恢复主题为已保存的值（Cancel 或未 Save 的 preview）
+  const prevIsOpenRef = useRef(isOpen);
+  useEffect(() => {
+    if (prevIsOpenRef.current && !isOpen) {
+      const t = savedSettings.theme;
+      if (t === "auto") {
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+      } else {
+        document.documentElement.setAttribute("data-theme", t);
+      }
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, savedSettings]);
 
   const availableModels =
     models.find(([key]) => key === settings.provider)?.[2] ?? [];
