@@ -144,7 +144,8 @@ impl Agent {
         // Plan mode: bypass the ReAct loop and use plan-driven execution.
         // This avoids the LLM "thinking step-by-step" and instead runs a
         // pre-generated structured plan step-by-step.
-        if self.approval_mode == crate::approval::ApprovalMode::Plan {
+        let mode = self.inner.read().unwrap().approval_mode;
+        if mode == crate::approval::ApprovalMode::Plan {
             let plan = self.plan(query.as_ref()).await?;
             self.send_wire_message(WireMessage::TurnBegin {
                 user_input: query.as_ref().to_string(),

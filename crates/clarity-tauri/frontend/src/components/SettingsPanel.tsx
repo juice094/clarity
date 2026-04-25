@@ -90,6 +90,11 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       setSavedSettings(settings);
       setToast("Settings saved");
       setTimeout(() => setToast(""), 2000);
+      try {
+        await invoke("set_approval_mode", { mode: settings.approval_mode });
+      } catch (e) {
+        console.error("Failed to set approval mode:", e);
+      }
     } catch (e) {
       console.error("Failed to save settings:", e);
     }

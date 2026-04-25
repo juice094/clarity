@@ -96,6 +96,18 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
 }
 
 #[tauri::command]
+pub fn set_approval_mode(mode: String, state: tauri::State<crate::AppState>) -> Result<(), String> {
+    let mode = match mode.as_str() {
+        "interactive" => clarity_core::approval::ApprovalMode::Interactive,
+        "yolo" => clarity_core::approval::ApprovalMode::Yolo,
+        "plan" => clarity_core::approval::ApprovalMode::Plan,
+        _ => return Err(format!("Invalid approval mode: {}", mode)),
+    };
+    state.agent.set_approval_mode(mode);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_approval_modes() -> Vec<(String, String)> {
     vec![
         (
