@@ -62,6 +62,7 @@ pub fn run() {
             commands::settings::save_settings,
             commands::settings::set_approval_mode,
             commands::settings::get_available_models,
+            commands::settings::get_local_models,
             commands::settings::get_approval_modes,
             commands::session::list_sessions,
             commands::session::load_session,

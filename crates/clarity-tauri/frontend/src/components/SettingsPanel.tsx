@@ -6,6 +6,7 @@ export interface GuiSettings {
   provider: string;
   approval_mode: string;
   theme: string;
+  local_model_path?: string;
 }
 
 interface SettingsPanelProps {
@@ -28,6 +29,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   });
   const [models, setModels] = useState<[string, string, string[]][]>([]);
   const [approvalModes, setApprovalModes] = useState<[string, string][]>([]);
+  const [localModels, setLocalModels] = useState<[string, string][]>([]);
   const [toast, setToast] = useState("");
 
   const fetchSettings = useCallback(async () => {
@@ -46,6 +48,8 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       setModels(m);
       const a = await invoke<[string, string][]>("get_approval_modes");
       setApprovalModes(a);
+      const lm = await invoke<[string, string][]>("get_local_models");
+      setLocalModels(lm);
     } catch (e) {
       console.error("Failed to load settings meta:", e);
     }
@@ -76,12 +80,34 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     models.find(([key]) => key === settings.provider)?.[2] ?? [];
 
   function handleProviderChange(provider: string) {
-    const newModels = models.find(([key]) => key === provider)?.[2] ?? [];
-    setSettings((prev) => ({
-      ...prev,
-      provider,
-      model: newModels[0] ?? prev.model,
-    }));
+    setSettings((prev) => {
+      const newModels = models.find(([key]) => key === provider)?.[2] ?? [];
+      let nextModel = newModels[0] ?? prev.model;
+      let nextLocalPath = prev.local_model_path;
+      if (provider === "local" && localModels.length > 0) {
+        nextModel = localModels[0][1];
+        nextLocalPath = localModels[0][0];
+      }
+      return {
+        ...prev,
+        provider,
+        model: nextModel,
+        local_model_path: nextLocalPath,
+      };
+    });
+  }
+
+  function handleModelChange(model: string) {
+    setSettings((prev) => {
+      let localPath = prev.local_model_path;
+      if (prev.provider === "local") {
+        const found = localModels.find(([_, name]) => name === model);
+        if (found) {
+          localPath = found[0];
+        }
+      }
+      return { ...prev, model, local_model_path: localPath };
+    });
   }
 
   async function handleSave() {
@@ -112,6 +138,11 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   }
 
   if (!isOpen) return null;
+
+  const isLocalProvider = settings.provider === "local";
+  const hasLocalModels = localModels.length > 0;
+  const localModelNames = localModels.map(([_, name]) => name);
+  const displayModels = isLocalProvider ? localModelNames : availableModels;
 
   return (
     <div className="settings-panel">
@@ -147,16 +178,38 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           <select
             className="settings-select"
             value={settings.model}
-            onChange={(e) =>
-              setSettings((prev) => ({ ...prev, model: e.target.value }))
-            }
+            onChange={(e) => handleModelChange(e.target.value)}
           >
-            {availableModels.map((m) => (
+            {displayModels.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
             ))}
           </select>
+
+          {isLocalProvider && (
+            <>
+              <label className="settings-label">Local Model Path</label>
+              <input
+                className="settings-input"
+                type="text"
+                readOnly
+                value={settings.local_model_path ?? ""}
+                placeholder={
+                  hasLocalModels
+                    ? "Auto-detected from ~/models/"
+                    : "No .gguf models found — place models in ~/models/"
+                }
+              />
+              {!hasLocalModels && (
+                <p className="settings-hint settings-hint-warning">
+                  No GGUF models detected. Place .gguf files in{" "}
+                  <code>~/models/</code> or set{" "}
+                  <code>CLARITY_LOCAL_MODEL_PATH</code>.
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Approval Group */}

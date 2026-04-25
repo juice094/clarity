@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -7,6 +8,8 @@ pub struct GuiSettings {
     pub provider: String,
     pub approval_mode: String,
     pub theme: String,
+    #[serde(default)]
+    pub local_model_path: Option<String>,
 }
 
 impl GuiSettings {
@@ -55,8 +58,73 @@ impl Default for GuiSettings {
             provider: "openai".into(),
             approval_mode: "interactive".into(),
             theme: "dark".into(),
+            local_model_path: None,
         }
     }
+}
+
+/// Scan known directories for `.gguf` model files.
+/// Returns `Vec<(full_path, file_name)>` sorted by file name.
+fn scan_local_models() -> Vec<(String, String)> {
+    let mut results = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Helper to collect .gguf files from a directory
+    fn add_ggufs_from_dir(dir: &PathBuf, results: &mut Vec<(String, String)>, seen: &mut HashSet<String>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_file()
+                    && path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("gguf"))
+                        .unwrap_or(false)
+                {
+                    let path_str = path.to_string_lossy().into_owned();
+                    if seen.insert(path_str.clone()) {
+                        let name = path
+                            .file_name()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        results.push((path_str, name));
+                    }
+                }
+            }
+        }
+    }
+
+    // 1. Explicit env var (may be a file or directory)
+    if let Ok(path_str) = std::env::var("CLARITY_LOCAL_MODEL_PATH") {
+        let p = PathBuf::from(&path_str);
+        if p.is_dir() {
+            add_ggufs_from_dir(&p, &mut results, &mut seen);
+        } else if p.is_file()
+            && p.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("gguf"))
+                .unwrap_or(false)
+        {
+            let name = p
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if seen.insert(path_str.clone()) {
+                results.push((path_str, name));
+            }
+        }
+    }
+
+    // 2. Auto-discover in ~/models/
+    if let Some(home) = dirs::home_dir() {
+        let models_dir = home.join("models");
+        if models_dir.is_dir() {
+            add_ggufs_from_dir(&models_dir, &mut results, &mut seen);
+        }
+    }
+
+    results.sort_by(|a, b| a.1.cmp(&b.1));
+    results
 }
 
 #[tauri::command]
@@ -71,6 +139,13 @@ pub fn save_settings(settings: GuiSettings) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
+    let local_models = scan_local_models();
+    let local_model_names: Vec<String> = if local_models.is_empty() {
+        vec!["No models found — place .gguf in ~/models/".into()]
+    } else {
+        local_models.into_iter().map(|(_, name)| name).collect()
+    };
+
     vec![
         (
             "openai".into(),
@@ -92,7 +167,17 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
             "Ollama".into(),
             vec!["llama3.2".into(), "qwen2.5".into()],
         ),
+        (
+            "local".into(),
+            "Local (GGUF)".into(),
+            local_model_names,
+        ),
     ]
+}
+
+#[tauri::command]
+pub fn get_local_models() -> Vec<(String, String)> {
+    scan_local_models()
 }
 
 #[tauri::command]
