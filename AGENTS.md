@@ -3,11 +3,15 @@
 ## Quick Reference
 
 ```bash
-cd C:\Users\<user>\Desktop\clarity
-cargo test --workspace --lib          # 350+ tests
+cd C:\Users\22414\dev\third_party\clarity
+cargo test --workspace --lib          # 474 tests
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
 cargo run -p clarity-gateway           # run Gateway (needs API key)
+
+# Desktop GUI (Tauri 2)
+cd crates/clarity-tauri/frontend && npm run build
+cargo tauri dev
 ```
 
 ## Environment Variables for LLM
@@ -25,7 +29,44 @@ $env:DEEPSEEK_API_KEY="..."
 $env:OPENAI_API_KEY="..."
 ```
 
-## Recent Major Changes (2026-04-21)
+## Recent Major Changes (2026-04-20 ~ Sprint 1 GUI)
+
+### GUI Desktop — Sprint 1 核心功能交付
+
+1. **Chat Panel + Agent Bridge**:
+   - `agent_run_streaming` Tauri Command with SSE-style event emission (`agent:chunk`, `agent:done`, `agent:error`).
+   - Real-time streaming output in React chat panel with dot-flashing loading animation.
+   - Auto LLM configuration from `OPENAI_API_KEY` env var when unconfigured.
+
+2. **Session Sidebar** (`Sidebar.tsx`):
+   - Multi-session management: create, switch, delete, rename.
+   - Sessions sorted by `updated_at` desc; inline rename with Enter/Escape/blur.
+   - Collapsible sidebar with smooth width transition.
+   - Message history isolation per session (frontend memory only; SQLite persistence pending).
+
+3. **Task Panel** (`TaskPanel.tsx`):
+   - Polling every 5s via `list_tasks` / `cancel_task` Tauri Commands.
+   - Status color mapping: running→accent, pending→secondary, completed→#238636, failed→danger.
+   - Cancel button for running/pending tasks.
+
+4. **Settings Panel** (`SettingsPanel.tsx`):
+   - Provider-model linkage: switching provider auto-selects first available model.
+   - Approval mode selection: Interactive / Yolo / Plan (UI ready; runtime sync pending Subagent-E).
+   - Theme selection: Dark / Light / Auto with instant preview via CSS variable switching.
+   - JSON file persistence at `%APPDATA%/clarity/settings.json`.
+   - Save/Reset/Cancel with 2s toast feedback.
+
+5. **Theme System** (`App.css` + `App.tsx`):
+   - CSS variable dual-theme: `:root` (dark default) + `[data-theme="light"]` override.
+   - `window.matchMedia("prefers-color-scheme: dark")` listener for Auto mode.
+   - `document.documentElement.setAttribute("data-theme", ...)` dynamic application.
+   - SettingsPanel Cancel restores DOM theme to last saved value.
+
+6. **Security & Dependencies**:
+   - `cargo audit` + `cargo update` upgraded 14 packages (`rustls` 0.23.39, `libc` 0.2.186, etc.).
+   - 9 remaining warnings are all Tauri upstream indirect deps (fxhash, gdkx11, instant, unic-*, rand 0.7) — cannot fix locally.
+
+### Previous Major Changes (2026-04-21)
 
 1. **Plan Mode — "先规划、后执行"工作流**:
    - `Agent::plan()` 调用 LLM 生成结构化 JSON 计划（`Plan` / `PlanStep`）。
@@ -56,6 +97,29 @@ $env:OPENAI_API_KEY="..."
    - Chat completions：7.8s 正常响应。
    - 后台任务：2.4s 完成，filesystem 工具调用正常。
    - 并行子代理：2 任务并发，8.4s，成功率 100%。
+
+## Comparison Reference: Clarity vs cc-haha (Claude Code Haha)
+
+Both projects fork from the same Claude Code leaked source but diverge significantly:
+
+| Dimension | **Clarity** | **cc-haha** |
+|-----------|-------------|-------------|
+| Core Language | Rust | TypeScript (Bun) |
+| TUI | ratatui | Ink (React) |
+| Desktop | Tauri 2 → native Rust core (single process) | Tauri 2 frontend ↔ Bun server (dual process) |
+| Gateway | Axum (built-in) | Bun server (separate launch) |
+| LLM Providers | OpenAI, Anthropic, DeepSeek, Ollama, Kimi | Anthropic-compatible only |
+| Memory | SQLite + BM25 + vector hybrid | File-based |
+| Notifications | Multi-channel webhook (5+ platforms) | Telegram / 飞书 / Discord IM adapters |
+| Computer Use | ❌ Not yet | ✅ Screenshot/mouse/keyboard |
+| Approval Modes | ✅ Interactive/Yolo/Plan (runtime switchable) | Permission controls |
+| Theme System | ✅ Dark/Light/Auto | ❌ Not yet |
+| Diff View | ❌ Not yet | ✅ In desktop |
+| Headless Mode | ❌ Not yet | ✅ `--print` |
+| LSP | ❌ Not yet | ✅ |
+| Test Coverage | 474+ Rust unit tests | Vitest (desktop only) |
+
+**Strategic gaps to close**: Computer Use, Diff view, Headless mode, LSP integration.
 
 ## Previous Major Changes (2026-04-20)
 
@@ -140,6 +204,15 @@ $env:OPENAI_API_KEY="..."
   - Bare names (e.g. `npx`, `uvx`) are allowed and resolved via `PATH`.
   - Override with the `CLARITY_MCP_ALLOWLIST` environment variable (comma-separated absolute paths or prefixes).
 
+## Active Subagent Tasks
+
+| Subagent | Task | Branch | Status |
+|----------|------|--------|--------|
+| Subagent-E | Approval system runtime sync (`set_approval_mode` Command + Agent inner refactor) | `subagent/approval-2026-0420` | 🔄 Running |
+| Subagent-F | File browser panel (`get_file_tree`/`read_file` Commands + `FileBrowser.tsx`) | `subagent/filebrowser-2026-0420` | 🔄 Running |
+
+**Merge policy**: Subagent completes → main session reviews → `cargo test` + `npm run build` → merge to `main` → push.
+
 ## Known Issues
 
 - ~~Personality system produces verbose `<mood>` XML metadata~~ **Fixed** by `Direct` mode.
@@ -149,6 +222,9 @@ $env:OPENAI_API_KEY="..."
 - ~~`agent ↔ approval` / `agent ↔ llm` / `agent ↔ compaction` cyclic dependencies~~ **Fixed** (2026-04-20).
 - ~~Old Skill system dead code~~ **Fixed** — removed `skill/` module; new `skills/` orchestration layer landed.
 - ~~Gateway SSE does not forward `tool_calls` deltas to the client~~ **Fixed** (2026-04-20) — SSE now emits structured events: `ToolCallStart` (with `id`, `name`, `arguments`), `ToolResult` (with `id`, `result`), and `StepBegin` (with `tool_name`).
+- **Session data is frontend-memory only**: Refreshing the GUI loses all sessions. Needs integration with `clarity-memory` session_store or `clarity-gateway` session_store.
+- **`task.rs` uses Mock data**: `list_tasks` / `cancel_task` are not wired to real `BackgroundTaskManager`.
+- **Streaming output session switching bug**: Switching sessions while streaming may append chunks to the wrong message array.
 - **kalosm local Provider not yet integrated**: Skeleton file planned; real implementation blocked until agri-paper delivers 7B model benchmark data.
 - **Discord/Telegram channels disabled by default**: Blocked by upstream `rustls-webpki` CVEs in `serenity 0.12.5`. Re-enable when upstream publishes a fix.
 - ~~Skill system not yet wired into Agent loop~~ **Fixed** (2026-04-20) — `Agent` now holds `skill_registry` and `active_skill`. `build_system_prompt()` injects skill context; `filter_tools_value()` enforces tool whitelists. TUI commands `/skill list` and `/skill use <id>` are live.

@@ -31,7 +31,6 @@ impl Agent {
             memory_ticker: None,
             wire: None,
             approval_runtime: None,
-            approval_mode: ApprovalMode::Interactive,
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
             compaction_service: config.compaction_service.map(CompactionService::new),
@@ -53,6 +52,7 @@ impl Agent {
                 snapshotted_skill: None,
                 file_prompt_cache: None,
                 active_file_paths: Vec::new(),
+                approval_mode: ApprovalMode::default(),
             })),
         }
     }
@@ -152,20 +152,13 @@ impl Agent {
         self
     }
 
-    /// Set the approval mode
-    pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
-        self.approval_mode = mode;
+    /// Set the approval mode (builder pattern)
+    pub fn with_approval_mode(self, mode: ApprovalMode) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.approval_mode = mode;
+        }
         self
-    }
-
-    /// Set the approval mode at runtime.
-    pub fn set_approval_mode(&mut self, mode: ApprovalMode) {
-        self.approval_mode = mode;
-    }
-
-    /// Get the current approval mode.
-    pub fn approval_mode(&self) -> ApprovalMode {
-        self.approval_mode
     }
 
     /// Set the compaction configuration

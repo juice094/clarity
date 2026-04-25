@@ -179,11 +179,12 @@ Rules:
     pub async fn execute_plan(&self, plan: &Plan) -> Result<Vec<PlanResult>, AgentError> {
         let _cancel_token = self.begin_turn()?;
 
+        let mode = self.inner.read().unwrap().approval_mode;
         let ctx = crate::tools::ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
             .with_timeout(self.config.tool_timeout_secs)
-            .with_approval_mode(self.approval_mode);
+            .with_approval_mode(mode);
 
         let mut results = Vec::with_capacity(plan.steps.len());
         for step in &plan.steps {

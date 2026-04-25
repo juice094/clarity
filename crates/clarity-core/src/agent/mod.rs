@@ -90,6 +90,8 @@ struct AgentInner {
     /// File paths representing the user's current operation.
     /// Used to dynamically activate skills whose `paths` patterns match.
     active_file_paths: Vec<std::path::PathBuf>,
+    /// Approval mode (Interactive, Yolo, Plan)
+    approval_mode: ApprovalMode,
 }
 
 /// Simple mock LLM for testing
@@ -188,8 +190,6 @@ pub struct Agent {
     wire: Option<Arc<Wire>>,
     /// Approval runtime for tool execution control
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
-    /// Approval mode (Interactive, Yolo, Plan)
-    approval_mode: ApprovalMode,
     /// Compaction configuration for context management
     compaction_config: CompactionConfig,
     /// Maximum context tokens before compaction
@@ -218,6 +218,16 @@ pub struct Agent {
 }
 
 impl Agent {
+    /// Set the approval mode at runtime.
+    pub fn set_approval_mode(&self, mode: ApprovalMode) {
+        self.inner.write().unwrap().approval_mode = mode;
+    }
+
+    /// Get the current approval mode.
+    pub fn approval_mode(&self) -> ApprovalMode {
+        self.inner.read().unwrap().approval_mode
+    }
+
     /// Spawn an async background task to extract structured notes from a turn transcript.
     /// Does nothing if `extract_memories` is disabled or no LLM is configured.
     pub(crate) fn maybe_extract_memories(&self, transcript: String) {
