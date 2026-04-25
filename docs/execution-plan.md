@@ -8,8 +8,8 @@
 
 ```
                     ┌─────────────────────────────────────────────┐
-                    │  Phase 1: Session persistence               │
-                    │  (Subagent-G 🔄 进行中)                      │
+                    │  Phase 1: Session persistence ✅            │
+                    │  (Subagent-G ✅ 已完成)                      │
                     │  分支: subagent/session-persist-2026-0425    │
                     └──────────────────┬──────────────────────────┘
                                        │
@@ -22,9 +22,9 @@
         │                              │                              │
         ▼                              ▼                              ▼
 ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│ Phase 2A            │    │ Phase 2B            │    │ Phase 2C (可选)     │
+│ Phase 2A 🔄         │    │ Phase 2B 🔄         │    │ Phase 2C (可选)     │
 │ TaskPanel 真实对接  │    │ Diff view           │    │ Headless mode       │
-│ (Subagent-H)        │    │ (Subagent-I)        │    │ (Subagent-J)        │
+│ (Subagent-I)        │    │ (Subagent-H)        │    │ (Subagent-J)        │
 │                     │    │                     │    │                     │
 │ 依赖: AppState 稳定 │    │ 依赖: 无            │    │ 依赖: 无            │
 │ 阻塞: Phase 3A      │    │ 阻塞: 无            │    │ 阻塞: 无            │
@@ -67,7 +67,7 @@
 
 ## 二、Phase 详细编排
 
-### Phase 1（当前窗口）— Session persistence
+### Phase 1 ✅ — Session persistence
 
 | 属性 | 值 |
 |------|-----|
@@ -77,6 +77,7 @@
 | **分支** | `subagent/session-persist-2026-0425` |
 | **范围** | `commands/session.rs` + `lib.rs` + `App.tsx` + `Cargo.toml` |
 | **验收标准** | 刷新页面后会话不丢失；481 tests 全绿；clippy zero warning |
+| **实际提交** | `95bf6fb` |
 
 **为什么串行？**
 - Session persistence 需要扩展 `AppState`（引入 `SessionStore`）
@@ -86,15 +87,15 @@
 
 ---
 
-### Phase 2（Phase 1 合并后）— 三轨并行
+### Phase 2 🔄 — 双轨并行（当前窗口）
 
 #### 2A: TaskPanel 真实对接
 
 | 属性 | 值 |
 |------|-----|
 | **模式** | 并行 |
-| **子代理** | Subagent-H |
-| **分支** | `subagent/task-real-2026-04XX` |
+| **子代理** | Subagent-I |
+| **分支** | `subagent/task-real-2026-0425` |
 | **范围** | `commands/task.rs` + `AppState` + `lib.rs` |
 | **关键改动** | `AppState` 增加 `BackgroundTaskManager`；`list_tasks`/`cancel_task` 对接真实数据 |
 
@@ -103,8 +104,8 @@
 | 属性 | 值 |
 |------|-----|
 | **模式** | 并行 |
-| **子代理** | Subagent-I |
-| **分支** | `subagent/diff-view-2026-04XX` |
+| **子代理** | Subagent-H |
+| **分支** | `subagent/diff-view-2026-0425` |
 | **范围** | 新建 `DiffPanel.tsx` + `App.tsx` 集成 + CSS |
 | **参考** | TUI 已有 `diff.rs` + `diff_popup.rs`（`similar` crate） |
 | **交互** | Agent 执行 `file_edit` 后在聊天区显示 diff 预览 |
@@ -286,9 +287,9 @@ git stash pop
 
 | Phase | 任务 | 子代理 | 分支 | 状态 | 阻塞 |
 |-------|------|--------|------|------|------|
-| **Phase 1** | Session persistence | Subagent-G | `subagent/session-persist-2026-0425` | 🔄 Running | — |
-| Phase 2A | TaskPanel 真实对接 | — | — | ⏸️ Pending | Phase 1 |
-| Phase 2B | Diff view | — | — | ⏸️ Pending | Phase 1 |
+| **Phase 1** | Session persistence | Subagent-G | `subagent/session-persist-2026-0425` | ✅ Done (`95bf6fb`) | — |
+| **Phase 2A** | **TaskPanel 真实对接** | **Subagent-I** | **`subagent/task-real-2026-0425`** | 🔄 **Running** | Phase 1 |
+| **Phase 2B** | **Diff view** | **Subagent-H** | **`subagent/diff-view-2026-0425`** | 🔄 **Running** | Phase 1 |
 | Phase 2C | Headless mode | — | — | ⏸️ Pending | — |
 | Phase 3A | Computer Use | — | — | ⏸️ Pending | Phase 2 |
 | Phase 3B | 设置面板增强 | — | — | ⏸️ Pending | — |

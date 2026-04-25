@@ -192,7 +192,7 @@ cargo tauri dev
 - [x] GUI Desktop — Theme system (Dark/Light/Auto)
 - [x] GUI Desktop — Approval system runtime sync
 - [x] GUI Desktop — File browser panel
-- [ ] GUI Desktop — Session persistence (SQLite backend)
+- [x] GUI Desktop — Session persistence (JSON backend)
 - [ ] GUI Desktop — Diff view for file edits
 - [ ] Computer Use (screenshot / mouse / keyboard)
 - [ ] Headless mode (`--print`)

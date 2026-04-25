@@ -217,23 +217,26 @@ Both projects fork from the same Claude Code leaked source but diverge significa
 
 完整的依赖关系编排和 Git 安全机制见 [`docs/execution-plan.md`](./docs/execution-plan.md)。
 
-**当前 Phase**：Phase 1 — Session persistence（串行单轨）
+**当前 Phase**：Phase 2 — TaskPanel 真实对接 + Diff view（并行双轨）
+**上一 Phase**：Phase 1 — Session persistence ✅ 已完成（commit `95bf6fb`）
 
 ## Active Subagent Tasks
 
 | Subagent | Task | Branch | Status |
 |----------|------|--------|--------|
-| Subagent-G | Session persistence — GUI 会话 JSON 持久化 | `subagent/session-persist-2026-0425` | 🔄 Running |
+| Subagent-H | Diff view — `compute_diff` Command + `DiffViewer` 组件 | `subagent/diff-view-2026-0425` | 🔄 Running |
+| Subagent-I | TaskPanel 真实对接 — GUI 任务记录存储 | `subagent/task-real-2026-0425` | 🔄 Running |
 
 **Merge policy**: Subagent completes → main session reviews → `cargo test` + `npm run build` → merge to `main` → push.
 
-## Completed Subagent Tasks (Sprint 1-2)
+## Completed Subagent Tasks
 
-| Subagent | Task | Commit |
-|----------|------|--------|
-| Subagent-D | 暗色主题系统化 | `1641572` |
-| Subagent-E | 审批系统运行时切换对接 | `1e8b0fe` |
-| Subagent-F | 文件浏览器面板 | `cda98d4` |
+| Phase | Subagent | Task | Commit |
+|-------|----------|------|--------|
+| Sprint 1-2 | Subagent-D | 暗色主题系统化 | `1641572` |
+| Sprint 1-2 | Subagent-E | 审批系统运行时切换对接 | `1e8b0fe` |
+| Sprint 1-2 | Subagent-F | 文件浏览器面板 | `cda98d4` |
+| Sprint 3 | Subagent-G | Session persistence — GUI 会话 JSON 持久化 | `95bf6fb` |
 
 ## Known Issues
 
@@ -244,9 +247,9 @@ Both projects fork from the same Claude Code leaked source but diverge significa
 - ~~`agent ↔ approval` / `agent ↔ llm` / `agent ↔ compaction` cyclic dependencies~~ **Fixed** (2026-04-20).
 - ~~Old Skill system dead code~~ **Fixed** — removed `skill/` module; new `skills/` orchestration layer landed.
 - ~~Gateway SSE does not forward `tool_calls` deltas to the client~~ **Fixed** (2026-04-20) — SSE now emits structured events: `ToolCallStart` (with `id`, `name`, `arguments`), `ToolResult` (with `id`, `result`), and `StepBegin` (with `tool_name`).
-- **Session data is frontend-memory only**: Refreshing the GUI loses all sessions. Needs integration with `clarity-memory` session_store or `clarity-gateway` session_store.
+- ~~Session data is frontend-memory only~~ **Fixed** (2026-04-25) — JSON file persistence at `%APPDATA%/clarity/sessions/`.
 - **`task.rs` uses Mock data**: `list_tasks` / `cancel_task` are not wired to real `BackgroundTaskManager`.
-- **Streaming output session switching bug**: Switching sessions while streaming may append chunks to the wrong message array.
+- ~~Streaming output session switching bug~~ **Fixed** (2026-04-25) — Auto-interrupt streaming on session switch.
 - **kalosm local Provider not yet integrated**: Skeleton file planned; real implementation blocked until agri-paper delivers 7B model benchmark data.
 - **Discord/Telegram channels disabled by default**: Blocked by upstream `rustls-webpki` CVEs in `serenity 0.12.5`. Re-enable when upstream publishes a fix.
 - ~~Skill system not yet wired into Agent loop~~ **Fixed** (2026-04-20) — `Agent` now holds `skill_registry` and `active_skill`. `build_system_prompt()` injects skill context; `filter_tools_value()` enforces tool whitelists. TUI commands `/skill list` and `/skill use <id>` are live.
