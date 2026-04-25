@@ -6,6 +6,7 @@ import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
 import FileBrowser from "./components/FileBrowser";
 import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
+import LspPanel from "./components/LspPanel";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -67,6 +68,7 @@ function App() {
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [diffPanelOpen, setDiffPanelOpen] = useState(false);
   const [diffHunks, setDiffHunks] = useState<DiffHunk[]>([]);
+  const [lspPanelOpen, setLspPanelOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
@@ -432,6 +434,14 @@ function App() {
               🖥️
             </button>
             <button
+              className="lsp-toggle-btn"
+              onClick={() => setLspPanelOpen((prev) => !prev)}
+              title="Toggle LSP panel"
+              aria-label="Toggle LSP panel"
+            >
+              🔌 LSP
+            </button>
+            <button
               className="diff-toggle-btn"
               onClick={() => {
                 if (!diffPanelOpen) {
@@ -499,6 +509,10 @@ function App() {
           <ComputerUsePanel
             isOpen={computerPanelOpen}
             onClose={() => setComputerPanelOpen(false)}
+          />
+          <LspPanel
+            isOpen={lspPanelOpen}
+            onClose={() => setLspPanelOpen(false)}
           />
           <DiffPanel isOpen={diffPanelOpen} hunks={diffHunks} onClose={() => setDiffPanelOpen(false)} />
           <SettingsPanel

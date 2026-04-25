@@ -5,6 +5,7 @@
 //! Rust backend via Tauri Commands (IPC).
 
 pub mod commands;
+pub mod lsp_manager;
 
 use tauri::Manager;
 use tracing::info;
@@ -13,13 +14,18 @@ use tracing::info;
 pub struct AppState {
     /// The Agent instance driving conversations.
     pub agent: clarity_core::Agent,
+    /// LSP server process manager.
+    pub lsp_manager: lsp_manager::LspManager,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let registry = clarity_core::ToolRegistry::with_builtin_tools();
         let agent = clarity_core::Agent::new(registry);
-        Self { agent }
+        Self {
+            agent,
+            lsp_manager: lsp_manager::LspManager::new(),
+        }
     }
 }
 
@@ -68,6 +74,11 @@ pub fn run() {
             commands::file::get_file_tree,
             commands::file::read_file,
             commands::diff::compute_diff,
+            commands::lsp::lsp_start,
+            commands::lsp::lsp_send,
+            commands::lsp::lsp_recv,
+            commands::lsp::lsp_stop,
+            commands::lsp::lsp_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

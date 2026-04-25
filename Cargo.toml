@@ -8,7 +8,7 @@ edition = "2021"
 rust-version = "1.85"
 authors = ["Clarity Team"]
 license = "MIT"
-repository = "https://github.com/clarity/clarity"
+repository = "https://github.com/juice094/clarity"
 
 [workspace.dependencies]
 # Async runtime
