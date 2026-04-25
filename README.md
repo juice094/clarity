@@ -4,7 +4,7 @@
 
 Clarity is a **personal AI standard runtime** that orchestrates LLMs, tools, and sub-agents across multiple entry points — TUI, desktop GUI, web IDE, headless CLI, and system-tray monitor — with persistent memory, structured planning, and parallel execution.
 
-**Rust drives the core**, **Tauri 2 drives the GUI**, **ratatui drives the TUI** — native performance across all platforms. Zero runtime dependencies: `cargo install` produces a fully working binary.
+**Rust drives the core**, **Tauri 2 drives the GUI**, **ratatui drives the TUI** — native performance across all platforms. `cargo install` produces a fully working binary. Pre-built installers coming in v0.3.0.
 
 ## Core Differentiators
 

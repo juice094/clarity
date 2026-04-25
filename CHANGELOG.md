@@ -7,18 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-25
+
 ### Added
 
-- **Local GGUF Inference** — `LocalGgufProvider` using Candle for zero-dependency native GGUF model loading. Supports Qwen2/Qwen2.5/DeepSeek-R1-Distill-Qwen architectures with auto chat-template detection and streaming via `tokio::mpsc`.
+- **Local GGUF Inference (Default)** — `LocalGgufProvider` using Candle for zero-dependency native GGUF model loading. Supports Qwen2/Qwen2.5/DeepSeek-R1-Distill-Qwen architectures with auto chat-template detection and streaming via `tokio::mpsc`. Now enabled by default via `clarity-core/default = ["local-llm"]`.
+- **Offline Auto-Fallback** — Startup `prewarm_llm` with background network monitoring (TCP probe every 30s). Offline mode automatically falls back to local provider; reconnects to cloud provider when network recovers. Frontend shows `llm:fallback` banner.
+- **Settings-Runtime Integration** — `ensure_llm` reads `GuiSettings` provider and `local_model_path` at runtime. Settings cache eliminates per-request disk I/O. `save_settings` validates `network_probe_url` format.
 - **Headless CLI Local Provider** — `clarity-headless --provider local` with `CLARITY_LOCAL_MODEL_PATH` and `CLARITY_LOCAL_TOKENIZER_REPO` env vars.
 - **Model Path Resolution** — `resolve_local_model_path()` replaces all hardcoded paths; uses `CLARITY_LOCAL_MODEL_PATH` env var or auto-scans `~/models/`.
 - **Settings Panel Local Model Config** — `clarity-tauri` Settings Panel now supports selecting `Local (GGUF)` provider with auto-scanned `.gguf` models from `~/models/` and `CLARITY_LOCAL_MODEL_PATH`. Path persisted in `gui-settings.json`.
+- **Tokenizer Auto-Detection** — `ensure_llm` auto-detects `tokenizer.json` in model directory; avoids HuggingFace download when local file exists. Files < 1024 bytes are rejected as corrupted.
+- **Startup Error Caching** — `AppState.prewarm_error` caches startup LLM load errors for frontend inspection via `get_prewarm_status`.
 
 ### Changed
 
 - **Kalosm Deprecation** — Old `KalosmProvider` stubbed to redirect users to `LocalGgufProvider`. `ProtocolType::KalosmLocal` now builds `LocalGgufProvider`.
 
-## [0.1.2] — 2026-04-20
+### Fixed
+
+- **Concurrent LLM Load Race** — `tokio::sync::Mutex<()>` double-checked locking prevents concurrent duplicate model loading in `ensure_llm`.
+- **Explicit Provider Failure** — When user explicitly selects a provider and it fails, error is returned directly instead of silently falling back to `auto_arc`.
+- **LlmBinding.is_fallback Dead Code** — Removed unused field.
+
+### Security
+
+- **Network Probe URL Validation** — `save_settings` validates probe URL contains valid port (1–65535), rejecting malformed endpoints.
+
+## [0.1.2] — 2026-04-24
 
 ### Added
 
