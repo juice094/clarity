@@ -45,41 +45,43 @@ Clarity is not another chat client. It is a **personal AI standard runtime** tha
 | **Daemon Runtime** | Cross-platform PID lockfile + graceful shutdown. | ✅ |
 | **AutoDream** | Nightly memory consolidation scheduler. | ✅ |
 | **Lazy Master** | Heavy components initialized on first `run()`, not at startup. | ✅ |
-| **Four Entries** | mobile, desktop, web, cli — use the right tool for the job. | 🔄 Desktop WIP |
-| **GUI Desktop** | Tauri 2 + React 18 — chat, sessions, tasks, settings, file browser. | 🔄 Sprint 1-2 |
+| **Four Entries** | TUI, desktop, gateway, headless — use the right tool for the job. | ✅ |
+| **GUI Desktop** | Tauri 2 + React 18 — chat, sessions, tasks, settings, file browser, diff, computer use. | ✅ |
 | **Session Management** | Multi-session sidebar with create/switch/delete/rename. | ✅ |
 | **Task Panel** | Real-time background task list with cancel action. | ✅ |
 | **Settings Panel** | Model/provider/approval-mode/theme config with JSON persistence. | ✅ |
 | **Theme System** | Dark / Light / Auto with CSS variables + system theme listener. | ✅ |
-| **Approval System** | Interactive / Yolo / Plan — runtime hot-swap via GUI. | 🔄 Subagent-E |
-| **File Browser** | Browse working directory tree, click to insert `@path` references. | 🔄 Subagent-F |
+| **Diff View** | Line-based diff viewer for code review and AI-generated changes. | ✅ |
+| **Computer Use** | Desktop screenshot, click, type, scroll via GUI panel. | ✅ |
+| **Web Browser** | Navigate, extract text/HTML from web pages (lightweight, zero-config). | ✅ |
+| **Session Persistence** | JSON file-based session save/load across app restarts. | ✅ |
+| **Approval System** | Interactive / Yolo / Plan — runtime hot-swap via GUI/TUI. | ✅ |
+| **File Browser** | Browse working directory tree, click to insert `@path` references. | ✅ |
 
-## Clarity vs cc-haha (Claude Code Haha)
+## Why Clarity?
 
-Both projects fork from the same Claude Code leaked source, but diverge significantly:
+> An opinionated Rust-native AI runtime, inspired by modern agent architectures.
 
-| Dimension | **Clarity** | **cc-haha** |
-|-----------|-------------|-------------|
-| **Core Language** | Rust (memory-safe, zero-cost) | TypeScript (Bun runtime) |
-| **TUI** | ratatui (Rust terminal UI) | Ink (React in terminal) |
-| **Desktop Architecture** | Tauri 2 → native Rust core (single process) | Tauri 2 frontend ↔ Bun server (dual process) |
-| **HTTP Gateway** | Axum (built-in, `cargo run -p clarity-gateway`) | Bun server (separate `SERVER_PORT=3456` launch) |
-| **LLM Providers** | OpenAI, Anthropic, DeepSeek, Ollama, Kimi | Anthropic-compatible (OpenRouter, MiniMax, etc.) |
-| **Memory Storage** | SQLite + BM25 + cosine vector hybrid | File-based (unspecified backend) |
-| **Background Tasks** | Worker pool + Cron scheduler + system tray | Cron tasks |
-| **Notifications** | Multi-channel webhook (5+ platforms) | Telegram / 飞书 / Discord IM adapters |
-| **Computer Use** | ❌ Not yet | ✅ Screenshot / mouse / keyboard control |
-| **Approval Modes** | ✅ Interactive / Yolo / Plan (runtime switchable) | Permission controls |
-| **Theme System** | ✅ Dark / Light / Auto | ❌ Not yet |
-| **Session Isolation** | ✅ Sidebar with full CRUD | Multi-tab |
-| **Headless Mode** | ❌ Not yet | ✅ `--print` for scripts/CI |
-| **LSP Support** | ❌ Not yet | ✅ |
-| **Diff View** | ❌ Not yet | ✅ In desktop |
-| **Test Coverage** | 481+ Rust unit tests | Vitest (desktop only) |
+Clarity is a ground-up Rust implementation of an AI agent runtime with fundamentally different architectural goals from scripting-language alternatives.
 
-**Clarity's differentiation**: Rust-native core for performance and safety, richer built-in toolset (web search, todo, plan, notify), SQLite-backed hybrid memory retrieval, and a unified single-process desktop architecture.
+### Architecture Philosophy
 
-**cc-haha's differentiation**: Computer Use desktop control, more mature desktop UI (diff view, code editing), deeper IM integrations, and comprehensive VitePress documentation.
+| **Dimension** | **Clarity** | **Typical Node.js / TS Agents** |
+|---------------|-------------|--------------------------------|
+| **Runtime** | Single binary, `cargo install` | Node.js / Bun runtime required |
+| **Memory Safety** | Compile-time guarantees (Rust) | Runtime GC |
+| **Process Model** | Single-process (Tauri ↔ Rust core) | Frontend ↔ server dual-process |
+| **Memory System** | SQLite + BM25 + vector hybrid | File-based or external DB |
+| **Deployment** | Native binary, zero runtime deps | Requires package manager + node_modules |
+
+### Core Differentiators
+
+- **Local-First LLM**: Deep Ollama integration — zero external API dependency possible
+- **Offline Plan Mode**: Full agent planning and execution without network connectivity
+- **Hybrid Memory**: BM25 full-text + cosine vector search persist across sessions
+- **Approval System**: Interactive / Yolo / Plan — runtime hot-swappable via GUI or TUI
+- **Zero Runtime Dependencies**: `cargo install` produces a fully working binary
+- **Single-Process Desktop**: Tauri 2 frontend directly embeds the Rust agent core — no separate server process
 
 ## Quick Start
 
