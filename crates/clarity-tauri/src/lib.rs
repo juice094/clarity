@@ -47,6 +47,10 @@ pub fn run() {
             commands::agent::agent_run_streaming,
             commands::agent::agent_interrupt,
             commands::agent::get_agent_status,
+            commands::settings::get_settings,
+            commands::settings::save_settings,
+            commands::settings::get_available_models,
+            commands::settings::get_approval_modes,
             commands::task::list_tasks,
             commands::task::cancel_task,
         ])
