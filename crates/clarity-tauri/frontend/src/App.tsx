@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
 
 interface Message {
@@ -14,6 +15,7 @@ function App() {
   const [status, setStatus] = useState("unconfigured");
   const [version, setVersion] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef(false);
 
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion);
@@ -23,6 +25,45 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    const unlisteners: UnlistenFn[] = [];
+
+    listen<string>("agent:chunk", (event) => {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === "agent") {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...last,
+            content: last.content + event.payload,
+          };
+          return updated;
+        }
+        return prev;
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<string | null>("agent:done", () => {
+      streamingRef.current = false;
+      setIsLoading(false);
+      refreshStatus();
+    }).then((u) => unlisteners.push(u));
+
+    listen<string>("agent:error", (event) => {
+      streamingRef.current = false;
+      setIsLoading(false);
+      setMessages((prev) => [
+        ...prev,
+        { role: "agent", content: `Error: ${event.payload}` },
+      ]);
+      refreshStatus();
+    }).then((u) => unlisteners.push(u));
+
+    return () => {
+      unlisteners.forEach((u) => u());
+    };
+  }, []);
 
   async function refreshStatus() {
     const s = await invoke<string>("get_agent_status");
@@ -35,19 +76,34 @@ function App() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setIsLoading(true);
+    streamingRef.current = true;
     await refreshStatus();
 
+    // Placeholder for the streaming response
+    setMessages((prev) => [...prev, { role: "agent", content: "" }]);
+
     try {
-      const response = await invoke<string>("agent_run", { query });
-      setMessages((prev) => [...prev, { role: "agent", content: response }]);
+      await invoke("agent_run_streaming", { query });
     } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "agent", content: `Error: ${e}` },
-      ]);
-    } finally {
-      setIsLoading(false);
-      await refreshStatus();
+      // Fallback: if the streaming command itself fails, show error
+      if (streamingRef.current) {
+        streamingRef.current = false;
+        setIsLoading(false);
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "agent" && last.content === "") {
+            updated[updated.length - 1] = {
+              ...last,
+              content: `Error: ${e}`,
+            };
+          } else {
+            updated.push({ role: "agent", content: `Error: ${e}` });
+          }
+          return updated;
+        });
+        await refreshStatus();
+      }
     }
   }
 
@@ -83,7 +139,7 @@ function App() {
             <div className="message-bubble">{msg.content}</div>
           </div>
         ))}
-        {isLoading && (
+        {isLoading && messages[messages.length - 1]?.role !== "agent" && (
           <div className="message agent loading">
             <div className="message-bubble">
               <span className="dot-flashing" />
@@ -102,10 +158,7 @@ function App() {
           rows={1}
           disabled={isLoading}
         />
-        <button
-          onClick={sendMessage}
-          disabled={isLoading || !input.trim()}
-        >
+        <button onClick={sendMessage} disabled={isLoading || !input.trim()}>
           Send
         </button>
       </div>

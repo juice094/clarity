@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use clarity_core::{AgentError, OpenAiCompatibleLlm};
 
 /// Simple echo command for smoke-testing the IPC bridge.
@@ -24,7 +24,7 @@ pub fn get_agent_count(state: State<crate::AppState>) -> usize {
     }
 }
 
-/// Run a single-turn agent query.
+/// Run a single-turn agent query (non-streaming).
 ///
 /// If no LLM is configured, attempts to auto-configure from the
 /// `OPENAI_API_KEY` environment variable.
@@ -51,6 +51,55 @@ pub async fn agent_run(
         Ok(response) => Ok(response),
         Err(AgentError::Cancelled) => Ok("[Cancelled by user]".into()),
         Err(e) => Err(format!("Agent error: {}", e)),
+    }
+}
+
+/// Run a single-turn agent query with streaming output.
+///
+/// Chunks are emitted via Tauri events (`agent:chunk`).
+/// Completion is signaled by `agent:done`, errors by `agent:error`.
+#[tauri::command]
+pub async fn agent_run_streaming(
+    query: String,
+    app: AppHandle,
+    state: State<'_, crate::AppState>,
+) -> Result<(), String> {
+    if state.agent.llm().is_none() {
+        match OpenAiCompatibleLlm::from_env() {
+            Ok(llm) => {
+                let llm: Arc<dyn clarity_core::llm::LlmProvider> = Arc::new(llm);
+                state.agent.set_llm(llm);
+            }
+            Err(_) => {
+                return Err(
+                    "LLM not configured. Please set OPENAI_API_KEY environment variable.".into(),
+                );
+            }
+        }
+    }
+
+    let app_for_chunk = app.clone();
+    let result = state
+        .agent
+        .run_streaming(&query, move |chunk: &str| {
+            let _ = app_for_chunk.emit("agent:chunk", chunk.to_string());
+        })
+        .await;
+
+    match result {
+        Ok(_) => {
+            let _ = app.emit("agent:done", ());
+            Ok(())
+        }
+        Err(AgentError::Cancelled) => {
+            let _ = app.emit("agent:done", "[Cancelled by user]");
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("Agent error: {}", e);
+            let _ = app.emit("agent:error", &msg);
+            Err(msg)
+        }
     }
 }
 

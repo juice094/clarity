@@ -44,6 +44,7 @@ pub fn run() {
             commands::agent::greet,
             commands::agent::get_app_version,
             commands::agent::agent_run,
+            commands::agent::agent_run_streaming,
             commands::agent::agent_interrupt,
             commands::agent::get_agent_status,
         ])
