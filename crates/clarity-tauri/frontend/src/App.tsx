@@ -44,6 +44,7 @@ function App() {
   const [theme, setTheme] = useState("dark");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
+  const taskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion);
@@ -180,6 +181,10 @@ function App() {
       streamingRef.current = false;
       setIsLoading(false);
       refreshStatus();
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "completed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }).then((u) => unlisteners.push(u));
 
     listen<string>("agent:error", (event) => {
@@ -190,6 +195,10 @@ function App() {
         { role: "agent", content: `Error: ${event.payload}` },
       ]);
       refreshStatus();
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -207,6 +216,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     setActiveSessionId(id);
     const session = sessions.find((s) => s.id === id);
@@ -220,6 +233,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     const newSession = createNewSession();
     setSessions((prev) => [newSession, ...prev]);
@@ -241,6 +258,10 @@ function App() {
       invoke("agent_interrupt");
       streamingRef.current = false;
       setIsLoading(false);
+      if (taskIdRef.current) {
+        invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+        taskIdRef.current = null;
+      }
     }
     const newSessions = sessions.filter((s) => s.id !== id);
     if (newSessions.length === 0) {
@@ -285,6 +306,14 @@ function App() {
     streamingRef.current = true;
     await refreshStatus();
 
+    // Create task record
+    try {
+      const taskId = await invoke<string>("create_task", { name: query.slice(0, 30) });
+      taskIdRef.current = taskId;
+    } catch (e) {
+      console.error("Failed to create task:", e);
+    }
+
     // Placeholder for the streaming response
     setMessages((prev) => [...prev, { role: "agent", content: "" }]);
 
@@ -308,6 +337,10 @@ function App() {
           }
           return updated;
         });
+        if (taskIdRef.current) {
+          invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
+          taskIdRef.current = null;
+        }
         await refreshStatus();
       }
     }
