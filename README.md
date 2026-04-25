@@ -75,7 +75,7 @@ Both projects fork from the same Claude Code leaked source, but diverge signific
 | **Headless Mode** | ❌ Not yet | ✅ `--print` for scripts/CI |
 | **LSP Support** | ❌ Not yet | ✅ |
 | **Diff View** | ❌ Not yet | ✅ In desktop |
-| **Test Coverage** | 474+ Rust unit tests | Vitest (desktop only) |
+| **Test Coverage** | 481+ Rust unit tests | Vitest (desktop only) |
 
 **Clarity's differentiation**: Rust-native core for performance and safety, richer built-in toolset (web search, todo, plan, notify), SQLite-backed hybrid memory retrieval, and a unified single-process desktop architecture.
 
@@ -160,7 +160,7 @@ crates/
 
 ```bash
 # Run all tests
-cargo test --workspace --lib          # 474+ tests
+cargo test --workspace --lib          # 481+ tests
 
 # Run clippy
 cargo clippy --workspace --lib --bins --tests
@@ -190,8 +190,8 @@ cargo tauri dev
 - [x] GUI Desktop — Task panel
 - [x] GUI Desktop — Settings panel
 - [x] GUI Desktop — Theme system (Dark/Light/Auto)
-- [ ] GUI Desktop — Approval system runtime sync (Subagent-E 🔄)
-- [ ] GUI Desktop — File browser panel (Subagent-F 🔄)
+- [x] GUI Desktop — Approval system runtime sync
+- [x] GUI Desktop — File browser panel
 - [ ] GUI Desktop — Session persistence (SQLite backend)
 - [ ] GUI Desktop — Diff view for file edits
 - [ ] Computer Use (screenshot / mouse / keyboard)

@@ -4,7 +4,7 @@
 
 ```bash
 cd C:\Users\22414\dev\third_party\clarity
-cargo test --workspace --lib          # 474 tests
+cargo test --workspace --lib          # 481 tests
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
 cargo run -p clarity-gateway           # run Gateway (needs API key)
@@ -30,6 +30,15 @@ $env:OPENAI_API_KEY="..."
 ```
 
 ## Recent Major Changes (2026-04-20 ~ Sprint 1 GUI)
+
+### 文档整理（2026-04-25）
+
+- 归档根目录 6 个过时 `.md` 文件至 `docs/archive/` 和 `docs/comparisons/`：
+  - `IMPLEMENTATION_SUMMARY.md`、`PHASE2_RWLOCK_AUDIT.md`、`PLAN_v0.2.md`
+  - `PROJECT_REPORT.md`、`PROJECT_STATUS.md`、`TEST_REPORT.md`
+  - `OPENCLAW_GAP_ANALYSIS.md` → `docs/comparisons/`
+- 更新 `docs/README.md` 索引：版本升至 v0.2.0，加入 GUI Sprint 1-2 功能列表
+- 根目录仅保留 `README.md`、`README.en.md`、`AGENTS.md`、`CHANGELOG.md`
 
 ### GUI Desktop — Sprint 1 核心功能交付
 
