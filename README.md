@@ -13,6 +13,7 @@ Clarity is a **personal AI standard runtime** that orchestrates LLMs, tools, and
 - **Hybrid Memory**: SQLite + BM25 + vector search persist across sessions with automatic consolidation
 - **Approval System**: Interactive / Yolo / Plan — runtime hot-swappable via GUI or TUI
 - **Single-Process Desktop**: Tauri 2 frontend directly embeds the Rust agent core — no separate server process
+- **i18n**: Chinese / English language switching with persistent preference
 
 ## Architecture
 
@@ -49,8 +50,10 @@ clarity-gateway   # http://127.0.0.1:18800
 clarity-tui       # in another terminal
 
 # Desktop GUI (Tauri 2)
-cd crates/clarity-tauri/frontend && npm install && npm run build
-cargo tauri dev   # or cargo tauri build --features cuda for CUDA acceleration
+cd crates/clarity-tauri/frontend && npm install
+npm run dev       # start Vite dev server (keep running)
+# In another terminal:
+cargo run -p clarity-tauri   # or cargo tauri build --features cuda for CUDA acceleration
 ```
 
 ### Local LLM (offline, no API key)
