@@ -54,6 +54,8 @@ pub fn run() {
             commands::settings::get_approval_modes,
             commands::task::list_tasks,
             commands::task::cancel_task,
+            commands::file::get_file_tree,
+            commands::file::read_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

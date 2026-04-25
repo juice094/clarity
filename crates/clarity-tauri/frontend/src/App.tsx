@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import TaskPanel from "./components/TaskPanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
+import FileBrowser from "./components/FileBrowser";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -29,6 +30,7 @@ function App() {
   const [version, setVersion] = useState("");
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
@@ -244,6 +246,14 @@ function App() {
             <span className="version">v{version}</span>
             <span className={`status-badge ${status}`}>{status}</span>
             <button
+              className="file-browser-toggle-btn"
+              onClick={() => setFileBrowserOpen((prev) => !prev)}
+              title="Browse files"
+              aria-label="Browse files"
+            >
+              📂
+            </button>
+            <button
               className="task-toggle-btn"
               onClick={() => setTaskPanelOpen((prev) => !prev)}
               title="Toggle task panel"
@@ -263,6 +273,14 @@ function App() {
         </header>
 
         <div className="main-content">
+          <FileBrowser
+            isOpen={fileBrowserOpen}
+            onClose={() => setFileBrowserOpen(false)}
+            onFileSelect={(path) => {
+              setInput((prev) => prev + (prev ? " " : "") + `@${path}`);
+              setFileBrowserOpen(false);
+            }}
+          />
           <div className="messages">
             {messages.length === 0 && (
               <div className="welcome">
