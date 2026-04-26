@@ -20,7 +20,7 @@ pub struct GuiSettings {
 }
 
 impl GuiSettings {
-    fn config_path() -> PathBuf {
+    pub(crate) fn config_path() -> PathBuf {
         // Cross-platform MVP: APPDATA (Windows) → HOME/.config (Unix) → fallback cwd
         if let Ok(appdata) = std::env::var("APPDATA") {
             let mut path = PathBuf::from(appdata);
@@ -74,7 +74,7 @@ impl Default for GuiSettings {
 
 /// Scan known directories for `.gguf` model files.
 /// Returns `Vec<(full_path, file_name)>` sorted by file name.
-fn scan_local_models() -> Vec<(String, String)> {
+pub(crate) fn scan_local_models() -> Vec<(String, String)> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
 

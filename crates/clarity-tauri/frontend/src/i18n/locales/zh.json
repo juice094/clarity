@@ -52,6 +52,20 @@
     "reset": "重置",
     "cancel": "取消"
   },
+  "onboarding": {
+    "title": "欢迎使用 Clarity",
+    "subtitle": "让我们开始配置。",
+    "networkOk": "网络可用",
+    "networkOffline": "网络离线 — 仅本地模式",
+    "localModelOk": "已发现本地模型",
+    "localModelMissing": "未找到本地模型",
+    "configured": "可以开始聊天",
+    "notConfigured": "模型 / Provider 未配置",
+    "hintCloud": "你可以使用云端 Provider（OpenAI / Anthropic）或下载本地 GGUF 模型。",
+    "hintOffline": "你当前处于离线状态。请将 .gguf 模型文件放入 ~/models/ 以使用本地模式。",
+    "openSettings": "配置模型",
+    "startChat": "开始聊天"
+  },
   "taskPanel": {
     "title": "任务列表",
     "close": "关闭",

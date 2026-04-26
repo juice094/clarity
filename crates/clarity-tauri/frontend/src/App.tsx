@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
+import OnboardingModal, { type LaunchStatus } from "./components/OnboardingModal";
 import FileBrowser from "./components/FileBrowser";
 import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
 import LspPanel from "./components/LspPanel";
@@ -74,6 +75,7 @@ function App() {
   const [theme, setTheme] = useState("dark");
   const [networkStatus, setNetworkStatus] = useState<"offline" | "restored" | "error" | null>(null);
   const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
+  const [launchStatus, setLaunchStatus] = useState<LaunchStatus | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
@@ -81,6 +83,13 @@ function App() {
   useEffect(() => {
     invoke<string>("get_app_version").then(setVersion);
     refreshStatus();
+    invoke<LaunchStatus>("get_launch_status")
+      .then((status) => {
+        setLaunchStatus(status);
+      })
+      .catch((e) => {
+        console.error("Failed to get launch status:", e);
+      });
     invoke<string | null>("get_prewarm_status").then((err) => {
       if (err) {
         setNetworkErrorMsg(err);
@@ -510,6 +519,13 @@ function App() {
           </div>
         </header>
 
+        {launchStatus?.needs_onboarding && (
+          <OnboardingModal
+            status={launchStatus}
+            onOpenSettings={() => setSettingsPanelOpen(true)}
+            onDismiss={() => setLaunchStatus((prev) => prev ? { ...prev, needs_onboarding: false } : prev)}
+          />
+        )}
         <div className="main-content">
           <FileBrowser
             isOpen={fileBrowserOpen}

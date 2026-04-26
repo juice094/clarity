@@ -1,0 +1,54 @@
+use serde::Serialize;
+use std::path::PathBuf;
+
+#[derive(Serialize, Clone, Debug)]
+pub struct LaunchStatus {
+    pub has_local_model: bool,
+    pub network_available: bool,
+    pub configured: bool,
+    pub needs_onboarding: bool,
+    pub first_launch: bool,
+}
+
+/// Check whether a settings file already exists on disk.
+fn settings_file_exists() -> bool {
+    PathBuf::from(&crate::commands::settings::GuiSettings::config_path()).is_file()
+}
+
+#[tauri::command]
+pub async fn get_launch_status(state: tauri::State<'_, crate::AppState>) -> Result<LaunchStatus, String> {
+    let settings = {
+        let guard = state.cached_settings.lock().unwrap();
+        guard.clone()
+    };
+
+    let local_models = crate::commands::settings::scan_local_models();
+    let has_local_model = local_models
+        .iter()
+        .any(|(_, name)| !name.starts_with("No models"));
+
+    let network_available = state
+        .network_available
+        .load(std::sync::atomic::Ordering::Relaxed);
+
+    // "Configured" means the user has chosen a provider that is actually usable
+    // right now (local model present, or remote provider + network).
+    let configured = match settings.provider.as_str() {
+        "local" => has_local_model,
+        _ => network_available && !settings.model.is_empty(),
+    };
+
+    let first_launch = !settings_file_exists();
+
+    // Onboarding is needed when it's the first launch OR when no usable
+    // model/provider is configured.
+    let needs_onboarding = first_launch || !configured;
+
+    Ok(LaunchStatus {
+        has_local_model,
+        network_available,
+        configured,
+        needs_onboarding,
+        first_launch,
+    })
+}

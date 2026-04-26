@@ -212,6 +212,7 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::save_settings,
             commands::settings::reload_llm,
+            commands::ftue::get_launch_status,
             commands::settings::set_approval_mode,
             commands::settings::get_available_models,
             commands::settings::get_local_models,

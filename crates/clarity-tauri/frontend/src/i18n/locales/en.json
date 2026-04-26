@@ -52,6 +52,20 @@
     "reset": "Reset",
     "cancel": "Cancel"
   },
+  "onboarding": {
+    "title": "Welcome to Clarity",
+    "subtitle": "Let's get you set up.",
+    "networkOk": "Network available",
+    "networkOffline": "Network offline — local mode only",
+    "localModelOk": "Local model found",
+    "localModelMissing": "No local model found",
+    "configured": "Ready to chat",
+    "notConfigured": "Model / provider not configured",
+    "hintCloud": "You can use a cloud provider (OpenAI / Anthropic) or download a local GGUF model.",
+    "hintOffline": "You are offline. Please place a .gguf model file in ~/models/ to use local mode.",
+    "openSettings": "Configure Model",
+    "startChat": "Start Chatting"
+  },
   "taskPanel": {
     "title": "Tasks",
     "close": "Close",
