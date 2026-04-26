@@ -183,14 +183,17 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         await invoke("set_approval_mode", { mode: settings.approval_mode });
       } catch (e) {
         console.error("Failed to set approval mode:", e);
+        setToast(t("settings.saveFailed"));
       }
       try {
         await invoke("reload_llm");
       } catch (e) {
         console.error("Failed to reload LLM:", e);
+        setToast(t("settings.saveFailed"));
       }
     } catch (e) {
       console.error("Failed to save settings:", e);
+      setToast(t("settings.saveFailed"));
     }
   }
 

@@ -17,6 +17,7 @@ interface TaskPanelProps {
 
 function TaskPanel({ isOpen, onClose }: TaskPanelProps) {
   const [tasks, setTasks] = useState<TaskView[]>([]);
+  const [error, setError] = useState("");
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -24,6 +25,7 @@ function TaskPanel({ isOpen, onClose }: TaskPanelProps) {
       setTasks(data);
     } catch (e) {
       console.error("Failed to list tasks:", e);
+      setError("Failed to load tasks");
     }
   }, []);
 
@@ -40,6 +42,7 @@ function TaskPanel({ isOpen, onClose }: TaskPanelProps) {
       fetchTasks();
     } catch (e) {
       console.error("Failed to cancel task:", e);
+      setError("Failed to cancel task");
     }
   }
 
@@ -68,8 +71,9 @@ function TaskPanel({ isOpen, onClose }: TaskPanelProps) {
           <X size={16} />
         </button>
       </div>
+      {error && <div className="task-error-banner">{error}</div>}
       <div className="task-list">
-        {tasks.length === 0 && (
+        {tasks.length === 0 && !error && (
           <div className="task-empty">No tasks</div>
         )}
         {tasks.map((task) => (
