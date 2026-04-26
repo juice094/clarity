@@ -2,4 +2,6 @@
 frontend/dist/
 *.log
 gen/
+/updater_key
+/updater_key.pub
 

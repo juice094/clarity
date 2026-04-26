@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X, MoreVertical, Send, Code, FlaskConical, Wrench } from "lucide-react";
+import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X, MoreVertical, Send, Code, FlaskConical, Wrench, Download } from "lucide-react";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
@@ -79,11 +79,24 @@ function App() {
   const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; downloading: boolean } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Delayed update check (5s after startup)
+    const updateTimer = setTimeout(async () => {
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+        if (update) {
+          setUpdateInfo({ version: update.version, downloading: false });
+        }
+      } catch (e) {
+        // Updater not available or check failed — silently ignore
+      }
+    }, 5000);
 
     refreshStatus();
     invoke<LaunchStatus>("get_launch_status")
@@ -100,6 +113,8 @@ function App() {
         setTimeout(() => setNetworkStatus((s) => (s === "error" ? null : s)), 8000);
       }
     });
+
+    return () => clearTimeout(updateTimer);
   }, []);
 
   // 加载持久化会话
@@ -278,6 +293,22 @@ function App() {
       unlisteners.forEach((u) => u());
     };
   }, []);
+
+  async function handleUpdateInstall() {
+    if (!updateInfo || updateInfo.downloading) return;
+    setUpdateInfo((prev) => (prev ? { ...prev, downloading: true } : null));
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        await update.downloadAndInstall();
+      }
+    } catch (e) {
+      console.error("Update install failed:", e);
+    } finally {
+      setUpdateInfo((prev) => (prev ? { ...prev, downloading: false } : null));
+    }
+  }
 
   async function refreshStatus() {
     const s = await invoke<string>("get_agent_status");
@@ -468,6 +499,19 @@ function App() {
               : networkStatus === "restored"
               ? "Network restored — switched back to preferred provider"
               : `Error: ${networkErrorMsg}`}
+          </div>
+        )}
+        {updateInfo && (
+          <div className="update-banner">
+            <span>Update available: v{updateInfo.version}</span>
+            <button
+              onClick={handleUpdateInstall}
+              disabled={updateInfo.downloading}
+              className="update-banner-btn"
+            >
+              <Download size={14} />
+              {updateInfo.downloading ? "Installing…" : "Install & Restart"}
+            </button>
           </div>
         )}
         <header className="chat-header">
