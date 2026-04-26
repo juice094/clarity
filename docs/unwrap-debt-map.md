@@ -1,112 +1,100 @@
 # Clarity Unwrap/Expect 债务地图
 
 > 生成日期：2026-04-26  
-> 范围：`clarity-core` + `clarity-gateway` + `clarity-memory` 非测试代码  
-> 测量命令：`grep -rn "\.unwrap()\|\.expect(" crates/*/src --include="*.rs" | grep -v "test"`
+> 范围：全 workspace 非测试代码（`#[cfg(test)]` 模块已排除）  
+> 测量方法：AST-aware Python 扫描，追踪 `#[cfg(test)]` 花括号边界
 
 ---
 
-## 1. 总量基线
+## 1. 总量基线（修正版）
 
 | 指标 | 数量 | 备注 |
 |------|------|------|
-| `unwrap()` / `expect()` 总量 | **947** | 非测试代码 |
-| 同步原语类（`lock/read/write`） | ~44 | 低风险，允许保留 |
-| `await` / `handle.await` 类 | ~59 | 中低风险，async 边界 |
-| **非同步原语、非 await 类（高风险）** | **~637** | 需逐步清理 |
+| `unwrap()` / `expect()` 总量 | **171** | 非测试代码 |
+| 同步原语类（`lock/read/write`） | **92** | 低风险，允许保留 |
+| `Regex::new` 编译期正则 | **30** | 硬编码模式，不会失败 |
+| `duration_since(UNIX_EPOCH)` | **2** | 系统时间不可能早于 1970 |
+| 硬编码字符串 `parse()` | **6** | 如 HeaderValue parse，不会失败 |
+| doc 注释中的示例代码 | **2** | 非实际执行代码 |
+| **真实风险类（需关注）** | **~39** | 见下文详细清单 |
+
+> 之前估算的 947 / 637 为严重高估，原因：扫描未排除 `#[cfg(test)]` 内联模块。
 
 ---
 
 ## 2. 按风险等级分类
 
-### 🟢 低风险 — 允许保留（已评估）
+### 🟢 低风险 — 允许保留（已评估，无需行动）
 
-| 模式 | 示例 | 说明 |
+| 模式 | 数量 | 说明 |
 |------|------|------|
-| 同步原语 | `mutex.lock().unwrap()` | 锁 poison 即 panic 是合理行为 |
-| 同步原语 | `rwlock.read().unwrap()` | 同上 |
-| 同步原语 | `rwlock.write().unwrap()` | 同上 |
-| async join | `handle.await.unwrap()` | Tokio JoinHandle 的取消语义 |
+| `mutex.lock().unwrap()` / `rwlock.read().unwrap()` | 92 | 锁 poison 即 panic 是合理行为 |
+| `Regex::new(r"...").unwrap()` | 30 | 编译期硬编码正则，模式语法由开发者保证 |
+| `SystemTime::duration_since(UNIX_EPOCH).unwrap()` | 2 | 系统时间不可能早于 1970 |
+| `"http://...".parse::<HeaderValue>().unwrap()` | 5 | 硬编码合法字符串 |
+| `"application/json".parse().unwrap()` | 1 | 同上 |
+| `HmacSha256::new_from_slice(...).expect(...)` | 2 | HMAC 接受任意长度 key |
+| `reqwest::Client::builder()...expect(...)` | 4 | 初始化期，失败即无法运行 |
+| `tauri::Builder...expect(...)` | 2 | 初始化期 |
+| doc 注释示例 | 2 | 不执行 |
 
-### 🟡 中风险 — 需配 `// SAFE: ...` 注释
+### 🟡 中风险 — 需加 `// SAFE: ...` 注释
 
-| 模式 | 示例 | 说明 |
-|------|------|------|
-| 初始化期配置 | `config.parse().unwrap()` | 仅在启动期调用一次 |
-| 测试辅助 | `test_data.to_string().unwrap()` | 非生产路径 |
-| 内部状态转换 | `enum_from_str(s).unwrap()` | 输入来自内部生成，非外部 |
+| 文件 | 行 | 代码 | 说明 |
+|------|----|------|------|
+| `agent/prompt.rs` | 156 | `.unwrap()` | 需查看上下文 |
+| `memory/mod.rs` | 228 | `.unwrap()` | 需查看上下文 |
+| `skills/registry.rs` | 67, 78 | `.unwrap()` | 需查看上下文 |
+| `subagents/runner.rs` | 834 | `.unwrap()` | 需查看上下文 |
+| `tools/web.rs` | 466 | `.unwrap()` | 需查看上下文 |
+| `memory/compiler.rs` | 395 | `.unwrap()` | 需查看上下文 |
+| `memory/extractor.rs` | 438 | `.unwrap()` | 需查看上下文 |
+| `tauri/commands/task.rs` | 59 | `.unwrap()` | 需查看上下文 |
+| `tui/widgets/generating_indicator.rs` | 38, 48 | `.unwrap()` | 需查看上下文 |
 
-### 🔴 高风险 — 优先 `?` 化
+### 🔴 高风险 — 优先 `?` 化或改为 safe 模式
 
-| 模式 | 示例 | 典型文件 | 风险 |
-|------|------|---------|------|
-| JSON 解析 | `serde_json::from_str(x).unwrap()` | `handlers.rs`, `webhook.rs`, `ollama.rs` | 无效 JSON → panic |
-| 字符串解析 | `s.parse::<T>().unwrap()` | `config.rs`, `model_registry.rs` | 格式错误 → panic |
-| 文件 IO | `fs::read_to_string(p).unwrap()` | `compiler.rs`, `registry.rs` | 路径不存在 → panic |
-| 路径操作 | `PathBuf::from(s).canonicalize().unwrap()` | `tools/file.rs` | 权限拒绝 → panic |
-| 网络响应 | `response.json().await.unwrap()` | `handlers.rs`, `web.rs` | 非 JSON 响应 → panic |
-| 数据库操作 | `conn.execute(sql).unwrap()` | `session_store.rs`, `lib.rs` | 约束冲突 → panic |
-
----
-
-## 3. Top 15 高风险文件（非 lock/await 类 unwrap 密度）
-
-| 排名 | 文件 | unwrap/expect 数 | 主要风险模式 |
-|------|------|-----------------|-------------|
-| 1 | `clarity-memory/src/session_store.rs` | 32 | 数据库 execute/query |
-| 2 | `clarity-core/src/tools/web.rs` | 32 | 网络响应解析、HTML 提取 |
-| 3 | `clarity-memory/src/lib.rs` | 27 | 数据库连接、BM25 索引 |
-| 4 | `clarity-core/src/approval/mod.rs` | 27 | 规则引擎求值 |
-| 5 | `clarity-gateway/src/handlers.rs` | 23 | JSON 序列化、请求体解析 |
-| 6 | `clarity-core/src/tools/web_browser.rs` | 23 | CDP 消息解析 |
-| 7 | `clarity-core/src/background/store.rs` | 23 | Session 存储序列化 |
-| 8 | `clarity-core/src/background/mod.rs` | 22 | Task 状态转换 |
-| 9 | `clarity-core/src/subagents/runner.rs` | 18 | 子代理输出解析 |
-| 10 | `clarity-core/src/llm/ollama.rs` | 16 | Ollama 响应 JSON 解析 |
-| 11 | `clarity-core/src/mcp/config.rs` | 16 | MCP 配置解析 |
-| 12 | `clarity-memory/src/extractor.rs` | 16 | 文本提取 |
-| 13 | `clarity-core/src/mcp/enhanced.rs` | 16 | MCP 消息解析 |
-| 14 | `clarity-core/src/notifications/mod.rs` | 15 | 通知序列化 |
-| 15 | `clarity-core/src/skills/registry.rs` | 14 | Skill 元数据解析 |
+| 排名 | 文件 | 行 | 代码 | 风险 |
+|------|------|----|------|------|
+| 1 | `subagents/store.rs` | 63 | `self.in_memory.get(&agent_id).unwrap()` | agent_id 不存在 → panic |
+| 2 | `gateway/channels/webhook.rs` | 125-126 | `self.auth_header.as_ref().unwrap()` | auth 未配置 → panic |
+| 3 | `memory/embedding.rs` | 393 | `scores.sort_by(...partial_cmp().unwrap())` | NaN score → panic |
+| 4 | `memory/embedding.rs` | 455 | `results.sort_by(...partial_cmp().unwrap())` | NaN score → panic |
+| 5 | `tui/main.rs` | 127 | `memory_db_path.parent().unwrap()` | 根路径 → panic |
+| 6 | `tauri/commands/task.rs` | 50 | `path.parent().unwrap()` | 根路径 → panic |
+| 7 | `agent/enhanced.rs` | 260 | `last_error.expect("Last error should exist")` | 逻辑路径错误 → panic |
 
 ---
 
-## 4. 清理路线图
+## 3. 清理路线图（修正版）
 
-### Phase 1（每次 PR 附带，无独立 deadline）
+### 立即可做（≤ 30 分钟，6 处）
 
-**规则**：任何修改上述 15 个文件的 PR，必须附带 "此 PR 减少 X 处风险类 unwrap" 的 self-review。
+1. **`subagents/store.rs` L63**：`get(&agent_id).unwrap()` → `ok_or(SubagentError::NotFound)?`
+2. **`gateway/channels/webhook.rs` L125-126**：`as_ref().unwrap()` → `if let Some(...) = ...`
+3. **`memory/embedding.rs` L393, 455**：`partial_cmp().unwrap()` → `partial_cmp().unwrap_or(Ordering::Equal)`
+4. **`tauri/commands/task.rs` L50**：`path.parent().unwrap()` → `ok_or("invalid path")?`
+5. **`tui/main.rs` L127**：`path.parent().unwrap()` → `ok_or("invalid path")?`
 
-**优先级**：
-1. `handlers.rs`（Gateway 对外接口，panic = 服务崩溃）
-2. `web.rs` / `web_browser.rs`（工具调用，panic = 用户请求失败）
-3. `session_store.rs` / `lib.rs`（Memory 层，panic = 数据丢失）
-4. `ollama.rs` / `mcp/enhanced.rs`（Provider 层，panic = 模型不可用）
+### 本周内（需理解上下文）
 
-### Phase 2（v0.4.0 前，集中清理）
+6. **`agent/enhanced.rs` L260**：`last_error.expect(...)` → 改为 `match last_error` 避免 panic
+7. **中风险 9 处**：逐个查看上下文，加 `// SAFE: ...` 或 `?` 化
 
-目标：上述 Top 15 文件的风险类 unwrap 减少 **50%**（从 ~320 降至 ~160）。
+### 长期冻结
 
-策略：
-- 将 `unwrap()` 替换为 `?` + `AgentError` / `anyhow::Error`
-- 在 API 边界（Gateway handlers、Tool execute）使用 `Result` 传播
-- 在内部模块（Memory store、Background store）使用 `thiserror` 定义精确错误类型
-
-### Phase 3（v0.5.0+，长期维护）
-
-目标：全 workspace 非 lock/await 类 unwrap 降至 **<300**。
+- 同步原语 92 处：不投入，鼓励新代码用 `tokio::sync`
+- Regex 30 处：不投入，编译期安全
+- 初始化期 expect：不投入，启动失败即 panic 是合理行为
 
 ---
 
-## 5. PR Self-Review 检查单
+## 4. PR Self-Review 检查单（精简版）
 
-提交代码前，若修改了本列表中的文件，请检查：
-
-- [ ] 新增 `unwrap()` 是否已配 `// SAFE: <不变量说明>` 注释？
+- [ ] 新增 `unwrap()` 是否已配 `// SAFE: ...` 注释？
 - [ ] 是否优先使用 `?` 而非 `unwrap()`？
-- [ ] JSON/字符串/路径解析是否返回 `Result` 而非 panic？
-- [ ] 本 PR 净减少了几处风险类 unwrap？（期望 ≥0，鼓励 >0）
+- [ ] `HashMap::get()` / `Option::unwrap()` 在 API 边界是否返回 `Result`？
 
 ---
 
-*本文件由代码健康评估生成，每次重大版本发布时更新基线。*
+*本文件由精确扫描生成（Python AST-aware，排除 `#[cfg(test)]`）。之前版本高估了债务规模，特此修正。*
