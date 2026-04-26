@@ -390,7 +390,7 @@ impl CosineIndex {
             .collect();
 
         // Sort by similarity (descending)
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scores.truncate(top_k);
 
         scores
@@ -452,7 +452,7 @@ impl VectorStore {
             .filter(|(_, _, score)| *score > 0.0)
             .collect();
 
-        results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+        results.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(top_k);
 
         results
