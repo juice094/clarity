@@ -1,5 +1,8 @@
 # Clarity Future Direction — Technical Roadmap v0.3.0 → v0.5.0
 
+> **来源**：本文档由 Kimi plan 模式生成，plan 原文见 `docs/plans/2026-04-26-cluster-as-single-node.md`。
+> 宿可在此基础上直接修改、裁剪或重新编排，plan 原文作为参考底稿保留。
+>
 > **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 > 先在本地验证分布式语义（Hub-Worker、Wire 消息边界、MCP 三传输、Background Tasks），验证通过后同一套原语可无损穿透到 Syncthing-Rust P2P 层。
 >
