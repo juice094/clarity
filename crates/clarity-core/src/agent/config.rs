@@ -87,7 +87,10 @@ impl AgentConfig {
     }
 
     /// Set template variables for runtime prompt substitution.
-    pub fn with_template_variables(mut self, vars: std::collections::HashMap<String, String>) -> Self {
+    pub fn with_template_variables(
+        mut self,
+        vars: std::collections::HashMap<String, String>,
+    ) -> Self {
         self.template_variables = vars;
         self
     }

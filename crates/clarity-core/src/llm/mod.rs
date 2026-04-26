@@ -997,9 +997,16 @@ impl LlmFactory {
 
     /// Create a provider with an explicit API key, bypassing environment variables.
     /// Used by the Tauri GUI so users can configure provider + key through Settings.
-    pub fn create_with_key(name: &str, api_key: &str, model: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
+    pub fn create_with_key(
+        name: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<Box<dyn LlmProvider>, AgentError> {
         if api_key.is_empty() {
-            return Err(AgentError::Llm(format!("Provider '{}' requires an API key. Please enter it in Settings.", name)));
+            return Err(AgentError::Llm(format!(
+                "Provider '{}' requires an API key. Please enter it in Settings.",
+                name
+            )));
         }
         let lower = name.to_lowercase();
         match lower.as_str() {
@@ -1047,7 +1054,11 @@ impl LlmFactory {
     }
 
     /// `Arc` wrapper for `create_with_key`.
-    pub fn create_with_key_arc(name: &str, api_key: &str, model: &str) -> Result<Arc<dyn LlmProvider>, AgentError> {
+    pub fn create_with_key_arc(
+        name: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<Arc<dyn LlmProvider>, AgentError> {
         Self::create_with_key(name, api_key, model).map(Arc::from)
     }
 

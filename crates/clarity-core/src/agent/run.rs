@@ -155,7 +155,10 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            tool_names.extend(self.dispatch_tool_calls(&response.tool_calls, messages).await);
+            tool_names.extend(
+                self.dispatch_tool_calls(&response.tool_calls, messages)
+                    .await,
+            );
         }
 
         Ok((final_response, completed, tool_names))

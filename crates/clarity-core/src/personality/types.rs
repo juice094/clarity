@@ -45,10 +45,7 @@ mod tests {
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "Clarity".to_string());
         let config = PersonalityConfig::new().with_template_variables(vars);
-        assert_eq!(
-            config.fill_variables("Hello, {{name}}!"),
-            "Hello, Clarity!"
-        );
+        assert_eq!(config.fill_variables("Hello, {{name}}!"), "Hello, Clarity!");
     }
 
     #[test]

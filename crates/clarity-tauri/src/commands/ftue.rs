@@ -16,7 +16,9 @@ fn settings_file_exists() -> bool {
 }
 
 #[tauri::command]
-pub async fn get_launch_status(state: tauri::State<'_, crate::AppState>) -> Result<LaunchStatus, String> {
+pub async fn get_launch_status(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<LaunchStatus, String> {
     let settings = {
         let guard = state.cached_settings.lock().unwrap();
         guard.clone()
@@ -62,9 +64,7 @@ pub async fn get_launch_status(state: tauri::State<'_, crate::AppState>) -> Resu
         let mut new_settings = settings.clone();
         new_settings.provider = "local".to_string();
         new_settings.model = first_model.clone();
-        new_settings.local_model_path = local_models
-            .first()
-            .map(|(path, _)| path.clone());
+        new_settings.local_model_path = local_models.first().map(|(path, _)| path.clone());
         if let Err(e) = new_settings.save() {
             tracing::warn!("Failed to auto-save local settings on first launch: {}", e);
         } else {

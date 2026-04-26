@@ -80,7 +80,7 @@ crop_type = "string"
 
 [system_prompt]
 template = "You are {{agent_name}}, helping {{user_name}} with {{crop}} in {{region}}."
-"#
+"#,
         )
         .unwrap();
         file
@@ -92,8 +92,16 @@ template = "You are {{agent_name}}, helping {{user_name}} with {{crop}} in {{reg
         let config = parse_domain_persona(file.path()).unwrap();
         assert_eq!(config.persona.agent_name, "AgriExpert");
         assert_eq!(config.persona.user_name, "Farmer");
-        assert_eq!(config.persona.template_variables.get("crop").unwrap(), "wheat");
+        assert_eq!(
+            config.persona.template_variables.get("crop").unwrap(),
+            "wheat"
+        );
         assert_eq!(config.tools.as_ref().unwrap().len(), 1);
-        assert!(config.system_prompt.as_ref().unwrap().template.contains("{{agent_name}}"));
+        assert!(config
+            .system_prompt
+            .as_ref()
+            .unwrap()
+            .template
+            .contains("{{agent_name}}"));
     }
 }

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-26
+
 ### Added
 
 - **T_FTUE** — First-time user experience with launch status detection (`get_launch_status` command) and `OnboardingModal` React component with i18n support (en/zh).
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **T_COMPACT** — Two-tier compaction: Tier-1 fast local truncation of old assistant text (no LLM call) + Tier-2 LLM summarization.
 - **T_PARALLEL** — Concurrent tool call execution via `futures::future::join_all` in both sync and streaming loops.
 - **T_RELEASE/T_PACKAGE/T_UPDATE/T_SIGN** — GitHub Actions release workflow (tag-triggered), MSI/NSIS bundling, auto-update check (GitHub API + SemVer), and Windows self-signed certificate signing.
+- **v0.3.0 Daily Hardening (4 stages)** — Tool call visualization, compaction status banner, HuggingFace model download GUI, frontend log panel.
 
 ### Changed
 

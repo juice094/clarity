@@ -242,8 +242,10 @@ async fn load_and_register_mcp_tools(agent: &Agent) {
 
     match tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        mcp_registry.connect_all()
-    ).await {
+        mcp_registry.connect_all(),
+    )
+    .await
+    {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
             warn!("Failed to connect to one or more MCP servers: {}", e);

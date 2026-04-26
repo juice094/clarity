@@ -36,7 +36,11 @@ pub async fn download_model(
         .await
         .map_err(|e| format!("Failed to create file: {}", e))?;
 
-    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Download error: {}", e))? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| format!("Download error: {}", e))?
+    {
         file.write_all(&chunk)
             .await
             .map_err(|e| format!("Write error: {}", e))?;

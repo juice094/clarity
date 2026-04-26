@@ -29,10 +29,7 @@ pub struct DefaultChatDriver;
 
 impl ChatDriver for DefaultChatDriver {
     fn build_messages(&self, query: &str, system_prompt: &str) -> Vec<Message> {
-        vec![
-            Message::system(system_prompt),
-            Message::user(query),
-        ]
+        vec![Message::system(system_prompt), Message::user(query)]
     }
 }
 

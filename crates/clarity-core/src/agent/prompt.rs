@@ -66,8 +66,7 @@ impl SystemPromptBuilder {
     }
 
     pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
-        self.components
-            .push(PromptComponent::ApprovalNotice(mode));
+        self.components.push(PromptComponent::ApprovalNotice(mode));
         self
     }
 

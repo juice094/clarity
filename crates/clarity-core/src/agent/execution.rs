@@ -129,30 +129,33 @@ impl Agent {
 
             // Augment description with risk level for UI context
             let description = match risk {
-                RiskLevel::High => Some(description.unwrap_or_else(|| "High-risk operation".to_string())),
+                RiskLevel::High => {
+                    Some(description.unwrap_or_else(|| "High-risk operation".to_string()))
+                }
                 RiskLevel::Medium => description,
                 _ => description,
             };
 
-            let tool_call_for_approval = if sensitive_path.is_some() || tool_requires_approval || risk == RiskLevel::High {
-                let mut tc = tool_call.clone();
-                let mut approval_args = args.clone();
-                if tool_requires_approval {
-                    approval_args["_requires_approval_warning"] =
-                        serde_json::json!("This tool directly controls the computer desktop.");
-                }
-                if sensitive_path.is_some() {
-                    approval_args["_sensitive_file_warning"] =
-                        serde_json::json!("This operation accesses a sensitive file");
-                }
-                if risk == RiskLevel::High {
-                    approval_args["_risk_level"] = serde_json::json!("high");
-                }
-                tc.function.arguments = approval_args.to_string();
-                tc
-            } else {
-                tool_call.clone()
-            };
+            let tool_call_for_approval =
+                if sensitive_path.is_some() || tool_requires_approval || risk == RiskLevel::High {
+                    let mut tc = tool_call.clone();
+                    let mut approval_args = args.clone();
+                    if tool_requires_approval {
+                        approval_args["_requires_approval_warning"] =
+                            serde_json::json!("This tool directly controls the computer desktop.");
+                    }
+                    if sensitive_path.is_some() {
+                        approval_args["_sensitive_file_warning"] =
+                            serde_json::json!("This operation accesses a sensitive file");
+                    }
+                    if risk == RiskLevel::High {
+                        approval_args["_risk_level"] = serde_json::json!("high");
+                    }
+                    tc.function.arguments = approval_args.to_string();
+                    tc
+                } else {
+                    tool_call.clone()
+                };
 
             let mode = self.inner.read().unwrap().approval_mode;
             let needs_approval = match mode {
@@ -162,9 +165,7 @@ impl Agent {
                         || tool_requires_approval
                         || sensitive_path.is_some()
                 }
-                ApprovalMode::Yolo => {
-                    tool_requires_approval || risk == RiskLevel::High
-                }
+                ApprovalMode::Yolo => tool_requires_approval || risk == RiskLevel::High,
                 ApprovalMode::Plan => false,
             };
 
@@ -174,7 +175,11 @@ impl Agent {
             } else {
                 match risk {
                     RiskLevel::Medium => {
-                        tracing::info!("Medium-risk tool '{}' auto-approved in {:?} mode", name, mode);
+                        tracing::info!(
+                            "Medium-risk tool '{}' auto-approved in {:?} mode",
+                            name,
+                            mode
+                        );
                     }
                     RiskLevel::Low => {
                         tracing::debug!("Low-risk tool '{}' auto-approved", name);

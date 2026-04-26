@@ -76,8 +76,12 @@ pub fn load_session(id: String) -> Result<SessionData, String> {
                 // Main file corrupted — try backup
                 let mut bak = path.clone();
                 bak.set_extension("json.bak");
-                let bak_content = std::fs::read_to_string(&bak)
-                    .map_err(|e| format!("Session corrupted and no backup: {} (backup err: {})", parse_err, e))?;
+                let bak_content = std::fs::read_to_string(&bak).map_err(|e| {
+                    format!(
+                        "Session corrupted and no backup: {} (backup err: {})",
+                        parse_err, e
+                    )
+                })?;
                 serde_json::from_str(&bak_content)
                     .map_err(|e| format!("Session corrupted and backup unreadable: {}", e))
             }
@@ -86,8 +90,12 @@ pub fn load_session(id: String) -> Result<SessionData, String> {
             // Main file missing — try backup
             let mut bak = path.clone();
             bak.set_extension("json.bak");
-            let bak_content = std::fs::read_to_string(&bak)
-                .map_err(|e| format!("Session not found and no backup: {} (backup err: {})", io_err, e))?;
+            let bak_content = std::fs::read_to_string(&bak).map_err(|e| {
+                format!(
+                    "Session not found and no backup: {} (backup err: {})",
+                    io_err, e
+                )
+            })?;
             serde_json::from_str(&bak_content)
                 .map_err(|e| format!("Session not found and backup unreadable: {}", e))
         }

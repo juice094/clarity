@@ -139,12 +139,11 @@ impl RuleEngine {
         };
         match cond {
             ArgCondition::KeyExists(key) => args.get(key).is_some(),
-            ArgCondition::KeyEquals(key, val) => {
-                args.get(key)
-                    .and_then(|v| v.as_str())
-                    .map(|s| s == val)
-                    .unwrap_or(false)
-            }
+            ArgCondition::KeyEquals(key, val) => args
+                .get(key)
+                .and_then(|v| v.as_str())
+                .map(|s| s == val)
+                .unwrap_or(false),
         }
     }
 }
@@ -156,13 +155,19 @@ mod tests {
     #[test]
     fn test_default_shell_high() {
         let engine = RuleEngine::with_defaults();
-        assert_eq!(engine.evaluate("shell", &serde_json::json!({})), RiskLevel::High);
+        assert_eq!(
+            engine.evaluate("shell", &serde_json::json!({})),
+            RiskLevel::High
+        );
     }
 
     #[test]
     fn test_default_file_read_low() {
         let engine = RuleEngine::with_defaults();
-        assert_eq!(engine.evaluate("file_read", &serde_json::json!({})), RiskLevel::Low);
+        assert_eq!(
+            engine.evaluate("file_read", &serde_json::json!({})),
+            RiskLevel::Low
+        );
     }
 
     #[test]
@@ -177,7 +182,10 @@ mod tests {
     #[test]
     fn test_unknown_tool_fallback_low() {
         let engine = RuleEngine::with_defaults();
-        assert_eq!(engine.evaluate("unknown", &serde_json::json!({})), RiskLevel::Low);
+        assert_eq!(
+            engine.evaluate("unknown", &serde_json::json!({})),
+            RiskLevel::Low
+        );
     }
 
     #[test]
@@ -188,8 +196,14 @@ mod tests {
             arg_condition: None,
             risk: RiskLevel::Medium,
         });
-        assert_eq!(engine.evaluate("foo_bar", &serde_json::json!({})), RiskLevel::Medium);
-        assert_eq!(engine.evaluate("foo", &serde_json::json!({})), RiskLevel::Low);
+        assert_eq!(
+            engine.evaluate("foo_bar", &serde_json::json!({})),
+            RiskLevel::Medium
+        );
+        assert_eq!(
+            engine.evaluate("foo", &serde_json::json!({})),
+            RiskLevel::Low
+        );
     }
 
     #[test]
@@ -215,7 +229,10 @@ mod tests {
         let mut engine = RuleEngine::new();
         engine.add_rule(ApprovalRule {
             tool_pattern: "test".to_string(),
-            arg_condition: Some(ArgCondition::KeyEquals("mode".to_string(), "destructive".to_string())),
+            arg_condition: Some(ArgCondition::KeyEquals(
+                "mode".to_string(),
+                "destructive".to_string(),
+            )),
             risk: RiskLevel::High,
         });
         assert_eq!(

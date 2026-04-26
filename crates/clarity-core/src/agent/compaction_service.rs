@@ -520,7 +520,10 @@ mod tests {
             "Expected truncation marker, got: {}",
             messages[2].content
         );
-        assert_eq!(messages[2].content.len(), 120 + " [...truncated, 200 total chars]".len());
+        assert_eq!(
+            messages[2].content.len(),
+            120 + " [...truncated, 200 total chars]".len()
+        );
         // Recent message untouched
         assert_eq!(messages[3].content, "recent");
     }

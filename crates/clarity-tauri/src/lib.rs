@@ -166,7 +166,8 @@ pub fn run() {
         } else {
             "Unknown panic payload".to_string()
         };
-        let location = info.location()
+        let location = info
+            .location()
             .map(|l| format!("{}:{}", l.file(), l.line()))
             .unwrap_or_else(|| "unknown location".to_string());
         let report = format!("[{}] PANIC: {}\n", location, msg);

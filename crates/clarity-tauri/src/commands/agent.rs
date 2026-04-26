@@ -212,15 +212,22 @@ pub async fn agent_run_streaming(
         let mut wire_ui = wire.ui_side(false);
         while let Some(msg) = wire_ui.recv().await {
             let payload = match msg {
-                clarity_wire::WireMessage::ToolCall { id, name, arguments } => {
-                    Some(("agent:tool_start", serde_json::json!({ "id": id, "name": name, "arguments": arguments })))
-                }
-                clarity_wire::WireMessage::ToolResult { id, result } => {
-                    Some(("agent:tool_result", serde_json::json!({ "id": id, "result": result })))
-                }
-                clarity_wire::WireMessage::StepBegin { tool_name } => {
-                    Some(("agent:step_begin", serde_json::json!({ "tool_name": tool_name })))
-                }
+                clarity_wire::WireMessage::ToolCall {
+                    id,
+                    name,
+                    arguments,
+                } => Some((
+                    "agent:tool_start",
+                    serde_json::json!({ "id": id, "name": name, "arguments": arguments }),
+                )),
+                clarity_wire::WireMessage::ToolResult { id, result } => Some((
+                    "agent:tool_result",
+                    serde_json::json!({ "id": id, "result": result }),
+                )),
+                clarity_wire::WireMessage::StepBegin { tool_name } => Some((
+                    "agent:step_begin",
+                    serde_json::json!({ "tool_name": tool_name }),
+                )),
                 clarity_wire::WireMessage::CompactionBegin => {
                     Some(("agent:compaction_begin", serde_json::json!({})))
                 }
