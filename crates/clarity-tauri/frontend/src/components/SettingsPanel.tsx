@@ -133,6 +133,11 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       } catch (e) {
         console.error("Failed to set approval mode:", e);
       }
+      try {
+        await invoke("reload_llm");
+      } catch (e) {
+        console.error("Failed to reload LLM:", e);
+      }
     } catch (e) {
       console.error("Failed to save settings:", e);
     }
