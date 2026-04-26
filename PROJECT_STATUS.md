@@ -16,6 +16,7 @@
 | 3 | CI闭环 | ✅ Complete | `.github/workflows/release.yml` `working-directory` 修复 |
 | 4 | FTUE闭环 | ✅ Complete | `SettingsPanel` 保存后自动触发 `reload_llm` |
 | 5 | 冷却验证 | ✅ Complete | 测试524 passed, Clippy零警告 |
+| 6 | 可用性急救 | ✅ Complete | GUI API key 输入框 + `LlmFactory::create_with_key` — Clarity 真正可用 |
 
 ---
 

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tauri Build Paths** — `tauri.conf.json` `frontendDist` corrected from `../frontend/dist` to `frontend/dist`; `beforeBuildCommand`/`beforeDevCommand` switched to `npm run build`/`npm run dev` (Tauri CLI executes these in `frontend/` directory on Windows).
 - **CI Release Workflow** — Added `working-directory: crates/clarity-tauri` to the Tauri build step so `cargo tauri build` locates `tauri.conf.json` correctly in GitHub Actions.
 - **FTUE Settings Reload** — `SettingsPanel` now calls `reload_llm` after `save_settings` succeeds, ensuring the LLM binding is re-created with new provider/model configuration without restart.
+- **GUI API Key Input** — `SettingsPanel` now displays a password input field for non-local providers. `LlmFactory::create_with_key()` creates cloud providers (OpenAI/Anthropic/Kimi/DeepSeek/Ollama) with an explicit API key, bypassing environment variables. `ensure_llm` prioritizes `GuiSettings.api_key`, falls back to env vars, and surfaces a clear error if neither is set. `ftue::configured` now checks for `api_key` presence. Clarity is now usable without manual environment configuration.
 
 ## [0.2.1] — 2026-04-25
 
