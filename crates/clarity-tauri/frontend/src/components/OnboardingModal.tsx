@@ -61,11 +61,11 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
             {status.network_available
               ? t(
                   "onboarding.hintCloud",
-                  "You can use a cloud provider (OpenAI / Anthropic) or download a local GGUF model."
+                  "Select a provider and enter your API key in Settings to start chatting."
                 )
               : t(
                   "onboarding.hintOffline",
-                  "You are offline. Please place a .gguf model file in ~/models/ to use local mode."
+                  "You are offline. Place a .gguf model in ~/models/ and select Local (GGUF) provider."
                 )}
           </div>
         )}

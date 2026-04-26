@@ -10,6 +10,7 @@ export interface GuiSettings {
   local_model_path?: string;
   network_probe_url?: string;
   language?: string;
+  api_key?: string;
 }
 
 interface SettingsPanelProps {
@@ -203,6 +204,27 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               </option>
             ))}
           </select>
+
+          {!isLocalProvider && (
+            <>
+              <label className="settings-label">API Key</label>
+              <input
+                className="settings-input"
+                type="password"
+                value={settings.api_key ?? ""}
+                placeholder="sk-..."
+                onChange={(e) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    api_key: e.target.value || undefined,
+                  }))
+                }
+              />
+              <p className="settings-hint">
+                Stored locally in %APPDATA%/clarity/gui-settings.json
+              </p>
+            </>
+          )}
 
           {isLocalProvider && (
             <>

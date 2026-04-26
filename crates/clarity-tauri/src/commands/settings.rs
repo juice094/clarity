@@ -17,6 +17,10 @@ pub struct GuiSettings {
     pub network_probe_url: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
+    /// API key for the selected cloud provider.
+    /// Stored locally in gui-settings.json; not transmitted except to the provider's API.
+    #[serde(default)]
+    pub api_key: Option<String>,
 }
 
 impl GuiSettings {
@@ -68,6 +72,7 @@ impl Default for GuiSettings {
             local_model_path: None,
             network_probe_url: None,
             language: Some("zh".into()),
+            api_key: None,
         }
     }
 }

@@ -32,10 +32,21 @@ pub async fn get_launch_status(state: tauri::State<'_, crate::AppState>) -> Resu
         .load(std::sync::atomic::Ordering::Relaxed);
 
     // "Configured" means the user has chosen a provider that is actually usable
-    // right now (local model present, or remote provider + network).
+    // right now (local model present, or remote provider + network + api_key).
+    let has_api_key = settings
+        .api_key
+        .as_ref()
+        .map(|k| !k.is_empty())
+        .unwrap_or(false)
+        || std::env::var("KIMI_API_KEY").is_ok()
+        || std::env::var("KIMI_CODE_API_KEY").is_ok()
+        || std::env::var("OPENAI_API_KEY").is_ok()
+        || std::env::var("ANTHROPIC_AUTH_TOKEN").is_ok()
+        || std::env::var("DEEPSEEK_API_KEY").is_ok();
+
     let configured = match settings.provider.as_str() {
         "local" => has_local_model,
-        _ => network_available && !settings.model.is_empty(),
+        _ => network_available && !settings.model.is_empty() && has_api_key,
     };
 
     let first_launch = !settings_file_exists();

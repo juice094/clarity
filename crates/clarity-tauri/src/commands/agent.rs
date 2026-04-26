@@ -130,20 +130,26 @@ pub async fn ensure_llm(state: &crate::AppState) -> Result<(), String> {
             Arc::new(provider)
         }
         _ => {
-            match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
+            let api_key = settings.api_key.as_deref().unwrap_or("");
+            match clarity_core::llm::LlmFactory::create_with_key_arc(
+                &desired_provider,
+                api_key,
+                &settings.model,
+            ) {
                 Ok(llm) => llm,
                 Err(e) => {
-                    // Only auto-detect when the user explicitly asked for it or left
-                    // the provider unconfigured. If they named a specific provider,
-                    // surface the error directly so they know what to fix.
-                    if desired_provider == "auto" || desired_provider.is_empty() {
-                        tracing::warn!(
-                            "Failed to auto-detect provider: {}, trying legacy fallback",
-                            e
-                        );
-                        clarity_core::llm::LlmFactory::auto_arc()
-                            .await
-                            .map_err(|e| format!("LLM initialization failed: {}", e))?
+                    // Fallback: try env-var based creation if GUI key is empty
+                    if api_key.is_empty() {
+                        match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
+                            Ok(llm) => llm,
+                            Err(_) => {
+                                return Err(format!(
+                                    "Provider '{}' requires an API key. \
+                                     Please open Settings and enter your key.",
+                                    desired_provider
+                                ));
+                            }
+                        }
                     } else {
                         return Err(format!(
                             "Failed to create provider '{}': {}. \

@@ -995,6 +995,62 @@ impl LlmFactory {
         Self::create(name).await.map(Arc::from)
     }
 
+    /// Create a provider with an explicit API key, bypassing environment variables.
+    /// Used by the Tauri GUI so users can configure provider + key through Settings.
+    pub fn create_with_key(name: &str, api_key: &str, model: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
+        if api_key.is_empty() {
+            return Err(AgentError::Llm(format!("Provider '{}' requires an API key. Please enter it in Settings.", name)));
+        }
+        let lower = name.to_lowercase();
+        match lower.as_str() {
+            "anthropic" | "claude" => Ok(Box::new(AnthropicLlm::new(
+                api_key,
+                "https://api.anthropic.com",
+                model,
+            ))),
+            "deepseek" => Ok(Box::new(DeepSeekProvider::new(
+                api_key,
+                "https://api.deepseek.com/v1",
+                if model.is_empty() { "deepseek-chat" } else { model },
+            ))),
+            "openai" => Ok(Box::new(OpenAiCompatibleLlm::new(
+                api_key,
+                "https://api.openai.com/v1",
+                if model.is_empty() { "gpt-4o" } else { model },
+            ))),
+            "kimi" | "kimi-code" | "moonshot" => {
+                // sk-kimi-* keys belong to Kimi Code endpoint
+                if api_key.starts_with("sk-kimi-") {
+                    Ok(Box::new(KimiCodeLlm::new(
+                        api_key,
+                        "https://api.kimi.com/coding/v1",
+                        if model.is_empty() { "kimi-k2-07132k" } else { model },
+                    )))
+                } else {
+                    Ok(Box::new(KimiLlm::new(
+                        api_key,
+                        "https://api.moonshot.ai/v1",
+                        if model.is_empty() { "kimi-k2-07132k" } else { model },
+                    )))
+                }
+            }
+            "ollama" => Ok(Box::new(OpenAiCompatibleLlm::new(
+                api_key, // Ollama usually doesn't need a key, but we pass it anyway
+                "http://localhost:11434/v1",
+                if model.is_empty() { "llama3.2" } else { model },
+            ))),
+            _ => Err(AgentError::Llm(format!(
+                "Unknown provider '{}'. Supported: openai, anthropic, kimi, deepseek, ollama, local",
+                name
+            ))),
+        }
+    }
+
+    /// `Arc` wrapper for `create_with_key`.
+    pub fn create_with_key_arc(name: &str, api_key: &str, model: &str) -> Result<Arc<dyn LlmProvider>, AgentError> {
+        Self::create_with_key(name, api_key, model).map(Arc::from)
+    }
+
     /// Create an Anthropic provider from environment
     pub fn anthropic() -> Result<AnthropicLlm, AgentError> {
         AnthropicLlm::from_env()
