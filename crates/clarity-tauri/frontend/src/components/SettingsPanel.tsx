@@ -3,6 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
+const FALLBACK_MODELS: [string, string, string[]][] = [
+  ["openai", "OpenAI", ["gpt-4o", "gpt-4o-mini", "o3-mini"]],
+  ["anthropic", "Anthropic", ["claude-3-sonnet", "claude-3-opus"]],
+  ["kimi", "Kimi", ["kimi-k2-07132k", "kimi-latest"]],
+  ["ollama", "Ollama", ["llama3.2", "qwen2.5"]],
+  ["local", "Local (GGUF)", ["No models found — place .gguf in ~/models/"]],
+];
+
 export interface GuiSettings {
   model: string;
   provider: string;
@@ -87,12 +95,13 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     prevIsOpenRef.current = isOpen;
   }, [isOpen, savedSettings]);
 
+  const modelSource = models.length > 0 ? models : FALLBACK_MODELS;
   const availableModels =
-    models.find(([key]) => key === settings.provider)?.[2] ?? [];
+    modelSource.find(([key]) => key === settings.provider)?.[2] ?? [];
 
   function handleProviderChange(provider: string) {
     setSettings((prev) => {
-      const newModels = models.find(([key]) => key === provider)?.[2] ?? [];
+      const newModels = modelSource.find(([key]) => key === provider)?.[2] ?? [];
       let nextModel = newModels[0] ?? prev.model;
       let nextLocalPath = prev.local_model_path;
       if (provider === "local" && localModels.length > 0) {
@@ -186,7 +195,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             value={settings.provider}
             onChange={(e) => handleProviderChange(e.target.value)}
           >
-            {models.map(([key, display]) => (
+            {modelSource.map(([key, display]) => (
               <option key={key} value={key}>
                 {display}
               </option>

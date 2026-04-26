@@ -74,7 +74,7 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
         <div className="onboarding-actions">
           <button
             className="onboarding-btn primary"
-            onClick={onOpenSettings}
+            onClick={() => { onOpenSettings(); onDismiss(); }}
           >
             {t("onboarding.openSettings", "Configure Model")}
           </button>

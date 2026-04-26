@@ -67,13 +67,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("unconfigured");
 
-  const [taskPanelOpen, setTaskPanelOpen] = useState(false);
-  const [computerPanelOpen, setComputerPanelOpen] = useState(false);
-  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
-  const [diffPanelOpen, setDiffPanelOpen] = useState(false);
+  const [activeToolPanel, setActiveToolPanel] = useState<string | null>(null);
   const [diffHunks, setDiffHunks] = useState<DiffHunk[]>([]);
-  const [lspPanelOpen, setLspPanelOpen] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [networkStatus, setNetworkStatus] = useState<"offline" | "restored" | "error" | null>(null);
   const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
@@ -310,6 +306,13 @@ function App() {
     }
   }
 
+  function toggleToolPanel(tool: string) {
+    setActiveToolPanel((prev) => {
+      if (prev === tool) return null;
+      return tool;
+    });
+  }
+
   async function refreshStatus() {
     const s = await invoke<string>("get_agent_status");
     setStatus(s);
@@ -469,27 +472,21 @@ function App() {
         onDelete={handleDeleteSession}
         onRename={handleRenameSession}
         tools={[
-          { id: "files", label: t("app.files"), icon: <FolderOpen size={14} />, onClick: () => setFileBrowserOpen(true) },
-          { id: "tasks", label: t("app.tasks"), icon: <Zap size={14} />, onClick: () => setTaskPanelOpen(true) },
-          { id: "computer", label: t("app.computerUse"), icon: <Monitor size={14} />, onClick: () => setComputerPanelOpen(true) },
-          { id: "lsp", label: t("app.lsp"), icon: <Plug size={14} />, onClick: () => setLspPanelOpen(true) },
+          { id: "files", label: t("app.files"), icon: <FolderOpen size={14} />, onClick: () => toggleToolPanel("files") },
+          { id: "tasks", label: t("app.tasks"), icon: <Zap size={14} />, onClick: () => toggleToolPanel("tasks") },
+          { id: "computer", label: t("app.computerUse"), icon: <Monitor size={14} />, onClick: () => toggleToolPanel("computer") },
+          { id: "lsp", label: t("app.lsp"), icon: <Plug size={14} />, onClick: () => toggleToolPanel("lsp") },
           { id: "diff", label: t("app.diff"), icon: <FileText size={14} />, onClick: () => {
-            if (!diffPanelOpen) {
+            if (activeToolPanel !== "diff") {
               invoke<DiffHunk[]>("compute_diff", {
                 oldText: "line1\nline2\nline3\n",
                 newText: "line1\nmodified\nline3\n",
               }).then(setDiffHunks);
             }
-            setDiffPanelOpen(true);
+            toggleToolPanel("diff");
           }},
         ]}
-        activeTool={
-          fileBrowserOpen ? "files" :
-          taskPanelOpen ? "tasks" :
-          computerPanelOpen ? "computer" :
-          lspPanelOpen ? "lsp" :
-          diffPanelOpen ? "diff" : undefined
-        }
+        activeTool={activeToolPanel ?? undefined}
       />
       <div className="chat-container">
         {networkStatus && (
@@ -550,26 +547,26 @@ function App() {
               </button>
               {moreMenuOpen && (
                 <div className="more-menu-dropdown">
-                  <button onClick={() => { setFileBrowserOpen(true); setMoreMenuOpen(false); }}>
+                  <button onClick={() => { toggleToolPanel("files"); setMoreMenuOpen(false); }}>
                     <FolderOpen size={14} /> File Browser
                   </button>
-                  <button onClick={() => { setTaskPanelOpen(true); setMoreMenuOpen(false); }}>
+                  <button onClick={() => { toggleToolPanel("tasks"); setMoreMenuOpen(false); }}>
                     <Zap size={14} /> Tasks
                   </button>
-                  <button onClick={() => { setComputerPanelOpen(true); setMoreMenuOpen(false); }}>
+                  <button onClick={() => { toggleToolPanel("computer"); setMoreMenuOpen(false); }}>
                     <Monitor size={14} /> Computer Use
                   </button>
-                  <button onClick={() => { setLspPanelOpen(true); setMoreMenuOpen(false); }}>
+                  <button onClick={() => { toggleToolPanel("lsp"); setMoreMenuOpen(false); }}>
                     <Plug size={14} /> LSP
                   </button>
                   <button onClick={() => {
-                    if (!diffPanelOpen) {
+                    if (activeToolPanel !== "diff") {
                       invoke<DiffHunk[]>("compute_diff", {
                         oldText: "line1\nline2\nline3\n",
                         newText: "line1\nmodified\nline3\n",
                       }).then(setDiffHunks);
                     }
-                    setDiffPanelOpen(true);
+                    toggleToolPanel("diff");
                     setMoreMenuOpen(false);
                   }}>
                     <FileText size={14} /> Diff
@@ -589,11 +586,11 @@ function App() {
         )}
         <div className="main-content">
           <FileBrowser
-            isOpen={fileBrowserOpen}
-            onClose={() => setFileBrowserOpen(false)}
+            isOpen={activeToolPanel === "files"}
+            onClose={() => setActiveToolPanel(null)}
             onFileSelect={(path) => {
               setInput((prev) => prev + (prev ? " " : "") + `@${path}`);
-              setFileBrowserOpen(false);
+              setActiveToolPanel(null);
             }}
           />
           <div className="messages">
@@ -644,18 +641,18 @@ function App() {
             <div ref={messagesEndRef} />
           </div>
           <TaskPanel
-            isOpen={taskPanelOpen}
-            onClose={() => setTaskPanelOpen(false)}
+            isOpen={activeToolPanel === "tasks"}
+            onClose={() => setActiveToolPanel(null)}
           />
           <ComputerUsePanel
-            isOpen={computerPanelOpen}
-            onClose={() => setComputerPanelOpen(false)}
+            isOpen={activeToolPanel === "computer"}
+            onClose={() => setActiveToolPanel(null)}
           />
           <LspPanel
-            isOpen={lspPanelOpen}
-            onClose={() => setLspPanelOpen(false)}
+            isOpen={activeToolPanel === "lsp"}
+            onClose={() => setActiveToolPanel(null)}
           />
-          <DiffPanel isOpen={diffPanelOpen} hunks={diffHunks} onClose={() => setDiffPanelOpen(false)} />
+          <DiffPanel isOpen={activeToolPanel === "diff"} hunks={diffHunks} onClose={() => setActiveToolPanel(null)} />
           <SettingsPanel
             isOpen={settingsPanelOpen}
             onClose={() => setSettingsPanelOpen(false)}

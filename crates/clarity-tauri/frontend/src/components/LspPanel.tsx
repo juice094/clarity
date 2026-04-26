@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { X } from "lucide-react";
+import { X, RefreshCw } from "lucide-react";
 
 interface LspPanelProps {
   isOpen: boolean;
@@ -42,7 +42,16 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
   const [messageText, setMessageText] = useState(INITIALIZE_TEMPLATE);
   const [responseText, setResponseText] = useState("");
 
+  const checkInvoke = useCallback((): boolean => {
+    if (typeof invoke !== "function") {
+      setError("Tauri IPC not available. Please reload the window (Ctrl+R).");
+      return false;
+    }
+    return true;
+  }, []);
+
   const fetchServers = useCallback(async () => {
+    if (!checkInvoke()) return;
     setLoading(true);
     setError("");
     try {
@@ -54,7 +63,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [checkInvoke]);
 
   useEffect(() => {
     if (isOpen) {
@@ -63,6 +72,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
   }, [isOpen, fetchServers]);
 
   async function handleStart() {
+    if (!checkInvoke()) return;
     if (!serverPath.trim() || !rootPath.trim()) {
       setError("Server Path and Root Path are required");
       return;
@@ -90,6 +100,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
   }
 
   async function handleStop(processId: string) {
+    if (!checkInvoke()) return;
     setLoading(true);
     setError("");
     try {
@@ -104,6 +115,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
   }
 
   async function handleSend() {
+    if (!checkInvoke()) return;
     if (!selectedProcessId.trim() || !messageText.trim()) {
       setError("Process ID and message are required");
       return;
@@ -125,6 +137,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
   }
 
   async function handleReceive() {
+    if (!checkInvoke()) return;
     if (!selectedProcessId.trim()) {
       setError("Process ID is required");
       return;
@@ -176,7 +189,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
               disabled={loading}
               title="Refresh list"
             >
-              🔄 Refresh
+              <RefreshCw size={14} /> Refresh
             </button>
           </div>
           <div className="lsp-server-list">
