@@ -79,6 +79,7 @@ function App() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ version: string; downloading: boolean } | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCallInfo[]>([]);
+  const [compacting, setCompacting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
@@ -246,6 +247,7 @@ function App() {
       streamingRef.current = false;
       setIsLoading(false);
       setActiveToolCalls([]);
+      setCompacting(false);
       refreshStatus();
       if (taskIdRef.current) {
         invoke("complete_task", { id: taskIdRef.current, status: "completed" }).catch(console.error);
@@ -261,11 +263,20 @@ function App() {
         { role: "agent", content: `Error: ${event.payload}` },
       ]);
       setActiveToolCalls([]);
+      setCompacting(false);
       refreshStatus();
       if (taskIdRef.current) {
         invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
         taskIdRef.current = null;
       }
+    }).then((u) => unlisteners.push(u));
+
+    listen("agent:compaction_begin", () => {
+      setCompacting(true);
+    }).then((u) => unlisteners.push(u));
+
+    listen("agent:compaction_end", () => {
+      setCompacting(false);
     }).then((u) => unlisteners.push(u));
 
     listen<{ id: string; name: string; arguments: Record<string, unknown> }>("agent:tool_start", (event) => {
@@ -438,6 +449,7 @@ function App() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setActiveToolCalls([]);
+    setCompacting(false);
     setIsLoading(true);
     streamingRef.current = true;
     await refreshStatus();
@@ -539,6 +551,12 @@ function App() {
               <Download size={14} />
               {updateInfo.downloading ? "Installing…" : "Install & Restart"}
             </button>
+          </div>
+        )}
+        {compacting && (
+          <div className="compaction-banner">
+            <span className="dot-flashing" />
+            <span>Compacting conversation history…</span>
           </div>
         )}
         <header className="chat-header">

@@ -1784,6 +1784,68 @@ body {
   cursor: not-allowed;
 }
 
+.compaction-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(139, 92, 246, 0.12);
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.dot-flashing {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #a78bfa;
+  animation: dot-flash 1s infinite linear alternate;
+  animation-delay: 0.5s;
+}
+
+.dot-flashing::before,
+.dot-flashing::after {
+  content: "";
+  display: inline-block;
+  position: absolute;
+  top: 0;
+}
+
+.dot-flashing::before {
+  left: -10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #a78bfa;
+  animation: dot-flash 1s infinite alternate;
+  animation-delay: 0s;
+}
+
+.dot-flashing::after {
+  left: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #a78bfa;
+  animation: dot-flash 1s infinite alternate;
+  animation-delay: 1s;
+}
+
+@keyframes dot-flash {
+  0% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 /* ===== Onboarding Modal ===== */
 .onboarding-overlay {
   position: fixed;

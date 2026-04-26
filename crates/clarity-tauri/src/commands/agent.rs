@@ -221,6 +221,12 @@ pub async fn agent_run_streaming(
                 clarity_wire::WireMessage::StepBegin { tool_name } => {
                     Some(("agent:step_begin", serde_json::json!({ "tool_name": tool_name })))
                 }
+                clarity_wire::WireMessage::CompactionBegin => {
+                    Some(("agent:compaction_begin", serde_json::json!({})))
+                }
+                clarity_wire::WireMessage::CompactionEnd => {
+                    Some(("agent:compaction_end", serde_json::json!({})))
+                }
                 _ => None,
             };
             if let Some((event, payload)) = payload {

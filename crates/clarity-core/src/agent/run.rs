@@ -12,12 +12,21 @@ use tracing::{debug, info, warn};
 impl Agent {
     /// Run proactive compaction and threshold-based compaction if needed.
     async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
+        let mut did_compact = false;
         if let Some(ref service) = self.compaction_service {
+            if service.needs_compaction(messages) {
+                self.send_wire_message(WireMessage::CompactionBegin);
+                did_compact = true;
+            }
             if let Err(e) = service.maybe_compact(messages, llm).await {
                 warn!("Compaction failed: {}", e);
             }
         }
         if self.should_compact(messages).await {
+            if !did_compact {
+                self.send_wire_message(WireMessage::CompactionBegin);
+                did_compact = true;
+            }
             match self.compact_messages(messages).await {
                 Ok(compacted) => {
                     info!(
@@ -31,6 +40,9 @@ impl Agent {
                     warn!("Failed to compact messages: {}", e);
                 }
             }
+        }
+        if did_compact {
+            self.send_wire_message(WireMessage::CompactionEnd);
         }
     }
 
@@ -529,8 +541,15 @@ impl Agent {
 
             // Proactive compaction via CompactionService
             if let Some(ref service) = self.compaction_service {
+                let needs = service.needs_compaction(&messages);
+                if needs {
+                    self.send_wire_message(WireMessage::CompactionBegin);
+                }
                 if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
                     warn!("Compaction failed: {}", e);
+                }
+                if needs {
+                    self.send_wire_message(WireMessage::CompactionEnd);
                 }
             }
 

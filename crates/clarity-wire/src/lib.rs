@@ -76,6 +76,12 @@ pub enum WireMessage {
 
     /// Status update message (for UI feedback).
     StatusUpdate { message: String },
+
+    /// Conversation history compaction has started.
+    CompactionBegin,
+
+    /// Conversation history compaction has finished.
+    CompactionEnd,
 }
 
 impl WireMessage {
