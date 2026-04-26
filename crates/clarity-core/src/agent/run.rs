@@ -10,6 +10,79 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 impl Agent {
+    /// Run proactive compaction and threshold-based compaction if needed.
+    async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
+        if let Some(ref service) = self.compaction_service {
+            if let Err(e) = service.maybe_compact(messages, llm).await {
+                warn!("Compaction failed: {}", e);
+            }
+        }
+        if self.should_compact(messages).await {
+            match self.compact_messages(messages).await {
+                Ok(compacted) => {
+                    info!(
+                        "Context compacted: {} messages -> {} messages",
+                        messages.len(),
+                        compacted.len()
+                    );
+                    *messages = compacted;
+                }
+                Err(e) => {
+                    warn!("Failed to compact messages: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Execute a batch of tool calls, sending wire lifecycle events and appending
+    /// results to `messages`. Returns the ordered list of tool names for telemetry.
+    async fn dispatch_tool_calls(
+        &self,
+        tool_calls: &[ToolCall],
+        messages: &mut Vec<Message>,
+    ) -> Vec<String> {
+        let mut tool_names = Vec::new();
+        let mut futures = Vec::new();
+
+        // Phase 1: emit begin messages and start all tool executions concurrently.
+        for tool_call in tool_calls {
+            tool_names.push(tool_call.function.name.clone());
+            self.send_wire_message(WireMessage::StepBegin {
+                tool_name: tool_call.function.name.clone(),
+            });
+
+            let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+                .unwrap_or_else(|_| serde_json::json!({}));
+            self.send_wire_message(WireMessage::ToolCall {
+                id: tool_call.id.clone(),
+                name: tool_call.function.name.clone(),
+                arguments: args,
+            });
+
+            futures.push(self.execute_tool_call(tool_call));
+        }
+
+        // Phase 2: await all results concurrently.
+        let results = futures::future::join_all(futures).await;
+
+        // Phase 3: emit results in original order and append to messages.
+        for (tool_call, result) in tool_calls.iter().zip(results.into_iter()) {
+            let result_content = match result {
+                Ok(value) => value.to_string(),
+                Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
+            };
+
+            self.send_wire_message(WireMessage::ToolResult {
+                id: tool_call.id.clone(),
+                result: result_content.clone(),
+            });
+
+            messages.push(Message::tool(&tool_call.id, result_content));
+        }
+
+        tool_names
+    }
+
     /// Shared core of the non-streaming agent loop.
     ///
     /// Iterates up to `max_iterations`, calling the LLM and executing any tool
@@ -33,28 +106,7 @@ impl Agent {
                 return Err(AgentError::Cancelled);
             }
 
-            // Proactive compaction via CompactionService
-            if let Some(ref service) = self.compaction_service {
-                if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
-                    warn!("Compaction failed: {}", e);
-                }
-            }
-
-            if self.should_compact(messages).await {
-                match self.compact_messages(messages).await {
-                    Ok(compacted) => {
-                        info!(
-                            "Context compacted: {} messages -> {} messages",
-                            messages.len(),
-                            compacted.len()
-                        );
-                        *messages = compacted;
-                    }
-                    Err(e) => {
-                        warn!("Failed to compact messages: {}", e);
-                    }
-                }
-            }
+            self.maybe_compact_turn(messages, llm.as_ref()).await;
 
             let prompt_tokens =
                 crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
@@ -91,33 +143,7 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            for tool_call in &response.tool_calls {
-                tool_names.push(tool_call.function.name.clone());
-                self.send_wire_message(WireMessage::StepBegin {
-                    tool_name: tool_call.function.name.clone(),
-                });
-
-                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                    .unwrap_or_else(|_| serde_json::json!({}));
-                self.send_wire_message(WireMessage::ToolCall {
-                    id: tool_call.id.clone(),
-                    name: tool_call.function.name.clone(),
-                    arguments: args,
-                });
-
-                let result = self.execute_tool_call(tool_call).await;
-                let result_content = match result {
-                    Ok(value) => value.to_string(),
-                    Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
-                };
-
-                self.send_wire_message(WireMessage::ToolResult {
-                    id: tool_call.id.clone(),
-                    result: result_content.clone(),
-                });
-
-                messages.push(Message::tool(&tool_call.id, result_content));
-            }
+            tool_names.extend(self.dispatch_tool_calls(&response.tool_calls, messages).await);
         }
 
         Ok((final_response, completed, tool_names))
@@ -612,35 +638,9 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            for tool_call in &response.tool_calls {
-                // Send StepBegin message
-                self.send_wire_message(WireMessage::StepBegin {
-                    tool_name: tool_call.function.name.clone(),
-                });
-
-                // Send ToolCall message
-                let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
-                    .unwrap_or_else(|_| serde_json::json!({}));
-                self.send_wire_message(WireMessage::ToolCall {
-                    id: tool_call.id.clone(),
-                    name: tool_call.function.name.clone(),
-                    arguments: args,
-                });
-
-                let result = self.execute_tool_call(tool_call).await;
-                let result_content = match result {
-                    Ok(value) => value.to_string(),
-                    Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
-                };
-
-                // Send ToolResult message
-                self.send_wire_message(WireMessage::ToolResult {
-                    id: tool_call.id.clone(),
-                    result: result_content.clone(),
-                });
-
-                messages.push(Message::tool(&tool_call.id, result_content));
-            }
+            let _ = self
+                .dispatch_tool_calls(&response.tool_calls, &mut messages)
+                .await;
         }
 
         // Send TurnEnd message

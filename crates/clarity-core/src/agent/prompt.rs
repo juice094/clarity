@@ -89,11 +89,18 @@ impl Agent {
             }
         }
 
-        if !skill_contexts.is_empty() {
+        let mut result = if !skill_contexts.is_empty() {
             format!("{}\n\n{}", with_entry, skill_contexts.join("\n\n"))
         } else {
             with_entry
+        };
+
+        // Apply runtime template variable substitution.
+        for (key, value) in &self.config.template_variables {
+            result = result.replace(&format!("{{{}}}", key), value);
         }
+
+        result
     }
 
     /// Get tool descriptions from the registry for the system prompt.

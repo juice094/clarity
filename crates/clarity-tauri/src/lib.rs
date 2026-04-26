@@ -35,6 +35,8 @@ pub struct AppState {
     pub cached_settings: Mutex<crate::commands::settings::GuiSettings>,
     /// Caches the last prewarm error so the frontend can query it after mount.
     pub prewarm_error: Mutex<Option<String>>,
+    /// Whether `init_async` has completed successfully.
+    pub initialized: AtomicBool,
 }
 
 impl Default for AppState {
@@ -49,6 +51,7 @@ impl Default for AppState {
             llm_load_lock: tokio::sync::Mutex::new(()),
             cached_settings: Mutex::new(crate::commands::settings::GuiSettings::load()),
             prewarm_error: Mutex::new(None),
+            initialized: AtomicBool::new(false),
         }
     }
 }
@@ -208,6 +211,7 @@ pub fn run() {
             commands::computer::computer_check_bridge,
             commands::settings::get_settings,
             commands::settings::save_settings,
+            commands::settings::reload_llm,
             commands::settings::set_approval_mode,
             commands::settings::get_available_models,
             commands::settings::get_local_models,
@@ -228,6 +232,7 @@ pub fn run() {
             commands::lsp::lsp_recv,
             commands::lsp::lsp_stop,
             commands::lsp::lsp_list,
+            commands::update::check_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

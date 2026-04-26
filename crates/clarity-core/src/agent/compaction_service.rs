@@ -21,17 +21,60 @@ pub struct CompactionServiceConfig {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompactionService {
     config: CompactionServiceConfig,
+    tier1_enabled: bool,
 }
 
 impl CompactionService {
     /// Create a new compaction service from configuration
     pub fn new(config: CompactionServiceConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            tier1_enabled: true,
+        }
     }
 
     /// Convenience constructor (alias for `new`)
     pub fn with_config(config: CompactionServiceConfig) -> Self {
         Self::new(config)
+    }
+
+    /// Enable or disable Tier-1 (fast local truncation) compaction.
+    pub fn with_tier1(mut self, enabled: bool) -> Self {
+        self.tier1_enabled = enabled;
+        self
+    }
+
+    /// Tier-1 compaction: fast local truncation of old assistant text messages.
+    ///
+    /// Preserves system prompt, tool calls, and recent messages within the
+    /// retention window. Only truncates plain assistant content (no tool_calls)
+    /// that exceeds 120 characters.
+    fn tier1_compact(&self, messages: &mut [Message]) {
+        let total = Self::estimate_tokens(messages);
+        let mut accumulated = 0;
+        let mut split_index = messages.len();
+        for (i, msg) in messages.iter().enumerate() {
+            let tokens = msg.content.len().div_ceil(4);
+            accumulated += tokens;
+            if total.saturating_sub(accumulated) <= self.config.history_retention_tokens {
+                split_index = i + 1;
+                break;
+            }
+        }
+        if split_index == 0 || split_index >= messages.len() {
+            return;
+        }
+        for msg in messages[..split_index].iter_mut() {
+            if msg.role == MessageRole::Assistant
+                && msg.tool_calls.is_none()
+                && msg.content.len() > 120
+            {
+                let orig_len = msg.content.len();
+                msg.content.truncate(120);
+                msg.content
+                    .push_str(&format!(" [...truncated, {} total chars]", orig_len));
+            }
+        }
     }
 
     /// Estimate token count for a slice of messages using a character heuristic
@@ -58,6 +101,16 @@ impl CompactionService {
             return Ok(());
         }
 
+        // Tier 1: fast local truncation (no LLM call).
+        if self.tier1_enabled {
+            self.tier1_compact(messages);
+            if !self.needs_compaction(messages) {
+                tracing::info!("Tier-1 compaction resolved context pressure");
+                return Ok(());
+            }
+        }
+
+        // Tier 2: LLM summarization.
         // Locate the original system prompt (if any).
         let system_idx = messages.iter().position(|m| m.role == MessageRole::System);
 
@@ -441,6 +494,93 @@ mod tests {
         assert!(messages[0].content.contains("No system summary"));
         // Recent message preserved.
         assert_eq!(messages[1].content, "recent");
+    }
+
+    #[tokio::test]
+    async fn test_tier1_compact_truncates_old_assistant_text() {
+        let config = CompactionServiceConfig {
+            token_limit: 10,
+            compaction_model: "kimi-latest".to_string(),
+            history_retention_tokens: 4,
+        };
+        let service = CompactionService::with_config(config);
+
+        let long_text = "a".repeat(200);
+        let mut messages = vec![
+            Message::system("You are helpful"),
+            Message::user("short"),
+            Message::assistant(long_text.clone()),
+            Message::user("recent"),
+        ];
+
+        service.tier1_compact(&mut messages);
+
+        assert!(
+            messages[2].content.contains("[...truncated"),
+            "Expected truncation marker, got: {}",
+            messages[2].content
+        );
+        assert_eq!(messages[2].content.len(), 120 + " [...truncated, 200 total chars]".len());
+        // Recent message untouched
+        assert_eq!(messages[3].content, "recent");
+    }
+
+    #[tokio::test]
+    async fn test_tier1_compact_preserves_tool_calls() {
+        let config = CompactionServiceConfig {
+            token_limit: 10,
+            compaction_model: "kimi-latest".to_string(),
+            history_retention_tokens: 4,
+        };
+        let service = CompactionService::with_config(config);
+
+        let long_text = "b".repeat(200);
+        let mut messages = vec![
+            Message::system("You are helpful"),
+            Message::user("short"),
+            Message {
+                role: MessageRole::Assistant,
+                content: long_text.clone(),
+                tool_calls: Some(vec![]),
+                tool_call_id: None,
+            },
+            Message::user("recent"),
+        ];
+
+        service.tier1_compact(&mut messages);
+
+        // Assistant message with tool_calls should NOT be truncated
+        assert_eq!(messages[2].content, long_text);
+    }
+
+    #[tokio::test]
+    async fn test_tier1_compact_skips_when_disabled() {
+        let config = CompactionServiceConfig {
+            token_limit: 10,
+            compaction_model: "kimi-latest".to_string(),
+            history_retention_tokens: 4,
+        };
+        let service = CompactionService::with_config(config).with_tier1(false);
+
+        let long_text = "c".repeat(200);
+        let mut messages = vec![
+            Message::system("You are helpful"),
+            Message::user("short"),
+            Message::assistant(long_text.clone()),
+            Message::user("recent"),
+        ];
+
+        // Tier-1 disabled, so maybe_compact goes straight to LLM summarization.
+        let llm = MockLlm {
+            response: "Summary".to_string(),
+        };
+        service.maybe_compact(&mut messages, &llm).await.unwrap();
+
+        // The old assistant text should have been summarized away, not truncated.
+        assert!(
+            !messages.iter().any(|m| m.content.contains("[...truncated")),
+            "Tier-1 should be skipped when disabled"
+        );
     }
 
     #[tokio::test]

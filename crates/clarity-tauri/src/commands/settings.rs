@@ -179,6 +179,18 @@ pub fn save_settings(
 }
 
 #[tauri::command]
+pub async fn reload_llm(state: tauri::State<'_, crate::AppState>) -> Result<(), String> {
+    {
+        let mut binding = state.llm_binding.lock().unwrap();
+        *binding = None;
+    }
+    crate::commands::agent::ensure_llm(&state)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
     let local_models = scan_local_models();
     let local_model_names: Vec<String> = if local_models.is_empty() {

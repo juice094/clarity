@@ -1110,6 +1110,7 @@ dependencies = [
  "clarity-core",
  "clarity-wire",
  "dirs 5.0.1",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "similar",

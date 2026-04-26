@@ -20,6 +20,8 @@ pub struct AgentConfig {
     pub system_prompt: String,
     /// Entry-specific context appended to system prompt (methodology, persona, etc.)
     pub entry_context: String,
+    /// Runtime template variables injected into the system prompt.
+    pub template_variables: std::collections::HashMap<String, String>,
     /// Optional compaction service configuration
     pub compaction_service: Option<CompactionServiceConfig>,
     /// Directory containing Markdown prompt files
@@ -39,6 +41,7 @@ impl Default for AgentConfig {
             read_only: false,
             system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
             entry_context: String::new(),
+            template_variables: std::collections::HashMap::new(),
             compaction_service: None,
             prompts_dir: None,
             capability_token: None,
@@ -80,6 +83,12 @@ impl AgentConfig {
     /// Set entry-specific context appended to system prompt
     pub fn with_entry_context(mut self, context: impl Into<String>) -> Self {
         self.entry_context = context.into();
+        self
+    }
+
+    /// Set template variables for runtime prompt substitution.
+    pub fn with_template_variables(mut self, vars: std::collections::HashMap<String, String>) -> Self {
+        self.template_variables = vars;
         self
     }
 

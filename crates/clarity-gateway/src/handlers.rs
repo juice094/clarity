@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use std::convert::Infallible;
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::server::AppState;
 
@@ -124,6 +124,15 @@ pub async fn chat_completions(
 
     // Create a per-request AgentController so that streaming events are isolated.
     let agent = state.agent.read().await.clone();
+
+    // Security: log a warning when the agent is in Yolo mode via Gateway,
+    // since HTTP clients cannot interactively approve dangerous tool calls.
+    if agent.approval_mode() == clarity_core::approval::ApprovalMode::Yolo {
+        warn!(
+            "Gateway chat_completions running with Yolo approval mode — \
+             tool calls will execute without user confirmation"
+        );
+    }
 
     // Build the internal message list:
     // 1. Agent system prompt

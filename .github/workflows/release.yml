@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        working-directory: crates/clarity-tauri/frontend
+        run: npm ci && npm run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      - name: Build Tauri
+        run: cargo tauri build
+
+      - name: Generate self-signed certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigning `
+            -Subject "CN=Clarity" `
+            -KeyAlgorithm RSA `
+            -KeyLength 2048 `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -NotAfter (Get-Date).AddYears(1)
+          $pwd = ConvertTo-SecureString -String "clarity-sign" -Force -AsPlainText
+          Export-PfxCertificate `
+            -Cert $cert `
+            -FilePath "$env:RUNNER_TEMP\clarity.pfx" `
+            -Password $pwd | Out-Null
+          Write-Output "THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Sign binaries
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "signtool.exe" | Select-Object -First 1
+          if (-not $signtool) {
+            $signtool = Get-ChildItem -Path "C:\Program Files\Windows Kits" -Recurse -Filter "signtool.exe" | Select-Object -First 1
+          }
+          $exe = Get-ChildItem -Path "target\release\clarity-tauri.exe" -ErrorAction SilentlyContinue
+          $msi = Get-ChildItem -Path "target\release\bundle\msi\*.msi" -ErrorAction SilentlyContinue
+          $nsis = Get-ChildItem -Path "target\release\bundle\nsis\*.exe" -ErrorAction SilentlyContinue
+          foreach ($f in @($exe, $msi, $nsis)) {
+            if ($f) {
+              & $signtool.FullName sign `
+                /f "$env:RUNNER_TEMP\clarity.pfx" `
+                /p "clarity-sign" `
+                /tr "http://timestamp.digicert.com" `
+                /td sha256 `
+                /fd sha256 `
+                /a `
+                $f.FullName
+            }
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-windows
+          path: |
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/bundle/msi/*.msi
+            target/release/bundle/nsis/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

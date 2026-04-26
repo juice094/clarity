@@ -53,6 +53,7 @@ pub mod hooks;
 pub mod llm;
 pub mod mcp;
 pub mod memory;
+pub mod personality;
 pub mod notifications;
 pub mod registry;
 pub mod server;

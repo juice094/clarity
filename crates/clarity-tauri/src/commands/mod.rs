@@ -6,3 +6,4 @@ pub mod lsp;
 pub mod session;
 pub mod settings;
 pub mod task;
+pub mod update;

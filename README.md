@@ -21,7 +21,7 @@ You have a dozen AI tools: chat UIs, coding assistants, task runners, memory plu
 
 **Clarity is a single runtime that orchestrates LLMs, tools, and memory across every entry point you use** — terminal, desktop, browser, headless scripts, system tray. One agent core, multiple surfaces. Your sessions, memory, and tasks persist and travel with you.
 
-Built in Rust. The core engine and CLI tools ship as single binaries with **zero runtime dependencies**. The desktop GUI (Tauri 2) reuses the system WebView engine — no bundled browser, but WebView2/WebKit must be present on the target system.
+Built in Rust. The core engine and CLI tools ship as single binaries with **zero runtime dependencies**. The desktop GUI (Tauri 2) reuses the system WebView engine — Windows 11 has it pre-installed; Windows 10 may auto-download on first run.
 
 ---
 
