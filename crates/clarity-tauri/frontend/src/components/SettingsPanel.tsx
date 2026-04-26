@@ -47,6 +47,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const [approvalModes, setApprovalModes] = useState<[string, string][]>([]);
   const [localModels, setLocalModels] = useState<[string, string][]>([]);
   const [toast, setToast] = useState("");
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -99,6 +100,14 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const availableModels =
     modelSource.find(([key]) => key === settings.provider)?.[2] ?? [];
 
+  function scheduleAutoSave() {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleSave();
+      autoSaveTimerRef.current = null;
+    }, 1000);
+  }
+
   function handleProviderChange(provider: string) {
     setSettings((prev) => {
       const newModels = modelSource.find(([key]) => key === provider)?.[2] ?? [];
@@ -115,6 +124,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         local_model_path: nextLocalPath,
       };
     });
+    scheduleAutoSave();
   }
 
   function handleModelChange(model: string) {
@@ -128,9 +138,15 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       }
       return { ...prev, model, local_model_path: localPath };
     });
+    scheduleAutoSave();
   }
 
   async function handleSave() {
+    // Cancel any pending auto-save to avoid double-save
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     try {
       await invoke("save_settings", { settings });
       setSavedSettings(settings);

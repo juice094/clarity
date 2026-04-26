@@ -23,14 +23,20 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Build frontend
         working-directory: crates/clarity-tauri/frontend
         run: npm ci && npm run build
 
+      - name: Install cargo-binstall
+        shell: pwsh
+        run: |
+          $script = Invoke-RestMethod -Uri https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1
+          Invoke-Expression "$script"
+
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
+        run: cargo binstall tauri-cli --locked --no-confirm
 
       - name: Build Tauri
         working-directory: crates/clarity-tauri
@@ -55,23 +61,32 @@ jobs:
             -Password $pwd | Out-Null
           Write-Output "THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Sign binary
+      - name: Sign binaries and installers
         shell: pwsh
         run: |
           $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "signtool.exe" | Select-Object -First 1
           if (-not $signtool) {
             $signtool = Get-ChildItem -Path "C:\Program Files\Windows Kits" -Recurse -Filter "signtool.exe" | Select-Object -First 1
           }
-          $exe = Get-ChildItem -Path "target\release\clarity-tauri.exe" -ErrorAction SilentlyContinue
-          if ($exe) {
-            & $signtool.FullName sign `
-              /f "$env:RUNNER_TEMP\clarity.pfx" `
-              /p "clarity-sign" `
-              /tr "http://timestamp.digicert.com" `
-              /td sha256 `
-              /fd sha256 `
-              /a `
-              $exe.FullName
+
+          $targets = @(
+            "target\release\clarity-tauri.exe",
+            (Get-ChildItem -Path "target\release\bundle\msi\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1),
+            (Get-ChildItem -Path "target\release\bundle\nsis\*.exe" -Exclude "*.sig" -ErrorAction SilentlyContinue | Select-Object -First 1)
+          )
+
+          foreach ($t in $targets) {
+            if ($t -and (Test-Path $t)) {
+              & $signtool.FullName sign `
+                /f "$env:RUNNER_TEMP\clarity.pfx" `
+                /p "clarity-sign" `
+                /tr "http://timestamp.digicert.com" `
+                /td sha256 `
+                /fd sha256 `
+                /a `
+                $t
+              Write-Output "Signed: $t"
+            }
           }
 
       - name: Generate latest.json for updater
@@ -89,17 +104,23 @@ jobs:
           elseif ($msiSig) { $sig = (Get-Content $msiSig.FullName -Raw).Trim() }
 
           $date = (Get-Date -Format "o")
-          $url = "https://github.com/juice094/clarity/releases/download/$tag/$($nsis.Name)"
+          $nsisUrl = if ($nsis) { "https://github.com/juice094/clarity/releases/download/$tag/$($nsis.Name)" } else { "" }
+          $msiUrl = if ($msi) { "https://github.com/juice094/clarity/releases/download/$tag/$($msi.Name)" } else { "" }
+
+          $platform = [ordered]@{
+            signature = $sig
+            url = $nsisUrl
+          }
+          if ($msiUrl) {
+            $platform["msi-url"] = $msiUrl
+          }
 
           $obj = [ordered]@{
             version = $tag
             notes = "See release notes at https://github.com/juice094/clarity/releases/tag/$tag"
             pub_date = $date
             platforms = [ordered]@{
-              "windows-x86_64" = [ordered]@{
-                signature = $sig
-                url = $url
-              }
+              "windows-x86_64" = $platform
             }
           }
 
