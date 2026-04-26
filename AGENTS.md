@@ -57,7 +57,11 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - Settings-Runtime 打通（`ensure_llm` 读取 `GuiSettings`）✅
 - 启动时后台预加载 + 网络探测离线 fallback + Provider 热切换 ✅
 - CUDA 编译验证通过（可选 feature，不默认启用）✅
+- UI/UX 全面重构（Header/Chat Input/Welcome/Sidebar Tools）✅
+- Tauri 自动更新（updater plugin + Release workflow 签名）✅
 - 零依赖发行准备（单二进制 + 嵌入式模型）🔄 进行中
+
+> AI 关键决策见 [`docs/ai-protocol.md`](./docs/ai-protocol.md)。验收发现 4 个前端 bug 待修复，见该文件 5.1。
 
 完整路线图见 [`docs/ROADMAP.md`](./docs/ROADMAP.md)。
 

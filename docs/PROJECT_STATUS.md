@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.2.1 | 日期：2026-04-25 | 基于实机测试与代码审计
+> 版本：v0.2.1 | 日期：2026-04-26 | 基于实机测试与代码审计
 
 ---
 
@@ -11,7 +11,7 @@
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
 | **单元测试** | **524 passed, 0 failed, 4 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
-| **安全审计** | `cargo audit` | ✅ 已集成 CI |
+| **安全审计** | `cargo audit --deny unsound --deny yanked` | ✅ 已集成 CI |
 | **代码规模** | ~125 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
 
@@ -194,12 +194,15 @@
 | **MemoryCompiler 四级编译管道** | ✅ 已完成 | `5514209` — today→week→longterm→facts，LLM 自动摘要 + 事实提取 + 去重 |
 | **Slack 渠道** | ✅ 已完成 | `4a3d2e0` — Web API 实现（长消息分块、HMAC-SHA256 签名验证、Events API challenge） |
 | **统一配置系统（TOML）** | ✅ 已完成 | `cfcc24c` — 三层配置加载 + `export_to_env()` + Gateway/TUI 双端接入，向后兼容 |
+| **UI/UX 全面重构** | ✅ 已完成 | `b95d26b` — Header 精简 / Chat Input 居中卡片 / Welcome 页 / Sidebar Tools |
+| **Tauri 自动更新** | ✅ 已完成 | `3f270d8` — `tauri-plugin-updater` + 前端检测 banner + Release workflow 签名 + `latest.json` |
+| **CI audit 策略调整** | ✅ 已完成 | `b9e45b6` — `--deny unsound --deny yanked` + `.cargo/audit.toml` 忽略已评估上游警告 |
 
 ### 7.2 进行中 / 待启动
 
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
-| P2 | clarity-tauri Desktop GUI | ✅ 已完成 | Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；离线 fallback + 预加载 + Settings 缓存 | — |
+| P2 | clarity-tauri Desktop GUI | ✅ 已完成 | Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；离线 fallback + 预加载 + Settings 缓存 + 自动更新 | — |
 | P2 | 审批系统增强 | 🔄 部分完成 | 规则引擎 V1 已完成（RiskLevel + RuleEngine + 执行集成）；AI 分类器 V2 待启动 | — |
 | P2 | T_FTUE 首次体验 | ✅ 已完成 | `get_launch_status()` + OnboardingModal + i18n (en/zh) | — |
 | P2 | T_DYNAMIC_PROMPT | ✅ 已完成 | `SystemPromptBuilder` + `PromptComponent` 条件注入 | — |
@@ -210,6 +213,15 @@
 | P3 | Vim 集成 | 1-2 周 | Vim 键位引擎 | — |
 | P3 | Sandbox | 1-2 周 | landlock (Linux) + Windows 沙箱 API | — |
 | P3 | Plugin SDK | 2-3 周 | Rust dylib 插件系统 | — |
+
+### 7.3 验收发现的问题（待修复）
+
+| 优先级 | 问题 | 位置 | 根因 | 计划 |
+|--------|------|------|------|------|
+| P1 | OnboardingModal "配置模型" 点击后不关闭 | `OnboardingModal.tsx` | 按钮仅调用 `onOpenSettings`，未调用 `onDismiss` | 单行修复 |
+| P1 | Settings Provider/模型下拉框无数据 | `SettingsPanel.tsx` + 后端 | `fetchMeta` 调用可能失败被静默 catch | 前端 fallback + 后端检查 |
+| P2 | 多面板同时打开布局拥挤 | `App.css` | 无互斥/折叠机制，聊天区缺 `min-width` | 互斥逻辑 + CSS 保护 |
+| P2 | LSP Servers `invoke undefined` 报错 | `LspPanel.tsx` | Dev 模式下 Tauri IPC 偶发未注入 | 存在性检查 + 降级提示 |
 
 ---
 
