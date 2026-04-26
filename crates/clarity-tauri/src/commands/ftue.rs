@@ -51,9 +51,36 @@ pub async fn get_launch_status(state: tauri::State<'_, crate::AppState>) -> Resu
 
     let first_launch = !settings_file_exists();
 
-    // Onboarding is needed when it's the first launch OR when no usable
-    // model/provider is configured.
-    let needs_onboarding = first_launch || !configured;
+    // Auto-configure local provider on first launch if a local model is present.
+    // This gives the user an immediate "ready to chat" experience without
+    // forcing them through the Settings panel.
+    let (configured, needs_onboarding) = if first_launch && has_local_model {
+        let first_model = local_models
+            .first()
+            .map(|(_, name)| name.clone())
+            .unwrap_or_default();
+        let mut new_settings = settings.clone();
+        new_settings.provider = "local".to_string();
+        new_settings.model = first_model.clone();
+        new_settings.local_model_path = local_models
+            .first()
+            .map(|(path, _)| path.clone());
+        if let Err(e) = new_settings.save() {
+            tracing::warn!("Failed to auto-save local settings on first launch: {}", e);
+        } else {
+            let mut guard = state.cached_settings.lock().unwrap();
+            *guard = new_settings.clone();
+            tracing::info!(
+                "Auto-configured local provider on first launch: model={}",
+                first_model
+            );
+        }
+        (true, false)
+    } else {
+        // Onboarding is needed when it's the first launch OR when no usable
+        // model/provider is configured.
+        (configured, first_launch || !configured)
+    };
 
     Ok(LaunchStatus {
         has_local_model,
