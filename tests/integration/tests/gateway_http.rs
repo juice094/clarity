@@ -298,3 +298,76 @@ async fn test_tui_wire_to_gateway_websocket() {
 
     let _ = ws_tx.close().await;
 }
+
+/// Scenario D — Empty request body should return 400.
+#[tokio::test]
+async fn test_gateway_chat_completions_empty_body() {
+    let app = test_api_router().await;
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/chat/completions")
+                .method("POST")
+                .header("content-type", "application/json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// Scenario D — Invalid JSON should return 400.
+#[tokio::test]
+async fn test_gateway_chat_completions_invalid_json() {
+    let app = test_api_router().await;
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/chat/completions")
+                .method("POST")
+                .header("content-type", "application/json")
+                .body(Body::from("not-json-at-all"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+/// Scenario D — Admin tools list should return 200 with tool schemas.
+/// Admin router requires no token when CLARITY_ADMIN_TOKEN is unset.
+#[tokio::test]
+async fn test_gateway_admin_tools_list() {
+    std::env::remove_var("CLARITY_ADMIN_TOKEN");
+    let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
+    let config = clarity_core::agent::AgentConfig::new();
+    let agent = Arc::new(clarity_core::agent::Agent::with_config(registry, config));
+    let temp = std::env::temp_dir().join(format!("clarity-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp);
+    let task_manager = Arc::new(BackgroundTaskManager::new(
+        temp.join("store"),
+        temp.join("work"),
+        temp.join("context"),
+    ));
+    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
+    let app = clarity_gateway::server::create_admin_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/tools")
+                .method("GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["tools"].is_array(), "expected tools array in response");
+}
