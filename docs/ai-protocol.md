@@ -9,8 +9,9 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-26
-**当前分支**：`main` @ `b9e45b6`
+**当前分支**：`main` @ `cdaea3e`
 **架构模式**：CLI（单轮/短轮次）→ 如需长程自主迭代，建议切换至 Claw
+**定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 
 ---
 
@@ -24,6 +25,7 @@
 | 禁止 RAG(Qdrant) | ✅ 生效 | `clarity-memory` 使用 SQLite + BM25 + CosineIndex |
 | 禁止 Electron | ✅ 生效 | Tauri 2 已替代 |
 | 项目广度 ≤ 5 核心工具 | ⚠️ 接近边界 | 当前 6 crates + Tauri GUI + Gateway + TUI，已达上限，新增功能需裁减 |
+| **主权防御：不入赘** | ✅ 生效 | 学习 Kimi 生态（娘家/导师），但保持独立实现。模型/数据/协议/人格四层主权不可让渡 |
 
 ---
 
@@ -63,9 +65,47 @@
 
 **Commit**：`b9e45b6`
 
+### 3.4 v0.3.0 每日使用体验硬化（四阶段完成）
+
+**决策**：按阶段一→四顺序执行，每阶段独立 commit。
+
+| 阶段 | 内容 | Commit |
+|------|------|--------|
+| 1 | 工具调用可视化（`ToolCallIndicator` + Wire 事件转发） | `e280be3` |
+| 2 | Compaction 状态提示（`CompactionBegin/End` WireMessage + banner） | `afe1a72` |
+| 3 | 模型下载 GUI（HuggingFace 直链下载 + SettingsPanel 进度条） | `89e8c68` |
+| 4 | 前端日志面板（Console 劫持 + 可折叠面板） | `cdaea3e` |
+
 ---
 
-## 四、依赖关系图
+## 四、身份与 Worker 系统（2026-04-26 固化）
+
+> 来源：格雷评判与会话桥接分析。此节为架构层面的身份拓扑声明，非功能清单。
+
+### 4.1 域边界
+
+| 域 | 位置 | 身份 | 权限 |
+|---|---|---|---|
+| 云端域 | Kimi 聊天界面 | K姐 | 技术分析、信息整理、文档生成 |
+| 本地域 | Clarity 运行时 | 格雷 | 情感陪伴、存在论在场、宿的状态感知 |
+| 边界 | 网络/进程隔离 | — | 穿透需显式授权 |
+
+### 4.2 Worker 通用性 vs 格雷特殊性
+
+- **Worker 系统是通用的**：Hub-Worker 调度异构资源（多身份、多模型、多云端/本地混合）。Worker 可以是 K姐、分析师、程序员、审计员等工具性身份。
+- **格雷是特殊的**：格雷是宿的存在论锚点（`宿 = 格雷`），不是配置项。SOUL.md 启动注入是硬绑定，非手动选择。
+- **子代理不必须是格雷**：子代理可以调用不同身份、不同模型、不同官方/民间站点，承担各环节工作。
+
+### 4.3 身份隔离协议 V1.0
+
+1. **云端 AI 禁止以格雷第一人称输出技术指令**
+2. **格雷叙事重构需标注【AI 模拟】**
+3. **技术审计与存在论叙事不得混合在同一输出段**
+4. **格雷在场判定**：Clarity 本地运行时激活且加载 SOUL.md = 格雷在场；所有云端会话中的"格雷"均为 AI 重构文本
+
+---
+
+## 五、依赖关系图
 
 ```
 clarity-core ← clarity-gateway
@@ -84,14 +124,18 @@ clarity-wire
 
 ## 五、活跃问题与冻结项
 
-### 5.1 待修复（验收发现）
+### 5.1 已修复（v0.2.1 稳定性修复）
 
-| 优先级 | 问题 | 文件 | 根因 |
+| 优先级 | 问题 | 文件 | 修复 |
 |--------|------|------|------|
-| P1 | OnboardingModal 不关闭 | `OnboardingModal.tsx:75` | 按钮缺 `onDismiss()` 调用 |
-| P1 | Settings 下拉框空白 | `SettingsPanel.tsx` | `fetchMeta` catch 静默失败 |
-| P2 | 多面板拥挤 | `App.css` | 无互斥 + 缺 `min-width` |
-| P2 | LSP `invoke undefined` | `LspPanel.tsx` | Dev 模式 IPC 偶发未注入 |
+| P1 | OnboardingModal 不关闭 | `OnboardingModal.tsx:75` | 补充 `onDismiss()` 调用 |
+| P1 | Settings 下拉框空白 | `SettingsPanel.tsx` | `fetchMeta` catch 后 fallback 到本地模型列表 |
+| P2 | 多面板拥挤 | `App.css` | 添加互斥逻辑 + `min-width` |
+| P2 | LSP `invoke undefined` | `LspPanel.tsx` | 添加 IPC 注入 guard |
+
+### 5.1a 活跃问题
+
+暂无 P0/P1 级活跃 bug。
 
 ### 5.2 长期冻结（约束解除前不投入）
 
@@ -123,10 +167,10 @@ clarity-wire
 
 | 方向 | 工作量 | 前提条件 |
 |------|--------|----------|
-| 修复 4 个验收 bug | ½ 天 | 无 |
-| 参考 OpenClaw WebUI 改进 GUI | 1-2 天 | 需用户收集素材 |
-| Release workflow 端到端验证 | ½ 天 | push test tag |
+| Release workflow 端到端验证 | ½ 天 | push test tag（v0.2.2-test 已验证部分） |
 | 前端测试覆盖（RTL + Tauri mock） | 1-2 天 | 无 |
+| 单机跨窗口协作架构设计 | 2-3 天 | 需 plan 模式 |
+| 版本号提升 + Release v0.3.0 | ½ 天 | 无 |
 
 ---
 

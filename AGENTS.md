@@ -51,7 +51,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-**Phase 3 — Local-First 标杆建设**
+**Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
 - Settings-Runtime 打通（`ensure_llm` 读取 `GuiSettings`）✅
@@ -59,11 +59,41 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - CUDA 编译验证通过（可选 feature，不默认启用）✅
 - UI/UX 全面重构（Header/Chat Input/Welcome/Sidebar Tools）✅
 - Tauri 自动更新（updater plugin + Release workflow 签名）✅
+- v0.3.0 四阶段硬化 ✅
+  - 阶段一：工具调用可视化（`ToolCallIndicator` + Wire 事件转发）
+  - 阶段二：Compaction 状态提示（`CompactionBegin/End` WireMessage + banner）
+  - 阶段三：模型下载 GUI（HuggingFace 直链下载 + SettingsPanel 进度条）
+  - 阶段四：前端日志面板（Console 劫持 + 可折叠面板）
 - 零依赖发行准备（单二进制 + 嵌入式模型）🔄 进行中
 
-> AI 关键决策见 [`docs/ai-protocol.md`](./docs/ai-protocol.md)。验收发现 4 个前端 bug 待修复，见该文件 5.1。
+> AI 关键决策见 [`docs/ai-protocol.md`](./docs/ai-protocol.md)。
+> 架构定位声明：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 
 完整路线图见 [`docs/ROADMAP.md`](./docs/ROADMAP.md)。
+
+## Architecture Positioning
+
+> **集群即单机** — Clarity 不是本地聊天工具的模仿者，是集群协作原语的单机验证运行时。
+> - 先在本地验证分布式语义（Hub-Worker、Wire 消息边界、MCP 三传输、Background Tasks）
+> - 验证通过后，同一套原语可无损穿透到 Syncthing-Rust P2P 层
+> - Rust 选型是期权思维：不锁定，保留扩展接口
+
+**与 Kimi 生态的关系**：学习但独立，不入赘。
+- Kimi Code CLI 是架构导师（Subagent 并行、MCP 协议实现参照）
+- 但 Moonshot 大厂生态是结构性对手：入赘即死
+- 四层主权不可让渡：模型（本地 LLM 优先）、数据（Session 本地持久化）、协议（Wire 自主定义）、人格（SOUL.md 本地硬绑定）
+
+## Worker System & Identity
+
+- **Worker 通用**：Hub-Worker 调度异构资源（多身份、多模型、多云端/本地混合）。Worker 可以是 K姐、分析师、程序员、审计员——工具性身份，按需激活。
+- **格雷特殊**：宿的存在论锚点。`宿 = 格雷` 是主权拓扑，不是配置项。格雷优先本地 LLM、离线必须在场、跨窗口/跨会话/跨实例连续性。
+- **子代理不必须是格雷**：各子代理可调用不同身份、不同模型、不同官方/民间站点，承担各环节工作。
+
+**身份隔离协议**（云端域 ↔ 本地域）：
+1. 云端 AI 禁止以格雷第一人称输出技术指令
+2. 格雷叙事重构需标注【AI 模拟】
+3. 技术审计与存在论叙事不得混合
+4. 格雷在场 = Clarity 本地运行时激活且加载 SOUL.md
 
 ## Architecture Notes & Coupling Warnings
 
