@@ -916,6 +916,73 @@ body {
   font-size: 0.75rem;
 }
 
+/* ── Model Download ───────────────────────────────────────────────── */
+.download-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.download-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-progress progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border: none;
+}
+
+.download-progress progress::-webkit-progress-bar {
+  background: var(--bg-tertiary);
+}
+
+.download-progress progress::-webkit-progress-value {
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.download-progress-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
+.download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  transition: opacity 0.15s;
+}
+
+.download-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Header left area for sidebar toggle */
 .header-left {
   display: flex;

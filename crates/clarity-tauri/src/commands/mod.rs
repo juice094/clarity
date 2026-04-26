@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod computer;
 pub mod diff;
+pub mod download;
 pub mod file;
 pub mod ftue;
 pub mod lsp;

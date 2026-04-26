@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
 
 const FALLBACK_MODELS: [string, string, string[]][] = [
   ["openai", "OpenAI", ["gpt-4o", "gpt-4o-mini", "o3-mini"]],
@@ -49,6 +50,11 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const [toast, setToast] = useState("");
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [downloadRepo, setDownloadRepo] = useState("unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF");
+  const [downloadFile, setDownloadFile] = useState("DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf");
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadStatus, setDownloadStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
+
   const fetchSettings = useCallback(async () => {
     try {
       const data = await invoke<GuiSettings>("get_settings");
@@ -80,6 +86,24 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     fetchSettings();
     fetchMeta();
   }, [isOpen, fetchSettings, fetchMeta]);
+
+  // Listen for model download progress events
+  useEffect(() => {
+    const unlisteners: UnlistenFn[] = [];
+    listen<{ bytes: number; total: number | null; filename: string }>("download:progress", (event) => {
+      const { bytes, total } = event.payload;
+      setDownloadProgress(total && total > 0 ? bytes / total : 0);
+    }).then((u) => unlisteners.push(u));
+    listen<{ path: string; filename: string }>("download:complete", () => {
+      setDownloadStatus("done");
+      setDownloadProgress(1);
+      fetchMeta();
+      setTimeout(() => setDownloadStatus("idle"), 3000);
+    }).then((u) => unlisteners.push(u));
+    return () => {
+      unlisteners.forEach((u) => u());
+    };
+  }, [fetchMeta]);
 
   // 关闭面板时恢复主题为已保存的值（Cancel 或未 Save 的 preview）
   const prevIsOpenRef = useRef(isOpen);
@@ -271,6 +295,62 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   {t("settings.noModels")}
                 </p>
               )}
+
+              <div className="download-section">
+                <label className="settings-label">Download from HuggingFace</label>
+                <input
+                  className="settings-input"
+                  type="text"
+                  placeholder="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+                  value={downloadRepo}
+                  onChange={(e) => setDownloadRepo(e.target.value)}
+                  disabled={downloadStatus === "downloading"}
+                />
+                <input
+                  className="settings-input"
+                  type="text"
+                  placeholder="DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf"
+                  value={downloadFile}
+                  onChange={(e) => setDownloadFile(e.target.value)}
+                  disabled={downloadStatus === "downloading"}
+                />
+                {downloadStatus === "downloading" && (
+                  <div className="download-progress">
+                    <progress value={downloadProgress} max={1} />
+                    <span className="download-progress-text">
+                      {Math.round(downloadProgress * 100)}%
+                    </span>
+                  </div>
+                )}
+                <button
+                  className="download-btn"
+                  onClick={async () => {
+                    if (!downloadRepo.trim() || !downloadFile.trim()) return;
+                    setDownloadStatus("downloading");
+                    setDownloadProgress(0);
+                    try {
+                      await invoke("download_model", {
+                        repoId: downloadRepo.trim(),
+                        filename: downloadFile.trim(),
+                      });
+                    } catch (e) {
+                      console.error("Download failed:", e);
+                      setDownloadStatus("error");
+                      setTimeout(() => setDownloadStatus("idle"), 3000);
+                    }
+                  }}
+                  disabled={downloadStatus === "downloading" || !downloadRepo.trim() || !downloadFile.trim()}
+                >
+                  <Download size={14} />
+                  {downloadStatus === "downloading"
+                    ? "Downloading…"
+                    : downloadStatus === "done"
+                    ? "Downloaded"
+                    : downloadStatus === "error"
+                    ? "Failed"
+                    : "Download Model"}
+                </button>
+              </div>
             </>
           )}
         </div>

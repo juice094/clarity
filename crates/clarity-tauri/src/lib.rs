@@ -250,6 +250,7 @@ pub fn run() {
             commands::file::get_file_tree,
             commands::file::read_file,
             commands::diff::compute_diff,
+            commands::download::download_model,
             commands::lsp::lsp_start,
             commands::lsp::lsp_send,
             commands::lsp::lsp_recv,
