@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Approval Module Restructure** — `approval.rs` split into `approval/mod.rs` + `approval/rules.rs`.
 - **Interactive Mode Refinement** — Low-risk tools (`file_read`, `web_search`) now auto-approve in Interactive mode; only High/Medium/forced-approval tools prompt.
 
+### Fixed
+
+- **Tauri Build Paths** — `tauri.conf.json` `frontendDist` corrected from `../frontend/dist` to `frontend/dist`; `beforeBuildCommand`/`beforeDevCommand` switched to `npm run build`/`npm run dev` (Tauri CLI executes these in `frontend/` directory on Windows).
+- **CI Release Workflow** — Added `working-directory: crates/clarity-tauri` to the Tauri build step so `cargo tauri build` locates `tauri.conf.json` correctly in GitHub Actions.
+- **FTUE Settings Reload** — `SettingsPanel` now calls `reload_llm` after `save_settings` succeeds, ensuring the LLM binding is re-created with new provider/model configuration without restart.
+
 ## [0.2.1] — 2026-04-25
 
 ### Added
