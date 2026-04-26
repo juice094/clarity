@@ -21,7 +21,7 @@ use async_trait::async_trait;
 
 /// Executor trait for running real Agent tasks in the background.
 ///
-/// Implementations receive a [`TaskSpec`] and must build/run an [`Agent`],
+/// Implementations receive a [`TaskSpec`] and must build/run an [`crate::agent::Agent`],
 /// returning the textual output and the number of steps taken.
 #[async_trait]
 pub trait AgentTaskExecutor: Send + Sync + std::fmt::Debug {
@@ -419,7 +419,7 @@ impl BackgroundTaskManager {
 
     /// 启动一个真实的 Agent 后台任务，使用指定的 task_id。
     ///
-    /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
+    /// 需要事先通过 `with_agent_executor` 配置执行器，否则会返回错误。
     pub async fn spawn_agent_with_id(
         &self,
         task_id: TaskId,
@@ -451,7 +451,7 @@ impl BackgroundTaskManager {
 
     /// 启动一个真实的 Agent 后台任务。
     ///
-    /// 需要事先通过 [`with_agent_executor`] 配置执行器，否则会返回错误。
+    /// 需要事先通过 `with_agent_executor` 配置执行器，否则会返回错误。
     pub async fn spawn_agent(&self, spec: TaskSpec) -> anyhow::Result<TaskId> {
         self.spawn_agent_with_id(generate_task_id(), spec).await
     }

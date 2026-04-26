@@ -6,7 +6,7 @@
 //!
 //! ## Quick start
 //!
-//! 1. Install Ollama: https://ollama.com/download
+//! 1. Install Ollama: [ollama.com/download](https://ollama.com/download)
 //! 2. Pull a model: `ollama pull llama3`
 //! 3. Ensure the server is running (default: http://localhost:11434)
 //!

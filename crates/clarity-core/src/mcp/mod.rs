@@ -431,7 +431,7 @@ impl McpManager {
         }
     }
 
-    /// Create a manager from an [`McpConfig`], spawning all enabled servers.
+    /// Create a manager from an `McpConfig`, spawning all enabled servers.
     /// Servers that fail to start are logged and skipped.
     pub async fn from_config(config: &config::McpConfig) -> Self {
         let mut manager = Self::new();
@@ -524,7 +524,7 @@ impl McpManager {
         &self.tools
     }
 
-    /// Register all discovered tools into a [`ToolRegistry`].
+    /// Register all discovered tools into a `ToolRegistry`.
     /// Duplicate names are logged as warnings and skipped.
     pub fn register_all(&self, registry: &crate::registry::ToolRegistry) {
         for tool in &self.tools {

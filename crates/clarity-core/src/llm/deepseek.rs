@@ -1,6 +1,6 @@
 //! DeepSeek LLM Provider
 //!
-//! DeepSeek (https://deepseek.com) provides OpenAI-compatible API.
+//! DeepSeek ([deepseek.com](https://deepseek.com)) provides OpenAI-compatible API.
 //! This module wraps the generic OpenAI-compatible provider with DeepSeek-specific defaults.
 //!
 //! ## Configuration
@@ -19,7 +19,7 @@ use std::env;
 
 /// DeepSeek LLM Provider
 ///
-/// Uses OpenAI-compatible API at https://api.deepseek.com/v1
+/// Uses OpenAI-compatible API at [https://api.deepseek.com/v1](https://api.deepseek.com/v1)
 #[derive(Debug, Clone)]
 pub struct DeepSeekProvider {
     inner: OpenAiCompatibleLlm,
@@ -30,7 +30,7 @@ impl DeepSeekProvider {
     ///
     /// Required: `DEEPSEEK_API_KEY`
     /// Optional: `DEEPSEEK_MODEL` (default: "deepseek-chat")
-    /// Optional: `DEEPSEEK_BASE_URL` (default: "https://api.deepseek.com/v1")
+    /// Optional: `DEEPSEEK_BASE_URL` (default: `"https://api.deepseek.com/v1"`)
     pub fn from_env() -> Result<Self, AgentError> {
         let api_key = env::var("DEEPSEEK_API_KEY")
             .map_err(|_| AgentError::Llm("DEEPSEEK_API_KEY not set".into()))?;

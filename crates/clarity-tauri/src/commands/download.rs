@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncWriteExt;
 
 /// Download a .gguf model from HuggingFace and save it to ~/models/.
-/// Emits `download:progress` events with { repo_id, filename, bytes: u64, total: Option<u64> }.
+/// Emits `download:progress` events with `{ repo_id, filename, bytes: u64, total: Option<u64> }`.
 #[tauri::command]
 pub async fn download_model(
     repo_id: String,

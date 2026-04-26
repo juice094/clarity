@@ -632,7 +632,7 @@ impl AnthropicLlm {
     /// Create from environment variables
     ///
     /// Required: ANTHROPIC_AUTH_TOKEN
-    /// Optional: ANTHROPIC_BASE_URL (default: "https://api.anthropic.com")
+    /// Optional: ANTHROPIC_BASE_URL (default: `"https://api.anthropic.com"`)
     /// Optional: ANTHROPIC_MODEL (default: "claude-3-sonnet-20240229")
     pub fn from_env() -> Result<Self, AgentError> {
         let api_key = env::var("ANTHROPIC_AUTH_TOKEN")

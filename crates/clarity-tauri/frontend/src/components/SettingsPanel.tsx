@@ -229,8 +229,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         {/* Model Group */}
         <div className="settings-group">
           <h3>{t("settings.model")}</h3>
-          <label className="settings-label">{t("settings.provider")}</label>
+          <label className="settings-label" htmlFor="settings-provider">{t("settings.provider")}</label>
           <select
+            id="settings-provider"
             className="settings-select"
             value={settings.provider}
             onChange={(e) => handleProviderChange(e.target.value)}
@@ -242,8 +243,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             ))}
           </select>
 
-          <label className="settings-label">{t("settings.model")}</label>
+          <label className="settings-label" htmlFor="settings-model">{t("settings.model")}</label>
           <select
+            id="settings-model"
             className="settings-select"
             value={settings.model}
             onChange={(e) => handleModelChange(e.target.value)}
@@ -257,8 +259,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
           {!isLocalProvider && (
             <>
-              <label className="settings-label">API Key</label>
+              <label className="settings-label" htmlFor="settings-api-key">API Key</label>
               <input
+                id="settings-api-key"
                 className="settings-input"
                 type="password"
                 value={settings.api_key ?? ""}
@@ -278,8 +281,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 
           {isLocalProvider && (
             <>
-              <label className="settings-label">{t("settings.localModelPath")}</label>
+              <label className="settings-label" htmlFor="settings-local-model-path">{t("settings.localModelPath")}</label>
               <input
+                id="settings-local-model-path"
                 className="settings-input"
                 type="text"
                 readOnly
@@ -297,8 +301,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               )}
 
               <div className="download-section">
-                <label className="settings-label">Download from HuggingFace</label>
+                <label className="settings-label" htmlFor="settings-download-repo">Download from HuggingFace</label>
                 <input
+                  id="settings-download-repo"
                   className="settings-input"
                   type="text"
                   placeholder="unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
@@ -307,6 +312,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   disabled={downloadStatus === "downloading"}
                 />
                 <input
+                  id="settings-download-file"
                   className="settings-input"
                   type="text"
                   placeholder="DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf"
@@ -411,7 +417,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         {/* Language Group */}
         <div className="settings-group">
           <h3>{t("settings.language")}</h3>
+          <label className="settings-label" htmlFor="settings-language">{t("settings.language")}</label>
           <select
+            id="settings-language"
             className="settings-select"
             value={settings.language ?? "zh"}
             onChange={(e) =>
@@ -426,8 +434,9 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         {/* Network Group */}
         <div className="settings-group">
           <h3>Network</h3>
-          <label className="settings-label">{t("settings.networkProbeUrl")}</label>
+          <label className="settings-label" htmlFor="settings-network-probe">{t("settings.networkProbeUrl")}</label>
           <input
+            id="settings-network-probe"
             className="settings-input"
             type="text"
             value={settings.network_probe_url ?? ""}

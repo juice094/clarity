@@ -41,9 +41,12 @@ describe("SettingsPanel smoke test", () => {
   it("renders settings form when open", async () => {
     render(<SettingsPanel isOpen={true} onClose={vi.fn()} />);
     expect(await screen.findByText("settings.title")).toBeInTheDocument();
-    // Provider and model selects are present (3 comboboxes: provider, model, language)
-    const combos = screen.getAllByRole("combobox");
-    expect(combos.length).toBeGreaterThanOrEqual(2);
+
+    // Labels are properly associated with controls via htmlFor
+    expect(screen.getByLabelText("settings.provider")).toBeInTheDocument();
+    expect(screen.getByLabelText("settings.model")).toBeInTheDocument();
+    expect(screen.getByLabelText("settings.language")).toBeInTheDocument();
+
     // Save button present
     expect(screen.getByText("settings.save")).toBeInTheDocument();
   });

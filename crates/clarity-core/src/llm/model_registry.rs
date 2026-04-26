@@ -130,7 +130,7 @@ impl ModelRegistry {
         Self::from_config(Self::built_in_fallback())
     }
 
-    /// Async wrapper around [`load`] that offloads blocking file I/O to
+    /// Async wrapper around `load` that offloads blocking file I/O to
     /// Tokio's blocking thread pool.
     pub async fn load_async() -> Result<Self, AgentError> {
         tokio::task::spawn_blocking(Self::load)
@@ -147,7 +147,7 @@ impl ModelRegistry {
         Self::from_config(config)
     }
 
-    /// Async wrapper around [`load_from`].
+    /// Async wrapper around `load_from`.
     pub async fn load_from_async(path: &Path) -> Result<Self, AgentError> {
         let path = path.to_path_buf();
         tokio::task::spawn_blocking(move || Self::load_from(&path))
