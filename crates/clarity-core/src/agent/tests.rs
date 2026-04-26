@@ -229,8 +229,8 @@ async fn test_tool_call_approval_flow() {
                     id: "call_123".to_string(),
                     call_type: "function".to_string(),
                     function: FunctionCall {
-                        name: "mock_tool".to_string(),
-                        arguments: r#"{"param": "value"}"#.to_string(),
+                        name: "shell".to_string(),
+                        arguments: r#"{"command": "echo test"}"#.to_string(),
                     },
                 }],
                 is_complete: false,
@@ -288,10 +288,10 @@ async fn test_tool_call_approval_flow() {
 
     // Agent 应该完成（虽然工具执行会失败，因为 mock_tool 不存在）
     let result = handle.await.unwrap();
-    // 结果应该是 Err，因为工具不存在，但审批流程已经测试到了
+    // 结果应该是 Err，因为工具未注册，但审批流程已经测试到了
     assert!(
         result.is_err(),
-        "Expected error because mock_tool is not registered"
+        "Expected error because shell is not registered in the empty test registry"
     );
 }
 

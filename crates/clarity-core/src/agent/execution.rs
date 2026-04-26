@@ -1,6 +1,7 @@
 //! Tool execution, approval flow, and context compaction.
 
 use super::Agent;
+use crate::approval::rules::{RiskLevel, RuleEngine};
 use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalRuntime, ApprovalSource};
 use crate::compaction::estimate_message_tokens;
 use crate::error::{AgentError, ToolError};
@@ -111,6 +112,9 @@ impl Agent {
             .map(|t| t.requires_approval())
             .unwrap_or(false);
 
+        // 规则引擎风险评估
+        let risk = RuleEngine::with_defaults().evaluate(name, &args);
+
         // 如果配置了审批运行时，先请求审批
         if let Some(ref runtime) = self.approval_runtime {
             let mut description = sensitive_path
@@ -123,7 +127,14 @@ impl Agent {
                 }));
             }
 
-            let tool_call_for_approval = if sensitive_path.is_some() || tool_requires_approval {
+            // Augment description with risk level for UI context
+            let description = match risk {
+                RiskLevel::High => Some(description.unwrap_or_else(|| "High-risk operation".to_string())),
+                RiskLevel::Medium => description,
+                _ => description,
+            };
+
+            let tool_call_for_approval = if sensitive_path.is_some() || tool_requires_approval || risk == RiskLevel::High {
                 let mut tc = tool_call.clone();
                 let mut approval_args = args.clone();
                 if tool_requires_approval {
@@ -134,6 +145,9 @@ impl Agent {
                     approval_args["_sensitive_file_warning"] =
                         serde_json::json!("This operation accesses a sensitive file");
                 }
+                if risk == RiskLevel::High {
+                    approval_args["_risk_level"] = serde_json::json!("high");
+                }
                 tc.function.arguments = approval_args.to_string();
                 tc
             } else {
@@ -141,24 +155,31 @@ impl Agent {
             };
 
             let mode = self.inner.read().unwrap().approval_mode;
-            match mode {
+            let needs_approval = match mode {
                 ApprovalMode::Interactive => {
-                    self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
-                        .await?;
+                    risk == RiskLevel::High
+                        || risk == RiskLevel::Medium
+                        || tool_requires_approval
+                        || sensitive_path.is_some()
                 }
                 ApprovalMode::Yolo => {
-                    if tool_requires_approval {
-                        self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
-                            .await?;
-                    }
-                    // 否则跳过审批（原有 Yolo 行为）
+                    tool_requires_approval || risk == RiskLevel::High
                 }
-                ApprovalMode::Plan => {
-                    // Plan mode's approval is handled at the run() level:
-                    // run() bypasses the ReAct loop and uses plan-driven execution
-                    // (generate plan → execute steps). If we reach here inside
-                    // run_sync_loop, auto-approve to avoid blocking on per-tool
-                    // approvals after the plan has already been vetted.
+                ApprovalMode::Plan => false,
+            };
+
+            if needs_approval {
+                self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
+                    .await?;
+            } else {
+                match risk {
+                    RiskLevel::Medium => {
+                        tracing::info!("Medium-risk tool '{}' auto-approved in {:?} mode", name, mode);
+                    }
+                    RiskLevel::Low => {
+                        tracing::debug!("Low-risk tool '{}' auto-approved", name);
+                    }
+                    _ => {}
                 }
             }
         }
