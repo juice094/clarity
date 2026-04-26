@@ -1,6 +1,6 @@
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-04-20
+> Code-accurate architecture reference | Last updated: 2026-04-26
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 8 independent crates, each with one clear role |
+| **Single Responsibility** | 8 independent crates; `clarity-core` is a 27k-line god crate pending decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -68,6 +68,18 @@
           └──────────┴────────────────┘
 ```
 
+### 2.1a Code Health Metrics (v0.3.0 baseline)
+
+| Metric | Value | Target |
+|--------|-------|--------|
+| `unwrap()` / `expect()` (non-test) | ~1,069 | Freeze new; reduce risk-class gradually |
+| `pub fn` doc coverage | ~92% | ≥90% |
+| clippy warnings | 0 | 0 |
+| `unsafe` count | 1 | 0 new |
+| Rust tests passed | 515 / 0 failed | 100% |
+| Frontend tests passed | 30 / 0 failed | 100% |
+| `cargo doc` warnings | 0 | 0 |
+
 ### 2.1 Crate Dependency Graph
 
 ```
@@ -82,13 +94,18 @@ clarity-claw ─────→ clarity-core
 clarity-headless ─→ clarity-core
 ```
 
+**Reusability rating**:
+- `clarity-wire` / `clarity-memory`: **A+** — minimal deps, clean interfaces, ready for crates.io
+- `clarity-core`: **B** — strong trait boundaries (`LlmProvider`, `Tool`, `MemoryStore`) but 27k lines and high `unwrap()` density (~1,069) limit downstream reliability
+- Application crates (`gateway`, `tauri`, `tui`, `claw`, `headless`): **D** — thin shells, not intended as libraries
+
 **Invariant**: `clarity-core` has **zero** dependencies on any frontend or network crate.
 
 ### 2.2 Crate Details
 
 | Crate | Lines (~) | Tests | Key Types |
 |-------|-----------|-------|-----------|
-| `clarity-core` | ~8,500 | 260+ | `Agent`, `ToolRegistry`, `LlmProvider`, `McpManager`, `BackgroundTaskManager` |
+| `clarity-core` | ~27,000 | 381+ | `Agent`, `ToolRegistry`, `LlmProvider`, `McpManager`, `BackgroundTaskManager` |
 | `clarity-memory` | ~2,800 | 79+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
 | `clarity-wire` | ~400 | 8 | `WireMessage`, `WireBroadcaster` |
 | `clarity-gateway` | ~3,200 | 43+ | `AppState`, `PersistentSessionStore`, API handlers |

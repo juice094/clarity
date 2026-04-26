@@ -13,8 +13,8 @@
 |------|------|
 | 版本 | v0.3.0 已发布（tag pushed） |
 | Rust 测试 | 515 passed / 0 failed / 0 warning |
-| 前端测试 | 1 smoke test（App 渲染不崩溃） |
-| CI/CD | Release workflow tag-triggered，待验证 |
+| 前端测试 | 30 passed / 11 test files（smoke tests 全覆盖） |
+| CI/CD | Release workflow tag-triggered，已验证通过 |
 | 本地构建 | `.exe` + `.msi` + `.nsis` 产出确认 |
 | 分支卫生 | 13 个已合并 subagent 分支已清理 |
 
@@ -27,7 +27,7 @@
 | 项 | 说明 | 理论依据 |
 |---|------|---------|
 | CI Release 验证 | v0.3.0 tag 已 push，需确认 GitHub Actions 成功产出 signed bundles | 持续交付：每次 tag 必须是可部署的 |
-| 前端测试矩阵 | 仅 1 个 smoke test，核心组件（Sidebar/Settings/ErrorBoundary/Onboarding）零覆盖 | 测试金字塔：单元测试是质量基线 |
+| 前端测试矩阵 | ~~仅 1 个 smoke test~~ → 11 组件 / 30 tests 已覆盖 | ✅ 已完成 |
 | 版本号一致性 | tauri.conf.json 已同步 0.3.0；需确认所有 Cargo.lock 衍生 crate 版本正确 | 配置即代码：版本漂移是发布事故根因 |
 
 ### P1 · 质量加固（v0.3.1，1-2 周）
@@ -35,8 +35,8 @@
 | 项 | 说明 | 理论依据 |
 |---|------|---------|
 | 前端组件测试 | Sidebar 会话切换、SettingsPanel 渲染、OnboardingModal 状态流转 | 防御性编程：UI 重构必须有回归保护 |
-| Gateway 集成测试 | HTTP chat completions 的边界场景（空消息、超长消息、工具调用链） | 康威定律：Gateway 是核心对外接口，必须高覆盖 |
-| 性能基准 | 启动时间（Tauri cold start）、内存占用（模型加载前后） | 可观测性：没有度量就没有优化 |
+| Gateway 集成测试 | HTTP chat completions 的边界场景（空消息、超长消息、工具调用链） | ✅ 已完成（8 tests） |
+| 性能基准 | 启动时间（Tauri cold start）、内存占用（模型加载前后） | 🔄 待执行 |
 | 错误处理审计 | 所有 `invoke().catch(console.error)` 是否应向前端用户暴露 | 四层主权之数据主权：错误信息不能静默吞噬 |
 
 ### P2 · 功能推进（v0.4.0-alpha，2-4 周）
@@ -63,6 +63,8 @@
 | cargo audit 20+ upstream unmaintained | 已忽略 | 等待 Tauri 生态更新，不主动投入 |
 | Discord/Telegram CVE (rustls-webpki) | 已禁用 | 等上游 serenity 0.12.6+ |
 | `std::sync::RwLock` in `Agent.inner` |  intentional | 短临界区设计，非债务 |
+| `unwrap()` / `expect()` 密度（~1,069） | 已测绘 | 见 `docs/unwrap-debt-map.md`；冻结新增，存量逐步 `?` 化 |
+| `cargo doc` warnings | ✅ 已清零 | 13 处已修复，建立零 warning 基线 |
 
 ---
 
@@ -100,6 +102,7 @@ cargo test --workspace --lib
 cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo fmt --all -- --check
 cargo audit --deny unsound --deny yanked
+cargo doc --no-deps
 
 # 前端
 cd crates/clarity-tauri/frontend && npm test

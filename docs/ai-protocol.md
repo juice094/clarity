@@ -9,7 +9,7 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-26
-**当前分支**：`main` @ `cdaea3e`
+**当前分支**：`main` @ `2f1b39e`
 **架构模式**：CLI（单轮/短轮次）→ 如需长程自主迭代，建议切换至 Claw
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 
@@ -64,6 +64,24 @@
 - 保留对新 soundness issue 和 yanked crate 的阻断能力
 
 **Commit**：`b9e45b6`
+
+### 3.5 代码健康规则注入（2026-04-26）
+
+**决策**：将代码健康红线固化到项目规范文件，从"快速迭代"迁移到"规范驱动"。
+
+| 文件 | 注入内容 |
+|------|---------|
+| `AGENTS.md` | Code Style 扩展：`unwrap()` 注释规则、`pub fn` doc 要求、`unsafe` 禁令、跨层检查单 |
+| `docs/test_governance.md` | 新增第 8 章：定量基线表、unwrap 分类策略、验收命令、违规处理 |
+| `.kimi/SESSION_STARTER.md` | 重写为"会话启动检查清单"，前置健康红线 |
+
+**Commit**：`6ddda1d`（v0.3.0 发布）+ 后续文档更新
+
+### 3.6 cargo doc warning 清零（2026-04-26）
+
+**决策**：修复 13 处 doc warning（5 bare URL + 7 unresolved intra-doc link + 1 unclosed HTML tag），建立 `cargo doc --no-deps` 零 warning 基线。
+
+**Commit**：当前会话
 
 ### 3.4 v0.3.0 每日使用体验硬化（四阶段完成）
 
