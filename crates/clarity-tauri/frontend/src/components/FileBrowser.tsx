@@ -24,6 +24,7 @@ export default function FileBrowser({
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (isOpen && tree === null) {
@@ -34,6 +35,7 @@ export default function FileBrowser({
         })
         .catch((err) => {
           console.error("Failed to load file tree:", err);
+          setError("Failed to load file tree");
         })
         .finally(() => {
           setLoading(false);

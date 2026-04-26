@@ -53,6 +53,7 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
       });
     } catch (e) {
       console.error("Model download failed:", e);
+      setDownloadStatus("error");
       setDownloading(false);
     }
   }
