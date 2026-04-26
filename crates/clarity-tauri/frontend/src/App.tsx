@@ -10,6 +10,7 @@ import OnboardingModal, { type LaunchStatus } from "./components/OnboardingModal
 import FileBrowser from "./components/FileBrowser";
 import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
 import LspPanel from "./components/LspPanel";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -461,6 +462,7 @@ function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="app-layout">
       <Sidebar
         sessions={sessions}
@@ -681,6 +683,7 @@ function App() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }
 

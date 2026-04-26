@@ -158,6 +158,27 @@ async fn prewarm_llm(handle: &tauri::AppHandle) -> Result<(), String> {
 /// This function is called from `main.rs` and sets up the Tauri app
 /// with all commands, plugins, and event handlers.
 pub fn run() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic payload".to_string()
+        };
+        let location = info.location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let report = format!("[{}] PANIC: {}\n", location, msg);
+        eprintln!("{}", report);
+        // Write to panic log file
+        if let Some(data_dir) = dirs::data_dir() {
+            let log_path = data_dir.join("clarity").join("panic.log");
+            let _ = std::fs::create_dir_all(log_path.parent().unwrap_or(&data_dir));
+            let _ = std::fs::write(&log_path, report);
+        }
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
