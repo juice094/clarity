@@ -9,14 +9,14 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **502 passed, 0 failed, 4 ignored** | ✅ 全绿 |
+| **单元测试** | **524 passed, 0 failed, 4 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit` | ✅ 已集成 CI |
 | **代码规模** | ~125 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
-- `clarity-core`: 360 tests passed, 4 ignored
+- `clarity-core`: 381 tests passed, 4 ignored
 - `clarity-gateway`: 43 tests passed
 - `clarity-memory`: 79 tests passed
 - `clarity-wire`: 8 tests passed
@@ -200,7 +200,9 @@
 | 优先级 | 工作项 | 工作量 | 说明 | Track |
 |--------|--------|--------|------|-------|
 | P2 | clarity-tauri Desktop GUI | ✅ 已完成 | Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；离线 fallback + 预加载 + Settings 缓存 | — |
-| P2 | 审批系统增强 | ⏸️ 未启动 | AI 分类器 + 规则引擎 + 远程审批中继（设计完成，代码未动工） | — |
+| P2 | 审批系统增强 | 🔄 部分完成 | 规则引擎 V1 已完成（RiskLevel + RuleEngine + 执行集成）；AI 分类器 V2 待启动 | — |
+| P2 | T_FTUE 首次体验 | ✅ 已完成 | `get_launch_status()` + OnboardingModal + i18n (en/zh) | — |
+| P2 | T_DYNAMIC_PROMPT | ✅ 已完成 | `SystemPromptBuilder` + `PromptComponent` 条件注入 | — |
 | P2 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel（rust-analyzer 等进程管理 + JSON-RPC 调试） | — |
 | P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
 | P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |

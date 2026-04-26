@@ -62,18 +62,27 @@ cargo install --path crates/clarity-tui
 ## Test Coverage
 
 ```
-502 tests passed, 0 failed, 4 ignored
+524 tests passed, 0 failed, 4 ignored
 ```
 
 ---
 
 ## Roadmap
 
+### v0.2.1 (Current)
+- **T_FTUE** — First-time user experience: launch status detection + Onboarding modal
+- **T_DYNAMIC_PROMPT** — Conditional system prompt builder with approval mode injection
+- **T_APPROVAL (V1)** — Rule-based risk engine for tool call approval
+- **T_SETTINGS** — Provider/model hot-reload command
+- **T_COMPACT** — Tier-1 fast local truncation + Tier-2 LLM summarization
+- **T_PARALLEL** — Concurrent tool call execution
+- **T_RELEASE/T_PACKAGE/T_UPDATE/T_SIGN** — CI release workflow + MSI/NSIS bundling + update check
+
 ### v0.3.0 (Next)
+- Single-binary packaging research (`cargo-bundle` / `tauri-bundler`)
+- Embedded model onboarding (guided download + progress UI)
 - GUI Monaco editor integration
-- LocalGgufProvider model selector + onboarding flow
 - Computer Use vision integration (AI reads screenshots)
-- Enhanced local-LLM onboarding (Candle GGUF auto-discovery)
 
 ---
 

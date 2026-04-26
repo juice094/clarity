@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **T_FTUE** — First-time user experience with launch status detection (`get_launch_status` command) and `OnboardingModal` React component with i18n support (en/zh).
+- **T_DYNAMIC_PROMPT** — `SystemPromptBuilder` with declarative `PromptComponent` enum for conditional prompt assembly (approval mode notices, offline notices, template variables).
+- **T_APPROVAL (V1)** — Rule-based risk engine (`RuleEngine` with `RiskLevel`: Auto/Low/Medium/High). Integrated into `execute_tool_call` to reduce unnecessary approval popups in Interactive mode.
+- **T_SETTINGS** — `reload_llm` Tauri command for provider/model hot-swap without restart.
+- **T_COMPACT** — Two-tier compaction: Tier-1 fast local truncation of old assistant text (no LLM call) + Tier-2 LLM summarization.
+- **T_PARALLEL** — Concurrent tool call execution via `futures::future::join_all` in both sync and streaming loops.
+- **T_RELEASE/T_PACKAGE/T_UPDATE/T_SIGN** — GitHub Actions release workflow (tag-triggered), MSI/NSIS bundling, auto-update check (GitHub API + SemVer), and Windows self-signed certificate signing.
+
+### Changed
+
+- **Approval Module Restructure** — `approval.rs` split into `approval/mod.rs` + `approval/rules.rs`.
+- **Interactive Mode Refinement** — Low-risk tools (`file_read`, `web_search`) now auto-approve in Interactive mode; only High/Medium/forced-approval tools prompt.
+
 ## [0.2.1] — 2026-04-25
 
 ### Added
