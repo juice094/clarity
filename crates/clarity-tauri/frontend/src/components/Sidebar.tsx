@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { ChevronRight, ChevronLeft, Plus, Pencil, X } from "lucide-react";
 
 export interface Message {
   role: "user" | "agent";
@@ -107,13 +108,13 @@ export default function Sidebar({
           onClick={onToggle}
           title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
         >
-          {collapsed ? "→" : "←"}
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
         {!collapsed && (
           <>
             <span className="sidebar-title">Clarity</span>
             <button className="sidebar-new-btn" onClick={onNew} title={t("sidebar.newSession")}>
-              +
+              <Plus size={16} />
             </button>
           </>
         )}
@@ -162,7 +163,7 @@ export default function Sidebar({
                       }}
                       title={t("sidebar.rename")}
                     >
-                      ✎
+                      <Pencil size={14} />
                     </button>
                     <button
                       className="session-action-btn danger"
@@ -172,7 +173,7 @@ export default function Sidebar({
                       }}
                       title={t("sidebar.delete")}
                     >
-                      ×
+                      <X size={14} />
                     </button>
                   </div>
                 )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
+import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X } from "lucide-react";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
@@ -29,7 +30,7 @@ function DiffPanel({ isOpen, hunks, onClose }: { isOpen: boolean; hunks: DiffHun
       <div className="diff-panel-header">
         <h2>{t("app.diffPreview")}</h2>
         <button className="diff-panel-close" onClick={onClose} aria-label={t("settings.close")}>
-          ✕
+          <X size={16} />
         </button>
       </div>
       <div className="diff-panel-body">
@@ -439,10 +440,10 @@ function App() {
         {networkStatus && (
           <div className={`network-banner ${networkStatus}`}>
             {networkStatus === "offline"
-              ? "⚠️ Network unavailable — switched to local model"
+              ? "Network unavailable — switched to local model"
               : networkStatus === "restored"
-              ? "✅ Network restored — switched back to preferred provider"
-              : `❌ ${networkErrorMsg}`}
+              ? "Network restored — switched back to preferred provider"
+              : `Error: ${networkErrorMsg}`}
           </div>
         )}
         <header className="chat-header">
@@ -453,7 +454,7 @@ function App() {
               title="Toggle sidebar"
               aria-label="Toggle sidebar"
             >
-              ☰
+              <Menu size={18} />
             </button>
             <h1>Clarity</h1>
           </div>
@@ -466,7 +467,7 @@ function App() {
               title="Browse files"
               aria-label="Browse files"
             >
-              📂
+              <FolderOpen size={16} />
             </button>
             <button
               className="task-toggle-btn"
@@ -474,7 +475,7 @@ function App() {
               title="Toggle task panel"
               aria-label="Toggle task panel"
             >
-              ⚡
+              <Zap size={16} />
             </button>
             <button
               className="computer-toggle-btn"
@@ -482,7 +483,7 @@ function App() {
               title="Toggle computer use panel"
               aria-label="Toggle computer use panel"
             >
-              🖥️
+              <Monitor size={16} />
             </button>
             <button
               className="lsp-toggle-btn"
@@ -490,7 +491,7 @@ function App() {
               title="Toggle LSP panel"
               aria-label="Toggle LSP panel"
             >
-              🔌 LSP
+              <Plug size={16} /> LSP
             </button>
             <button
               className="diff-toggle-btn"
@@ -506,7 +507,7 @@ function App() {
               title="Toggle diff panel"
               aria-label="Toggle diff panel"
             >
-              📝
+              <FileText size={16} />
             </button>
             <button
               className="settings-toggle-btn"
@@ -514,7 +515,7 @@ function App() {
               title="Toggle settings"
               aria-label="Toggle settings"
             >
-              ⚙️
+              <Settings size={16} />
             </button>
           </div>
         </header>

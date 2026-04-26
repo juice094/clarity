@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { X } from "lucide-react";
 
 interface TaskView {
   id: string;
@@ -64,7 +65,7 @@ function TaskPanel({ isOpen, onClose }: TaskPanelProps) {
       <div className="task-panel-header">
         <h2>Tasks</h2>
         <button className="task-panel-close" onClick={onClose} aria-label="Close">
-          ✕
+          <X size={16} />
         </button>
       </div>
       <div className="task-list">

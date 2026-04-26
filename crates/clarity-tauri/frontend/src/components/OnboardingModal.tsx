@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 
 export interface LaunchStatus {
   has_local_model: boolean;
@@ -29,7 +30,7 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
 
         <div className="onboarding-status">
           <div className={`status-item ${status.network_available ? "ok" : "warn"}`}>
-            <span className="status-icon">{status.network_available ? "✅" : "⚠️"}</span>
+            <span className="status-icon">{status.network_available ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}</span>
             <span className="status-label">
               {status.network_available
                 ? t("onboarding.networkOk", "Network available")
@@ -38,7 +39,7 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
           </div>
 
           <div className={`status-item ${status.has_local_model ? "ok" : "warn"}`}>
-            <span className="status-icon">{status.has_local_model ? "✅" : "⚠️"}</span>
+            <span className="status-icon">{status.has_local_model ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}</span>
             <span className="status-label">
               {status.has_local_model
                 ? t("onboarding.localModelOk", "Local model found")
@@ -47,7 +48,7 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
           </div>
 
           <div className={`status-item ${status.configured ? "ok" : "warn"}`}>
-            <span className="status-icon">{status.configured ? "✅" : "❌"}</span>
+            <span className="status-icon">{status.configured ? <CheckCircle size={16} /> : <XCircle size={16} />}</span>
             <span className="status-label">
               {status.configured
                 ? t("onboarding.configured", "Ready to chat")

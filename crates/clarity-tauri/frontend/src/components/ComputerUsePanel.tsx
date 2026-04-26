@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { X } from "lucide-react";
 
 interface ComputerUsePanelProps {
   isOpen: boolean;
@@ -152,7 +153,7 @@ function ComputerUsePanel({ isOpen, onClose }: ComputerUsePanelProps) {
       <div className="computer-panel-header">
         <h2>Computer Use</h2>
         <button className="computer-panel-close" onClick={onClose} aria-label="Close">
-          ✕
+          <X size={16} />
         </button>
       </div>
 

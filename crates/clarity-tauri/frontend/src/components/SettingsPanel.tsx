@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 
 export interface GuiSettings {
   model: string;
@@ -171,7 +172,7 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           onClick={onClose}
           aria-label={t("settings.close")}
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
 

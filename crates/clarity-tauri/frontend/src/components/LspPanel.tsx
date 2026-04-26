@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { X } from "lucide-react";
 
 interface LspPanelProps {
   isOpen: boolean;
@@ -158,7 +159,7 @@ function LspPanel({ isOpen, onClose }: LspPanelProps) {
       <div className="lsp-panel-header">
         <h2>LSP Servers</h2>
         <button className="lsp-panel-close" onClick={onClose} aria-label="Close">
-          ✕
+          <X size={16} />
         </button>
       </div>
 

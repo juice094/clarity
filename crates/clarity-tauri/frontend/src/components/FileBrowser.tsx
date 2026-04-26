@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { FolderOpen, Folder, X, FileText } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface FileTreeNode {
@@ -64,7 +65,7 @@ export default function FileBrowser({
             style={{ paddingLeft: `${paddingLeft + 16}px` }}
             onClick={() => toggleDir(node.path)}
           >
-            <span>{isExpanded ? "📂" : "📁"}</span>
+            <span>{isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />}</span>
             <span>{node.name}</span>
           </div>
           {isExpanded && node.children && (
@@ -83,7 +84,7 @@ export default function FileBrowser({
         style={{ paddingLeft: `${paddingLeft + 16}px` }}
         onClick={() => onFileSelect(node.path)}
       >
-        <span>📄</span>
+        <span><FileText size={14} /></span>
         <span>{node.name}</span>
       </div>
     );
@@ -101,7 +102,7 @@ export default function FileBrowser({
           title="Close"
           aria-label="Close file browser"
         >
-          ✕
+          <X size={16} />
         </button>
       </div>
       <div className="file-browser-tree">
