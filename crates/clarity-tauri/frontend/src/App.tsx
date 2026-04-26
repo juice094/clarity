@@ -349,6 +349,13 @@ function App() {
       setTimeout(() => setNetworkStatus((s) => (s === "error" ? null : s)), 8000);
     }).then((u) => unlisteners.push(u));
 
+    listen<{ path: string; filename: string }>("download:complete", () => {
+      // Refresh launch status so local model is detected and onboarding dismissed
+      invoke<LaunchStatus>("get_launch_status")
+        .then((status) => setLaunchStatus(status))
+        .catch((e) => console.error("Failed to refresh launch status after download:", e));
+    }).then((u) => unlisteners.push(u));
+
     return () => {
       unlisteners.forEach((u) => u());
     };

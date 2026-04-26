@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import OnboardingModal, { type LaunchStatus } from "./OnboardingModal";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(async () => "/home/user/models/test.gguf"),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => {}),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -44,6 +52,28 @@ describe("OnboardingModal smoke test", () => {
     expect(screen.getByText("Model / provider not configured")).toBeInTheDocument();
     expect(screen.getByText("No local model found")).toBeInTheDocument();
     expect(screen.queryByText("Start Chatting")).not.toBeInTheDocument();
+  });
+
+  it("shows download button when no local model and network available", () => {
+    render(
+      <OnboardingModal
+        status={{ ...baseStatus, configured: false, has_local_model: false }}
+        onOpenSettings={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Download Model/)).toBeInTheDocument();
+  });
+
+  it("hides download button when offline", () => {
+    render(
+      <OnboardingModal
+        status={{ ...baseStatus, configured: false, has_local_model: false, network_available: false }}
+        onOpenSettings={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Download Model/)).not.toBeInTheDocument();
   });
 
   it("calls onOpenSettings and onDismiss when configure button clicked", () => {

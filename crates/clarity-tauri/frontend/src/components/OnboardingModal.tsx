@@ -1,5 +1,8 @@
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { CheckCircle, AlertTriangle, XCircle, Download } from "lucide-react";
 
 export interface LaunchStatus {
   has_local_model: boolean;
@@ -15,10 +18,47 @@ interface OnboardingModalProps {
   onDismiss: () => void;
 }
 
+const RECOMMENDED_MODEL = {
+  repo: "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
+  file: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+};
+
 function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalProps) {
   const { t } = useTranslation();
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+
+  useEffect(() => {
+    const unlisteners: UnlistenFn[] = [];
+    listen<{ bytes: number; total: number | null }>("download:progress", (event) => {
+      const { bytes, total } = event.payload;
+      setDownloadProgress(total && total > 0 ? bytes / total : 0);
+    }).then((u) => unlisteners.push(u));
+    listen("download:complete", () => {
+      setDownloading(false);
+      setDownloadProgress(1);
+    }).then((u) => unlisteners.push(u));
+    return () => {
+      unlisteners.forEach((u) => u());
+    };
+  }, []);
+
+  async function handleDownload() {
+    setDownloading(true);
+    setDownloadProgress(0);
+    try {
+      await invoke("download_model", {
+        repoId: RECOMMENDED_MODEL.repo,
+        filename: RECOMMENDED_MODEL.file,
+      });
+    } catch (e) {
+      console.error("Model download failed:", e);
+      setDownloading(false);
+    }
+  }
 
   const canProceed = status.configured;
+  const canDownload = !status.has_local_model && status.network_available;
 
   return (
     <div className="onboarding-overlay">
@@ -72,8 +112,21 @@ function OnboardingModal({ status, onOpenSettings, onDismiss }: OnboardingModalP
         )}
 
         <div className="onboarding-actions">
+          {canDownload && (
+            <button
+              className="onboarding-btn primary"
+              onClick={handleDownload}
+              disabled={downloading}
+              title={RECOMMENDED_MODEL.file}
+            >
+              <Download size={14} />
+              {downloading
+                ? `${t("onboarding.downloading", "Downloading")} ${Math.round(downloadProgress * 100)}%`
+                : t("onboarding.downloadModel", "Download Model (~1GB)")}
+            </button>
+          )}
           <button
-            className="onboarding-btn primary"
+            className={`onboarding-btn ${canDownload ? "secondary" : "primary"}`}
             onClick={() => { onOpenSettings(); onDismiss(); }}
           >
             {t("onboarding.openSettings", "Configure Model")}
