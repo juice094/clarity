@@ -33,6 +33,7 @@ jobs:
         run: cargo install tauri-cli --locked
 
       - name: Build Tauri
+        working-directory: crates/clarity-tauri
         run: cargo tauri build
 
       - name: Generate self-signed certificate
