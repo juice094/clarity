@@ -15,6 +15,13 @@ export interface Session {
   messages: Message[];
 }
 
+export interface ToolItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}
+
 interface SidebarProps {
   sessions: Session[];
   activeSessionId: string;
@@ -24,6 +31,8 @@ interface SidebarProps {
   onNew: () => void;
   onDelete: (id: string) => void;
   onRename: (id: string, newTitle: string) => void;
+  tools?: ToolItem[];
+  activeTool?: string;
 }
 
 function generateId(): string {
@@ -60,6 +69,8 @@ export default function Sidebar({
   onNew,
   onDelete,
   onRename,
+  tools = [],
+  activeTool,
 }: SidebarProps) {
   const { t } = useTranslation();
   const formatRelativeTime = useFormatRelativeTime();
@@ -119,6 +130,23 @@ export default function Sidebar({
           </>
         )}
       </div>
+
+      {!collapsed && tools.length > 0 && (
+        <div className="tools-section">
+          <div className="tools-header">Tools</div>
+          {tools.map((tool) => (
+            <button
+              key={tool.id}
+              className={`tool-item ${activeTool === tool.id ? "active" : ""}`}
+              onClick={tool.onClick}
+              title={tool.label}
+            >
+              {tool.icon}
+              <span>{tool.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {!collapsed && (
         <div className="session-list">

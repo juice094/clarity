@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X } from "lucide-react";
+import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X, MoreVertical, Send, Code, FlaskConical, Wrench } from "lucide-react";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
@@ -53,6 +53,7 @@ interface SessionData {
 }
 
 function App() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -65,7 +66,7 @@ function App() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("unconfigured");
-  const [version, setVersion] = useState("");
+
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [computerPanelOpen, setComputerPanelOpen] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
@@ -77,12 +78,13 @@ function App() {
   const [networkStatus, setNetworkStatus] = useState<"offline" | "restored" | "error" | null>(null);
   const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus | null>(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    invoke<string>("get_app_version").then(setVersion);
+
     refreshStatus();
     invoke<LaunchStatus>("get_launch_status")
       .then((status) => {
@@ -435,6 +437,28 @@ function App() {
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
         onRename={handleRenameSession}
+        tools={[
+          { id: "files", label: t("app.files"), icon: <FolderOpen size={14} />, onClick: () => setFileBrowserOpen(true) },
+          { id: "tasks", label: t("app.tasks"), icon: <Zap size={14} />, onClick: () => setTaskPanelOpen(true) },
+          { id: "computer", label: t("app.computerUse"), icon: <Monitor size={14} />, onClick: () => setComputerPanelOpen(true) },
+          { id: "lsp", label: t("app.lsp"), icon: <Plug size={14} />, onClick: () => setLspPanelOpen(true) },
+          { id: "diff", label: t("app.diff"), icon: <FileText size={14} />, onClick: () => {
+            if (!diffPanelOpen) {
+              invoke<DiffHunk[]>("compute_diff", {
+                oldText: "line1\nline2\nline3\n",
+                newText: "line1\nmodified\nline3\n",
+              }).then(setDiffHunks);
+            }
+            setDiffPanelOpen(true);
+          }},
+        ]}
+        activeTool={
+          fileBrowserOpen ? "files" :
+          taskPanelOpen ? "tasks" :
+          computerPanelOpen ? "computer" :
+          lspPanelOpen ? "lsp" :
+          diffPanelOpen ? "diff" : undefined
+        }
       />
       <div className="chat-container">
         {networkStatus && (
@@ -459,64 +483,56 @@ function App() {
             <h1>Clarity</h1>
           </div>
           <div className="header-meta">
-            <span className="version">v{version}</span>
-            <span className={`status-badge ${status}`}>{status}</span>
-            <button
-              className="file-browser-toggle-btn"
-              onClick={() => setFileBrowserOpen((prev) => !prev)}
-              title="Browse files"
-              aria-label="Browse files"
-            >
-              <FolderOpen size={16} />
-            </button>
-            <button
-              className="task-toggle-btn"
-              onClick={() => setTaskPanelOpen((prev) => !prev)}
-              title="Toggle task panel"
-              aria-label="Toggle task panel"
-            >
-              <Zap size={16} />
-            </button>
-            <button
-              className="computer-toggle-btn"
-              onClick={() => setComputerPanelOpen((prev) => !prev)}
-              title="Toggle computer use panel"
-              aria-label="Toggle computer use panel"
-            >
-              <Monitor size={16} />
-            </button>
-            <button
-              className="lsp-toggle-btn"
-              onClick={() => setLspPanelOpen((prev) => !prev)}
-              title="Toggle LSP panel"
-              aria-label="Toggle LSP panel"
-            >
-              <Plug size={16} /> LSP
-            </button>
-            <button
-              className="diff-toggle-btn"
-              onClick={() => {
-                if (!diffPanelOpen) {
-                  invoke<DiffHunk[]>("compute_diff", {
-                    oldText: "line1\nline2\nline3\n",
-                    newText: "line1\nmodified\nline3\n",
-                  }).then(setDiffHunks);
-                }
-                setDiffPanelOpen((prev) => !prev);
-              }}
-              title="Toggle diff panel"
-              aria-label="Toggle diff panel"
-            >
-              <FileText size={16} />
-            </button>
+            <div
+              className={`status-dot ${status}`}
+              title={`Agent status: ${status}`}
+            />
             <button
               className="settings-toggle-btn"
               onClick={() => setSettingsPanelOpen((prev) => !prev)}
-              title="Toggle settings"
-              aria-label="Toggle settings"
+              title="Settings"
+              aria-label="Settings"
             >
               <Settings size={16} />
             </button>
+            <div className="more-menu-wrapper">
+              <button
+                className="more-menu-trigger"
+                onClick={() => setMoreMenuOpen((prev) => !prev)}
+                title="More tools"
+                aria-label="More tools"
+              >
+                <MoreVertical size={16} />
+              </button>
+              {moreMenuOpen && (
+                <div className="more-menu-dropdown">
+                  <button onClick={() => { setFileBrowserOpen(true); setMoreMenuOpen(false); }}>
+                    <FolderOpen size={14} /> File Browser
+                  </button>
+                  <button onClick={() => { setTaskPanelOpen(true); setMoreMenuOpen(false); }}>
+                    <Zap size={14} /> Tasks
+                  </button>
+                  <button onClick={() => { setComputerPanelOpen(true); setMoreMenuOpen(false); }}>
+                    <Monitor size={14} /> Computer Use
+                  </button>
+                  <button onClick={() => { setLspPanelOpen(true); setMoreMenuOpen(false); }}>
+                    <Plug size={14} /> LSP
+                  </button>
+                  <button onClick={() => {
+                    if (!diffPanelOpen) {
+                      invoke<DiffHunk[]>("compute_diff", {
+                        oldText: "line1\nline2\nline3\n",
+                        newText: "line1\nmodified\nline3\n",
+                      }).then(setDiffHunks);
+                    }
+                    setDiffPanelOpen(true);
+                    setMoreMenuOpen(false);
+                  }}>
+                    <FileText size={14} /> Diff
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -537,13 +553,35 @@ function App() {
             }}
           />
           <div className="messages">
-            {messages.length === 0 && (
-              <div className="welcome">
-                <h2>Welcome to Clarity</h2>
-                <p>
-                  Ask me anything. I can read files, run commands, and think
-                  step by step.
-                </p>
+            {messages.length === 0 && !isLoading && (
+              <div className="welcome-center">
+                <h1 className="welcome-title">{t("app.welcomeTitle")}</h1>
+                {status === "unconfigured" ? (
+                  <button
+                    className="welcome-configure-btn"
+                    onClick={() => setSettingsPanelOpen(true)}
+                  >
+                    {t("app.configureHint")}
+                  </button>
+                ) : (
+                  <>
+                    <p className="welcome-hint">{t("app.welcomeHint")}</p>
+                    <div className="quick-actions">
+                      <button onClick={() => setInput(t("app.quickProject"))}>
+                        <FolderOpen size={14} /> {t("app.quickProject")}
+                      </button>
+                      <button onClick={() => setInput(t("app.quickExplain"))}>
+                        <Code size={14} /> {t("app.quickExplain")}
+                      </button>
+                      <button onClick={() => setInput(t("app.quickTest"))}>
+                        <FlaskConical size={14} /> {t("app.quickTest")}
+                      </button>
+                      <button onClick={() => setInput(t("app.quickRefactor"))}>
+                        <Wrench size={14} /> {t("app.quickRefactor")}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {messages.map((msg, i) => (
@@ -581,17 +619,24 @@ function App() {
         </div>
 
         <div className="input-area">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            rows={1}
-            disabled={isLoading}
-          />
-          <button onClick={sendMessage} disabled={isLoading || !input.trim()}>
-            Send
-          </button>
+          <div className="chat-editor">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              rows={1}
+              disabled={isLoading}
+            />
+            <button
+              className="send-btn"
+              onClick={sendMessage}
+              disabled={isLoading || !input.trim()}
+              aria-label="Send"
+            >
+              <Send size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
