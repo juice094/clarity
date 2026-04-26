@@ -218,6 +218,66 @@ echo "=== All checks passed ==="
 
 ---
 
+## 8. 代码健康红线（Code Health Baseline）
+
+> 本节基于 v0.3.0 代码健康评估注入，作为增量开发的硬性约束。
+
+### 8.1 定量基线（不可退化）
+
+| 指标 | v0.3.0 基线 | 天花板 / 目标 | 测量命令 |
+|------|------------|--------------|---------|
+| `unwrap()` / `expect()` 密度（非测试） | ~1,069 处 | **不新增**；存量逐步 `?` 化 | `grep -rn "\.unwrap()\|\.expect(" crates/ --include="*.rs" \| grep -v "test" \| grep -v "\.smoke\."` |
+| `pub fn` doc 覆盖率 | ~92% | **≥90%** | `cargo doc --no-deps 2>&1 \| grep "missing"` |
+| clippy warning | 0 | **0** | `cargo clippy --workspace --lib --bins --tests -D warnings` |
+| `unsafe` 数量 | 1 处 | **禁止新增** | `grep -rn "unsafe" crates/ --include="*.rs" \| grep -v "test"` |
+| 测试通过率 | 515/0 | **100%** | `cargo test --workspace --lib` |
+| 前端测试 | 30/0 | **100%** | `cd crates/clarity-tauri/frontend && npm test` |
+
+### 8.2 `unwrap()` / `expect()` 分类策略
+
+存量 1,069 处按风险等级分类处理：
+
+| 类别 | 示例 | 策略 |
+|------|------|------|
+| **同步原语** | `lock().unwrap()`, `read().unwrap()`, `write().unwrap()` | 允许保留；鼓励新代码用 `tokio::sync` |
+| **初始化期** | `config.parse().unwrap()`（启动时一次） | 允许保留，但必须配 `// SAFE: 仅启动期调用，失败即 panic 是合理行为` |
+| **解析/IO 风险** | `serde_json::from_str().unwrap()`, `PathBuf` 操作 | **禁止新增**；存量逐步改为 `?` + `AgentError` |
+| **测试代码** | `#[test]` / `*.smoke.test.*` 中的 unwrap | 不受限制 |
+
+### 8.3 验收命令（每次提交前必跑）
+
+```bash
+# Rust 侧
+cargo test --workspace --lib
+cargo clippy --workspace --lib --bins --tests -D warnings
+cargo fmt --all -- --check
+cargo doc --no-deps
+
+# 前端侧
+cd crates/clarity-tauri/frontend && npm test
+
+# 安全检查（本地预检）
+cargo audit --deny unsound --deny yanked
+```
+
+### 8.4 违规处理
+
+与测试违规同等对待：
+
+| 违规类型 | 第 1 次 | 第 2 次 | 第 3 次 |
+|---------|---------|---------|---------|
+| 新增无注释 unwrap | 警告，要求补注释或改为 `?` | 暂停分配新任务，先修复 | 永久禁用该子 Agent |
+| 新增 pub fn 无 doc | 警告，要求补文档 | 暂停分配 | 永久禁用 |
+| 引入 clippy warning | 必须修复，否则不合并 | — | — |
+| 新增 unsafe | **立即阻断**，需人工审批 | — | — |
+
+### 8.5 存量债务追踪
+
+- `clarity-core` 27k 行 god crate 拆分：见 `ENGINEERING_PLAN.md` Phase D，冻结至 v0.5.0 后评估。
+- unwrap 存量清理：不设定硬 deadline，但每个功能 PR 应附带 "此 PR 减少 X 处风险类 unwrap" 的 self-review。
+
+---
+
 **生效日期**：立即生效  
-**最后更新**：2026-04-03  
+**最后更新**：2026-04-26  
 **负责人**：主控会话（人类监督）

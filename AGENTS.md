@@ -141,9 +141,35 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 已修复的历史问题见 [`CHANGELOG.md`](./CHANGELOG.md)。
 
-## Code Style
+## Code Style & Health Rules
+
+### 基础风格
 
 - Rust edition 2021, `tokio` full, `ratatui` 0.24, `axum` 0.7.
 - Prefer minimal changes; keep diffs small.
 - When modifying `agent/mod.rs` or `llm/mod.rs`, run the full test suite before committing.
 - When modifying `AgentController` or `Op`, check all callers in `clarity-tui`, `clarity-gateway`, and integration tests.
+
+### 错误处理红线
+
+- **`unwrap()` / `expect()` 新增必须注释**：非 `lock().unwrap()` / `read().unwrap()` 等同步原语场景，必须配 `// SAFE: <不变量说明>` 注释。
+- **优先 `?` 传播**：JSON 解析、路径操作、字符串解析等场景，优先使用 `?` + `AgentError` 传播，而非 `unwrap()`。
+- **同步原语例外**：`std::sync::RwLock` / `Mutex` / `RwLock` 的 `lock().unwrap()` / `read().unwrap()` / `write().unwrap()` 允许保留，但鼓励在初始化完成后转为 `tokio::sync`。
+
+### 文档与 API 契约
+
+- **`pub fn` 必须含 doc 注释**：所有 `pub` 函数/方法/结构体/枚举必须有 `///` 文档注释。当前覆盖率 ≥90%，不得低于此基线。
+- **修改 `pub` API 时同步更新文档**：包括示例代码、参数说明、`# Panics` / `# Errors` 标注。
+
+### 安全与依赖
+
+- **禁止新增 `unsafe`**：全 workspace 非测试代码当前仅 1 处 `unsafe`，已白名单化。新增 `unsafe` 必须经人工审批并附安全论证文档。
+- **外部依赖 feature-gate**：新增 crate 引入 >3 个外部依赖时，必须通过 `Cargo.toml` feature 控制，默认关闭。
+- **禁止 `TODO` / `FIXME` / `XXX` 留存**：代码中不得遗留此类标记；如确需暂存，转为 GitHub Issue 或 `docs/notes/` 文档。
+
+### 跨层变更检查单
+
+修改以下类型/枚举时，必须同步检查三处调用方：
+1. `clarity-tui` 中的事件处理与渲染逻辑
+2. `clarity-gateway` 中的 HTTP API / WebSocket 序列化
+3. `tests/integration` 中的断言匹配
