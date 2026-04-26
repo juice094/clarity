@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X, MoreVertical, Send, Code, FlaskConical, Wrench, Download } from "lucide-react";
+import { Menu, FolderOpen, Zap, Monitor, Plug, FileText, Settings, X, MoreVertical, Send, Code, FlaskConical, Wrench, Download, Terminal } from "lucide-react";
 import TaskPanel from "./components/TaskPanel";
 import ComputerUsePanel from "./components/ComputerUsePanel";
 import SettingsPanel, { type GuiSettings } from "./components/SettingsPanel";
@@ -80,9 +80,34 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<{ version: string; downloading: boolean } | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCallInfo[]>([]);
   const [compacting, setCompacting] = useState(false);
+  const [logPanelOpen, setLogPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const logsRef = useRef<{ level: string; message: string; time: string }[]>([]);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
+
+  // Console log capture for frontend log panel
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function pushLog(level: string, args: unknown[]) {
+      const message = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+      const entry = { level, message, time: new Date().toLocaleTimeString() };
+      logsRef.current = logsRef.current.slice(-199).concat(entry);
+    }
+
+    console.log = (...args: unknown[]) => { pushLog("info", args); originalLog(...args); };
+    console.warn = (...args: unknown[]) => { pushLog("warn", args); originalWarn(...args); };
+    console.error = (...args: unknown[]) => { pushLog("error", args); originalError(...args); };
+
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+    };
+  }, []);
 
   useEffect(() => {
     // Delayed update check (5s after startup)
@@ -577,6 +602,14 @@ function App() {
               title={`Agent status: ${status}`}
             />
             <button
+              className={`settings-toggle-btn ${logPanelOpen ? "active" : ""}`}
+              onClick={() => setLogPanelOpen((prev) => !prev)}
+              title="Logs"
+              aria-label="Logs"
+            >
+              <Terminal size={16} />
+            </button>
+            <button
               className="settings-toggle-btn"
               onClick={() => setSettingsPanelOpen((prev) => !prev)}
               title="Settings"
@@ -714,6 +747,34 @@ function App() {
             onClose={() => setSettingsPanelOpen(false)}
           />
         </div>
+
+        {logPanelOpen && (
+          <div className="log-panel">
+            <div className="log-panel-header">
+              <span>Frontend Logs</span>
+              <button
+                className="log-panel-close"
+                onClick={() => setLogPanelOpen(false)}
+                aria-label="Close logs"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="log-panel-body">
+              {logsRef.current.length === 0 ? (
+                <div className="log-empty">No logs yet</div>
+              ) : (
+                logsRef.current.map((log, i) => (
+                  <div key={i} className={`log-entry ${log.level}`}>
+                    <span className="log-time">{log.time}</span>
+                    <span className="log-level">{log.level}</span>
+                    <span className="log-message">{log.message}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="input-area">
           <div className="chat-editor">
