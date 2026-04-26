@@ -1894,3 +1894,95 @@ body {
   border: 1px solid var(--border-color);
   color: var(--text-primary);
 }
+
+/* ── ToolCallIndicator ────────────────────────────────────────────── */
+.tool-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-call-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.tool-call-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  transition: border-color 0.2s;
+}
+
+.tool-call-card.running {
+  border-color: var(--accent);
+}
+
+.tool-call-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.tool-call-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-call-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.tool-call-card.done .tool-call-icon {
+  color: #4ade80;
+}
+
+.tool-call-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-call-body {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.tool-call-body pre {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.tool-call-body pre:last-child {
+  margin-bottom: 0;
+}
+
+.tool-result {
+  color: #4ade80 !important;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}

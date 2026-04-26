@@ -191,6 +191,8 @@ pub async fn agent_run(query: String, state: State<'_, crate::AppState>) -> Resu
 /// Run a single-turn agent query with streaming output.
 ///
 /// Chunks are emitted via Tauri events (`agent:chunk`).
+/// Tool-call lifecycle events are emitted via `agent:tool_start`,
+/// `agent:tool_result`, and `agent:step_begin`.
 /// Completion is signaled by `agent:done`, errors by `agent:error`.
 #[tauri::command]
 pub async fn agent_run_streaming(
@@ -200,9 +202,35 @@ pub async fn agent_run_streaming(
 ) -> Result<(), String> {
     ensure_llm(&state).await?;
 
+    // Clone agent and inject a fresh Wire so tool-call events can be observed
+    // without interfering with the shared global agent state.
+    let wire = Arc::new(clarity_wire::Wire::new());
+    let agent = state.agent.clone().with_wire(wire.clone());
+
+    let app_for_tool = app.clone();
+    tokio::spawn(async move {
+        let mut wire_ui = wire.ui_side(false);
+        while let Some(msg) = wire_ui.recv().await {
+            let payload = match msg {
+                clarity_wire::WireMessage::ToolCall { id, name, arguments } => {
+                    Some(("agent:tool_start", serde_json::json!({ "id": id, "name": name, "arguments": arguments })))
+                }
+                clarity_wire::WireMessage::ToolResult { id, result } => {
+                    Some(("agent:tool_result", serde_json::json!({ "id": id, "result": result })))
+                }
+                clarity_wire::WireMessage::StepBegin { tool_name } => {
+                    Some(("agent:step_begin", serde_json::json!({ "tool_name": tool_name })))
+                }
+                _ => None,
+            };
+            if let Some((event, payload)) = payload {
+                let _ = app_for_tool.emit(event, payload);
+            }
+        }
+    });
+
     let app_for_chunk = app.clone();
-    let result = state
-        .agent
+    let result = agent
         .run_streaming(&query, move |chunk: &str| {
             let _ = app_for_chunk.emit("agent:chunk", chunk.to_string());
         })

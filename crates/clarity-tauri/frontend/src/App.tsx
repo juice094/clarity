@@ -11,6 +11,7 @@ import FileBrowser from "./components/FileBrowser";
 import DiffViewer, { type DiffHunk } from "./components/DiffViewer";
 import LspPanel from "./components/LspPanel";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ToolCallIndicator, { type ToolCallInfo } from "./components/ToolCallIndicator";
 import Sidebar, {
   createNewSession,
   type Session,
@@ -77,6 +78,7 @@ function App() {
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ version: string; downloading: boolean } | null>(null);
+  const [activeToolCalls, setActiveToolCalls] = useState<ToolCallInfo[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const taskIdRef = useRef<string | null>(null);
@@ -243,6 +245,7 @@ function App() {
     listen<string | null>("agent:done", () => {
       streamingRef.current = false;
       setIsLoading(false);
+      setActiveToolCalls([]);
       refreshStatus();
       if (taskIdRef.current) {
         invoke("complete_task", { id: taskIdRef.current, status: "completed" }).catch(console.error);
@@ -257,11 +260,35 @@ function App() {
         ...prev,
         { role: "agent", content: `Error: ${event.payload}` },
       ]);
+      setActiveToolCalls([]);
       refreshStatus();
       if (taskIdRef.current) {
         invoke("complete_task", { id: taskIdRef.current, status: "failed" }).catch(console.error);
         taskIdRef.current = null;
       }
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ id: string; name: string; arguments: Record<string, unknown> }>("agent:tool_start", (event) => {
+      setActiveToolCalls((prev) => {
+        if (prev.find((t) => t.id === event.payload.id)) return prev;
+        return [...prev, { ...event.payload, status: "running" as const }];
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ id: string; result: string }>("agent:tool_result", (event) => {
+      setActiveToolCalls((prev) =>
+        prev.map((t) =>
+          t.id === event.payload.id
+            ? { ...t, status: "done" as const, result: event.payload.result }
+            : t
+        )
+      );
+    }).then((u) => unlisteners.push(u));
+
+    listen<{ tool_name: string }>("agent:step_begin", (event) => {
+      // StepBegin is supplementary; tool_start already creates the card.
+      // We can use this to update a global "current step" indicator if needed.
+      console.log("Step begin:", event.payload.tool_name);
     }).then((u) => unlisteners.push(u));
 
     listen<{ fallback: boolean; reason: string }>("llm:fallback", (event) => {
@@ -410,6 +437,7 @@ function App() {
     const query = input.trim();
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: query }]);
+    setActiveToolCalls([]);
     setIsLoading(true);
     streamingRef.current = true;
     await refreshStatus();
@@ -632,8 +660,16 @@ function App() {
                 <div className="message-bubble">{msg.content}</div>
               </div>
             ))}
+            {isLoading && activeToolCalls.length > 0 && (
+              <div className="message agent">
+                <div className="message-bubble tool-bubble">
+                  <ToolCallIndicator toolCalls={activeToolCalls} />
+                </div>
+              </div>
+            )}
             {isLoading &&
-              messages[messages.length - 1]?.role !== "agent" && (
+              messages[messages.length - 1]?.role !== "agent" &&
+              activeToolCalls.length === 0 && (
                 <div className="message agent loading">
                   <div className="message-bubble">
                     <span className="dot-flashing" />
