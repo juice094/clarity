@@ -1,6 +1,6 @@
 # Clarity 文档中心
 
-> 项目文档索引和导航 | 当前版本：**v0.2.0** | 最后更新：2026-04-20
+> 项目文档索引和导航 | 当前版本：**v0.3.0** | 最后更新：2026-04-26
 
 ---
 
@@ -57,7 +57,10 @@
 | [`THIRD_PARTY_INTEGRATION_ROADMAP.md`](./THIRD_PARTY_INTEGRATION_ROADMAP.md) | 第三方集成路线图 | 决策者、架构师 |
 | [`SUBAGENT_PARALLEL_ANALYSIS.md`](./SUBAGENT_PARALLEL_ANALYSIS.md) | 子代理并行执行分析 | 开发者 |
 | [`PARALLEL_IMPLEMENTATION_PLAN.md`](./PARALLEL_IMPLEMENTATION_PLAN.md) | 并行实现计划 | 开发者 |
-| [`channel_roadmap.md`](./channel_roadmap.md) | Channel 系统路线图 | 开发者 |
+| [`ENGINEERING_PLAN.md`](./ENGINEERING_PLAN.md) | 工程长程计划（P0-P3 + 验收标准） | 开发者 |
+| [`FUTURE_DIRECTION.md`](./FUTURE_DIRECTION.md) | 长期技术路线图 Phase A→D | 开发者、架构师 |
+| [`PROJECT_STATUS.md`](./PROJECT_STATUS.md) | 项目现状速览（指标 + 功能清单） | 全员 |
+| [`methodology-shape-up.md`](./methodology-shape-up.md) | 工程方法论速查（Cynefin/TOC/Shape Up） | 规划者 |
 | [`server_channel_design_analysis.md`](./server_channel_design_analysis.md) | 服务端 Channel 设计分析 | 开发者 |
 
 ---
@@ -65,11 +68,12 @@
 ## 📊 项目状态速览
 
 ```
-当前阶段: v0.2.0 — GUI 核心功能交付完成，进入本地优先标杆建设
+当前阶段: v0.3.0 — 本地优先标杆已发布，进入集群语义验证准备
 代码状态: ✅ 可编译，测试全绿，0 个警告
-代码规模: ~150 个 Rust 源文件，8 个 crates + Tauri 前端
-CI 状态:   check + test + clippy + fmt + audit (5 jobs)
-安全状态: cargo audit 9 个警告（均为 Tauri 上游间接依赖，无法自主修复）
+cargo doc: ✅ 零 warning
+代码规模: ~130 个 Rust 源文件，8 个 crates + Tauri 前端
+CI 状态:   check + test + clippy + fmt + audit + release (6 jobs)
+安全状态: cargo audit 3 个警告（2 moderate, 1 low，Tauri 上游间接依赖，已配置忽略）
 
 核心能力:
   ✅ Plan Mode — 结构化计划 + 批量执行
@@ -81,9 +85,12 @@ CI 状态:   check + test + clippy + fmt + audit (5 jobs)
   ✅ 本地 LLM — Candle 原生 GGUF 推理 (Qwen2/DeepSeek-R1-Distill)
   ✅ 三层运行时 — claw / window / cli
   ✅ Gateway — REST API + WebSocket + Session Store
-  ✅ GUI 桌面端 — Chat / Session / Task / Settings / FileBrowser / Diff / ComputerUse / LSP
+  ✅ GUI 桌面端 — Chat / Session / Task / Settings / FileBrowser / Diff / ComputerUse / LSP / Onboarding / LogPanel
   ✅ 主题系统 — Dark / Light / Auto
-  ✅ 审批系统 — Interactive / Yolo / Plan 运行时热切换
+  ✅ 审批系统 — Interactive / Yolo / Plan + T_APPROVAL V1 规则引擎
+  ✅ FTUE — 首次启动引导 + 模型下载
+  ✅ 自动更新检查 — GitHub Release API
+  ✅ 本地构建 — `.msi` / `.exe` / `.nsis`
 ```
 
 ---
@@ -139,7 +146,7 @@ cargo test --workspace --lib
 |----------|----------|
 | 功能清单与状态 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) §3.2 |
 | 版本变更历史 | [`../CHANGELOG.md`](../CHANGELOG.md) |
-| 未来规划 | [`ROADMAP.md`](./ROADMAP.md) |
+| 未来规划 | [`ROADMAP.md`](./ROADMAP.md) / [`FUTURE_DIRECTION.md`](./FUTURE_DIRECTION.md) |
 | 开发环境 | [`../AGENTS.md`](../AGENTS.md) |
 | 测试数字 | [`../README.md`](../README.md) |
 

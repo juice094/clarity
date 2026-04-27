@@ -63,8 +63,11 @@ cargo run -p clarity-tauri
 | **Plan Mode** | LLM writes a structured execution plan first; runs steps in batch without per-tool interruption. |
 | **Hybrid Memory** | SQLite + BM25 + vector search. Conversations persist across sessions and auto-consolidate into long-term memory. |
 | **Multi-Entry** | Same agent core, five surfaces: TUI (`ratatui`), Desktop GUI (`Tauri 2`), Web IDE (`Axum`), Headless CLI, System Tray (`claw`). |
-| **Approval System** | Interactive / Yolo / Plan — switch at runtime from GUI or TUI. |
-| **Offline Fallback** | Network monitor probes every 30s. Offline? Auto-switch to local model. Back online? Restore cloud provider. |
+| **Approval System** | Interactive / Yolo / Plan — switch at runtime. V1 rule engine auto-approves low-risk tools. |
+| **Offline Fallback** | Network monitor probes every 30s. Auto-switch to local model when offline; restore cloud provider on reconnect. |
+| **First-Time UX** | Onboarding flow detects missing models, guides download, or prompts cloud provider setup. No manual config required. |
+| **Dynamic Prompts** | `SystemPromptBuilder` assembles context-aware prompts (approval notices, offline status, template variables). |
+| **Model Hot-Swap** | Change provider / model in Settings without restart. API keys stored locally, never leave the machine. |
 | **i18n** | Chinese / English language switching with persistent preference. |
 
 **Supported providers**: `openai`, `anthropic`, `kimi`, `kimi-code`, `deepseek`, `ollama`, `local` (Candle GGUF).
@@ -93,10 +96,11 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 524 tests, 0 failed
+cargo test --workspace --lib                          # 524 tests, 0 failed, 4 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
-cargo audit
+cargo doc --no-deps                                   # zero doc warnings
+cargo audit --deny unsound --deny yanked
 
 # Run individual components
 cargo run -p clarity-gateway
@@ -117,7 +121,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide, architect
 | [`AGENTS.md`](AGENTS.md) | AI agents / Contributors | Environment guide, known issues, coupling notes |
 | [`CHANGELOG.md`](CHANGELOG.md) | Users | Version history and migration notes |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Users / Contributors | Future direction and risk assessment |
-| [`docs/execution-plan-v2.md`](docs/execution-plan-v2.md) | Maintainers | Deep project analysis (Cynefin, TOC, Shape Up) |
+| [`docs/methodology-shape-up.md`](docs/methodology-shape-up.md) | Maintainers | Engineering methodology (Cynefin, TOC, Shape Up) |
 
 ---
 

@@ -28,6 +28,7 @@
 |--------|--------|--------|
 | 本地 LLM 深度集成 | ✅ Candle 原生 GGUF 支持（Qwen2/DeepSeek-R1-Distill） | **P0** |
 | 零依赖发行 | 单二进制 + 嵌入式模型（用户无需安装 Rust/Ollama/Python） | **P0** |
+| 集群语义验证 | Hub-Worker 调度器 + Wire 消息扩展 + 多窗口协作 | **P1** |
 | 协议草案 | 开源 Agent 通信协议（供其他 Runtime 参考实现） | **P2** |
 | 企业/团队版 | Multi-user session 支持 | **P3** |
 
@@ -36,11 +37,12 @@
 - ✅ Settings Panel 中本地模型路径配置 + 自动扫描
 - ✅ 离线模式检测（无网络时自动 fallback 到 LocalGgufProvider）
 - ✅ `clarity-tauri` 默认启用 `local-llm` feature
-- ⏸️ 单二进制打包调研（cargo-bundle / tauri-bundler）
+- ✅ 单二进制打包 + CI Release workflow（`.msi` / `.exe` / `.nsis`）已交付
+- ⏸️ 嵌入式模型自动下载（首次启动引导）
 
 ### 风险对冲
 
-若 v0.2.0 发布后 **30 天内无实质性社区反馈**（GitHub Star ≥ 50 / Issue+PR ≥ 3），阶段二冻结，资源回拨至 devbase。
+若 v0.3.0 发布后 **30 天内无实质性社区反馈**（GitHub Star ≥ 50 / Issue+PR ≥ 3），阶段二冻结，资源回拨至 devbase。
 
 ---
 
@@ -58,18 +60,30 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
-| 审批系统增强 | ⏸️ 未启动 | AI 分类器 + 规则引擎（设计完成，代码未动工） |
+| 审批系统增强 | 🔄 部分完成 | T_APPROVAL V1（规则引擎）已交付；V2（AI 分类器混合）设计中 |
 | 文件浏览器集成 | ✅ 已完成 | 工作目录树 + `@path` 引用 |
 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel |
 | WebBrowserTool | ✅ 已完成 | reqwest+scraper 轻量实现 |
 | 快捷键系统 | ⏸️ 未启动 | 全局快捷键 + Vim 键位引擎 |
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
-| 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），虚拟滚动/懒加载未启动 |
-| 桌面端打包 | ⏸️ 未启动 | CI/CD 自动构建 |
+| 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），release 跑分待执行 |
+| 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
 
-### Phase 3：Mobile 适配（3 周）
+### Phase 3：集群语义验证（4-6 周）
 
-iOS/Android 构建链、移动端 UI 适配、推送通知、生物识别审批。
+目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器。
+
+详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C。
+
+| 工作项 | 状态 | 说明 |
+|--------|------|------|
+| WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
+| Tauri ↔ BackgroundTaskManager 集成 | ⏸️ 未启动 | 替换独立 `TaskRecord` JSON |
+| Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
+| 会话层统一（SQLite） | ⏸️ 未启动 | 替代 JSON+JSONL 双系统 |
+| Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
+| 多窗口 Agent 隔离 | ⏸️ 未启动 | `AppState.agent` → `AgentPool` |
+| IPC 传输层 | ⏸️ 未启动 | TCP 回环 / UDS / Named Pipe |
 
 ### Phase 4：生态扩展（6 周）
 
@@ -83,7 +97,7 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 |--------|------|---------|
 | cargo audit 3 warnings (2 moderate, 1 low) | ⚠️ Tauri 上游间接依赖 | 已配置 `.cargo/audit.toml` 忽略；等待上游更新，不主动投入 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
-| Mobile app | ⏸️ 未启动 | Phase 3 考虑 |
+| Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
 
 ---
 
@@ -107,7 +121,7 @@ cargo audit                       # 无高危漏洞
     │
 2026-06 ── v0.4.0-beta   性能优化 + 快捷键 + 搜索增强 + 审批系统增强
     │
-2026-07 ── v0.5.0-beta   Mobile iOS/Android 适配
+2026-07 ── v0.5.0-beta   集群语义验证（Hub-Worker + 多窗口 + IPC）
     │
 2026-08 ── v0.6.0-rc     Sandbox + Plugin SDK
     │

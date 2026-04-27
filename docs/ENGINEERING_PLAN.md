@@ -14,8 +14,10 @@
 | 版本 | v0.3.0 已发布（tag pushed） |
 | Rust 测试 | 515 passed / 0 failed / 0 warning |
 | 前端测试 | 31 passed / 11 test files（smoke + 1 interaction） |
-| CI/CD | Release workflow tag-triggered，已验证通过 |
-| 本地构建 | `.exe` + `.msi` + `.nsis` 产出确认 |
+| Gateway 集成测试 | 8 tests passing |
+| CI/CD | Release workflow tag-triggered，`.msi` / `.exe` / `.nsis` 产出验证通过 |
+| 本地构建 | `cargo build --release` 产出确认 |
+| 文档健康 | `cargo doc --no-deps` 零 warning |
 | 分支卫生 | 13 个已合并 subagent 分支已清理 |
 
 ---
@@ -34,10 +36,12 @@
 
 | 项 | 说明 | 理论依据 |
 |---|------|---------|
-| 前端组件测试 | ~~Sidebar 会话切换、SettingsPanel 渲染、OnboardingModal 状态流转~~ → 11 组件 smoke tests 全覆盖 + SettingsPanel cancel 交互测试 | ✅ 已完成（基础覆盖） |
-| Gateway 集成测试 | HTTP chat completions 的边界场景（空消息、超长消息、工具调用链） | ✅ 已完成（8 tests） |
-| 性能基准 | 启动时间（Tauri cold start）、内存占用（模型加载前后） | ✅ 脚本已交付（dev 基准已采集，release 待编译） |
-| 错误处理审计 | 所有 `invoke().catch(console.error)` 是否应向前端用户暴露 | ✅ 已完成（审计报告 + 5 组件修复 + App.tsx load error） |
+| 前端组件测试 | 11 组件 smoke tests 全覆盖 + SettingsPanel cancel 交互测试 | ✅ 已完成（2026-04-26） |
+| Gateway 集成测试 | HTTP chat completions 边界场景 | ✅ 已完成（8 tests，2026-04-26） |
+| 性能基准 | 启动时间、内存占用基准脚本 | ✅ 已交付（dev 基准已采集，release 待编译，2026-04-26） |
+| 错误处理审计 | `invoke().catch(console.error)` 向前端暴露 | ✅ 已完成（6 组件修复 + 审计报告，2026-04-26） |
+| `cargo doc` warnings | 13 处 → 0 | ✅ 已清零（2026-04-26） |
+| unwrap 清理 | 11 处高风险 `?` 化 + 8 处 SAFETY 注释 | ✅ 已完成（2026-04-26） |
 
 ### P2 · 功能推进（v0.4.0-alpha，2-4 周）
 
@@ -88,7 +92,7 @@ Week 5-6: v0.4.0-alpha — 架构扩展
 
 Month 3+: v0.5.0-beta — 生态准备
   ├─ 条件触发：v0.4.0 发布 30 天后评估社区反馈
-  ├─ Mobile 适配解冻评估
+  ├─ 集群语义验证验收（多窗口/IPC/AgentPool）→ 见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md)
   └─ Plugin SDK 技术选型（WASM vs Rust dylib）
 ```
 
@@ -101,7 +105,7 @@ Month 3+: v0.5.0-beta — 生态准备
 cargo test --workspace --lib
 cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo fmt --all -- --check
-cargo audit --deny unsound --deny yanked
+cargo audit --deny unsound --deny yanked  # CI 实际配置；本地可追加 `--deny warnings` 做严格检查
 cargo doc --no-deps
 
 # 前端

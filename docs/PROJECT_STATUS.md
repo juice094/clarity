@@ -1,6 +1,7 @@
 # Clarity 项目现状报告
 
-> 版本：v0.2.1 | 日期：2026-04-26 | 基于实机测试与代码审计
+> 版本：v0.3.0 | 日期：2026-04-26 | 基于实机测试与代码审计  
+> 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md)
 
 ---
 
@@ -12,8 +13,8 @@
 | **单元测试** | **524 passed, 0 failed, 4 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` | ✅ 已集成 CI |
-| **代码规模** | ~125 个 Rust 源文件 | 持续增长 |
-| **Workspace Crates** | 6 + 1 集成测试 crate | 结构稳定 |
+| **代码规模** | ~130 个 Rust 源文件 | 持续增长 |
+| **Workspace Crates** | 8 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
 - `clarity-core`: 381 tests passed, 4 ignored
@@ -22,11 +23,14 @@
 - `clarity-wire`: 8 tests passed
 - `clarity-tui`: 6 tests passed
 - `clarity-claw`: 6 tests passed
+- `clarity-headless`: 1 test passed
 - `clarity-integration-tests`: 0 tests（空骨架）
+
+**前端测试**：31 passed / 11 test files（smoke + interaction）
 
 ---
 
-## 2. 已完成功能（v0.1.1）
+## 2. 已完成功能（v0.3.0）
 
 ### 2.1 核心引擎（clarity-core）
 
@@ -34,8 +38,8 @@
 ✅ Agent Loop — ReAct 循环、工具调用、多轮对话、审批系统
 ✅ Plan Mode — 结构化 JSON 计划 + 批量执行，绕过逐工具审批
 ✅ 并行子代理 — run_parallel() + BackgroundTaskManager 并发调度
-✅ 三层审批 — Interactive / Yolo / Plan
-✅ 上下文压缩 — CompactionService 自动防止 Token 爆炸
+✅ 三层审批 — Interactive / Yolo / Plan + T_APPROVAL V1 规则引擎
+✅ 上下文压缩 — CompactionService 自动防止 Token 爆炸（Tier-1 截断 + Tier-2 摘要）
 ✅ 17+ 内置工具 — 文件读写编辑、Shell、搜索、Web、MCP、任务管理、团队管理、推送通知
 ✅ Daemon 运行时 — 跨平台 PID lockfile + graceful shutdown
 ✅ AutoDream — 夜间记忆整合调度器（cron 触发 + timeout 保护）
@@ -50,6 +54,8 @@
 ✅ Wire 事件总线 — SPMC 跨模块通信
 ✅ LSP 代理 — rust-analyzer 等语言服务器进程管理 + JSON-RPC 调试
 ✅ Computer Use — 远程桌面控制面板（截图/点击/输入/滚动）
+✅ 动态系统提示 — SystemPromptBuilder 条件组装
+✅ 模型热切换 — Settings Panel 中 provider/model 切换无需重启
 ```
 
 ### 2.2 记忆系统（clarity-memory）
@@ -101,6 +107,9 @@
 ✅ Computer Use Panel — 远程桌面控制
 ✅ 离线状态 banner — 自动 fallback / 恢复提示
 ✅ i18n — 中文/英文切换，Settings Panel 语言选择 + 持久化
+✅ OnboardingModal — 首次启动引导（FTUE）
+✅ 日志面板 — 前端错误与运行时日志可视化
+✅ HuggingFace 模型下载 — GUI 引导 + 进度显示
 ```
 
 ---
@@ -128,8 +137,9 @@
 | `test` | ✅ | `cargo test --workspace --lib` |
 | `clippy` | ✅ | `cargo clippy --workspace --lib --bins --tests -- -D warnings` |
 | `fmt` | ✅ | `cargo fmt --all -- --check` |
-| `audit` | ✅ | `cargo audit --deny warnings` |
+| `audit` | ✅ | `cargo audit --deny unsound --deny yanked` |
 | `coverage` | ✅ | `cargo tarpaulin --workspace --lib --out Xml` |
+| `release` | ✅ | Tag-triggered GitHub Actions workflow，产出 `.msi` / `.exe` / `.nsis` |
 
 **平台矩阵**：ubuntu-latest, windows-latest, macos-latest
 
@@ -143,86 +153,27 @@
 | MCP HTTP E2E 验证 | ✅ 已解决 | Axum 最小 server E2E 测试通过（`8db4db3`） | — |
 | MCP SSE Transport | ✅ 已解决 | 完整 SSE 协议实现（endpoint discovery + reconnection + handshake），注释已同步 | — |
 | Gateway handler 单元测试 | ✅ 已解决 | mock 测试已覆盖（v0.1.1） | — |
-| 文档过时 | ✅ 已解决 | docs 目录已全面整理（v0.1.1） | — |
+| 文档过时 | 🔄 持续 | 本次审计已清理 3 份过时计划文件 | 见 [`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) |
+| unwrap() 密度 | 🔄 持续 | 171 总量 / ~39 真实风险；11 处已清理，8 处已注释 | 冻结新增，渐进清理 |
+| cargo audit 上游漏洞 | ⚠️ 监控 | 3 处 Tauri 间接依赖（2 moderate, 1 low） | 已配置 `.cargo/audit.toml` 忽略；等待上游更新 |
 
 ---
 
 ## 6. 与竞品对比（简要）
 
-| 维度 | Clarity (v0.2.0-dev) | cc-haha | OpenClaw | zeroclaw | codex-rs |
-|------|----------------------|---------|----------|----------|----------|
+| 维度 | Clarity (v0.3.0) | cc-haha | OpenClaw | zeroclaw | codex-rs |
+|------|------------------|---------|----------|----------|----------|
 | **技术栈** | Rust (Tauri 2 UI) | Bun/TS (Tauri UI) | Node.js | Rust | Rust |
+| **本地 LLM (零依赖)** | ✅ Candle GGUF | ✅ (Ollama 可选) | ❌ | ✅ | ✅ |
+| **离线模式** | ✅ 自动 fallback | ⚠️ | ❌ | ❌ | ❌ |
 | **Task/Team 工具暴露** | ✅ TaskCreate + TeamCreate/Delete/List + PushNotify | ✅ | ❌ | ❌ | ❌ |
 | **Plan Mode** | ✅ | ✅ (5 阶段) | ❌ | ❌ | ❌ |
 | **并行子代理** | ✅ | ✅ (Coordinator) | ⚠️ | ❌ | ❌ |
 | **MCP** | ✅ stdio/HTTP/SSE | ✅ + OAuth + Channel 协议 | ⚠️ | ❌ | ✅ |
+| **审批系统** | ✅ 三层 + V1 规则引擎 | ✅ | ❌ | ❌ | ❌ |
+| **预构建安装包** | ✅ `.msi` + `.exe` | ❌ | ❌ | ❌ | ❌ |
 | **Voice** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **Desktop GUI** | ✅ Tauri 2 + React | ✅ Tauri 2 + React | ❌ | ❌ | ❌ |
-| **多标签** | 🔄 进行中 | ✅ | ❌ | ❌ | ❌ |
-| **LSP** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Vim** | 🔄 计划中 | ✅ | ❌ | ❌ | ❌ |
-| **Sandbox** | 🔄 计划中 | ✅ OS-level | ❌ | ❌ | ✅ Docker |
-| **Plugin SDK** | 🔄 计划中 | ✅ | ✅ | ❌ | ❌ |
-| **审批系统** | ✅ 3 层 | ✅ 7 层 + AI 分类器 | ❌ | ❌ | ❌ |
-| **Memory 深度** | ✅ SQLite + BM25 + 四级编译 | ⚠️ 文件目录 | ❌ | ❌ | ❌ |
-| **性能** | ✅ 原生二进制 ~40MB | ⚠️ Bun runtime | ⚠️ Node.js | ✅ <5MB | ✅ |
-| **代码合法性** | ✅ 自研 | ⚠️ 泄露源码补丁 | ✅ | ✅ | ✅ |
-
-**定位差异**：
-- **Clarity** = 开发者的 AI 标准运行时（Rust 全栈 + Plan Mode + Memory 深度）
-- **cc-haha** = 个人 AI 编码助手（功能全面但架构沉重，法律风险）
-- **OpenClaw** = 个人 AI 助手（Channels + Voice + Canvas + 移动端）
-- **zeroclaw** = 极简 Rust AI 助手（极低资源）
-- **codex-rs** = 编码助手（沙箱 + MCP）
 
 ---
 
-## 7. 下一步（Phase 3）
-
-### 7.1 已完成（v0.1.2 交付）
-
-| 工作项 | 状态 | Commit |
-|--------|------|--------|
-| Channels Webhook E2E 验证 | ✅ 已完成 | `dedb6bd` — 18 个集成测试覆盖飞书/钉钉/企业微信/通用端点 |
-| 性能基准测试（Criterion） | ✅ 已完成 | `dedb6bd` — ToolRegistry 31.5µs / AgentPrompt 89.2µs / SkillContext 158ns |
-| MCP SSE Transport | ✅ 已完成 | 完整实现（endpoint discovery + reconnection + handshake） |
-| Channels 原型（Telegram/Discord/Webhook） | ✅ 已实现 | Gateway 已集成 Telegram、Discord、Webhook 三渠道 |
-| 本地模型支持（Candle GGUF） | ✅ 已实现 | `LocalGgufProvider` 原生推理，无需 Ollama；E2E 测试通过 |
-| **MemoryTicker 版本统一** | ✅ 已完成 | `5514209` — 删除 `clarity-core` 简化版，全项目统一为 `clarity-memory::SharedMemoryTicker`（session 隔离 + compile callback + 防重入） |
-| **Settings Panel 本地模型配置** | ✅ 已完成 | `1b2ded2` — `get_local_models()` 扫描 `~/models/` + `CLARITY_LOCAL_MODEL_PATH`；前端增加 `Local (GGUF)` provider 选择器 + 路径显示 + 无模型提示 |
-| **Gateway Memory 激活** | ✅ 已完成 | `5514209` — `create_agent()` 接入 `PersistentMemoryStore` + `SharedMemoryTicker`，默认 5 turns 触发 |
-| **MemoryCompiler 四级编译管道** | ✅ 已完成 | `5514209` — today→week→longterm→facts，LLM 自动摘要 + 事实提取 + 去重 |
-| **Slack 渠道** | ✅ 已完成 | `4a3d2e0` — Web API 实现（长消息分块、HMAC-SHA256 签名验证、Events API challenge） |
-| **统一配置系统（TOML）** | ✅ 已完成 | `cfcc24c` — 三层配置加载 + `export_to_env()` + Gateway/TUI 双端接入，向后兼容 |
-| **UI/UX 全面重构** | ✅ 已完成 | `b95d26b` — Header 精简 / Chat Input 居中卡片 / Welcome 页 / Sidebar Tools |
-| **Tauri 自动更新** | ✅ 已完成 | `3f270d8` — `tauri-plugin-updater` + 前端检测 banner + Release workflow 签名 + `latest.json` |
-| **CI audit 策略调整** | ✅ 已完成 | `b9e45b6` — `--deny unsound --deny yanked` + `.cargo/audit.toml` 忽略已评估上游警告 |
-
-### 7.2 进行中 / 待启动
-
-| 优先级 | 工作项 | 工作量 | 说明 | Track |
-|--------|--------|--------|------|-------|
-| P2 | clarity-tauri Desktop GUI | ✅ 已完成 | Chat/Session/Task/Settings/FileBrowser/Diff/ComputerUse/LSP；离线 fallback + 预加载 + Settings 缓存 + 自动更新 | — |
-| P2 | 审批系统增强 | 🔄 部分完成 | 规则引擎 V1 已完成（RiskLevel + RuleEngine + 执行集成）；AI 分类器 V2 待启动 | — |
-| P2 | T_FTUE 首次体验 | ✅ 已完成 | `get_launch_status()` + OnboardingModal + i18n (en/zh) | — |
-| P2 | T_DYNAMIC_PROMPT | ✅ 已完成 | `SystemPromptBuilder` + `PromptComponent` 条件注入 | — |
-| P2 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel（rust-analyzer 等进程管理 + JSON-RPC 调试） | — |
-| P3 | Bridge 远程控制 | 1-2 周 | 跨设备 Agent 远程调度 | — |
-| P3 | Vector Search（sqlite-vec） | 1-2 周 | 语义向量检索替换 TF-IDF | — |
-| P3 | WebBrowserTool | ✅ 已完成 | 轻量级 reqwest+scraper 实现（navigate/get_text/get_html） | — |
-| P3 | Vim 集成 | 1-2 周 | Vim 键位引擎 | — |
-| P3 | Sandbox | 1-2 周 | landlock (Linux) + Windows 沙箱 API | — |
-| P3 | Plugin SDK | 2-3 周 | Rust dylib 插件系统 | — |
-
-### 7.3 验收发现的问题（待修复）
-
-| 优先级 | 问题 | 位置 | 根因 | 计划 |
-|--------|------|------|------|------|
-| P1 | OnboardingModal "配置模型" 点击后不关闭 | `OnboardingModal.tsx` | 按钮仅调用 `onOpenSettings`，未调用 `onDismiss` | 单行修复 |
-| P1 | Settings Provider/模型下拉框无数据 | `SettingsPanel.tsx` + 后端 | `fetchMeta` 调用可能失败被静默 catch | 前端 fallback + 后端检查 |
-| P2 | 多面板同时打开布局拥挤 | `App.css` | 无互斥/折叠机制，聊天区缺 `min-width` | 互斥逻辑 + CSS 保护 |
-| P2 | LSP Servers `invoke undefined` 报错 | `LspPanel.tsx` | Dev 模式下 Tauri IPC 偶发未注入 | 存在性检查 + 降级提示 |
-
----
-
-*本报告随版本更新。最新状态见 [`../CHANGELOG.md`](../CHANGELOG.md)。*
+*本文件随版本发布同步更新。上次全面审计：2026-04-26。*
