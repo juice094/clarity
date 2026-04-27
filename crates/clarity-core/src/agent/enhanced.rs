@@ -257,7 +257,9 @@ impl ErrorRecovery {
                     }
                 }
 
-                Err(last_error.expect("Last error should exist"))
+                Err(last_error.unwrap_or_else(|| {
+                    AgentError::Llm("Operation failed with no retry attempts captured".into())
+                }))
             }
             RecoveryStrategy::Fail => operation().await,
             _ => operation().await,

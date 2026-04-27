@@ -118,12 +118,9 @@ impl WebhookChannel {
     /// 验证请求认证
     fn verify_auth(&self, headers: &HeaderMap) -> Result<(), ChannelError> {
         // 如果没有配置认证，允许所有请求
-        if self.auth_header.is_none() || self.auth_token.is_none() {
+        let (Some(header_name), Some(expected_token)) = (&self.auth_header, &self.auth_token) else {
             return Ok(());
-        }
-
-        let header_name = self.auth_header.as_ref().unwrap();
-        let expected_token = self.auth_token.as_ref().unwrap();
+        };
 
         // 从请求头中获取认证信息
         let provided_token = headers

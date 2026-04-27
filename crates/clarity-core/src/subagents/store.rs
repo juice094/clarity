@@ -60,6 +60,7 @@ impl SubagentStore {
     pub fn create(&mut self, agent_id: String, agent_type: String) -> &SubagentState {
         let state = SubagentState::new(agent_id.clone(), agent_type);
         self.in_memory.insert(agent_id.clone(), state);
+        // SAFE: state was just inserted with the same agent_id on the line above.
         self.in_memory.get(&agent_id).unwrap()
     }
 
