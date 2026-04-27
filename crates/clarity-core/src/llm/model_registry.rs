@@ -235,7 +235,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 alias: "kimi-k2".into(),
                 provider: "kimi-code".into(),
-                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into()),
+                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into()),
                 temperature: None,
                 max_tokens: None,
             });
@@ -252,7 +252,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 alias: "kimi-k2".into(),
                 provider: "kimi".into(),
-                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into()),
+                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into()),
                 temperature: None,
                 max_tokens: None,
             });

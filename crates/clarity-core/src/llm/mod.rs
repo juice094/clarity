@@ -485,7 +485,7 @@ impl KimiLlm {
         let base_url =
             env::var("KIMI_BASE_URL").unwrap_or_else(|_| "https://api.moonshot.ai/v1".into());
 
-        let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
+        let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -543,7 +543,7 @@ impl KimiCodeLlm {
         let base_url = env::var("KIMI_CODE_BASE_URL")
             .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
 
-        let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
+        let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
 
         Ok(Self::new(api_key, base_url, model))
     }
@@ -895,7 +895,7 @@ impl LlmFactory {
             if kimi_key.starts_with("sk-kimi-") {
                 let base_url = env::var("KIMI_BASE_URL")
                     .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
-                let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2-07132k".into());
+                let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
                 return Ok(Box::new(KimiCodeLlm::new(kimi_key, base_url, model)));
             }
             return Ok(Box::new(KimiLlm::from_env()?));
@@ -1031,13 +1031,13 @@ impl LlmFactory {
                     Ok(Box::new(KimiCodeLlm::new(
                         api_key,
                         "https://api.kimi.com/coding/v1",
-                        if model.is_empty() { "kimi-k2-07132k" } else { model },
+                        if model.is_empty() { "kimi-k2.6" } else { model },
                     )))
                 } else {
                     Ok(Box::new(KimiLlm::new(
                         api_key,
                         "https://api.moonshot.ai/v1",
-                        if model.is_empty() { "kimi-k2-07132k" } else { model },
+                        if model.is_empty() { "kimi-k2.6" } else { model },
                     )))
                 }
             }
