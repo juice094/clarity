@@ -85,7 +85,7 @@ fn setup_fonts(ctx: &egui::Context) {
                 egui::FontData::from_owned(bytes).into(),
             );
             // Append CJK font as fallback (not first), so egui's built-in fonts
-            // handle Latin symbols (×, ✕, arrows) and CJK font handles Chinese.
+            // handle Latin symbols (×, ×, arrows) and CJK font handles Chinese.
             fonts.families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
@@ -373,6 +373,11 @@ impl App {
     }
     fn new_session(&mut self) {
         self.save_current_session();
+        // Lazy creation: if an empty session already exists, focus it instead of creating another.
+        if let Some(existing) = self.sessions.iter().find(|s| s.messages.is_empty() && s.title == "New Chat") {
+            self.active_session_id = existing.id.clone();
+            return;
+        }
         let s = new_session(); let id = s.id.clone();
         self.sessions.push(s); self.active_session_id = id;
     }
@@ -528,19 +533,22 @@ impl eframe::App for App {
             }
         }
 
+        // ESC closes settings modal
+        if self.settings_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.settings_open = false;
+        }
+
         // Keyboard shortcuts (only when settings modal is closed)
         if !self.settings_open && !self.is_loading {
-            // Enter sends; Shift+Enter lets TextEdit insert newline
+            // Enter (no modifiers) sends message
             if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
                 if !self.input.trim().is_empty() || !self.attachments.is_empty() {
                     self.send();
                 }
             }
-            // Ctrl+Enter also sends (compatibility)
+            // Ctrl+Enter inserts newline into input
             if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
-                if !self.input.trim().is_empty() || !self.attachments.is_empty() {
-                    self.send();
-                }
+                self.input.push('\n');
             }
             if ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl) {
                 self.new_session();
@@ -640,7 +648,7 @@ impl eframe::App for App {
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new("Preview").size(11.0).color(self.theme.text_dim).weak());
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.small_button("✕").clicked() { self.preview_file = None; }
+                                if ui.small_button("×").clicked() { self.preview_file = None; }
                             });
                         });
                         ui.label(egui::RichText::new(&preview_name).size(12.0).color(self.theme.text).monospace());
@@ -683,7 +691,7 @@ impl eframe::App for App {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Tasks").size(16.0).strong().color(self.theme.text));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("✕").clicked() { self.task_panel_open = false; }
+                            if ui.button("×").clicked() { self.task_panel_open = false; }
                         });
                     });
                     ui.add_space(8.0);
@@ -744,7 +752,7 @@ impl eframe::App for App {
                 if let Some(banner) = banner_text {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new(&banner).size(12.0).color(self.theme.status_busy));
-                        if ui.button("✕").clicked() { self.network_banner = None; }
+                        if ui.button("×").clicked() { self.network_banner = None; }
                     });
                     ui.separator();
                 }
@@ -853,7 +861,7 @@ impl eframe::App for App {
                                     ui.horizontal(|ui| {
                                         ui.label(egui::RichText::new("📎").size(11.0));
                                         ui.label(egui::RichText::new(&att.name).size(11.0).color(self.theme.text).monospace());
-                                        if ui.small_button("✕").clicked() { to_remove = Some(i); }
+                                        if ui.small_button("×").clicked() { to_remove = Some(i); }
                                     });
                                 });
                         }
@@ -1139,7 +1147,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 700.0])
-            .with_min_inner_size([600.0, 400.0]),
+            .with_min_inner_size([900.0, 600.0]),
         ..Default::default()
     };
 

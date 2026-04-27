@@ -139,7 +139,7 @@ impl Theme {
             // Focus
             focus_ring: hex_alpha("#8b5cf6", 0.20),
             focus_glow: hex_alpha("#8b5cf6", 0.15),
-            selection: hex_alpha("#a78bfa", 0.35),
+            selection: hex_alpha("#ffffff", 0.40),
 
             // Fonts
             font_body: "Inter".into(),
@@ -205,7 +205,7 @@ impl Theme {
 
             focus_ring: hex_alpha("#8b5cf6", 0.20),
             focus_glow: hex_alpha("#8b5cf6", 0.10),
-            selection: hex_alpha("#7c3aed", 0.25),
+            selection: hex_alpha("#000000", 0.30),
 
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),

@@ -54,17 +54,32 @@ pub fn render_file_tree(
                 render_file_tree(ui, &full_path, theme, depth + 1, on_file_click);
             });
         } else {
-            let response = ui.horizontal(|ui| {
-                ui.add_space(4.0 * depth as f32);
-                ui.label(
-                    egui::RichText::new(format!("📄 {}", name))
-                        .size(12.0)
-                        .color(theme.text_dim),
-                )
-            }).response.interact(egui::Sense::click());
+            let full_width = ui.available_width();
+            let row_height = 20.0;
+            let row_rect = ui.available_rect_before_wrap();
+            let row_rect = egui::Rect::from_min_size(
+                row_rect.min,
+                egui::vec2(full_width, row_height),
+            );
+            let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
+            if ui.is_rect_visible(row_rect) {
+                let painter = ui.painter_at(row_rect);
+                let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 4.0, 3.0);
+                painter.text(
+                    text_pos,
+                    egui::Align2::LEFT_TOP,
+                    format!("📄 {}", name),
+                    egui::FontId::new(12.0, egui::FontFamily::Proportional),
+                    theme.text_dim,
+                );
+                if response.hovered() {
+                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover);
+                }
+            }
             if response.clicked() {
                 on_file_click(&full_path);
             }
+            ui.allocate_space(egui::vec2(full_width, row_height));
         }
     }
 }
