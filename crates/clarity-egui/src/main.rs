@@ -546,10 +546,8 @@ impl eframe::App for App {
                     self.send();
                 }
             }
-            // Ctrl+Enter inserts newline into input
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
-                self.input.push('\n');
-            }
+            // Shift+Enter inserts newline (handled by TextEdit naturally when not consumed)
+            // No explicit code needed — consume_key(Modifiers::NONE) only intercepts plain Enter
             if ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl) {
                 self.new_session();
             }
@@ -624,7 +622,7 @@ impl eframe::App for App {
                     let mut clicked_file: Option<std::path::PathBuf> = None;
                     egui::ScrollArea::vertical()
                         .id_salt("file_tree_scroll")
-                        .max_height(260.0)
+                        .max_height(360.0)
                         .show(ui, |ui| {
                             if let Ok(cwd) = std::env::current_dir() {
                                 ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
@@ -653,8 +651,9 @@ impl eframe::App for App {
                         });
                         ui.label(egui::RichText::new(&preview_name).size(12.0).color(self.theme.text).monospace());
                         ui.add_space(4.0);
-                        let mut preview_text = if preview_content.len() > 2000 {
-                            format!("{}…\n\n[Preview truncated: {} total characters]", &preview_content[..2000], preview_content.len())
+                        let mut preview_text = if preview_content.chars().count() > 2000 {
+                            let truncated: String = preview_content.chars().take(2000).collect();
+                            format!("{}…\n\n[Preview truncated: {} total characters]", truncated, preview_content.len())
                         } else {
                             preview_content
                         };
@@ -931,7 +930,7 @@ impl eframe::App for App {
             egui::Window::new("MCP Servers")
                 .open(&mut open)
                 .collapsible(false)
-                .resizable(true)
+                .resizable(false)
                 .default_size([400.0, 500.0])
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)))
