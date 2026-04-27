@@ -66,8 +66,8 @@ App {
 
 | 边界 | 风险等级 | 说明 |
 |------|---------|------|
-| Markdown / 代码块渲染 | 🔴 高 | egui 无原生 markdown，需第三方库或自研 parser + `ui.code()` |
-| 长消息列表（>1000条）性能 | 🟡 中 | `ScrollArea` 默认渲染全部项，需 `Table` 或虚拟滚动 |
+| Markdown / 代码块渲染 | 🟢 低 | `egui_commonmark` 生产级（CommonMark+GFM+syntect 高亮），Ferrite 900⭐验证 |
+| 长消息列表（>1000条）性能 | 🟡 低~中 | `egui_virtual_list` 专为聊天设计（变高项+顶部追加锚定），需接入 |
 | 真实 LLM 后端连接 | 🟡 中 | 需 `reqwest`/`tokio` 集成，Gateway 已有 HTTP API |
 | 富文本（链接、按钮内嵌） | 🟡 中 | `RichText` 有限，复杂排版需 `ui.horizontal_wrapped` |
 | CJK/Emoji 字体回退 | 🟡 中 | `default_fonts` feature 覆盖基础，复杂回退待验证 |
@@ -87,10 +87,11 @@ App {
 ### 但："成为主力栈" ≠ "2 周内可聊天"
 
 egui 要成为 Clarity 的**主力**前端栈，仍需验证：
-- Markdown 渲染方案选型（`egui-markdown`? `pulldown-cmark` + 自定义 widget?）
-- 长消息列表虚拟滚动性能基准
-- 与 `clarity-gateway` 的真实集成（WebSocket / HTTP SSE）
-- 跨平台打包一致性（Windows .exe / 未来 Linux）
+- ✅ Markdown 渲染：`egui_commonmark` 已覆盖需求（见下"生态情报更新"）
+- ✅ 长消息列表：`egui_virtual_list` 已有聊天场景专用方案
+- ⏳ 与 `clarity-gateway` 的真实集成（WebSocket / HTTP SSE）
+- ⏳ 跨平台打包一致性（Windows .exe / 未来 Linux）
+- ⚠️ 调试摩擦：无 Web Inspector，UI 错位需靠日志/AI 辅助
 
 ### 建议路径
 
@@ -101,6 +102,28 @@ Week 2: Markdown 渲染 POC + 长列表性能基准
 
 若两周内上述三项均达标 → **启动 `clarity-egui` crate 作为 Tauri 替代方案**
 若任一失败 → **维持 Tauri 冻结状态，egui 降级为 side project**
+
+## 生态情报更新（2026-04-27）
+
+### Markdown 渲染 — 风险降级：🔴→🟢
+
+- **`egui_commonmark` v0.23.0**：生产级，CommonMark + GFM（表格、任务列表、删除线、脚注）、代码块语法高亮（`syntect` 或 primitive 模式）、数学公式回调
+- **Ferrite**：900+⭐ 纯 egui WYSIWYG 编辑器，验证了复杂 markdown + 实时预览 + 语法高亮 + Mermaid 的可行性
+- 编译期优化可选：`macros` feature 用 `commonmark!` 在编译期解析，运行时零开销
+
+### 长消息列表 — 风险降级：🟡→🟡(低~中)
+
+- **`egui_virtual_list`**：专为聊天场景设计
+  - 变高项自适应（懒计算+缓存每项高度）
+  - 顶部追加不跳滚动（加载历史记录时视角锚定）
+  - 10万+ 项任意跳转建议回退原生 `ScrollArea`
+- egui 原生开销：1–2 ms/帧（普通 GUI），虚拟化后长列表回归此区间
+
+### 真正成本（非技术障碍）
+
+1. **调试摩擦**：无 Web Inspector，UI 错位靠日志输出或 AI 辅助
+2. **异步资源管理**：网络图片需显式 `fetch` feature + 手动异步加载
+3. **syntect 体积**：语法高亮主题文件约 1–3MB，敏感时可换 primitive 模式
 
 ## 关联实验
 
