@@ -36,19 +36,18 @@ Built in Rust. The core engine and CLI tools ship as single binaries with **no e
 git clone https://github.com/juice094/clarity.git && cd clarity
 
 # 2. Install a binary (pick one)
+cargo install --path crates/clarity-egui      # Desktop GUI — zero runtime deps, pure Rust
 cargo install --path crates/clarity-tui       # Terminal UI — zero runtime deps
 cargo install --path crates/clarity-gateway   # Web IDE — zero runtime deps
 cargo install --path crates/clarity-headless  # CLI for scripts — zero runtime deps
 
 # 3. Run
-clarity-tui
+clarity-egui
 ```
 
-**Desktop GUI** (requires Node.js for build; runtime needs system WebView):
+**Desktop GUI** (eframe + egui, pure Rust — no Node.js, no WebView):
 ```bash
-cd crates/clarity-tauri/frontend && npm install && npm run dev
-# In another terminal:
-cargo run -p clarity-tauri
+cargo run -p clarity-egui
 ```
 
 **No API key? No problem.** Place a `.gguf` model in `~/models/` and select **Local (GGUF)** in Settings. Clarity falls back to local inference automatically when offline.
@@ -81,7 +80,8 @@ crates/
 ├── clarity-core      # Agent loop, tools, memory, MCP, subagents
 ├── clarity-memory    # BM25 + vector hybrid search, chunking, compilation
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
-├── clarity-tauri     # Tauri 2 Desktop GUI (React + i18n)
+├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
+├── clarity-tauri     # Tauri 2 Desktop GUI (React) — frozen, no new features
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
 ├── clarity-wire      # UI↔Agent event bus (SPMC)
@@ -103,6 +103,7 @@ cargo doc --no-deps                                   # zero doc warnings
 cargo audit --deny unsound --deny yanked
 
 # Run individual components
+cargo run -p clarity-egui
 cargo run -p clarity-gateway
 cargo run -p clarity-tui
 cargo run -p clarity-claw

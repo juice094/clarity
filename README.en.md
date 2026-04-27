@@ -26,7 +26,8 @@ crates/
 ├── clarity-core      # Agent loop, tools, memory, MCP, subagents
 ├── clarity-memory    # BM25 + vector hybrid search, chunking
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
-├── clarity-tauri     # Tauri 2 Desktop + Mobile GUI
+├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
+├── clarity-tauri     # Tauri 2 Desktop GUI — frozen, no new features
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
 ├── clarity-wire      # UI↔Agent event bus
@@ -39,9 +40,13 @@ crates/
 
 ```bash
 # Install
+cargo install --path crates/clarity-egui
 cargo install --path crates/clarity-tui
 cargo install --path crates/clarity-gateway
 cargo install --path crates/clarity-headless
+
+# Run Desktop GUI (pure Rust, zero Node.js deps)
+cargo run --package clarity-egui
 
 # Run TUI
 cargo run --package clarity-tui

@@ -1,4 +1,5 @@
 use crate::settings::GuiSettings;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -17,12 +18,16 @@ pub struct AppState {
     pub prewarm_error: Mutex<Option<String>>,
     #[allow(dead_code)]
     pub initialized: AtomicBool,
+    pub task_store: clarity_core::background::TaskStore,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let registry = clarity_core::ToolRegistry::with_builtin_tools();
         let agent = clarity_core::Agent::new(registry);
+        let task_dir = dirs::data_dir()
+            .map(|d| d.join("clarity").join("bg_tasks"))
+            .unwrap_or_else(|| PathBuf::from("."));
         Self {
             agent,
             llm_binding: Mutex::new(None),
@@ -31,6 +36,7 @@ impl Default for AppState {
             cached_settings: Mutex::new(GuiSettings::load()),
             prewarm_error: Mutex::new(None),
             initialized: AtomicBool::new(false),
+            task_store: clarity_core::background::TaskStore::new(task_dir),
         }
     }
 }
