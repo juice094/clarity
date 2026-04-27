@@ -178,6 +178,8 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Meta-Cognitive Rules
 
+> **性质声明**：本节规则为**工程启发式（heuristics）**，非学术理论框架。部分术语受 Popper 证伪主义、Taleb 叙事谬误、Staw 承诺升级、Trope & Liberman 解释水平理论等概念启发，但仅为类比注释，不赋予规则合法性。
+
 ### 约束型叙事禁令
 
 项目文档（AGENTS.md / ENGINEERING_PLAN.md / ROADMAP.md / FUTURE_DIRECTION.md）**禁止写入**以下叙事：
@@ -190,7 +192,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ### 叙事审计协议
 
-每季度执行一次叙事审计：
+定期执行叙事审计（建议每 3–6 个月，无硬性理论支撑）：
 1. 检查活跃记忆/文档中是否有叙事被连续调用 3 次以上而未遭遇反例
 2. 若发现约束型叙事，注入反叙事扰动（列出对立面证据）
 3. **工程参数优先**：内存占用、延迟、binary size、测试通过率、CI 稳定性优先于任何叙事
