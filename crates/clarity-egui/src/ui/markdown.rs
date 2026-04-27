@@ -58,19 +58,19 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         }
 
         // Headings
-        if trimmed.starts_with("### ") {
+        if let Some(rest) = trimmed.strip_prefix("### ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
-            blocks.push(RenderBlock::Heading(3, parse_inline(&trimmed[4..])));
+            blocks.push(RenderBlock::Heading(3, parse_inline(rest)));
             continue;
         }
-        if trimmed.starts_with("## ") {
+        if let Some(rest) = trimmed.strip_prefix("## ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
-            blocks.push(RenderBlock::Heading(2, parse_inline(&trimmed[3..])));
+            blocks.push(RenderBlock::Heading(2, parse_inline(rest)));
             continue;
         }
-        if trimmed.starts_with("# ") {
+        if let Some(rest) = trimmed.strip_prefix("# ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
-            blocks.push(RenderBlock::Heading(1, parse_inline(&trimmed[2..])));
+            blocks.push(RenderBlock::Heading(1, parse_inline(rest)));
             continue;
         }
 
@@ -90,9 +90,9 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         }
 
         // Blockquote
-        if trimmed.starts_with("> ") {
+        if let Some(rest) = trimmed.strip_prefix("> ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
-            blocks.push(RenderBlock::Blockquote(parse_inline(&trimmed[2..])));
+            blocks.push(RenderBlock::Blockquote(parse_inline(rest)));
             continue;
         }
 

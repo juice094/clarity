@@ -364,7 +364,7 @@ impl App {
                         if self.input.is_empty() {
                             self.input = text;
                         } else {
-                            self.input.push_str("\n");
+                            self.input.push('\n');
                             self.input.push_str(&text);
                         }
                         self.attachments.append(&mut attachments);
@@ -564,10 +564,10 @@ impl eframe::App for App {
             self.settings_open = false;
         }
 
-        if !self.settings_open && !self.is_loading {
-            if ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl) {
-                self.new_session();
-            }
+        if !self.settings_open && !self.is_loading
+            && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
+        {
+            self.new_session();
         }
 
         // Refresh task list periodically when panel is open
@@ -723,10 +723,10 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 8.0;
-                    if self.sidebar_collapsed {
-                        if ui.add(egui::Button::new(egui::RichText::new("➡").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
-                            self.sidebar_collapsed = false;
-                        }
+                    if self.sidebar_collapsed
+                        && ui.add(egui::Button::new(egui::RichText::new("➡").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked()
+                    {
+                        self.sidebar_collapsed = false;
                     }
                     ui.label(egui::RichText::new("Chat").size(16.0).strong().color(self.theme.text));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -847,7 +847,7 @@ impl eframe::App for App {
 
                                 // Tool calls & typing indicator (few items, always rendered)
                                 for tc in &tool_calls { ui::render::tool_call_bubble(ui, tc, &theme); }
-                                if is_loading && session.messages.last().map_or(true, |m| m.role == Role::User) && tool_calls.is_empty() {
+                                if is_loading && session.messages.last().is_none_or(|m| m.role == Role::User) && tool_calls.is_empty() {
                                     ui::render::typing_indicator(ui, &theme);
                                 }
                             }
@@ -916,7 +916,7 @@ impl eframe::App for App {
                                     };
                                     let prev_input = self.input.clone();
                                     let line_count = self.input.matches('\n').count() + 1;
-                                    let input_height = (line_count as f32 * 20.0 + 24.0).min(120.0).max(44.0);
+                                    let input_height = (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
                                     let text_edit = egui::TextEdit::multiline(&mut self.input)
                                         .desired_rows(line_count.max(1))
                                         .hint_text(hint)
@@ -1038,7 +1038,7 @@ impl eframe::App for App {
                             self.push_toast("MCP config saved", ToastLevel::Info);
                             self.mcp_changed = false;
                         }
-                        Err(e) => self.push_toast(&format!("Save failed: {}", e), ToastLevel::Error),
+                        Err(e) => self.push_toast(format!("Save failed: {}", e), ToastLevel::Error),
                     }
                 }
             }

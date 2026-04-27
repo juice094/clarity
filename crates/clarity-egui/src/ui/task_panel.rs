@@ -79,6 +79,6 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) {
 
 fn format_timestamp(ts: u64) -> String {
     use chrono::{DateTime, Utc};
-    let dt = DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(|| Utc::now());
+    let dt = DateTime::from_timestamp(ts as i64, 0).unwrap_or_else(Utc::now);
     dt.format("%Y-%m-%d %H:%M").to_string()
 }
