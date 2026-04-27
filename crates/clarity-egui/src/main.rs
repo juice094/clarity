@@ -540,14 +540,31 @@ impl eframe::App for App {
 
         // Keyboard shortcuts (only when settings modal is closed)
         if !self.settings_open && !self.is_loading {
-            // Enter (no modifiers) sends message
-            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
+            // Enter WITHOUT modifiers sends message.
+            // We must NOT use consume_key(Modifiers::NONE) because egui's
+            // Modifiers::matches treats NONE as "don't care", catching Shift+Enter too.
+            let plain_enter = ctx.input(|i| {
+                i.events.iter().any(|e| matches!(e, egui::Event::Key {
+                    key: egui::Key::Enter,
+                    modifiers,
+                    pressed: true,
+                    ..
+                } if modifiers.is_none()))
+            });
+            if plain_enter {
+                ctx.input_mut(|i| {
+                    i.events.retain(|e| !matches!(e, egui::Event::Key {
+                        key: egui::Key::Enter,
+                        modifiers,
+                        pressed: true,
+                        ..
+                    } if modifiers.is_none()));
+                    i.keys_down.remove(&egui::Key::Enter);
+                });
                 if !self.input.trim().is_empty() || !self.attachments.is_empty() {
                     self.send();
                 }
             }
-            // Shift+Enter inserts newline (handled by TextEdit naturally when not consumed)
-            // No explicit code needed — consume_key(Modifiers::NONE) only intercepts plain Enter
             if ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl) {
                 self.new_session();
             }
@@ -620,9 +637,10 @@ impl eframe::App for App {
                     ui.label(egui::RichText::new("Files").size(11.0).color(self.theme.text_dim).weak());
                     ui.add_space(4.0);
                     let mut clicked_file: Option<std::path::PathBuf> = None;
+                    let files_height = (ui.available_height() - 160.0).max(120.0);
                     egui::ScrollArea::vertical()
                         .id_salt("file_tree_scroll")
-                        .max_height(360.0)
+                        .max_height(files_height)
                         .show(ui, |ui| {
                             if let Ok(cwd) = std::env::current_dir() {
                                 ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
@@ -661,7 +679,8 @@ impl eframe::App for App {
                             .id_salt("preview_scroll")
                             .max_height(180.0)
                             .show(ui, |ui| {
-                                ui.add(
+                                ui.add_sized(
+                                    egui::vec2(ui.available_width(), 180.0),
                                     egui::TextEdit::multiline(&mut preview_text)
                                         .desired_rows(10)
                                         .font(egui::TextStyle::Monospace)
