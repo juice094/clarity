@@ -389,10 +389,25 @@ impl App {
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
         if !self.settings_open { return; }
 
+        // Modal dimmer: semi-transparent overlay that also catches outside clicks
+        let screen_rect = ctx.screen_rect();
+        let modal_response = egui::Area::new(egui::Id::new("settings_modal_overlay"))
+            .fixed_pos(screen_rect.min)
+            .show(ctx, |ui| {
+                ui.allocate_response(screen_rect.size(), egui::Sense::click());
+                ui.painter().rect_filled(screen_rect, egui::CornerRadius::ZERO, egui::Color32::from_black_alpha(120));
+            })
+            .response;
+        if modal_response.clicked() {
+            self.settings_open = false;
+            return;
+        }
+
         egui::Window::new("Settings")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .default_pos(ctx.screen_rect().center())
             .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)))
             .show(ctx, |ui| {
                 ui.set_min_width(400.0);
@@ -809,7 +824,13 @@ impl eframe::App for App {
                     });
 
                 self.last_scroll_offset = output.state.offset.y;
-                if configure_clicked { self.agent_status = AgentStatus::Unconfigured; }
+                if configure_clicked {
+                    self.settings_open = true;
+                    self.settings_edit = {
+                        let guard = self.state.cached_settings.lock().unwrap();
+                        guard.clone()
+                    };
+                }
 
                 ui.separator();
 
