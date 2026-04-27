@@ -18,7 +18,7 @@ use crate::ui::types::{Message, Role, ToolCallInfo, ToolCallStatus};
 /// Returns the actual rendered height (including trailing space).
 pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
-    let max_width = (ui.available_width() * 0.78).max(280.0);
+    let max_width = (ui.available_width() * 0.82).max(280.0);
 
     let (align, bg, text_color, radius, stroke) = if msg.is_error {
         (
@@ -71,8 +71,9 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
             .corner_radius(radius)
             .stroke(stroke)
             .shadow(shadow)
-            .inner_margin(egui::Margin::symmetric(14, 10))
+            .inner_margin(egui::Margin::symmetric(16, 12))
             .show(ui, |ui| {
+                ui.set_min_width(48.0);
                 if msg.is_error {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("⚠").size(14.0));

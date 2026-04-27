@@ -885,19 +885,24 @@ impl eframe::App for App {
                                     } else {
                                         "Type a message (files attached)..."
                                     };
-                                    let prev_input_len = self.input.len();
+                                    let prev_input = self.input.clone();
+                                    let line_count = self.input.matches('\n').count() + 1;
+                                    let input_height = (line_count as f32 * 20.0 + 24.0).min(120.0).max(44.0);
                                     let text_edit = egui::TextEdit::multiline(&mut self.input)
-                                        .desired_rows(1).hint_text(hint).margin(egui::vec2(8.0, 8.0));
-                                    ui.add_sized(egui::vec2(input_width, 44.0), text_edit);
-                                    // Enter sends; Shift+Enter keeps newline from TextEdit
+                                        .desired_rows(line_count.max(1))
+                                        .hint_text(hint)
+                                        .margin(egui::vec2(8.0, 8.0));
+                                    ui.add_sized(egui::vec2(input_width, input_height), text_edit);
+                                    // Enter sends; Shift+Enter keeps newline from TextEdit.
+                                    // We compare prev_input to detect IME commits (which add chars
+                                    // other than newline) vs plain Enter (which only adds newline).
                                     let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                    if enter_pressed && self.input.len() == prev_input_len + 1 && self.input.ends_with('\n') {
-                                        let shift_pressed = ui.input(|i| i.modifiers.shift);
-                                        if !shift_pressed {
+                                    if enter_pressed && !ui.input(|i| i.modifiers.shift) {
+                                        while self.input.ends_with('\n') {
                                             self.input.pop();
-                                            if !self.input.trim().is_empty() || !self.attachments.is_empty() {
-                                                self.send();
-                                            }
+                                        }
+                                        if self.input == prev_input && !self.input.trim().is_empty() {
+                                            self.send();
                                         }
                                     }
                                 },
