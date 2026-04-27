@@ -18,26 +18,53 @@ use crate::ui::types::{Message, Role, ToolCallInfo, ToolCallStatus};
 /// Returns the actual rendered height (including trailing space).
 pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
-    let (align, bg, text_color) = match msg.role {
+    let max_width = (ui.available_width() * 0.78).max(280.0);
+
+    let (align, bg, text_color, radius) = match msg.role {
         Role::User => (
             egui::Align::RIGHT,
             theme.user_bubble,
             egui::Color32::WHITE,
+            egui::CornerRadius {
+                nw: (theme.radius_lg as u8),
+                ne: 4,
+                sw: (theme.radius_lg as u8),
+                se: 4,
+            },
         ),
-        Role::Agent => (egui::Align::LEFT, theme.ai_bubble, theme.chat_text),
+        Role::Agent => (
+            egui::Align::LEFT,
+            theme.ai_bubble,
+            theme.chat_text,
+            egui::CornerRadius {
+                nw: 4,
+                ne: (theme.radius_lg as u8),
+                sw: 4,
+                se: (theme.radius_lg as u8),
+            },
+        ),
+    };
+
+    let shadow = egui::Shadow {
+        offset: [0, 2],
+        blur: 6,
+        spread: 0,
+        color: theme.bg_elevated.linear_multiply(0.25),
     };
 
     ui.with_layout(egui::Layout::top_down(align), |ui| {
+        ui.set_max_width(max_width);
         egui::Frame::group(ui.style())
             .fill(bg)
-            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .corner_radius(radius)
             .stroke(egui::Stroke::NONE)
+            .shadow(shadow)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, text_color);
             });
     });
-    ui.add_space(theme.space_8);
+    ui.add_space(theme.space_12);
     ui.cursor().min.y - start_y
 }
 
@@ -48,11 +75,20 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
         ToolCallStatus::Running => "⏳",
         ToolCallStatus::Done => "✅",
     };
+    let shadow = egui::Shadow {
+        offset: [0, 1],
+        blur: 3,
+        spread: 0,
+        color: theme.bg_elevated.linear_multiply(0.15),
+    };
+
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+        ui.set_max_width(ui.available_width() * 0.85);
         egui::Frame::group(ui.style())
             .fill(bg)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::new(1.0, theme.border))
+            .shadow(shadow)
             .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -78,11 +114,25 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
 
 /// Render a typing indicator "..." bubble.
 pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
+    let shadow = egui::Shadow {
+        offset: [0, 2],
+        blur: 6,
+        spread: 0,
+        color: theme.bg_elevated.linear_multiply(0.25),
+    };
+
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+        ui.set_max_width(ui.available_width() * 0.78);
         egui::Frame::group(ui.style())
             .fill(theme.ai_bubble)
-            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .corner_radius(egui::CornerRadius {
+                nw: 4,
+                ne: (theme.radius_lg as u8),
+                sw: 4,
+                se: (theme.radius_lg as u8),
+            })
             .stroke(egui::Stroke::NONE)
+            .shadow(shadow)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.label(
@@ -92,7 +142,7 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
                 );
             });
     });
-    ui.add_space(theme.space_8);
+    ui.add_space(theme.space_12);
 }
 
 // ============================================================================

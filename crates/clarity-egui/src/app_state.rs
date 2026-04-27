@@ -1,6 +1,6 @@
 use crate::settings::GuiSettings;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -50,17 +50,12 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
         let guard = state.cached_settings.lock().unwrap();
         guard.clone()
     };
-    let network_available = state.network_available.load(Ordering::Relaxed);
 
-    let desired_provider = if !network_available && settings.provider != "local" {
-        tracing::info!(
-            "Network unavailable (preferred={}); falling back to local",
-            settings.provider
-        );
-        "local".to_string()
-    } else {
-        settings.provider.clone()
-    };
+    // NOTE: We do NOT force fallback to local when network probe fails.
+    // The user-configured provider is authoritative. Network probes can
+    // give false negatives (firewall, DNS, captive portals), and the
+    // actual API endpoint may still be reachable.
+    let desired_provider = settings.provider.clone();
 
     let desired_path = if desired_provider == "local" {
         settings

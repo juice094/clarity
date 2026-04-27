@@ -142,16 +142,14 @@ impl App {
                 if should_flip {
                     let prev = state_for_monitor.network_available.swap(available, std::sync::atomic::Ordering::Relaxed);
                     if !available && prev {
-                        if let Err(e) = ensure_llm(&state_for_monitor).await {
-                            if let Err(e) = tx_for_monitor.send(UiEvent::FallbackError { message: e }) { tracing::warn!("Failed to send FallbackError: {}", e); }
-                        } else {
-                            if let Err(e) = tx_for_monitor.send(UiEvent::Fallback { fallback: true, reason: "offline".into() }) { tracing::warn!("Failed to send Fallback: {}", e); }
+                        // Network went offline: show banner only. Provider stays as-configured.
+                        if let Err(e) = tx_for_monitor.send(UiEvent::Fallback { fallback: true, reason: "offline".into() }) {
+                            tracing::warn!("Failed to send Fallback: {}", e);
                         }
                     } else if available && !prev {
-                        if let Err(e) = ensure_llm(&state_for_monitor).await {
-                            if let Err(e) = tx_for_monitor.send(UiEvent::FallbackError { message: e }) { tracing::warn!("Failed to send FallbackError: {}", e); }
-                        } else {
-                            if let Err(e) = tx_for_monitor.send(UiEvent::Fallback { fallback: false, reason: "online".into() }) { tracing::warn!("Failed to send Fallback: {}", e); }
+                        // Network came back online: clear banner.
+                        if let Err(e) = tx_for_monitor.send(UiEvent::Fallback { fallback: false, reason: "online".into() }) {
+                            tracing::warn!("Failed to send Fallback: {}", e);
                         }
                     }
                 }
@@ -340,16 +338,12 @@ impl App {
                 }
                 UiEvent::Fallback { fallback, reason } => {
                     let msg = if fallback {
-                        format!("Network unavailable — switched to local ({})", reason)
+                        format!("Network probe failed ({}). External provider will still be tried.", reason)
                     } else {
-                        format!("Network restored — switched back to preferred provider ({})", reason)
+                        format!("Network probe restored ({})", reason)
                     };
                     self.push_toast(&msg, ToastLevel::Warn);
-                    self.network_banner = Some(msg);
-                }
-                UiEvent::FallbackError { message } => {
-                    self.push_toast(&format!("Fallback error: {}", message), ToastLevel::Error);
-                    self.network_banner = Some(format!("Fallback error: {}", message));
+                    self.network_banner = if fallback { Some(msg) } else { None };
                 }
                 UiEvent::TaskList(tasks) => {
                     self.tasks = tasks;
@@ -574,12 +568,17 @@ impl eframe::App for App {
                     for (id, title, is_active) in sessions_clone {
                         let bg = if is_active { self.theme.surface } else { self.theme.bg_accent };
                         let text_color = if is_active { self.theme.text } else { self.theme.text_dim };
+                        let stroke = if is_active { egui::Stroke::new(2.0, self.theme.accent) } else { egui::Stroke::NONE };
                         ui.horizontal(|ui| {
-                            let response = ui.add(egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
-                                .fill(bg).corner_radius(egui::CornerRadius::same(6))
-                                .min_size(egui::vec2(ui.available_width() - 28.0, 36.0)));
+                            let response = ui.add(
+                                egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
+                                    .fill(bg)
+                                    .corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8))
+                                    .stroke(stroke)
+                                    .min_size(egui::vec2(ui.available_width() - 28.0, 36.0))
+                            );
                             if response.clicked() { self.save_current_session(); self.active_session_id = id.clone(); }
-                            if ui.add(egui::Button::new("🗑").fill(egui::Color32::TRANSPARENT)).clicked() { to_delete = Some(id); }
+                            if ui.add(egui::Button::new("🗑").fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { to_delete = Some(id); }
                         });
                     }
                     if let Some(id) = to_delete { self.delete_session(id); }
@@ -626,48 +625,49 @@ impl eframe::App for App {
             .frame(egui::Frame::central_panel(&ctx.style()).fill(self.theme.bg))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if self.sidebar_collapsed { if ui.button("➡").clicked() { self.sidebar_collapsed = false; } }
-                    ui.label(egui::RichText::new("Chat").size(16.0).strong());
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if self.sidebar_collapsed {
+                        if ui.add(egui::Button::new(egui::RichText::new("➡").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
+                            self.sidebar_collapsed = false;
+                        }
+                    }
+                    ui.label(egui::RichText::new("Chat").size(16.0).strong().color(self.theme.text));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("⚙").clicked() {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        // Settings
+                        if ui.add(egui::Button::new(egui::RichText::new("⚙").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
                             self.settings_open = true;
                             self.settings_edit = {
                                 let guard = self.state.cached_settings.lock().unwrap();
                                 guard.clone()
                             };
                         }
+                        // Tasks
                         let active_tasks = self.tasks.iter().filter(|t| !t.status.is_terminal()).count();
-                        let task_btn = if active_tasks > 0 {
-                            format!("📝 {}", active_tasks)
-                        } else {
-                            "📝".to_string()
-                        };
-                        if ui.button(task_btn).clicked() {
+                        let task_btn = if active_tasks > 0 { format!("📝 {}", active_tasks) } else { "📝".to_string() };
+                        if ui.add(egui::Button::new(egui::RichText::new(&task_btn).size(12.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
                             self.task_panel_open = !self.task_panel_open;
-                            if self.task_panel_open {
-                                self.refresh_tasks();
-                            }
+                            if self.task_panel_open { self.refresh_tasks(); }
                         }
+                        // MCP
                         let mcp_count = self.mcp_config.as_ref().map_or(0, |c| c.servers.len());
-                        let mcp_btn = if mcp_count > 0 {
-                            format!("🔌 {}", mcp_count)
-                        } else {
-                            "🔌".to_string()
-                        };
-                        if ui.button(mcp_btn).clicked() {
+                        let mcp_btn = if mcp_count > 0 { format!("🔌 {}", mcp_count) } else { "🔌".to_string() };
+                        if ui.add(egui::Button::new(egui::RichText::new(&mcp_btn).size(12.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
                             self.mcp_panel_open = !self.mcp_panel_open;
                         }
+                        // Status
                         let (status_color, status_label) = match self.agent_status {
                             AgentStatus::Online => (self.theme.status_online, "Online"),
                             AgentStatus::Busy => (self.theme.status_busy, "Busy"),
                             AgentStatus::Unconfigured => (self.theme.status_offline, "Unconfigured"),
                             AgentStatus::Offline => (self.theme.status_offline, "Offline"),
                         };
-                        ui.label(egui::RichText::new(status_label).size(12.0).color(self.theme.text_dim));
                         let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                         ui.painter().circle_filled(rect.center(), 4.0, status_color);
+                        ui.label(egui::RichText::new(status_label).size(12.0).color(self.theme.text_dim));
                     });
                 });
+                ui.add_space(4.0);
                 ui.separator();
 
                 let banner_text = self.network_banner.clone();
@@ -766,12 +766,18 @@ impl eframe::App for App {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(egui::RichText::new("Attachments:").size(11.0).color(self.theme.text_dim));
                         for (i, att) in self.attachments.iter().enumerate() {
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(&att.name).size(11.0).color(self.theme.text).monospace());
-                                if ui.small_button("✕").clicked() {
-                                    to_remove = Some(i);
-                                }
-                            });
+                            egui::Frame::group(ui.style())
+                                .fill(self.theme.surface)
+                                .corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8))
+                                .stroke(egui::Stroke::new(1.0, self.theme.border))
+                                .inner_margin(egui::Margin::symmetric(8, 4))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("📎").size(11.0));
+                                        ui.label(egui::RichText::new(&att.name).size(11.0).color(self.theme.text).monospace());
+                                        if ui.small_button("✕").clicked() { to_remove = Some(i); }
+                                    });
+                                });
                         }
                     });
                     if let Some(i) = to_remove {
@@ -780,41 +786,50 @@ impl eframe::App for App {
                     ui.separator();
                 }
 
-                ui.horizontal(|ui| {
-                    let available_width = ui.available_width();
-                    let input_width = available_width - 60.0;
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(input_width, 50.0),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            let hint = if self.attachments.is_empty() {
-                                "Type a message..."
-                            } else {
-                                "Type a message (files attached)..."
-                            };
-                            let text_edit = egui::TextEdit::multiline(&mut self.input)
-                                .desired_rows(1).hint_text(hint).margin(egui::vec2(10.0, 10.0));
-                            ui.add_sized(egui::vec2(input_width, 50.0), text_edit);
-                        },
-                    );
-                    ui.vertical_centered(|ui| {
-                        if self.is_loading {
-                            let btn = ui.add_sized(
-                                egui::vec2(44.0, 44.0),
-                                egui::Button::new(egui::RichText::new("■").size(18.0).color(self.theme.text))
-                                    .fill(self.theme.danger).corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8)),
+                // Input bar card
+                egui::Frame::group(ui.style())
+                    .fill(self.theme.input_bg)
+                    .corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8))
+                    .stroke(egui::Stroke::new(1.0, self.theme.border))
+                    .inner_margin(egui::Margin::same(6))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            let available_width = ui.available_width();
+                            let input_width = available_width - 52.0;
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(input_width, 44.0),
+                                egui::Layout::top_down(egui::Align::LEFT),
+                                |ui| {
+                                    let hint = if self.attachments.is_empty() {
+                                        "Type a message..."
+                                    } else {
+                                        "Type a message (files attached)..."
+                                    };
+                                    let text_edit = egui::TextEdit::multiline(&mut self.input)
+                                        .desired_rows(1).hint_text(hint).margin(egui::vec2(8.0, 8.0));
+                                    ui.add_sized(egui::vec2(input_width, 44.0), text_edit);
+                                },
                             );
-                            if btn.clicked() { self.stop(); }
-                        } else {
-                            let btn = ui.add_sized(
-                                egui::vec2(44.0, 44.0),
-                                egui::Button::new(egui::RichText::new("➤").size(18.0).color(self.theme.text))
-                                    .fill(self.theme.accent).corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8)),
-                            );
-                            if btn.clicked() { self.send(); }
-                        }
+                            ui.vertical_centered(|ui| {
+                                if self.is_loading {
+                                    let btn = ui.add_sized(
+                                        egui::vec2(40.0, 40.0),
+                                        egui::Button::new(egui::RichText::new("■").size(16.0).color(self.theme.text))
+                                            .fill(self.theme.danger).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
+                                    );
+                                    if btn.clicked() { self.stop(); }
+                                } else {
+                                    let btn = ui.add_sized(
+                                        egui::vec2(40.0, 40.0),
+                                        egui::Button::new(egui::RichText::new("➤").size(16.0).color(self.theme.text))
+                                            .fill(self.theme.accent).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
+                                    );
+                                    if btn.clicked() { self.send(); }
+                                }
+                            });
+                        });
                     });
-                });
             });
 
         self.render_settings_panel(ctx);

@@ -37,9 +37,6 @@ pub enum UiEvent {
         fallback: bool,
         reason: String,
     },
-    FallbackError {
-        message: String,
-    },
     TaskList(Vec<TaskInfo>),
 }
 
