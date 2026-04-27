@@ -43,7 +43,25 @@ impl GuiSettings {
                 return settings;
             }
         }
-        Self::default()
+        Self::default_with_env()
+    }
+
+    pub fn default_with_env() -> Self {
+        let mut s = Self::default();
+        if let Ok(key) = std::env::var("KIMI_API_KEY") {
+            s.provider = "kimi".to_string();
+            s.api_key = Some(key);
+        } else if let Ok(key) = std::env::var("OPENAI_API_KEY") {
+            s.provider = "openai".to_string();
+            s.api_key = Some(key);
+        }
+        if let Ok(model) = std::env::var("KIMI_MODEL") {
+            s.model = model;
+        }
+        if let Ok(model) = std::env::var("OPENAI_MODEL") {
+            s.model = model;
+        }
+        s
     }
 
     #[allow(dead_code)]

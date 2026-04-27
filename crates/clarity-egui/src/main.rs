@@ -82,8 +82,43 @@ struct App {
     start: Instant,
 }
 
+fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    let candidates = [
+        "C:\\Windows\\Fonts\\simhei.ttf",
+        "C:\\Windows\\Fonts\\msyh.ttc",
+        "C:\\Windows\\Fonts\\simsun.ttc",
+        "C:\\Windows\\Fonts\\msyhbd.ttc",
+    ];
+    for path in &candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            let name = std::path::Path::new(path)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            fonts.font_data.insert(
+                name.clone(),
+                egui::FontData::from_owned(bytes).into(),
+            );
+            fonts.families
+                .entry(egui::FontFamily::Proportional)
+                .or_default()
+                .insert(0, name.clone());
+            fonts.families
+                .entry(egui::FontFamily::Monospace)
+                .or_default()
+                .push(name);
+            tracing::info!("Loaded CJK font from {}", path);
+            break;
+        }
+    }
+    ctx.set_fonts(fonts);
+}
+
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        setup_fonts(&cc.egui_ctx);
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
         let state = Arc::new(AppState::default());
         let (ui_tx, ui_rx) = channel::<UiEvent>();
