@@ -27,7 +27,7 @@ use ui::types::*;
 // Clarity egui Desktop — Phase A: Design System Foundation
 // ============================================================================
 
-const SIDEBAR_WIDTH: f32 = 220.0;
+const SIDEBAR_WIDTH: f32 = 240.0;
 
 struct App {
     state: Arc<AppState>,
@@ -84,10 +84,12 @@ fn setup_fonts(ctx: &egui::Context) {
                 name.clone(),
                 egui::FontData::from_owned(bytes).into(),
             );
+            // Append CJK font as fallback (not first), so egui's built-in fonts
+            // handle Latin symbols (×, ✕, arrows) and CJK font handles Chinese.
             fonts.families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
-                .insert(0, name.clone());
+                .push(name.clone());
             fonts.families
                 .entry(egui::FontFamily::Monospace)
                 .or_default()
@@ -389,29 +391,20 @@ impl App {
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
         if !self.settings_open { return; }
 
-        // Modal dimmer: semi-transparent overlay that also catches outside clicks
+        // Non-interactive dimmer overlay — paint only, no event capture
         let screen_rect = ctx.screen_rect();
-        let modal_response = egui::Area::new(egui::Id::new("settings_modal_overlay"))
-            .fixed_pos(screen_rect.min)
-            .show(ctx, |ui| {
-                ui.allocate_response(screen_rect.size(), egui::Sense::click());
-                ui.painter().rect_filled(screen_rect, egui::CornerRadius::ZERO, egui::Color32::from_black_alpha(120));
-            })
-            .response;
-        if modal_response.clicked() {
-            self.settings_open = false;
-            return;
-        }
+        ctx.layer_painter(egui::LayerId::background())
+            .rect_filled(screen_rect, egui::CornerRadius::ZERO, egui::Color32::from_black_alpha(100));
 
         egui::Window::new("Settings")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .default_pos(ctx.screen_rect().center())
-            .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)))
+            .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)).inner_margin(egui::Margin::same(20)))
             .show(ctx, |ui| {
-                ui.set_min_width(400.0);
-                ui.add_space(8.0);
+                ui.set_min_width(420.0);
+                ui.add_space(4.0);
 
                 // Provider
                 ui.horizontal(|ui| {
@@ -536,9 +529,16 @@ impl eframe::App for App {
         }
 
         // Keyboard shortcuts (only when settings modal is closed)
-        if !self.settings_open {
+        if !self.settings_open && !self.is_loading {
+            // Enter sends; Shift+Enter lets TextEdit insert newline
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
+                if !self.input.trim().is_empty() || !self.attachments.is_empty() {
+                    self.send();
+                }
+            }
+            // Ctrl+Enter also sends (compatibility)
             if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
-                if (!self.input.trim().is_empty() || !self.attachments.is_empty()) && !self.is_loading {
+                if !self.input.trim().is_empty() || !self.attachments.is_empty() {
                     self.send();
                 }
             }
@@ -567,7 +567,7 @@ impl eframe::App for App {
         if !self.sidebar_collapsed {
             egui::SidePanel::left("sidebar")
                 .default_width(SIDEBAR_WIDTH)
-                .min_width(180.0)
+                .min_width(200.0)
                 .max_width(360.0)
                 .resizable(true)
                 .frame(egui::Frame::side_top_panel(&ctx.style()).fill(self.theme.bg_accent))
@@ -615,7 +615,8 @@ impl eframe::App for App {
                     ui.add_space(4.0);
                     let mut clicked_file: Option<std::path::PathBuf> = None;
                     egui::ScrollArea::vertical()
-                        .max_height(200.0)
+                        .id_salt("file_tree_scroll")
+                        .max_height(260.0)
                         .show(ui, |ui| {
                             if let Ok(cwd) = std::env::current_dir() {
                                 ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
@@ -650,6 +651,7 @@ impl eframe::App for App {
                             preview_content
                         };
                         egui::ScrollArea::vertical()
+                            .id_salt("preview_scroll")
                             .max_height(180.0)
                             .show(ui, |ui| {
                                 ui.add(
@@ -763,7 +765,9 @@ impl eframe::App for App {
                 let mut configure_clicked = false;
 
                 let output = egui::ScrollArea::vertical()
+                    .id_salt("chat_scroll")
                     .stick_to_bottom(true)
+                    .auto_shrink([false; 2])
                     .max_height(available_height)
                     .show(ui, |ui| {
                         if let Some(session) = self.sessions.iter_mut().find(|s| s.id == active_id) {

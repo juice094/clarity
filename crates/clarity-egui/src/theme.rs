@@ -59,6 +59,7 @@ pub struct Theme {
     // --- Focus & Effects ---
     pub focus_ring: egui::Color32,
     pub focus_glow: egui::Color32,
+    pub selection: egui::Color32,
 
     // --- Fonts ---
     pub font_body: String,
@@ -138,6 +139,7 @@ impl Theme {
             // Focus
             focus_ring: hex_alpha("#8b5cf6", 0.20),
             focus_glow: hex_alpha("#8b5cf6", 0.15),
+            selection: hex_alpha("#a78bfa", 0.35),
 
             // Fonts
             font_body: "Inter".into(),
@@ -203,6 +205,7 @@ impl Theme {
 
             focus_ring: hex_alpha("#8b5cf6", 0.20),
             focus_glow: hex_alpha("#8b5cf6", 0.10),
+            selection: hex_alpha("#7c3aed", 0.25),
 
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
@@ -236,8 +239,8 @@ impl Theme {
         style.visuals.widgets.hovered.weak_bg_fill = self.bg_hover;
         style.visuals.widgets.hovered.bg_fill = self.bg_hover;
         style.visuals.widgets.active.bg_fill = self.bg_hover;
-        style.visuals.selection.bg_fill = self.accent;
-        style.visuals.selection.stroke = egui::Stroke::NONE;
+        style.visuals.selection.bg_fill = self.selection;
+        style.visuals.selection.stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);
         style.visuals.window_shadow = egui::Shadow::NONE;
         style.visuals.popup_shadow = egui::Shadow::NONE;
