@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.3.0 | 日期：2026-04-27 | 基于实机测试与代码审计  
+> 版本：v0.3.0 | 日期：2026-04-27 | `main` @ `899d8f9` | 基于实机测试与代码审计  
 > 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)
 
 ---
@@ -116,29 +116,29 @@
 
 ## 3. 前后端功能 Parity 矩阵（关键差距标注）
 
-| 功能 | clarity-core | clarity-egui | clarity-tauri | clarity-tui | clarity-gateway | clarity-headless |
+| 功能 | clarity-core | clarity-egui | clarity-tui | clarity-gateway | clarity-headless |
 |------|:------------:|:------------:|:-------------:|:-----------:|:---------------:|:----------------:|
-| Agent 运行/流式 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 工具调用可视化 | ✅ (产生) | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Compaction Banner | ✅ (产生) | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **审批交互 UI** | ✅ (后端) | ❌ | 部分 | ❌ | ❌ | CLI only |
-| **Plan 模式可视化** | ✅ (后端) | ❌ | 部分 | `/plan` | ❌ | CLI only |
+| Agent 运行/流式 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 工具调用可视化 | ✅ (产生) | ✅ | ✅ | ❌ | ❌ |
+| Compaction Banner | ✅ (产生) | ✅ | ❌ | ❌ | ❌ |
+| **审批交互 UI** | ✅ (后端) | ❌ | ❌ | ❌ | CLI only |
+| **Plan 模式可视化** | ✅ (后端) | ❌ | `/plan` | ❌ | CLI only |
 | **子代理/并行执行** | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
-| 后台任务面板 | ✅ (完整) | 只读 | ✅ | 命令行 | API only | ❌ |
-| 后台任务创建/取消 | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
-| Cron 调度 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| 团队协调 (Team) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **技能系统 UI** | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| MCP 配置/管理 | ✅ | 配置面板 | ❌ | ❌ | ❌ | ❌ |
-| MCP 工具执行 | ✅ | 间接 | 间接 | 间接 | 间接 | 间接 |
-| 记忆提取/存储 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| 会话持久化 | ✅ | ✅ | ✅ | ❌ | ✅ (SQLite) | ❌ |
-| **Token 用量显示** | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ |
-| LSP 集成 | ✅ (core 支持) | ❌ | ✅ | ❌ | ❌ | ❌ |
-| 模型下载 GUI | ❌ (非 core 职责) | ❌ | ✅ | ❌ | ❌ | ❌ |
-| 日志面板 | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| 后台任务面板 | ✅ (完整) | 只读 | 命令行 | API only | ❌ |
+| 后台任务创建/取消 | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Cron 调度 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 团队协调 (Team) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **技能系统 UI** | ✅ | ❌ | ✅ | ❌ | ❌ |
+| MCP 配置/管理 | ✅ | 配置面板 | ❌ | ❌ | ❌ |
+| MCP 工具执行 | ✅ | 间接 | 间接 | 间接 | 间接 |
+| 记忆提取/存储 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 会话持久化 | ✅ | ✅ | ❌ | ✅ (SQLite) | ❌ |
+| **Token 用量显示** | ✅ | ❌ | ✅ | ❌ | ✅ |
+| LSP 集成 | ✅ (core 支持) | ❌ | ❌ | ❌ | ❌ |
+| 模型下载 GUI | ❌ (非 core 职责) | ❌ | ❌ | ❌ | ❌ |
+| 日志面板 | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-**最大差距**：egui 缺少 core 已实现的**交互型功能**（审批、Plan、子代理、技能、任务创建）。这些功能在 TUI 中已通过命令行暴露，但在 GUI 中完全缺失，导致 `Interactive`/`Plan` approval mode 在 egui 中实际上无法使用。
+**最大差距**：egui 缺少 core 已实现的**交互型功能**（审批、Plan、子代理、技能、任务创建）。这些功能在 TUI 中已通过命令行暴露，但在 GUI 中完全缺失，导致 `Interactive`/`Plan` approval mode 在 egui 中实际上无法使用。`clarity-tauri` 已完全归档移出仓库。
 
 ---
 
@@ -150,16 +150,13 @@
 
 | # | 子问题 | 根因 | 影响 |
 |---|--------|------|------|
-| I1.1 | 无模型下拉列表 | `get_available_models()` 返回的模型列表在 `render_settings_panel` 中被完全忽略，Model 字段为自由文本 `TextEdit` | 用户需手动输入模型 ID，易出错 |
-| I1.2 | Provider/Model 不联动 | 切换 provider 时不更新 model 文本 | provider 与 model 可能不匹配 |
-| I1.3 | `load()` 静默吞错 | JSON 解析失败直接回退 `default_with_env()`，无日志 | 文件损坏时用户感知为"配置丢失" |
-| I1.4 | 环境变量 model 互斥缺失 | `KIMI_MODEL` 与 `OPENAI_MODEL` 顺序执行而非 `else if` | 可能产生 provider=kimi + model=gpt-4o 的不匹配状态 |
-| I1.5 | `ensure_llm` 无网络 fallback | 与 tauri 侧不同，未在断网时自动 fallback 到 local | 断网时直接连接云端 API 失败 |
+| I1.1 | 无模型下拉列表 | `TextEdit` → `ComboBox` + provider 联动 | ✅ 已修复 |
+| I1.2 | Provider/Model 不联动 | 切换 provider 时自动更新 model | ✅ 已修复 |
+| I1.3 | `load()` 静默吞错 | 解析失败时日志 + `.bak` 备份 | ✅ 已修复 |
+| I1.4 | 环境变量 model 互斥缺失 | provider 匹配 env var 选择 | ✅ 已修复 |
+| I1.5 | `ensure_llm` 无网络 fallback | 断网时自动 fallback 到 local | ✅ 已修复 |
 
-**修复计划**：
-- 短期（½ 天）：Model `TextEdit` → `ComboBox`，联动 provider 切换。
-- 中期（1 天）：`load()` 错误日志 + 损坏文件备份；修复 `default_with_env()` 互斥逻辑；补齐 `ensure_llm` 网络 fallback。
-- 长期（冻结）：借鉴 Kimi CLI 的 settings 分层设计，见代办项 T_KIMICLI_REF。
+**修复 commit**：`ff3227d`（Phase 1 维护批次）
 
 ### I2. egui 零测试（P0 技术债务）
 

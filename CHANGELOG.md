@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **clarity-tauri 归档** — `clarity-tauri`（Tauri 2 + React 前端）已完全移出本仓库。前端代码、package-lock.json、Cargo.toml 全部删除；Rust 源码归档至外部备份目录 `third_party/archived/clarity-tauri/`。Dependabot 安全报警从 3 个降至 0 个。当前主力桌面 GUI 为 `clarity-egui`（eframe/egui，纯 Rust，零 web 依赖）。
+- **Settings 模型选择体验修复** — Model 字段从自由文本 `TextEdit` 改为 `ComboBox`，provider 切换时自动联动更新模型；`load()` 解析失败时记录 warning 并备份损坏文件为 `.bak`；`default_with_env()` 改为 provider 匹配的环境变量选择；`ensure_llm` 新增断网自动 fallback 到 local provider。
+- **Mutex 硬化** — `AppState` 和 `main.rs` 中 `std::sync::Mutex` → `parking_lot::Mutex`，消除 12 处 `lock().unwrap()` panic 风险。
+- **App::update() 拆分** — 550 行 monolithic `update()` 拆分为 6 个独立渲染方法（`render_sidebar`, `render_task_panel`, `render_chat_area`, `render_settings_panel`, `render_mcp_panel`, `render_toasts`），符合 Pretext hot-path 原则。
+
+### Removed
+
+- `clarity-egui` 中未使用的 `anyhow` 依赖。
+
 ## [0.3.0] — 2026-04-26
 
 ### Added

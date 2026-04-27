@@ -9,10 +9,10 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-27
-**当前分支**：`main` @ `39a7308`（ahead of origin/main by 1）
+**当前分支**：`main` @ `899d8f9`（已推送 origin/main）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
-**会话状态**：clarity-egui clippy warnings 清零（11 处修复）；Pretext 健康度审查完成，运维 plan 已写入 `docs/plans/2026-04-27-egui-pretext-health-plan.md`；working tree 待提交
+**会话状态**：clarity-tauri 完全归档移出仓库；Dependabot 报警清零；Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成；Pretext Phase 1 维护完成。
 
 ---
 
@@ -25,7 +25,7 @@
 | 禁止 Docker | ✅ 生效 | 无容器化依赖 |
 | 禁止 RAG(Qdrant) | ✅ 生效 | `clarity-memory` 使用 SQLite + BM25 + CosineIndex |
 | 禁止 Electron | ✅ 生效 | Tauri 2 已替代 |
-| 项目广度 ≤ 5 核心工具 | ⚠️ 接近边界 | 当前 6 crates + Tauri GUI + Gateway + TUI，已达上限，新增功能需裁减 |
+| 项目广度 ≤ 5 核心工具 | ✅ 已收敛 | clarity-tauri 已归档，活跃 crate 6 个 + Gateway + TUI，已达上限，新增功能需裁减 |
 | **主权防御：不入赘** | ✅ 生效 | 学习 Kimi 生态（娘家/导师），但保持独立实现。模型/数据/协议/人格四层主权不可让渡 |
 
 ---
@@ -156,7 +156,7 @@ clarity-wire
 
 | 优先级 | 问题 | 范围 | 状态 |
 |--------|------|------|------|
-| P1 | Settings 模型选择体验缺陷 | `clarity-egui` | 已审计，修复计划见 `PROJECT_STATUS.md` I1 |
+| P1 | Settings 模型选择体验缺陷 | `clarity-egui` | ✅ 已修复（`ff3227d`） |
 | P2 | egui 审批交互 UI 缺失 | `clarity-egui` | 已确认，待排期；当前建议使用 Yolo 模式 |
 
 ### 5.2 长期冻结（约束解除前不投入）

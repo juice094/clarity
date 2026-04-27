@@ -9,7 +9,6 @@ ReAct/Plan agents · MCP ecosystem · BM25+vector memory · Multi-entry (TUI/Web
 [![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
-[![Tauri](https://img.shields.io/badge/Tauri-2.0-purple.svg)](https://tauri.app)
 
 [English](#readme) | [中文](#readme-zh)
 
@@ -23,7 +22,7 @@ You have a dozen AI tools: chat UIs, coding assistants, task runners, memory plu
 
 **Clarity is a single runtime that orchestrates LLMs, tools, and memory across every entry point you use** — terminal, desktop, browser, headless scripts, system tray. One agent core, multiple surfaces. Your sessions, memory, and tasks persist and travel with you.
 
-Built in Rust. The core engine and CLI tools ship as single binaries with **no external runtime dependencies** (no Python, Node.js, or Ollama required). The desktop GUI (Tauri 2) uses the system WebView2 engine — pre-installed on Windows 11, auto-downloaded on first run for Windows 10.
+Built in Rust. The core engine and CLI tools ship as single binaries with **no external runtime dependencies** (no Python, Node.js, or Ollama required). The desktop GUI (eframe/egui) is a pure Rust implementation with zero web dependencies — no Node.js, no WebView, no Electron.
 
 > **Pre-built installers**: Windows `.msi` and `.exe` are available on [GitHub Releases](https://github.com/juice094/clarity/releases). No Rust toolchain needed.
 
@@ -61,7 +60,7 @@ cargo run -p clarity-egui
 | **Local-First LLM** | Native GGUF inference via Candle. Qwen2, DeepSeek-R1-Distill, and more — no Ollama, no API keys, no network required. |
 | **Plan Mode** | LLM writes a structured execution plan first; runs steps in batch without per-tool interruption. |
 | **Hybrid Memory** | SQLite + BM25 + vector search. Conversations persist across sessions and auto-consolidate into long-term memory. |
-| **Multi-Entry** | Same agent core, five surfaces: TUI (`ratatui`), Desktop GUI (`Tauri 2`), Web IDE (`Axum`), Headless CLI, System Tray (`claw`). |
+| **Multi-Entry** | Same agent core, five surfaces: TUI (`ratatui`), Desktop GUI (`eframe/egui`), Web IDE (`Axum`), Headless CLI, System Tray (`claw`). |
 | **Approval System** | Interactive / Yolo / Plan — switch at runtime. V1 rule engine auto-approves low-risk tools. |
 | **Offline Fallback** | Network monitor probes every 30s. Auto-switch to local model when offline; restore cloud provider on reconnect. |
 | **First-Time UX** | Onboarding flow detects missing models, guides download, or prompts cloud provider setup. No manual config required. |
@@ -81,7 +80,7 @@ crates/
 ├── clarity-memory    # BM25 + vector hybrid search, chunking, compilation
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
 ├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
-├── clarity-tauri     # Tauri 2 Desktop GUI (React) — frozen, no new features
+# clarity-tauri     # Archived — moved to external backup (see CHANGELOG)
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
 ├── clarity-wire      # UI↔Agent event bus (SPMC)
