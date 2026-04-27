@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 mod app_state;
 mod settings;
 
-use app_state::{ensure_llm, AppState};
+use app_state::{ensure_llm, reload_llm, AppState};
+use settings::GuiSettings;
 
 // ============================================================================
 // Clarity egui Desktop — Phase 2: Real LLM Integration
@@ -72,6 +73,8 @@ struct App {
     network_banner: Option<String>,
     tool_calls: Vec<ToolCallInfo>,
     compacting: bool,
+    settings_open: bool,
+    settings_edit: GuiSettings,
     frame_count: u64,
     last_fps_time: f64,
     fps: f64,
@@ -151,6 +154,8 @@ impl App {
             sidebar_collapsed: false, input: String::new(), is_loading: false,
             agent_status: AgentStatus::Unconfigured, network_banner: None,
             tool_calls: vec![], compacting: false,
+            settings_open: false,
+            settings_edit: GuiSettings::load(),
             frame_count: 0, last_fps_time: cc.egui_ctx.input(|i| i.time),
             fps: 0.0, start: now,
         }
@@ -284,6 +289,113 @@ impl App {
         if self.sessions.is_empty() { self.new_session(); }
         else if self.active_session_id == id { self.active_session_id = self.sessions[0].id.clone(); }
     }
+
+    fn render_settings_panel(&mut self, ctx: &egui::Context) {
+        if !self.settings_open { return; }
+
+        egui::Window::new("Settings")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .frame(egui::Frame::window(&ctx.style()).fill(COLOR_SURFACE).corner_radius(egui::CornerRadius::same(12)))
+            .show(ctx, |ui| {
+                ui.set_min_width(400.0);
+                ui.add_space(8.0);
+
+                // Provider
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Provider").size(13.0).color(COLOR_TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        egui::ComboBox::from_id_salt("provider_combo")
+                            .selected_text(&self.settings_edit.provider)
+                            .width(200.0)
+                            .show_ui(ui, |ui| {
+                                for (key, label, _) in settings::get_available_models() {
+                                    ui.selectable_value(&mut self.settings_edit.provider, key.clone(), label);
+                                }
+                            });
+                    });
+                });
+                ui.add_space(8.0);
+
+                // Model
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Model").size(13.0).color(COLOR_TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut self.settings_edit.model).text_color(COLOR_TEXT));
+                    });
+                });
+                ui.add_space(8.0);
+
+                // API Key
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("API Key").size(13.0).color(COLOR_TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut key = self.settings_edit.api_key.clone().unwrap_or_default();
+                        let response = ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut key).password(true).text_color(COLOR_TEXT));
+                        if response.changed() {
+                            self.settings_edit.api_key = if key.is_empty() { None } else { Some(key) };
+                        }
+                    });
+                });
+                ui.add_space(8.0);
+
+                // Local model path
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Local Model Path").size(13.0).color(COLOR_TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut path = self.settings_edit.local_model_path.clone().unwrap_or_default();
+                        let response = ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut path).text_color(COLOR_TEXT));
+                        if response.changed() {
+                            self.settings_edit.local_model_path = if path.is_empty() { None } else { Some(path) };
+                        }
+                    });
+                });
+                ui.add_space(8.0);
+
+                // Approval mode
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Approval Mode").size(13.0).color(COLOR_TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        egui::ComboBox::from_id_salt("approval_combo")
+                            .selected_text(&self.settings_edit.approval_mode)
+                            .width(200.0)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.settings_edit.approval_mode, "interactive".into(), "Interactive — Approve each tool call");
+                                ui.selectable_value(&mut self.settings_edit.approval_mode, "yolo".into(), "Yolo — Auto-approve all");
+                                ui.selectable_value(&mut self.settings_edit.approval_mode, "plan".into(), "Plan — Review plan before execution");
+                            });
+                    });
+                });
+                ui.add_space(16.0);
+
+                // Buttons
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new(egui::RichText::new("Save").size(13.0).color(COLOR_TEXT)).fill(COLOR_USER_BUBBLE).min_size(egui::vec2(80.0, 32.0))).clicked() {
+                            if let Err(e) = self.settings_edit.save() {
+                                tracing::error!("Failed to save settings: {}", e);
+                            } else {
+                                {
+                                    let mut guard = self.state.cached_settings.lock().unwrap();
+                                    *guard = self.settings_edit.clone();
+                                }
+                                let state = self.state.clone();
+                                self.runtime.spawn(async move {
+                                    if let Err(e) = reload_llm(&state).await {
+                                        tracing::warn!("reload_llm failed: {}", e);
+                                    }
+                                });
+                            }
+                            self.settings_open = false;
+                        }
+                        if ui.add(egui::Button::new(egui::RichText::new("Cancel").size(13.0).color(COLOR_TEXT)).fill(COLOR_BORDER).min_size(egui::vec2(80.0, 32.0))).clicked() {
+                            self.settings_open = false;
+                        }
+                    });
+                });
+            });
+    }
 }
 
 impl eframe::App for App {
@@ -382,6 +494,13 @@ impl eframe::App for App {
                     if self.sidebar_collapsed { if ui.button("➡").clicked() { self.sidebar_collapsed = false; } }
                     ui.label(egui::RichText::new("Chat").size(16.0).strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("⚙").clicked() {
+                            self.settings_open = true;
+                            self.settings_edit = {
+                                let guard = self.state.cached_settings.lock().unwrap();
+                                guard.clone()
+                            };
+                        }
                         let (status_color, status_label) = match self.agent_status {
                             AgentStatus::Online => (COLOR_STATUS_ONLINE, "Online"),
                             AgentStatus::Busy => (COLOR_STATUS_BUSY, "Busy"),
@@ -461,6 +580,8 @@ impl eframe::App for App {
                     });
                 });
             });
+
+        self.render_settings_panel(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

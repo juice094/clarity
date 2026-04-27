@@ -163,6 +163,14 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn reload_llm(state: &AppState) -> Result<(), String> {
+    {
+        let mut binding = state.llm_binding.lock().unwrap();
+        *binding = None;
+    }
+    ensure_llm(state).await.map_err(|e| e.to_string())
+}
+
 pub async fn check_network(probe: &str) -> bool {
     matches!(
         tokio::time::timeout(
