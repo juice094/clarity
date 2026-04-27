@@ -191,7 +191,8 @@ clarity-wire
 | 方向 | 工作量 | 前提条件 |
 |------|--------|----------|
 | egui Settings 模型选择短期修复 | ½ 天 | 无 |
-| egui Pretext 健康度运维硬化（三阶段） | 6 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-pretext-health-plan.md` |
+| egui Pretext 健康度运维硬化（三阶段） | 6 周 | Phase 1 已完成（settings 修复、Mutex 替换）；`App::update()` 拆分待续 |
+| egui 关键 Parity 差距修复 | 4 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-parity-gap-plan.md` |
 | Phase A：WebSocket MCP + Gateway↔BTM | 2 周 | 用户确认启动 |
 | Release v0.3.1（质量硬化） | ½ 天 | 无 |
 | 单机跨窗口协作架构设计 | 2-3 天 | 需 plan 模式 |
