@@ -64,7 +64,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | WebBrowserTool | ✅ 已完成 | reqwest+scraper 轻量实现 |
 | 快捷键系统 | ⏸️ 未启动 | 全局快捷键 + Vim 键位引擎 |
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
-| 性能优化 | ⏸️ 未启动 | 虚拟滚动、懒加载 |
+| 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），虚拟滚动/懒加载未启动 |
 | 桌面端打包 | ⏸️ 未启动 | CI/CD 自动构建 |
 
 ### Phase 3：Mobile 适配（3 周）
@@ -81,7 +81,7 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 
 | 债务项 | 状态 | 处理策略 |
 |--------|------|---------|
-| cargo audit 9 warnings | ⚠️ Tauri 上游间接依赖 | 等待上游更新，不主动投入 |
+| cargo audit 3 warnings (2 moderate, 1 low) | ⚠️ Tauri 上游间接依赖 | 已配置 `.cargo/audit.toml` 忽略；等待上游更新，不主动投入 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
 | Mobile app | ⏸️ 未启动 | Phase 3 考虑 |
 
@@ -101,9 +101,9 @@ cargo audit                       # 无高危漏洞
 ## 里程碑时间线
 
 ```
-2026-04 ── v0.2.0      本地优先标杆（当前）— Local LLM + 离线 fallback + Desktop GUI
+2026-04 ── v0.3.0      本地优先标杆（已发布）— Local LLM + 离线 fallback + Desktop GUI + 健康维护基线
     │
-2026-05 ── v0.3.0-alpha  零依赖发行 — 单二进制打包 + 嵌入式模型
+2026-05 ── v0.3.1+      质量硬化 + 零依赖发行 — 单二进制打包 + 嵌入式模型 + unwrap 清理
     │
 2026-06 ── v0.4.0-beta   性能优化 + 快捷键 + 搜索增强 + 审批系统增强
     │

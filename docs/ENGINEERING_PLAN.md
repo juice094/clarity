@@ -13,7 +13,7 @@
 |------|------|
 | 版本 | v0.3.0 已发布（tag pushed） |
 | Rust 测试 | 515 passed / 0 failed / 0 warning |
-| 前端测试 | 30 passed / 11 test files（smoke tests 全覆盖） |
+| 前端测试 | 31 passed / 11 test files（smoke + 1 interaction） |
 | CI/CD | Release workflow tag-triggered，已验证通过 |
 | 本地构建 | `.exe` + `.msi` + `.nsis` 产出确认 |
 | 分支卫生 | 13 个已合并 subagent 分支已清理 |
@@ -34,10 +34,10 @@
 
 | 项 | 说明 | 理论依据 |
 |---|------|---------|
-| 前端组件测试 | Sidebar 会话切换、SettingsPanel 渲染、OnboardingModal 状态流转 | 防御性编程：UI 重构必须有回归保护 |
+| 前端组件测试 | ~~Sidebar 会话切换、SettingsPanel 渲染、OnboardingModal 状态流转~~ → 11 组件 smoke tests 全覆盖 + SettingsPanel cancel 交互测试 | ✅ 已完成（基础覆盖） |
 | Gateway 集成测试 | HTTP chat completions 的边界场景（空消息、超长消息、工具调用链） | ✅ 已完成（8 tests） |
-| 性能基准 | 启动时间（Tauri cold start）、内存占用（模型加载前后） | 🔄 待执行 |
-| 错误处理审计 | 所有 `invoke().catch(console.error)` 是否应向前端用户暴露 | 四层主权之数据主权：错误信息不能静默吞噬 |
+| 性能基准 | 启动时间（Tauri cold start）、内存占用（模型加载前后） | ✅ 脚本已交付（dev 基准已采集，release 待编译） |
+| 错误处理审计 | 所有 `invoke().catch(console.error)` 是否应向前端用户暴露 | ✅ 已完成（审计报告 + 5 组件修复 + App.tsx load error） |
 
 ### P2 · 功能推进（v0.4.0-alpha，2-4 周）
 
@@ -63,7 +63,7 @@
 | cargo audit 20+ upstream unmaintained | 已忽略 | 等待 Tauri 生态更新，不主动投入 |
 | Discord/Telegram CVE (rustls-webpki) | 已禁用 | 等上游 serenity 0.12.6+ |
 | `std::sync::RwLock` in `Agent.inner` |  intentional | 短临界区设计，非债务 |
-| `unwrap()` / `expect()` 密度（~1,069） | 已测绘 | 见 `docs/unwrap-debt-map.md`；冻结新增，存量逐步 `?` 化 |
+| `unwrap()` / `expect()` 密度（~171 精确值） | 已测绘 + 部分清理 | 见 `docs/unwrap-debt-map.md`；11 处已 `?` 化/重构，8 处已 SAFETY 注释，冻结新增 |
 | `cargo doc` warnings | ✅ 已清零 | 13 处已修复，建立零 warning 基线 |
 
 ---
