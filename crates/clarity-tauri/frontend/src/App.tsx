@@ -75,6 +75,7 @@ function App() {
   const [theme, setTheme] = useState("dark");
   const [networkStatus, setNetworkStatus] = useState<"offline" | "restored" | "error" | null>(null);
   const [networkErrorMsg, setNetworkErrorMsg] = useState<string>("");
+  const [sessionLoadError, setSessionLoadError] = useState<string>("");
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<{ version: string; downloading: boolean } | null>(null);
@@ -170,6 +171,7 @@ function App() {
       })
       .catch((e) => {
         console.error("Failed to load sessions:", e);
+        setSessionLoadError("Failed to load sessions — started with a new session");
         const initial = createNewSession();
         setSessions([initial]);
         setActiveSessionId(initial.id);
@@ -563,6 +565,9 @@ function App() {
         activeTool={activeToolPanel ?? undefined}
       />
       <div className="chat-container">
+        {sessionLoadError && (
+          <div className="network-banner error">{sessionLoadError}</div>
+        )}
         {networkStatus && (
           <div className={`network-banner ${networkStatus}`}>
             {networkStatus === "offline"
