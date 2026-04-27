@@ -28,7 +28,6 @@ use ui::types::*;
 // ============================================================================
 
 const SIDEBAR_WIDTH: f32 = 220.0;
-const SIDEBAR_COLLAPSED_WIDTH: f32 = 0.0;
 
 struct App {
     state: Arc<AppState>,
@@ -538,19 +537,20 @@ impl eframe::App for App {
             self.theme.apply(style);
         });
 
-        let sidebar_width = if self.sidebar_collapsed { SIDEBAR_COLLAPSED_WIDTH } else { SIDEBAR_WIDTH };
-
         if !self.sidebar_collapsed {
             egui::SidePanel::left("sidebar")
-                .exact_width(sidebar_width)
-                .resizable(false)
+                .default_width(SIDEBAR_WIDTH)
+                .min_width(180.0)
+                .max_width(360.0)
+                .resizable(true)
                 .frame(egui::Frame::side_top_panel(&ctx.style()).fill(self.theme.bg_accent))
                 .show(ctx, |ui| {
+                    ui.set_min_width(ui.available_width());
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Clarity").size(18.0).strong().color(self.theme.text));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("⬅").clicked() { self.sidebar_collapsed = true; }
+                            if ui.add(egui::Button::new(egui::RichText::new("⬅").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { self.sidebar_collapsed = true; }
                         });
                     });
                     ui.add_space(16.0);
@@ -596,6 +596,7 @@ impl eframe::App for App {
 
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         ui.add_space(8.0);
+                        #[cfg(debug_assertions)]
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new(format!("FPS: {:.0}", self.fps)).size(10.0).color(self.theme.text_dim));
                         });
@@ -822,7 +823,7 @@ impl eframe::App for App {
                                 } else {
                                     let btn = ui.add_sized(
                                         egui::vec2(40.0, 40.0),
-                                        egui::Button::new(egui::RichText::new("➤").size(16.0).color(self.theme.text))
+                                        egui::Button::new(egui::RichText::new("▶").size(16.0).color(self.theme.text))
                                             .fill(self.theme.accent).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
                                     );
                                     if btn.clicked() { self.send(); }

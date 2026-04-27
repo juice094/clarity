@@ -93,28 +93,28 @@ impl Theme {
     /// Dark theme — based on OpenClaw "claw:dark" with indigo accent.
     pub fn dark() -> Self {
         Self {
-            // Backgrounds: OpenClaw dark palette
-            bg: hex("#0e1015"),
-            bg_accent: hex("#13151b"),
-            bg_elevated: hex("#191c24"),
-            bg_hover: hex("#1f2330"),
-            surface: hex("#161920"),
-            surface_strong: hex("#191c24"),
+            // Backgrounds: Linear + Zed inspired deep space palette
+            bg: hex("#0f0f11"),
+            bg_accent: hex("#18181b"),
+            bg_elevated: hex("#27272a"),
+            bg_hover: hex("#3f3f46"),
+            surface: hex("#18181b"),
+            surface_strong: hex("#27272a"),
 
-            // Text: 4-level grayscale for information density
-            text: hex("#d4d4d8"),
-            text_strong: hex("#f4f4f5"),
-            text_muted: hex("#838387"),
-            text_dim: hex("#75757d"),
+            // Text: crisp grayscale for OLED readability
+            text: hex("#fafafa"),
+            text_strong: hex("#ffffff"),
+            text_muted: hex("#a1a1aa"),
+            text_dim: hex("#71717a"),
 
-            // Accent: Indigo (#6366f1) — user selected, low saturation, dev-friendly
-            accent: hex("#6366f1"),
-            accent_hover: hex("#818cf8"),
-            accent_subtle: hex_alpha("#6366f1", 0.10),
+            // Accent: Violet (#8b5cf6) — modern, distinctive
+            accent: hex("#8b5cf6"),
+            accent_hover: hex("#a78bfa"),
+            accent_subtle: hex_alpha("#8b5cf6", 0.10),
 
             // Chat bubbles
-            user_bubble: hex("#6366f1"),
-            ai_bubble: hex("#21262d"),
+            user_bubble: hex("#8b5cf6"),
+            ai_bubble: hex("#27272a"),
             chat_text: hex("#d4d4d8"),
 
             // Status
@@ -126,14 +126,14 @@ impl Theme {
             danger: hex("#ef4444"),
 
             // Borders
-            border: hex("#1e2028"),
-            border_strong: hex("#2e3040"),
-            border_hover: hex("#3e4050"),
-            input_bg: hex("#1e2028"),
+            border: hex("#3f3f46"),
+            border_strong: hex("#52525b"),
+            border_hover: hex("#71717a"),
+            input_bg: hex("#27272a"),
 
             // Focus
-            focus_ring: hex_alpha("#6366f1", 0.20),
-            focus_glow: hex_alpha("#6366f1", 0.15),
+            focus_ring: hex_alpha("#8b5cf6", 0.20),
+            focus_glow: hex_alpha("#8b5cf6", 0.15),
 
             // Fonts
             font_body: "Inter".into(),
@@ -175,11 +175,11 @@ impl Theme {
             text_muted: hex("#656d76"),
             text_dim: hex("#8c959f"),
 
-            accent: hex("#6366f1"),
-            accent_hover: hex("#4f46e5"),
-            accent_subtle: hex_alpha("#6366f1", 0.08),
+            accent: hex("#8b5cf6"),
+            accent_hover: hex("#7c3aed"),
+            accent_subtle: hex_alpha("#8b5cf6", 0.08),
 
-            user_bubble: hex("#6366f1"),
+            user_bubble: hex("#8b5cf6"),
             ai_bubble: hex("#f6f8fa"),
             chat_text: hex("#1f2328"),
 
@@ -195,8 +195,8 @@ impl Theme {
             border_hover: hex("#9099a2"),
             input_bg: hex("#f6f8fa"),
 
-            focus_ring: hex_alpha("#6366f1", 0.20),
-            focus_glow: hex_alpha("#6366f1", 0.10),
+            focus_ring: hex_alpha("#8b5cf6", 0.20),
+            focus_glow: hex_alpha("#8b5cf6", 0.10),
 
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
@@ -222,7 +222,7 @@ impl Theme {
     /// Apply theme to egui context visuals.
     pub fn apply(&self, style: &mut egui::Style) {
         style.visuals.override_text_color = Some(self.text);
-        style.visuals.panel_fill = self.bg;
+        style.visuals.panel_fill = self.bg_accent;
         style.visuals.window_fill = self.surface;
         style.visuals.extreme_bg_color = self.bg_accent;
         style.visuals.widgets.inactive.weak_bg_fill = self.surface;
@@ -235,6 +235,7 @@ impl Theme {
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);
         style.visuals.window_shadow = egui::Shadow::NONE;
         style.visuals.popup_shadow = egui::Shadow::NONE;
+        style.visuals.window_stroke = egui::Stroke::NONE;
         style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
         style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
