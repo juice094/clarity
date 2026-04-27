@@ -8,7 +8,14 @@ use std::path::Path;
 const MAX_DEPTH: usize = 4;
 
 /// Render a directory tree starting at `path`.
-pub fn render_file_tree(ui: &mut egui::Ui, path: &Path, theme: &Theme, depth: usize) {
+/// `on_file_click` is called when a file (not directory) is clicked.
+pub fn render_file_tree(
+    ui: &mut egui::Ui,
+    path: &Path,
+    theme: &Theme,
+    depth: usize,
+    on_file_click: &mut dyn FnMut(&Path),
+) {
     if depth > MAX_DEPTH {
         return;
     }
@@ -44,17 +51,20 @@ pub fn render_file_tree(ui: &mut egui::Ui, path: &Path, theme: &Theme, depth: us
             .id_salt(full_path.to_string_lossy().to_string())
             .default_open(depth < 1);
             header.show(ui, |ui| {
-                render_file_tree(ui, &full_path, theme, depth + 1);
+                render_file_tree(ui, &full_path, theme, depth + 1, on_file_click);
             });
         } else {
-            ui.horizontal(|ui| {
+            let response = ui.horizontal(|ui| {
                 ui.add_space(4.0 * depth as f32);
                 ui.label(
                     egui::RichText::new(format!("📄 {}", name))
                         .size(12.0)
                         .color(theme.text_dim),
-                );
-            });
+                )
+            }).response.interact(egui::Sense::click());
+            if response.clicked() {
+                on_file_click(&full_path);
+            }
         }
     }
 }

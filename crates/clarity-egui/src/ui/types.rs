@@ -58,6 +58,8 @@ pub struct Message {
     pub parsed: Vec<RenderBlock>,
     /// Cached bubble height from last render (for virtual list estimation).
     pub cached_height: Option<f32>,
+    /// Semantic flag: true for system/error messages that need distinct styling.
+    pub is_error: bool,
 }
 
 impl Message {

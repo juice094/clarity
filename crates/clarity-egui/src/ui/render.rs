@@ -20,29 +20,41 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.78).max(280.0);
 
-    let (align, bg, text_color, radius) = match msg.role {
-        Role::User => (
-            egui::Align::RIGHT,
-            theme.user_bubble,
-            egui::Color32::WHITE,
-            egui::CornerRadius {
-                nw: (theme.radius_lg as u8),
-                ne: 4,
-                sw: (theme.radius_lg as u8),
-                se: 4,
-            },
-        ),
-        Role::Agent => (
+    let (align, bg, text_color, radius, stroke) = if msg.is_error {
+        (
             egui::Align::LEFT,
-            theme.ai_bubble,
-            theme.chat_text,
-            egui::CornerRadius {
-                nw: 4,
-                ne: (theme.radius_lg as u8),
-                sw: 4,
-                se: (theme.radius_lg as u8),
-            },
-        ),
+            theme.error_bubble,
+            theme.error_text,
+            egui::CornerRadius::same(theme.radius_lg as u8),
+            egui::Stroke::new(1.0, theme.danger),
+        )
+    } else {
+        match msg.role {
+            Role::User => (
+                egui::Align::RIGHT,
+                theme.user_bubble,
+                egui::Color32::WHITE,
+                egui::CornerRadius {
+                    nw: (theme.radius_lg as u8),
+                    ne: 4,
+                    sw: (theme.radius_lg as u8),
+                    se: 4,
+                },
+                egui::Stroke::NONE,
+            ),
+            Role::Agent => (
+                egui::Align::LEFT,
+                theme.ai_bubble,
+                theme.chat_text,
+                egui::CornerRadius {
+                    nw: 4,
+                    ne: (theme.radius_lg as u8),
+                    sw: 4,
+                    se: (theme.radius_lg as u8),
+                },
+                egui::Stroke::NONE,
+            ),
+        }
     };
 
     let shadow = egui::Shadow {
@@ -57,10 +69,17 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
         egui::Frame::group(ui.style())
             .fill(bg)
             .corner_radius(radius)
-            .stroke(egui::Stroke::NONE)
+            .stroke(stroke)
             .shadow(shadow)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
+                if msg.is_error {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("⚠").size(14.0));
+                        ui.label(egui::RichText::new("Error").size(12.0).strong().color(text_color));
+                    });
+                    ui.add_space(4.0);
+                }
                 crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, text_color);
             });
     });

@@ -61,6 +61,8 @@ struct App {
     mcp_changed: bool,
     /// Last frame's scroll offset for virtual list culling.
     last_scroll_offset: f32,
+    /// File preview: (file_name, content_text).
+    preview_file: Option<(String, String)>,
 }
 
 fn setup_fonts(ctx: &egui::Context) {
@@ -187,6 +189,7 @@ impl App {
             mcp_config: ui::mcp_panel::load_mcp_config(),
             mcp_changed: false,
             last_scroll_offset: 0.0,
+            preview_file: None,
         }
     }
 
@@ -224,7 +227,7 @@ impl App {
         let text = self.input.trim().to_string();
         if (text.is_empty() && self.attachments.is_empty()) || self.is_loading { return; }
 
-        let mut full_message = text;
+        let mut full_message = text.clone();
         for att in &self.attachments {
             if let Ok(content) = std::fs::read_to_string(&att.path) {
                 full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
@@ -235,10 +238,19 @@ impl App {
         self.attachments.clear();
 
         if let Some(session) = self.active_session_mut() {
-            let mut msg = Message { role: Role::User, content: full_message.clone(), timestamp: Instant::now(), parsed: vec![], cached_height: None };
+            let mut msg = Message { role: Role::User, content: full_message.clone(), timestamp: Instant::now(), parsed: vec![], cached_height: None, is_error: false };
             msg.prepare();
             session.messages.push(msg);
             session.updated_at = now_millis();
+            // Auto-name session from first user message
+            if session.title == "New Chat" {
+                let trimmed = text.trim();
+                session.title = if trimmed.chars().count() > 20 {
+                    format!("{}…", trimmed.chars().take(20).collect::<String>())
+                } else {
+                    trimmed.to_string()
+                };
+            }
         }
         self.input.clear();
         self.is_loading = true;
@@ -305,7 +317,7 @@ impl App {
                                 continue;
                             }
                         }
-                        let mut msg = Message { role: Role::Agent, content: text, timestamp: Instant::now(), parsed: vec![], cached_height: None };
+                        let mut msg = Message { role: Role::Agent, content: text, timestamp: Instant::now(), parsed: vec![], cached_height: None, is_error: false };
                         msg.prepare();
                         session.messages.push(msg);
                     }
@@ -330,7 +342,7 @@ impl App {
                     self.is_loading = false; self.agent_status = AgentStatus::Online;
                     self.push_toast(&msg, ToastLevel::Error);
                     if let Some(session) = self.active_session_mut() {
-                        let mut m = Message { role: Role::Agent, content: format!("Error: {}", msg), timestamp: Instant::now(), parsed: vec![], cached_height: None };
+                        let mut m = Message { role: Role::Agent, content: msg.clone(), timestamp: Instant::now(), parsed: vec![], cached_height: None, is_error: true };
                         m.prepare();
                         session.messages.push(m);
                     }
@@ -586,13 +598,53 @@ impl eframe::App for App {
                     ui.add_space(16.0);
                     ui.label(egui::RichText::new("Files").size(11.0).color(self.theme.text_dim).weak());
                     ui.add_space(4.0);
+                    let mut clicked_file: Option<std::path::PathBuf> = None;
                     egui::ScrollArea::vertical()
                         .max_height(200.0)
                         .show(ui, |ui| {
                             if let Ok(cwd) = std::env::current_dir() {
-                                ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0);
+                                ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
+                                    clicked_file = Some(path.to_path_buf());
+                                });
                             }
                         });
+                    if let Some(path) = clicked_file {
+                        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                        let content = std::fs::read_to_string(&path).ok();
+                        self.preview_file = content.map(|c| (name, c));
+                    }
+
+                    // File preview panel
+                    if let Some((ref name, ref content)) = self.preview_file {
+                        let preview_name = name.clone();
+                        let preview_content = content.clone();
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Preview").size(11.0).color(self.theme.text_dim).weak());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.small_button("✕").clicked() { self.preview_file = None; }
+                            });
+                        });
+                        ui.label(egui::RichText::new(&preview_name).size(12.0).color(self.theme.text).monospace());
+                        ui.add_space(4.0);
+                        let mut preview_text = if preview_content.len() > 2000 {
+                            format!("{}…\n\n[Preview truncated: {} total characters]", &preview_content[..2000], preview_content.len())
+                        } else {
+                            preview_content
+                        };
+                        egui::ScrollArea::vertical()
+                            .max_height(180.0)
+                            .show(ui, |ui| {
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut preview_text)
+                                        .desired_rows(10)
+                                        .font(egui::TextStyle::Monospace)
+                                        .text_color(self.theme.text_dim)
+                                );
+                            });
+                    }
 
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                         ui.add_space(8.0);
@@ -965,7 +1017,7 @@ fn load_sessions() -> Vec<Session> {
                             messages: data.messages.into_iter().map(|m| {
                                 let mut msg = Message {
                                     role: if m.role == "user" { Role::User } else { Role::Agent },
-                                    content: m.content, timestamp: Instant::now(), parsed: vec![], cached_height: None,
+                                    content: m.content, timestamp: Instant::now(), parsed: vec![], cached_height: None, is_error: false,
                                 };
                                 msg.prepare();
                                 msg

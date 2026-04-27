@@ -39,6 +39,8 @@ pub struct Theme {
     pub user_bubble: egui::Color32,
     pub ai_bubble: egui::Color32,
     pub chat_text: egui::Color32,
+    pub error_bubble: egui::Color32,
+    pub error_text: egui::Color32,
 
     // --- Status ---
     pub status_online: egui::Color32,
@@ -116,6 +118,8 @@ impl Theme {
             user_bubble: hex("#8b5cf6"),
             ai_bubble: hex("#27272a"),
             chat_text: hex("#d4d4d8"),
+            error_bubble: hex_alpha("#ef4444", 0.15),
+            error_text: hex("#fafafa"),
 
             // Status
             status_online: hex("#22c55e"),
@@ -182,6 +186,8 @@ impl Theme {
             user_bubble: hex("#8b5cf6"),
             ai_bubble: hex("#f6f8fa"),
             chat_text: hex("#1f2328"),
+            error_bubble: hex_alpha("#ef4444", 0.10),
+            error_text: hex("#1f2328"),
 
             status_online: hex("#22c55e"),
             status_busy: hex("#f59e0b"),
