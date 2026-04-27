@@ -63,6 +63,8 @@ struct App {
     last_scroll_offset: f32,
     /// File preview: (file_name, content_text).
     preview_file: Option<(String, String)>,
+    /// Queued message to auto-send when current streaming finishes.
+    pending_send: Option<(String, Vec<Attachment>)>,
 }
 
 fn setup_fonts(ctx: &egui::Context) {
@@ -192,6 +194,7 @@ impl App {
             mcp_changed: false,
             last_scroll_offset: 0.0,
             preview_file: None,
+            pending_send: None,
         }
     }
 
@@ -227,7 +230,14 @@ impl App {
 
     fn send(&mut self) {
         let text = self.input.trim().to_string();
-        if (text.is_empty() && self.attachments.is_empty()) || self.is_loading { return; }
+        if text.is_empty() && self.attachments.is_empty() { return; }
+
+        // If currently streaming, queue the message for auto-send when done.
+        if self.is_loading {
+            self.pending_send = Some((text, std::mem::take(&mut self.attachments)));
+            self.input.clear();
+            return;
+        }
 
         let mut full_message = text.clone();
         for att in &self.attachments {
@@ -339,10 +349,26 @@ impl App {
                     self.is_loading = false; self.agent_status = AgentStatus::Online;
                     self.state.agent.reset();
                     self.save_current_session();
+                    // Auto-send any queued message.
+                    if let Some((text, attachments)) = self.pending_send.take() {
+                        self.input = text;
+                        self.attachments = attachments;
+                        self.send();
+                    }
                 }
                 UiEvent::Error(msg) => {
                     self.is_loading = false; self.agent_status = AgentStatus::Online;
                     self.push_toast(&msg, ToastLevel::Error);
+                    // Release queued message back to input so user can retry.
+                    if let Some((text, mut attachments)) = self.pending_send.take() {
+                        if self.input.is_empty() {
+                            self.input = text;
+                        } else {
+                            self.input.push_str("\n");
+                            self.input.push_str(&text);
+                        }
+                        self.attachments.append(&mut attachments);
+                    }
                     if let Some(session) = self.active_session_mut() {
                         let mut m = Message { role: Role::Agent, content: msg.clone(), timestamp: Instant::now(), parsed: vec![], cached_height: None, is_error: true };
                         m.prepare();
@@ -875,15 +901,18 @@ impl eframe::App for App {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             let available_width = ui.available_width();
-                            let input_width = available_width - 52.0;
+                            let btn_area_width = if self.is_loading { 100.0 } else { 52.0 };
+                            let input_width = available_width - btn_area_width;
                             ui.allocate_ui_with_layout(
                                 egui::vec2(input_width, 44.0),
                                 egui::Layout::top_down(egui::Align::LEFT),
                                 |ui| {
-                                    let hint = if self.attachments.is_empty() {
-                                        "Type a message..."
-                                    } else {
+                                    let hint = if self.pending_send.is_some() {
+                                        "Message queued — will send when reply finishes..."
+                                    } else if !self.attachments.is_empty() {
                                         "Type a message (files attached)..."
+                                    } else {
+                                        "Type a message..."
                                     };
                                     let prev_input = self.input.clone();
                                     let line_count = self.input.matches('\n').count() + 1;
@@ -907,21 +936,43 @@ impl eframe::App for App {
                                     }
                                 },
                             );
-                            ui.vertical_centered(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if self.is_loading {
-                                    let btn = ui.add_sized(
-                                        egui::vec2(40.0, 40.0),
+                                    // Queue-send button (rightmost) — enabled only if input has content.
+                                    let can_queue = !self.input.trim().is_empty() || !self.attachments.is_empty();
+                                    let queue_color = if can_queue { self.theme.accent } else { self.theme.bg_elevated };
+                                    let queue_text = if can_queue { self.theme.text } else { self.theme.text_dim };
+                                    let queue_btn = ui.add_sized(
+                                        egui::vec2(44.0, 44.0),
+                                        egui::Button::new(egui::RichText::new("▶").size(16.0).color(queue_text))
+                                            .fill(queue_color).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
+                                    );
+                                    if queue_btn.clicked() && can_queue {
+                                        self.send();
+                                    }
+                                    if can_queue {
+                                        queue_btn.on_hover_text("Queue message — auto-sends when current reply finishes");
+                                    } else {
+                                        queue_btn.on_hover_text("Type a message to queue");
+                                    }
+
+                                    // Stop button (left of queue).
+                                    let stop_btn = ui.add_sized(
+                                        egui::vec2(44.0, 44.0),
                                         egui::Button::new(egui::RichText::new("■").size(16.0).color(self.theme.text))
                                             .fill(self.theme.danger).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
                                     );
-                                    if btn.clicked() { self.stop(); }
+                                    if stop_btn.clicked() { self.stop(); }
+                                    stop_btn.on_hover_text("Stop generating (Ctrl+C)");
                                 } else {
+                                    // Send button.
                                     let btn = ui.add_sized(
-                                        egui::vec2(40.0, 40.0),
+                                        egui::vec2(44.0, 44.0),
                                         egui::Button::new(egui::RichText::new("▶").size(16.0).color(self.theme.text))
                                             .fill(self.theme.accent).corner_radius(egui::CornerRadius::same(self.theme.radius_full as u8)),
                                     );
                                     if btn.clicked() { self.send(); }
+                                    btn.on_hover_text("Send message");
                                 }
                             });
                         });
