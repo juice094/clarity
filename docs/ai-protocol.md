@@ -9,7 +9,7 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-26
-**当前分支**：`main` @ `73ae3c1`（已 push origin/main）
+**当前分支**：`main` @ `a51fde6`（已 push origin/main）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：健康维护长程推进完成，working tree clean，0 background tasks
