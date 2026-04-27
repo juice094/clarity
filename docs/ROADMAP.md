@@ -68,7 +68,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
 | 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），release 跑分待执行 |
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
-| egui 聊天原型 | ✅ 已验证 | 基础 UI(<2h)、Markdown 生态(`egui_commonmark`)、长列表虚拟化(`egui_virtual_list`) 风险均确认可控。状态：**候选主力栈**，暂不启动独立 crate。触发启动条件：① Phase 3 多窗口需求 ② Tauri 维护负担超过阈值
+| `clarity-egui` | 🚀 **已启动** | `crates/clarity-egui` 已创建，复刻 Tauri 深色主题风格。状态：**主力栈**，`clarity-tauri` 废弃归档。v0.4.0 起 Release 产出 egui 二进制 |
 
 ### Phase 3：集群语义验证（4-6 周）
 
@@ -79,7 +79,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
 | WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
-| Tauri ↔ BackgroundTaskManager 集成 | ⏸️ 未启动 | 替换独立 `TaskRecord` JSON |
+| Gateway ↔ BackgroundTaskManager 集成 | ⏸️ 未启动 | 原 Tauri ↔ BTM 已废弃，迁移至 Gateway ↔ BTM（egui 直接消费 Gateway 事件） |
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
 | 会话层统一（SQLite） | ⏸️ 未启动 | 替代 JSON+JSONL 双系统 |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
