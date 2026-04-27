@@ -128,15 +128,15 @@
 
 ```
 clarity-core ← clarity-gateway
-      ↑              ↑
-      └────── clarity-tauri ──────┘
+      ↑
+      └────── clarity-egui（主力 GUI，Tauri 已归档）
       ↑
 clarity-memory
       ↑
 clarity-wire
 ```
 
-- `clarity-tui` / `clarity-headless` / `clarity-claw` 均依赖 `clarity-core`
+- `clarity-tui` / `clarity-headless` / `clarity-claw` / `clarity-tauri`（归档）均依赖 `clarity-core`
 - `clarity-integration-tests` 依赖 gateway + core
 
 ---
@@ -154,7 +154,10 @@ clarity-wire
 
 ### 5.1a 活跃问题
 
-暂无 P0/P1 级活跃 bug。
+| 优先级 | 问题 | 范围 | 状态 |
+|--------|------|------|------|
+| P1 | Settings 模型选择体验缺陷 | `clarity-egui` | 已审计，修复计划见 `PROJECT_STATUS.md` I1 |
+| P2 | egui 审批交互 UI 缺失 | `clarity-egui` | 已确认，待排期；当前建议使用 Yolo 模式 |
 
 ### 5.2 长期冻结（约束解除前不投入）
 
@@ -163,6 +166,7 @@ clarity-wire
 - Mobile 适配
 - Plugin SDK / Sandbox
 - Vim 集成
+- **T_KIMICLI_REF**：借鉴 Kimi CLI settings/模型选择设计 — 仅作设计参考，不推进实现
 
 ### 5.3 外部阻塞
 
@@ -186,10 +190,12 @@ clarity-wire
 
 | 方向 | 工作量 | 前提条件 |
 |------|--------|----------|
+| egui Settings 模型选择短期修复 | ½ 天 | 无 |
 | egui Pretext 健康度运维硬化（三阶段） | 6 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-pretext-health-plan.md` |
 | Phase A：WebSocket MCP + Gateway↔BTM | 2 周 | 用户确认启动 |
 | Release v0.3.1（质量硬化） | ½ 天 | 无 |
 | 单机跨窗口协作架构设计 | 2-3 天 | 需 plan 模式 |
+| **借鉴 Kimi CLI settings/模型选择** | — | ⏸️ 冻结代办，不推进实现，仅作设计参考 |
 
 ---
 

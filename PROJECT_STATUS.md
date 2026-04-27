@@ -1,7 +1,7 @@
 # Clarity Project Status
 
-> Last updated: 2026-04-26
-> Branch: `main` @ `1a6cbc0`
+> Last updated: 2026-04-27
+> Branch: `main` @ `8917506`
 > Test baseline: **524 passed, 0 failed, 4 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
@@ -17,6 +17,8 @@
 | 4 | FTUE闭环 | ✅ Complete | `SettingsPanel` 保存后自动触发 `reload_llm` |
 | 5 | 冷却验证 | ✅ Complete | 测试524 passed, Clippy零警告 |
 | 6 | 可用性急救 | ✅ Complete | GUI API key 输入框 + `LlmFactory::create_with_key` — Clarity 真正可用 |
+| 7 | UI 栈迁移 | ✅ Complete | `clarity-egui` 替代 `clarity-tauri` 成为主力 GUI 栈 |
+| 8 | egui 硬化（进行中） | 🔄 In Progress | Pretext 健康度审查完成，三阶段运维 plan 已产出 |
 
 ---
 
@@ -24,14 +26,72 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 524 passed, 0 failed | 2026-04-26 |
-| Clippy zero warnings | `-D warnings` clean | 2026-04-26 |
+| Workspace lib tests | 524 passed, 0 failed | 2026-04-27 |
+| Clippy zero warnings | `-D warnings` clean | 2026-04-27 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
 | Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
 | EXE runtime dependency scan | Pure system DLLs + UCRT only | 2026-04-26 |
 | EXE launch test | `clarity-tauri.exe` starts (GUI blocking) | 2026-04-26 |
 | Frontend npm build | `npm run build` succeeds (75 modules) | 2026-04-26 |
 | CI workflow syntax | YAML valid, `working-directory` set | 2026-04-26 |
+| egui dev build | `cargo run -p clarity-egui` starts | 2026-04-27 |
+| egui clippy | 0 warnings (11 resolved) | 2026-04-27 |
+
+---
+
+## Current Stack Positioning
+
+**主力 GUI 栈**：`clarity-egui`（egui 0.31 + glow backend）
+**废弃归档**：`clarity-tauri`（Tauri 2 + React/Vite）— 代码保留，新功能不追加
+**活跃后端**：`clarity-core` / `clarity-gateway` / `clarity-memory` / `clarity-wire`
+**维护模式**：`clarity-tui` / `clarity-claw` / `clarity-headless`
+
+### 前后端功能 Parity（关键差距）
+
+后端 `clarity-core` 功能极为完整（Agent 循环、20+ 工具、审批系统、Plan 模式、并行子代理、后台任务、MCP 三协议、Skill 系统、记忆系统、本地 LLM）。
+
+前端 `clarity-egui` 在**聊天体验**（流式、虚拟列表、美观气泡、文件预览、CJK 字体、消息队列）上已超越 Tauri，但在 **core 功能暴露**上存在显著缺口：
+
+| 功能 | core | egui | 说明 |
+|------|:----:|:----:|------|
+| Agent 运行/流式 | ✅ | ✅ | — |
+| 工具调用可视化 | ✅ | ✅ | Running/Done 状态气泡 |
+| Compaction Banner | ✅ | ✅ | 压缩状态提示条 |
+| **审批交互 UI** | ✅ | ❌ | Interactive/Plan 模式无审批弹窗，实际无法使用 |
+| **Plan 步骤可视化** | ✅ | ❌ | 无计划步骤展示和分步审批界面 |
+| **子代理/并行执行** | ✅ | ❌ | 无多 Agent 进度面板 |
+| 后台任务面板 | ✅ | 只读 | 无创建/取消/Cron 配置操作 |
+| **技能系统 UI** | ✅ | ❌ | 无 Skill 列表、激活/切换界面 |
+| **Token 用量显示** | ✅ | ❌ | `Usage` WireMessage 未处理 |
+| **模型下载 GUI** | — | ❌ | Tauri 曾实现，egui 无 |
+| **日志/Console 面板** | — | ❌ | Tauri 曾实现，egui 无 |
+| LSP 集成 | ✅ | ❌ | Tauri 曾实现，egui 无 |
+| MCP 配置面板 | ✅ | ✅ | 服务器列表、启用/禁用、保存 |
+
+**最大风险**：`clarity-egui` **零单元测试**（0 tests / 0 modules）。
+
+---
+
+## Active Issues（已确认，待修复）
+
+### A1. Settings 模型配置体验缺陷（P1）
+
+**诊断结论**：`model` 字段持久化机制本身完好（serde 序列化/反序列化无遗漏）。问题集中在**UI 交互层**和**边缘容错**：
+
+1. **UI 无模型下拉列表**：`get_available_models()` 返回的 provider→model 映射在 `render_settings_panel` 中被完全忽略，Model 字段是自由文本 `TextEdit`。用户需手动输入模型 ID（如 `kimi-k2-07132k`），易出错且无自动校验。
+2. **Provider/Model 不联动**：切换 provider 时 model 文本不会自动更新，可能导致 provider 与 model 不匹配（如 kimi provider + gpt-4o model）。
+3. **`load()` 静默吞错**：`gui-settings.json` 损坏时直接回退 `default_with_env()`，无任何日志，用户感知为"配置丢失"。
+4. **`default_with_env()` model 环境变量互斥缺失**：同时设置 `KIMI_API_KEY` + `OPENAI_MODEL` 会导致 provider=kimi 但 model=openai 型号的不匹配状态。
+5. **`ensure_llm` 无网络 fallback**：与 `clarity-tauri` 侧不同，egui 的 `ensure_llm` 在网络不可用时不会自动回退到 local provider。
+
+**修复路径**：
+- 短期：将 Model `TextEdit` 改为基于 `get_available_models` 的 `ComboBox`，联动 provider 切换。
+- 中期：补齐 `load()` 错误日志 + 损坏文件备份；修复 `default_with_env()` 互斥逻辑；补齐 `ensure_llm` 网络 fallback。
+- 长期：借鉴 Kimi CLI 的 settings 分层设计（环境变量 → 配置文件 → 交互式选择），见代办项 T_KIMICLI_REF。
+
+### A2. egui 交互型功能缺口（P2）
+
+审批弹窗、Plan 可视化、子代理进度、任务创建/取消、Token 用量显示为当前最大功能缺口，直接影响 core 能力的完整暴露。
 
 ---
 
@@ -47,6 +107,7 @@
 | U6 | **模型下载引导** — 用户从Onboarding到下载.gguf到完成首次对话 | 🟡 Medium | T_KALOSM_REAL阻塞 | 云端Provider作为默认路径，本地模型作为进阶选项 |
 | U7 | **WebView2缺失环境** — Win10未预装WebView2时的自动下载行为 | 🟡 Medium | 无Win10 VM | 文档说明；依赖Tauri内置的WebView2引导 |
 | U8 | **NSIS便携版运行** — `.exe` 直接运行（非安装） | 🟢 Low | 无 | 双击验证即可 |
+| U9 | **egui 纯净环境运行** — 无 WebView2 依赖的 egui 单二进制在裸机运行 | 🟡 Medium | 无 | egui 无 WebView2 依赖，但需验证字体/渲染在裸机表现 |
 
 ---
 
@@ -55,16 +116,19 @@
 | ID | Item | Status | Impact | Mitigation |
 |----|------|--------|--------|------------|
 | T_KALOSM_REAL | agri-paper 7B模型数据未到达 | 🔴 持续阻塞 | 本地模型首次体验路径不完整 | 云端Provider（OpenAI/Anthropic）作为默认首次体验路径 |
+| T_KIMICLI_REF | 借鉴 Kimi CLI 的 settings/模型选择交互设计 | ⏸️ 冻结代办 | settings 体验优化参考 | 不推进实现，仅作为设计参考归档于 `docs/plans/2026-04-27-egui-pretext-health-plan.md` 冻结项 |
 
 ---
 
 ## Known Limitations (Documented, Not Blockers)
 
-1. **WebView2 Dependency** — Windows 11预装；Windows 10可能需自动下载（Tauri处理）
+1. **WebView2 Dependency（仅 Tauri）** — Windows 11预装；Windows 10可能需自动下载（Tauri处理）。egui 无此依赖。
 2. **CUDA Optional** — `cuda` feature flag控制，非必需
 3. **Self-Signed Certificate** — 无商业证书，SmartScreen可能拦截，文档已说明
 4. **Discord/Telegram Channels** — 因CVE禁用，Slack可用
 5. **cargo audit warnings** — 11个unmaintained（上游依赖），已标记为允许
+6. **egui 审批交互缺失** — Interactive/Plan approval mode 在 GUI 中暂不可用，建议当前使用 Yolo 模式
+7. **egui 零测试** — 计划通过 `docs/plans/2026-04-27-egui-pretext-health-plan.md` 分阶段补齐
 
 ---
 
@@ -72,39 +136,43 @@
 
 ### Current Assessment
 
-方案A的核心约束是：**"任意Windows用户可在3分钟内从GitHub Release下载并运行Clarity"**。
+**方案A的核心约束已扩展**：**"任意Windows用户可在3分钟内从GitHub Release下载并运行Clarity（egui 版本）"**。
 
 当前状态：
-- ✅ 构建产物已生成（MSI/NSIS）
-- ✅ 代码已修复并推送
-- ❌ 未在真实/纯净环境中验证
+- ✅ 构建产物已生成（MSI/NSIS）— Tauri 侧
+- ✅ egui 侧可 `cargo run` 直接运行，无 WebView2 依赖
+- ✅ 代码已修复并推送（clippy 零警告）
+- ❌ 未在真实/纯净环境中验证安装包
 - ❌ CI未实际触发验证
 - ❌ 首次用户体验未端到端验证
+- 🔄 egui 健康度运维 plan 已产出，待执行
 
-**结论：继续完成方案A的验证工作，不切入方案B。**
+**结论：继续完成方案A的验证工作，同时推进 egui 硬化。**
 
 理由：
-1. 构建产物已产出，验证成本远低于重新开发
-2. 方案B（功能驱动）的ROI在当前阶段为负——没有发布链，功能越多债务越重
-3. 剩余未验证项（U1-U5）均可通过GitHub Actions + 少量人工验证完成
+1. egui 彻底摆脱 WebView2 依赖，纯净环境验证意义更大
+2. 构建产物已产出，验证成本远低于重新开发
+3. 剩余未验证项（U1-U5, U9）均可通过 GitHub Actions + 少量人工验证完成
+4. Pretext 运维 plan 为 egui 提供了可量化的硬化路径
 
 ### Recommended Next Steps
 
 | Priority | Action | Est. Time | Owner |
 |----------|--------|-----------|-------|
-| P0 | Push test tag `v0.2.1-test.1` 触发CI，验证 workflow 完整跑通 | 10 min + CI time | Human |
-| P0 | 人工验证CI产出的MSI/NSIS在本地安装运行 | 15 min | Human |
-| P1 | 使用Windows Sandbox验证纯净环境安装 | 30 min | Human |
-| P1 | 验证FTUE完整路径：安装→启动→Onboarding→设置OpenAI key→首次对话 | 20 min | Human |
-| P2 | 评估是否购买商业代码签名证书（如SmartScreen拦截严重） | — | Deferred |
-| P2 | 发布v0.3.0-alpha并开始社区推广 | — | After P0-P1 |
+| P0 | Push test tag `v0.3.0-test.1` 触发CI，验证 workflow 完整跑通 | 10 min + CI time | Human |
+| P0 | 人工验证CI产出的 egui binary 在本地运行 | 15 min | Human |
+| P1 | 使用Windows Sandbox验证 egui 纯净环境运行 | 30 min | Human |
+| P1 | 修复 Settings 模型选择 ComboBox + provider/model 联动 | ½ 天 | Agent |
+| P1 | 验证FTUE完整路径：启动→设置OpenAI key→选择模型→首次对话 | 20 min | Human |
+| P2 | 启动 Pretext 运维 plan Phase 1（热路径清剿） | 2 周 | Agent |
+| P2 | 发布v0.3.1-alpha并开始社区推广 | — | After P0-P1 |
 
 ### Abort Criteria (Switch to Plan B)
 
 若以下任一条件触发，重新评估方案：
 1. CI workflow 在3次尝试后仍无法产出可用artifact
 2. 包体积在UPX压缩后仍 >100MB（当前8.5MB MSI，远低于阈值）
-3. WebView2缺失环境导致>50% Win10用户无法安装
+3. egui 在裸机环境中字体渲染/输入法出现不可修复的回归
 4. 30天风险对冲窗口到期（GitHub Star < 50 且 Issue+PR < 3）
 
 ---
@@ -121,6 +189,6 @@ cargo fmt --all -- --check               # 格式检查
 
 ```bash
 cargo audit                              # 无高危漏洞
-cargo tauri build                        # 本地打包成功（Windows）
-# 以上 + U1-U5 验证通过
+cargo run -p clarity-egui               # 本地运行验证（egui 为主力栈）
+# 以上 + U1-U5, U9 验证通过
 ```
