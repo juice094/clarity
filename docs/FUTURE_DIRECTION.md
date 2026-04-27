@@ -33,7 +33,7 @@
 - **项目广度 ≤ 5 核心工具**：当前 6 crates 已达上限，Phase A-D 不新增 crate，只重构现有 crate
 - **Rust 核心模块不可外包**：Hub-Worker、Wire 扩展、SessionManager 必须由直接代码实现
 - **Hard Veto 生效**：禁止 Docker / RAG(Qdrant) / Electron / 分布式消息通道 / Mobile 适配
-- **UI 技术栈方向**：egui 为未来主控探索方向，Tauri 冻结新功能开发（仅维护），Pretext 为优化项不入主路线图
+- **UI 技术栈方向**：egui 为**候选主力栈**（技术风险已验证：基础 UI ✅、Markdown `egui_commonmark` ✅、长列表 `egui_virtual_list` ✅），暂不启动独立 crate；Tauri 冻结新功能开发（仅维护）；Pretext 思想可借鉴（两阶段分离），库本身不入主路线图
 - **每阶段验收**：`cargo test --workspace --lib` + `npm run build` 全绿
 
 ---

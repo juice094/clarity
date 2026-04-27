@@ -50,7 +50,7 @@
 | 嵌入式模型自动下载 | 首次启动检测无模型 → 引导下载 Qwen2.5-3B / DeepSeek-R1-Distill-1.5B；`hf-hub` 已集成 | 零依赖发行：用户不应手动找模型文件 |
 | T_APPROVAL V2 设计 | AI 分类器 + 规则引擎混合审批；V1 已完成规则引擎，V2 需 LLM-based 风险分类 | 哥德尔不完备：规则引擎无法覆盖所有场景，需 LLM 补全 |
 | 单机跨窗口协作原型 | 同一台机器上多个 Clarity 窗口共享 Hub-Worker 状态；验证 Wire 消息边界 | 集群即单机：先在单机验证分布式语义 |
-| egui 聊天原型验证 | 在 `clarity-tui` 中验证 egui 即时模式 GUI 替代 ratatui：聊天窗口 + Wire 事件绑定 | 零外部运行时依赖：egui 与 core 同一内存空间，毫秒级启动 |
+| egui 聊天原型验证 | ✅ 已完成（2026-04-27）。基础 UI（气泡/输入/流式）<2h 验证；Markdown(`egui_commonmark`) + 长列表(`egui_virtual_list`) 生态情报确认风险可控。暂不启动独立 crate，维持候选主力栈状态，触发条件见 ROADMAP。 | 零外部运行时依赖：egui 与 core 同一内存空间，毫秒级启动 |
 
 ### P3 · 架构演进（v0.5.0+，长期冻结至约束解除）
 
