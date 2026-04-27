@@ -56,6 +56,7 @@ impl TaskRecord {
 fn generate_task_id() -> String {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
+        // SAFE: system time is always after UNIX_EPOCH.
         .unwrap()
         .as_millis();
     let counter = TASK_COUNTER.fetch_add(1, Ordering::Relaxed);

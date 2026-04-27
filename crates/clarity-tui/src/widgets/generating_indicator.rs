@@ -35,6 +35,7 @@ impl GeneratingIndicator {
         let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame_idx = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
+            // SAFE: system time is always after UNIX_EPOCH.
             .unwrap()
             .as_millis()
             / 80) as usize
@@ -45,6 +46,7 @@ impl GeneratingIndicator {
             Some(m) if m.first_token_time.is_some() => {
                 let ttft = m
                     .first_token_time
+                    // SAFE: guarded by is_some() check in match guard above.
                     .unwrap()
                     .duration_since(m.start_time)
                     .as_secs_f64();

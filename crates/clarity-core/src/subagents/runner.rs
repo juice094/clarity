@@ -828,9 +828,10 @@ impl SubagentRunner {
             .await;
 
         // 9. 处理结果
-        let elapsed = SystemTime::now().duration_since(start_time).unwrap();
+        let elapsed = SystemTime::now().duration_since(start_time).unwrap(); // SAFE: start_time set earlier in this function
         let completed_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
+            // SAFE: system time is always after UNIX_EPOCH.
             .unwrap()
             .as_secs();
 

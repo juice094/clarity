@@ -392,6 +392,7 @@ Long-term memory summary:"#,
                     .iter()
                     .map(|&idx| &memories[idx])
                     .max_by_key(|m| m.len())
+                    // SAFE: similar_indices.len() > 1 ensures iterator is non-empty.
                     .unwrap()
                     .clone();
                 merged.push(best);

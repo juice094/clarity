@@ -225,6 +225,7 @@ fn uuid() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
+        // SAFE: system time is always after UNIX_EPOCH.
         .unwrap()
         .as_nanos();
     format!("{:x}", timestamp)

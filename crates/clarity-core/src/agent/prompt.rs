@@ -153,6 +153,7 @@ impl Agent {
                     .config
                     .prompts_dir
                     .as_ref()
+                    // SAFE: guarded by is_some() check on line 149.
                     .unwrap()
                     .join(format!("{}.md", entry));
                 let loaded = load_prompt_from_file(&prompt_path);
