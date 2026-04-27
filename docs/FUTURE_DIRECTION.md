@@ -21,7 +21,7 @@
 | IPC 传输（UDS/Named Pipe/TCP 回环） | `tokio::broadcast` 仅进程内 | 🔴 高 |
 | Session Handoff | 无相关代码 | 🔴 高 |
 | WebSocket MCP 传输 | `McpTransport` 只有 Stdio/Http/Sse | 🟡 中 |
-| Tauri ↔ BackgroundTaskManager 打通 | `TaskRecord` JSON 与 `BackgroundTaskManager` 完全断开 | 🟡 中 |
+| Gateway ↔ BackgroundTaskManager 打通 | `TaskRecord` JSON 与 `BackgroundTaskManager` 完全断开 | 🟡 中 |
 | Worker 池自动扩缩容 | `ScalableWorkerPool` 字段带下划线（未使用） | 🟡 中 |
 | 跨会话记忆检索 | `session_notes` 表存在，无跨会话联合查询 | 🟢 低 |
 | 多窗口 Agent 隔离 | `AppState` 单例，`Agent::begin_turn()` 返回 `AlreadyRunning` | 🔴 高 |
@@ -33,6 +33,7 @@
 - **项目广度 ≤ 5 核心工具**：当前 6 crates 已达上限，Phase A-D 不新增 crate，只重构现有 crate
 - **Rust 核心模块不可外包**：Hub-Worker、Wire 扩展、SessionManager 必须由直接代码实现
 - **Hard Veto 生效**：禁止 Docker / RAG(Qdrant) / Electron / 分布式消息通道 / Mobile 适配
+- **UI 技术栈方向**：egui 为未来主控探索方向，Tauri 冻结新功能开发（仅维护），Pretext 为优化项不入主路线图
 - **每阶段验收**：`cargo test --workspace --lib` + `npm run build` 全绿
 
 ---
@@ -48,12 +49,13 @@
 - 将 `McpTransport` 从 closed enum 改为可扩展的 trait-based 注册表（可选，复杂则延至 Phase B）
 - **验收**：连接到 WebSocket MCP Server 并成功执行 tool call
 
-### A2. Tauri ↔ BackgroundTaskManager 集成（2-3 天）
+### A2. Gateway ↔ BackgroundTaskManager 集成（2-3 天）
 
-- `AppState` 新增 `BackgroundTaskManager` 字段
-- `NotificationManager` 事件桥接到 Tauri event bus（`task:update`、`task:complete`）
-- 用 `BackgroundTaskManager` API 替换 Tauri 侧独立的 `TaskRecord` JSON 存储
-- **验收**：从前端创建后台任务，观察进度事件，确认持久化恢复
+> 注：原 Tauri ↔ BTM 集成因 Tauri 冻结调整至 Gateway 侧。若 egui 主控提前成熟，可迁移至 egui 事件总线。
+
+- `clarity-gateway` WebSocket 事件流接入 `BackgroundTaskManager` 进度事件
+- 用 `BackgroundTaskManager` API 替代前端独立的任务状态轮询
+- **验收**：从 Gateway Web UI 创建后台任务，观察实时进度事件，确认持久化恢复
 
 ### A3. Worker 池自动扩缩容（2-3 天）
 

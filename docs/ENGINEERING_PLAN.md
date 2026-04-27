@@ -50,6 +50,7 @@
 | 嵌入式模型自动下载 | 首次启动检测无模型 → 引导下载 Qwen2.5-3B / DeepSeek-R1-Distill-1.5B；`hf-hub` 已集成 | 零依赖发行：用户不应手动找模型文件 |
 | T_APPROVAL V2 设计 | AI 分类器 + 规则引擎混合审批；V1 已完成规则引擎，V2 需 LLM-based 风险分类 | 哥德尔不完备：规则引擎无法覆盖所有场景，需 LLM 补全 |
 | 单机跨窗口协作原型 | 同一台机器上多个 Clarity 窗口共享 Hub-Worker 状态；验证 Wire 消息边界 | 集群即单机：先在单机验证分布式语义 |
+| egui 聊天原型验证 | 在 `clarity-tui` 中验证 egui 即时模式 GUI 替代 ratatui：聊天窗口 + Wire 事件绑定 | 零外部运行时依赖：egui 与 core 同一内存空间，毫秒级启动 |
 
 ### P3 · 架构演进（v0.5.0+，长期冻结至约束解除）
 
@@ -69,6 +70,7 @@
 | `std::sync::RwLock` in `Agent.inner` |  intentional | 短临界区设计，非债务 |
 | `unwrap()` / `expect()` 密度（~171 精确值） | 已测绘 + 部分清理 | 见 `docs/unwrap-debt-map.md`；11 处已 `?` 化/重构，8 处已 SAFETY 注释，冻结新增 |
 | `cargo doc` warnings | ✅ 已清零 | 13 处已修复，建立零 warning 基线 |
+| `clarity-tauri` 冻结 | 停止新功能开发，仅维护现有代码 | 待 egui 方向验证通过后评估废弃或归档；沉没成本极低（~1000 行前端） |
 
 ---
 
@@ -88,7 +90,8 @@ Week 3-4: v0.3.2 — 体验优化
 Week 5-6: v0.4.0-alpha — 架构扩展
   ├─ T_APPROVAL V2 设计文档 + 原型实现
   ├─ 单机跨窗口协作：SharedWorker / Tauri IPC 广播
-  └─ 性能优化：虚拟滚动（messages > 100 条时）
+  ├─ 性能优化：虚拟滚动（messages > 100 条时）
+  └─ egui 方向验证：聊天窗口原型 + Wire 绑定（替代 ratatui 可行性）
 
 Month 3+: v0.5.0-beta — 生态准备
   ├─ 条件触发：v0.4.0 发布 30 天后评估社区反馈

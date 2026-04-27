@@ -68,6 +68,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
 | 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），release 跑分待执行 |
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
+| egui 聊天原型 | ⏸️ 未启动 | 验证 egui 替代 ratatui 的可行性，作为未来主控 UI 探索方向 |
 
 ### Phase 3：集群语义验证（4-6 周）
 
@@ -98,6 +99,8 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 | cargo audit 3 warnings (2 moderate, 1 low) | ⚠️ Tauri 上游间接依赖 | 已配置 `.cargo/audit.toml` 忽略；等待上游更新，不主动投入 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
 | Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
+| `clarity-tauri` 冻结 | ⏸️ 冻结 | 停止新功能开发，仅维护现有代码至 egui 主控成熟 |
+| Pretext 排版引擎 | ❌ 已否决 | 重型移植工程，不入主 repo 路线图；可作为个人探索项目 |
 
 ---
 
@@ -117,7 +120,7 @@ cargo audit                       # 无高危漏洞
 ```
 2026-04 ── v0.3.0      本地优先标杆（已发布）— Local LLM + 离线 fallback + Desktop GUI + 健康维护基线
     │
-2026-05 ── v0.3.1+      质量硬化 + 零依赖发行 — 单二进制打包 + 嵌入式模型 + unwrap 清理
+2026-05 ── v0.3.1+      质量硬化 + egui 方向验证 + 零依赖发行 — 单二进制打包 + 嵌入式模型 + unwrap 清理
     │
 2026-06 ── v0.4.0-beta   性能优化 + 快捷键 + 搜索增强 + 审批系统增强
     │
