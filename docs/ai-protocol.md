@@ -12,7 +12,7 @@
 **当前分支**：`main` @ `39a7308`（ahead of origin/main by 1）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
-**会话状态**：clarity-egui clippy warnings 清零（11 处修复），cargo test 全绿，working tree 待提交
+**会话状态**：clarity-egui clippy warnings 清零（11 处修复）；Pretext 健康度审查完成，运维 plan 已写入 `docs/plans/2026-04-27-egui-pretext-health-plan.md`；working tree 待提交
 
 ---
 
@@ -186,7 +186,7 @@ clarity-wire
 
 | 方向 | 工作量 | 前提条件 |
 |------|--------|----------|
-| egui 聊天原型验证 | 1-2 周 | 用户确认启动 |
+| egui Pretext 健康度运维硬化（三阶段） | 6 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-pretext-health-plan.md` |
 | Phase A：WebSocket MCP + Gateway↔BTM | 2 周 | 用户确认启动 |
 | Release v0.3.1（质量硬化） | ½ 天 | 无 |
 | 单机跨窗口协作架构设计 | 2-3 天 | 需 plan 模式 |
