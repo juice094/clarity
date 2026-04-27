@@ -1142,12 +1142,15 @@ dependencies = [
  "chrono",
  "clarity-core",
  "clarity-wire",
+ "dirs 5.0.1",
  "eframe",
  "egui",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
