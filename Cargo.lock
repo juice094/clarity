@@ -1138,13 +1138,13 @@ dependencies = [
 name = "clarity-egui"
 version = "0.3.0"
 dependencies = [
- "anyhow",
  "chrono",
  "clarity-core",
  "clarity-wire",
  "dirs 5.0.1",
  "eframe",
  "egui",
+ "parking_lot",
  "serde",
  "serde_json",
  "tokio",

@@ -1,7 +1,8 @@
 use crate::settings::GuiSettings;
 use std::path::PathBuf;
+use parking_lot::Mutex;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct LlmBinding {
@@ -47,15 +48,20 @@ fn binding_matches(binding: &Option<LlmBinding>, provider: &str, path: &str) -> 
 
 pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     let settings = {
-        let guard = state.cached_settings.lock().unwrap();
+        let guard = state.cached_settings.lock();
         guard.clone()
     };
 
-    // NOTE: We do NOT force fallback to local when network probe fails.
-    // The user-configured provider is authoritative. Network probes can
-    // give false negatives (firewall, DNS, captive portals), and the
-    // actual API endpoint may still be reachable.
-    let desired_provider = settings.provider.clone();
+    let network_available = state.network_available.load(std::sync::atomic::Ordering::Relaxed);
+    let desired_provider = if !network_available && settings.provider != "local" {
+        tracing::info!(
+            "Network unavailable (preferred={}); falling back to local",
+            settings.provider
+        );
+        "local".to_string()
+    } else {
+        settings.provider.clone()
+    };
 
     let desired_path = if desired_provider == "local" {
         settings
@@ -71,7 +77,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     };
 
     {
-        let guard = state.llm_binding.lock().unwrap();
+        let guard = state.llm_binding.lock();
         if binding_matches(&guard, &desired_provider, &desired_path) && state.agent.llm().is_some()
         {
             return Ok(());
@@ -81,7 +87,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     let _load_guard = state.llm_load_lock.lock().await;
 
     {
-        let guard = state.llm_binding.lock().unwrap();
+        let guard = state.llm_binding.lock();
         if binding_matches(&guard, &desired_provider, &desired_path) && state.agent.llm().is_some()
         {
             return Ok(());
@@ -155,7 +161,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
 
     state.agent.set_llm(llm);
 
-    let mut guard = state.llm_binding.lock().unwrap();
+    let mut guard = state.llm_binding.lock();
     *guard = Some(LlmBinding {
         provider: desired_provider,
         local_model_path: desired_path,
@@ -166,7 +172,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
 
 pub async fn reload_llm(state: &AppState) -> Result<(), String> {
     {
-        let mut binding = state.llm_binding.lock().unwrap();
+        let mut binding = state.llm_binding.lock();
         *binding = None;
     }
     ensure_llm(state).await.map_err(|e| e.to_string())

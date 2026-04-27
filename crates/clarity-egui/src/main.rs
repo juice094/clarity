@@ -114,7 +114,7 @@ impl App {
         let tx_for_monitor = ui_tx.clone();
         runtime.spawn(async move {
             let probe = {
-                let guard = state_for_monitor.cached_settings.lock().unwrap();
+                let guard = state_for_monitor.cached_settings.lock();
                 guard.network_probe_url.clone().unwrap_or_else(|| "1.1.1.1:443".to_string())
             };
             let available = app_state::check_network(&probe).await;
@@ -122,7 +122,7 @@ impl App {
 
             if let Err(e) = app_state::prewarm_llm(&state_for_monitor).await {
                 tracing::warn!("LLM prewarm failed: {}", e);
-                let mut guard = state_for_monitor.prewarm_error.lock().unwrap();
+                let mut guard = state_for_monitor.prewarm_error.lock();
                 *guard = Some(e.clone());
             }
 
@@ -132,7 +132,7 @@ impl App {
             loop {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 let probe = {
-                    let guard = state_for_monitor.cached_settings.lock().unwrap();
+                    let guard = state_for_monitor.cached_settings.lock();
                     guard.network_probe_url.clone().unwrap_or_else(|| "1.1.1.1:443".to_string())
                 };
                 let available = app_state::check_network(&probe).await;
@@ -445,19 +445,37 @@ impl App {
                             .selected_text(&self.settings_edit.provider)
                             .width(200.0)
                             .show_ui(ui, |ui| {
-                                for (key, label, _) in settings::get_available_models() {
-                                    ui.selectable_value(&mut self.settings_edit.provider, key.clone(), label);
+                                for (key, label, models) in settings::get_available_models() {
+                                    if ui.selectable_value(&mut self.settings_edit.provider, key.clone(), label).changed() {
+                                        // Auto-select first model when provider changes
+                                        if let Some(first) = models.first() {
+                                            self.settings_edit.model = first.clone();
+                                        }
+                                    }
                                 }
                             });
                     });
                 });
                 ui.add_space(8.0);
 
-                // Model
+                // Model — ComboBox populated from get_available_models for the current provider
+                let available_models = settings::get_available_models();
+                let current_models = available_models
+                    .iter()
+                    .find(|(k, _, _)| k == &self.settings_edit.provider)
+                    .map(|(_, _, m)| m.clone())
+                    .unwrap_or_default();
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Model").size(13.0).color(self.theme.text));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut self.settings_edit.model).text_color(self.theme.text));
+                        egui::ComboBox::from_id_salt("model_combo")
+                            .selected_text(&self.settings_edit.model)
+                            .width(200.0)
+                            .show_ui(ui, |ui| {
+                                for m in &current_models {
+                                    ui.selectable_value(&mut self.settings_edit.model, m.clone(), m);
+                                }
+                            });
                     });
                 });
                 ui.add_space(8.0);
@@ -512,7 +530,7 @@ impl App {
                                 tracing::error!("Failed to save settings: {}", e);
                             } else {
                                 {
-                                    let mut guard = self.state.cached_settings.lock().unwrap();
+                                    let mut guard = self.state.cached_settings.lock();
                                     *guard = self.settings_edit.clone();
                                 }
                                 let state = self.state.clone();
@@ -735,7 +753,7 @@ impl eframe::App for App {
                         if ui.add(egui::Button::new(egui::RichText::new("⚙").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() {
                             self.settings_open = true;
                             self.settings_edit = {
-                                let guard = self.state.cached_settings.lock().unwrap();
+                                let guard = self.state.cached_settings.lock();
                                 guard.clone()
                             };
                         }
@@ -858,7 +876,7 @@ impl eframe::App for App {
                 if configure_clicked {
                     self.settings_open = true;
                     self.settings_edit = {
-                        let guard = self.state.cached_settings.lock().unwrap();
+                        let guard = self.state.cached_settings.lock();
                         guard.clone()
                     };
                 }

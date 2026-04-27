@@ -39,8 +39,20 @@ impl GuiSettings {
     pub fn load() -> Self {
         let path = Self::config_path();
         if let Ok(content) = std::fs::read_to_string(&path) {
-            if let Ok(settings) = serde_json::from_str(&content) {
-                return settings;
+            match serde_json::from_str(&content) {
+                Ok(settings) => return settings,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to parse settings at {}: {}. Falling back to defaults.",
+                        path.display(),
+                        e
+                    );
+                    // Backup corrupted file so user can manually recover
+                    let bak = path.with_extension("json.bak");
+                    if let Err(e) = std::fs::rename(&path, &bak) {
+                        tracing::warn!("Failed to backup corrupted settings to {}: {}", bak.display(), e);
+                    }
+                }
             }
         }
         Self::default_with_env()
@@ -55,11 +67,19 @@ impl GuiSettings {
             s.provider = "openai".to_string();
             s.api_key = Some(key);
         }
-        if let Ok(model) = std::env::var("KIMI_MODEL") {
-            s.model = model;
-        }
-        if let Ok(model) = std::env::var("OPENAI_MODEL") {
-            s.model = model;
+        // Match model env var to the selected provider to avoid mismatches
+        match s.provider.as_str() {
+            "kimi" => {
+                if let Ok(model) = std::env::var("KIMI_MODEL") {
+                    s.model = model;
+                }
+            }
+            "openai" => {
+                if let Ok(model) = std::env::var("OPENAI_MODEL") {
+                    s.model = model;
+                }
+            }
+            _ => {}
         }
         s
     }
@@ -90,7 +110,6 @@ impl Default for GuiSettings {
     }
 }
 
-#[allow(dead_code)]
 pub fn scan_local_models() -> Vec<(String, String)> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
@@ -154,7 +173,6 @@ pub fn scan_local_models() -> Vec<(String, String)> {
     results
 }
 
-#[allow(dead_code)]
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
     let local_models = scan_local_models();
     let local_model_names: Vec<String> = if local_models.is_empty() {
