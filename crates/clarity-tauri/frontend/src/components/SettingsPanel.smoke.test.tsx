@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import SettingsPanel from "./SettingsPanel";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -14,7 +14,10 @@ vi.mock("@tauri-apps/api/core", () => ({
       };
     }
     if (cmd === "get_available_models") {
-      return [["openai", "OpenAI", ["gpt-4o"]]];
+      return [
+        ["openai", "OpenAI", ["gpt-4o", "gpt-4o-mini"]],
+        ["anthropic", "Anthropic", ["claude-3-sonnet"]],
+      ];
     }
     if (cmd === "get_approval_modes") {
       return [["interactive", "Interactive"], ["yolo", "Yolo"]];
@@ -55,4 +58,14 @@ describe("SettingsPanel smoke test", () => {
     render(<SettingsPanel isOpen={false} onClose={vi.fn()} />);
     expect(screen.queryByText("settings.title")).not.toBeInTheDocument();
   });
+
+  it("calls onClose when cancel clicked", async () => {
+    const onClose = vi.fn();
+    render(<SettingsPanel isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText("settings.title")).toBeInTheDocument();
+    const cancelBtn = screen.getByText("settings.cancel");
+    fireEvent.click(cancelBtn);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
 });
