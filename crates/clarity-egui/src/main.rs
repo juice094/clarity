@@ -538,33 +538,7 @@ impl eframe::App for App {
             self.settings_open = false;
         }
 
-        // Keyboard shortcuts (only when settings modal is closed)
         if !self.settings_open && !self.is_loading {
-            // Enter WITHOUT modifiers sends message.
-            // We must NOT use consume_key(Modifiers::NONE) because egui's
-            // Modifiers::matches treats NONE as "don't care", catching Shift+Enter too.
-            let plain_enter = ctx.input(|i| {
-                i.events.iter().any(|e| matches!(e, egui::Event::Key {
-                    key: egui::Key::Enter,
-                    modifiers,
-                    pressed: true,
-                    ..
-                } if modifiers.is_none()))
-            });
-            if plain_enter {
-                ctx.input_mut(|i| {
-                    i.events.retain(|e| !matches!(e, egui::Event::Key {
-                        key: egui::Key::Enter,
-                        modifiers,
-                        pressed: true,
-                        ..
-                    } if modifiers.is_none()));
-                    i.keys_down.remove(&egui::Key::Enter);
-                });
-                if !self.input.trim().is_empty() || !self.attachments.is_empty() {
-                    self.send();
-                }
-            }
             if ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl) {
                 self.new_session();
             }
@@ -590,10 +564,10 @@ impl eframe::App for App {
         if !self.sidebar_collapsed {
             egui::SidePanel::left("sidebar")
                 .default_width(SIDEBAR_WIDTH)
-                .min_width(200.0)
+                .min_width(220.0)
                 .max_width(360.0)
                 .resizable(true)
-                .frame(egui::Frame::side_top_panel(&ctx.style()).fill(self.theme.bg_accent))
+                .frame(egui::Frame::new().fill(self.theme.bg_accent).inner_margin(egui::Margin::same(4)))
                 .show(ctx, |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.add_space(12.0);
@@ -637,7 +611,7 @@ impl eframe::App for App {
                     ui.label(egui::RichText::new("Files").size(11.0).color(self.theme.text_dim).weak());
                     ui.add_space(4.0);
                     let mut clicked_file: Option<std::path::PathBuf> = None;
-                    let files_height = (ui.available_height() - 160.0).max(120.0);
+                    let files_height = (ui.available_height() - 260.0).max(100.0);
                     egui::ScrollArea::vertical()
                         .id_salt("file_tree_scroll")
                         .max_height(files_height)
@@ -685,6 +659,7 @@ impl eframe::App for App {
                                         .desired_rows(10)
                                         .font(egui::TextStyle::Monospace)
                                         .text_color(self.theme.text_dim)
+                                        .margin(egui::vec2(8.0, 6.0))
                                 );
                             });
                     }
@@ -910,9 +885,21 @@ impl eframe::App for App {
                                     } else {
                                         "Type a message (files attached)..."
                                     };
+                                    let prev_input_len = self.input.len();
                                     let text_edit = egui::TextEdit::multiline(&mut self.input)
                                         .desired_rows(1).hint_text(hint).margin(egui::vec2(8.0, 8.0));
                                     ui.add_sized(egui::vec2(input_width, 44.0), text_edit);
+                                    // Enter sends; Shift+Enter keeps newline from TextEdit
+                                    let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                    if enter_pressed && self.input.len() == prev_input_len + 1 && self.input.ends_with('\n') {
+                                        let shift_pressed = ui.input(|i| i.modifiers.shift);
+                                        if !shift_pressed {
+                                            self.input.pop();
+                                            if !self.input.trim().is_empty() || !self.attachments.is_empty() {
+                                                self.send();
+                                            }
+                                        }
+                                    }
                                 },
                             );
                             ui.vertical_centered(|ui| {
