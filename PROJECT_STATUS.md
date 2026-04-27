@@ -18,7 +18,7 @@
 | 5 | 冷却验证 | ✅ Complete | 测试524 passed, Clippy零警告 |
 | 6 | 可用性急救 | ✅ Complete | GUI API key 输入框 + `LlmFactory::create_with_key` — Clarity 真正可用 |
 | 7 | UI 栈迁移 | ✅ Complete | `clarity-egui` 替代 `clarity-tauri` 成为主力 GUI 栈 |
-| 8 | egui 硬化（进行中） | 🔄 In Progress | Pretext 健康度审查完成，三阶段运维 plan 已产出 |
+| 8 | egui 硬化（进行中） | 🔄 In Progress | Pretext Phase 1 已完成：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分 |
 
 ---
 
