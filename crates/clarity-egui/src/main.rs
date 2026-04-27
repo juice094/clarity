@@ -549,193 +549,8 @@ impl App {
                 });
             });
     }
-}
 
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let now = ctx.input(|i| i.time);
-        self.frame_count += 1;
-        if now - self.last_fps_time >= 1.0 {
-            self.fps = self.frame_count as f64 / (now - self.last_fps_time);
-            self.frame_count = 0;
-            self.last_fps_time = now;
-        }
-
-        self.process_events();
-        if self.is_loading {
-            ctx.request_repaint_after(Duration::from_millis(16));
-        }
-
-        // File drag-and-drop
-        let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
-        if !dropped_files.is_empty() {
-            for file in dropped_files {
-                if let Some(path) = file.path {
-                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                    self.attachments.push(Attachment { path, name });
-                }
-            }
-        }
-
-        // ESC closes settings modal
-        if self.settings_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.settings_open = false;
-        }
-
-        if !self.settings_open && !self.is_loading
-            && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
-        {
-            self.new_session();
-        }
-
-        // Refresh task list periodically when panel is open
-        if self.task_panel_open && self.last_task_refresh.elapsed() > Duration::from_secs(3) {
-            self.refresh_tasks();
-        }
-
-        use clarity_core::agent::AgentState;
-        self.agent_status = match self.state.agent.state() {
-            AgentState::Unconfigured => AgentStatus::Unconfigured,
-            AgentState::Idle => if self.is_loading { AgentStatus::Busy } else { AgentStatus::Online },
-            AgentState::Running { .. } => AgentStatus::Busy,
-            AgentState::Stalled => AgentStatus::Offline,
-        };
-
-        ctx.style_mut(|style| {
-            self.theme.apply(style);
-        });
-
-        if !self.sidebar_collapsed {
-            egui::SidePanel::left("sidebar")
-                .default_width(SIDEBAR_WIDTH)
-                .min_width(220.0)
-                .max_width(360.0)
-                .resizable(true)
-                .frame(egui::Frame::new().fill(self.theme.bg_accent).inner_margin(egui::Margin::same(4)))
-                .show(ctx, |ui| {
-                    ui.set_min_width(ui.available_width());
-                    ui.add_space(12.0);
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Clarity").size(18.0).strong().color(self.theme.text));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(egui::Button::new(egui::RichText::new("⬅").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { self.sidebar_collapsed = true; }
-                        });
-                    });
-                    ui.add_space(16.0);
-
-                    if ui.add(egui::Button::new(egui::RichText::new("+ New Chat").size(13.0).color(self.theme.text))
-                        .fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))
-                        .min_size(egui::vec2(ui.available_width(), 36.0))).clicked() { self.new_session(); }
-                    ui.add_space(12.0);
-
-                    ui.label(egui::RichText::new("Sessions").size(11.0).color(self.theme.text_dim).weak());
-                    ui.add_space(4.0);
-
-                    let mut to_delete: Option<String> = None;
-                    let sessions_clone: Vec<(String, String, bool)> = self.sessions.iter().map(|s| (s.id.clone(), s.title.clone(), s.id == self.active_session_id)).collect();
-                    for (id, title, is_active) in sessions_clone {
-                        let bg = if is_active { self.theme.surface } else { self.theme.bg_accent };
-                        let text_color = if is_active { self.theme.text } else { self.theme.text_dim };
-                        let stroke = if is_active { egui::Stroke::new(2.0, self.theme.accent) } else { egui::Stroke::NONE };
-                        ui.horizontal(|ui| {
-                            let response = ui.add(
-                                egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
-                                    .fill(bg)
-                                    .corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8))
-                                    .stroke(stroke)
-                                    .min_size(egui::vec2(ui.available_width() - 28.0, 36.0))
-                            );
-                            if response.clicked() { self.save_current_session(); self.active_session_id = id.clone(); }
-                            if ui.add(egui::Button::new("🗑").fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { to_delete = Some(id); }
-                        });
-                    }
-                    if let Some(id) = to_delete { self.delete_session(id); }
-
-                    ui.add_space(16.0);
-                    ui.label(egui::RichText::new("Files").size(11.0).color(self.theme.text_dim).weak());
-                    ui.add_space(4.0);
-                    let mut clicked_file: Option<std::path::PathBuf> = None;
-                    let files_height = (ui.available_height() - 260.0).max(100.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt("file_tree_scroll")
-                        .max_height(files_height)
-                        .show(ui, |ui| {
-                            if let Ok(cwd) = std::env::current_dir() {
-                                ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
-                                    clicked_file = Some(path.to_path_buf());
-                                });
-                            }
-                        });
-                    if let Some(path) = clicked_file {
-                        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                        let content = std::fs::read_to_string(&path).ok();
-                        self.preview_file = content.map(|c| (name, c));
-                    }
-
-                    // File preview panel
-                    if let Some((ref name, ref content)) = self.preview_file {
-                        let preview_name = name.clone();
-                        let preview_content = content.clone();
-                        ui.add_space(12.0);
-                        ui.separator();
-                        ui.add_space(8.0);
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Preview").size(11.0).color(self.theme.text_dim).weak());
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.small_button("×").clicked() { self.preview_file = None; }
-                            });
-                        });
-                        ui.label(egui::RichText::new(&preview_name).size(12.0).color(self.theme.text).monospace());
-                        ui.add_space(4.0);
-                        let mut preview_text = if preview_content.chars().count() > 2000 {
-                            let truncated: String = preview_content.chars().take(2000).collect();
-                            format!("{}…\n\n[Preview truncated: {} total characters]", truncated, preview_content.len())
-                        } else {
-                            preview_content
-                        };
-                        egui::ScrollArea::vertical()
-                            .id_salt("preview_scroll")
-                            .max_height(180.0)
-                            .show(ui, |ui| {
-                                ui.add_sized(
-                                    egui::vec2(ui.available_width(), 180.0),
-                                    egui::TextEdit::multiline(&mut preview_text)
-                                        .desired_rows(10)
-                                        .font(egui::TextStyle::Monospace)
-                                        .text_color(self.theme.text_dim)
-                                        .margin(egui::vec2(8.0, 6.0))
-                                );
-                            });
-                    }
-
-                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                        ui.add_space(8.0);
-                        #[cfg(debug_assertions)]
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(format!("FPS: {:.0}", self.fps)).size(10.0).color(self.theme.text_dim));
-                        });
-                    });
-                });
-        }
-
-        if self.task_panel_open {
-            egui::SidePanel::right("task_panel")
-                .exact_width(280.0)
-                .resizable(false)
-                .frame(egui::Frame::side_top_panel(&ctx.style()).fill(self.theme.bg_accent))
-                .show(ctx, |ui| {
-                    ui.add_space(12.0);
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Tasks").size(16.0).strong().color(self.theme.text));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("×").clicked() { self.task_panel_open = false; }
-                        });
-                    });
-                    ui.add_space(8.0);
-                    ui::task_panel::render_task_panel(ui, &self.tasks, &self.theme);
-                });
-        }
-
+    fn render_chat_area(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(&ctx.style()).fill(self.theme.bg))
             .show(ctx, |ui| {
@@ -996,84 +811,216 @@ impl eframe::App for App {
                         });
                     });
             });
+    }
 
-        self.render_settings_panel(ctx);
+    fn render_sidebar(&mut self, ctx: &egui::Context) {
+        if self.sidebar_collapsed { return; }
+        egui::SidePanel::left("sidebar")
+            .default_width(SIDEBAR_WIDTH)
+            .min_width(220.0)
+            .max_width(360.0)
+            .resizable(true)
+            .frame(egui::Frame::new().fill(self.theme.bg_accent).inner_margin(egui::Margin::same(4)))
+            .show(ctx, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Clarity").size(18.0).strong().color(self.theme.text));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new(egui::RichText::new("⬅").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { self.sidebar_collapsed = true; }
+                    });
+                });
+                ui.add_space(16.0);
 
-        // MCP configuration panel
-        if self.mcp_panel_open {
-            let mut config_opt = self.mcp_config.take();
-            let mut save_clicked = false;
-            let mut cancel_clicked = false;
-            let mut create_clicked = false;
-            let mut open = self.mcp_panel_open;
+                if ui.add(egui::Button::new(egui::RichText::new("+ New Chat").size(13.0).color(self.theme.text))
+                    .fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))
+                    .min_size(egui::vec2(ui.available_width(), 36.0))).clicked() { self.new_session(); }
+                ui.add_space(12.0);
 
-            egui::Window::new("MCP Servers")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .default_size([400.0, 500.0])
-                .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-                .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)))
-                .show(ctx, |ui| {
-                    ui.set_min_width(360.0);
-                    if let Some(ref mut config) = config_opt {
-                        let mut changed = false;
-                        ui::mcp_panel::render_mcp_panel(ui, config, &self.theme, &mut changed);
-                        if changed {
-                            self.mcp_changed = true;
-                        }
-                        if self.mcp_changed {
-                            ui.add_space(12.0);
-                            ui.horizontal(|ui| {
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.add(egui::Button::new(egui::RichText::new("Save").size(13.0).color(self.theme.text)).fill(self.theme.accent).min_size(egui::vec2(80.0, 32.0))).clicked() {
-                                        save_clicked = true;
-                                    }
-                                    if ui.add(egui::Button::new(egui::RichText::new("Cancel").size(13.0).color(self.theme.text)).fill(self.theme.border).min_size(egui::vec2(80.0, 32.0))).clicked() {
-                                        cancel_clicked = true;
-                                    }
-                                });
+                ui.label(egui::RichText::new("Sessions").size(11.0).color(self.theme.text_dim).weak());
+                ui.add_space(4.0);
+
+                let mut to_delete: Option<String> = None;
+                let sessions_clone: Vec<(String, String, bool)> = self.sessions.iter().map(|s| (s.id.clone(), s.title.clone(), s.id == self.active_session_id)).collect();
+                for (id, title, is_active) in sessions_clone {
+                    let bg = if is_active { self.theme.surface } else { self.theme.bg_accent };
+                    let text_color = if is_active { self.theme.text } else { self.theme.text_dim };
+                    let stroke = if is_active { egui::Stroke::new(2.0, self.theme.accent) } else { egui::Stroke::NONE };
+                    ui.horizontal(|ui| {
+                        let response = ui.add(
+                            egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
+                                .fill(bg)
+                                .corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8))
+                                .stroke(stroke)
+                                .min_size(egui::vec2(ui.available_width() - 28.0, 36.0))
+                        );
+                        if response.clicked() { self.save_current_session(); self.active_session_id = id.clone(); }
+                        if ui.add(egui::Button::new("🗑").fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))).clicked() { to_delete = Some(id); }
+                    });
+                }
+                if let Some(id) = to_delete { self.delete_session(id); }
+
+                ui.add_space(16.0);
+                ui.label(egui::RichText::new("Files").size(11.0).color(self.theme.text_dim).weak());
+                ui.add_space(4.0);
+                let mut clicked_file: Option<std::path::PathBuf> = None;
+                let files_height = (ui.available_height() - 260.0).max(100.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("file_tree_scroll")
+                    .max_height(files_height)
+                    .show(ui, |ui| {
+                        if let Ok(cwd) = std::env::current_dir() {
+                            ui::file_browser::render_file_tree(ui, &cwd, &self.theme, 0, &mut |path| {
+                                clicked_file = Some(path.to_path_buf());
                             });
                         }
+                    });
+                if let Some(path) = clicked_file {
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    let content = std::fs::read_to_string(&path).ok();
+                    self.preview_file = content.map(|c| (name, c));
+                }
+
+                // File preview panel
+                if let Some((ref name, ref content)) = self.preview_file {
+                    let preview_name = name.clone();
+                    let preview_content = content.clone();
+                    ui.add_space(12.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Preview").size(11.0).color(self.theme.text_dim).weak());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("×").clicked() { self.preview_file = None; }
+                        });
+                    });
+                    ui.label(egui::RichText::new(&preview_name).size(12.0).color(self.theme.text).monospace());
+                    ui.add_space(4.0);
+                    let mut preview_text = if preview_content.chars().count() > 2000 {
+                        let truncated: String = preview_content.chars().take(2000).collect();
+                        format!("{}…\n\n[Preview truncated: {} total characters]", truncated, preview_content.len())
                     } else {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(40.0);
-                            ui.label(egui::RichText::new("No MCP config found").size(13.0).color(self.theme.text_dim));
-                            ui.add_space(8.0);
-                            if ui.add(egui::Button::new(egui::RichText::new("Create Config").size(13.0).color(self.theme.text)).fill(self.theme.accent).min_size(egui::vec2(140.0, 36.0))).clicked() {
-                                create_clicked = true;
-                            }
+                        preview_content
+                    };
+                    egui::ScrollArea::vertical()
+                        .id_salt("preview_scroll")
+                        .max_height(180.0)
+                        .show(ui, |ui| {
+                            ui.add_sized(
+                                egui::vec2(ui.available_width(), 180.0),
+                                egui::TextEdit::multiline(&mut preview_text)
+                                    .desired_rows(10)
+                                    .font(egui::TextStyle::Monospace)
+                                    .text_color(self.theme.text_dim)
+                                    .margin(egui::vec2(8.0, 6.0))
+                            );
+                        });
+                }
+
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    ui.add_space(8.0);
+                    #[cfg(debug_assertions)]
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(format!("FPS: {:.0}", self.fps)).size(10.0).color(self.theme.text_dim));
+                    });
+                });
+            });
+    }
+
+    fn render_task_panel(&mut self, ctx: &egui::Context) {
+        if !self.task_panel_open { return; }
+        egui::SidePanel::right("task_panel")
+            .exact_width(280.0)
+            .resizable(false)
+            .frame(egui::Frame::side_top_panel(&ctx.style()).fill(self.theme.bg_accent))
+            .show(ctx, |ui| {
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Tasks").size(16.0).strong().color(self.theme.text));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("×").clicked() { self.task_panel_open = false; }
+                    });
+                });
+                ui.add_space(8.0);
+                ui::task_panel::render_task_panel(ui, &self.tasks, &self.theme);
+            });
+    }
+
+    fn render_mcp_panel(&mut self, ctx: &egui::Context) {
+        if !self.mcp_panel_open { return; }
+        let mut config_opt = self.mcp_config.take();
+        let mut save_clicked = false;
+        let mut cancel_clicked = false;
+        let mut create_clicked = false;
+        let mut open = self.mcp_panel_open;
+
+        egui::Window::new("MCP Servers")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_size([400.0, 500.0])
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_lg as u8)))
+            .show(ctx, |ui| {
+                ui.set_min_width(360.0);
+                if let Some(ref mut config) = config_opt {
+                    let mut changed = false;
+                    ui::mcp_panel::render_mcp_panel(ui, config, &self.theme, &mut changed);
+                    if changed {
+                        self.mcp_changed = true;
+                    }
+                    if self.mcp_changed {
+                        ui.add_space(12.0);
+                        ui.horizontal(|ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.add(egui::Button::new(egui::RichText::new("Save").size(13.0).color(self.theme.text)).fill(self.theme.accent).min_size(egui::vec2(80.0, 32.0))).clicked() {
+                                    save_clicked = true;
+                                }
+                                if ui.add(egui::Button::new(egui::RichText::new("Cancel").size(13.0).color(self.theme.text)).fill(self.theme.border).min_size(egui::vec2(80.0, 32.0))).clicked() {
+                                    cancel_clicked = true;
+                                }
+                            });
                         });
                     }
-                });
-
-            self.mcp_panel_open = open;
-
-            if save_clicked {
-                if let Some(ref mut config) = config_opt {
-                    match ui::mcp_panel::save_mcp_config(config) {
-                        Ok(()) => {
-                            self.push_toast("MCP config saved", ToastLevel::Info);
-                            self.mcp_changed = false;
+                } else {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(40.0);
+                        ui.label(egui::RichText::new("No MCP config found").size(13.0).color(self.theme.text_dim));
+                        ui.add_space(8.0);
+                        if ui.add(egui::Button::new(egui::RichText::new("Create Config").size(13.0).color(self.theme.text)).fill(self.theme.accent).min_size(egui::vec2(140.0, 36.0))).clicked() {
+                            create_clicked = true;
                         }
-                        Err(e) => self.push_toast(format!("Save failed: {}", e), ToastLevel::Error),
+                    });
+                }
+            });
+
+        self.mcp_panel_open = open;
+
+        if save_clicked {
+            if let Some(ref mut config) = config_opt {
+                match ui::mcp_panel::save_mcp_config(config) {
+                    Ok(()) => {
+                        self.push_toast("MCP config saved", ToastLevel::Info);
+                        self.mcp_changed = false;
                     }
+                    Err(e) => self.push_toast(format!("Save failed: {}", e), ToastLevel::Error),
                 }
             }
-            if cancel_clicked {
-                config_opt = ui::mcp_panel::load_mcp_config();
-                self.mcp_changed = false;
-                self.mcp_panel_open = false;
-            }
-            if create_clicked {
-                config_opt = Some(clarity_core::mcp::config::McpConfig::default());
-                self.mcp_changed = true;
-            }
-
-            self.mcp_config = config_opt;
+        }
+        if cancel_clicked {
+            config_opt = ui::mcp_panel::load_mcp_config();
+            self.mcp_changed = false;
+            self.mcp_panel_open = false;
+        }
+        if create_clicked {
+            config_opt = Some(clarity_core::mcp::config::McpConfig::default());
+            self.mcp_changed = true;
         }
 
-        // Toast notifications — top-right, auto-dismiss after 5s
+        self.mcp_config = config_opt;
+    }
+
+    fn render_toasts(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
         self.toasts.retain(|t| now.duration_since(t.created_at) < Duration::from_secs(5));
         for (i, toast) in self.toasts.iter().enumerate() {
@@ -1098,6 +1045,74 @@ impl eframe::App for App {
                         });
                 });
         }
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let now = ctx.input(|i| i.time);
+        self.frame_count += 1;
+        if now - self.last_fps_time >= 1.0 {
+            self.fps = self.frame_count as f64 / (now - self.last_fps_time);
+            self.frame_count = 0;
+            self.last_fps_time = now;
+        }
+
+        self.process_events();
+        if self.is_loading {
+            ctx.request_repaint_after(Duration::from_millis(16));
+        }
+
+        // File drag-and-drop
+        let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
+        if !dropped_files.is_empty() {
+            for file in dropped_files {
+                if let Some(path) = file.path {
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    self.attachments.push(Attachment { path, name });
+                }
+            }
+        }
+
+        // ESC closes settings modal
+        if self.settings_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.settings_open = false;
+        }
+
+        if !self.settings_open && !self.is_loading
+            && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
+        {
+            self.new_session();
+        }
+
+        // Refresh task list periodically when panel is open
+        if self.task_panel_open && self.last_task_refresh.elapsed() > Duration::from_secs(3) {
+            self.refresh_tasks();
+        }
+
+        use clarity_core::agent::AgentState;
+        self.agent_status = match self.state.agent.state() {
+            AgentState::Unconfigured => AgentStatus::Unconfigured,
+            AgentState::Idle => if self.is_loading { AgentStatus::Busy } else { AgentStatus::Online },
+            AgentState::Running { .. } => AgentStatus::Busy,
+            AgentState::Stalled => AgentStatus::Offline,
+        };
+
+        ctx.style_mut(|style| {
+            self.theme.apply(style);
+        });
+
+        self.render_sidebar(ctx);
+
+        self.render_task_panel(ctx);
+
+        self.render_chat_area(ctx);
+
+        self.render_settings_panel(ctx);
+
+        self.render_mcp_panel(ctx);
+
+        self.render_toasts(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
