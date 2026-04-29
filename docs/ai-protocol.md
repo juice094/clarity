@@ -19,7 +19,8 @@
 - **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
 - **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
 - **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔓 已解锁
-- **Sprint 10 — 协议先行解锁**：D1 ✅ (AgentProfile TOML) | D2 ✅ (LlmFactory 冻结) | D3 ✅ (能力发现协议) | D4 ✅ (冒烟测试基线)
+- **Sprint 10 — 协议先行解锁**：D1 ✅ | D2 ✅ | D3 ✅ | D4 ✅
+- **Sprint 11 — 超越 Kimi CLI**：Phase A 🔄 (上下文注入) | Phase B 🔄 (编辑精度) | Phase C 🔄 (终端体验)
 
 ---
 

@@ -74,6 +74,14 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
 
+**Sprint 11 — 超越 Kimi CLI（🔄 当前）**
+
+- Phase A 🔄: 上下文注入 — `GitContext` + 项目元数据 + 文件树自动注入主 Agent
+- Phase B 🔄: 编辑精度升级 — `file_edit` 批量替换 + unified diff 预览
+- Phase C 🔄: 终端体验补齐 — TUI `/yolo`/`/interactive` + Headless stdin 管道
+
+> 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅

@@ -231,3 +231,122 @@ fn test_chat_area_contains_input() {
 ---
 
 *本计划由 Kimi 交叉审计触发，经实机代码验证后制定。任何与代码实态的冲突以代码为准。*
+
+
+---
+
+## 附录：超越 Kimi CLI 视角路线（2026-04-29 纠正记录）
+
+> **前置纠正**：此前分析将差距归结为"架构定位不同"，建议"错位竞争"。经实机代码审计后，该结论错误。Clarity 的底层能力已超过或持平 Kimi CLI，差距集中在**一层整合**——将分散在 Subagent/Headless/TUI 各层的能力统一注入主 Agent 的默认编码工作流。
+>
+> **核心结论**：这不是"能不能替代"的问题，是"愿不愿意花 2–4 周整合"的问题。
+
+---
+
+### A. 被低估的已有能力基础
+
+| Kimi CLI 能力 | Clarity 已有基础 | 代码位置 |
+|---------------|-----------------|---------|
+| **Git 上下文** | `GitContext::collect()` 完整实现（分支/最近提交/未提交文件） | `subagents/runner.rs:482-548` |
+| **Plan 模式** | Plan 生成 + 执行 + egui Review UI + TUI `/plan`/`/execute` | `agent/plan.rs`, `panels/chat.rs:157-223` |
+| **并发工具执行** | ReAct 循环中多个 tool call 通过 `join_all` **并行执行** | `agent/run.rs:51-96` |
+| **审批交互** | TUI `DiffPopup`（文件编辑审批）+ `ToolResultPopup` | `popups/diff_popup.rs` |
+| **Skill 自动发现** | 自动扫描 `.clarity/skills/` 和 `.claude/skills/`，按路径模式激活 | `skills/registry.rs:111-159` |
+| **Headless 脚本化** | `--prompt`/`--file`/`--plan`/`--approval` 全参数支持 | `headless/src/main.rs:22-68` |
+| **代码编辑** | `file_edit` 纯字符串替换 + `_diff_preview` 变更对比 | `tools/file.rs:385-471` |
+
+**关键发现**：`GitContext::collect` 只注入 Subagent，主 Agent 的 `SystemPromptBuilder` 完全没有调用它。这不是"没有"，是"没连上"。
+
+---
+
+### B. 真实的差距清单（可量化）
+
+#### P0 — 阻塞日常编码工作流
+
+| # | 差距 | 根因 | 工作量 |
+|---|------|------|--------|
+| 1 | **主 Agent 无 Git 上下文** | `GitContext::collect` 只给 Subagent，主 Agent `SystemPromptBuilder` 没调用 | 1–2 天 |
+| 2 | **主 Agent 无项目文件树** | `active_file_paths` 只用于 Skill 激活，不注入 prompt | 2–3 天 |
+| 3 | **file_edit 精度不足** | 纯 `String::replace`，无 AST、无多位置批量替换 | 1–2 周 |
+| 4 | **TUI 缺 `/yolo` 命令** | 硬编码 `ApprovalMode::Interactive`，无法运行时切换 | 半天 |
+
+#### P1 — 体验差距
+
+| # | 差距 | 根因 | 工作量 |
+|---|------|------|--------|
+| 5 | **Headless 不支持 stdin 管道** | `read_prompt()` 只处理 `--prompt`/`--file`，不读 `std::io::stdin()` | 1 天 |
+| 6 | **无自动项目元数据读取** | `SystemPromptBuilder` 不自动读取 `Cargo.toml`/`package.json` | 2–3 天 |
+| 7 | **Plan 步骤顺序执行** | `execute_plan` 是 `for` 循环，未利用 `dispatch_tool_calls` 的 `join_all` 并行 | 2–3 天 |
+
+---
+
+### C. 从"已有基础"到"超越"的路径
+
+**不是架构重构，是能力整合。**
+
+#### Phase A：上下文注入（1 周）
+
+将 Subagent 层已有的能力提升到主 Agent：
+
+```rust
+// agent/prompt.rs — SystemPromptBuilder 新增
+fn auto_context(&self) -> String {
+    let mut ctx = String::new();
+    // 1. GitContext（已有实现，只需调用）
+    if let Some(git) = GitContext::collect(&self.working_dir).await {
+        ctx.push_str(&git.to_prompt_string());
+    }
+    // 2. 项目元数据（轻量扫描）
+    if let Ok(manifest) = std::fs::read_to_string(self.working_dir.join("Cargo.toml")) {
+        ctx.push_str(&format!("\n# Cargo.toml\n```toml\n{}\n```\n", &manifest[..1024]));
+    }
+    // 3. 文件树（浅层）
+    ctx.push_str(&format!("\n# File Tree\n{}", shallow_tree(&self.working_dir, 2)));
+    ctx
+}
+```
+
+#### Phase B：编辑精度升级（1–2 周）
+
+升级 `file_edit` 工具：
+
+| 当前 | 目标 | 实现方式 |
+|------|------|---------|
+| 单 `old_string`/`new_string` | 支持 `Vec<{old, new}>` 批量替换 | Schema 扩展 + 循环 `replacen` |
+| 无 AST | 新增 `file_edit_ast` 工具（可选） | 引入 `tree-sitter` 或 `syn`（Rust 专用） |
+| 全文件 `_diff_preview` | 生成标准 unified diff | `diff` crate 或自研行级 diff |
+
+#### Phase C：终端体验补齐（3–5 天）
+
+- TUI 添加 `/yolo` 命令（切换 `ApprovalMode::Yolo`）
+- TUI 添加 `/interactive` 命令（切回）
+- Headless 添加 stdin 读取：`echo "prompt" | clarity-headless`
+
+---
+
+### D. 与 Kimi CLI 的对比修正
+
+| 维度 | Kimi CLI | Clarity（当前实际） | 超越所需时间 |
+|------|---------|-------------------|-------------|
+| **代码编辑** | Diff 应用、AST 感知 | 字符串替换，但有 `_diff_preview` | 1–2 周 |
+| **上下文提取** | 自动（git + 项目结构） | **Git 已有（Subagent）**，项目结构缺自动扫描 | 1 周 |
+| **Plan 执行** | 有 | **有**，且 egui 有 Review UI | ✅ 已达标 |
+| **并发编辑** | 有 | **有**（`join_all`），但 Plan 模式未利用 | 2–3 天 |
+| **审批交互** | 终端内 Y/N/Always | TUI 有 DiffPopup，**缺运行时切换命令** | 半天 |
+| **管道友好** | 支持 | Headless **stdout 可管道**，stdin 不可 | 1 天 |
+| **离线可用** | 否 | **本地 LLM + 自动 fallback** | ✅ 已超越 |
+| **多模型** | 仅限 Kimi | **OpenAI/Anthropic/Kimi/DeepSeek/Local + TOML 自定义** | ✅ 已超越 |
+| **MCP 生态** | 可能有 | **stdio/HTTP/SSE 三协议完整** | ✅ 已超越 |
+| **记忆持久化** | 会话级 | **SQLite + BM25 + 向量，跨会话** | ✅ 已超越 |
+
+---
+
+### E. 决策记录
+
+**此前错误**：将差距归结为"架构定位不同"，建议"错位竞争"。
+
+**纠正后**：Clarity 的底层能力（Git 上下文、Plan 模式、并发执行、Skill 系统、MCP、记忆）**已经超过或持平** Kimi CLI。差距集中在**一层整合**——将这些分散在 Subagent/Headless/TUI 各层的能力，统一注入到主 Agent 的默认编码工作流中。
+
+**总工作量估算**：2–4 周（Phase A 1 周 + Phase B 1–2 周 + Phase C 3–5 天）。
+
+**触发条件**：若用户确认"超越 Kimi CLI"为战略优先级，可将上述 Phase A/B/C 纳入 Sprint 11，取代原定的"egui 审批 UI"方向。
