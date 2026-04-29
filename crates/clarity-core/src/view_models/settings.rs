@@ -135,11 +135,16 @@ impl SettingsViewModel {
                     ViewCommand::TextInput {
                         id: "api_key".into(),
                         value: self.api_key.clone().unwrap_or_default(),
-                        placeholder: String::new(),
+                        placeholder: "${env:KIMI_API_KEY} or plain key".into(),
                         password: true,
                         width: 200.0,
                     },
                 ],
+            },
+            ViewCommand::Text {
+                content: "Supports ${env:VAR_NAME} syntax to avoid storing keys on disk.".into(),
+                role: TextRole::Body,
+                size: 11.0,
             },
             ViewCommand::Space { height: 8.0 },
             ViewCommand::HStack {

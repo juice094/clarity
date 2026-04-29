@@ -146,7 +146,8 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
             Arc::new(provider)
         }
         _ => {
-            let api_key = settings.api_key.as_deref().unwrap_or("");
+            let resolved_key = GuiSettings::resolve_api_key(&settings.api_key);
+            let api_key = resolved_key.as_deref().unwrap_or("");
             match clarity_core::llm::LlmFactory::create_with_key_arc(
                 &desired_provider,
                 api_key,
