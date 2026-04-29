@@ -59,11 +59,20 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - TUI 新增 `protocol_renderer`（ratatui 翻译层）+ `/settings` 命令 + `settings_mode` 覆盖层 ✅
 - Gateway `WsResponse` 扩展 `ViewCommands` variant；WebSocket 并发转发 wire + view 双通道 ✅
 
-**Sprint 9 — 服务商支持硬化（Phase 1/2 完成 ✅, Phase 3 冻结 ⏸️）**
+**Sprint 9 — 服务商支持硬化（Phase 1/2 完成 ✅, Phase 3 冻结 ⏸️→ 已解锁 🔓）**
 
 - Phase 1 ✅: API Key `${env:VAR}` 语法注入 + Settings 增量保存（`merge_json`）
 - Phase 2 ✅: `ModelRegistry` 接入 egui — `get_available_models()` 动态读取 registry + 硬编码 fallback 合并；`ensure_llm` registry 优先创建（支持自定义 provider from `models.toml`）；`build_provider_from_registry_with_key()` 支持 UI 传入 api key 覆盖环境变量
-- Phase 3 ⏸️: 多模型角色分工（chat/utility/utility_large），待 Agent 架构重构后实施
+- Phase 3 🔓 解锁: Kimi 交叉审计识别出"协议先行，架构后置"路径 —— AgentProfile TOML Schema 无需等待 `agent/mod.rs` 拆分即可实现 Agent 级 Provider 覆盖
+
+**Sprint 10 — 协议先行解锁（🔄 当前）**
+
+- D1 🔄: AgentProfile TOML Schema + GuiSettings 扩展（`profiles.toml`）
+- D2 🔄: LlmFactory 功能冻结（`#[deprecated]` + 路由表更新）
+- D3 🔄: 能力发现协议（`CapabilityRegistry::supported_approval_modes`）
+- D4 🔄: egui 冒烟测试基线（headless 存在性验证或 ViewCommand 树测试）
+
+> 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 

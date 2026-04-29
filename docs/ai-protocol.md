@@ -9,7 +9,7 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-29
-**当前分支**：`phase2/protocol-pilot` @ `f02d764`（已推送 origin）
+**当前分支**：`phase2/protocol-pilot` @ `48006e5`（已推送 origin）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
@@ -18,7 +18,7 @@
 - Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成
 - **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
 - **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
-- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ (env-var 注入 + 增量保存) | Phase 2 ✅ (ModelRegistry 接入 egui) | Phase 3 ⏸️ (多模型角色，冻结)
+- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ (env-var 注入 + 增量保存) | Phase 2 ✅ (ModelRegistry 接入 egui) | Phase 3 🔓 (多模型角色，Kimi 审计后解锁"协议先行"路径)
 
 ---
 
@@ -138,9 +138,38 @@
 - `get_available_models()` 采用**合并策略**而非替换策略。`ModelRegistry` 可覆盖/补充 provider，但硬编码 fallback 始终作为缺位补充。这避免了测试环境（无 env var）下 provider 列表为空的问题。
 - `build_provider_from_registry_with_key()` 的 override key 优先于 `ProviderConfig.api_key_env`，实现"用户 UI 输入 > 环境变量"的优先级。
 
-**Phase 3 ⏸️ — 多模型角色分工（冻结）**
+**Phase 3 🔓 解锁 — Kimi 交叉审计后重新定义**
 
-待 Agent 架构重构后实施。当前 `GuiSettings` 为全局单一配置；长期需支持 Agent 级覆盖（格雷 local，研究 Agent Kimi）。
+原冻结原因："需 Agent 架构重构后实施"。Kimi 交叉审计（参照 devbase 现状）识别出这是**叙事级软阻塞** —— `GuiSettings` 是独立数据模型，Agent 级 Provider 覆盖**不依赖** `agent/mod.rs` 的物理拆分。
+
+解锁路径：**协议先行，架构后置**。先定义 `AgentProfile` TOML 数据模型（`profiles.toml`），让 `GuiSettings` 支持 Agent 级覆盖；`agent/mod.rs` 物理拆分延后到 Wave 0。
+
+### 3.11 Kimi 交叉审计 — Clarity↔devbase（2026-04-29）
+
+**触发**：用户上传 Clarity + devbase 现状文档，要求结合 GitHub 真实现状进行正反面分析。
+
+**核心结论**：两个项目的阻塞点本质都是"决策-叙事解耦未完成"。Clarity 的 "Phase 3 冻结" 与 devbase 的 "v0.12.0 不敢发" 都是"架构叙事"（宏大重构）压制了"具体决策"（可交付的下一步）。
+
+**对 Clarity 的关键建议**：
+1. **F1 双轨制**：LlmFactory 功能冻结（`#[deprecated]`），ModelRegistry 成为唯一真相源
+2. **F3 Phase 3**：数据模型解耦优先于代码结构解耦 —— `AgentProfile` TOML 不依赖 Agent 重构
+3. **F5 Parity 差距**：能力发现协议（Capability Discovery），egui 启动时向 core 查询 `supported_modes`，禁用不可用选项
+4. **F2 渲染测试**：UI 逻辑与渲染逻辑拆分 —— `build_*_commands()` 纯函数返回 `Vec<ViewCommand>`，可单元测试
+
+**完整报告**：用户 Kimi 会话 `https://www.kimi.com/share/19dd9850-5e72-878f-8000-0000ca3275b0`
+
+### 3.12 Sprint 10 — 协议先行解锁（2026-04-29）
+
+承接 Kimi 审计建议，执行"协议先行，架构后置"路径。
+
+| ID | 交付物 | 说明 | 计划 |
+|----|--------|------|------|
+| D1 | `AgentProfile` TOML Schema | `profiles.toml` + `GuiSettings` 扩展；零 Agent 重构成本 | Sprint 10 Week 1 |
+| D2 | LlmFactory 功能冻结 | `#[deprecated]` + 路由表更新；零行为变更 | Sprint 10 Week 1 |
+| D3 | 能力发现协议 | `CapabilityRegistry::supported_approval_modes(surface)`；禁用 egui 不可用模式 | Sprint 10 Week 1–2 |
+| D4 | egui 冒烟测试基线 | headless 存在性验证或 `build_*_commands()` 纯函数测试 | Sprint 10 Week 2 |
+
+> 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
 
 ### 3.8 Settings 增量保存决策（2026-04-27）
 
