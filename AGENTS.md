@@ -146,6 +146,116 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 >
 > **Recommendation for future refactors**: Extract a `ChatDriver` or `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own message-building strategies without modifying core enums.
 
+## Capability Islands & Sleeping Mines
+
+> 交叉审计结论（2026-04-27）：Clarity 的底层能力储备被系统性低估。问题不是"能力缺失"，而是"能力分散在各层、未统一注入主 Agent 的价值流"。
+>
+> 以下分析基于 Sprint 11 计划 `docs/plans/2026-04-30-sprint11-surpass-kimicli.md` 的审计结果。
+
+### 能力孤岛拓扑
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    Clarity 能力孤岛拓扑                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    │
+│   │clarity-core │    │   memory    │    │  gateway    │    │
+│   │ (Agent引擎) │◄──►│(SQLite/BM25 │◄──►│(MCP/LLM网关)│    │
+│   │             │ ❌  │  /Vector)   │    │             │    │
+│   └──────┬──────┘    └─────────────┘    └──────┬──────┘    │
+│          │                                      │           │
+│          │           ┌─────────────┐            │           │
+│          │           │    wire     │◄───────────┘           │
+│          │           │ (事件总线)  │                        │
+│          │           └──────┬──────┘                        │
+│          │                  ▲                              │
+│          │                  │ ❌ 事件发了，主Agent不订阅     │
+│          │           ┌──────┴──────┐                        │
+│          │           │     tui     │                        │
+│          │           │ (DiffPopup  │◄───┐                   │
+│          │           │  /yolo缺)   │    │ ❌ 能力不回流      │
+│          │           └─────────────┘    │                   │
+│          │                   ▲          │                   │
+│          │                   │          │                   │
+│          └───────────────────┴──────────┘                   │
+│                        claw (Headless)                      │
+│                                                             │
+│  图例: ❌ 孤岛/断层   ▲ 数据向上流动阻塞                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 矿脉清单
+
+**🥇 高纯度金矿（已实现但未激活）**
+
+| 矿脉 | 实现位置 | 激活路径 | 断点 |
+|------|---------|---------|------|
+| Git 上下文 | `subagents/runner.rs:482-548` | `GitContext::collect()` | 仅注入 Subagent System Prompt，主 Agent 从不调用 |
+| 跨会话记忆 | `memory` crate (SQLite+BM25+Vector) | `memory_store.query_similar()` | 主 Agent Prompt 构建不自动检索历史相关记忆 |
+| MCP 三协议 | `gateway` crate (stdio/HTTP/SSE) | Tool 注册完整 | Plan 模式工具调度未打通并行 |
+| 并发执行 | `agent/run.rs:51-96` (`join_all`) | `ReAct` 循环已支持 | Plan 模式 `execute_plan` 是顺序 `for` 循环 |
+| Skill 自动发现 | `skills/registry.rs:111-159` | 扫描 `.clarity/skills/` | 激活逻辑和上下文注入脱节 |
+| Approval 三模式 | 代码层完整 | `CapabilityRegistry` | TUI 缺运行时切换，Headless 管道不读 stdin |
+| Background Tasks | 已实现 | `wire` 事件总线发布 | 主 Agent ReAct 循环未订阅结果回流 |
+
+**🥈 次级矿脉（部分实现，需补齐）**
+
+| 矿脉 | 状态 | 阻塞原因 |
+|------|------|---------|
+| 项目文件树感知 | `active_file_paths` 只用于 Skill 激活 | 未进入 System Prompt |
+| 项目元数据读取 | 零实现 | 策略待定义（读多少、何时读） |
+| AST 感知编辑 | 零实现 | 字符串替换在 80% 场景够用，需收集真实使用反馈后再决策 |
+
+### 运输带断层根因
+
+1. **Subagent 优先陷阱**：早期设计将重型能力下放给 Subagent，主 Agent 保持轻量调度。实际使用场景中主 Agent 直接编码，Subagent 成了能力的冷备份。
+2. **UI 与引擎平行进化**：TUI/Headless/egui 三条 UI 线各自实现部分交互能力（DiffPopup、审批模式），无统一能力抽象层——换个前端就要重新实现一遍。
+3. **事件总线单向广播**：`wire` crate 发布事件，但主 Agent 的 ReAct 循环无订阅机制，背景任务、MCP 工具回调、记忆检索结果无法自动更新主 Agent 上下文。
+
+### 汇流方案（架桥而非重构）
+
+核心原则：不改矿脉位置，只铺运输带。利用已有 `wire` 事件总线作为统一物流层。
+
+**Phase 1: 主 Agent 上下文汇流（Week 1，收益最高）**
+目标：让主 Agent 的每次 LLM 调用前，自动拿到全量感知。
+- `SystemPromptBuilder` 新增汇流点：Git 上下文（从 Subagent 层迁移）、项目文件树（复用 Skill 层 `active_file_paths`）、相关历史记忆（检索 `memory` crate）、项目元数据（轻量读取 `Cargo.toml`/`package.json`）
+
+**Phase 2: 执行层并联（Week 1–2）**
+目标：Plan 模式利用已有 `join_all` 并发能力。
+- `execute_plan` 从顺序 `for` 循环改造为依赖 DAG + `join_all` 并行执行
+- **风险**：步骤间可能存在隐式数据依赖（步骤 B 的文件路径依赖步骤 A 的输出）。改造前需扫描现有 `.clarity/plans/` 样本，确认步骤间数据传递模式。必要时给 Plan Step Schema 增加 `depends_on` 字段。
+
+**Phase 3: UI 能力统一层（Week 2）**
+目标：Approval、Diff、命令切换等交互能力从"各前端各自实现"变为"统一抽象 + 各前端适配"。
+- 在 `clarity-core` 中抽象出统一交互契约（`ApprovalMode`、`DiffRenderer`、`CommandRegistry`）
+- TUI/egui/Headless 各自只做渲染/参数化适配，行为一致性由 core 保证
+
+**Phase 4: 记忆主动推送（持续，收益复利）**
+目标：记忆不是等主 Agent 来查，而是主动在关键节点推送。
+- 连续 3 轮对话围绕同一文件 → 自动将该文件历史编辑记录注入上下文
+- Tool Call 失败 → 检索记忆库中同类错误的历史解决方案
+- 进入 Plan 模式 → 检索"过去同类 Plan 的执行时长/失败步骤"
+- 需扩展 `wire` 事件类型，由 `memory` crate 的 background listener 订阅并决策推送。
+
+### 执行优先级
+
+```text
+Week 1 (4.29-5.5):   Phase 1 上下文汇流
+  └─ 产出：主 Agent 能感知 Git + 文件树 + 记忆
+  └─ 验证：让 Clarity 处理一个真实 PR 描述，观察分支/未提交变更识别能力
+
+Week 2 (5.6-5.12):   Phase 2 执行并联 + Phase 3 UI 统一层启动
+  └─ 产出：Plan 并行执行 + /yolo 命令可用
+  └─ 验证：一个 5 步骤 Plan，其中 3 个无依赖步骤并行完成
+
+Week 3-4 (5.13-5.19): Phase 3 收尾 + Phase 4 设计
+  └─ 产出：Headless/TUI/egui 共享同一套交互抽象
+  └─ 验证：切换前端不改变审批行为和数据流
+```
+
+---
+
 ## Security Notes
 
 - **MCP stdio command validation is active** (since 2026-04-17). Before spawning any MCP server, Clarity validates the `command` field:
