@@ -51,6 +51,14 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Phase 2b — 跨前端 Settings 协议化（已完成 ✅）**
+
+- `SettingsViewModel` 下沉至 `clarity-core`，provider→model 联动统一 ✅
+- `clarity-wire` 扩展独立 `ViewCommand` 广播通道（`WireUIViewSide` / `send_view`）✅
+- egui Settings 面板协议化（`ViewCommand` + `UserAction`）✅
+- TUI 新增 `protocol_renderer`（ratatui 翻译层）+ `/settings` 命令 + `settings_mode` 覆盖层 ✅
+- Gateway `WsResponse` 扩展 `ViewCommands` variant；WebSocket 并发转发 wire + view 双通道 ✅
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
@@ -173,6 +181,11 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 1. `clarity-tui` 中的事件处理与渲染逻辑
 2. `clarity-gateway` 中的 HTTP API / WebSocket 序列化
 3. `tests/integration` 中的断言匹配
+
+**Phase 2b 新增协议类型**（`clarity-wire`）：
+- `ViewCommand`（`VStack` / `HStack` / `Text` / `TextInput` / `ComboBox` / `Button` / `Space`）
+- `UserAction`（`TextInputChange` / `ComboChange` / `ButtonClick`）
+- 变更时需同步检查：egui `protocol_renderer.rs`、TUI `protocol_renderer.rs`、Gateway `ws.rs` `WsResponse`
 
 ---
 

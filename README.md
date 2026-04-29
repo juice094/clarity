@@ -83,7 +83,7 @@ crates/
 # clarity-tauri     # Archived — moved to external backup (see CHANGELOG)
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
-├── clarity-wire      # UI↔Agent event bus (SPMC)
+├── clarity-wire      # UI↔Agent event bus (SPMC) + ViewCommand protocol channel
 └── clarity-headless  # Headless CLI for scripts/CI
 ```
 
@@ -95,7 +95,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 524 tests, 0 failed, 4 ignored
+cargo test --workspace --lib                          # 543 tests, 0 failed, 4 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

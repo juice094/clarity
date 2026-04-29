@@ -61,6 +61,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
 | 审批系统增强 | 🔄 部分完成 | T_APPROVAL V1（规则引擎）已交付；V2（AI 分类器混合）设计中 |
+| 跨前端 Settings 协议化 | ✅ 已完成 | `SettingsViewModel` 下沉 core + `ViewCommand` 协议通道 + 三前端统一接入 |
 | 文件浏览器集成 | ✅ 已完成 | 工作目录树 + `@path` 引用 |
 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel |
 | WebBrowserTool | ✅ 已完成 | reqwest+scraper 轻量实现 |
