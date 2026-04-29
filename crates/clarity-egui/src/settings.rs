@@ -205,3 +205,58 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         ("local".into(), "Local (GGUF)".into(), local_model_names),
     ]
 }
+
+// ============================================================================
+// Unit tests for settings persistence and model enumeration
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_settings_structure() {
+        let settings = GuiSettings::default_with_env();
+        // All string fields must be non-empty or have sensible defaults.
+        assert!(!settings.model.is_empty());
+        assert!(!settings.provider.is_empty());
+        assert!(!settings.approval_mode.is_empty());
+        assert!(!settings.theme.is_empty());
+    }
+
+    #[test]
+    fn test_get_available_models_has_providers() {
+        let models = get_available_models();
+        assert!(!models.is_empty());
+        let keys: Vec<String> = models.iter().map(|(k, _, _)| k.clone()).collect();
+        assert!(keys.contains(&"openai".to_string()));
+        assert!(keys.contains(&"local".to_string()));
+    }
+
+    #[test]
+    fn test_get_available_models_local_label() {
+        let models = get_available_models();
+        let local = models.iter().find(|(k, _, _)| k == "local");
+        assert!(local.is_some());
+        let (_, label, _) = local.unwrap();
+        assert_eq!(label, "Local (GGUF)");
+    }
+
+    #[test]
+    fn test_settings_clone_roundtrip() {
+        let original = GuiSettings::default_with_env();
+        let cloned = original.clone();
+        assert_eq!(original.model, cloned.model);
+        assert_eq!(original.provider, cloned.provider);
+        assert_eq!(original.approval_mode, cloned.approval_mode);
+    }
+
+    #[test]
+    fn test_settings_serde_roundtrip() {
+        let original = GuiSettings::default_with_env();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let deserialized: GuiSettings = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original.model, deserialized.model);
+        assert_eq!(original.provider, deserialized.provider);
+        assert_eq!(original.approval_mode, deserialized.approval_mode);
+    }
+}

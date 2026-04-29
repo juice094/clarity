@@ -309,3 +309,43 @@ fn hex_alpha(s: &str, alpha: f32) -> egui::Color32 {
     let a = (alpha * 255.0).clamp(0.0, 255.0) as u8;
     egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a)
 }
+
+// ============================================================================
+// Unit tests for theme construction and color helpers
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dark_theme_construction() {
+        let t = Theme::dark();
+        // Backgrounds should be dark (value < 0.2 in any channel heuristic)
+        assert!(t.bg.r() < 60, "dark bg expected");
+        assert!(t.text.r() > 200, "bright text expected");
+        assert!(t.accent.g() > 80, "accent should have some green component");
+    }
+
+    #[test]
+    fn test_light_theme_construction() {
+        let t = Theme::light();
+        assert!(t.bg.r() > 240, "light bg expected");
+        assert!(t.text.r() < 50, "dark text expected");
+    }
+
+    #[test]
+    fn test_hex_parsing() {
+        let c = hex("#8b5cf6");
+        assert_eq!(c.r(), 139);
+        assert_eq!(c.g(), 92);
+        assert_eq!(c.b(), 246);
+    }
+
+    #[test]
+    fn test_apply_does_not_panic() {
+        let t = Theme::dark();
+        let mut style = egui::Style::default();
+        t.apply(&mut style);
+        assert_eq!(style.visuals.override_text_color, Some(t.text));
+    }
+}

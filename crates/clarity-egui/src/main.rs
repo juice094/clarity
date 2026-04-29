@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use clarity_core::approval::ApprovalRuntime;
 
 mod app_state;
+mod error;
 mod settings;
 mod theme;
 mod ui;
@@ -127,7 +128,7 @@ impl App {
             if let Err(e) = app_state::prewarm_llm(&state_for_monitor).await {
                 tracing::warn!("LLM prewarm failed: {}", e);
                 let mut guard = state_for_monitor.prewarm_error.lock();
-                *guard = Some(e.clone());
+                *guard = Some(e.to_string());
             }
 
             let mut consecutive_failures: u32 = 0;
@@ -280,7 +281,7 @@ impl App {
 
         self.runtime.spawn(async move {
             if let Err(e) = ensure_llm(&state).await {
-                if let Err(err) = tx.send(UiEvent::Error(e)) { tracing::warn!("Failed to send Error: {}", err); }
+                if let Err(err) = tx.send(UiEvent::Error(e.to_string())) { tracing::warn!("Failed to send Error: {}", err); }
                 return;
             }
 

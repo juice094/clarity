@@ -1,3 +1,4 @@
+use crate::error::EguiError;
 use crate::settings::GuiSettings;
 use std::path::PathBuf;
 use parking_lot::Mutex;
@@ -63,7 +64,7 @@ fn binding_matches(binding: &Option<LlmBinding>, provider: &str, path: &str) -> 
     matches!(binding, Some(b) if b.provider == provider && b.local_model_path == path)
 }
 
-pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
+pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     let settings = {
         let guard = state.cached_settings.lock();
         guard.clone()
@@ -114,9 +115,9 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     let llm: Arc<dyn clarity_core::llm::LlmProvider> = match desired_provider.as_str() {
         "local" => {
             if desired_path.is_empty() {
-                return Err(
+                return Err(EguiError::LlmLoad(
                     "No local model configured. Place .gguf in ~/models/ or set CLARITY_LOCAL_MODEL_PATH.".to_string(),
-                );
+                ));
             }
             let model_path = std::path::PathBuf::from(&desired_path);
             let sibling_tokenizer = model_path.with_file_name("tokenizer.json");
@@ -127,12 +128,12 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
             if sibling_tokenizer.exists() {
                 if let Ok(meta) = std::fs::metadata(&sibling_tokenizer) {
                     if meta.len() < 1024 {
-                        return Err(format!(
+                        return Err(EguiError::LlmLoad(format!(
                             "Tokenizer file {} seems corrupted (size {} bytes). \
                              Please re-download a valid tokenizer.json.",
                             sibling_tokenizer.display(),
                             meta.len()
-                        ));
+                        )));
                     }
                 }
                 tracing::info!("Using local tokenizer at {}", sibling_tokenizer.display());
@@ -141,7 +142,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
 
             let provider = clarity_core::llm::LocalGgufProvider::new(config)
                 .await
-                .map_err(|e| format!("Failed to load local model: {}", e))?;
+                .map_err(|e| EguiError::LlmLoad(format!("Failed to load local model: {}", e)))?;
             Arc::new(provider)
         }
         _ => {
@@ -157,19 +158,19 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
                         match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
                             Ok(llm) => llm,
                             Err(_) => {
-                                return Err(format!(
+                                return Err(EguiError::InvalidProvider(format!(
                                     "Provider '{}' requires an API key. \
                                      Please open Settings and enter your key.",
                                     desired_provider
-                                ));
+                                )));
                             }
                         }
                     } else {
-                        return Err(format!(
+                        return Err(EguiError::LlmLoad(format!(
                             "Failed to create provider '{}': {}. \
                              Please check your API key and network connection.",
                             desired_provider, e
-                        ));
+                        )));
                     }
                 }
             }
@@ -187,12 +188,12 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn reload_llm(state: &AppState) -> Result<(), String> {
+pub async fn reload_llm(state: &AppState) -> Result<(), EguiError> {
     {
         let mut binding = state.llm_binding.lock();
         *binding = None;
     }
-    ensure_llm(state).await.map_err(|e| e.to_string())
+    ensure_llm(state).await
 }
 
 pub async fn check_network(probe: &str) -> bool {
@@ -206,6 +207,61 @@ pub async fn check_network(probe: &str) -> bool {
     )
 }
 
-pub async fn prewarm_llm(state: &AppState) -> Result<(), String> {
+pub async fn prewarm_llm(state: &AppState) -> Result<(), EguiError> {
     ensure_llm(state).await
+}
+
+// ============================================================================
+// Unit tests for AppState pure logic
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clarity_core::approval::ApprovalMode;
+
+    #[test]
+    fn test_parse_approval_mode_interactive() {
+        assert_eq!(parse_approval_mode("interactive"), ApprovalMode::Interactive);
+        assert_eq!(parse_approval_mode("Interactive"), ApprovalMode::Interactive);
+    }
+
+    #[test]
+    fn test_parse_approval_mode_yolo() {
+        assert_eq!(parse_approval_mode("yolo"), ApprovalMode::Yolo);
+    }
+
+    #[test]
+    fn test_parse_approval_mode_plan() {
+        assert_eq!(parse_approval_mode("plan"), ApprovalMode::Plan);
+    }
+
+    #[test]
+    fn test_parse_approval_mode_default_fallback() {
+        // Any unknown string falls back to Interactive.
+        assert_eq!(parse_approval_mode("unknown"), ApprovalMode::Interactive);
+        assert_eq!(parse_approval_mode(""), ApprovalMode::Interactive);
+    }
+
+    #[test]
+    fn test_binding_matches_same() {
+        let binding = Some(LlmBinding {
+            provider: "openai".to_string(),
+            local_model_path: "".to_string(),
+        });
+        assert!(binding_matches(&binding, "openai", ""));
+    }
+
+    #[test]
+    fn test_binding_matches_different_provider() {
+        let binding = Some(LlmBinding {
+            provider: "openai".to_string(),
+            local_model_path: "".to_string(),
+        });
+        assert!(!binding_matches(&binding, "anthropic", ""));
+    }
+
+    #[test]
+    fn test_binding_matches_none() {
+        assert!(!binding_matches(&None, "openai", ""));
+    }
 }
