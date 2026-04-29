@@ -115,6 +115,13 @@ pub struct App {
     pub task_manager: Option<Arc<BackgroundTaskManager>>,
     /// Most recently generated plan, awaiting user confirmation.
     pub pending_plan: Option<clarity_core::agent::Plan>,
+    /// Settings ViewModel (populated when entering settings mode).
+    #[allow(dead_code)]
+    pub settings_vm: Option<clarity_core::view_models::settings::SettingsViewModel>,
+    /// Whether the TUI is in settings display mode.
+    pub settings_mode: bool,
+    /// Cached view commands received from the wire view channel.
+    pub cached_view_commands: Vec<clarity_wire::ViewCommand>,
 }
 
 impl App {
@@ -156,6 +163,9 @@ impl App {
             skill_registry: None,
             task_manager,
             pending_plan: None,
+            settings_vm: None,
+            settings_mode: false,
+            cached_view_commands: Vec::new(),
         }
     }
 
@@ -184,7 +194,8 @@ impl App {
         self.event_tx = Some(tx.clone());
         let wire = std::sync::Arc::new(clarity_wire::Wire::new());
         let agent = (*self.agent).clone().with_wire(wire.clone());
-        spawn_wire_adapter(wire.ui_side(false), tx);
+        spawn_wire_adapter(wire.ui_side(false), tx.clone());
+        crate::wire_adapter::spawn_wire_view_adapter(wire.ui_view_side(), tx);
         let (controller, controller_tx) = AgentController::new_with_sender(agent);
         tokio::spawn(controller.run());
         self.controller_tx = Some(controller_tx);
@@ -232,6 +243,15 @@ impl App {
 
         // 过滤 key release/repeat，只处理 press（避免某些终端重复触发）
         if key.kind != crossterm::event::KeyEventKind::Press {
+            return Ok(true);
+        }
+
+        // Settings 模式优先拦截：Esc 退出，其余忽略
+        if self.settings_mode {
+            if key.code == KeyCode::Esc {
+                self.settings_mode = false;
+                self.cached_view_commands.clear();
+            }
             return Ok(true);
         }
 

@@ -49,6 +49,8 @@ pub(crate) struct App {
     pub(crate) compacting: bool,
     pub(crate) settings_open: bool,
     pub(crate) settings_edit: GuiSettings,
+    pub(crate) settings_vm: clarity_core::view_models::settings::SettingsViewModel,
+    pub(crate) wire: Arc<clarity_wire::Wire>,
     pub(crate) frame_count: u64,
     pub(crate) last_fps_time: f64,
     pub(crate) fps: f64,

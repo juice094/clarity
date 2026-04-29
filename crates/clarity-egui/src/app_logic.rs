@@ -82,13 +82,27 @@ impl App {
         theme.apply(&mut style);
         cc.egui_ctx.set_style(style);
 
+        let settings_edit = GuiSettings::load();
+        let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
+            provider: settings_edit.provider.clone(),
+            model: settings_edit.model.clone(),
+            approval_mode: settings_edit.approval_mode.clone(),
+            api_key: settings_edit.api_key.clone(),
+            local_model_path: settings_edit.local_model_path.clone(),
+            theme: settings_edit.theme.clone(),
+        };
+        let settings_vm = clarity_core::view_models::settings::SettingsViewModel::from_snapshot(&settings_snapshot);
+        let wire = Arc::new(clarity_wire::Wire::new());
+
         Self {
             state, runtime, ui_tx, ui_rx, sessions, active_session_id: active_id,
             sidebar_collapsed: false, input: String::new(), is_loading: false,
             agent_status: AgentStatus::Unconfigured, network_banner: None,
             tool_calls: vec![], compacting: false,
             settings_open: false,
-            settings_edit: GuiSettings::load(),
+            settings_edit,
+            settings_vm,
+            wire,
             frame_count: 0, last_fps_time: cc.egui_ctx.input(|i| i.time),
             fps: 0.0, start: now,
             theme,

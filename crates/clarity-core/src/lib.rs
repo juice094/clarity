@@ -61,6 +61,7 @@ pub mod skills;
 pub mod subagents;
 pub mod tools;
 pub mod types;
+pub mod view_models;
 
 // Re-export core types
 pub use agent::Agent;

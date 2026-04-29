@@ -7,6 +7,7 @@ mod events;
 mod parse;
 mod popup;
 mod popups;
+mod protocol_renderer;
 mod ui;
 mod widgets;
 mod wire_adapter;
@@ -291,6 +292,9 @@ where
                 total_tokens,
             } => {
                 app.handle_usage(prompt_tokens, completion_tokens, total_tokens);
+            }
+            events::Event::ViewUpdate(commands) => {
+                app.cached_view_commands = commands;
             }
         }
     }

@@ -2,13 +2,14 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 
 use crate::app::App;
 use crate::command_bar;
 use crate::popup;
+use crate::protocol_renderer;
 use crate::widgets::{chat_pane::ChatPane, generating_indicator::GeneratingIndicator};
 
 /// 渲染主界面
@@ -97,6 +98,20 @@ pub fn draw(f: &mut Frame, app: &App) {
     // 生成中指示器
     if app.is_generating() {
         GeneratingIndicator::render(f, size, app.generation_metrics.as_ref());
+    }
+
+    // Settings overlay（最上层，仅次于弹窗）
+    if app.settings_mode && !app.cached_view_commands.is_empty() {
+        let settings_area = popup::centered_rect(60, 20, size);
+        f.render_widget(Clear, settings_area);
+        let block = Block::default()
+            .title(" Settings ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Rgb(100, 180, 255)))
+            .style(Style::default().bg(Color::Rgb(30, 30, 40)));
+        let inner = block.inner(settings_area);
+        f.render_widget(block, settings_area);
+        protocol_renderer::render_view_commands(f, inner, &app.cached_view_commands);
     }
 
     // 弹窗（最上层）

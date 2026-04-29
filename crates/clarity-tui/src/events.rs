@@ -52,6 +52,8 @@ pub enum Event {
         completion_tokens: u32,
         total_tokens: u32,
     },
+    /// Declarative UI command batch from the wire view channel.
+    ViewUpdate(Vec<clarity_wire::ViewCommand>),
 }
 
 /// 事件处理器

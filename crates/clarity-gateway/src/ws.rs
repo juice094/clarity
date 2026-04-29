@@ -149,21 +149,54 @@ async fn handle_chat_with_wire(
     let message_clone = message.clone();
     let agent_task = tokio::spawn(async move { agent.run(&message_clone).await });
 
-    // Forward wire messages to WebSocket
+    // Forward wire messages and view commands to WebSocket via a merge channel
+    let (merge_tx, mut merge_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
     let mut ui_side = wire.ui_side(false);
-    while let Some(msg) = ui_side.recv().await {
-        match serde_json::to_string(&msg) {
-            Ok(json) => {
-                if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                    warn!("Failed to send wire message: {}", e);
-                    break;
+    let merge_tx_wire = merge_tx.clone();
+    let wire_task = tokio::spawn(async move {
+        while let Some(msg) = ui_side.recv().await {
+            match serde_json::to_string(&msg) {
+                Ok(json) => {
+                    if merge_tx_wire.send(json).is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to serialize wire message: {}", e);
                 }
             }
-            Err(e) => {
-                error!("Failed to serialize wire message: {}", e);
+        }
+    });
+
+    let mut ui_view_side = wire.ui_view_side();
+    let merge_tx_view = merge_tx;
+    let view_task = tokio::spawn(async move {
+        while let Some(commands) = ui_view_side.recv().await {
+            let resp = WsResponse::ViewCommands { commands };
+            match serde_json::to_string(&resp) {
+                Ok(json) => {
+                    if merge_tx_view.send(json).is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to serialize view commands: {}", e);
+                }
             }
         }
+    });
+
+    while let Some(json) = merge_rx.recv().await {
+        if let Err(e) = sender.send(WsMessage::Text(json)).await {
+            warn!("Failed to send merged message: {}", e);
+            break;
+        }
     }
+
+    // Clean up background forwarding tasks
+    let _ = wire_task.await;
+    let _ = view_task.await;
 
     // Wait for agent to complete
     match agent_task.await {
@@ -232,6 +265,9 @@ pub enum WsResponse {
     Pong,
     History {
         messages: Vec<ChatMessage>,
+    },
+    ViewCommands {
+        commands: Vec<clarity_wire::ViewCommand>,
     },
     Error {
         error: String,

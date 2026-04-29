@@ -109,6 +109,20 @@ impl CommandHandler for ModelCommand {
     }
 }
 
+pub struct SettingsCommand;
+impl CommandHandler for SettingsCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        use clarity_core::view_models::settings::SettingsViewModel;
+        let vm = SettingsViewModel::new();
+        app.cached_view_commands = vm.commands();
+        app.settings_vm = Some(vm);
+        app.settings_mode = true;
+    }
+    fn description(&self) -> &str {
+        "打开设置面板"
+    }
+}
+
 pub struct StopCommand;
 impl CommandHandler for StopCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -253,6 +267,7 @@ pub fn build_default_registry() -> CommandRegistry {
     registry.alias("/h", "/help");
 
     registry.register("/model", Arc::new(ModelCommand));
+    registry.register("/settings", Arc::new(SettingsCommand));
 
     registry.register("/stop", Arc::new(StopCommand));
 
