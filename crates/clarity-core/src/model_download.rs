@@ -11,9 +11,18 @@ use tokio::sync::mpsc;
 
 /// Progress event emitted during model download.
 #[derive(Debug, Clone)]
-pub struct ModelDownloadProgress {
-    pub bytes_downloaded: u64,
-    pub total_bytes: Option<u64>,
+pub enum ModelDownloadProgress {
+    /// Download has started.
+    Started,
+    /// Progress update with bytes downloaded and total (if known).
+    Progress {
+        bytes_downloaded: u64,
+        total_bytes: Option<u64>,
+    },
+    /// Download completed successfully.
+    Complete,
+    /// Download failed with an error message.
+    Failed(String),
 }
 
 /// A pre-configured model available for one-click download.
@@ -42,79 +51,86 @@ pub async fn download_model(
     dest_dir: PathBuf,
     progress_tx: mpsc::Sender<ModelDownloadProgress>,
 ) -> Result<PathBuf, String> {
-    let endpoint = std::env::var("HF_ENDPOINT")
-        .unwrap_or_else(|_| "https://huggingface.co".to_string());
+    let _ = progress_tx.send(ModelDownloadProgress::Started).await;
 
-    let url = format!(
-        "{}/{}/resolve/main/{}",
-        endpoint.trim_end_matches('/'),
-        model.repo_id,
-        model.filename
-    );
+    let result = async {
+        let endpoint = std::env::var("HF_ENDPOINT")
+            .unwrap_or_else(|_| "https://huggingface.co".to_string());
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3600))
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+        let url = format!(
+            "{}/{}/resolve/main/{}",
+            endpoint.trim_end_matches('/'),
+            model.repo_id,
+            model.filename
+        );
 
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Download request failed: {}", e))?;
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3600))
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    if !response.status().is_success() {
-        return Err(format!(
-            "Download failed with status {}: {}",
-            response.status(),
-            url
-        ));
-    }
-
-    let total_bytes = response.content_length();
-
-    std::fs::create_dir_all(&dest_dir)
-        .map_err(|e| format!("Failed to create model directory: {}", e))?;
-
-    let dest_path = dest_dir.join(model.filename);
-    let mut file = tokio::fs::File::create(&dest_path)
-        .await
-        .map_err(|e| format!("Failed to create model file: {}", e))?;
-
-    let mut bytes_downloaded: u64 = 0;
-    let mut stream = response.bytes_stream();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Download stream error: {}", e))?;
-        file.write_all(&chunk)
+        let response = client
+            .get(&url)
+            .send()
             .await
-            .map_err(|e| format!("Failed to write model chunk: {}", e))?;
-        bytes_downloaded += chunk.len() as u64;
+            .map_err(|e| format!("Download request failed: {}", e))?;
 
-        // Throttle progress updates: only send every 1 MB to avoid flooding the UI.
-        if chunk.len() >= 1_048_576 || total_bytes.is_none() {
-            let _ = progress_tx
-                .send(ModelDownloadProgress {
-                    bytes_downloaded,
-                    total_bytes,
-                })
-                .await;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Download failed with status {}: {}",
+                response.status(),
+                url
+            ));
         }
+
+        let total_bytes = response.content_length();
+
+        std::fs::create_dir_all(&dest_dir)
+            .map_err(|e| format!("Failed to create model directory: {}", e))?;
+
+        let dest_path = dest_dir.join(model.filename);
+        let mut file = tokio::fs::File::create(&dest_path)
+            .await
+            .map_err(|e| format!("Failed to create model file: {}", e))?;
+
+        let mut bytes_downloaded: u64 = 0;
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Download stream error: {}", e))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Failed to write model chunk: {}", e))?;
+            bytes_downloaded += chunk.len() as u64;
+
+            // Throttle progress updates: only send every 1 MB to avoid flooding the UI.
+            if chunk.len() >= 1_048_576 || total_bytes.is_none() {
+                let _ = progress_tx
+                    .send(ModelDownloadProgress::Progress {
+                        bytes_downloaded,
+                        total_bytes,
+                    })
+                    .await;
+            }
+        }
+
+        file.flush()
+            .await
+            .map_err(|e| format!("Failed to flush model file: {}", e))?;
+
+        let _ = progress_tx
+            .send(ModelDownloadProgress::Complete)
+            .await;
+
+        Ok(dest_path)
+    }
+    .await;
+
+    if let Err(ref e) = result {
+        let _ = progress_tx.send(ModelDownloadProgress::Failed(e.clone())).await;
     }
 
-    file.flush()
-        .await
-        .map_err(|e| format!("Failed to flush model file: {}", e))?;
-
-    // Final progress update
-    let _ = progress_tx
-        .send(ModelDownloadProgress {
-            bytes_downloaded,
-            total_bytes,
-        })
-        .await;
-
-    Ok(dest_path)
+    result
 }
 
 /// Return the default local model directory (`~/models` on Windows `%USERPROFILE%/models`).
@@ -142,13 +158,18 @@ mod tests {
     #[tokio::test]
     async fn test_download_progress_channel() {
         let (tx, mut rx) = mpsc::channel(4);
-        let progress = ModelDownloadProgress {
+        let progress = ModelDownloadProgress::Progress {
             bytes_downloaded: 100,
             total_bytes: Some(1000),
         };
         tx.send(progress.clone()).await.unwrap();
         let received = rx.recv().await.unwrap();
-        assert_eq!(received.bytes_downloaded, 100);
-        assert_eq!(received.total_bytes, Some(1000));
+        match received {
+            ModelDownloadProgress::Progress { bytes_downloaded, total_bytes } => {
+                assert_eq!(bytes_downloaded, 100);
+                assert_eq!(total_bytes, Some(1000));
+            }
+            _ => panic!("Expected Progress variant"),
+        }
     }
 }

@@ -163,12 +163,26 @@ fn render_downloading(
     if let Some(ref mut rx) = app.onboarding_progress_rx {
         let rx: &mut std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress> = rx;
         loop {
+            use clarity_core::model_download::ModelDownloadProgress;
             match rx.try_recv() {
-                Ok(progress) => {
+                Ok(ModelDownloadProgress::Started) => {
+                    // Download task has started; keep current UI state.
+                }
+                Ok(ModelDownloadProgress::Progress { bytes_downloaded, total_bytes }) => {
                     app.onboarding_state = OnboardingState::Downloading {
-                        bytes_downloaded: progress.bytes_downloaded,
-                        total_bytes: progress.total_bytes,
+                        bytes_downloaded,
+                        total_bytes,
                     };
+                }
+                Ok(ModelDownloadProgress::Complete) => {
+                    let dest = clarity_core::model_download::default_model_dir()
+                        .join(clarity_core::model_download::PRECONFIGURED_MODELS[0].filename);
+                    app.onboarding_state = OnboardingState::DownloadComplete { model_path: dest };
+                    break;
+                }
+                Ok(ModelDownloadProgress::Failed(err)) => {
+                    app.onboarding_state = OnboardingState::DownloadFailed(err);
+                    break;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -179,17 +193,9 @@ fn render_downloading(
         }
     }
 
-    // Auto-transition when download finishes or channel closes.
-    if channel_disconnected {
-        if let OnboardingState::Downloading { bytes_downloaded, total_bytes: Some(total) } = &app.onboarding_state {
-            if bytes_downloaded >= total {
-                let dest = clarity_core::model_download::default_model_dir()
-                    .join(clarity_core::model_download::PRECONFIGURED_MODELS[0].filename);
-                app.onboarding_state = OnboardingState::DownloadComplete { model_path: dest };
-            } else {
-                app.onboarding_state = OnboardingState::DownloadFailed("Download interrupted".into());
-            }
-        }
+    // Fallback: if channel disconnected without explicit Complete/Failed, treat as interrupted.
+    if channel_disconnected && matches!(app.onboarding_state, OnboardingState::Downloading { .. }) {
+        app.onboarding_state = OnboardingState::DownloadFailed("Download interrupted".into());
     }
 
     egui::Window::new("Downloading Model")
