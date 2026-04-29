@@ -13,6 +13,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use clarity_core::approval::ApprovalRuntime;
+
 mod app_state;
 mod settings;
 mod theme;
@@ -65,6 +67,8 @@ struct App {
     preview_file: Option<(String, String)>,
     /// Queued message to auto-send when current streaming finishes.
     pending_send: Option<(String, Vec<Attachment>)>,
+    /// Pending approval requests from the agent runtime (populated each frame).
+    pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
 }
 
 fn setup_fonts(ctx: &egui::Context) {
@@ -195,6 +199,7 @@ impl App {
             last_scroll_offset: 0.0,
             preview_file: None,
             pending_send: None,
+            pending_approvals: Vec::new(),
         }
     }
 
@@ -533,6 +538,9 @@ impl App {
                                     let mut guard = self.state.cached_settings.lock();
                                     *guard = self.settings_edit.clone();
                                 }
+                                // Sync approval mode to the running agent.
+                                let mode = crate::app_state::parse_approval_mode(&self.settings_edit.approval_mode);
+                                self.state.agent.set_approval_mode(mode);
                                 let state = self.state.clone();
                                 self.runtime.spawn(async move {
                                     if let Err(e) = reload_llm(&state).await {
@@ -1046,6 +1054,138 @@ impl App {
                 });
         }
     }
+
+    /// Render the approval modal when the agent blocks on a tool call.
+    fn render_approval_modal(&mut self, ctx: &egui::Context) {
+        // Refresh pending approvals each frame from the shared runtime.
+        self.pending_approvals = self.state.approval_runtime.list_pending();
+
+        let request = match self.pending_approvals.first() {
+            Some(r) => r.clone(),
+            None => return,
+        };
+
+        // Dim the background to focus attention on the modal.
+        let screen = ctx.screen_rect();
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Background,
+            egui::Id::new("approval_dimmer"),
+        ));
+        painter.rect_filled(screen, 0.0, egui::Color32::from_black_alpha(120));
+
+        egui::Window::new("🔒 Tool Approval Required")
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .frame(
+                egui::Frame::group(&ctx.style())
+                    .fill(self.theme.surface)
+                    .corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8))
+                    .inner_margin(egui::Margin::same(20)),
+            )
+            .show(ctx, |ui| {
+                ui.set_min_width(420.0);
+                ui.set_max_width(520.0);
+
+                ui.heading(egui::RichText::new("Tool Call Approval").color(self.theme.text));
+                ui.add_space(12.0);
+
+                // Tool name
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Tool:").strong().color(self.theme.text));
+                    ui.label(
+                        egui::RichText::new(&request.tool_call.function.name)
+                            .color(self.theme.accent),
+                    );
+                });
+
+                ui.add_space(8.0);
+
+                // Arguments (monospace JSON block)
+                ui.label(egui::RichText::new("Arguments:").strong().color(self.theme.text));
+                egui::Frame::new()
+                    .fill(self.theme.bg_accent)
+                    .corner_radius(egui::CornerRadius::same(self.theme.radius_sm as u8))
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.set_max_width(480.0);
+                        ui.monospace(
+                            egui::RichText::new(&request.tool_call.function.arguments)
+                                .color(self.theme.text)
+                                .size(12.0),
+                        );
+                    });
+
+                // Risk / sensitivity description
+                if let Some(ref desc) = request.description {
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("⚠️ ").size(14.0));
+                        ui.label(
+                            egui::RichText::new(desc)
+                                .color(self.theme.danger)
+                                .size(13.0),
+                        );
+                    });
+                }
+
+                ui.add_space(16.0);
+
+                // Action buttons
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Reject
+                        if ui
+                            .button(egui::RichText::new("❌ Reject").color(self.theme.danger))
+                            .clicked()
+                        {
+                            let req_id = request.id.clone();
+                            let rt = self.state.approval_runtime.clone();
+                            let _ = self.runtime.block_on(async move {
+                                rt.resolve(&req_id, clarity_core::approval::ApprovalResponse::Reject)
+                                    .await
+                            });
+                        }
+
+                        // Approve for Session
+                        if ui
+                            .button(
+                                egui::RichText::new("✅ Approve for Session")
+                                    .color(self.theme.accent),
+                            )
+                            .clicked()
+                        {
+                            let req_id = request.id.clone();
+                            let rt = self.state.approval_runtime.clone();
+                            let _ = self.runtime.block_on(async move {
+                                rt.resolve(
+                                    &req_id,
+                                    clarity_core::approval::ApprovalResponse::ApproveForSession,
+                                )
+                                .await
+                            });
+                        }
+
+                        // Approve
+                        if ui
+                            .button(egui::RichText::new("✅ Approve").color(self.theme.ok))
+                            .clicked()
+                        {
+                            let req_id = request.id.clone();
+                            let rt = self.state.approval_runtime.clone();
+                            let _ = self.runtime.block_on(async move {
+                                rt.resolve(
+                                    &req_id,
+                                    clarity_core::approval::ApprovalResponse::Approve,
+                                )
+                                .await
+                            });
+                        }
+                    });
+                });
+            });
+    }
 }
 
 impl eframe::App for App {
@@ -1113,6 +1253,8 @@ impl eframe::App for App {
         self.render_mcp_panel(ctx);
 
         self.render_toasts(ctx);
+
+        self.render_approval_modal(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

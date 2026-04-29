@@ -4,6 +4,15 @@ use parking_lot::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+/// Parse approval mode string from settings into core enum.
+pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
+    match mode {
+        "yolo" => clarity_core::approval::ApprovalMode::Yolo,
+        "plan" => clarity_core::approval::ApprovalMode::Plan,
+        _ => clarity_core::approval::ApprovalMode::Interactive,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LlmBinding {
     pub provider: String,
@@ -20,12 +29,19 @@ pub struct AppState {
     #[allow(dead_code)]
     pub initialized: AtomicBool,
     pub task_store: clarity_core::background::TaskStore,
+    /// Shared approval runtime for UI↔Agent coordination.
+    pub approval_runtime: Arc<clarity_core::approval::InMemoryApprovalRuntime>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let registry = clarity_core::ToolRegistry::with_builtin_tools();
-        let agent = clarity_core::Agent::new(registry);
+        let approval_rt = Arc::new(clarity_core::approval::InMemoryApprovalRuntime::new());
+        let settings = GuiSettings::load();
+        let mode = parse_approval_mode(&settings.approval_mode);
+        let agent = clarity_core::Agent::new(registry)
+            .with_approval_runtime(approval_rt.clone())
+            .with_approval_mode(mode);
         let task_dir = dirs::data_dir()
             .map(|d| d.join("clarity").join("bg_tasks"))
             .unwrap_or_else(|| PathBuf::from("."));
@@ -34,10 +50,11 @@ impl Default for AppState {
             llm_binding: Mutex::new(None),
             network_available: AtomicBool::new(true),
             llm_load_lock: tokio::sync::Mutex::new(()),
-            cached_settings: Mutex::new(GuiSettings::load()),
+            cached_settings: Mutex::new(settings),
             prewarm_error: Mutex::new(None),
             initialized: AtomicBool::new(false),
             task_store: clarity_core::background::TaskStore::new(task_dir),
+            approval_runtime: approval_rt,
         }
     }
 }
