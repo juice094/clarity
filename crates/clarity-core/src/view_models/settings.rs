@@ -300,7 +300,58 @@ pub fn scan_local_models() -> Vec<(String, String)> {
     results
 }
 
+/// Format a provider ID into a human-friendly display name.
+fn format_provider_name(id: &str) -> String {
+    match id {
+        "openai" => "OpenAI".into(),
+        "anthropic" => "Anthropic".into(),
+        "kimi" => "Kimi".into(),
+        "kimi-code" => "Kimi Code".into(),
+        "deepseek" => "DeepSeek".into(),
+        "ollama" => "Ollama".into(),
+        "local" => "Local (GGUF)".into(),
+        other => {
+            let mut chars = other.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => other.into(),
+            }
+        }
+    }
+}
+
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
+    use std::collections::HashSet;
+
+    let mut result: Vec<(String, String, Vec<String>)> = Vec::new();
+    let mut seen_providers = HashSet::new();
+
+    // Phase 2: Merge dynamic registry with hardcoded fallback
+    // Registry takes precedence; hardcoded fills gaps for backward compat.
+    if let Ok(registry) = crate::llm::ModelRegistry::load() {
+        for provider_id in registry.list_providers() {
+            seen_providers.insert(provider_id.clone());
+            let models: Vec<String> = if provider_id == "local" {
+                let local_models = scan_local_models();
+                if local_models.is_empty() {
+                    vec!["No models found — place .gguf in ~/models/".into()]
+                } else {
+                    local_models.into_iter().map(|(_, name)| name).collect()
+                }
+            } else {
+                registry.list_models()
+                    .into_iter()
+                    .filter(|m| &m.provider == provider_id)
+                    .map(|m| m.model_id.clone())
+                    .collect()
+            };
+            if !models.is_empty() {
+                result.push((provider_id.clone(), format_provider_name(provider_id), models));
+            }
+        }
+    }
+
+    // Hardcoded fallback for providers not present in registry
     let local_models = scan_local_models();
     let local_model_names: Vec<String> = if local_models.is_empty() {
         vec!["No models found — place .gguf in ~/models/".into()]
@@ -308,29 +359,42 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         local_models.into_iter().map(|(_, name)| name).collect()
     };
 
-    vec![
+    let fallback = vec![
         (
-            "openai".into(),
-            "OpenAI".into(),
+            "openai".to_string(),
+            "OpenAI".to_string(),
             vec!["gpt-4o".into(), "gpt-4o-mini".into(), "o3-mini".into()],
         ),
         (
-            "anthropic".into(),
-            "Anthropic".into(),
+            "anthropic".to_string(),
+            "Anthropic".to_string(),
             vec!["claude-3-sonnet".into(), "claude-3-opus".into()],
         ),
         (
-            "kimi".into(),
-            "Kimi".into(),
+            "kimi".to_string(),
+            "Kimi".to_string(),
             vec!["kimi-k2-07132k".into(), "kimi-latest".into()],
         ),
         (
-            "ollama".into(),
-            "Ollama".into(),
+            "deepseek".to_string(),
+            "DeepSeek".to_string(),
+            vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
+        ),
+        (
+            "ollama".to_string(),
+            "Ollama".to_string(),
             vec!["llama3.2".into(), "qwen2.5".into()],
         ),
-        ("local".into(), "Local (GGUF)".into(), local_model_names),
-    ]
+        ("local".to_string(), "Local (GGUF)".to_string(), local_model_names),
+    ];
+
+    for (id, label, models) in fallback {
+        if seen_providers.insert(id.clone()) {
+            result.push((id, label, models));
+        }
+    }
+
+    result
 }
 
 // ============================================================================

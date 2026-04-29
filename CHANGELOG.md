@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sprint 9 Phase 1 — API Key 安全注入 + Settings 增量保存** — `GuiSettings::resolve_api_key()` 支持 `${env:VAR_NAME}` 语法，运行时解析环境变量，避免 API Key 明文落盘。`save()` 改为增量 merge（`merge_json` 递归合并），只写入变更字段，保留未知配置，规避 OpenClaw 式全配置覆盖风险。UI 输入框 placeholder 提示环境变量语法。
+- **Sprint 9 Phase 2 — ModelRegistry 动态接入 egui** — `get_available_models()` 从 `ModelRegistry::load()` 动态读取 provider/model 列表，registry 结果与硬编码 fallback **合并**（registry 优先，缺位补充）。`ensure_llm` 非 local provider 创建时优先尝试 `ModelRegistry`（支持 `models.toml` 自定义 provider），失败 fallback 到 `LlmFactory`。新增 `build_provider_from_registry_with_key()`，允许 UI 传入的 API key 覆盖环境变量。
+
+### Changed
+
+- `clarity-egui` 测试基线从 0 提升至 26（`app_state`/`settings`/`theme` 纯逻辑测试），UI 渲染测试仍为缺口。
+
 ## [0.3.1] — 2026-04-27
 
 ### Added

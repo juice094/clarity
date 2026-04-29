@@ -379,12 +379,20 @@ pub async fn build_provider_from_registry(
     cfg: &ProviderConfig,
     model_id: &str,
 ) -> Result<Box<dyn LlmProvider>, AgentError> {
+    build_provider_from_registry_with_key(cfg, model_id, None).await
+}
+
+/// Build a provider with an optional API-key override (e.g. from GUI Settings).
+pub async fn build_provider_from_registry_with_key(
+    cfg: &ProviderConfig,
+    model_id: &str,
+    override_key: Option<&str>,
+) -> Result<Box<dyn LlmProvider>, AgentError> {
     match cfg.protocol {
         ProtocolType::OpenAiChat => {
-            let api_key = cfg
-                .api_key_env
-                .as_ref()
-                .and_then(|env_var| std::env::var(env_var).ok())
+            let api_key = override_key
+                .map(|s| s.to_string())
+                .or_else(|| cfg.api_key_env.as_ref().and_then(|env_var| std::env::var(env_var).ok()))
                 .unwrap_or_default();
             let base_url = cfg
                 .base_url

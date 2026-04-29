@@ -23,8 +23,8 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    build_provider_from_registry, ModelConfigFile, ModelEntry, ModelRegistry, ProtocolType,
-    ProviderConfig,
+    build_provider_from_registry, build_provider_from_registry_with_key, ModelConfigFile,
+    ModelEntry, ModelRegistry, ProtocolType, ProviderConfig,
 };
 pub use ollama::OllamaProvider;
 

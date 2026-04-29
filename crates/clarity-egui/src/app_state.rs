@@ -148,30 +148,59 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         _ => {
             let resolved_key = GuiSettings::resolve_api_key(&settings.api_key);
             let api_key = resolved_key.as_deref().unwrap_or("");
-            match clarity_core::llm::LlmFactory::create_with_key_arc(
-                &desired_provider,
-                api_key,
-                &settings.model,
-            ) {
-                Ok(llm) => llm,
-                Err(e) => {
-                    if api_key.is_empty() {
-                        match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
-                            Ok(llm) => llm,
-                            Err(_) => {
-                                return Err(EguiError::InvalidProvider(format!(
-                                    "Provider '{}' requires an API key. \
-                                     Please open Settings and enter your key.",
-                                    desired_provider
-                                )));
+
+            // Phase 2: Try ModelRegistry first (supports custom providers from models.toml)
+            let registry_llm = async {
+                let registry = clarity_core::llm::ModelRegistry::load_async().await.ok()?;
+                let provider_cfg = registry.get_provider(&desired_provider)?;
+                let model_id = if settings.model.is_empty() {
+                    // Pick first model for this provider from registry
+                    registry.list_models()
+                        .into_iter()
+                        .find(|m| m.provider == desired_provider)
+                        .map(|m| m.model_id.clone())?
+                } else {
+                    settings.model.clone()
+                };
+                clarity_core::llm::build_provider_from_registry_with_key(
+                    provider_cfg,
+                    &model_id,
+                    if api_key.is_empty() { None } else { Some(api_key) },
+                )
+                .await
+                .map(Arc::from)
+                .ok()
+            };
+
+            if let Some(llm) = registry_llm.await {
+                llm
+            } else {
+                // Fallback to legacy LlmFactory for built-in providers
+                match clarity_core::llm::LlmFactory::create_with_key_arc(
+                    &desired_provider,
+                    api_key,
+                    &settings.model,
+                ) {
+                    Ok(llm) => llm,
+                    Err(e) => {
+                        if api_key.is_empty() {
+                            match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
+                                Ok(llm) => llm,
+                                Err(_) => {
+                                    return Err(EguiError::InvalidProvider(format!(
+                                        "Provider '{}' requires an API key. \
+                                         Please open Settings and enter your key.",
+                                        desired_provider
+                                    )));
+                                }
                             }
+                        } else {
+                            return Err(EguiError::LlmLoad(format!(
+                                "Failed to create provider '{}': {}. \
+                                 Please check your API key and network connection.",
+                                desired_provider, e
+                            )));
                         }
-                    } else {
-                        return Err(EguiError::LlmLoad(format!(
-                            "Failed to create provider '{}': {}. \
-                             Please check your API key and network connection.",
-                            desired_provider, e
-                        )));
                     }
                 }
             }

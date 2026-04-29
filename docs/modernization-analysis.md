@@ -100,11 +100,11 @@
 
 | Crate | 文件数 | 代码行 | 测试数 | 测试率 | 最大文件 | 健康度 |
 |-------|--------|--------|--------|--------|---------|--------|
-| clarity-core | 46 | ~8,900 | 337 | ~75% | agent/mod.rs (1914) | B+ |
+| clarity-core | 46 | ~8,900 | 392 | ~75% | agent/mod.rs (1914) | B+ |
 | clarity-memory | 12 | ~2,800 | 57 | ~90% | store.rs (310) | A- |
 | clarity-wire | 1 | ~400 | 16 | ~80% | lib.rs (400) | A |
 | clarity-gateway | 8 | ~2,200 | 12 | ~60% | handlers.rs (~500) | B |
-| clarity-egui | 8 | ~2,000 | 18 | ~40% | app_logic.rs (396) | C+ |
+| clarity-egui | 8 | ~2,000 | 26 | ~40% | app_logic.rs (396) | C+ |
 | clarity-tui | 14 | ~3,500 | 6 | ~15% | app.rs (~600) | C |
 | clarity-claw | 3 | ~500 | 6 | ~50% | main.rs (~300) | C |
 

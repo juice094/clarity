@@ -68,7 +68,7 @@ cargo run -p clarity-egui
 | **Model Hot-Swap** | Change provider / model in Settings without restart. API keys stored locally, never leave the machine. |
 | **i18n** | Chinese / English language switching with persistent preference. |
 
-**Supported providers**: `openai`, `anthropic`, `kimi`, `kimi-code`, `deepseek`, `ollama`, `local` (Candle GGUF).
+**Supported providers**: `openai`, `anthropic`, `kimi`, `kimi-code`, `deepseek`, `ollama`, `local` (Candle GGUF). Custom providers via `~/.config/clarity/models.toml` — no code changes required.
 
 ---
 
@@ -95,7 +95,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 543 tests, 0 failed, 4 ignored
+cargo test --workspace --lib                          # 568 tests, 0 failed, 4 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

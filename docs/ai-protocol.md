@@ -8,8 +8,8 @@
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-04-27
-**当前分支**：`phase2/protocol-pilot` @ `54c5951`（已推送 origin）
+**最后更新**：2026-04-29
+**当前分支**：`phase2/protocol-pilot` @ `f02d764`（已推送 origin）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
@@ -18,6 +18,7 @@
 - Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成
 - **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
 - **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
+- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ (env-var 注入 + 增量保存) | Phase 2 ✅ (ModelRegistry 接入 egui) | Phase 3 ⏸️ (多模型角色，冻结)
 
 ---
 
@@ -112,6 +113,34 @@
 **关键教训（OpenClaw）**：Dashboard Save 覆盖全配置导致大面积数据丢失。Clarity 必须实现**增量保存**。
 
 **下一步**：Provider Schema 化（TOML/JSON 描述 baseURL/authType/modelListEndpoint），支持 `${env:VAR}` 语法注入 API Key。
+
+### 3.10 Sprint 9 — 服务商支持硬化（2026-04-29）
+
+**Phase 1 ✅ — API Key 安全注入 + Settings 增量保存**
+
+| 改动 | 文件 | 说明 |
+|------|------|------|
+| `resolve_api_key()` | `crates/clarity-egui/src/settings.rs` | 支持 `${env:VAR_NAME}` 语法，运行时解析环境变量；解析失败 fallback 到原值 |
+| 增量 `save()` | `crates/clarity-egui/src/settings.rs` | `merge_json` 递归合并，保留未知字段，支持字段删除（`null` overlay） |
+| `app_state.rs` 接入 | `crates/clarity-egui/src/app_state.rs` | LLM 创建时自动调用 `resolve_api_key()` |
+| Settings placeholder | `crates/clarity-egui/src/view_models/settings.rs` | 输入框提示 `${env:YOUR_API_KEY}` |
+
+**Phase 2 ✅ — ModelRegistry 动态接入 egui**
+
+| 改动 | 文件 | 说明 |
+|------|------|------|
+| `config()` accessor | `crates/clarity-core/src/llm/model_registry.rs` | `ModelRegistry.config` 字段添加 `pub fn config(&self) -> &ModelConfigFile` |
+| `get_available_models()` 动态化 | `crates/clarity-core/src/view_models/settings.rs` | 优先从 `ModelRegistry::load()` 读取 provider/model；registry 结果与硬编码 fallback **合并**（registry 优先，缺位补充），保证向后兼容 |
+| `build_provider_from_registry_with_key()` | `crates/clarity-core/src/llm/model_registry.rs` | 新增 override api_key 参数，支持 GUI Settings 传入的 key 覆盖环境变量 |
+| `ensure_llm` registry 优先 | `crates/clarity-egui/src/app_state.rs` | 非 local provider 创建时先尝试 `ModelRegistry` 解析（支持自定义 provider from `models.toml`），失败 fallback 到 `LlmFactory` |
+
+**架构决策**：
+- `get_available_models()` 采用**合并策略**而非替换策略。`ModelRegistry` 可覆盖/补充 provider，但硬编码 fallback 始终作为缺位补充。这避免了测试环境（无 env var）下 provider 列表为空的问题。
+- `build_provider_from_registry_with_key()` 的 override key 优先于 `ProviderConfig.api_key_env`，实现"用户 UI 输入 > 环境变量"的优先级。
+
+**Phase 3 ⏸️ — 多模型角色分工（冻结）**
+
+待 Agent 架构重构后实施。当前 `GuiSettings` 为全局单一配置；长期需支持 Agent 级覆盖（格雷 local，研究 Agent Kimi）。
 
 ### 3.8 Settings 增量保存决策（2026-04-27）
 
