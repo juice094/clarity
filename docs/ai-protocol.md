@@ -9,10 +9,15 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-04-27
-**当前分支**：`main` @ `899d8f9`（已推送 origin/main）
+**当前分支**：`phase2/protocol-pilot` @ `54c5951`（已推送 origin）
 **架构模式**：CLI（单轮/短轮次）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
-**会话状态**：clarity-tauri 完全归档移出仓库；Dependabot 报警清零；Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成；Pretext Phase 1 维护完成。
+**会话状态**：
+- v0.3.1 已发布（tag `v0.3.1`）：model_download + onboarding + unwrap 审计 + egui release CI
+- clarity-tauri 完全归档移出仓库；Dependabot 报警清零
+- Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成
+- **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
+- **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
 
 ---
 
@@ -94,6 +99,36 @@
 | 2 | Compaction 状态提示（`CompactionBegin/End` WireMessage + banner） | `afe1a72` |
 | 3 | 模型下载 GUI（HuggingFace 直链下载 + SettingsPanel 进度条） | `89e8c68` |
 | 4 | 前端日志面板（Console 劫持 + 可折叠面板） | `cdaea3e` |
+
+### 3.7 服务商持久化调研（2026-04-27）
+
+**决策**：调研 OpenHanako 与 OpenClaw 的 Provider 配置机制，识别 Clarity 的架构缺口。
+
+| 项目 | Provider 机制 | Clarity 差距 |
+|------|--------------|-------------|
+| OpenHanako | Agent 文件夹自包含 + 插件化 `providers/*.js` + 三模型角色 | 无 Agent 级覆盖、无插件注册、无模型角色分工 |
+| OpenClaw | 中心化 `~/.openclaw/openclaw.json` + 交互式 `onboard` 向导 + 40+ 服务商 | 无 Custom Provider 无代码注册、无环境变量注入、Save 覆盖全配置 |
+
+**关键教训（OpenClaw）**：Dashboard Save 覆盖全配置导致大面积数据丢失。Clarity 必须实现**增量保存**。
+
+**下一步**：Provider Schema 化（TOML/JSON 描述 baseURL/authType/modelListEndpoint），支持 `${env:VAR}` 语法注入 API Key。
+
+### 3.8 Settings 增量保存决策（2026-04-27）
+
+**决策**：`save_settings` 必须只写入变更字段，保留未修改配置。
+
+- 当前：`GuiSettings` 整体 serde 序列化覆盖文件 → 风险：并发修改或新增字段丢失
+- 目标：字段级 dirty tracking，只序列化变更字段
+- 参考：OpenClaw 的教训（Dashboard Save 覆盖导致配置丢失）
+
+### 3.9 API Key 安全策略（2026-04-27）
+
+**决策**：禁止 API Key 明文落盘。
+
+- 当前：`gui-settings.json` 中 `api_key: "sk-xxx"` 为明文 String
+- 短期：支持 `${env:KIMI_API_KEY}` 语法，引导用户通过环境变量注入
+- 中期：OS Keychain 集成（Windows Credential Manager / macOS Keychain）
+- 长期：启动时交互式输入 + 内存驻留，磁盘零存储
 
 ---
 

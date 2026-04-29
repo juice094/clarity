@@ -1,8 +1,8 @@
 # Clarity Project Status
 
 > Last updated: 2026-04-27
-> Branch: `main` @ `8917506`
-> Test baseline: **524 passed, 0 failed, 4 ignored**
+> Branch: `phase2/protocol-pilot` @ `54c5951`
+> Test baseline: **542 passed, 0 failed, 4 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -18,7 +18,8 @@
 | 5 | 冷却验证 | ✅ Complete | 测试524 passed, Clippy零警告 |
 | 6 | 可用性急救 | ✅ Complete | GUI API key 输入框 + `LlmFactory::create_with_key` — Clarity 真正可用 |
 | 7 | UI 栈迁移 | ✅ Complete | `clarity-egui` 替代 `clarity-tauri` 成为主力 GUI 栈 |
-| 8 | egui 硬化（进行中） | 🔄 In Progress | Pretext Phase 1 已完成：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分 |
+| 8 | egui 硬化 | ✅ Complete | Pretext Phase 1：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分、onboarding 模型下载 |
+| 9 | **服务商支持硬化** | 🔄 In Progress | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 加密/引用 |
 
 ---
 
@@ -63,12 +64,16 @@
 | 后台任务面板 | ✅ | 只读 | 无创建/取消/Cron 配置操作 |
 | **技能系统 UI** | ✅ | ❌ | 无 Skill 列表、激活/切换界面 |
 | **Token 用量显示** | ✅ | ❌ | `Usage` WireMessage 未处理 |
-| **模型下载 GUI** | — | ❌ | Tauri 曾实现，egui 无 |
+| **模型下载 GUI** | ✅ | ✅ | onboarding 首次启动引导 + HF 直链下载 + 进度条 |
 | **日志/Console 面板** | — | ❌ | Tauri 曾实现，egui 无 |
 | LSP 集成 | ✅ | ❌ | Tauri 曾实现，egui 无 |
 | MCP 配置面板 | ✅ | ✅ | 服务器列表、启用/禁用、保存 |
 
-**最大风险**：`clarity-egui` **零单元测试**（0 tests / 0 modules）。
+**最大风险**：
+1. `clarity-egui` **零单元测试**（0 tests / 0 modules）。
+2. **Provider 配置硬编码** — 新服务商需改代码，不支持无代码注册。
+3. **API Key 明文落盘** — `gui-settings.json` 直接存储明文密钥。
+4. **Settings Save 覆盖全配置** — 存在丢失未修改字段的风险（OpenClaw 教训）。
 
 ---
 
@@ -92,6 +97,37 @@
 ### A2. egui 交互型功能缺口（P2）
 
 审批弹窗、Plan 可视化、子代理进度、任务创建/取消、Token 用量显示为当前最大功能缺口，直接影响 core 能力的完整暴露。
+
+### A3. Provider 配置架构缺陷（P0）
+
+**来源**：OpenHanako / OpenClaw 服务商持久化调研（2026-04-27）。
+
+| 缺陷 | 当前状态 | 目标状态 |
+|------|---------|---------|
+| Provider 硬编码枚举 | egui `ComboBox` 写死 5 个 provider | Schema 化配置（TOML/JSON），无代码注册新 Provider |
+| 单模型选择 | 一个 Model 下拉框 | chat / utility / utilityLarge 角色分工 |
+| 全局单一配置 | 所有 Agent 共享 `GuiSettings` | 全局默认值 + Agent 级覆盖 |
+| API Key 明文存储 | `gui-settings.json` 明文 `String` | 支持 `${env:KIMI_API_KEY}` 语法，避免密钥落盘 |
+| Settings Save 覆盖 | 整个 `GuiSettings` 序列化覆盖 | 增量保存，只写入变更字段 |
+
+**修复路径**：
+- 短期：环境变量注入语法 + Settings 增量保存
+- 中期：Provider Schema 化（baseURL / authType / modelListEndpoint / compatibility）
+- 长期：Agent 级 Provider 覆盖 + 多模型角色分工
+
+### A4. UI/UX 零碎问题（P2）
+
+**来源**：egui GUI 美化审计（2026-04-27）。
+
+| 问题 | 优先级 | 说明 |
+|------|--------|------|
+| 色彩系统扁平 | P1 | 单层深灰背景，需语义分层（基底/一级表面/二级表面/悬停） |
+| 布局靠线框分割 | P1 | 侧边栏与主区之间用边框而非间距区分 |
+| 输入区无工具栏 | P1 | 底部只有发送按钮，缺附件/MCP 工具选择 |
+| 消息 Segment 结构 | P2 | 头像+内容+时间戳未组件化 |
+| 弹窗无阴影/动画 | P2 | Settings/MCP 弹窗缺出现动画和阴影 |
+| 图标不统一 | P3 | 使用 emoji，跨平台显示不一致 |
+| 无边框窗口 | P3 | OS 标题栏未自定义 |
 
 ---
 
