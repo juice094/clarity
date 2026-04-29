@@ -70,6 +70,17 @@ struct App {
     pending_send: Option<(String, Vec<Attachment>)>,
     /// Pending approval requests from the agent runtime (populated each frame).
     pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
+    /// Latest token usage for the active session.
+    last_usage: Option<(u32, u32, u32)>,
+    /// Pending plan for user review (Plan mode).
+    pending_plan: Option<clarity_core::agent::Plan>,
+    /// Task creation modal state.
+    task_create_modal_open: bool,
+    /// Task creation form fields.
+    task_create_name: String,
+    task_create_desc: String,
+    task_create_prompt: String,
+    task_create_priority: u8,
 }
 
 fn setup_fonts(ctx: &egui::Context) {
@@ -201,6 +212,13 @@ impl App {
             preview_file: None,
             pending_send: None,
             pending_approvals: Vec::new(),
+            last_usage: None,
+            pending_plan: None,
+            task_create_modal_open: false,
+            task_create_name: String::new(),
+            task_create_desc: String::new(),
+            task_create_prompt: String::new(),
+            task_create_priority: 2,
         }
     }
 
@@ -279,6 +297,33 @@ impl App {
         let tx = self.ui_tx.clone();
         let query = full_message;
 
+        // Plan mode command: /plan <query>
+        if let Some(plan_query) = text.strip_prefix("/plan ") {
+            let plan_query = plan_query.to_string();
+            self.runtime.spawn(async move {
+                if let Err(e) = ensure_llm(&state).await {
+                    if let Err(err) = tx.send(UiEvent::Error(e.to_string())) { tracing::warn!("Failed to send Error: {}", err); }
+                    return;
+                }
+                match state.agent.plan(plan_query).await {
+                    Ok(plan) => {
+                        if let Err(e) = tx.send(UiEvent::PlanReady(plan)) {
+                            tracing::warn!("Failed to send PlanReady: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        if let Err(err) = tx.send(UiEvent::Error(format!("Plan generation failed: {}", e))) {
+                            tracing::warn!("Failed to send Error: {}", err);
+                        }
+                    }
+                }
+                if let Err(e) = tx.send(UiEvent::Done) {
+                    tracing::warn!("Failed to send Done: {}", e);
+                }
+            });
+            return;
+        }
+
         self.runtime.spawn(async move {
             if let Err(e) = ensure_llm(&state).await {
                 if let Err(err) = tx.send(UiEvent::Error(e.to_string())) { tracing::warn!("Failed to send Error: {}", err); }
@@ -304,6 +349,9 @@ impl App {
                         }
                         clarity_wire::WireMessage::CompactionBegin => Some(UiEvent::CompactionBegin),
                         clarity_wire::WireMessage::CompactionEnd => Some(UiEvent::CompactionEnd),
+                        clarity_wire::WireMessage::Usage { prompt_tokens, completion_tokens, total_tokens } => {
+                            Some(UiEvent::Usage { prompt_tokens, completion_tokens, total_tokens })
+                        }
                         _ => None,
                     };
                     if let Some(ev) = event { if let Err(e) = tx_wire.send(ev) { tracing::warn!("Failed to send wire event: {}", e); } }
@@ -394,6 +442,14 @@ impl App {
                     self.tasks = tasks;
                     self.last_task_refresh = Instant::now();
                 }
+                UiEvent::Usage { prompt_tokens, completion_tokens, total_tokens } => {
+                    self.last_usage = Some((prompt_tokens, completion_tokens, total_tokens));
+                }
+                UiEvent::PlanReady(plan) => {
+                    self.is_loading = false;
+                    self.agent_status = AgentStatus::Online;
+                    self.pending_plan = Some(plan);
+                }
             }
         }
     }
@@ -412,6 +468,7 @@ impl App {
         }
         let s = new_session(); let id = s.id.clone();
         self.sessions.push(s); self.active_session_id = id;
+        self.last_usage = None;
     }
     fn stop(&mut self) {
         self.state.agent.cancel();
@@ -604,6 +661,10 @@ impl App {
                         let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                         ui.painter().circle_filled(rect.center(), 4.0, status_color);
                         ui.label(egui::RichText::new(status_label).size(12.0).color(self.theme.text_dim));
+                        // Token usage
+                        if let Some((p, c, t)) = self.last_usage {
+                            ui.label(egui::RichText::new(format!("Tokens: {}↑ {}↓ {}∑", p, c, t)).size(11.0).color(self.theme.text_dim).monospace());
+                        }
                     });
                 });
                 ui.add_space(4.0);
@@ -706,6 +767,75 @@ impl App {
                 }
 
                 ui.separator();
+
+                // Plan review card above input bar
+                if let Some(ref plan) = self.pending_plan {
+                    let mut execute = false;
+                    let mut cancel = false;
+                    egui::Frame::group(ui.style())
+                        .fill(self.theme.surface)
+                        .corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8))
+                        .stroke(egui::Stroke::new(1.0, self.theme.accent))
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.label(egui::RichText::new(format!("📋 Plan Review: {}", plan.title)).size(13.0).strong().color(self.theme.text));
+                            ui.add_space(6.0);
+                            for step in &plan.steps {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(format!("{}.", step.id)).size(11.0).strong().color(self.theme.text));
+                                    ui.label(egui::RichText::new(&step.description).size(11.0).color(self.theme.text));
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("→").size(10.0).color(self.theme.text_dim));
+                                    ui.label(egui::RichText::new(format!("{}({})", step.tool_name, step.tool_params)).size(10.0).color(self.theme.text_dim).monospace());
+                                });
+                                ui.add_space(2.0);
+                            }
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Cancel").size(12.0).color(self.theme.text)).fill(self.theme.border)).clicked() {
+                                        cancel = true;
+                                    }
+                                    if ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Execute").size(12.0).color(self.theme.text)).fill(self.theme.accent)).clicked() {
+                                        execute = true;
+                                    }
+                                });
+                            });
+                        });
+                    if execute {
+                        let plan = self.pending_plan.take().unwrap();
+                        let state = self.state.clone();
+                        let tx = self.ui_tx.clone();
+                        self.is_loading = true;
+                        self.agent_status = AgentStatus::Busy;
+                        self.runtime.spawn(async move {
+                            match state.agent.execute_plan(&plan).await {
+                                Ok(results) => {
+                                    let mut text = String::new();
+                                    for r in &results {
+                                        text.push_str(&format!("**Step {}**: {}\n```\n{}\n```\n\n", r.step_id, if r.success { "✅" } else { "❌" }, r.output));
+                                    }
+                                    if let Err(e) = tx.send(UiEvent::Chunk(text)) {
+                                        tracing::warn!("Failed to send plan results: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    if let Err(err) = tx.send(UiEvent::Error(format!("Plan execution failed: {}", e))) {
+                                        tracing::warn!("Failed to send Error: {}", err);
+                                    }
+                                }
+                            }
+                            if let Err(e) = tx.send(UiEvent::Done) {
+                                tracing::warn!("Failed to send Done: {}", e);
+                            }
+                        });
+                    } else if cancel {
+                        self.pending_plan = None;
+                    }
+                    ui.separator();
+                }
 
                 // Attachment chips above input bar
                 if !self.attachments.is_empty() {
@@ -951,7 +1081,19 @@ impl App {
                     });
                 });
                 ui.add_space(8.0);
-                ui::task_panel::render_task_panel(ui, &self.tasks, &self.theme);
+                let action = ui::task_panel::render_task_panel(ui, &self.tasks, &self.theme);
+                ui.add_space(8.0);
+                if ui.add(egui::Button::new(egui::RichText::new("+ Create Task").size(13.0).color(self.theme.text)).fill(self.theme.accent).min_size(egui::vec2(ui.available_width(), 36.0))).clicked() {
+                    self.task_create_modal_open = true;
+                }
+                if let ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
+                    let store = self.state.task_store.clone();
+                    self.runtime.spawn(async move {
+                        if let Err(e) = store.update_status(&task_id, clarity_core::background::TaskStatus::Cancelled).await {
+                            tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+                        }
+                    });
+                }
             });
     }
 
@@ -1027,6 +1169,89 @@ impl App {
         }
 
         self.mcp_config = config_opt;
+    }
+
+    fn render_task_create_modal(&mut self, ctx: &egui::Context) {
+        if !self.task_create_modal_open { return; }
+        let mut created = false;
+        let mut close_requested = false;
+        egui::Window::new("Create Task")
+            .collapsible(false)
+            .resizable(false)
+            .movable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .frame(egui::Frame::window(&ctx.style()).fill(self.theme.surface).corner_radius(egui::CornerRadius::same(self.theme.radius_md as u8)))
+            .show(ctx, |ui| {
+                ui.set_min_width(360.0);
+                ui.set_max_width(480.0);
+                ui.heading(egui::RichText::new("New Background Task").color(self.theme.text));
+                ui.add_space(12.0);
+                ui.label(egui::RichText::new("Name").size(12.0).color(self.theme.text).strong());
+                ui.add(egui::TextEdit::singleline(&mut self.task_create_name).hint_text("Task name"));
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Description").size(12.0).color(self.theme.text).strong());
+                ui.add(egui::TextEdit::singleline(&mut self.task_create_desc).hint_text("Short description"));
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Prompt").size(12.0).color(self.theme.text).strong());
+                ui.add_sized(egui::vec2(ui.available_width(), 80.0), egui::TextEdit::multiline(&mut self.task_create_prompt).hint_text("Agent prompt..."));
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Priority").size(12.0).color(self.theme.text).strong());
+                egui::ComboBox::from_id_salt("task_priority")
+                    .selected_text(match self.task_create_priority {
+                        0 => "Background", 1 => "Low", 2 => "Normal", 3 => "High", 4 => "Critical", _ => "Normal",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.task_create_priority, 0, "Background");
+                        ui.selectable_value(&mut self.task_create_priority, 1, "Low");
+                        ui.selectable_value(&mut self.task_create_priority, 2, "Normal");
+                        ui.selectable_value(&mut self.task_create_priority, 3, "High");
+                        ui.selectable_value(&mut self.task_create_priority, 4, "Critical");
+                    });
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let can_create = !self.task_create_name.trim().is_empty() && !self.task_create_prompt.trim().is_empty();
+                        let create_btn = ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Create").size(13.0).color(self.theme.text)).fill(if can_create { self.theme.accent } else { self.theme.bg_elevated }));
+                        if create_btn.clicked() && can_create {
+                            created = true;
+                        }
+                        if ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Cancel").size(13.0).color(self.theme.text)).fill(self.theme.border)).clicked() {
+                            close_requested = true;
+                        }
+                    });
+                });
+            });
+        if created {
+            let spec = clarity_core::background::TaskSpec {
+                name: self.task_create_name.trim().to_string(),
+                description: self.task_create_desc.trim().to_string(),
+                agent_type: "default".to_string(),
+                prompt: self.task_create_prompt.trim().to_string(),
+                max_iterations: Some(10),
+                timeout_seconds: Some(300),
+                priority: clarity_core::background::TaskPriority::from_value(self.task_create_priority),
+                model_alias: None,
+            };
+            let task_id = format!("task-{}", uuid::Uuid::new_v4());
+            let store = self.state.task_store.clone();
+            let tx = self.ui_tx.clone();
+            self.runtime.spawn(async move {
+                if let Err(e) = store.create(&task_id, spec).await {
+                    tracing::warn!("Failed to create task {}: {}", task_id, e);
+                    let _ = tx.send(UiEvent::Error(format!("Task create failed: {}", e)));
+                } else {
+                    tracing::info!("Created task: {}", task_id);
+                    let _ = tx.send(UiEvent::TaskList(store.list_all().await.unwrap_or_default()));
+                }
+            });
+            self.task_create_name.clear();
+            self.task_create_desc.clear();
+            self.task_create_prompt.clear();
+            self.task_create_priority = 2;
+            self.task_create_modal_open = false;
+        } else if close_requested {
+            self.task_create_modal_open = false;
+        }
     }
 
     fn render_toasts(&mut self, ctx: &egui::Context) {
@@ -1256,6 +1481,8 @@ impl eframe::App for App {
         self.render_toasts(ctx);
 
         self.render_approval_modal(ctx);
+
+        self.render_task_create_modal(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

@@ -8,6 +8,7 @@
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
 use clarity_core::background::TaskInfo;
+use clarity_core::agent::Plan;
 use std::time::Instant;
 
 // ============================================================================
@@ -38,6 +39,12 @@ pub enum UiEvent {
         reason: String,
     },
     TaskList(Vec<TaskInfo>),
+    Usage {
+        prompt_tokens: u32,
+        completion_tokens: u32,
+        total_tokens: u32,
+    },
+    PlanReady(Plan),
 }
 
 #[derive(Clone)]
