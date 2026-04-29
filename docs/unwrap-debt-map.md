@@ -98,7 +98,7 @@
 | `clarity-egui` release 二进制大小 | **18.82 MB** | 含 Candle + tokenizers + egui |
 | 启动时间（`--help`） | ~8.1 s | eframe 初始化 + 字体加载 |
 
-> 帧时间/内存占用需在实际 GUI 环境下手动测量（`benchmark.ps1` 内存测量模块存在 bug，待修复）。
+> 帧时间/内存占用需在实际 GUI 环境下手动测量。`benchmark.ps1` 内存测量模块已修复（`Measure-Object` 对哈希表数组失效 → 改用 `ForEach-Object` 提取属性）。
 
 ---
 

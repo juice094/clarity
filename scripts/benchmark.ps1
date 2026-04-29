@@ -138,8 +138,8 @@ function Measure-Memory($binary, $argsList = @("--help"), $sampleIntervalMs = 10
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
     }
     if ($samples.Count -gt 0) {
-        $peak_ws = ($samples | Measure-Object -Property working_set_mb -Maximum).Maximum
-        $avg_ws = [math]::Round(($samples | Measure-Object -Property working_set_mb -Average).Average, 2)
+        $peak_ws = ($samples | ForEach-Object { $_.working_set_mb } | Measure-Object -Maximum).Maximum
+        $avg_ws = [math]::Round((($samples | ForEach-Object { $_.working_set_mb } | Measure-Object -Average).Average), 2)
     } else {
         $peak_ws = 0
         $avg_ws = 0
@@ -177,7 +177,7 @@ $report = @{
 if (-not $SkipCompile) {
     $report.compile += Measure-CompileTime "clarity-core"
     $report.compile += Measure-CompileTime "clarity-gateway"
-    $report.compile += Measure-CompileTime "clarity-tauri"
+    # clarity-tauri archived (v0.3.1), removed from workspace
     $report.compile += Measure-CompileTime "clarity-wire"
     $report.compile += Measure-CompileTime "clarity-memory"
 } else {
