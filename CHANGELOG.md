@@ -14,7 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `clarity-egui` 测试基线从 0 提升至 26（`app_state`/`settings`/`theme` 纯逻辑测试），UI 渲染测试仍为缺口。
+- `clarity-egui` 测试基线从 0 提升至 32（`app_state`/`settings`/`theme`/`profile_overlay` 纯逻辑测试），UI 渲染测试仍为缺口。
+
+### Added
+
+- **Sprint 10 D2 — LlmFactory 功能冻结** — `anthropic()`/`deepseek()`/`kimi()`/`openai()` 标记 `#[deprecated]`，引导开发者使用 `ModelRegistry + build_provider_from_registry()`。`AGENTS.md` 新增 Provider 新增检查单（4 步验证）。`create()` 内部调用添加 `#[allow(deprecated)]`，零编译中断。
+- **Sprint 10 D3 — 能力发现协议** — 新增 `crates/clarity-core/src/capability.rs`，`CapabilityRegistry::supported_approval_modes(surface)` 按前端 surface 返回可用审批模式。egui 当前仅暴露 `["yolo"]`（反映实际 UI 能力），`SettingsViewModel` 自动 fallback 不可用模式。为审批 UI 上线预留动态扩展接口。
+- **Sprint 10 D1 — AgentProfile TOML Schema** — `~/.config/clarity/profiles.toml` 支持命名 Profile（provider/model/approval_mode/api_key/local_model_path）。`GuiSettings` 扩展 `active_profile` + `profiles`（`#[serde(skip)]`，单文件真相源）。Settings 面板有条件渲染 Profile ComboBox；`ensure_llm()` 和 Save 时自动 overlay Profile 字段。向后兼容：无 `profiles.toml` 时行为与 Sprint 9 完全一致。
+- **Sprint 10 D4 — 冒烟测试基线** — `apply_profile_overlay` 提取为纯函数，新增 11 个测试（capability 5 + profile 3 + overlay 3）。测试总数从 568 提升至 579。
 
 ## [0.3.1] — 2026-04-27
 

@@ -18,7 +18,8 @@
 - Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成
 - **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
 - **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
-- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ (env-var 注入 + 增量保存) | Phase 2 ✅ (ModelRegistry 接入 egui) | Phase 3 🔓 (多模型角色，Kimi 审计后解锁"协议先行"路径)
+- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔓 已解锁
+- **Sprint 10 — 协议先行解锁**：D1 ✅ (AgentProfile TOML) | D2 ✅ (LlmFactory 冻结) | D3 ✅ (能力发现协议) | D4 ✅ (冒烟测试基线)
 
 ---
 
