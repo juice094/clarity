@@ -310,6 +310,40 @@ fn hex_alpha(s: &str, alpha: f32) -> egui::Color32 {
     egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a)
 }
 
+pub fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    let candidates = [
+        "C:\\Windows\\Fonts\\simhei.ttf",
+        "C:\\Windows\\Fonts\\msyh.ttc",
+        "C:\\Windows\\Fonts\\simsun.ttc",
+        "C:\\Windows\\Fonts\\msyhbd.ttc",
+    ];
+    for path in &candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            let name = std::path::Path::new(path)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            fonts.font_data.insert(
+                name.clone(),
+                egui::FontData::from_owned(bytes).into(),
+            );
+            fonts.families
+                .entry(egui::FontFamily::Proportional)
+                .or_default()
+                .push(name.clone());
+            fonts.families
+                .entry(egui::FontFamily::Monospace)
+                .or_default()
+                .push(name);
+            tracing::info!("Loaded CJK font from {}", path);
+            break;
+        }
+    }
+    ctx.set_fonts(fonts);
+}
+
 // ============================================================================
 // Unit tests for theme construction and color helpers
 // ============================================================================

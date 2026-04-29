@@ -169,6 +169,37 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
 // Helpers
 // ============================================================================
 
+/// Pretext-style height estimation for virtual list culling.
+/// Called on the cold path (once per message when height cache is missing).
+pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
+    use crate::ui::types::RenderBlock;
+    let mut height = 28.0; // bubble padding + trailing space_8
+    for block in &msg.parsed {
+        match block {
+            RenderBlock::Paragraph(spans) => {
+                let chars: usize = spans.iter().map(|s| match s {
+                    crate::ui::types::InlineSpan::Text(t)
+                    | crate::ui::types::InlineSpan::Bold(t)
+                    | crate::ui::types::InlineSpan::Code(t) => t.len(),
+                    crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
+                }).sum();
+                let lines = (chars / 55).max(1);
+                height += lines as f32 * 18.0;
+            }
+            RenderBlock::Heading(_, _) => height += 24.0,
+            RenderBlock::CodeBlock { code, .. } => {
+                let lines = code.lines().count().max(1);
+                height += lines as f32 * 16.0 + 30.0;
+            }
+            RenderBlock::ListItem(_) => height += 20.0,
+            RenderBlock::Blockquote(_) => height += 20.0,
+            RenderBlock::HorizontalRule => height += 20.0,
+        }
+        height += 4.0; // inter-block spacing
+    }
+    height
+}
+
 pub fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
