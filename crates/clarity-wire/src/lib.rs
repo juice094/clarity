@@ -445,6 +445,80 @@ impl WireUISide {
     }
 }
 
+// ============================================================================
+// Protocol-Driven UI Layer (Phase 2 Pilot)
+// ============================================================================
+
+/// Semantic text role — frontend maps to theme-specific styling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextRole {
+    Label,
+    Body,
+    Title,
+}
+
+/// Semantic button style — frontend maps to theme-specific coloring.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ButtonStyle {
+    Primary,
+    Secondary,
+    Danger,
+}
+
+/// Declarative UI commands produced by a ViewModel.
+/// The frontend translates these into native draw calls.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ViewCommand {
+    /// Vertical stack of children.
+    VStack { children: Vec<ViewCommand> },
+    /// Horizontal stack of children.
+    HStack { children: Vec<ViewCommand> },
+    /// Static text label.
+    Text {
+        content: String,
+        role: TextRole,
+        size: f32,
+    },
+    /// Single-line text input.
+    TextInput {
+        id: String,
+        value: String,
+        placeholder: String,
+        password: bool,
+        width: f32,
+    },
+    /// Dropdown selector.
+    ComboBox {
+        id: String,
+        selected_value: String,
+        /// (value, label) pairs.
+        options: Vec<(String, String)>,
+        width: f32,
+    },
+    /// Clickable button.
+    Button {
+        id: String,
+        label: String,
+        style: ButtonStyle,
+        min_width: f32,
+        min_height: f32,
+    },
+    /// Vertical spacer.
+    Space { height: f32 },
+}
+
+/// User interaction events captured by the frontend and sent to the ViewModel.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UserAction {
+    TextInputChange { id: String, value: String },
+    ComboChange { id: String, selected: String },
+    ButtonClick { id: String },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -665,5 +739,77 @@ mod tests {
                 text: "AB".to_string()
             }
         );
+    }
+
+    // ------------------------------------------------------------------------
+    // Protocol-Driven UI Layer tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_text_role_serde_roundtrip() {
+        for role in [TextRole::Label, TextRole::Body, TextRole::Title] {
+            let json = serde_json::to_string(&role).unwrap();
+            let decoded: TextRole = serde_json::from_str(&json).unwrap();
+            assert_eq!(role, decoded);
+        }
+    }
+
+    #[test]
+    fn test_button_style_serde_roundtrip() {
+        for style in [ButtonStyle::Primary, ButtonStyle::Secondary, ButtonStyle::Danger] {
+            let json = serde_json::to_string(&style).unwrap();
+            let decoded: ButtonStyle = serde_json::from_str(&json).unwrap();
+            assert_eq!(style, decoded);
+        }
+    }
+
+    #[test]
+    fn test_view_command_nested_roundtrip() {
+        let cmd = ViewCommand::VStack {
+            children: vec![
+                ViewCommand::HStack {
+                    children: vec![
+                        ViewCommand::Text {
+                            content: "Provider".into(),
+                            role: TextRole::Label,
+                            size: 13.0,
+                        },
+                        ViewCommand::ComboBox {
+                            id: "provider".into(),
+                            selected_value: "openai".into(),
+                            options: vec![
+                                ("openai".into(), "OpenAI".into()),
+                                ("kimi".into(), "Kimi".into()),
+                            ],
+                            width: 200.0,
+                        },
+                    ],
+                },
+                ViewCommand::Space { height: 8.0 },
+                ViewCommand::Button {
+                    id: "save".into(),
+                    label: "Save".into(),
+                    style: ButtonStyle::Primary,
+                    min_width: 80.0,
+                    min_height: 32.0,
+                },
+            ],
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: ViewCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, decoded);
+    }
+
+    #[test]
+    fn test_user_action_roundtrip() {
+        for action in [
+            UserAction::TextInputChange { id: "api_key".into(), value: "secret".into() },
+            UserAction::ComboChange { id: "provider".into(), selected: "openai".into() },
+            UserAction::ButtonClick { id: "save".into() },
+        ] {
+            let json = serde_json::to_string(&action).unwrap();
+            let decoded: UserAction = serde_json::from_str(&json).unwrap();
+            assert_eq!(action, decoded);
+        }
     }
 }

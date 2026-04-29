@@ -1,7 +1,170 @@
 use crate::{app_state::reload_llm, App};
+use clarity_wire::{ButtonStyle, TextRole, UserAction, ViewCommand};
+
+/// Pure function: given current settings + theme, produce the declarative command tree.
+fn settings_commands(settings: &crate::settings::GuiSettings, _theme: &crate::theme::Theme) -> Vec<ViewCommand> {
+    let providers = crate::settings::get_available_models();
+
+    let provider_options: Vec<(String, String)> = providers
+        .iter()
+        .map(|(k, l, _)| (k.clone(), l.clone()))
+        .collect();
+
+    let current_models = providers
+        .iter()
+        .find(|(k, _, _)| k == &settings.provider)
+        .map(|(_, _, m)| m.clone())
+        .unwrap_or_default();
+
+    let model_options: Vec<(String, String)> = current_models
+        .into_iter()
+        .map(|m| (m.clone(), m))
+        .collect();
+
+    let approval_options = vec![
+        ("interactive".into(), "Interactive — Approve each tool call".into()),
+        ("yolo".into(), "Yolo — Auto-approve all".into()),
+        ("plan".into(), "Plan — Review plan before execution".into()),
+    ];
+
+    vec![
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Provider".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "provider".into(),
+                    selected_value: settings.provider.clone(),
+                    options: provider_options,
+                    width: 200.0,
+                },
+            ],
+        },
+        ViewCommand::Space { height: 8.0 },
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Model".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "model".into(),
+                    selected_value: settings.model.clone(),
+                    options: model_options,
+                    width: 200.0,
+                },
+            ],
+        },
+        ViewCommand::Space { height: 8.0 },
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "API Key".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::TextInput {
+                    id: "api_key".into(),
+                    value: settings.api_key.clone().unwrap_or_default(),
+                    placeholder: String::new(),
+                    password: true,
+                    width: 200.0,
+                },
+            ],
+        },
+        ViewCommand::Space { height: 8.0 },
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Local Model Path".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::TextInput {
+                    id: "local_model_path".into(),
+                    value: settings.local_model_path.clone().unwrap_or_default(),
+                    placeholder: String::new(),
+                    password: false,
+                    width: 200.0,
+                },
+            ],
+        },
+        ViewCommand::Space { height: 8.0 },
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Approval Mode".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "approval_mode".into(),
+                    selected_value: settings.approval_mode.clone(),
+                    options: approval_options,
+                    width: 200.0,
+                },
+            ],
+        },
+        ViewCommand::Space { height: 16.0 },
+        ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Button {
+                    id: "cancel".into(),
+                    label: "Cancel".into(),
+                    style: ButtonStyle::Secondary,
+                    min_width: 80.0,
+                    min_height: 32.0,
+                },
+                ViewCommand::Button {
+                    id: "save".into(),
+                    label: "Save".into(),
+                    style: ButtonStyle::Primary,
+                    min_width: 80.0,
+                    min_height: 32.0,
+                },
+            ],
+        },
+    ]
+}
+
+/// Route a user action back into application state.
+fn handle_settings_action(action: UserAction, app: &mut App) {
+    match action {
+        UserAction::ComboChange { id, selected } if id == "provider" => {
+            app.settings_edit.provider = selected.clone();
+            let providers = crate::settings::get_available_models();
+            if let Some((_, _, models)) = providers.iter().find(|(k, _, _)| k == &selected) {
+                if let Some(first) = models.first() {
+                    app.settings_edit.model = first.clone();
+                }
+            }
+        }
+        UserAction::ComboChange { id, selected } if id == "model" => {
+            app.settings_edit.model = selected;
+        }
+        UserAction::ComboChange { id, selected } if id == "approval_mode" => {
+            app.settings_edit.approval_mode = selected;
+        }
+        UserAction::TextInputChange { id, value } if id == "api_key" => {
+            app.settings_edit.api_key = if value.is_empty() { None } else { Some(value) };
+        }
+        UserAction::TextInputChange { id, value } if id == "local_model_path" => {
+            app.settings_edit.local_model_path = if value.is_empty() { None } else { Some(value) };
+        }
+        UserAction::ButtonClick { id } if id == "save" => {
+            if let Err(e) = app.settings_edit.save() {
+                tracing::error!("Failed to save settings: {}", e);
+            } else {
+                {
+                    let mut guard = app.state.cached_settings.lock();
+                    *guard = app.settings_edit.clone();
+                }
+                let mode = crate::app_state::parse_approval_mode(&app.settings_edit.approval_mode);
+                app.state.agent.set_approval_mode(mode);
+                let state = app.state.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = reload_llm(&state).await {
+                        tracing::warn!("reload_llm failed: {}", e);
+                    }
+                });
+            }
+            app.settings_open = false;
+        }
+        UserAction::ButtonClick { id } if id == "cancel" => {
+            app.settings_open = false;
+        }
+        _ => {}
+    }
+}
 
 pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.settings_open { return; }
+    if !app.settings_open {
+        return;
+    }
 
     // Non-interactive dimmer overlay — paint only, no event capture
     let screen_rect = ctx.screen_rect();
@@ -13,123 +176,25 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
         .resizable(false)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .default_pos(ctx.screen_rect().center())
-        .frame(egui::Frame::window(&ctx.style()).fill(app.theme.surface).corner_radius(egui::CornerRadius::same(app.theme.radius_lg as u8)).inner_margin(egui::Margin::same(20)))
+        .frame(
+            egui::Frame::window(&ctx.style())
+                .fill(app.theme.surface)
+                .corner_radius(egui::CornerRadius::same(app.theme.radius_lg as u8))
+                .inner_margin(egui::Margin::same(20)),
+        )
         .show(ctx, |ui| {
             ui.set_min_width(420.0);
             ui.add_space(4.0);
 
-            // Provider
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Provider").size(13.0).color(app.theme.text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::ComboBox::from_id_salt("provider_combo")
-                        .selected_text(&app.settings_edit.provider)
-                        .width(200.0)
-                        .show_ui(ui, |ui| {
-                            for (key, label, models) in crate::settings::get_available_models() {
-                                if ui.selectable_value(&mut app.settings_edit.provider, key.clone(), label).changed() {
-                                    // Auto-select first model when provider changes
-                                    if let Some(first) = models.first() {
-                                        app.settings_edit.model = first.clone();
-                                    }
-                                }
-                            }
-                        });
-                });
-            });
-            ui.add_space(8.0);
+            let commands = settings_commands(&app.settings_edit, &app.theme);
+            let mut actions = Vec::new();
 
-            // Model — ComboBox populated from get_available_models for the current provider
-            let available_models = crate::settings::get_available_models();
-            let current_models = available_models
-                .iter()
-                .find(|(k, _, _)| k == &app.settings_edit.provider)
-                .map(|(_, _, m)| m.clone())
-                .unwrap_or_default();
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Model").size(13.0).color(app.theme.text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::ComboBox::from_id_salt("model_combo")
-                        .selected_text(&app.settings_edit.model)
-                        .width(200.0)
-                        .show_ui(ui, |ui| {
-                            for m in &current_models {
-                                ui.selectable_value(&mut app.settings_edit.model, m.clone(), m);
-                            }
-                        });
-                });
+            ui.vertical(|ui| {
+                crate::ui::protocol_renderer::render_view_commands(ui, &commands, &app.theme, &mut actions);
             });
-            ui.add_space(8.0);
 
-            // API Key
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("API Key").size(13.0).color(app.theme.text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let mut key = app.settings_edit.api_key.clone().unwrap_or_default();
-                    let response = ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut key).password(true).text_color(app.theme.text));
-                    if response.changed() {
-                        app.settings_edit.api_key = if key.is_empty() { None } else { Some(key) };
-                    }
-                });
-            });
-            ui.add_space(8.0);
-
-            // Local model path
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Local Model Path").size(13.0).color(app.theme.text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let mut path = app.settings_edit.local_model_path.clone().unwrap_or_default();
-                    let response = ui.add_sized(egui::vec2(200.0, 28.0), egui::TextEdit::singleline(&mut path).text_color(app.theme.text));
-                    if response.changed() {
-                        app.settings_edit.local_model_path = if path.is_empty() { None } else { Some(path) };
-                    }
-                });
-            });
-            ui.add_space(8.0);
-
-            // Approval mode
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Approval Mode").size(13.0).color(app.theme.text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::ComboBox::from_id_salt("approval_combo")
-                        .selected_text(&app.settings_edit.approval_mode)
-                        .width(200.0)
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut app.settings_edit.approval_mode, "interactive".into(), "Interactive — Approve each tool call");
-                            ui.selectable_value(&mut app.settings_edit.approval_mode, "yolo".into(), "Yolo — Auto-approve all");
-                            ui.selectable_value(&mut app.settings_edit.approval_mode, "plan".into(), "Plan — Review plan before execution");
-                        });
-                });
-            });
-            ui.add_space(16.0);
-
-            // Buttons
-            ui.horizontal(|ui| {
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new(egui::RichText::new("Save").size(13.0).color(app.theme.text)).fill(app.theme.accent).min_size(egui::vec2(80.0, 32.0))).clicked() {
-                        if let Err(e) = app.settings_edit.save() {
-                            tracing::error!("Failed to save settings: {}", e);
-                        } else {
-                            {
-                                let mut guard = app.state.cached_settings.lock();
-                                *guard = app.settings_edit.clone();
-                            }
-                            // Sync approval mode to the running agent.
-                            let mode = crate::app_state::parse_approval_mode(&app.settings_edit.approval_mode);
-                            app.state.agent.set_approval_mode(mode);
-                            let state = app.state.clone();
-                            app.runtime.spawn(async move {
-                                if let Err(e) = reload_llm(&state).await {
-                                    tracing::warn!("reload_llm failed: {}", e);
-                                }
-                            });
-                        }
-                        app.settings_open = false;
-                    }
-                    if ui.add(egui::Button::new(egui::RichText::new("Cancel").size(13.0).color(app.theme.text)).fill(app.theme.border).min_size(egui::vec2(80.0, 32.0))).clicked() {
-                        app.settings_open = false;
-                    }
-                });
-            });
+            for action in actions {
+                handle_settings_action(action, app);
+            }
         });
 }
