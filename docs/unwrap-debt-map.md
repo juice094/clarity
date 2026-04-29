@@ -96,9 +96,14 @@
 |------|----|------|
 | `clarity-egui` release 编译时间 | ~246 s | `lto = true`, `codegen-units = 1` |
 | `clarity-egui` release 二进制大小 | **18.82 MB** | 含 Candle + tokenizers + egui |
-| 启动时间（`--help`） | ~8.1 s | eframe 初始化 + 字体加载 |
+| `clarity-egui` release 内存峰值 | **131.18 MB** | 50 samples, working set |
+| `clarity-gateway` release 内存峰值 | **14.16 MB** | 50 samples, working set |
+| `clarity-egui` 启动（`--help`） | ~15 s | eframe 窗口不自动退出，超时 kill |
+| `clarity-headless` 启动 | **276 ms** | `--help` |
+| `clarity-gateway` 启动 | **27 ms** | ready 检测 |
+| `clarity-claw` 启动 | **52 ms** | ready 检测 |
 
-> 帧时间/内存占用需在实际 GUI 环境下手动测量。`benchmark.ps1` 内存测量模块已修复（`Measure-Object` 对哈希表数组失效 → 改用 `ForEach-Object` 提取属性）。
+> 帧时间需在实际 GUI 环境下手动测量。`benchmark.ps1` 已修复并支持 `-Profile release`。
 
 ---
 
