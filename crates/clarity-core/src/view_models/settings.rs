@@ -11,6 +11,7 @@ pub struct SettingsSnapshot {
     pub api_key: Option<String>,
     pub local_model_path: Option<String>,
     pub theme: String,
+    pub active_profile: Option<String>,
 }
 
 /// Protocol-driven ViewModel for the settings panel.
@@ -25,6 +26,8 @@ pub struct SettingsViewModel {
     api_key: Option<String>,
     local_model_path: Option<String>,
     theme: String,
+    active_profile: Option<String>,
+    profiles: Vec<(String, String)>, // (id, display_label)
     dirty: bool,
 }
 
@@ -33,10 +36,19 @@ impl Default for SettingsViewModel {
         Self {
             provider: "openai".into(),
             model: "gpt-4o".into(),
-            approval_mode: "interactive".into(),
+            approval_mode: {
+                let modes = crate::capability::CapabilityRegistry::supported_approval_modes("egui");
+                if modes.contains(&"interactive") {
+                    "interactive".into()
+                } else {
+                    modes.first().unwrap_or(&"yolo").to_string()
+                }
+            },
             api_key: None,
             local_model_path: None,
             theme: "dark".into(),
+            active_profile: None,
+            profiles: Vec::new(),
             dirty: false,
         }
     }
@@ -47,7 +59,7 @@ impl SettingsViewModel {
         Self::default()
     }
 
-    pub fn from_snapshot(snapshot: &SettingsSnapshot) -> Self {
+    pub fn from_snapshot(snapshot: &SettingsSnapshot, profiles: Vec<(String, String)>) -> Self {
         Self {
             provider: snapshot.provider.clone(),
             model: snapshot.model.clone(),
@@ -55,6 +67,8 @@ impl SettingsViewModel {
             api_key: snapshot.api_key.clone(),
             local_model_path: snapshot.local_model_path.clone(),
             theme: snapshot.theme.clone(),
+            active_profile: snapshot.active_profile.clone(),
+            profiles,
             dirty: false,
         }
     }
@@ -67,6 +81,7 @@ impl SettingsViewModel {
             api_key: self.api_key.clone(),
             local_model_path: self.local_model_path.clone(),
             theme: self.theme.clone(),
+            active_profile: self.active_profile.clone(),
         }
     }
 
@@ -98,104 +113,135 @@ impl SettingsViewModel {
             .map(|m| (m.clone(), m))
             .collect();
 
-        let approval_options = vec![
-            ("interactive".into(), "Interactive — Approve each tool call".into()),
-            ("yolo".into(), "Yolo — Auto-approve all".into()),
-            ("plan".into(), "Plan — Review plan before execution".into()),
-        ];
+        let approval_modes = crate::capability::CapabilityRegistry::supported_approval_modes("egui");
+        let approval_options: Vec<(String, String)> = approval_modes
+            .into_iter()
+            .map(|mode| {
+                let label = match mode {
+                    "interactive" => "Interactive — Approve each tool call",
+                    "yolo" => "Yolo — Auto-approve all",
+                    "plan" => "Plan — Review plan before execution",
+                    other => other,
+                };
+                (mode.into(), label.into())
+            })
+            .collect();
 
-        vec![
-            ViewCommand::HStack {
+        let mut cmds: Vec<ViewCommand> = Vec::new();
+
+        // Profile selector (only shown when profiles are configured)
+        if !self.profiles.is_empty() {
+            let profile_options: Vec<(String, String)> = self.profiles.clone();
+            cmds.push(ViewCommand::HStack {
                 children: vec![
-                    ViewCommand::Text { content: "Provider".into(), role: TextRole::Label, size: 13.0 },
+                    ViewCommand::Text { content: "Profile".into(), role: TextRole::Label, size: 13.0 },
                     ViewCommand::ComboBox {
-                        id: "provider".into(),
-                        selected_value: self.provider.clone(),
-                        options: provider_options,
+                        id: "profile".into(),
+                        selected_value: self.active_profile.clone().unwrap_or_default(),
+                        options: profile_options,
                         width: 200.0,
                     },
                 ],
-            },
-            ViewCommand::Space { height: 8.0 },
-            ViewCommand::HStack {
-                children: vec![
-                    ViewCommand::Text { content: "Model".into(), role: TextRole::Label, size: 13.0 },
-                    ViewCommand::ComboBox {
-                        id: "model".into(),
-                        selected_value: self.model.clone(),
-                        options: model_options,
-                        width: 200.0,
-                    },
-                ],
-            },
-            ViewCommand::Space { height: 8.0 },
-            ViewCommand::HStack {
-                children: vec![
-                    ViewCommand::Text { content: "API Key".into(), role: TextRole::Label, size: 13.0 },
-                    ViewCommand::TextInput {
-                        id: "api_key".into(),
-                        value: self.api_key.clone().unwrap_or_default(),
-                        placeholder: "${env:KIMI_API_KEY} or plain key".into(),
-                        password: true,
-                        width: 200.0,
-                    },
-                ],
-            },
-            ViewCommand::Text {
-                content: "Supports ${env:VAR_NAME} syntax to avoid storing keys on disk.".into(),
-                role: TextRole::Body,
-                size: 11.0,
-            },
-            ViewCommand::Space { height: 8.0 },
-            ViewCommand::HStack {
-                children: vec![
-                    ViewCommand::Text { content: "Local Model Path".into(), role: TextRole::Label, size: 13.0 },
-                    ViewCommand::TextInput {
-                        id: "local_model_path".into(),
-                        value: self.local_model_path.clone().unwrap_or_default(),
-                        placeholder: String::new(),
-                        password: false,
-                        width: 200.0,
-                    },
-                ],
-            },
-            ViewCommand::Space { height: 8.0 },
-            ViewCommand::HStack {
-                children: vec![
-                    ViewCommand::Text { content: "Approval Mode".into(), role: TextRole::Label, size: 13.0 },
-                    ViewCommand::ComboBox {
-                        id: "approval_mode".into(),
-                        selected_value: self.approval_mode.clone(),
-                        options: approval_options,
-                        width: 200.0,
-                    },
-                ],
-            },
-            ViewCommand::Space { height: 16.0 },
-            ViewCommand::HStack {
-                children: vec![
-                    ViewCommand::Button {
-                        id: "cancel".into(),
-                        label: "Cancel".into(),
-                        style: ButtonStyle::Secondary,
-                        min_width: 80.0,
-                        min_height: 32.0,
-                    },
-                    ViewCommand::Button {
-                        id: "save".into(),
-                        label: "Save".into(),
-                        style: ButtonStyle::Primary,
-                        min_width: 80.0,
-                        min_height: 32.0,
-                    },
-                ],
-            },
-        ]
+            });
+            cmds.push(ViewCommand::Space { height: 8.0 });
+        }
+
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Provider".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "provider".into(),
+                    selected_value: self.provider.clone(),
+                    options: provider_options,
+                    width: 200.0,
+                },
+            ],
+        });
+        cmds.push(ViewCommand::Space { height: 8.0 });
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Model".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "model".into(),
+                    selected_value: self.model.clone(),
+                    options: model_options,
+                    width: 200.0,
+                },
+            ],
+        });
+        cmds.push(ViewCommand::Space { height: 8.0 });
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "API Key".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::TextInput {
+                    id: "api_key".into(),
+                    value: self.api_key.clone().unwrap_or_default(),
+                    placeholder: "${env:KIMI_API_KEY} or plain key".into(),
+                    password: true,
+                    width: 200.0,
+                },
+            ],
+        });
+        cmds.push(ViewCommand::Text {
+            content: "Supports ${env:VAR_NAME} syntax to avoid storing keys on disk.".into(),
+            role: TextRole::Body,
+            size: 11.0,
+        });
+        cmds.push(ViewCommand::Space { height: 8.0 });
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Local Model Path".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::TextInput {
+                    id: "local_model_path".into(),
+                    value: self.local_model_path.clone().unwrap_or_default(),
+                    placeholder: String::new(),
+                    password: false,
+                    width: 200.0,
+                },
+            ],
+        });
+        cmds.push(ViewCommand::Space { height: 8.0 });
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Text { content: "Approval Mode".into(), role: TextRole::Label, size: 13.0 },
+                ViewCommand::ComboBox {
+                    id: "approval_mode".into(),
+                    selected_value: self.approval_mode.clone(),
+                    options: approval_options,
+                    width: 200.0,
+                },
+            ],
+        });
+        cmds.push(ViewCommand::Space { height: 16.0 });
+        cmds.push(ViewCommand::HStack {
+            children: vec![
+                ViewCommand::Button {
+                    id: "cancel".into(),
+                    label: "Cancel".into(),
+                    style: ButtonStyle::Secondary,
+                    min_width: 80.0,
+                    min_height: 32.0,
+                },
+                ViewCommand::Button {
+                    id: "save".into(),
+                    label: "Save".into(),
+                    style: ButtonStyle::Primary,
+                    min_width: 80.0,
+                    min_height: 32.0,
+                },
+            ],
+        });
+
+        cmds
     }
 
     /// Route a user action back into the ViewModel state.
     pub fn handle_action(&mut self, action: UserAction) {
         match action {
+            UserAction::ComboChange { id, selected } if id == "profile" => {
+                self.active_profile = if selected.is_empty() { None } else { Some(selected) };
+                self.dirty = true;
+            }
             UserAction::ComboChange { id, selected } if id == "provider" => {
                 self.provider = selected.clone();
                 let providers = get_available_models();
@@ -403,13 +449,20 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::CapabilityRegistry;
 
     #[test]
     fn test_view_model_default() {
         let vm = SettingsViewModel::new();
         assert_eq!(vm.provider, "openai");
         assert_eq!(vm.model, "gpt-4o");
-        assert_eq!(vm.approval_mode, "interactive");
+        // egui currently only supports "yolo" (no Interactive/Plan UI yet)
+        let expected_mode = if CapabilityRegistry::supported_approval_modes("egui").contains(&"interactive") {
+            "interactive"
+        } else {
+            "yolo"
+        };
+        assert_eq!(vm.approval_mode, expected_mode);
         assert!(!vm.is_dirty());
     }
 
@@ -417,7 +470,7 @@ mod tests {
     fn test_view_model_from_snapshot_roundtrip() {
         let vm = SettingsViewModel::new();
         let snapshot = vm.snapshot();
-        let vm2 = SettingsViewModel::from_snapshot(&snapshot);
+        let vm2 = SettingsViewModel::from_snapshot(&snapshot, Vec::new());
         assert_eq!(vm, vm2);
     }
 

@@ -857,11 +857,17 @@ impl LlmProvider for AnthropicLlm {
     fn set_prompt_cache_key(&mut self, _key: &str) {}
 }
 
-/// Factory for creating LLM providers
+/// Factory for creating LLM providers.
 ///
-/// Now backed by `ModelRegistry` for configuration-driven routing.
-/// All static methods remain backward-compatible; they first consult the
-/// registry, then fall back to legacy env-var detection.
+/// **Frozen for new providers** — use `ModelRegistry::load()` +
+/// `build_provider_from_registry()` for configuration-driven routing.
+///
+/// `auto()` / `create()` / `create_with_key()` remain active for backward
+/// compatibility with existing callers (gateway, tui, egui). They first
+/// consult the registry, then fall back to legacy env-var detection.
+///
+/// Provider-specific helpers (`anthropic`, `deepseek`, `kimi`, `openai`)
+/// are deprecated; prefer registry aliases or `create_with_key()`.
 pub struct LlmFactory;
 
 impl LlmFactory {
@@ -942,6 +948,7 @@ impl LlmFactory {
 
     /// Create a provider by alias or legacy name.
     /// First checks ModelRegistry, then falls back to hard-coded legacy names.
+    #[allow(deprecated)]
     pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
         // Try registry first
         if let Ok(registry) = ModelRegistry::load_async().await {
@@ -1063,21 +1070,25 @@ impl LlmFactory {
     }
 
     /// Create an Anthropic provider from environment
+    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
     pub fn anthropic() -> Result<AnthropicLlm, AgentError> {
         AnthropicLlm::from_env()
     }
 
     /// Create a DeepSeek provider from environment
+    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
     pub fn deepseek() -> Result<DeepSeekProvider, AgentError> {
         DeepSeekProvider::from_env()
     }
 
     /// Create a Kimi provider from environment
+    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
     pub fn kimi() -> Result<KimiLlm, AgentError> {
         KimiLlm::from_env()
     }
 
     /// Create an OpenAI-compatible provider from environment
+    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
     pub fn openai() -> Result<OpenAiCompatibleLlm, AgentError> {
         OpenAiCompatibleLlm::from_env()
     }

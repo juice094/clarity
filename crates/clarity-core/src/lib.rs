@@ -44,6 +44,7 @@ pub mod activity;
 pub mod agent;
 pub mod approval;
 pub mod autodream;
+pub mod capability;
 pub mod background;
 pub mod compaction;
 pub mod config;

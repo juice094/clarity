@@ -38,11 +38,29 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                 match action {
                     UserAction::ButtonClick { id } if id == "save" => {
                         let snapshot = app.settings_vm.snapshot();
-                        app.settings_edit.provider = snapshot.provider;
-                        app.settings_edit.model = snapshot.model;
-                        app.settings_edit.approval_mode = snapshot.approval_mode;
-                        app.settings_edit.api_key = snapshot.api_key;
-                        app.settings_edit.local_model_path = snapshot.local_model_path;
+                        app.settings_edit.active_profile = snapshot.active_profile.clone();
+
+                        // If an active profile is selected, overlay its fields onto settings
+                        if let Some(ref profile_id) = snapshot.active_profile {
+                            if let Some(profile) = app.settings_edit.profiles.get(profile_id) {
+                                app.settings_edit.provider = profile.provider.clone();
+                                app.settings_edit.model = profile.model.clone();
+                                app.settings_edit.approval_mode = profile.approval_mode.clone();
+                                if profile.api_key.is_some() {
+                                    app.settings_edit.api_key = profile.api_key.clone();
+                                }
+                                if profile.local_model_path.is_some() {
+                                    app.settings_edit.local_model_path = profile.local_model_path.clone();
+                                }
+                            }
+                        } else {
+                            // No profile selected: use the directly edited values
+                            app.settings_edit.provider = snapshot.provider;
+                            app.settings_edit.model = snapshot.model;
+                            app.settings_edit.approval_mode = snapshot.approval_mode;
+                            app.settings_edit.api_key = snapshot.api_key;
+                            app.settings_edit.local_model_path = snapshot.local_model_path;
+                        }
                         app.settings_edit.theme = snapshot.theme;
 
                         if let Err(e) = app.settings_edit.save() {

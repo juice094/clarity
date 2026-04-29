@@ -64,11 +64,31 @@ fn binding_matches(binding: &Option<LlmBinding>, provider: &str, path: &str) -> 
     matches!(binding, Some(b) if b.provider == provider && b.local_model_path == path)
 }
 
+/// Apply the active profile's fields onto `settings` when an active profile is set.
+/// This is a pure function extracted for testability.
+pub fn apply_profile_overlay(settings: &mut GuiSettings) {
+    if let Some(ref profile_id) = settings.active_profile {
+        if let Some(profile) = settings.profiles.get(profile_id) {
+            settings.provider = profile.provider.clone();
+            settings.model = profile.model.clone();
+            settings.approval_mode = profile.approval_mode.clone();
+            if profile.api_key.is_some() {
+                settings.api_key = profile.api_key.clone();
+            }
+            if profile.local_model_path.is_some() {
+                settings.local_model_path = profile.local_model_path.clone();
+            }
+        }
+    }
+}
+
 pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
-    let settings = {
+    let mut settings = {
         let guard = state.cached_settings.lock();
         guard.clone()
     };
+
+    apply_profile_overlay(&mut settings);
 
     let network_available = state.network_available.load(std::sync::atomic::Ordering::Relaxed);
     let desired_provider = if !network_available && settings.provider != "local" {
@@ -293,5 +313,65 @@ mod tests {
     #[test]
     fn test_binding_matches_none() {
         assert!(!binding_matches(&None, "openai", ""));
+    }
+
+    // ============================================================================
+    // Sprint 10 D4: Profile overlay tests
+    // ============================================================================
+
+    #[test]
+    fn test_apply_profile_overlay_changes_fields() {
+        use crate::settings::AgentProfile;
+        let mut settings = GuiSettings {
+            provider: "openai".into(),
+            model: "gpt-4o".into(),
+            approval_mode: "interactive".into(),
+            api_key: Some("sk-old".into()),
+            local_model_path: None,
+            active_profile: Some("research".into()),
+            ..Default::default()
+        };
+        settings.profiles.insert(
+            "research".into(),
+            AgentProfile {
+                provider: "kimi".into(),
+                model: "kimi-k2".into(),
+                approval_mode: "plan".into(),
+                api_key: Some("sk-kimi".into()),
+                local_model_path: Some("/models/local.gguf".into()),
+            },
+        );
+        apply_profile_overlay(&mut settings);
+        assert_eq!(settings.provider, "kimi");
+        assert_eq!(settings.model, "kimi-k2");
+        assert_eq!(settings.approval_mode, "plan");
+        assert_eq!(settings.api_key, Some("sk-kimi".into()));
+        assert_eq!(settings.local_model_path, Some("/models/local.gguf".into()));
+    }
+
+    #[test]
+    fn test_apply_profile_overlay_no_profile_selected() {
+        let mut settings = GuiSettings {
+            provider: "openai".into(),
+            model: "gpt-4o".into(),
+            active_profile: None,
+            ..Default::default()
+        };
+        apply_profile_overlay(&mut settings);
+        assert_eq!(settings.provider, "openai");
+        assert_eq!(settings.model, "gpt-4o");
+    }
+
+    #[test]
+    fn test_apply_profile_overlay_missing_profile() {
+        let mut settings = GuiSettings {
+            provider: "openai".into(),
+            model: "gpt-4o".into(),
+            active_profile: Some("nonexistent".into()),
+            ..Default::default()
+        };
+        apply_profile_overlay(&mut settings);
+        assert_eq!(settings.provider, "openai");
+        assert_eq!(settings.model, "gpt-4o");
     }
 }

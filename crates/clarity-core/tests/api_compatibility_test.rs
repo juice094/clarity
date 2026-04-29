@@ -250,6 +250,7 @@ fn test_crate_level_reexports() {
 // ==================== LLM Factory API Stability ====================
 
 #[test]
+#[allow(deprecated)]
 fn test_llm_factory_api() {
     // Test: LlmFactory methods exist
     // These will fail without API keys but verify the API exists

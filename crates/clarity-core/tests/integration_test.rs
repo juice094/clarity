@@ -118,6 +118,7 @@ async fn test_tool_execution_integration() {
 // ==================== LLM Provider Integration ====================
 
 #[test]
+#[allow(deprecated)]
 fn test_llm_factory_error_handling() {
     // Without any env vars set, factory methods should return error
     // Test kimi provider (requires KIMI_API_KEY)

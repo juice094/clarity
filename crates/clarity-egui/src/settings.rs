@@ -1,5 +1,25 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
+
+/// A named profile that overrides provider/model/approval_mode for a specific use-case.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct AgentProfile {
+    pub model: String,
+    pub provider: String,
+    pub approval_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_model_path: Option<String>,
+}
+
+/// Top-level structure of `profiles.toml`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+struct ProfilesFile {
+    #[serde(default)]
+    profiles: HashMap<String, AgentProfile>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GuiSettings {
@@ -15,6 +35,10 @@ pub struct GuiSettings {
     pub language: Option<String>,
     #[serde(default)]
     pub api_key: Option<String>,
+    #[serde(default)]
+    pub active_profile: Option<String>,
+    #[serde(skip)]
+    pub profiles: HashMap<String, AgentProfile>,
 }
 
 impl GuiSettings {
@@ -35,11 +59,28 @@ impl GuiSettings {
         PathBuf::from("gui-settings.json")
     }
 
+    pub fn profiles_path() -> PathBuf {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let mut path = PathBuf::from(appdata);
+            path.push("clarity");
+            path.push("profiles.toml");
+            return path;
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            let mut path = PathBuf::from(home);
+            path.push(".config");
+            path.push("clarity");
+            path.push("profiles.toml");
+            return path;
+        }
+        PathBuf::from("profiles.toml")
+    }
+
     pub fn load() -> Self {
         let path = Self::config_path();
-        if let Ok(content) = std::fs::read_to_string(&path) {
+        let mut settings: Self = if let Ok(content) = std::fs::read_to_string(&path) {
             match serde_json::from_str(&content) {
-                Ok(settings) => return settings,
+                Ok(settings) => settings,
                 Err(e) => {
                     tracing::warn!(
                         "Failed to parse settings at {}: {}. Falling back to defaults.",
@@ -51,10 +92,31 @@ impl GuiSettings {
                     if let Err(e) = std::fs::rename(&path, &bak) {
                         tracing::warn!("Failed to backup corrupted settings to {}: {}", bak.display(), e);
                     }
+                    Self::default_with_env()
+                }
+            }
+        } else {
+            Self::default_with_env()
+        };
+
+        // Load profiles from separate TOML file (single source of truth)
+        let profiles_path = Self::profiles_path();
+        if let Ok(content) = std::fs::read_to_string(&profiles_path) {
+            match toml::from_str::<ProfilesFile>(&content) {
+                Ok(file) => {
+                    settings.profiles = file.profiles;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to parse profiles at {}: {}. Using empty profiles.",
+                        profiles_path.display(),
+                        e
+                    );
                 }
             }
         }
-        Self::default_with_env()
+
+        settings
     }
 
     pub fn default_with_env() -> Self {
@@ -135,6 +197,8 @@ impl Default for GuiSettings {
             network_probe_url: None,
             language: Some("zh".into()),
             api_key: None,
+            active_profile: None,
+            profiles: HashMap::new(),
         }
     }
 }
@@ -282,5 +346,64 @@ mod tests {
         let merged = merge_json(base, new);
         assert_eq!(merged["provider"], "kimi");
         assert_eq!(merged["future_field"], true);
+    }
+
+    // ============================================================================
+    // Sprint 10 D1: AgentProfile tests
+    // ============================================================================
+
+    #[test]
+    fn test_profiles_file_parsing() {
+        let toml = r#"
+[profiles.default]
+model = "gpt-4o"
+provider = "openai"
+approval_mode = "interactive"
+
+[profiles.greylocal]
+model = "local-qwen"
+provider = "local"
+approval_mode = "yolo"
+"#;
+        let file: ProfilesFile = toml::from_str(toml).expect("parse profiles.toml");
+        assert_eq!(file.profiles.len(), 2);
+        assert!(file.profiles.contains_key("default"));
+        assert!(file.profiles.contains_key("greylocal"));
+        let greylocal = file.profiles.get("greylocal").unwrap();
+        assert_eq!(greylocal.provider, "local");
+        assert_eq!(greylocal.model, "local-qwen");
+    }
+
+    #[test]
+    fn test_gui_settings_skips_profiles_in_json() {
+        let mut settings = GuiSettings {
+            active_profile: Some("research".into()),
+            ..Default::default()
+        };
+        settings.profiles.insert(
+            "research".into(),
+            AgentProfile {
+                model: "kimi-k2".into(),
+                provider: "kimi".into(),
+                approval_mode: "plan".into(),
+                api_key: Some("sk-test".into()),
+                local_model_path: None,
+            },
+        );
+        let json = serde_json::to_string(&settings).expect("serialize");
+        // profiles field is #[serde(skip)], so it must not appear in JSON
+        assert!(!json.contains("profiles"), "profiles should not be serialized to gui-settings.json");
+        assert!(json.contains("active_profile"), "active_profile should be serialized");
+    }
+
+    #[test]
+    fn test_active_profile_roundtrip() {
+        let settings = GuiSettings {
+            active_profile: Some("research".into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&settings).expect("serialize");
+        let deserialized: GuiSettings = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(deserialized.active_profile, Some("research".into()));
     }
 }

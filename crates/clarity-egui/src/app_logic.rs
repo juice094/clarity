@@ -90,8 +90,10 @@ impl App {
             api_key: settings_edit.api_key.clone(),
             local_model_path: settings_edit.local_model_path.clone(),
             theme: settings_edit.theme.clone(),
+            active_profile: settings_edit.active_profile.clone(),
         };
-        let settings_vm = clarity_core::view_models::settings::SettingsViewModel::from_snapshot(&settings_snapshot);
+        let profile_list: Vec<(String, String)> = settings_edit.profiles.keys().map(|k| (k.clone(), k.clone())).collect();
+        let settings_vm = clarity_core::view_models::settings::SettingsViewModel::from_snapshot(&settings_snapshot, profile_list);
         let wire = Arc::new(clarity_wire::Wire::new());
 
         Self {

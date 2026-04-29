@@ -203,6 +203,13 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - `UserAction`（`TextInputChange` / `ComboChange` / `ButtonClick`）
 - 变更时需同步检查：egui `protocol_renderer.rs`、TUI `protocol_renderer.rs`、Gateway `ws.rs` `WsResponse`
 
+**新增 Provider 检查单**（Sprint 10 D2）：
+- `LlmFactory` 已冻结 —— 禁止新增 match 分支
+- ① `crates/clarity-core/src/llm/model_registry.rs`：添加 `ProtocolType` match 分支（如需要新协议）
+- ② `crates/clarity-core/src/view_models/settings.rs`：`get_available_models()` 的硬编码 fallback 中补充 provider + model 列表
+- ③ `crates/clarity-core/src/llm/model_registry.rs`：`build_provider_from_registry`/`build_provider_from_registry_with_key` 中补充 provider 构建逻辑
+- ④ 运行 `cargo test --workspace --lib` + `cargo clippy --workspace --lib --tests -- -D warnings`
+
 ---
 
 ## Meta-Cognitive Rules
