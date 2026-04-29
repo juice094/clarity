@@ -5,6 +5,7 @@
 
 param(
     [switch]$SkipCompile,
+    [string]$Profile,
     [string]$OutputPath = "target/benchmark-report.json"
 )
 
@@ -12,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$ProfileDir = if ($SkipCompile) { "debug" } else { "release" }
+$ProfileDir = if ($Profile) { $Profile } elseif ($SkipCompile) { "debug" } else { "release" }
 
 function Write-Report($data) {
     $json = $data | ConvertTo-Json -Depth 10
@@ -186,11 +187,13 @@ if (-not $SkipCompile) {
 
 # Startup benchmarks
 $report.startup += Measure-StartupTime "clarity-headless" @("--help")
+$report.startup += Measure-StartupTime "clarity-egui" @("--help")
 $report.startup += Measure-ServiceStartup "clarity-gateway" "API Server listening"
 $report.startup += Measure-ServiceStartup "clarity-claw" "Claw tray icon active"
 
 # Memory benchmarks
 $report.memory += Measure-Memory "clarity-headless" @("--help")
+$report.memory += Measure-Memory "clarity-egui" @("--help")
 $report.memory += Measure-Memory "clarity-gateway"
 
 # Summary

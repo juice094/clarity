@@ -25,9 +25,25 @@ pub enum OnboardingState {
 }
 
 /// Detect whether onboarding should be shown.
+///
+/// Returns `false` if any of the following is true:
+/// - A GUI settings file already exists
+/// - A cloud API key is set via environment variable
+/// - A local `.gguf` model already exists in the default model directory
 pub fn should_show_onboarding() -> bool {
     if GuiSettings::config_path().exists() {
         return false;
+    }
+    // Skip if a local model is already present (e.g. user manually downloaded)
+    let model_dir = clarity_core::model_download::default_model_dir();
+    if let Ok(entries) = std::fs::read_dir(&model_dir) {
+        for entry in entries.flatten() {
+            if let Some(ext) = entry.path().extension() {
+                if ext == "gguf" {
+                    return false;
+                }
+            }
+        }
     }
     if std::env::var("KIMI_API_KEY").is_ok()
         || std::env::var("OPENAI_API_KEY").is_ok()
