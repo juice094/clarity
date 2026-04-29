@@ -1,1 +1,0 @@
-C:\Users\22414\dev\third_party\clarity\experiments\protocol-pilot\target\release\protocol-pilot.exe: C:\Users\22414\dev\third_party\clarity\experiments\protocol-pilot\src\main.rs C:\Users\22414\dev\third_party\clarity\experiments\protocol-pilot\src\protocol.rs
