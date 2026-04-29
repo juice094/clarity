@@ -15,7 +15,7 @@ Clarity orchestrates LLMs, tools, and sub-agents across TUI, desktop GUI, web ID
 |-----------|---------|----------------------------|
 | **Runtime** | Single binary, `cargo install` | Node.js / Bun runtime required |
 | **Memory Safety** | Compile-time guarantees (Rust) | Runtime GC |
-| **Process Model** | Single-process (Tauri ↔ Rust core) | Frontend ↔ server dual-process |
+| **Process Model** | Single-process (eframe ↔ Rust core) | Frontend ↔ server dual-process |
 | **Memory System** | SQLite + BM25 + vector hybrid | File-based or external DB |
 | **Local LLM** | Native GGUF via Candle (no Ollama) | Depends on external runtime |
 
@@ -27,7 +27,7 @@ crates/
 ├── clarity-memory    # BM25 + vector hybrid search, chunking
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
 ├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
-├── clarity-tauri     # Tauri 2 Desktop GUI — frozen, no new features
+# clarity-tauri     # Archived — moved to external backup (see CHANGELOG)
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor
 ├── clarity-wire      # UI↔Agent event bus

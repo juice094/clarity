@@ -10,7 +10,7 @@ ReAct/Plan agents · MCP ecosystem · BM25+vector memory · Multi-entry (TUI/Web
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
-[English](#readme) | [中文](#readme-zh)
+[English](README.en.md) | [中文](README.zh.md)
 
 </div>
 
