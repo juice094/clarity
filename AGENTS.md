@@ -72,7 +72,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - 阶段二：Compaction 状态提示（`CompactionBegin/End` WireMessage + banner）
   - 阶段三：模型下载 GUI（HuggingFace 直链下载 + SettingsPanel 进度条）
   - 阶段四：前端日志面板（Console 劫持 + 可折叠面板）
-- 零依赖发行准备（单二进制 + 嵌入式模型）🔄 进行中
+- 零依赖发行准备（单二进制 + 嵌入式模型）✅
 
 > AI 关键决策见 [`docs/ai-protocol.md`](./docs/ai-protocol.md)。
 > 架构定位声明：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。

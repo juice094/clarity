@@ -7,16 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-04-27
+
+### Added
+
+- **嵌入式模型自动下载** — `clarity-core` 新增 `model_download.rs`（HuggingFace 直链流式下载 + 进度回调）。预配置 Qwen2.5-1.5B-Instruct-GGUF（~1.0 GB）。`clarity-egui` 新增首次启动引导覆盖层 `onboarding.rs`：三选项（输入 API Key / 下载本地模型 / 稍后配置），下载完成后自动配置 provider=local 并 reload LLM。
+- **unwrap/expect 全面审计** — 全 workspace 非测试代码 171 处 unwrap/expect 分级审计。5 处高风险已修复（subagents/store、gateway/webhook、memory/embedding×2、tui/main）。中风险 9 处确认全部已有 `// SAFE:` 注释或属低风险类别（Regex::new、锁、duration_since）。新增 `docs/unwrap-debt-map.md` 作为持续维护的债务地图。
+
 ### Changed
 
-- **clarity-tauri 归档** — `clarity-tauri`（Tauri 2 + React 前端）已完全移出本仓库。前端代码、package-lock.json、Cargo.toml 全部删除；Rust 源码归档至外部备份目录 `third_party/archived/clarity-tauri/`。Dependabot 安全报警从 3 个降至 0 个。当前主力桌面 GUI 为 `clarity-egui`（eframe/egui，纯 Rust，零 web 依赖）。
+- **Release CI 适配 egui** — `.github/workflows/release.yml` 移除 Node.js / Tauri CLI / 前端构建步骤，改为 `cargo build --release -p clarity-egui` + 自签名 + Release 上传。`.cargo/audit.toml` 清理已失效的 Tauri 相关忽略项，注释当前 transitive deps 的 unmaintained 原因。
+- **benchmark 脚本硬化** — 修复 `Measure-Memory` 哈希表数组处理 bug（`Measure-Object` 对 `[hashtable[]]` 失效 → 改用 `ForEach-Object` 提取属性）；支持 `-Profile release` 覆盖；新增 `clarity-egui` startup/memory 测试；移除已归档的 `clarity-tauri` 编译基准。
 - **Settings 模型选择体验修复** — Model 字段从自由文本 `TextEdit` 改为 `ComboBox`，provider 切换时自动联动更新模型；`load()` 解析失败时记录 warning 并备份损坏文件为 `.bak`；`default_with_env()` 改为 provider 匹配的环境变量选择；`ensure_llm` 新增断网自动 fallback 到 local provider。
 - **Mutex 硬化** — `AppState` 和 `main.rs` 中 `std::sync::Mutex` → `parking_lot::Mutex`，消除 12 处 `lock().unwrap()` panic 风险。
 - **App::update() 拆分** — 550 行 monolithic `update()` 拆分为 6 个独立渲染方法（`render_sidebar`, `render_task_panel`, `render_chat_area`, `render_settings_panel`, `render_mcp_panel`, `render_toasts`），符合 Pretext hot-path 原则。
 
 ### Removed
 
+- `clarity-tauri` 完全归档 — 前端代码、package-lock.json、workspace 引用全部删除；Rust 源码移至外部归档目录。Dependabot 安全报警从 3 个降至 0 个。当前主力桌面 GUI 为 `clarity-egui`（eframe/egui，纯 Rust，零 web 依赖）。
 - `clarity-egui` 中未使用的 `anyhow` 依赖。
+
+### Fixed
+
+- **onboarding 本地模型检测** — `should_show_onboarding()` 新增 `default_model_dir()` 下 `.gguf` 扫描，避免手动放置模型后仍强制显示引导覆盖层。
 
 ## [0.3.0] — 2026-04-26
 
