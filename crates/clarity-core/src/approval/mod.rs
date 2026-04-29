@@ -256,7 +256,10 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
             // Also resolve the current request as Approve to wake up the waiter.
             // Without this, wait_for_response() would block forever since
             // session_approvals is only checked on entry, not while waiting.
-            return self.inner.resolve(request_id, ApprovalResponse::Approve).await;
+            return self
+                .inner
+                .resolve(request_id, ApprovalResponse::Approve)
+                .await;
         }
         self.inner.resolve(request_id, response).await
     }

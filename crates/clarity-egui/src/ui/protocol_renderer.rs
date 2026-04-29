@@ -30,7 +30,11 @@ fn render_single(
                 render_view_commands(ui, children, theme, actions);
             });
         }
-        ViewCommand::Text { content, role, size } => {
+        ViewCommand::Text {
+            content,
+            role,
+            size,
+        } => {
             let mut text = egui::RichText::new(content).size(*size).color(theme.text);
             if matches!(role, TextRole::Title) {
                 text = text.strong();

@@ -8,8 +8,11 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
 
     // Non-interactive dimmer overlay — paint only, no event capture
     let screen_rect = ctx.screen_rect();
-    ctx.layer_painter(egui::LayerId::background())
-        .rect_filled(screen_rect, egui::CornerRadius::ZERO, egui::Color32::from_black_alpha(100));
+    ctx.layer_painter(egui::LayerId::background()).rect_filled(
+        screen_rect,
+        egui::CornerRadius::ZERO,
+        egui::Color32::from_black_alpha(100),
+    );
 
     egui::Window::new("Settings")
         .collapsible(false)
@@ -30,7 +33,12 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
             let mut actions = Vec::new();
 
             ui.vertical(|ui| {
-                crate::ui::protocol_renderer::render_view_commands(ui, &commands, &app.theme, &mut actions);
+                crate::ui::protocol_renderer::render_view_commands(
+                    ui,
+                    &commands,
+                    &app.theme,
+                    &mut actions,
+                );
             });
 
             for action in actions {
@@ -50,7 +58,8 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                                     app.settings_edit.api_key = profile.api_key.clone();
                                 }
                                 if profile.local_model_path.is_some() {
-                                    app.settings_edit.local_model_path = profile.local_model_path.clone();
+                                    app.settings_edit.local_model_path =
+                                        profile.local_model_path.clone();
                                 }
                             }
                         } else {
@@ -70,7 +79,9 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                                 let mut guard = app.state.cached_settings.lock();
                                 *guard = app.settings_edit.clone();
                             }
-                            let mode = crate::app_state::parse_approval_mode(&app.settings_edit.approval_mode);
+                            let mode = crate::app_state::parse_approval_mode(
+                                &app.settings_edit.approval_mode,
+                            );
                             app.state.agent.set_approval_mode(mode);
                             let state = app.state.clone();
                             app.runtime.spawn(async move {

@@ -904,7 +904,11 @@ mod tests {
 
     #[test]
     fn test_button_style_serde_roundtrip() {
-        for style in [ButtonStyle::Primary, ButtonStyle::Secondary, ButtonStyle::Danger] {
+        for style in [
+            ButtonStyle::Primary,
+            ButtonStyle::Secondary,
+            ButtonStyle::Danger,
+        ] {
             let json = serde_json::to_string(&style).unwrap();
             let decoded: ButtonStyle = serde_json::from_str(&json).unwrap();
             assert_eq!(style, decoded);
@@ -951,8 +955,14 @@ mod tests {
     #[test]
     fn test_user_action_roundtrip() {
         for action in [
-            UserAction::TextInputChange { id: "api_key".into(), value: "secret".into() },
-            UserAction::ComboChange { id: "provider".into(), selected: "openai".into() },
+            UserAction::TextInputChange {
+                id: "api_key".into(),
+                value: "secret".into(),
+            },
+            UserAction::ComboChange {
+                id: "provider".into(),
+                selected: "openai".into(),
+            },
             UserAction::ButtonClick { id: "save".into() },
         ] {
             let json = serde_json::to_string(&action).unwrap();
@@ -967,9 +977,11 @@ mod tests {
         let soul = wire.soul_side();
         let mut ui_view = wire.ui_view_side();
 
-        let commands = vec![
-            ViewCommand::Text { content: "Hello".into(), role: TextRole::Body, size: 14.0 },
-        ];
+        let commands = vec![ViewCommand::Text {
+            content: "Hello".into(),
+            role: TextRole::Body,
+            size: 14.0,
+        }];
         soul.send_view(commands.clone());
 
         let received = ui_view.recv().await.expect("should receive view commands");
@@ -986,7 +998,13 @@ mod tests {
 
         let commands = vec![
             ViewCommand::Space { height: 8.0 },
-            ViewCommand::Button { id: "ok".into(), label: "OK".into(), style: ButtonStyle::Primary, min_width: 60.0, min_height: 28.0 },
+            ViewCommand::Button {
+                id: "ok".into(),
+                label: "OK".into(),
+                style: ButtonStyle::Primary,
+                min_width: 60.0,
+                min_height: 28.0,
+            },
         ];
         soul.send_view(commands.clone());
 

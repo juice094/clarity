@@ -54,8 +54,8 @@ pub async fn download_model(
     let _ = progress_tx.send(ModelDownloadProgress::Started).await;
 
     let result = async {
-        let endpoint = std::env::var("HF_ENDPOINT")
-            .unwrap_or_else(|_| "https://huggingface.co".to_string());
+        let endpoint =
+            std::env::var("HF_ENDPOINT").unwrap_or_else(|_| "https://huggingface.co".to_string());
 
         let url = format!(
             "{}/{}/resolve/main/{}",
@@ -118,16 +118,16 @@ pub async fn download_model(
             .await
             .map_err(|e| format!("Failed to flush model file: {}", e))?;
 
-        let _ = progress_tx
-            .send(ModelDownloadProgress::Complete)
-            .await;
+        let _ = progress_tx.send(ModelDownloadProgress::Complete).await;
 
         Ok(dest_path)
     }
     .await;
 
     if let Err(ref e) = result {
-        let _ = progress_tx.send(ModelDownloadProgress::Failed(e.clone())).await;
+        let _ = progress_tx
+            .send(ModelDownloadProgress::Failed(e.clone()))
+            .await;
     }
 
     result
@@ -165,7 +165,10 @@ mod tests {
         tx.send(progress.clone()).await.unwrap();
         let received = rx.recv().await.unwrap();
         match received {
-            ModelDownloadProgress::Progress { bytes_downloaded, total_bytes } => {
+            ModelDownloadProgress::Progress {
+                bytes_downloaded,
+                total_bytes,
+            } => {
                 assert_eq!(bytes_downloaded, 100);
                 assert_eq!(total_bytes, Some(1000));
             }

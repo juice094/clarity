@@ -90,7 +90,11 @@ impl GuiSettings {
                     // Backup corrupted file so user can manually recover
                     let bak = path.with_extension("json.bak");
                     if let Err(e) = std::fs::rename(&path, &bak) {
-                        tracing::warn!("Failed to backup corrupted settings to {}: {}", bak.display(), e);
+                        tracing::warn!(
+                            "Failed to backup corrupted settings to {}: {}",
+                            bak.display(),
+                            e
+                        );
                     }
                     Self::default_with_env()
                 }
@@ -392,8 +396,14 @@ approval_mode = "yolo"
         );
         let json = serde_json::to_string(&settings).expect("serialize");
         // profiles field is #[serde(skip)], so it must not appear in JSON
-        assert!(!json.contains("profiles"), "profiles should not be serialized to gui-settings.json");
-        assert!(json.contains("active_profile"), "active_profile should be serialized");
+        assert!(
+            !json.contains("profiles"),
+            "profiles should not be serialized to gui-settings.json"
+        );
+        assert!(
+            json.contains("active_profile"),
+            "active_profile should be serialized"
+        );
     }
 
     #[test]

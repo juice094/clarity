@@ -13,7 +13,11 @@ use ratatui::{
 /// horizontally, `VStack` stacks vertically.  Keyboard focus / input is
 /// handled externally by `InputPane`; this renderer is display-only for
 /// settings forms received over the wire view channel.
-pub fn render_view_commands(f: &mut Frame, area: Rect, commands: &[ViewCommand]) -> Vec<UserAction> {
+pub fn render_view_commands(
+    f: &mut Frame,
+    area: Rect,
+    commands: &[ViewCommand],
+) -> Vec<UserAction> {
     let mut actions = Vec::new();
     let mut current = area;
 
@@ -37,8 +41,7 @@ fn render_single(
     match cmd {
         ViewCommand::VStack { children } => {
             let constraints: Vec<Constraint> =
-                std::iter::repeat_n(Constraint::Length(1), children.len())
-                    .collect();
+                std::iter::repeat_n(Constraint::Length(1), children.len()).collect();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints(constraints)
@@ -57,8 +60,7 @@ fn render_single(
         ViewCommand::HStack { children } => {
             let n = children.len().max(1) as u32;
             let constraints: Vec<Constraint> =
-                std::iter::repeat_n(Constraint::Ratio(1, n), children.len())
-                    .collect();
+                std::iter::repeat_n(Constraint::Ratio(1, n), children.len()).collect();
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(constraints)

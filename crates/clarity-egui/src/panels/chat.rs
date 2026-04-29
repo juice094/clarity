@@ -1,6 +1,6 @@
-use crate::App;
 use crate::ui;
 use crate::ui::types::{AgentStatus, Role, UiEvent};
+use crate::App;
 
 pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
     egui::CentralPanel::default()
@@ -9,15 +9,33 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if app.sidebar_collapsed
-                    && ui.add(egui::Button::new(egui::RichText::new("➡").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked()
+                    && ui
+                        .add(
+                            egui::Button::new(egui::RichText::new("➡").size(14.0))
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
                 {
                     app.sidebar_collapsed = false;
                 }
-                ui.label(egui::RichText::new("Chat").size(16.0).strong().color(app.theme.text));
+                ui.label(
+                    egui::RichText::new("Chat")
+                        .size(16.0)
+                        .strong()
+                        .color(app.theme.text),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     // Settings
-                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked() {
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new("⚙").size(14.0))
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
                         app.settings_open = true;
                         app.settings_edit = {
                             let guard = app.state.cached_settings.lock();
@@ -26,15 +44,39 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     }
                     // Tasks
                     let active_tasks = app.tasks.iter().filter(|t| !t.status.is_terminal()).count();
-                    let task_btn = if active_tasks > 0 { format!("📝 {}", active_tasks) } else { "📝".to_string() };
-                    if ui.add(egui::Button::new(egui::RichText::new(&task_btn).size(12.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked() {
+                    let task_btn = if active_tasks > 0 {
+                        format!("📝 {}", active_tasks)
+                    } else {
+                        "📝".to_string()
+                    };
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new(&task_btn).size(12.0))
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
                         app.task_panel_open = !app.task_panel_open;
-                        if app.task_panel_open { app.refresh_tasks(); }
+                        if app.task_panel_open {
+                            app.refresh_tasks();
+                        }
                     }
                     // MCP
                     let mcp_count = app.mcp_config.as_ref().map_or(0, |c| c.servers.len());
-                    let mcp_btn = if mcp_count > 0 { format!("🔌 {}", mcp_count) } else { "🔌".to_string() };
-                    if ui.add(egui::Button::new(egui::RichText::new(&mcp_btn).size(12.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked() {
+                    let mcp_btn = if mcp_count > 0 {
+                        format!("🔌 {}", mcp_count)
+                    } else {
+                        "🔌".to_string()
+                    };
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new(&mcp_btn).size(12.0))
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
                         app.mcp_panel_open = !app.mcp_panel_open;
                     }
                     // Status
@@ -44,12 +86,22 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         AgentStatus::Unconfigured => (app.theme.status_offline, "Unconfigured"),
                         AgentStatus::Offline => (app.theme.status_offline, "Offline"),
                     };
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                     ui.painter().circle_filled(rect.center(), 4.0, status_color);
-                    ui.label(egui::RichText::new(status_label).size(12.0).color(app.theme.text_dim));
+                    ui.label(
+                        egui::RichText::new(status_label)
+                            .size(12.0)
+                            .color(app.theme.text_dim),
+                    );
                     // Token usage
                     if let Some((p, c, t)) = app.last_usage {
-                        ui.label(egui::RichText::new(format!("Tokens: {}↑ {}↓ {}∑", p, c, t)).size(11.0).color(app.theme.text_dim).monospace());
+                        ui.label(
+                            egui::RichText::new(format!("Tokens: {}↑ {}↓ {}∑", p, c, t))
+                                .size(11.0)
+                                .color(app.theme.text_dim)
+                                .monospace(),
+                        );
                     }
                 });
             });
@@ -59,15 +111,25 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             let banner_text = app.network_banner.clone();
             if let Some(banner) = banner_text {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(&banner).size(12.0).color(app.theme.status_busy));
-                    if ui.button("×").clicked() { app.network_banner = None; }
+                    ui.label(
+                        egui::RichText::new(&banner)
+                            .size(12.0)
+                            .color(app.theme.status_busy),
+                    );
+                    if ui.button("×").clicked() {
+                        app.network_banner = None;
+                    }
                 });
                 ui.separator();
             }
 
             if app.compacting {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Compacting conversation history…").size(12.0).color(app.theme.text_dim));
+                    ui.label(
+                        egui::RichText::new("Compacting conversation history…")
+                            .size(12.0)
+                            .color(app.theme.text_dim),
+                    );
                 });
                 ui.separator();
             }
@@ -90,18 +152,46 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         if session.messages.is_empty() && !is_loading {
                             ui.vertical_centered(|ui| {
                                 ui.add_space(120.0);
-                                ui.label(egui::RichText::new("Clarity").size(32.0).strong().color(theme.text_dim));
+                                ui.label(
+                                    egui::RichText::new("Clarity")
+                                        .size(32.0)
+                                        .strong()
+                                        .color(theme.text_dim),
+                                );
                                 ui.add_space(8.0);
-                                ui.label(egui::RichText::new("Local-first AI agent runtime").size(14.0).color(theme.text_dim));
+                                ui.label(
+                                    egui::RichText::new("Local-first AI agent runtime")
+                                        .size(14.0)
+                                        .color(theme.text_dim),
+                                );
                                 ui.add_space(24.0);
-                                if ui.add(egui::Button::new(egui::RichText::new("Configure Settings").size(13.0).color(theme.text))
-                                    .fill(theme.surface).corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                                    .min_size(egui::vec2(180.0, 40.0))).clicked() { configure_clicked = true; }
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("Configure Settings")
+                                                .size(13.0)
+                                                .color(theme.text),
+                                        )
+                                        .fill(theme.surface)
+                                        .corner_radius(egui::CornerRadius::same(
+                                            theme.radius_sm as u8,
+                                        ))
+                                        .min_size(egui::vec2(180.0, 40.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    configure_clicked = true;
+                                }
                             });
                         } else {
                             // --- Virtualized message list ---
-                            let estimates: Vec<f32> = session.messages.iter()
-                                .map(|m| m.cached_height.unwrap_or_else(|| ui::render::estimate_height(m)))
+                            let estimates: Vec<f32> = session
+                                .messages
+                                .iter()
+                                .map(|m| {
+                                    m.cached_height
+                                        .unwrap_or_else(|| ui::render::estimate_height(m))
+                                })
                                 .collect();
 
                             let mut cumulative = 0.0;
@@ -113,7 +203,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     start_idx = i.saturating_sub(3);
                                 }
                                 cumulative += h;
-                                if cumulative >= scroll_y + available_height && end_idx == session.messages.len() {
+                                if cumulative >= scroll_y + available_height
+                                    && end_idx == session.messages.len()
+                                {
                                     end_idx = (i + 3).min(session.messages.len());
                                     break;
                                 }
@@ -125,7 +217,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             }
 
                             for i in start_idx..end_idx {
-                                let actual = ui::render::message_bubble(ui, &session.messages[i], &theme);
+                                let actual =
+                                    ui::render::message_bubble(ui, &session.messages[i], &theme);
                                 session.messages[i].cached_height = Some(actual);
                             }
 
@@ -135,8 +228,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             }
 
                             // Tool calls & typing indicator (few items, always rendered)
-                            for tc in &tool_calls { ui::render::tool_call_bubble(ui, tc, &theme); }
-                            if is_loading && session.messages.last().is_none_or(|m| m.role == Role::User) && tool_calls.is_empty() {
+                            for tc in &tool_calls {
+                                ui::render::tool_call_bubble(ui, tc, &theme);
+                            }
+                            if is_loading
+                                && session.messages.last().is_none_or(|m| m.role == Role::User)
+                                && tool_calls.is_empty()
+                            {
                                 ui::render::typing_indicator(ui, &theme);
                             }
                         }
@@ -165,29 +263,80 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        ui.label(egui::RichText::new(format!("📋 Plan Review: {}", plan.title)).size(13.0).strong().color(app.theme.text));
+                        ui.label(
+                            egui::RichText::new(format!("📋 Plan Review: {}", plan.title))
+                                .size(13.0)
+                                .strong()
+                                .color(app.theme.text),
+                        );
                         ui.add_space(6.0);
                         for step in &plan.steps {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("{}.", step.id)).size(11.0).strong().color(app.theme.text));
-                                ui.label(egui::RichText::new(&step.description).size(11.0).color(app.theme.text));
+                                ui.label(
+                                    egui::RichText::new(format!("{}.", step.id))
+                                        .size(11.0)
+                                        .strong()
+                                        .color(app.theme.text),
+                                );
+                                ui.label(
+                                    egui::RichText::new(&step.description)
+                                        .size(11.0)
+                                        .color(app.theme.text),
+                                );
                             });
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("→").size(10.0).color(app.theme.text_dim));
-                                ui.label(egui::RichText::new(format!("{}({})", step.tool_name, step.tool_params)).size(10.0).color(app.theme.text_dim).monospace());
+                                ui.label(
+                                    egui::RichText::new("→")
+                                        .size(10.0)
+                                        .color(app.theme.text_dim),
+                                );
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{}({})",
+                                        step.tool_name, step.tool_params
+                                    ))
+                                    .size(10.0)
+                                    .color(app.theme.text_dim)
+                                    .monospace(),
+                                );
                             });
                             ui.add_space(2.0);
                         }
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Cancel").size(12.0).color(app.theme.text)).fill(app.theme.border)).clicked() {
-                                    cancel = true;
-                                }
-                                if ui.add_sized(egui::vec2(80.0, 32.0), egui::Button::new(egui::RichText::new("Execute").size(12.0).color(app.theme.text)).fill(app.theme.accent)).clicked() {
-                                    execute = true;
-                                }
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add_sized(
+                                            egui::vec2(80.0, 32.0),
+                                            egui::Button::new(
+                                                egui::RichText::new("Cancel")
+                                                    .size(12.0)
+                                                    .color(app.theme.text),
+                                            )
+                                            .fill(app.theme.border),
+                                        )
+                                        .clicked()
+                                    {
+                                        cancel = true;
+                                    }
+                                    if ui
+                                        .add_sized(
+                                            egui::vec2(80.0, 32.0),
+                                            egui::Button::new(
+                                                egui::RichText::new("Execute")
+                                                    .size(12.0)
+                                                    .color(app.theme.text),
+                                            )
+                                            .fill(app.theme.accent),
+                                        )
+                                        .clicked()
+                                    {
+                                        execute = true;
+                                    }
+                                },
+                            );
                         });
                     });
                 if execute {
@@ -201,14 +350,21 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             Ok(results) => {
                                 let mut text = String::new();
                                 for r in &results {
-                                    text.push_str(&format!("**Step {}**: {}\n```\n{}\n```\n\n", r.step_id, if r.success { "✅" } else { "❌" }, r.output));
+                                    text.push_str(&format!(
+                                        "**Step {}**: {}\n```\n{}\n```\n\n",
+                                        r.step_id,
+                                        if r.success { "✅" } else { "❌" },
+                                        r.output
+                                    ));
                                 }
                                 if let Err(e) = tx.send(UiEvent::Chunk(text)) {
                                     tracing::warn!("Failed to send plan results: {}", e);
                                 }
                             }
                             Err(e) => {
-                                if let Err(err) = tx.send(UiEvent::Error(format!("Plan execution failed: {}", e))) {
+                                if let Err(err) =
+                                    tx.send(UiEvent::Error(format!("Plan execution failed: {}", e)))
+                                {
                                     tracing::warn!("Failed to send Error: {}", err);
                                 }
                             }
@@ -227,7 +383,11 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             if !app.attachments.is_empty() {
                 let mut to_remove: Option<usize> = None;
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("Attachments:").size(11.0).color(app.theme.text_dim));
+                    ui.label(
+                        egui::RichText::new("Attachments:")
+                            .size(11.0)
+                            .color(app.theme.text_dim),
+                    );
                     for (i, att) in app.attachments.iter().enumerate() {
                         egui::Frame::group(ui.style())
                             .fill(app.theme.surface)
@@ -237,8 +397,15 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new("📎").size(11.0));
-                                    ui.label(egui::RichText::new(&att.name).size(11.0).color(app.theme.text).monospace());
-                                    if ui.small_button("×").clicked() { to_remove = Some(i); }
+                                    ui.label(
+                                        egui::RichText::new(&att.name)
+                                            .size(11.0)
+                                            .color(app.theme.text)
+                                            .monospace(),
+                                    );
+                                    if ui.small_button("×").clicked() {
+                                        to_remove = Some(i);
+                                    }
                                 });
                             });
                     }
@@ -274,7 +441,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 };
                                 let prev_input = app.input.clone();
                                 let line_count = app.input.matches('\n').count() + 1;
-                                let input_height = (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
+                                let input_height =
+                                    (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
                                 let text_edit = egui::TextEdit::multiline(&mut app.input)
                                     .desired_rows(line_count.max(1))
                                     .hint_text(hint)
@@ -297,19 +465,35 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if app.is_loading {
                                 // Queue-send button (rightmost) — enabled only if input has content.
-                                let can_queue = !app.input.trim().is_empty() || !app.attachments.is_empty();
-                                let queue_color = if can_queue { app.theme.accent } else { app.theme.bg_elevated };
-                                let queue_text = if can_queue { app.theme.text } else { app.theme.text_dim };
+                                let can_queue =
+                                    !app.input.trim().is_empty() || !app.attachments.is_empty();
+                                let queue_color = if can_queue {
+                                    app.theme.accent
+                                } else {
+                                    app.theme.bg_elevated
+                                };
+                                let queue_text = if can_queue {
+                                    app.theme.text
+                                } else {
+                                    app.theme.text_dim
+                                };
                                 let queue_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
-                                    egui::Button::new(egui::RichText::new("▶").size(16.0).color(queue_text))
-                                        .fill(queue_color).corner_radius(egui::CornerRadius::same(app.theme.radius_full as u8)),
+                                    egui::Button::new(
+                                        egui::RichText::new("▶").size(16.0).color(queue_text),
+                                    )
+                                    .fill(queue_color)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                    ),
                                 );
                                 if queue_btn.clicked() && can_queue {
                                     app.send();
                                 }
                                 if can_queue {
-                                    queue_btn.on_hover_text("Queue message — auto-sends when current reply finishes");
+                                    queue_btn.on_hover_text(
+                                        "Queue message — auto-sends when current reply finishes",
+                                    );
                                 } else {
                                     queue_btn.on_hover_text("Type a message to queue");
                                 }
@@ -317,19 +501,33 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 // Stop button (left of queue).
                                 let stop_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
-                                    egui::Button::new(egui::RichText::new("■").size(16.0).color(app.theme.text))
-                                        .fill(app.theme.danger).corner_radius(egui::CornerRadius::same(app.theme.radius_full as u8)),
+                                    egui::Button::new(
+                                        egui::RichText::new("■").size(16.0).color(app.theme.text),
+                                    )
+                                    .fill(app.theme.danger)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                    ),
                                 );
-                                if stop_btn.clicked() { app.stop(); }
+                                if stop_btn.clicked() {
+                                    app.stop();
+                                }
                                 stop_btn.on_hover_text("Stop generating (Ctrl+C)");
                             } else {
                                 // Send button.
                                 let btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
-                                    egui::Button::new(egui::RichText::new("▶").size(16.0).color(app.theme.text))
-                                        .fill(app.theme.accent).corner_radius(egui::CornerRadius::same(app.theme.radius_full as u8)),
+                                    egui::Button::new(
+                                        egui::RichText::new("▶").size(16.0).color(app.theme.text),
+                                    )
+                                    .fill(app.theme.accent)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                    ),
                                 );
-                                if btn.clicked() { app.send(); }
+                                if btn.clicked() {
+                                    app.send();
+                                }
                                 btn.on_hover_text("Send message");
                             }
                         });

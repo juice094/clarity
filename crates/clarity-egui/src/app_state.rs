@@ -1,7 +1,7 @@
 use crate::error::EguiError;
 use crate::settings::GuiSettings;
-use std::path::PathBuf;
 use parking_lot::Mutex;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -90,7 +90,9 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
 
     apply_profile_overlay(&mut settings);
 
-    let network_available = state.network_available.load(std::sync::atomic::Ordering::Relaxed);
+    let network_available = state
+        .network_available
+        .load(std::sync::atomic::Ordering::Relaxed);
     let desired_provider = if !network_available && settings.provider != "local" {
         tracing::info!(
             "Network unavailable (preferred={}); falling back to local",
@@ -175,7 +177,8 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
                 let provider_cfg = registry.get_provider(&desired_provider)?;
                 let model_id = if settings.model.is_empty() {
                     // Pick first model for this provider from registry
-                    registry.list_models()
+                    registry
+                        .list_models()
                         .into_iter()
                         .find(|m| m.provider == desired_provider)
                         .map(|m| m.model_id.clone())?
@@ -185,7 +188,11 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
                 clarity_core::llm::build_provider_from_registry_with_key(
                     provider_cfg,
                     &model_id,
-                    if api_key.is_empty() { None } else { Some(api_key) },
+                    if api_key.is_empty() {
+                        None
+                    } else {
+                        Some(api_key)
+                    },
                 )
                 .await
                 .map(Arc::from)
@@ -204,7 +211,8 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
                     Ok(llm) => llm,
                     Err(e) => {
                         if api_key.is_empty() {
-                            match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await {
+                            match clarity_core::llm::LlmFactory::create_arc(&desired_provider).await
+                            {
                                 Ok(llm) => llm,
                                 Err(_) => {
                                     return Err(EguiError::InvalidProvider(format!(
@@ -271,8 +279,14 @@ mod tests {
 
     #[test]
     fn test_parse_approval_mode_interactive() {
-        assert_eq!(parse_approval_mode("interactive"), ApprovalMode::Interactive);
-        assert_eq!(parse_approval_mode("Interactive"), ApprovalMode::Interactive);
+        assert_eq!(
+            parse_approval_mode("interactive"),
+            ApprovalMode::Interactive
+        );
+        assert_eq!(
+            parse_approval_mode("Interactive"),
+            ApprovalMode::Interactive
+        );
     }
 
     #[test]

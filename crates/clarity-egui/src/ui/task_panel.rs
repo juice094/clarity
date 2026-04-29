@@ -49,22 +49,28 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                                 .strong()
                                 .color(theme.text),
                         );
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                if !task.status.is_terminal() {
-                                    if ui.add(egui::Button::new(egui::RichText::new("Cancel").size(10.0)).fill(theme.danger).corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))).clicked() {
-                                        action = TaskPanelAction::Cancel(task.id.clone());
-                                    }
-                                    ui.add_space(4.0);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if !task.status.is_terminal() {
+                                if ui
+                                    .add(
+                                        egui::Button::new(egui::RichText::new("Cancel").size(10.0))
+                                            .fill(theme.danger)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            )),
+                                    )
+                                    .clicked()
+                                {
+                                    action = TaskPanelAction::Cancel(task.id.clone());
                                 }
-                                ui.label(
-                                    egui::RichText::new(task.status.as_str())
-                                        .size(10.0)
-                                        .color(status_color),
-                                );
-                            },
-                        );
+                                ui.add_space(4.0);
+                            }
+                            ui.label(
+                                egui::RichText::new(task.status.as_str())
+                                    .size(10.0)
+                                    .color(status_color),
+                            );
+                        });
                     });
                     if !task.spec.description.is_empty() {
                         ui.label(

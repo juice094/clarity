@@ -40,15 +40,18 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Tool:").strong().color(app.theme.text));
                 ui.label(
-                    egui::RichText::new(&request.tool_call.function.name)
-                        .color(app.theme.accent),
+                    egui::RichText::new(&request.tool_call.function.name).color(app.theme.accent),
                 );
             });
 
             ui.add_space(8.0);
 
             // Arguments (monospace JSON block)
-            ui.label(egui::RichText::new("Arguments:").strong().color(app.theme.text));
+            ui.label(
+                egui::RichText::new("Arguments:")
+                    .strong()
+                    .color(app.theme.text),
+            );
             egui::Frame::new()
                 .fill(app.theme.bg_accent)
                 .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
@@ -67,11 +70,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("⚠️ ").size(14.0));
-                    ui.label(
-                        egui::RichText::new(desc)
-                            .color(app.theme.danger)
-                            .size(13.0),
-                    );
+                    ui.label(egui::RichText::new(desc).color(app.theme.danger).size(13.0));
                 });
             }
 
@@ -96,8 +95,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     // Approve for Session
                     if ui
                         .button(
-                            egui::RichText::new("✅ Approve for Session")
-                                .color(app.theme.accent),
+                            egui::RichText::new("✅ Approve for Session").color(app.theme.accent),
                         )
                         .clicked()
                     {
@@ -120,11 +118,8 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         let req_id = request.id.clone();
                         let rt = app.state.approval_runtime.clone();
                         let _ = app.runtime.block_on(async move {
-                            rt.resolve(
-                                &req_id,
-                                clarity_core::approval::ApprovalResponse::Approve,
-                            )
-                            .await
+                            rt.resolve(&req_id, clarity_core::approval::ApprovalResponse::Approve)
+                                .await
                         });
                     }
                 });

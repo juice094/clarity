@@ -32,18 +32,26 @@ pub fn load_sessions() -> Vec<Session> {
                         sessions.push(Session {
                             id: data.id,
                             title: data.title,
-                            messages: data.messages.into_iter().map(|m| {
-                                let mut msg = Message {
-                                    role: if m.role == "user" { Role::User } else { Role::Agent },
-                                    content: m.content,
-                                    timestamp: Instant::now(),
-                                    parsed: vec![],
-                                    cached_height: None,
-                                    is_error: false,
-                                };
-                                msg.prepare();
-                                msg
-                            }).collect(),
+                            messages: data
+                                .messages
+                                .into_iter()
+                                .map(|m| {
+                                    let mut msg = Message {
+                                        role: if m.role == "user" {
+                                            Role::User
+                                        } else {
+                                            Role::Agent
+                                        },
+                                        content: m.content,
+                                        timestamp: Instant::now(),
+                                        parsed: vec![],
+                                        cached_height: None,
+                                        is_error: false,
+                                    };
+                                    msg.prepare();
+                                    msg
+                                })
+                                .collect(),
                             updated_at: data.updated_at,
                         });
                     }
@@ -64,13 +72,17 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
         title: session.title.clone(),
         created_at: session.updated_at,
         updated_at: now_millis(),
-        messages: session.messages.iter().map(|m| MessageData {
-            role: match m.role {
-                Role::User => "user".into(),
-                Role::Agent => "agent".into(),
-            },
-            content: m.content.clone(),
-        }).collect(),
+        messages: session
+            .messages
+            .iter()
+            .map(|m| MessageData {
+                role: match m.role {
+                    Role::User => "user".into(),
+                    Role::Agent => "agent".into(),
+                },
+                content: m.content.clone(),
+            })
+            .collect(),
     };
     let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     std::fs::write(&path, content).map_err(|e| e.to_string())

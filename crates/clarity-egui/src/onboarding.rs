@@ -3,8 +3,8 @@
 //! Detects unconfigured state on startup and guides the user to:
 //! 1. Enter a cloud API key, 2. Download a local GGUF model, or 3. Skip for now.
 
-use crate::App;
 use crate::settings::GuiSettings;
+use crate::App;
 
 /// State machine for the onboarding flow.
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ pub fn should_show_onboarding() -> bool {
 pub fn render_onboarding(app: &mut App, ctx: &egui::Context) {
     let state = app.onboarding_state.clone();
     match state {
-        OnboardingState::Hidden => () ,
+        OnboardingState::Hidden => (),
         OnboardingState::ChooseProvider => render_choose_provider(app, ctx),
         OnboardingState::Downloading {
             bytes_downloaded,
@@ -161,14 +161,19 @@ fn render_downloading(
     // Poll for progress updates from the download task
     let mut channel_disconnected = false;
     if let Some(ref mut rx) = app.onboarding_progress_rx {
-        let rx: &mut std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress> = rx;
+        let rx: &mut std::sync::mpsc::Receiver<
+            clarity_core::model_download::ModelDownloadProgress,
+        > = rx;
         loop {
             use clarity_core::model_download::ModelDownloadProgress;
             match rx.try_recv() {
                 Ok(ModelDownloadProgress::Started) => {
                     // Download task has started; keep current UI state.
                 }
-                Ok(ModelDownloadProgress::Progress { bytes_downloaded, total_bytes }) => {
+                Ok(ModelDownloadProgress::Progress {
+                    bytes_downloaded,
+                    total_bytes,
+                }) => {
                     app.onboarding_state = OnboardingState::Downloading {
                         bytes_downloaded,
                         total_bytes,
@@ -216,13 +221,13 @@ fn render_downloading(
                     };
                     let mb = bytes_downloaded as f32 / 1_048_576.0;
                     let total_mb = total as f32 / 1_048_576.0;
-                    (pct, format!("{:.1} / {:.1} MB ({:.0}%)", mb, total_mb, pct * 100.0))
+                    (
+                        pct,
+                        format!("{:.1} / {:.1} MB ({:.0}%)", mb, total_mb, pct * 100.0),
+                    )
                 } else {
                     let mb = bytes_downloaded as f32 / 1_048_576.0;
-                    (
-                        0.0,
-                        format!("{:.1} MB downloaded (unknown total)", mb),
-                    )
+                    (0.0, format!("{:.1} MB downloaded (unknown total)", mb))
                 };
 
                 ui.label(&label);
@@ -362,9 +367,8 @@ fn start_model_download(app: &mut App) {
         let handle2 = handle.clone();
         // Bridge tokio mpsc -> std mpsc because App uses std::sync::mpsc for UI events
         let (tokio_tx, mut tokio_rx) = tokio::sync::mpsc::channel::<ModelDownloadProgress>(16);
-        let download_handle = handle2.spawn(async move {
-            download_model(&model_clone, dest, tokio_tx).await
-        });
+        let download_handle =
+            handle2.spawn(async move { download_model(&model_clone, dest, tokio_tx).await });
 
         // Forward progress from tokio channel to std channel
         let forward_handle = handle2.spawn(async move {
@@ -375,7 +379,8 @@ fn start_model_download(app: &mut App) {
             }
         });
 
-        let result: Result<Result<std::path::PathBuf, String>, tokio::task::JoinError> = download_handle.await;
+        let result: Result<Result<std::path::PathBuf, String>, tokio::task::JoinError> =
+            download_handle.await;
         let _ = forward_handle.await;
 
         // Note: we cannot mutate App from here, so the final state transition

@@ -85,7 +85,9 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         let digits_end = trimmed.find(|c: char| !c.is_ascii_digit()).unwrap_or(0);
         if digits_end > 0 && trimmed[digits_end..].starts_with(". ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
-            blocks.push(RenderBlock::ListItem(parse_inline(&trimmed[digits_end + 2..])));
+            blocks.push(RenderBlock::ListItem(parse_inline(
+                &trimmed[digits_end + 2..],
+            )));
             continue;
         }
 
@@ -113,7 +115,10 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         if code_buffer.ends_with('\n') {
             code_buffer.pop();
         }
-        blocks.push(RenderBlock::CodeBlock { lang: code_lang, code: code_buffer });
+        blocks.push(RenderBlock::CodeBlock {
+            lang: code_lang,
+            code: code_buffer,
+        });
     }
 
     blocks
@@ -224,12 +229,10 @@ pub fn render_blocks(
             }
             RenderBlock::Blockquote(spans) => {
                 ui.horizontal(|ui| {
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
-                    ui.painter().rect_filled(
-                        rect,
-                        egui::CornerRadius::same(2),
-                        theme.accent,
-                    );
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
+                    ui.painter()
+                        .rect_filled(rect, egui::CornerRadius::same(2), theme.accent);
                     ui.add_space(6.0);
                     render_spans(ui, spans, theme, theme.text_muted, 14.0, false);
                 });
@@ -275,7 +278,12 @@ fn render_span(
             ui.label(rt);
         }
         InlineSpan::Bold(text) => {
-            ui.label(egui::RichText::new(text).color(base_color).size(size).strong());
+            ui.label(
+                egui::RichText::new(text)
+                    .color(base_color)
+                    .size(size)
+                    .strong(),
+            );
         }
         InlineSpan::Code(text) => {
             ui.label(

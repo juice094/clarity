@@ -77,7 +77,12 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                 if msg.is_error {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("⚠").size(14.0));
-                        ui.label(egui::RichText::new("Error").size(12.0).strong().color(text_color));
+                        ui.label(
+                            egui::RichText::new("Error")
+                                .size(12.0)
+                                .strong()
+                                .color(text_color),
+                        );
                     });
                     ui.add_space(4.0);
                 }
@@ -177,12 +182,15 @@ pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
     for block in &msg.parsed {
         match block {
             RenderBlock::Paragraph(spans) => {
-                let chars: usize = spans.iter().map(|s| match s {
-                    crate::ui::types::InlineSpan::Text(t)
-                    | crate::ui::types::InlineSpan::Bold(t)
-                    | crate::ui::types::InlineSpan::Code(t) => t.len(),
-                    crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
-                }).sum();
+                let chars: usize = spans
+                    .iter()
+                    .map(|s| match s {
+                        crate::ui::types::InlineSpan::Text(t)
+                        | crate::ui::types::InlineSpan::Bold(t)
+                        | crate::ui::types::InlineSpan::Code(t) => t.len(),
+                        crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
+                    })
+                    .sum();
                 let lines = (chars / 55).max(1);
                 height += lines as f32 * 18.0;
             }

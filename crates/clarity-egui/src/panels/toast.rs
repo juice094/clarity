@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 
 pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
     let now = Instant::now();
-    app.toasts.retain(|t| now.duration_since(t.created_at) < Duration::from_secs(5));
+    app.toasts
+        .retain(|t| now.duration_since(t.created_at) < Duration::from_secs(5));
     for (i, toast) in app.toasts.iter().enumerate() {
         let (bg, text_color) = match toast.level {
             crate::ui::types::ToastLevel::Info => (app.theme.accent, app.theme.text),
@@ -22,7 +23,11 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                     .inner_margin(egui::Margin::same(12))
                     .show(ui, |ui| {
                         ui.set_max_width(280.0);
-                        ui.label(egui::RichText::new(&toast.message).color(text_color).size(13.0));
+                        ui.label(
+                            egui::RichText::new(&toast.message)
+                                .color(text_color)
+                                .size(13.0),
+                        );
                     });
             });
     }

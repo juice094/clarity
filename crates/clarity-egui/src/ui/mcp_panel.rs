@@ -1,7 +1,6 @@
 use crate::theme::Theme;
 use clarity_core::mcp::config::{McpConfig, McpServerEntry};
 
-
 // ============================================================================
 // MCP Configuration Panel
 // ============================================================================
@@ -57,19 +56,13 @@ pub fn render_mcp_panel(
                             .strong()
                             .color(theme.text),
                     );
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let mut enabled = !entry.disabled;
-                            if ui
-                                .checkbox(&mut enabled, "Enabled")
-                                .changed()
-                            {
-                                entry.disabled = !enabled;
-                                *changed = true;
-                            }
-                        },
-                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut enabled = !entry.disabled;
+                        if ui.checkbox(&mut enabled, "Enabled").changed() {
+                            entry.disabled = !enabled;
+                            *changed = true;
+                        }
+                    });
                 });
 
                 ui.add_space(4.0);
@@ -78,7 +71,9 @@ pub fn render_mcp_panel(
                 if !entry.command.is_empty() {
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new("Command:").size(11.0).color(theme.text_dim),
+                            egui::RichText::new("Command:")
+                                .size(11.0)
+                                .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(&entry.command)
@@ -93,7 +88,9 @@ pub fn render_mcp_panel(
                 if !entry.args.is_empty() {
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new("Args:").size(11.0).color(theme.text_dim),
+                            egui::RichText::new("Args:")
+                                .size(11.0)
+                                .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(entry.args.join(" "))
@@ -107,9 +104,7 @@ pub fn render_mcp_panel(
                 // URL (for HTTP/SSE transport)
                 if let Some(ref url) = entry.url {
                     ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("URL:").size(11.0).color(theme.text_dim),
-                        );
+                        ui.label(egui::RichText::new("URL:").size(11.0).color(theme.text_dim));
                         ui.label(
                             egui::RichText::new(url)
                                 .size(11.0)
@@ -123,7 +118,9 @@ pub fn render_mcp_panel(
                 if let Some(ref transport) = entry.transport {
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new("Transport:").size(11.0).color(theme.text_dim),
+                            egui::RichText::new("Transport:")
+                                .size(11.0)
+                                .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(transport)
@@ -137,7 +134,9 @@ pub fn render_mcp_panel(
                 if !entry.env.is_empty() {
                     ui.add_space(2.0);
                     ui.label(
-                        egui::RichText::new("Environment:").size(11.0).color(theme.text_dim),
+                        egui::RichText::new("Environment:")
+                            .size(11.0)
+                            .color(theme.text_dim),
                     );
                     for (k, v) in &entry.env {
                         ui.horizontal(|ui| {

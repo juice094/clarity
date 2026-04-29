@@ -1070,25 +1070,37 @@ impl LlmFactory {
     }
 
     /// Create an Anthropic provider from environment
-    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
+    #[deprecated(
+        since = "0.3.2",
+        note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()"
+    )]
     pub fn anthropic() -> Result<AnthropicLlm, AgentError> {
         AnthropicLlm::from_env()
     }
 
     /// Create a DeepSeek provider from environment
-    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
+    #[deprecated(
+        since = "0.3.2",
+        note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()"
+    )]
     pub fn deepseek() -> Result<DeepSeekProvider, AgentError> {
         DeepSeekProvider::from_env()
     }
 
     /// Create a Kimi provider from environment
-    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
+    #[deprecated(
+        since = "0.3.2",
+        note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()"
+    )]
     pub fn kimi() -> Result<KimiLlm, AgentError> {
         KimiLlm::from_env()
     }
 
     /// Create an OpenAI-compatible provider from environment
-    #[deprecated(since = "0.3.2", note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()")]
+    #[deprecated(
+        since = "0.3.2",
+        note = "Use ModelRegistry + build_provider_from_registry() or create_with_key()"
+    )]
     pub fn openai() -> Result<OpenAiCompatibleLlm, AgentError> {
         OpenAiCompatibleLlm::from_env()
     }

@@ -13,10 +13,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-mod panels;
-mod session;
 mod app_state;
 mod error;
+mod panels;
+mod session;
 mod settings;
 mod theme;
 mod ui;
@@ -87,7 +87,8 @@ pub(crate) struct App {
     /// First-run onboarding state.
     pub(crate) onboarding_state: onboarding::OnboardingState,
     /// Progress receiver for model download (std channel bridged from tokio).
-    pub(crate) onboarding_progress_rx: Option<std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress>>,
+    pub(crate) onboarding_progress_rx:
+        Option<std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress>>,
 }
 
 mod app_logic;
@@ -147,7 +148,10 @@ impl eframe::App for App {
         if !dropped_files.is_empty() {
             for file in dropped_files {
                 if let Some(path) = file.path {
-                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default();
                     self.attachments.push(Attachment { path, name });
                 }
             }
@@ -158,7 +162,8 @@ impl eframe::App for App {
             self.settings_open = false;
         }
 
-        if !self.settings_open && !self.is_loading
+        if !self.settings_open
+            && !self.is_loading
             && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
         {
             self.new_session();
@@ -172,7 +177,13 @@ impl eframe::App for App {
         use clarity_core::agent::AgentState;
         self.agent_status = match self.state.agent.state() {
             AgentState::Unconfigured => AgentStatus::Unconfigured,
-            AgentState::Idle => if self.is_loading { AgentStatus::Busy } else { AgentStatus::Online },
+            AgentState::Idle => {
+                if self.is_loading {
+                    AgentStatus::Busy
+                } else {
+                    AgentStatus::Online
+                }
+            }
             AgentState::Running { .. } => AgentStatus::Busy,
             AgentState::Stalled => AgentStatus::Offline,
         };
@@ -208,16 +219,27 @@ impl eframe::App for App {
 fn main() -> eframe::Result {
     tracing_subscriber::fmt::init();
     std::panic::set_hook(Box::new(|info| {
-        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() { s.to_string() }
-            else if let Some(s) = info.payload().downcast_ref::<String>() { s.clone() }
-            else { "Unknown panic payload".to_string() };
-        let location = info.location().map(|l| format!("{}:{}", l.file(), l.line())).unwrap_or_else(|| "unknown location".to_string());
+        let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic payload".to_string()
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
         let report = format!("[{}] PANIC: {}\n", location, msg);
         eprintln!("{}", report);
         if let Some(data_dir) = dirs::data_dir() {
             let log_path = data_dir.join("clarity").join("panic.log");
-            if let Err(e) = std::fs::create_dir_all(log_path.parent().unwrap_or(&data_dir)) { eprintln!("Failed to create panic log dir: {}", e); }
-            if let Err(e) = std::fs::write(&log_path, report) { eprintln!("Failed to write panic log: {}", e); }
+            if let Err(e) = std::fs::create_dir_all(log_path.parent().unwrap_or(&data_dir)) {
+                eprintln!("Failed to create panic log dir: {}", e);
+            }
+            if let Err(e) = std::fs::write(&log_path, report) {
+                eprintln!("Failed to write panic log: {}", e);
+            }
         }
     }));
 
@@ -228,5 +250,9 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
-    eframe::run_native("Clarity", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
+    eframe::run_native(
+        "Clarity",
+        options,
+        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+    )
 }

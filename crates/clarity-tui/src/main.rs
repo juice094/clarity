@@ -121,7 +121,9 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
         .join(".clarity")
         .join("memory.db");
-    let memory_parent = memory_db_path.parent().ok_or_else(|| anyhow::anyhow!("invalid memory db path"))?;
+    let memory_parent = memory_db_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("invalid memory db path"))?;
     std::fs::create_dir_all(memory_parent)?;
     let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path).await?);
 

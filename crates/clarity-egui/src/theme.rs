@@ -252,7 +252,11 @@ impl Theme {
 
     /// Create a frame for chat bubbles.
     pub fn bubble_frame(&self, is_user: bool) -> egui::Frame {
-        let fill = if is_user { self.user_bubble } else { self.ai_bubble };
+        let fill = if is_user {
+            self.user_bubble
+        } else {
+            self.ai_bubble
+        };
         egui::Frame::group(&egui::Style::default())
             .fill(fill)
             .corner_radius(egui::CornerRadius::same(self.radius_lg as u8))
@@ -270,8 +274,7 @@ impl Theme {
 
     /// Create a frame for the sidebar.
     pub fn sidebar_frame(&self) -> egui::Frame {
-        egui::Frame::side_top_panel(&egui::Style::default())
-            .fill(self.bg_accent)
+        egui::Frame::side_top_panel(&egui::Style::default()).fill(self.bg_accent)
     }
 
     /// Create a button with theme styling.
@@ -325,15 +328,16 @@ pub fn setup_fonts(ctx: &egui::Context) {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
-            fonts.font_data.insert(
-                name.clone(),
-                egui::FontData::from_owned(bytes).into(),
-            );
-            fonts.families
+            fonts
+                .font_data
+                .insert(name.clone(), egui::FontData::from_owned(bytes).into());
+            fonts
+                .families
                 .entry(egui::FontFamily::Proportional)
                 .or_default()
                 .push(name.clone());
-            fonts.families
+            fonts
+                .families
                 .entry(egui::FontFamily::Monospace)
                 .or_default()
                 .push(name);

@@ -1,54 +1,126 @@
 use crate::{App, SIDEBAR_WIDTH};
 
 pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
-    if app.sidebar_collapsed { return; }
+    if app.sidebar_collapsed {
+        return;
+    }
     egui::SidePanel::left("sidebar")
         .default_width(SIDEBAR_WIDTH)
         .min_width(220.0)
         .max_width(360.0)
         .resizable(true)
-        .frame(egui::Frame::new().fill(app.theme.bg_accent).inner_margin(egui::Margin::same(4)))
+        .frame(
+            egui::Frame::new()
+                .fill(app.theme.bg_accent)
+                .inner_margin(egui::Margin::same(4)),
+        )
         .show(ctx, |ui| {
             ui.set_min_width(ui.available_width());
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Clarity").size(18.0).strong().color(app.theme.text));
+                ui.label(
+                    egui::RichText::new("Clarity")
+                        .size(18.0)
+                        .strong()
+                        .color(app.theme.text),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new(egui::RichText::new("⬅").size(14.0)).fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked() { app.sidebar_collapsed = true; }
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new("⬅").size(14.0))
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
+                        app.sidebar_collapsed = true;
+                    }
                 });
             });
             ui.add_space(16.0);
 
-            if ui.add(egui::Button::new(egui::RichText::new("+ New Chat").size(13.0).color(app.theme.text))
-                .fill(app.theme.surface).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
-                .min_size(egui::vec2(ui.available_width(), 36.0))).clicked() { app.new_session(); }
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("+ New Chat")
+                            .size(13.0)
+                            .color(app.theme.text),
+                    )
+                    .fill(app.theme.surface)
+                    .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                    .min_size(egui::vec2(ui.available_width(), 36.0)),
+                )
+                .clicked()
+            {
+                app.new_session();
+            }
             ui.add_space(12.0);
 
-            ui.label(egui::RichText::new("Sessions").size(11.0).color(app.theme.text_dim).weak());
+            ui.label(
+                egui::RichText::new("Sessions")
+                    .size(11.0)
+                    .color(app.theme.text_dim)
+                    .weak(),
+            );
             ui.add_space(4.0);
 
             let mut to_delete: Option<String> = None;
-            let sessions_clone: Vec<(String, String, bool)> = app.sessions.iter().map(|s| (s.id.clone(), s.title.clone(), s.id == app.active_session_id)).collect();
+            let sessions_clone: Vec<(String, String, bool)> = app
+                .sessions
+                .iter()
+                .map(|s| (s.id.clone(), s.title.clone(), s.id == app.active_session_id))
+                .collect();
             for (id, title, is_active) in sessions_clone {
-                let bg = if is_active { app.theme.surface } else { app.theme.bg_accent };
-                let text_color = if is_active { app.theme.text } else { app.theme.text_dim };
-                let stroke = if is_active { egui::Stroke::new(2.0, app.theme.accent) } else { egui::Stroke::NONE };
+                let bg = if is_active {
+                    app.theme.surface
+                } else {
+                    app.theme.bg_accent
+                };
+                let text_color = if is_active {
+                    app.theme.text
+                } else {
+                    app.theme.text_dim
+                };
+                let stroke = if is_active {
+                    egui::Stroke::new(2.0, app.theme.accent)
+                } else {
+                    egui::Stroke::NONE
+                };
                 ui.horizontal(|ui| {
                     let response = ui.add(
                         egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
                             .fill(bg)
                             .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
                             .stroke(stroke)
-                            .min_size(egui::vec2(ui.available_width() - 28.0, 36.0))
+                            .min_size(egui::vec2(ui.available_width() - 28.0, 36.0)),
                     );
-                    if response.clicked() { app.save_current_session(); app.active_session_id = id.clone(); }
-                    if ui.add(egui::Button::new("🗑").fill(egui::Color32::TRANSPARENT).corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))).clicked() { to_delete = Some(id); }
+                    if response.clicked() {
+                        app.save_current_session();
+                        app.active_session_id = id.clone();
+                    }
+                    if ui
+                        .add(
+                            egui::Button::new("🗑")
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                        )
+                        .clicked()
+                    {
+                        to_delete = Some(id);
+                    }
                 });
             }
-            if let Some(id) = to_delete { app.delete_session(id); }
+            if let Some(id) = to_delete {
+                app.delete_session(id);
+            }
 
             ui.add_space(16.0);
-            ui.label(egui::RichText::new("Files").size(11.0).color(app.theme.text_dim).weak());
+            ui.label(
+                egui::RichText::new("Files")
+                    .size(11.0)
+                    .color(app.theme.text_dim)
+                    .weak(),
+            );
             ui.add_space(4.0);
             let mut clicked_file: Option<std::path::PathBuf> = None;
             let files_height = (ui.available_height() - 260.0).max(100.0);
@@ -57,13 +129,22 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 .max_height(files_height)
                 .show(ui, |ui| {
                     if let Ok(cwd) = std::env::current_dir() {
-                        crate::ui::file_browser::render_file_tree(ui, &cwd, &app.theme, 0, &mut |path| {
-                            clicked_file = Some(path.to_path_buf());
-                        });
+                        crate::ui::file_browser::render_file_tree(
+                            ui,
+                            &cwd,
+                            &app.theme,
+                            0,
+                            &mut |path| {
+                                clicked_file = Some(path.to_path_buf());
+                            },
+                        );
                     }
                 });
             if let Some(path) = clicked_file {
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
                 let content = std::fs::read_to_string(&path).ok();
                 app.preview_file = content.map(|c| (name, c));
             }
@@ -76,16 +157,32 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Preview").size(11.0).color(app.theme.text_dim).weak());
+                    ui.label(
+                        egui::RichText::new("Preview")
+                            .size(11.0)
+                            .color(app.theme.text_dim)
+                            .weak(),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("×").clicked() { app.preview_file = None; }
+                        if ui.small_button("×").clicked() {
+                            app.preview_file = None;
+                        }
                     });
                 });
-                ui.label(egui::RichText::new(&preview_name).size(12.0).color(app.theme.text).monospace());
+                ui.label(
+                    egui::RichText::new(&preview_name)
+                        .size(12.0)
+                        .color(app.theme.text)
+                        .monospace(),
+                );
                 ui.add_space(4.0);
                 let mut preview_text = if preview_content.chars().count() > 2000 {
                     let truncated: String = preview_content.chars().take(2000).collect();
-                    format!("{}…\n\n[Preview truncated: {} total characters]", truncated, preview_content.len())
+                    format!(
+                        "{}…\n\n[Preview truncated: {} total characters]",
+                        truncated,
+                        preview_content.len()
+                    )
                 } else {
                     preview_content
                 };
@@ -99,7 +196,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .desired_rows(10)
                                 .font(egui::TextStyle::Monospace)
                                 .text_color(app.theme.text_dim)
-                                .margin(egui::vec2(8.0, 6.0))
+                                .margin(egui::vec2(8.0, 6.0)),
                         );
                     });
             }
@@ -108,7 +205,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 ui.add_space(8.0);
                 #[cfg(debug_assertions)]
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("FPS: {:.0}", app.fps)).size(10.0).color(app.theme.text_dim));
+                    ui.label(
+                        egui::RichText::new(format!("FPS: {:.0}", app.fps))
+                            .size(10.0)
+                            .color(app.theme.text_dim),
+                    );
                 });
             });
         });

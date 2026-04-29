@@ -7,8 +7,8 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
-use clarity_core::background::TaskInfo;
 use clarity_core::agent::Plan;
+use clarity_core::background::TaskInfo;
 use std::time::Instant;
 
 // ============================================================================

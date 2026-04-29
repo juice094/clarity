@@ -58,10 +58,7 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
 
 /// Spawn a background task that reads from a Wire UI view side and forwards
 /// `Vec<ViewCommand>` as `Event::ViewUpdate` on the existing MPSC channel.
-pub fn spawn_wire_view_adapter(
-    mut ui_view_side: WireUIViewSide,
-    event_tx: UnboundedSender<Event>,
-) {
+pub fn spawn_wire_view_adapter(mut ui_view_side: WireUIViewSide, event_tx: UnboundedSender<Event>) {
     tokio::spawn(async move {
         while let Some(commands) = ui_view_side.recv().await {
             if event_tx.send(Event::ViewUpdate(commands)).is_err() {

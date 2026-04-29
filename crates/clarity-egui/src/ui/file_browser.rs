@@ -57,10 +57,8 @@ pub fn render_file_tree(
             let full_width = ui.available_width();
             let row_height = 20.0;
             let row_rect = ui.available_rect_before_wrap();
-            let row_rect = egui::Rect::from_min_size(
-                row_rect.min,
-                egui::vec2(full_width, row_height),
-            );
+            let row_rect =
+                egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
             if ui.is_rect_visible(row_rect) {
                 let painter = ui.painter_at(row_rect);
