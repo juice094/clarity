@@ -1,12 +1,8 @@
 [advisories]
 ignore = [
-    # rand 0.7.3: unsound only when using a custom logger with rand::rng().
-    # Clarity does not use custom loggers, and this is a deep transitive dep
-    # via tauri-utils → kuchikiki → selectors → phf_codegen → phf_generator.
-    # Tracked upstream; will resolve when Tauri updates its dependency tree.
-    "RUSTSEC-2026-0097",
     # glib 0.18.5: unsound Iterator impl for VariantStrIter.
-    # Only affects Linux (GTK bindings). Clarity does not use VariantStrIter
-    # directly; this comes via Tauri/wry on Linux.
+    # Affects Linux (GTK bindings). Comes via clarity-claw → tao/tray-icon → gtk → glib.
+    # clarity-claw is a system-tray utility; this unsound path is not reachable in our usage.
+    # Tracked upstream in tao/tray-icon ecosystems.
     "RUSTSEC-2024-0429",
 ]

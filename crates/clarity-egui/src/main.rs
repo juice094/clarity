@@ -84,9 +84,14 @@ pub(crate) struct App {
     pub(crate) task_create_desc: String,
     pub(crate) task_create_prompt: String,
     pub(crate) task_create_priority: u8,
+    /// First-run onboarding state.
+    pub(crate) onboarding_state: onboarding::OnboardingState,
+    /// Progress receiver for model download (std channel bridged from tokio).
+    pub(crate) onboarding_progress_rx: Option<std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress>>,
 }
 
 mod app_logic;
+mod onboarding;
 
 impl App {
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
@@ -191,6 +196,8 @@ impl eframe::App for App {
         self.render_approval_modal(ctx);
 
         self.render_task_create_modal(ctx);
+
+        onboarding::render_onboarding(self, ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

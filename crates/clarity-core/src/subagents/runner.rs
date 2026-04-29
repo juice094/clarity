@@ -429,6 +429,7 @@ impl OutputCollector {
         let stage = stage.into();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
+            // SAFE: system time is always after UNIX_EPOCH.
             .unwrap()
             .as_millis();
         self.stages.push(format!("[{}] {}", timestamp, stage));
@@ -724,7 +725,11 @@ impl SubagentRunner {
         parent_wire: Option<&Wire>,
     ) -> Result<SubagentResult, SubagentError> {
         let start_time = SystemTime::now();
-        let started_at = start_time.duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let started_at = start_time
+            .duration_since(UNIX_EPOCH)
+            // SAFE: system time is always after UNIX_EPOCH.
+            .unwrap()
+            .as_secs();
 
         // 1. 准备或恢复代理实例
         let (agent_id, agent_type, resumed) = self.prepare_instance(&spec, store).await?;

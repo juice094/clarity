@@ -125,6 +125,12 @@ impl App {
             task_create_desc: String::new(),
             task_create_prompt: String::new(),
             task_create_priority: 2,
+            onboarding_state: if crate::onboarding::should_show_onboarding() {
+                crate::onboarding::OnboardingState::ChooseProvider
+            } else {
+                crate::onboarding::OnboardingState::Hidden
+            },
+            onboarding_progress_rx: None,
         }
     }
 

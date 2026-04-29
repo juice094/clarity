@@ -51,6 +51,7 @@ pub mod daemon;
 pub mod error;
 pub mod hooks;
 pub mod llm;
+pub mod model_download;
 pub mod mcp;
 pub mod memory;
 pub mod notifications;
