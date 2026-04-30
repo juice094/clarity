@@ -48,11 +48,15 @@ impl Agent {
 
     /// Execute a batch of tool calls, sending wire lifecycle events and appending
     /// results to `messages`. Returns the ordered list of tool names for telemetry.
+    ///
+    /// If any tool fails with a **non-recoverable** error, the function returns
+    /// `AgentError::ToolExecutionFailed` immediately after all concurrent calls
+    /// complete, preventing the LLM from entering an infinite retry loop.
     async fn dispatch_tool_calls(
         &self,
         tool_calls: &[ToolCall],
         messages: &mut Vec<Message>,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, AgentError> {
         let mut tool_names = Vec::new();
         let mut futures = Vec::new();
 
@@ -77,9 +81,13 @@ impl Agent {
         // Phase 2: await all results concurrently.
         let results = futures::future::join_all(futures).await;
 
-        // Phase 3: emit results in original order and append to messages.
+        // Phase 3: emit results in original order, append to messages, and
+        // detect non-recoverable failures.
+        let mut fatal: Option<(String, String)> = None;
+
         for (tool_call, result) in tool_calls.iter().zip(results.into_iter()) {
-            let result_content = match result {
+            let sanitized = result.map_err(|e| e.sanitize_paths());
+            let result_content = match &sanitized {
                 Ok(value) => value.to_string(),
                 Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
             };
@@ -90,9 +98,19 @@ impl Agent {
             });
 
             messages.push(Message::tool(&tool_call.id, result_content));
+
+            if let Err(ref e) = sanitized {
+                if !e.is_recoverable() {
+                    fatal = Some((tool_call.function.name.clone(), e.to_string()));
+                }
+            }
         }
 
-        tool_names
+        if let Some((tool_name, error)) = fatal {
+            return Err(AgentError::ToolExecutionFailed(tool_name, error));
+        }
+
+        Ok(tool_names)
     }
 
     /// Shared core of the non-streaming agent loop.
@@ -157,7 +175,7 @@ impl Agent {
 
             tool_names.extend(
                 self.dispatch_tool_calls(&response.tool_calls, messages)
-                    .await,
+                    .await?,
             );
         }
 
@@ -662,9 +680,21 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            let _ = self
+            if let Err(e) = self
                 .dispatch_tool_calls(&response.tool_calls, &mut messages)
-                .await;
+                .await
+            {
+                warn!("Tool execution failed in stream: {}", e);
+                // Emit the error as content so the user sees what happened,
+                // then break the loop to prevent infinite retries.
+                let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
+                on_chunk(&error_text);
+                self.send_wire_message(WireMessage::ContentPart {
+                    text: error_text.clone(),
+                });
+                final_response = error_text;
+                break;
+            }
         }
 
         // Send TurnEnd message

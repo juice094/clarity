@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-04-28
-> Branch: `phase2/protocol-pilot` @ `4c9f4de`
-> Test baseline: **568 passed, 0 failed, 4 ignored**
+> Last updated: 2026-04-30
+> Branch: `phase2/protocol-pilot` @ `43a2e502`
+> Test baseline: **574 passed, 0 failed, 6 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -30,8 +30,8 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 568 passed, 4 ignored | 2026-04-28 |
-| Clippy zero warnings | `-D warnings` clean | 2026-04-27 |
+| Workspace lib tests | 574 passed, 6 ignored | 2026-04-30 |
+| Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
 | Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
 | EXE runtime dependency scan | Pure system DLLs + UCRT only | 2026-04-26 |
@@ -77,6 +77,14 @@
 2. **Provider 配置硬编码** — 新服务商需改代码，不支持无代码注册。
 3. **API Key 明文落盘** — `gui-settings.json` 直接存储明文密钥。
 4. **Settings Save 覆盖全配置** — 存在丢失未修改字段的风险（OpenClaw 教训）。
+
+**Sprint 13 进行中修复项**：
+- ✅ A1: Agent 工具调用失败后无限重试 → 三级错误分类 + 不可恢复错误立即停止
+- ✅ A2: 错误消息泄露绝对路径 → `ToolError::sanitize_paths()` 脱敏层
+- ✅ A3: System Prompt 泄露内部信息 → Git/Cargo.toml 移出 Prompt + 路径 `<external>` 脱敏 + 身份规则硬化
+- ✅ B1: `InMemoryApprovalRuntime` 内存状态丢失 → `wait_for_response` 内置 300s 超时，超时后自动 Cancel
+- ✅ B2: 审批 request_id 不一致 → 并发 resolve 竞态测试 + 不存在请求校验测试
+- ✅ B3: Agent 身份混乱 → 对外统一 Clarity / `AgentInner.provider_label` 保留原始模型名用于 tracing
 
 ---
 

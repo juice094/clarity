@@ -1,4 +1,4 @@
-use crate::{app_state::reload_llm, App};
+use crate::{app_state::reload_llm, ui::types::ToastLevel, App};
 use clarity_wire::UserAction;
 
 pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
@@ -83,6 +83,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                                 &app.settings_edit.approval_mode,
                             );
                             app.state.agent.set_approval_mode(mode);
+                            app.state.mode_aware_approval_runtime.set_mode(mode);
                             let state = app.state.clone();
                             app.runtime.spawn(async move {
                                 if let Err(e) = reload_llm(&state).await {
@@ -91,6 +92,10 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                             });
                         }
                         app.settings_open = false;
+                    }
+                    UserAction::ButtonClick { id } if id == "clear_batch_grants" => {
+                        app.state.mode_aware_approval_runtime.clear_batch_grants();
+                        app.push_toast("Batch grants cleared", ToastLevel::Info);
                     }
                     UserAction::ButtonClick { id } if id == "cancel" => {
                         app.settings_open = false;

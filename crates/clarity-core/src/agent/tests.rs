@@ -576,6 +576,40 @@ fn test_build_active_files_context() {
 }
 
 #[test]
+fn test_build_active_files_external_path_redacted() {
+    let registry = ToolRegistry::new();
+    let agent = Agent::with_config(registry, AgentConfig::new());
+
+    // Use a platform-specific absolute path that is outside the working directory.
+    let external_path = if cfg!(windows) {
+        std::path::PathBuf::from("C:\\Windows\\secret.txt")
+    } else {
+        std::path::PathBuf::from("/etc/passwd")
+    };
+
+    agent.set_active_file_paths(vec![
+        external_path.clone(),
+        std::path::PathBuf::from("src/main.rs"),
+    ]);
+    let ctx = agent.build_active_files_context().unwrap();
+    assert!(
+        ctx.contains("<external>"),
+        "external path should be redacted: {}",
+        ctx
+    );
+    assert!(
+        !ctx.contains(if cfg!(windows) { "C:\\Windows" } else { "/etc/passwd" }),
+        "absolute path must NOT leak: {}",
+        ctx
+    );
+    assert!(
+        ctx.contains("src/main.rs"),
+        "internal path should still appear: {}",
+        ctx
+    );
+}
+
+#[test]
 fn test_collect_project_metadata_cargo_toml() {
     use std::io::Write;
     use tempfile::TempDir;
@@ -730,12 +764,19 @@ async fn test_end_to_end_context_injection() {
 
     let prompt = agent.build_system_prompt();
 
-    // V2 验证: System Prompt 必须包含三类注入上下文
+    // Sprint 13 A3: Git Context and Project Metadata must NOT leak into prompt.
     assert!(
-        prompt.contains("Git Context"),
-        "should contain Git Context section:\n{}",
+        !prompt.contains("Git Context"),
+        "must NOT contain Git Context section:\n{}",
         prompt
     );
+    assert!(
+        !prompt.contains("Project Metadata"),
+        "must NOT contain Project Metadata section:\n{}",
+        prompt
+    );
+
+    // Active Files should still be present (paths are sanitized).
     assert!(
         prompt.contains("Active Files"),
         "should contain Active Files section:\n{}",
@@ -744,16 +785,6 @@ async fn test_end_to_end_context_injection() {
     assert!(
         prompt.contains("lib.rs"),
         "should mention lib.rs:\n{}",
-        prompt
-    );
-    assert!(
-        prompt.contains("Project Metadata"),
-        "should contain Project Metadata section:\n{}",
-        prompt
-    );
-    assert!(
-        prompt.contains("e2e-test"),
-        "should contain package name:\n{}",
         prompt
     );
 }
@@ -773,4 +804,142 @@ fn test_approval_mode_switch() {
 
     agent.set_approval_mode(ApprovalMode::Plan);
     assert_eq!(agent.approval_mode(), ApprovalMode::Plan);
+
+    agent.set_approval_mode(ApprovalMode::Smart);
+    assert_eq!(agent.approval_mode(), ApprovalMode::Smart);
+}
+
+// ------------------------------------------------------------------
+// Sprint 13 Phase A — Circuit breaker & path sanitization tests
+// ------------------------------------------------------------------
+
+/// Mock tool that always fails with a non-recoverable error.
+struct FailingTool;
+
+#[async_trait::async_trait]
+impl crate::tools::Tool for FailingTool {
+    fn name(&self) -> &str {
+        "failing_tool"
+    }
+
+    fn description(&self) -> &str {
+        "A tool that always fails for testing"
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {}
+        })
+    }
+
+    async fn execute(
+        &self,
+        _args: serde_json::Value,
+        _ctx: crate::tools::ToolContext,
+    ) -> crate::error::ToolResult<serde_json::Value> {
+        Err(crate::error::ToolError::PermissionDenied(
+            "Access denied to C:\\Users\\Test\\secret.txt".to_string(),
+        ))
+    }
+}
+
+/// Mock LLM that emits a single call to `failing_tool`.
+struct MockLlmFailingTool;
+
+#[async_trait::async_trait]
+impl LlmProvider for MockLlmFailingTool {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<LlmResponse, AgentError> {
+        Ok(LlmResponse {
+            content: "I'll use failing_tool".to_string(),
+            tool_calls: vec![ToolCall {
+                id: "call_fail".to_string(),
+                call_type: "function".to_string(),
+                function: FunctionCall {
+                    name: "failing_tool".to_string(),
+                    arguments: "{}".to_string(),
+                },
+            }],
+            is_complete: false,
+        })
+    }
+
+    fn stream(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("Mock".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
+        });
+        Ok(rx)
+    }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
+}
+
+#[tokio::test]
+async fn test_non_recoverable_tool_error_stops_turn() {
+    let registry = ToolRegistry::new();
+    registry.register(FailingTool).unwrap();
+
+    let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(10))
+        .with_llm(Arc::new(MockLlmFailingTool));
+
+    let result = agent.run("trigger failing tool").await;
+
+    assert!(
+        result.is_err(),
+        "Expected turn to stop on non-recoverable tool error, got: {:?}",
+        result
+    );
+    let err = result.unwrap_err();
+    match err {
+        AgentError::ToolExecutionFailed(tool_name, _) => {
+            assert_eq!(tool_name, "failing_tool");
+        }
+        other => panic!("Expected ToolExecutionFailed, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_tool_error_sanitize_paths() {
+    // Home-directory redaction
+    let home = dirs::home_dir();
+    if let Some(ref h) = home {
+        let home_str = h.to_string_lossy().to_string();
+        let err = crate::error::ToolError::ExecutionFailed(format!(
+            "Failed to read {}",
+            home_str
+        ));
+        let sanitized = err.sanitize_paths();
+        let msg = sanitized.to_string();
+        assert!(
+            !msg.contains(&home_str),
+            "home dir must be redacted: {}",
+            msg
+        );
+        assert!(msg.contains('~'), "should use ~ shorthand: {}", msg);
+    }
+
+    // Windows absolute path redaction
+    let err = crate::error::ToolError::ExecutionFailed(
+        "Failed to read C:\\Users\\Someone\\secret.txt".to_string(),
+    );
+    let sanitized = err.sanitize_paths();
+    assert!(
+        !sanitized.to_string().contains("C:\\Users\\Someone"),
+        "Windows absolute path must be redacted: {}",
+        sanitized
+    );
 }

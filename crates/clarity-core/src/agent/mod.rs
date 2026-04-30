@@ -99,6 +99,9 @@ struct AgentInner {
     active_files: Option<String>,
     /// Cached project metadata (Cargo.toml, package.json, etc.) for SystemPromptBuilder injection.
     project_metadata: Option<String>,
+    /// Provider label for internal logging (e.g. "deepseek-chat", "claude-3-7-sonnet").
+    /// NOT injected into the system prompt; used only for tracing/audit.
+    provider_label: Option<String>,
 }
 
 /// Simple mock LLM for testing
@@ -311,6 +314,8 @@ impl Agent {
     }
 
     /// Build a text description of active files for the system prompt.
+    /// Paths that resolve outside the working directory are redacted to `<external>`
+    /// to prevent leaking host directory structure.
     fn build_active_files_context(&self) -> Option<String> {
         let paths = self.active_file_paths();
         if paths.is_empty() {
@@ -320,10 +325,17 @@ impl Agent {
         let lines: Vec<String> = paths
             .iter()
             .map(|p| {
-                p.strip_prefix(working_dir)
-                    .unwrap_or(p)
-                    .to_string_lossy()
-                    .to_string()
+                // Resolve to absolute (relative paths are resolved against working_dir)
+                let abs = if p.is_absolute() {
+                    p.clone()
+                } else {
+                    working_dir.join(p)
+                };
+                // Only show the portion inside working_dir; anything else is redacted
+                match abs.strip_prefix(working_dir) {
+                    Ok(s) => s.to_string_lossy().to_string(),
+                    Err(_) => "<external>".to_string(),
+                }
             })
             .filter(|s| !s.is_empty())
             .collect();

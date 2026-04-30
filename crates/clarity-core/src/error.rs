@@ -54,6 +54,49 @@ impl ToolError {
     pub fn from_io(err: std::io::Error) -> Self {
         Self::IoError(err.to_string())
     }
+
+    /// Whether this error may resolve itself if retried (e.g. transient network issue).
+    pub fn is_recoverable(&self) -> bool {
+        matches!(self, Self::IoError(_) | Self::Timeout(_) | Self::Unavailable(_))
+    }
+
+    /// Sanitize absolute paths from error messages to prevent leaking
+    /// host directory structure (e.g. `C:\Users\<name>` → `~`).
+    pub fn sanitize_paths(&self) -> Self {
+        let sanitize = |s: &str| -> String {
+            let mut out = s.to_string();
+            // Replace home directory with ~ (covers both Unix and Windows)
+            if let Some(home) = dirs::home_dir() {
+                let home_str = home.to_string_lossy().to_string();
+                out = out.replace(&home_str, "~");
+            }
+            // Replace any remaining Windows-style absolute paths
+            // Heuristic: look for `C:\` or similar drive letters
+            out = out.split_whitespace()
+                .map(|word| {
+                    if word.len() > 3
+                        && word.as_bytes()[1] == b':'
+                        && word.as_bytes()[2] == b'\\'
+                    {
+                        "<absolute-path>".to_string()
+                    } else {
+                        word.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            out
+        };
+        match self {
+            Self::InvalidParameters(m) => Self::InvalidParameters(sanitize(m)),
+            Self::ExecutionFailed(m) => Self::ExecutionFailed(sanitize(m)),
+            Self::NotFound(m) => Self::NotFound(sanitize(m)),
+            Self::IoError(m) => Self::IoError(sanitize(m)),
+            Self::PermissionDenied(m) => Self::PermissionDenied(sanitize(m)),
+            Self::Unavailable(m) => Self::Unavailable(sanitize(m)),
+            Self::Timeout(s) => Self::Timeout(*s),
+        }
+    }
 }
 
 /// Errors that can occur in the Agent

@@ -277,6 +277,8 @@ async fn test_tui_wire_to_gateway_websocket() {
             WireMessage::Usage { .. } => "usage",
             WireMessage::CompactionBegin => "compaction_begin",
             WireMessage::CompactionEnd => "compaction_end",
+            WireMessage::PlanStepBegin { .. } => "plan_step_begin",
+            WireMessage::PlanStepEnd { .. } => "plan_step_end",
         };
         wire_types.push(msg_type.to_string());
         if msg_type == "turn_end" {

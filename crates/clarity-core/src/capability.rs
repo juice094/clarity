@@ -20,7 +20,7 @@ pub struct CapabilityRegistry;
 impl CapabilityRegistry {
     pub fn supported_approval_modes(surface: &str) -> Vec<&'static str> {
         match surface {
-            "egui" => vec!["yolo"],
+            "egui" => vec!["interactive", "yolo", "plan", "smart"],
             "tui" => vec!["interactive", "yolo", "plan"],
             "gateway" => vec!["yolo"],
             "headless" => vec!["yolo", "plan"],
@@ -37,9 +37,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_egui_only_yolo() {
+    fn test_egui_all_modes() {
         let modes = CapabilityRegistry::supported_approval_modes("egui");
-        assert_eq!(modes, vec!["yolo"]);
+        assert_eq!(modes, vec!["interactive", "yolo", "plan", "smart"]);
     }
 
     #[test]

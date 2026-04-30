@@ -538,7 +538,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
                                 let hint = if app.pending_send.is_some() {
-                                    "Message queued — will send when reply finishes..."
+                                    "Steer message queued — will send when current response stops..."
                                 } else if !app.attachments.is_empty() {
                                     "Type a message (files attached)..."
                                 } else {
@@ -553,15 +553,31 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     .hint_text(hint)
                                     .margin(egui::vec2(8.0, 8.0));
                                 ui.add_sized(egui::vec2(input_width, input_height), text_edit);
-                                // Enter sends; Shift+Enter keeps newline from TextEdit.
-                                // We compare prev_input to detect IME commits (which add chars
-                                // other than newline) vs plain Enter (which only adds newline).
+
+                                // Track input modifications for IME suppression heuristic.
+                                if app.input != prev_input {
+                                    app.last_input_modified = std::time::Instant::now();
+                                }
+
+                                // Enter sends; Shift+Enter inserts newline.
+                                // IME safeguard: if the input was modified very recently
+                                // (< 300 ms), treat Enter as composition confirmation
+                                // rather than send intent.
+                                //
+                                // FIXME-WEEK1-RISK: 300ms heuristic may fail for slow
+                                //   IME composition (e.g., Rime). Optimize: expose threshold
+                                //   in settings or detect IME state once egui supports it.
                                 let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
                                 if enter_pressed && !ui.input(|i| i.modifiers.shift) {
                                     while app.input.ends_with('\n') {
                                         app.input.pop();
                                     }
-                                    if app.input == prev_input && !app.input.trim().is_empty() {
+                                    let recent_ime = app.last_input_modified.elapsed()
+                                        < std::time::Duration::from_millis(300);
+                                    if app.input == prev_input
+                                        && !app.input.trim().is_empty()
+                                        && !recent_ime
+                                    {
                                         app.send();
                                     }
                                 }
@@ -597,10 +613,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 }
                                 if can_queue {
                                     queue_btn.on_hover_text(
-                                        "Queue message — auto-sends when current reply finishes",
+                                        "Steer — cancel current response and send immediately",
                                     );
                                 } else {
-                                    queue_btn.on_hover_text("Type a message to queue");
+                                    queue_btn.on_hover_text("Type a message to steer");
                                 }
 
                                 // Stop button (left of queue).

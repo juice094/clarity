@@ -136,6 +136,7 @@ impl App {
             active_session_id: active_id,
             sidebar_collapsed: false,
             input: String::new(),
+            drafts: std::collections::HashMap::new(),
             is_loading: false,
             agent_status: AgentStatus::Unconfigured,
             network_banner: None,
@@ -161,6 +162,7 @@ impl App {
             last_scroll_offset: 0.0,
             preview_file: None,
             pending_send: None,
+            last_input_modified: now,
             pending_approvals: Vec::new(),
             last_usage: None,
             pending_plan: None,
@@ -226,8 +228,16 @@ impl App {
         // Clear any stale plan tracker from a previous turn.
         self.plan_tracker = None;
 
-        // If currently streaming, queue the message for auto-send when done.
+        // If currently streaming, steer: cancel the current turn and queue the
+        // message for immediate send when the cancellation completes.
+        //
+        // FIXME-WEEK1-RISK: cancel() is cooperative; LLM API may block 1-3s before
+        //   noticing the cancellation token. If agent is mid-tool-call, side-effects
+        //   may already have occurred. Optimize: add visual "stopping..." state.
+        // FIXME-WEEK1-RISK: Rapid consecutive Enter presses overwrite pending_send.
+        //   Optimize: debounce (200ms) or append to pending_send instead of replace.
         if self.is_loading {
+            self.stop();
             self.pending_send = Some((text, std::mem::take(&mut self.attachments)));
             self.input.clear();
             return;
@@ -266,6 +276,7 @@ impl App {
             }
         }
         self.input.clear();
+        self.drafts.remove(&self.active_session_id);
         self.is_loading = true;
         self.agent_status = AgentStatus::Busy;
         self.tool_calls.clear();
@@ -545,6 +556,13 @@ impl App {
     }
     pub(crate) fn new_session(&mut self) {
         self.save_current_session();
+        // Save draft for current session before switching.
+        let old_id = self.active_session_id.clone();
+        if !self.input.trim().is_empty() {
+            self.drafts.insert(old_id, self.input.clone());
+        } else {
+            self.drafts.remove(&old_id);
+        }
         // Lazy creation: if an empty session already exists, focus it instead of creating another.
         if let Some(existing) = self
             .sessions
@@ -552,12 +570,14 @@ impl App {
             .find(|s| s.messages.is_empty() && s.title == "New Chat")
         {
             self.active_session_id = existing.id.clone();
+            self.input = self.drafts.remove(&existing.id).unwrap_or_default();
             return;
         }
         let s = new_session();
         let id = s.id.clone();
         self.sessions.push(s);
-        self.active_session_id = id;
+        self.active_session_id = id.clone();
+        self.input = self.drafts.remove(&id).unwrap_or_default();
         self.last_usage = None;
     }
     pub(crate) fn stop(&mut self) {
@@ -567,13 +587,19 @@ impl App {
     }
     pub(crate) fn delete_session(&mut self, id: String) {
         self.sessions.retain(|s| s.id != id);
+        self.drafts.remove(&id);
+        // FIXME-WEEK1-RISK: Switching to sessions[0] restores its draft, which may
+        //   overwrite user input if delete happens during typing. Acceptable for now
+        //   because delete is an explicit user action unlikely to coincide with typing.
         if let Err(e) = std::fs::remove_file(session_path(&id)) {
             tracing::warn!("Failed to remove session file: {}", e);
         }
         if self.sessions.is_empty() {
             self.new_session();
         } else if self.active_session_id == id {
-            self.active_session_id = self.sessions[0].id.clone();
+            let new_id = self.sessions[0].id.clone();
+            self.active_session_id = new_id.clone();
+            self.input = self.drafts.remove(&new_id).unwrap_or_default();
         }
     }
 }

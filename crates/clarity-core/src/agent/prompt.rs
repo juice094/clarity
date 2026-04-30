@@ -22,10 +22,12 @@ pub enum PromptComponent {
     #[allow(dead_code)]
     OfflineNotice,
     /// Git repository context (branch, status, recent commits).
+    #[allow(dead_code)]
     GitContext(String),
     /// Active files currently being operated on.
     ActiveFiles(String),
     /// Project metadata (Cargo.toml, package.json, etc.).
+    #[allow(dead_code)]
     ProjectMetadata(String),
 }
 
@@ -82,6 +84,7 @@ impl SystemPromptBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_git_context(mut self, ctx: impl Into<String>) -> Self {
         let ctx = ctx.into();
         if !ctx.is_empty() {
@@ -98,6 +101,7 @@ impl SystemPromptBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_project_metadata(mut self, meta: impl Into<String>) -> Self {
         let meta = meta.into();
         if !meta.is_empty() {
@@ -135,6 +139,9 @@ impl SystemPromptBuilder {
                         }
                         ApprovalMode::Plan => {
                             "You are running in Plan mode. Follow the pre-generated plan step-by-step and do not deviate unless the user explicitly requests a change."
+                        }
+                        ApprovalMode::Smart => {
+                            "You are running in Smart mode. Low-risk tools execute automatically. Medium-risk tools are auto-approved after the first manual approval of the same tool within this session. High-risk and sensitive operations always require explicit user approval."
                         }
                     };
                     sections.push(format!("## Approval Mode\n{}", notice));
@@ -231,9 +238,7 @@ impl Agent {
             .with_skills(skill_contexts)
             .with_approval_mode(self.approval_mode())
             .with_template_vars(self.config.template_variables.clone())
-            .with_git_context(self.git_context().unwrap_or_default())
             .with_active_files(self.active_files().unwrap_or_default())
-            .with_project_metadata(self.project_metadata().unwrap_or_default())
             .build()
     }
 
@@ -335,6 +340,15 @@ mod tests {
             .with_approval_mode(ApprovalMode::Interactive)
             .build();
         assert!(prompt.contains("Interactive mode"));
+    }
+
+    #[test]
+    fn test_builder_approval_mode_smart() {
+        let prompt = SystemPromptBuilder::new()
+            .with_base("Base.")
+            .with_approval_mode(ApprovalMode::Smart)
+            .build();
+        assert!(prompt.contains("Smart mode"));
     }
 
     #[test]

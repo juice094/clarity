@@ -209,6 +209,14 @@ impl Agent {
                 }
                 ApprovalMode::Yolo => tool_requires_approval || risk == RiskLevel::High,
                 ApprovalMode::Plan => false,
+                ApprovalMode::Smart => {
+                    // Low-risk auto-approved; medium/high and sensitive always go through
+                    // the approval runtime so that batch grants can be evaluated.
+                    risk == RiskLevel::High
+                        || risk == RiskLevel::Medium
+                        || tool_requires_approval
+                        || sensitive_path.is_some()
+                }
             };
 
             let diff_preview = if name == "file_edit" {

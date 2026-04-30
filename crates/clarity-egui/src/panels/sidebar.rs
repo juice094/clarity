@@ -96,7 +96,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     );
                     if response.clicked() {
                         app.save_current_session();
+                        // Save draft for the session we're leaving.
+                        let old_id = app.active_session_id.clone();
+                        if !app.input.trim().is_empty() {
+                            app.drafts.insert(old_id, app.input.clone());
+                        } else {
+                            app.drafts.remove(&old_id);
+                        }
                         app.active_session_id = id.clone();
+                        // Restore draft for the session we're entering.
+                        app.input = app.drafts.remove(&id).unwrap_or_default();
                     }
                     if ui
                         .add(

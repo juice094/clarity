@@ -10,6 +10,7 @@ pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
     match mode {
         "yolo" => clarity_core::approval::ApprovalMode::Yolo,
         "plan" => clarity_core::approval::ApprovalMode::Plan,
+        "smart" => clarity_core::approval::ApprovalMode::Smart,
         _ => clarity_core::approval::ApprovalMode::Interactive,
     }
 }
@@ -32,6 +33,9 @@ pub struct AppState {
     pub task_store: clarity_core::background::TaskStore,
     /// Shared approval runtime for UI↔Agent coordination.
     pub approval_runtime: Arc<clarity_core::approval::InMemoryApprovalRuntime>,
+    /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
+    pub mode_aware_approval_runtime:
+        Arc<clarity_core::approval::ModeAwareApprovalRuntime<clarity_core::approval::InMemoryApprovalRuntime>>,
 }
 
 impl Default for AppState {
@@ -40,8 +44,12 @@ impl Default for AppState {
         let approval_rt = Arc::new(clarity_core::approval::InMemoryApprovalRuntime::new());
         let settings = GuiSettings::load();
         let mode = parse_approval_mode(&settings.approval_mode);
+        let mode_aware_rt = Arc::new(clarity_core::approval::ModeAwareApprovalRuntime::new(
+            approval_rt.clone(),
+            mode,
+        ));
         let agent = clarity_core::Agent::new(registry)
-            .with_approval_runtime(approval_rt.clone())
+            .with_approval_runtime(mode_aware_rt.clone())
             .with_approval_mode(mode);
         let task_dir = dirs::data_dir()
             .map(|d| d.join("clarity").join("bg_tasks"))
@@ -56,6 +64,7 @@ impl Default for AppState {
             initialized: AtomicBool::new(false),
             task_store: clarity_core::background::TaskStore::new(task_dir),
             approval_runtime: approval_rt,
+            mode_aware_approval_runtime: mode_aware_rt,
         }
     }
 }
@@ -259,6 +268,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     }
 
     state.agent.set_llm(llm);
+    state.agent.set_provider_label(format!("{}:{}", desired_provider, settings.model));
 
     Ok(())
 }
@@ -314,6 +324,11 @@ mod tests {
     #[test]
     fn test_parse_approval_mode_plan() {
         assert_eq!(parse_approval_mode("plan"), ApprovalMode::Plan);
+    }
+
+    #[test]
+    fn test_parse_approval_mode_smart() {
+        assert_eq!(parse_approval_mode("smart"), ApprovalMode::Smart);
     }
 
     #[test]

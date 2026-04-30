@@ -56,6 +56,7 @@ impl Agent {
                 git_context: None,
                 active_files: None,
                 project_metadata: None,
+                provider_label: None,
             })),
         }
     }
@@ -78,6 +79,18 @@ impl Agent {
         if matches!(inner.state, AgentState::Unconfigured) {
             inner.state = AgentState::Idle;
         }
+    }
+
+    /// Set the provider label for internal tracing/audit.
+    /// This is NOT injected into the system prompt.
+    pub fn set_provider_label(&self, label: impl Into<String>) {
+        let mut inner = self.inner.write().unwrap();
+        inner.provider_label = Some(label.into());
+    }
+
+    /// Get the provider label (internal tracing only).
+    pub fn provider_label(&self) -> Option<String> {
+        self.inner.read().unwrap().provider_label.clone()
     }
 
     /// Set the skill registry.

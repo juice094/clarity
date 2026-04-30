@@ -120,6 +120,7 @@ impl SettingsViewModel {
                     "interactive" => "Interactive — Approve each tool call",
                     "yolo" => "Yolo — Auto-approve all",
                     "plan" => "Plan — Review plan before execution",
+                    "smart" => "Smart — Auto-approve low risk & remembered tools",
                     other => other,
                 };
                 (mode.into(), label.into())
@@ -234,6 +235,14 @@ impl SettingsViewModel {
                     width: 200.0,
                 },
             ],
+        });
+        cmds.push(ViewCommand::Space { height: 8.0 });
+        cmds.push(ViewCommand::Button {
+            id: "clear_batch_grants".into(),
+            label: "Clear Batch Grants".into(),
+            style: ButtonStyle::Secondary,
+            min_width: 160.0,
+            min_height: 28.0,
         });
         cmds.push(ViewCommand::Space { height: 16.0 });
         cmds.push(ViewCommand::HStack {
@@ -524,7 +533,7 @@ mod tests {
         let vm = SettingsViewModel::new();
         assert_eq!(vm.provider, "openai");
         assert_eq!(vm.model, "gpt-4o");
-        // egui currently only supports "yolo" (no Interactive/Plan UI yet)
+        // egui supports all approval modes including interactive, yolo, plan, smart
         let expected_mode =
             if CapabilityRegistry::supported_approval_modes("egui").contains(&"interactive") {
                 "interactive"
@@ -551,7 +560,7 @@ mod tests {
             selected: "kimi".into(),
         });
         assert_eq!(vm.provider, "kimi");
-        assert_eq!(vm.model, "kimi-k2-07132k"); // first model for kimi
+        assert_eq!(vm.model, "kimi-k2.6"); // first model for kimi
         assert!(vm.is_dirty());
     }
 

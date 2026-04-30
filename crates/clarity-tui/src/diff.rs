@@ -4,4 +4,4 @@
 //! TUI and egui frontends. This module preserves backward compatibility for
 //! existing TUI imports.
 
-pub use clarity_core::diff::{compute_diff, flatten_hunks, parse_unified_diff, DiffHunk, DiffLine};
+pub use clarity_core::diff::{compute_diff, parse_unified_diff, DiffHunk, DiffLine};

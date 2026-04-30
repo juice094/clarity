@@ -42,6 +42,13 @@ pub(crate) struct App {
     pub(crate) active_session_id: String,
     pub(crate) sidebar_collapsed: bool,
     pub(crate) input: String,
+    /// Per-session draft buffer. Key = session_id.
+    ///
+    /// FIXME-WEEK1-RISK: Drafts are memory-only; process restart loses them.
+    ///   Optimize: Persist alongside session files or as a JSON sidecar.
+    /// FIXME-WEEK1-RISK: No upper bound on HashMap size; long-lived sessions
+    ///   may accumulate memory. Optimize: Add LRU eviction for stale drafts.
+    pub(crate) drafts: std::collections::HashMap<String, String>,
     pub(crate) is_loading: bool,
     pub(crate) agent_status: AgentStatus,
     pub(crate) network_banner: Option<String>,
@@ -71,6 +78,9 @@ pub(crate) struct App {
     pub(crate) preview_file: Option<(String, String)>,
     /// Queued message to auto-send when current streaming finishes.
     pub(crate) pending_send: Option<(String, Vec<Attachment>)>,
+    /// Timestamp of the most recent input modification (used to detect IME
+    /// composition activity and suppress premature Enter-send).
+    pub(crate) last_input_modified: Instant,
     /// Pending approval requests from the agent runtime (populated each frame).
     pub(crate) pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     /// Latest token usage for the active session.
@@ -147,6 +157,12 @@ impl eframe::App for App {
         }
 
         self.process_events();
+
+        // Drain batch-grant auto-approval notifications and show toasts.
+        for msg in self.state.mode_aware_approval_runtime.drain_auto_approval_notifications() {
+            self.push_toast(msg, ToastLevel::Info);
+        }
+
         if self.is_loading {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
@@ -183,6 +199,13 @@ impl eframe::App for App {
             && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
         {
             self.new_session();
+        }
+
+        // Ctrl+C stops the running agent turn (only when generating).
+        if self.is_loading
+            && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
+        {
+            self.stop();
         }
 
         // Refresh task list periodically when panel is open
