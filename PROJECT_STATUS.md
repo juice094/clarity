@@ -21,7 +21,7 @@
 | 8 | egui 硬化 | ✅ Complete | Pretext Phase 1：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分、onboarding 模型下载 |
 | 9 | **服务商支持硬化** | ✅ Complete | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 引用语法 `${env:VAR}` |
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
-| 11 | **超越 Kimi CLI** | ✅ Complete | Phase A ✅ 上下文汇流；Phase B ✅ 编辑精度；Phase C ✅ TUI/Headless 体验补齐 |
+| 11 | **超越 Kimi CLI** | ✅ Complete | V1 风险清偿 + V2 端到端验证通过 |
 
 ---
 
@@ -29,7 +29,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 555 passed, 6 ignored | 2026-04-28 |
+| Workspace lib tests | 412 passed, 6 ignored | 2026-04-28 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-27 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
 | Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
@@ -218,7 +218,7 @@
 ## Quality Gates (Every Commit)
 
 ```bash
-cargo test --workspace --lib              # 555 passed, 6 ignored
+cargo test --workspace --lib              # 412 passed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零警告
 cargo fmt --all -- --check               # 格式检查
 ```
