@@ -216,7 +216,7 @@ impl ModelRegistry {
                 alias: "claude-sonnet".into(),
                 provider: "anthropic".into(),
                 model_id: std::env::var("ANTHROPIC_MODEL")
-                    .unwrap_or_else(|_| "claude-3-5-sonnet-20241022".into()),
+                    .unwrap_or_else(|_| "claude-3-7-sonnet-20250219".into()),
                 temperature: None,
                 max_tokens: None,
             });
@@ -273,6 +273,13 @@ impl ModelRegistry {
                 provider: "deepseek".into(),
                 model_id: std::env::var("DEEPSEEK_MODEL")
                     .unwrap_or_else(|_| "deepseek-chat".into()),
+                temperature: None,
+                max_tokens: None,
+            });
+            models.push(ModelEntry {
+                alias: "deepseek-reasoner".into(),
+                provider: "deepseek".into(),
+                model_id: "deepseek-reasoner".into(),
                 temperature: None,
                 max_tokens: None,
             });

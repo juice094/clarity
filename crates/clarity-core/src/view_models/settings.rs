@@ -441,27 +441,57 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         (
             "openai".to_string(),
             "OpenAI".to_string(),
-            vec!["gpt-4o".into(), "gpt-4o-mini".into(), "o3-mini".into()],
+            vec![
+                "gpt-4o".into(),
+                "gpt-4o-mini".into(),
+                "gpt-4.1".into(),
+                "gpt-4.1-mini".into(),
+                "gpt-4.1-nano".into(),
+                "o1".into(),
+                "o1-mini".into(),
+                "o3-mini".into(),
+            ],
         ),
         (
             "anthropic".to_string(),
             "Anthropic".to_string(),
-            vec!["claude-3-sonnet".into(), "claude-3-opus".into()],
+            vec![
+                "claude-3-7-sonnet-20250219".into(),
+                "claude-3-5-sonnet-20241022".into(),
+                "claude-3-5-haiku-20241022".into(),
+                "claude-3-opus-20240229".into(),
+            ],
         ),
         (
             "kimi".to_string(),
             "Kimi".to_string(),
-            vec!["kimi-k2-07132k".into(), "kimi-latest".into()],
+            vec![
+                "kimi-k2.6".into(),
+                "kimi-k2-07132k".into(),
+                "kimi-k1.5".into(),
+                "kimi-latest".into(),
+            ],
         ),
         (
             "deepseek".to_string(),
             "DeepSeek".to_string(),
-            vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
+            vec![
+                "deepseek-chat".into(),
+                "deepseek-reasoner".into(),
+                "deepseek-coder".into(),
+            ],
         ),
         (
             "ollama".to_string(),
             "Ollama".to_string(),
-            vec!["llama3.2".into(), "qwen2.5".into()],
+            vec![
+                "llama3.2".into(),
+                "llama3.1".into(),
+                "qwen2.5".into(),
+                "qwen2.5-coder".into(),
+                "deepseek-r1".into(),
+                "phi4".into(),
+            ],
         ),
         (
             "local".to_string(),
