@@ -22,6 +22,7 @@
 | 9 | **服务商支持硬化** | ✅ Complete | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 引用语法 `${env:VAR}` |
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
 | 11 | **超越 Kimi CLI** | ✅ Complete | V1 风险清偿 + V2 端到端验证通过 |
+| 12 | **egui 功能补齐** | 🔄 In Progress | 审批弹窗 → Plan 可视化 → Skill UI → Token 显示 |
 
 ---
 

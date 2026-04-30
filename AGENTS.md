@@ -74,14 +74,23 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
 
-**Sprint 11 — 超越 Kimi CLI（🔄 当前）**
+**Sprint 11 — 超越 Kimi CLI（✅ Complete）**
 
 - Phase A ✅: 上下文注入 — `SystemPromptBuilder` 自动汇流 `GitContext` + `ActiveFiles` + `ProjectMetadata`
-  - ⚠️ 风险/优化：① `active_file_paths` 格式化只取文件名，丢失目录结构；② 元数据 2KB 截断可能截断 `[dependencies]`；③ `run_with_messages_sync`/`run_streaming_with_messages` 未接入上下文；④ `refresh_context()` 中 `std::fs::read_to_string` 为 sync I/O 运行在 async 上下文（文件小，当前可接受）
 - Phase B ✅: 编辑精度升级 — `file_edit` 批量替换 + unified diff 预览
-  - ⚠️ 风险/优化：① 批量替换存在替换顺序干扰风险（前一条的 new_string 可能意外匹配后一条的 old_string）；② `_diff_preview` 格式从对象变为字符串，egui/Headless 若解析会断裂；③ `from_patch()` 未处理 `\ No newline at end of file` 等特殊标记；④ 批量替换已验证为内存级原子（全部替换成功后一次性落盘）；⑤ `strip_prefix(working_dir)` 在 Windows 上路径分隔符不一致（`\` vs `/`）；⑥ 若 active_file_paths 含 working_dir 外路径会暴露绝对路径
 - Phase C ✅: 终端体验补齐 — TUI `/yolo`/`/interactive` + Headless stdin 管道
-    - ⚠️ 风险/优化：① `/yolo` 切换无二次确认，敏感操作可能自动执行；② TUI 无当前 approval_mode 状态指示器；③ `/planmode` 与 `/plan` 命令命名易混淆；④ Headless `--prompt` 与 stdin 同时存在时管道输入被静默忽略；⑤ `IsTerminal` 在 Windows 伪终端上判断可能不准确
+- V1 ✅: 风险点清偿 — 批量替换原子性验证 + 文件路径目录结构保留
+- V2 ✅: 端到端验证 — 上下文注入 + approval_mode 切换 + legacy 兼容全部通过
+
+> 详见 [`docs/plans/2026-04-28-sprint11-validation-and-sprint12-plan.md`](./docs/plans/2026-04-28-sprint11-validation-and-sprint12-plan.md)
+
+**Sprint 12 — egui 功能补齐（🔄 当前）**
+
+- 目标: 将 `clarity-core` 中已完备的能力完整暴露到 `clarity-egui`
+- 关键交付: 审批弹窗 UI → Plan 步骤可视化 → Skill 面板 → Token 用量显示
+- 周期: 2 周
+
+> 详见 [`docs/plans/2026-04-28-sprint12-egui-feature-parity.md`](./docs/plans/2026-04-28-sprint12-egui-feature-parity.md)
 
 > 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
 
