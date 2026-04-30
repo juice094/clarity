@@ -173,6 +173,37 @@
 
 > 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
 
+### 3.13 许可策略备忘 — SSPL 分层评估（2026-04-27）
+
+**性质**：备忘 / 未决策。未来若涉及商业 SaaS 化或防云厂商白嫖，需重新激活讨论。
+
+**分析摘要**：
+
+| Crate | 性质 | SSPL 适配性 | 理由 |
+|-------|------|------------|------|
+| `clarity-core` | 基础库 | ❌ 极不适合 | SSPL 传染性会阻止 MIT/Apache-2.0 生态引入 |
+| `clarity-wire` / `clarity-memory` | 基础设施库 | ❌ 不适合 | 同上，库级组件用 SSPL = 生态隔离 |
+| `clarity-gateway` | 服务端程序 | ✅ 最适合 | 可被云厂商直接托管盈利，SSPL Section 13 对此有效 |
+| `clarity-egui` / `clarity-tui` | 客户端 GUI | ⚠️ 意义不大 | 本地运行，SSPL 无额外约束价值 |
+| `clarity-claw` | CLI 入口 | ⚠️ 中等 | 若作为远程 CLI 工具分发有一定意义 |
+
+**当前状态**：全 workspace MIT。
+
+**未来若需防 SaaS 白嫖**：
+1. **首选**：仅 `clarity-gateway` 切 SSPL-1.0 或 Elastic License v2，其余保持 MIT
+2. **次选**：全仓库 AGPLv3（OSI 批准，社区排斥小于 SSPL）
+3. **不建议**：全 workspace 一刀切 SSPL（会杀死 core 库生态采用率）
+
+**关键约束**：
+- SSPL 非 OSI 批准，GitHub 不标记 "Open Source"，企业法务可能直接禁用
+- Rust 生态主流 MIT/Apache-2.0，SSPL 库难以被主流项目依赖
+- 分层许可需在根目录 LICENSE（MIT）与各 crate LICENSE 之间显式声明策略
+
+**触发条件（重新评估）**：
+- `clarity-gateway` 被第三方以 SaaS 形式托管盈利且无任何回馈
+- 项目启动商业托管服务，需保留竞争优势
+- 出现明确的云厂商白嫖实例
+
 ### 3.8 Settings 增量保存决策（2026-04-27）
 
 **决策**：`save_settings` 必须只写入变更字段，保留未修改配置。

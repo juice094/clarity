@@ -1,8 +1,8 @@
 # Clarity Project Status
 
 > Last updated: 2026-04-30
-> Branch: `phase2/protocol-pilot` @ `43a2e502`
-> Test baseline: **574 passed, 0 failed, 6 ignored**
+> Branch: `phase2/protocol-pilot` @ `a4c1a2cf`
+> Test baseline: **577 passed, 0 failed, 6 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -23,6 +23,9 @@
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
 | 11 | **超越 Kimi CLI** | ✅ Complete | V1 风险清偿 + V2 端到端验证通过 |
 | 12 | **egui 功能补齐** | ✅ Complete | 审批弹窗 → Plan 可视化 → Skill UI → Token 显示 |
+| 13 | **安全止血 + 审批一致性** | ✅ Complete | A: 熔断/脱敏/Prompt边界；B: 超时/竞态/身份分层 |
+| 13.5 | **UX Hardening** | ✅ Complete | Multiline + Draft Persistence + Steer + Smart Approval |
+| Phase C | **架构解耦** | ✅ Complete | `ensure_llm` 三层解耦 + `list_pending` trait化 |
 
 ---
 
@@ -30,7 +33,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 574 passed, 6 ignored | 2026-04-30 |
+| Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
 | Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
@@ -72,11 +75,11 @@
 | LSP 集成 | ✅ | ❌ | Tauri 曾实现，egui 无 |
 | MCP 配置面板 | ✅ | ✅ | 服务器列表、启用/禁用、保存 |
 
-**最大风险**：
-1. `clarity-egui` **零单元测试**（0 tests / 0 modules）。
+**最大风险**（已缓解项划线删除）：
+1. ~~`clarity-egui` 零单元测试~~ — 已部分缓解：`app_state`/`settings`/`theme`/`profile_overlay`/`llm_policy` 纯逻辑测试 32+，UI 渲染测试仍为缺口。
 2. **Provider 配置硬编码** — 新服务商需改代码，不支持无代码注册。
-3. **API Key 明文落盘** — `gui-settings.json` 直接存储明文密钥。
-4. **Settings Save 覆盖全配置** — 存在丢失未修改字段的风险（OpenClaw 教训）。
+3. ~~API Key 明文落盘~~ — 已缓解：支持 `${env:VAR}` 环境变量引用语法，密钥可不落盘。
+4. ~~Settings Save 覆盖全配置~~ — 已缓解：增量 merge 保存，只写入变更字段。
 
 **Sprint 13 进行中修复项**：
 - ✅ A1: Agent 工具调用失败后无限重试 → 三级错误分类 + 不可恢复错误立即停止
