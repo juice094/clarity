@@ -70,11 +70,18 @@ pub struct ApprovalRequest {
     pub created_at: Instant,
     /// Optional description highlighting sensitive nature or other concerns
     pub description: Option<String>,
+    /// Optional unified diff preview for file-modifying tools (e.g. file_edit)
+    pub diff_preview: Option<String>,
 }
 
 impl ApprovalRequest {
     /// Create a new approval request
-    fn new(tool_call: ToolCall, source: ApprovalSource, description: Option<String>) -> Self {
+    fn new(
+        tool_call: ToolCall,
+        source: ApprovalSource,
+        description: Option<String>,
+        diff_preview: Option<String>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             tool_call,
@@ -82,6 +89,7 @@ impl ApprovalRequest {
             status: ApprovalStatus::Pending,
             created_at: Instant::now(),
             description,
+            diff_preview,
         }
     }
 }
@@ -104,6 +112,7 @@ pub trait ApprovalRuntime: Send + Sync {
         tool_call: &ToolCall,
         source: ApprovalSource,
         description: Option<String>,
+        diff_preview: Option<String>,
     ) -> Result<String, AgentError>;
 
     /// Wait for a response to an approval request
@@ -198,11 +207,12 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
         tool_call: &ToolCall,
         source: ApprovalSource,
         description: Option<String>,
+        diff_preview: Option<String>,
     ) -> Result<String, AgentError> {
         let session_key = source.session_key();
         let request_id = self
             .inner
-            .create_request(tool_call, source.clone(), description)
+            .create_request(tool_call, source.clone(), description, diff_preview)
             .await?;
         if let Ok(mut sessions) = self.request_sessions.lock() {
             sessions.insert(request_id.clone(), session_key.clone());
@@ -357,8 +367,9 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
         tool_call: &ToolCall,
         source: ApprovalSource,
         description: Option<String>,
+        diff_preview: Option<String>,
     ) -> Result<String, AgentError> {
-        let request = ApprovalRequest::new(tool_call.clone(), source, description);
+        let request = ApprovalRequest::new(tool_call.clone(), source, description, diff_preview);
         let request_id = request.id.clone();
 
         let mut requests = self.requests.lock().map_err(|_| {
@@ -484,6 +495,7 @@ impl Clone for ApprovalRequest {
             status: self.status,
             created_at: self.created_at,
             description: self.description.clone(),
+            diff_preview: self.diff_preview.clone(),
         }
     }
 }
@@ -513,7 +525,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -533,7 +545,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -558,7 +570,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -583,7 +595,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -605,7 +617,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -639,7 +651,7 @@ mod tests {
         };
 
         let request_id = runtime
-            .create_request(&tool_call, source, None)
+            .create_request(&tool_call, source, None, None)
             .await
             .expect("Failed to create request");
 
@@ -660,7 +672,7 @@ mod tests {
                 turn_id: format!("turn-{}", i),
             };
             runtime
-                .create_request(&tool_call, source, None)
+                .create_request(&tool_call, source, None, None)
                 .await
                 .expect("Failed to create request");
         }
@@ -690,7 +702,7 @@ mod tests {
 
         // First request should be pending
         let request_id1 = runtime
-            .create_request(&tool_call, source.clone(), None)
+            .create_request(&tool_call, source.clone(), None, None)
             .await
             .expect("Failed to create request");
 
@@ -708,7 +720,7 @@ mod tests {
 
         // Second request for same session should be auto-approved
         let request_id2 = runtime
-            .create_request(&tool_call, source.clone(), None)
+            .create_request(&tool_call, source.clone(), None, None)
             .await
             .expect("Failed to create request");
 
@@ -737,7 +749,7 @@ mod tests {
 
         // First request
         let request_id1 = runtime
-            .create_request(&tool_call, source.clone(), None)
+            .create_request(&tool_call, source.clone(), None, None)
             .await
             .expect("Failed to create request");
 
@@ -749,7 +761,7 @@ mod tests {
 
         // Second request - wait_for_response should return immediately without blocking
         let request_id2 = runtime
-            .create_request(&tool_call, source.clone(), None)
+            .create_request(&tool_call, source.clone(), None, None)
             .await
             .expect("Failed to create request");
 

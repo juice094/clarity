@@ -165,9 +165,7 @@ fn read_prompt(args: &Args) -> Result<String> {
             use std::io::IsTerminal;
             let stdin = std::io::stdin();
             if stdin.is_terminal() {
-                anyhow::bail!(
-                    "Either --prompt, --file must be provided, or pipe input via stdin"
-                );
+                anyhow::bail!("Either --prompt, --file must be provided, or pipe input via stdin");
             }
             let buf = std::io::read_to_string(stdin.lock())
                 .context("Failed to read prompt from stdin")?;

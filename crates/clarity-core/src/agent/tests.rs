@@ -563,8 +563,16 @@ fn test_build_active_files_context() {
         std::path::PathBuf::from("Cargo.toml"),
     ]);
     let ctx = agent.build_active_files_context().unwrap();
-    assert!(ctx.contains("src/main.rs"), "should preserve directory structure: {}", ctx);
-    assert!(ctx.contains("Cargo.toml"), "should include Cargo.toml: {}", ctx);
+    assert!(
+        ctx.contains("src/main.rs"),
+        "should preserve directory structure: {}",
+        ctx
+    );
+    assert!(
+        ctx.contains("Cargo.toml"),
+        "should include Cargo.toml: {}",
+        ctx
+    );
 }
 
 #[test]
@@ -657,7 +665,9 @@ async fn test_refresh_context_populates_fields() {
     );
 
     // Active files should be populated
-    let active = agent.active_files().expect("active_files should be populated");
+    let active = agent
+        .active_files()
+        .expect("active_files should be populated");
     assert!(active.contains("lib.rs"));
 
     // Project metadata should be populated
@@ -666,7 +676,6 @@ async fn test_refresh_context_populates_fields() {
         .expect("project_metadata should be populated");
     assert!(meta.contains("refresh-test"));
 }
-
 
 // ------------------------------------------------------------------
 // V2 端到端验证 — Sprint 11 能力闭环

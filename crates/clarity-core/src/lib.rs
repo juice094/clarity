@@ -49,6 +49,7 @@ pub mod capability;
 pub mod compaction;
 pub mod config;
 pub mod daemon;
+pub mod diff;
 pub mod error;
 pub mod hooks;
 pub mod llm;

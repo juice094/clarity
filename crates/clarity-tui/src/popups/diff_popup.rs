@@ -1,4 +1,4 @@
-use crate::diff::{DiffHunk, DiffLine};
+use crate::diff::{parse_unified_diff, DiffHunk, DiffLine};
 use crate::popup::{EventState, Popup};
 use crossterm::event::{Event, KeyCode};
 use ratatui::{
@@ -30,59 +30,9 @@ impl DiffPopup {
 
     /// Create a DiffPopup from a unified diff patch string.
     pub fn from_patch(file_path: impl Into<String>, patch: impl Into<String>) -> Self {
-        let patch = patch.into();
-        let mut hunks = Vec::new();
-        let mut current_hunk: Option<DiffHunk> = None;
-
-        for line in patch.lines() {
-            if line.starts_with("@@") {
-                if let Some(hunk) = current_hunk.take() {
-                    hunks.push(hunk);
-                }
-                if let Some((old_start, new_start)) = parse_hunk_header(line) {
-                    current_hunk = Some(DiffHunk {
-                        old_start,
-                        new_start,
-                        lines: Vec::new(),
-                    });
-                }
-            } else if let Some(ref mut hunk) = current_hunk {
-                if let Some(stripped) = line.strip_prefix('+') {
-                    if !line.starts_with("+++") {
-                        hunk.lines.push(DiffLine::Added(stripped.to_string() + "\n"));
-                    }
-                } else if let Some(stripped) = line.strip_prefix('-') {
-                    if !line.starts_with("---") {
-                        hunk.lines.push(DiffLine::Removed(stripped.to_string() + "\n"));
-                    }
-                } else if let Some(stripped) = line.strip_prefix(' ') {
-                    hunk.lines.push(DiffLine::Context(stripped.to_string() + "\n"));
-                } else if line.is_empty() {
-                    hunk.lines.push(DiffLine::Context("\n".to_string()));
-                }
-            }
-        }
-
-        if let Some(hunk) = current_hunk {
-            hunks.push(hunk);
-        }
-
+        let hunks = parse_unified_diff(&patch.into());
         Self::new(file_path, hunks)
     }
-}
-
-/// Parse a unified diff hunk header line.
-/// Format: `@@ -start[,count] +start[,count] @@`
-fn parse_hunk_header(line: &str) -> Option<(usize, usize)> {
-    let line = line.strip_prefix("@@ -")?;
-    let parts: Vec<&str> = line.splitn(2, " +").collect();
-    if parts.len() != 2 {
-        return None;
-    }
-    let old_start = parts[0].split(',').next()?.parse::<usize>().ok()?;
-    let new_part = parts[1].split(" @@").next()?;
-    let new_start = new_part.split(',').next()?.parse::<usize>().ok()?;
-    Some((old_start, new_start))
 }
 
 impl Popup for DiffPopup {

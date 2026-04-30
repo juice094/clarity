@@ -48,12 +48,53 @@ impl Agent {
         None
     }
 
+    /// Compute a preview diff for a file_edit tool call without writing to disk.
+    async fn preview_file_edit_diff(&self, args: &Value) -> Option<String> {
+        let path_str = args.get("path").and_then(|v| v.as_str())?;
+        let path = if std::path::Path::new(path_str).is_absolute() {
+            std::path::PathBuf::from(path_str)
+        } else {
+            self.config.working_dir.join(path_str)
+        };
+        let old_content = tokio::fs::read_to_string(&path).await.ok()?;
+
+        let new_content = if let Some(arr) = args.get("replacements").and_then(|v| v.as_array()) {
+            let mut current = old_content.clone();
+            for item in arr.iter() {
+                let old = item.get("old_string").and_then(|v| v.as_str())?;
+                let new = item.get("new_string").and_then(|v| v.as_str())?;
+                current = current.replacen(old, new, 1);
+            }
+            current
+        } else {
+            let old = args.get("old_string").and_then(|v| v.as_str())?;
+            let new = args.get("new_string").and_then(|v| v.as_str())?;
+            let count = if args
+                .get("replace_all")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                usize::MAX
+            } else {
+                1
+            };
+            old_content.replacen(old, new, count)
+        };
+
+        Some(crate::diff::generate_unified_diff(
+            &old_content,
+            &new_content,
+            path_str,
+        ))
+    }
+
     /// Wait for user approval of a tool call, with timeout handling.
     async fn wait_for_tool_approval(
         &self,
         runtime: &Arc<dyn ApprovalRuntime>,
         tool_call: &ToolCall,
         description: Option<String>,
+        diff_preview: Option<String>,
     ) -> Result<(), ToolError> {
         let turn_id = uuid::Uuid::new_v4().to_string();
         let request_id = runtime
@@ -61,6 +102,7 @@ impl Agent {
                 tool_call,
                 ApprovalSource::ForegroundTurn { turn_id },
                 description,
+                diff_preview,
             )
             .await
             .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
@@ -169,9 +211,20 @@ impl Agent {
                 ApprovalMode::Plan => false,
             };
 
+            let diff_preview = if name == "file_edit" {
+                self.preview_file_edit_diff(&args).await
+            } else {
+                None
+            };
+
             if needs_approval {
-                self.wait_for_tool_approval(runtime, &tool_call_for_approval, description)
-                    .await?;
+                self.wait_for_tool_approval(
+                    runtime,
+                    &tool_call_for_approval,
+                    description,
+                    diff_preview,
+                )
+                .await?;
             } else {
                 match risk {
                     RiskLevel::Medium => {

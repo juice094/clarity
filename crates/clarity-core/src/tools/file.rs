@@ -3,7 +3,6 @@
 use async_trait::async_trait;
 use serde_json::json;
 use serde_json::Value;
-use similar::TextDiff;
 use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
@@ -424,70 +423,69 @@ impl Tool for FileEditTool {
         })?;
 
         // Determine replacement mode: batch (replacements array) or legacy single-replacement
-        let (new_content, total_replacements) = if let Some(arr) =
-            args.get("replacements").and_then(|v| v.as_array())
-        {
-            // Batch mode
-            let mut current_content = content.clone();
-            let mut total = 0usize;
-            for (idx, item) in arr.iter().enumerate() {
-                let old = item
-                    .get("old_string")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        ToolError::invalid_params(format!(
-                            "replacements[{}]: missing old_string",
-                            idx
-                        ))
-                    })?;
-                let new = item
-                    .get("new_string")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        ToolError::invalid_params(format!(
-                            "replacements[{}]: missing new_string",
-                            idx
-                        ))
-                    })?;
-                if !current_content.contains(old) {
+        let (new_content, total_replacements) =
+            if let Some(arr) = args.get("replacements").and_then(|v| v.as_array()) {
+                // Batch mode
+                let mut current_content = content.clone();
+                let mut total = 0usize;
+                for (idx, item) in arr.iter().enumerate() {
+                    let old = item
+                        .get("old_string")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            ToolError::invalid_params(format!(
+                                "replacements[{}]: missing old_string",
+                                idx
+                            ))
+                        })?;
+                    let new = item
+                        .get("new_string")
+                        .and_then(|v| v.as_str())
+                        .ok_or_else(|| {
+                            ToolError::invalid_params(format!(
+                                "replacements[{}]: missing new_string",
+                                idx
+                            ))
+                        })?;
+                    if !current_content.contains(old) {
+                        return Err(ToolError::execution_failed(format!(
+                            "Pattern '{}' not found in file (batch index {})",
+                            old, idx
+                        )));
+                    }
+                    current_content = current_content.replacen(old, new, 1);
+                    total += 1;
+                }
+                (current_content, total)
+            } else {
+                // Legacy single-replacement mode
+                let old_string = helpers::required_str(&args, "old_string")?;
+                let new_string = helpers::required_str(&args, "new_string")?;
+                let replace_all = helpers::optional_bool(&args, "replace_all", false);
+
+                let new_content = if replace_all {
+                    content.replace(old_string, new_string)
+                } else {
+                    content.replacen(old_string, new_string, 1)
+                };
+
+                let count = if replace_all {
+                    content.matches(old_string).count()
+                } else if content.contains(old_string) {
+                    1
+                } else {
+                    0
+                };
+
+                if count == 0 {
+                    warn!("Pattern '{}' not found in file {:?}", old_string, path);
                     return Err(ToolError::execution_failed(format!(
-                        "Pattern '{}' not found in file (batch index {})",
-                        old, idx
+                        "Pattern '{}' not found in file",
+                        old_string
                     )));
                 }
-                current_content = current_content.replacen(old, new, 1);
-                total += 1;
-            }
-            (current_content, total)
-        } else {
-            // Legacy single-replacement mode
-            let old_string = helpers::required_str(&args, "old_string")?;
-            let new_string = helpers::required_str(&args, "new_string")?;
-            let replace_all = helpers::optional_bool(&args, "replace_all", false);
-
-            let new_content = if replace_all {
-                content.replace(old_string, new_string)
-            } else {
-                content.replacen(old_string, new_string, 1)
+                (new_content, count)
             };
-
-            let count = if replace_all {
-                content.matches(old_string).count()
-            } else if content.contains(old_string) {
-                1
-            } else {
-                0
-            };
-
-            if count == 0 {
-                warn!("Pattern '{}' not found in file {:?}", old_string, path);
-                return Err(ToolError::execution_failed(format!(
-                    "Pattern '{}' not found in file",
-                    old_string
-                )));
-            }
-            (new_content, count)
-        };
 
         // Write back
         fs::write(&path, &new_content)
@@ -501,7 +499,11 @@ impl Tool for FileEditTool {
         });
 
         if ctx.approval_mode != ApprovalMode::Yolo {
-            let patch = generate_unified_diff(&content, &new_content, &path.display().to_string());
+            let patch = crate::diff::generate_unified_diff(
+                &content,
+                &new_content,
+                &path.display().to_string(),
+            );
             if let Some(obj) = result.as_object_mut() {
                 obj.insert("_diff_preview".to_string(), json!(patch));
             }
@@ -519,12 +521,6 @@ impl Tool for FileEditTool {
 
         Ok(result)
     }
-}
-
-/// Generate a unified diff patch string from old and new content.
-fn generate_unified_diff(old: &str, new: &str, path: &str) -> String {
-    let diff = TextDiff::from_lines(old, new);
-    diff.unified_diff().header(path, path).to_string()
 }
 
 #[cfg(test)]
@@ -706,7 +702,9 @@ mod tests {
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["replacements"], 1);
         assert!(result.get("_diff_preview").is_some());
-        let patch = result["_diff_preview"].as_str().expect("_diff_preview should be a string");
+        let patch = result["_diff_preview"]
+            .as_str()
+            .expect("_diff_preview should be a string");
         assert!(patch.contains("---"));
         assert!(patch.contains("+++"));
         assert!(patch.contains("-Hello World"));
@@ -739,7 +737,9 @@ mod tests {
     async fn test_file_edit_batch_replacements() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("batch.txt");
-        fs::write(&file_path, "Hello World\nFoo Bar\n").await.unwrap();
+        fs::write(&file_path, "Hello World\nFoo Bar\n")
+            .await
+            .unwrap();
 
         let tool = FileEditTool::new();
         let ctx = ToolContext::new()
@@ -818,7 +818,10 @@ mod tests {
 
         // Verify atomicity: disk file must remain unchanged
         let content = fs::read_to_string(&file_path).await.unwrap();
-        assert_eq!(content, original, "file should remain unchanged on batch failure");
+        assert_eq!(
+            content, original,
+            "file should remain unchanged on batch failure"
+        );
     }
 
     #[tokio::test]

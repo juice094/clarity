@@ -87,10 +87,15 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 **Sprint 12 — egui 功能补齐（🔄 当前）**
 
 - 目标: 将 `clarity-core` 中已完备的能力完整暴露到 `clarity-egui`
-- 关键交付: 审批弹窗 UI → Plan 步骤可视化 → Skill 面板 → Token 用量显示
+- 关键交付:
+  - ✅ Phase 1: 审批弹窗 UI — diff 预览 + 键盘快捷键 (Enter/Esc/Shift+Enter) + 交互拦截
+  - ⏳ Phase 2: Plan 步骤可视化
+  - ⏳ Phase 3: Skill 面板
+  - ⏳ Phase 4: Token 用量显示
 - 周期: 2 周
 
 > 详见 [`docs/plans/2026-04-28-sprint12-egui-feature-parity.md`](./docs/plans/2026-04-28-sprint12-egui-feature-parity.md)
+> 风险与优化分析: [`docs/plans/2026-04-28-sprint12-risk-analysis.md`](./docs/plans/2026-04-28-sprint12-risk-analysis.md)（7 项风险 + 4 决策点 + 5 优化）
 
 > 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
 

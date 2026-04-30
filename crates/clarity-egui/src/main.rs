@@ -157,13 +157,18 @@ impl eframe::App for App {
             }
         }
 
-        // ESC closes settings modal
-        if self.settings_open && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        // Check if approval modal is active — if so, suppress main-UI shortcuts.
+        let approval_active = !self.pending_approvals.is_empty();
+
+        // ESC closes settings modal (but not when approval modal is open).
+        if self.settings_open && !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        {
             self.settings_open = false;
         }
 
         if !self.settings_open
             && !self.is_loading
+            && !approval_active
             && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
         {
             self.new_session();
