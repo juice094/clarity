@@ -92,7 +92,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - ✅ Phase 1: 审批弹窗 UI — diff 预览 + 键盘快捷键 (Enter/Esc/Shift+Enter) + 交互拦截
   - ✅ Phase 2: Plan 步骤可视化 — execute_plan 接入审批管道 + 实时状态图标 (⏳/▶️/✅/❌)
   - ✅ Phase 3: Skill 面板 — 手动激活/停用开关 + 自动发现状态 + 元数据展示
-  - ⏳ Phase 4: Token 用量显示
+  - ✅ Phase 4: Token 用量显示 — Session 累计用量 + 千位分隔符 + sidebar 摘要 + plan() token 记录
 - 周期: 2 周
 
 > 详见 [`docs/plans/2026-04-28-sprint12-egui-feature-parity.md`](./docs/plans/2026-04-28-sprint12-egui-feature-parity.md)

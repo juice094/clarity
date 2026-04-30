@@ -130,6 +130,15 @@ Rules:
             is_complete: _,
         } = llm.complete(&messages, &empty_tools).await?;
 
+        // Estimate and accumulate token usage for plan generation.
+        let prompt_tokens = messages
+            .iter()
+            .map(|m| m.content.len())
+            .sum::<usize>()
+            .div_ceil(4) as u32;
+        let completion_tokens = content.len().div_ceil(4) as u32;
+        self.accumulate_usage(prompt_tokens, completion_tokens);
+
         // Defensive: if the LLM decided to call a function instead of
         // returning JSON content, treat that as an error.
         if !tool_calls.is_empty() {

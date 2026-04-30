@@ -333,3 +333,78 @@
 | `Agent` 代理方法暴露过多内部状态 | 低 | 低 | 仅返回克隆数据，不暴露内部引用 |
 | egui 面板与 `active_skill` 字段不一致 | 中 | 中 | `active_skill` 是单 skill，`active_ids` 是多 skill；需明确语义 |
 | Skill 列表为空时的空状态 UI | 低 | 低 | 显示引导文字 "No skills found in .clarity/skills/" |
+
+
+---
+
+## 十二、Phase 3 交付审计（2026-04-28 执行后）
+
+### 已缓解风险
+
+| 风险 | 缓解措施 | 状态 |
+|------|---------|------|
+| `SkillRegistry` 无 `deactivate` | 新增 `deactivate`/`toggle_active`/`list_skills` | ✅ 已缓解 |
+| egui 无法切换 Skill 激活状态 | ON/OFF 按钮调用 `Agent::set_skill_active` | ✅ 已缓解 |
+| Skill 列表无法获取 | `list_skills()` 返回完整 `Vec<Skill>` | ✅ 已缓解 |
+
+### 新发现风险（Phase 3 执行后）
+
+**R3.P1 `set_skill_active` 非原子读-改-写**
+- `is_active`（读锁）→ `toggle_active`（写锁）之间存在窗口
+- egui 单线程操作，实际不会并发，但 API 层面不保证
+- **缓解**: 低影响，单用户桌面场景；如需强化可改为 `compare_and_set` 语义
+
+**R3.P2 `list_skills()` 克隆所有 Skill body**
+- 返回 `Vec<Skill>` 包含完整 Markdown body，大 skill 集时内存开销高
+- **缓解**: 当前 skill 数量通常 < 50，body < 10KB，可接受；未来可改为 `Vec<SkillMeta>`
+
+**R3.P3 Skill 面板无刷新/发现按钮**
+- 用户放置新 skill 文件后需重启才能看到
+- **缓解**: MVP 设计如此；`discover_skills()` API 已就绪，UI 按钮可后续添加
+
+**R3.P4 `active_skill`（单 skill）与 `active_ids`（多 skill）语义差异**
+- `set_active_skill` 控制 `AgentInner.active_skill`（单选，影响 prompt 注入顺序）
+- Skill 面板控制 `SkillRegistry.active_ids`（多选，影响 prompt 注入集合）
+- 两者独立，用户可能困惑为什么面板激活了 skill 但 `active_skill` 为空
+- **缓解**: 当前 `build_system_prompt` 会将 `active_ids` 中所有 skill 注入，面板操作确实有效；`active_skill` 主要用于确定 tool whitelist
+
+---
+
+## 十三、Phase 4 启动分析：Token 用量显示
+
+### 现状审计（L0）
+
+Phase 4 **核心功能已在前期实现**，现状如下：
+
+1. `WireMessage::Usage` 定义 ✅
+2. `agent/run.rs` 在 `run()`/`run_streaming()`/`run_with_messages_sync()` 结束时 emit Usage ✅
+3. `clarity-egui/src/app_logic.rs` wire → `UiEvent::Usage` 映射 ✅
+4. `process_events` 更新 `App::last_usage` ✅
+5. `panels/chat.rs` 顶部栏渲染：`Tokens: {prompt}↑ {completion}↓ {total}∑` ✅
+
+**结论：Phase 4 功能交付已完成，本次仅需审计优化点。**
+
+### 优化点
+
+**O4.P1 `plan()` 无 Token 用量**
+- `plan()` 调用 `llm.complete()` 但不报告用量（`LlmResponse` 无 token 字段）
+- **缓解**: `plan()` 为单次 LLM 调用，用量较小；非阻塞问题
+
+**O4.P2 `execute_plan()` 不更新 `last_usage`**
+- `execute_plan()` 发送 `TurnBegin`/`TurnEnd` 但不发送 `Usage`
+- 执行完成后 `last_usage` 保持旧值或 `None`
+- **缓解**: `execute_plan()` 不经过 LLM（只执行工具），无新增 token；行为正确
+
+**O4.P3 无累计/会话级用量**
+- 仅显示最近一轮用量，用户无法看到整个会话的累计
+- `AgentInner.session_usage` 已累加，但未通过 wire 暴露
+- **缓解**: Sprint 13 规划；MVP 当前显示足够
+
+**O4.P4 新会话清除 `last_usage`**
+- `new_session()` 设置 `last_usage = None`
+- 用户切换会话后用量显示消失
+- **缓解**: 设计决策，每会话独立统计
+
+---
+
+> 本分析受能力汇流审计协议 v1.0 统辖。风险评级为工程启发式，非定量模型。

@@ -2,6 +2,18 @@ use crate::ui;
 use crate::ui::types::{AgentStatus, Role, UiEvent};
 use crate::App;
 
+fn format_thousands(n: u32) -> String {
+    let s = n.to_string();
+    let mut result = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(c);
+    }
+    result
+}
+
 pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
     egui::CentralPanel::default()
         .frame(egui::Frame::central_panel(&ctx.style()).fill(app.theme.bg))
@@ -94,13 +106,18 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .size(12.0)
                             .color(app.theme.text_dim),
                     );
-                    // Token usage
+                    // Token usage (session cumulative)
                     if let Some((p, c, t)) = app.last_usage {
                         ui.label(
-                            egui::RichText::new(format!("Tokens: {}↑ {}↓ {}∑", p, c, t))
-                                .size(11.0)
-                                .color(app.theme.text_dim)
-                                .monospace(),
+                            egui::RichText::new(format!(
+                                "Session: {}↑ {}↓ {}∑",
+                                format_thousands(p),
+                                format_thousands(c),
+                                format_thousands(t)
+                            ))
+                            .size(11.0)
+                            .color(app.theme.text_dim)
+                            .monospace(),
                         );
                     }
                 });

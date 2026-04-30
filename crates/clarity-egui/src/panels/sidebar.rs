@@ -215,6 +215,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         app.skill_panel_open = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some((_, _, t)) = app.last_usage {
+                            ui.label(
+                                egui::RichText::new(format!("{}∑", t))
+                                    .size(10.0)
+                                    .color(app.theme.text_dim)
+                                    .monospace(),
+                            );
+                        }
                         #[cfg(debug_assertions)]
                         ui.label(
                             egui::RichText::new(format!("FPS: {:.0}", app.fps))
