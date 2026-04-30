@@ -476,6 +476,8 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
             "deepseek".to_string(),
             "DeepSeek".to_string(),
             vec![
+                "deepseek-v4-flash".into(),
+                "deepseek-v4-pro".into(),
                 "deepseek-chat".into(),
                 "deepseek-reasoner".into(),
                 "deepseek-coder".into(),

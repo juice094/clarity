@@ -263,7 +263,7 @@ impl ModelRegistry {
                 "deepseek".to_string(),
                 ProviderConfig {
                     protocol: ProtocolType::OpenAiChat,
-                    base_url: Some("https://api.deepseek.com/v1".into()),
+                    base_url: Some("https://api.deepseek.com".into()),
                     api_key_env: Some("DEEPSEEK_API_KEY".into()),
                     extra: HashMap::new(),
                 },

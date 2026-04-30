@@ -37,7 +37,8 @@ $env:KIMI_API_KEY = "sk-..."
 | 提供商 | 协议 | Base URL | 官方文档 |
 |--------|------|----------|----------|
 | **OpenAI** | `openai_chat` | `https://api.openai.com/v1` | https://platform.openai.com/docs |
-| **DeepSeek** | `openai_chat` | `https://api.deepseek.com/v1` | https://api-docs.deepseek.com/zh-cn/ |
+| **DeepSeek** | `openai_chat` | `https://api.deepseek.com` | https://api-docs.deepseek.com/zh-cn/ |
+| **DeepSeek (Anthropic)** | `anthropic_messages` | `https://api.deepseek.com/anthropic` | 同上 |
 | **Kimi (Moonshot)** | `openai_chat` | `https://api.moonshot.cn/v1` | https://platform.moonshot.cn/docs |
 | **Kimi Code** | `openai_chat` | `https://api.kimi.com/coding/v1` | 同上，Coding 专用 endpoint |
 | **Anthropic** | `anthropic_messages` | `https://api.anthropic.com` | https://docs.anthropic.com/en/api/getting-started |
