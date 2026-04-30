@@ -84,6 +84,15 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     .strong()
                     .color(app.theme.text),
             );
+            // Filter out internal underscore-prefixed keys (_risk_level, _sensitive_file_warning, etc.)
+            let display_args = serde_json::from_str::<serde_json::Value>(&request.tool_call.function.arguments)
+                .map(|mut v| {
+                    if let serde_json::Value::Object(ref mut map) = v {
+                        map.retain(|k, _| !k.starts_with('_'));
+                    }
+                    v.to_string()
+                })
+                .unwrap_or_else(|_| request.tool_call.function.arguments.clone());
             egui::Frame::new()
                 .fill(app.theme.bg_accent)
                 .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
@@ -91,7 +100,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     ui.set_max_width(560.0);
                     ui.monospace(
-                        egui::RichText::new(&request.tool_call.function.arguments)
+                        egui::RichText::new(display_args)
                             .color(app.theme.text)
                             .size(12.0),
                     );
