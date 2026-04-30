@@ -81,6 +81,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - Phase B ✅: 编辑精度升级 — `file_edit` 批量替换 + unified diff 预览
   - ⚠️ 风险/优化：① 批量替换无原子性/回滚（第 N 条失败时前 N-1 条已落盘）；② `_diff_preview` 格式从对象变为字符串，egui/Headless 若解析会断裂；③ `from_patch()` 未处理 `\ No newline at end of file` 等特殊标记
 - Phase C ✅: 终端体验补齐 — TUI `/yolo`/`/interactive` + Headless stdin 管道
+    - ⚠️ 风险/优化：① `/yolo` 切换无二次确认，敏感操作可能自动执行；② TUI 无当前 approval_mode 状态指示器；③ `/planmode` 与 `/plan` 命令命名易混淆；④ Headless `--prompt` 与 stdin 同时存在时管道输入被静默忽略；⑤ `IsTerminal` 在 Windows 伪终端上判断可能不准确
 
 > 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
 
