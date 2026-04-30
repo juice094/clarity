@@ -107,6 +107,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         settings
             .local_model_path
             .clone()
+            .filter(|s| !s.trim().is_empty())
             .or_else(|| {
                 clarity_core::llm::resolve_local_model_path()
                     .map(|p| p.to_string_lossy().into_owned())

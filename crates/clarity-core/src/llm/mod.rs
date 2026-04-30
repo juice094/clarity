@@ -52,7 +52,12 @@ pub fn resolve_local_model_path() -> Option<PathBuf> {
     if let Ok(path) = env::var("CLARITY_LOCAL_MODEL_PATH") {
         let p = PathBuf::from(path);
         if p.exists() {
-            return Some(p);
+            if let Some(ext) = p.extension() {
+                if ext.to_string_lossy().eq_ignore_ascii_case("gguf") {
+                    return Some(p);
+                }
+            }
+            tracing::warn!("CLARITY_LOCAL_MODEL_PATH points to a non-.gguf file: {}. Ignoring.", p.display());
         }
     }
 
@@ -257,6 +262,8 @@ impl LlmProvider for OpenAiCompatibleLlm {
             .map(|_| tools.clone());
         let thinking_opt = if self.base_url.contains("kimi.com") {
             Some(json!({"type": "disabled"}))
+        } else if self.base_url.contains("deepseek.com") {
+            Some(json!({"type": "enabled"}))
         } else {
             None
         };
