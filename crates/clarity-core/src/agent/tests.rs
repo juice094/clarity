@@ -557,14 +557,14 @@ fn test_build_active_files_context() {
     // No active files -> None
     assert!(agent.build_active_files_context().is_none());
 
-    // With active files -> Some
+    // With active files -> Some (preserves directory structure)
     agent.set_active_file_paths(vec![
         std::path::PathBuf::from("src/main.rs"),
         std::path::PathBuf::from("Cargo.toml"),
     ]);
     let ctx = agent.build_active_files_context().unwrap();
-    assert!(ctx.contains("main.rs"));
-    assert!(ctx.contains("Cargo.toml"));
+    assert!(ctx.contains("src/main.rs"), "should preserve directory structure: {}", ctx);
+    assert!(ctx.contains("Cargo.toml"), "should include Cargo.toml: {}", ctx);
 }
 
 #[test]

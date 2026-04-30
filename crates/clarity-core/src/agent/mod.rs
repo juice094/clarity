@@ -316,9 +316,16 @@ impl Agent {
         if paths.is_empty() {
             return None;
         }
+        let working_dir = &self.config.working_dir;
         let lines: Vec<String> = paths
             .iter()
-            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .map(|p| {
+                p.strip_prefix(working_dir)
+                    .unwrap_or(p)
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty())
             .collect();
         if lines.is_empty() {
             return None;

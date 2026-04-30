@@ -793,4 +793,31 @@ mod tests {
         assert!(err_msg.contains("NotFound"));
         assert!(err_msg.contains("batch index 1"));
     }
+
+    #[tokio::test]
+    async fn test_file_edit_batch_replacement_atomic_on_failure() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("atomic.txt");
+        let original = "Hello World\nFoo Bar\n";
+        fs::write(&file_path, original).await.unwrap();
+
+        let tool = FileEditTool::new();
+        let ctx = ToolContext::new().with_working_dir(temp_dir.path());
+
+        // Second replacement will fail — file should remain unchanged
+        let args = json!({
+            "path": "atomic.txt",
+            "replacements": [
+                { "old_string": "World", "new_string": "Rust" },
+                { "old_string": "NotFound", "new_string": "Oops" }
+            ]
+        });
+
+        let result = tool.execute(args, ctx).await;
+        assert!(result.is_err(), "should fail on missing pattern");
+
+        // Verify atomicity: disk file must remain unchanged
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, original, "file should remain unchanged on batch failure");
+    }
 }
