@@ -53,6 +53,18 @@ cargo run -p clarity-egui
 
 ---
 
+## Current Direction
+
+**阶段性目标**：将 Clarity 打造为能替代 Kimi CLI 的本地开发环境，实现 Claw 模式的持续化存储与多角色认知协同。
+
+- ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway）
+- 🔄 进行中：三栏工作台 UI（左侧角色栏 / 顶部实例标签 / 右侧通用工具栏）
+- ⏸️ 未实现：跨会话 Agent 状态快照、子 Agent 上下文持久化（IS-1 后端就绪，前端待接入）、多窗口进程隔离、层级信息注入总线
+
+> 详细路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
+
+---
+
 ## Core Capabilities
 
 | Capability | What it means |

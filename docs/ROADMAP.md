@@ -20,15 +20,19 @@
 
 ---
 
-## 阶段二：本地优先标杆（当前重点 🎯）
+## 阶段二：本地优先标杆 + 开发环境替代（当前重点 🎯）
 
-**目标**：在"个人 AI 运行时"品类中，成为离线/本地场景的默认选项。
+**双重目标**：
+1. 在"个人 AI 运行时"品类中，成为离线/本地场景的默认选项。
+2. 打造能替代 Kimi CLI 的本地开发环境，实现 Claw 模式的持续化存储与多角色认知协同。
 
 | 里程碑 | 交付物 | 优先级 |
 |--------|--------|--------|
 | 本地 LLM 深度集成 | ✅ Candle 原生 GGUF 支持（Qwen2/DeepSeek-R1-Distill） | **P0** |
 | 零依赖发行 | 单二进制 + 嵌入式模型（用户无需安装 Rust/Ollama/Python） | **P0** |
+| 三栏工作台 UI | 左侧角色栏 / 顶部实例标签 / 右侧通用工具栏 | **P0** |
 | 集群语义验证 | Hub-Worker 调度器 + Wire 消息扩展 + 多窗口协作 | **P1** |
+| Claw 持续化存储 | 跨会话 Agent 状态快照、子 Agent 上下文持久化 | **P1** |
 | 协议草案 | 开源 Agent 通信协议（供其他 Runtime 参考实现） | **P2** |
 | 企业/团队版 | Multi-user session 支持 | **P3** |
 
@@ -71,11 +75,11 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
 | `clarity-egui` | 🚀 **已启动** | `crates/clarity-egui` 已创建，复刻 Tauri 深色主题风格。状态：**主力栈**，`clarity-tauri` 废弃归档。v0.4.0 起 Release 产出 egui 二进制 |
 
-### Phase 3：集群语义验证（4-6 周）
+### Phase 3：集群语义验证 + Claw 持续化（4-6 周）
 
-目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器。
+目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器；实现跨会话状态快照与多角色认知协同。
 
-详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C。
+详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C 与 [`docs/visions/AGENT_OS_VISION.md`](docs/visions/AGENT_OS_VISION.md)。
 
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
@@ -86,6 +90,10 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
 | 多窗口 Agent 隔离 | ⏸️ 未启动 | `AppState.agent` → `AgentPool` |
 | IPC 传输层 | ⏸️ 未启动 | TCP 回环 / UDS / Named Pipe |
+| 子 Agent UI 接入（IS-1） | 🔄 后端就绪，前端待接入 | `subagents::builder` 已具备 spawn 能力，缺 egui 独立面板 |
+| Token 权限校验前端（IS-3） | 🔄 后端就绪，前端待接入 | `verify_sandbox_escape` 已存在，缺 UI 层的权限可视化 |
+| 跨会话状态快照 | ⏸️ 未启动 | Agent 思考过程、计划、未完成子任务的完整持久化 |
+| 角色方向性文件系统 | ⏸️ 未启动 | 情感/知识/工程的课题声明与权限矩阵落地 |
 
 ### Phase 4：生态扩展（6 周）
 
