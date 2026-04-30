@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 
 mod app_state;
 mod error;
+mod llm_binder;
+mod llm_loader;
+mod llm_policy;
 mod panels;
 mod session;
 mod settings;

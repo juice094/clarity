@@ -134,6 +134,14 @@ pub trait ApprovalRuntime: Send + Sync {
     /// * `response` - The response to set
     async fn resolve(&self, request_id: &str, response: ApprovalResponse)
         -> Result<(), AgentError>;
+
+    /// List all currently pending approval requests.
+    ///
+    /// Default implementation returns an empty vec for runtimes that
+    /// do not support introspection.
+    fn list_pending(&self) -> Vec<ApprovalRequest> {
+        Vec::new()
+    }
 }
 
 /// Approval mode determining automatic vs manual approval behavior
@@ -365,6 +373,10 @@ impl<R: ApprovalRuntime> ApprovalRuntime for ModeAwareApprovalRuntime<R> {
         }
 
         self.inner.resolve(request_id, response).await
+    }
+
+    fn list_pending(&self) -> Vec<ApprovalRequest> {
+        self.inner.list_pending()
     }
 }
 
@@ -617,6 +629,19 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
         }
 
         Ok(())
+    }
+
+    fn list_pending(&self) -> Vec<ApprovalRequest> {
+        self.requests
+            .lock()
+            .map(|requests| {
+                requests
+                    .values()
+                    .filter(|r| r.status == ApprovalStatus::Pending)
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 

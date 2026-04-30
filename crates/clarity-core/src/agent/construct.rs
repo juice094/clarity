@@ -81,6 +81,13 @@ impl Agent {
         }
     }
 
+    /// Remove the current LLM binding and revert to Unconfigured state.
+    pub fn unset_llm(&self) {
+        let mut inner = self.inner.write().unwrap();
+        inner.llm = None;
+        inner.state = AgentState::Unconfigured;
+    }
+
     /// Set the provider label for internal tracing/audit.
     /// This is NOT injected into the system prompt.
     pub fn set_provider_label(&self, label: impl Into<String>) {
