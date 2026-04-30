@@ -21,7 +21,7 @@
 | 8 | egui 硬化 | ✅ Complete | Pretext Phase 1：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分、onboarding 模型下载 |
 | 9 | **服务商支持硬化** | ✅ Complete | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 引用语法 `${env:VAR}` |
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
-| 11 | **超越 Kimi CLI** | 🔄 In Progress | Phase A ✅ 上下文汇流（Git+文件树+元数据）；Phase B 🔄 编辑精度升级 |
+| 11 | **超越 Kimi CLI** | 🔄 In Progress | Phase A ✅ 上下文汇流；Phase B ✅ 编辑精度（批量替换+unified diff）；Phase C 🔄 TUI/Headless 体验补齐 |
 
 ---
 
