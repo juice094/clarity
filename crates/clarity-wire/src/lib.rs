@@ -82,6 +82,22 @@ pub enum WireMessage {
 
     /// Conversation history compaction has finished.
     CompactionEnd,
+
+    /// Start of a plan step execution.
+    PlanStepBegin {
+        /// Identifier of the step (matches PlanStep.id).
+        step_id: String,
+        /// Name of the tool being executed.
+        tool_name: String,
+    },
+
+    /// End of a plan step execution.
+    PlanStepEnd {
+        /// Identifier of the step.
+        step_id: String,
+        /// Whether the step succeeded.
+        success: bool,
+    },
 }
 
 impl WireMessage {

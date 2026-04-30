@@ -183,3 +183,75 @@
 ---
 
 > 本分析受能力汇流审计协议 v1.0 统辖。风险评级为工程启发式，非定量模型。
+
+---
+
+## 八、Phase 1 交付审计（2026-04-28 执行后）
+
+### 已缓解风险
+
+| 风险 | 缓解措施 | 状态 |
+|------|---------|------|
+| R1.1 状态机错误 | `pending_approvals` 每帧刷新 + 全屏 blocker 拦截点击 + 主 UI 快捷键跳过 | ✅ 已缓解 |
+| R1.2 Wire 事件死锁 | 未走 Wire 事件，直接通过 `InMemoryApprovalRuntime` 共享状态（`Arc` + `Mutex`） | ✅ 已缓解 |
+| R1.4 diff 着色 | `parse_unified_diff` + `flatten_hunks` + egui `RichText::color` | ✅ 已缓解 |
+| R5.1 零测试 | `diff.rs` 新增 5 个单元测试；approval 弹窗逻辑为纯 UI，暂无自动测试 | 🟡 部分缓解 |
+
+### 新发现风险（Phase 1 执行后）
+
+**R1.P1 `preview_file_edit_diff` 与 `FileEditTool::execute` 逻辑漂移**
+- 两处独立实现了相同的 batch/legacy 替换逻辑
+- 未来修改 `FileEditTool` 行为时，`preview` 不会自动同步，导致审批 diff 与实际 diff 不一致
+- **缓解**: 将替换逻辑提取为 `clarity-core::tools::file_edit::simulate_replacement`，供 preview 和 execute 共用
+
+**R1.P2 `execute_plan()` 绕过审批流程（🔴 阻塞 Plan 模式安全）**
+- `execute_plan()` 直接调用 `registry.execute()`，不经过 `execute_tool_call()`
+- 结果：Plan 模式执行步骤时完全跳过敏感文件检测、风险评估、审批弹窗
+- **缓解**: Phase 2 必须将 `execute_plan()` 改为通过 `execute_tool_call()` 执行每步
+
+**R1.P3 `parse_unified_diff` 未处理特殊标记**
+- `\ No newline at end of file` 等标记被当作 context 行渲染
+- **缓解**: 低影响， cosmetic 问题，延期处理
+
+---
+
+## 九、Phase 2 启动分析：Plan 步骤可视化
+
+### 核心架构问题（L0）
+
+`Agent::execute_plan()` 当前直接调用 `ToolRegistry::execute`，绕过了 `Agent::execute_tool_call()` 中完整的安全/审批管道。这意味着：
+- Plan 模式 = YOLO 执行（无审批、无 diff、无风险检测）
+- 即使 egui 做了漂亮的步骤可视化，底层执行仍然不安全
+
+**Phase 2 必须先修复此问题，再谈 UI。**
+
+### 执行方案
+
+**Step A — 安全修复（L0，阻塞）**
+1. `execute_plan()` 每步构造 `ToolCall`，调用 `execute_tool_call()` 而非 `registry.execute()`
+2. 这样每步自动获得：敏感文件检测、风险评估、审批弹窗、diff 预览
+3. 在 `execute_tool_call()` 中 emit `WireMessage::PlanStepBegin` / `PlanStepEnd`
+
+**Step B — Wire 协议扩展**
+1. `WireMessage` 新增：
+   - `PlanStepBegin { step_id: String, tool_name: String }`
+   - `PlanStepEnd { step_id: String, success: bool }`
+2. `clarity-wire` 无需改 `ViewCommand`（走原生 WireMessage 事件）
+
+**Step C — egui Plan 面板**
+1. `UiEvent` 新增 `PlanStepBegin` / `PlanStepEnd`
+2. 新增 `panels/plan.rs`：步骤列表 + 状态图标（⏳/✅/❌）
+3. MVP 不做 DAG 图、不做步骤详情展开
+
+**Step D — 取消支持**
+1. `execute_plan()` 需要检查 `CancellationToken`，支持步骤间取消
+2. 现有 `begin_turn()` 已返回 token，但 `execute_plan()` 未使用
+
+### Phase 2 风险矩阵
+
+| 风险 | 概率 | 影响 | 缓解 |
+|------|------|------|------|
+| `execute_plan` 改 `execute_tool_call` 引入行为变化 | 中 | 高 | 保留现有测试，新增 Plan 执行测试 |
+| Plan 执行中审批弹窗与流式输出并发 | 低 | 高 | `execute_plan` 不走流式，风险低于 `run_streaming` |
+| 步骤状态同步滞后 | 低 | 中 | wire 事件顺序保证（单生产者） |
+| 大 Plan（>50 步）UI 性能 | 低 | 低 | 虚拟列表或 `ScrollArea` |

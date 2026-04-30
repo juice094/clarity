@@ -163,37 +163,57 @@ Rules:
 
     /// Execute a previously-generated plan step-by-step.
     ///
-    /// Each step is run through `ToolRegistry::execute` with the same
-    /// `ToolContext` that the Agent uses during a normal turn.
+    /// Each step is run through `Agent::execute_tool_call` so that the full
+    /// safety pipeline (sensitive-file detection, risk evaluation, approval)
+    /// is applied.  Step lifecycle events are emitted over the wire.
     /// Errors on individual steps are captured in `PlanResult` rather than
     /// aborting the whole plan, so the caller can see partial progress.
     pub async fn execute_plan(&self, plan: &Plan) -> Result<Vec<PlanResult>, AgentError> {
-        let _cancel_token = self.begin_turn()?;
+        let cancel_token = self.begin_turn()?;
 
-        let mode = self.inner.read().unwrap().approval_mode;
-        let ctx = crate::tools::ToolContext::new()
-            .with_working_dir(&self.config.working_dir)
-            .with_read_only(self.config.read_only)
-            .with_timeout(self.config.tool_timeout_secs)
-            .with_approval_mode(mode);
+        self.send_wire_message(clarity_wire::WireMessage::TurnBegin {
+            user_input: format!("Execute plan: {}", plan.title),
+        });
 
         let mut results = Vec::with_capacity(plan.steps.len());
         for step in &plan.steps {
-            let output = match self
-                .registry
-                .execute(&step.tool_name, step.tool_params.clone(), ctx.clone())
-                .await
-            {
-                Ok(val) => val.to_string(),
-                Err(e) => format!("Error: {}", e),
+            if cancel_token.is_cancelled() {
+                tracing::info!("Plan execution cancelled at step {}", step.id);
+                break;
+            }
+
+            self.send_wire_message(clarity_wire::WireMessage::PlanStepBegin {
+                step_id: step.id.clone(),
+                tool_name: step.tool_name.clone(),
+            });
+
+            let tool_call = crate::types::ToolCall {
+                id: format!("plan-step-{}", step.id),
+                call_type: "function".to_string(),
+                function: crate::types::FunctionCall {
+                    name: step.tool_name.clone(),
+                    arguments: serde_json::to_string(&step.tool_params).unwrap_or_default(),
+                },
             };
+
+            let (success, output) = match self.execute_tool_call(&tool_call).await {
+                Ok(val) => (true, val.to_string()),
+                Err(e) => (false, format!("Error: {}", e)),
+            };
+
+            self.send_wire_message(clarity_wire::WireMessage::PlanStepEnd {
+                step_id: step.id.clone(),
+                success,
+            });
+
             results.push(PlanResult {
                 step_id: step.id.clone(),
-                success: !output.starts_with("Error:"),
+                success,
                 output,
             });
         }
 
+        self.send_wire_message(clarity_wire::WireMessage::TurnEnd);
         self.finish_turn();
         Ok(results)
     }

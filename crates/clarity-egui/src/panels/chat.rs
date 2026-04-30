@@ -341,6 +341,20 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     });
                 if execute {
                     let plan = app.pending_plan.take().unwrap();
+                    // Initialize live execution tracker.
+                    app.plan_tracker = Some(crate::ui::types::PlanExecutionTracker {
+                        title: plan.title.clone(),
+                        steps: plan
+                            .steps
+                            .iter()
+                            .map(|s| crate::ui::types::PlanStepTracker {
+                                id: s.id.clone(),
+                                description: s.description.clone(),
+                                tool_name: s.tool_name.clone(),
+                                status: crate::ui::types::PlanStepStatus::Pending,
+                            })
+                            .collect(),
+                    });
                     let state = app.state.clone();
                     let tx = app.ui_tx.clone();
                     app.is_loading = true;
@@ -375,6 +389,80 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     });
                 } else if cancel {
                     app.pending_plan = None;
+                }
+                ui.separator();
+            }
+
+            // Plan execution tracker panel
+            if let Some(ref tracker) = app.plan_tracker {
+                let mut dismiss = false;
+                egui::Frame::group(ui.style())
+                    .fill(app.theme.surface)
+                    .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
+                    .stroke(egui::Stroke::new(1.0, app.theme.accent))
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!("📋 {}", tracker.title))
+                                    .size(13.0)
+                                    .strong()
+                                    .color(app.theme.text),
+                            );
+                            if ui
+                                .button(
+                                    egui::RichText::new("✕")
+                                        .size(12.0)
+                                        .color(app.theme.text_dim),
+                                )
+                                .clicked()
+                            {
+                                dismiss = true;
+                            }
+                        });
+                        ui.add_space(6.0);
+                        for step in &tracker.steps {
+                            let (icon, color) = match step.status {
+                                crate::ui::types::PlanStepStatus::Pending => {
+                                    ("⏳", app.theme.text_dim)
+                                }
+                                crate::ui::types::PlanStepStatus::Running => {
+                                    ("▶️", app.theme.accent)
+                                }
+                                crate::ui::types::PlanStepStatus::Success => ("✅", app.theme.ok),
+                                crate::ui::types::PlanStepStatus::Failed => {
+                                    ("❌", app.theme.danger)
+                                }
+                            };
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(icon).size(12.0));
+                                ui.label(
+                                    egui::RichText::new(format!("{}.", step.id))
+                                        .size(11.0)
+                                        .strong()
+                                        .color(app.theme.text),
+                                );
+                                ui.label(
+                                    egui::RichText::new(&step.description)
+                                        .size(11.0)
+                                        .color(app.theme.text),
+                                );
+                            });
+                            ui.horizontal(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(
+                                    egui::RichText::new(format!("→ {}", step.tool_name))
+                                        .size(10.0)
+                                        .color(color)
+                                        .monospace(),
+                                );
+                            });
+                            ui.add_space(2.0);
+                        }
+                    });
+                if dismiss {
+                    app.plan_tracker = None;
                 }
                 ui.separator();
             }

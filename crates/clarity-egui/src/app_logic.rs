@@ -164,6 +164,7 @@ impl App {
             pending_approvals: Vec::new(),
             last_usage: None,
             pending_plan: None,
+            plan_tracker: None,
             task_create_modal_open: false,
             task_create_name: String::new(),
             task_create_desc: String::new(),
@@ -336,6 +337,12 @@ impl App {
                             Some(UiEvent::CompactionBegin)
                         }
                         clarity_wire::WireMessage::CompactionEnd => Some(UiEvent::CompactionEnd),
+                        clarity_wire::WireMessage::PlanStepBegin { step_id, tool_name } => {
+                            Some(UiEvent::PlanStepBegin { step_id, tool_name })
+                        }
+                        clarity_wire::WireMessage::PlanStepEnd { step_id, success } => {
+                            Some(UiEvent::PlanStepEnd { step_id, success })
+                        }
                         clarity_wire::WireMessage::Usage {
                             prompt_tokens,
                             completion_tokens,
@@ -497,6 +504,30 @@ impl App {
                     self.is_loading = false;
                     self.agent_status = AgentStatus::Online;
                     self.pending_plan = Some(plan);
+                }
+                UiEvent::PlanStepBegin { step_id, .. } => {
+                    if let Some(ref mut tracker) = self.plan_tracker {
+                        for step in &mut tracker.steps {
+                            if step.id == step_id {
+                                step.status = crate::ui::types::PlanStepStatus::Running;
+                                break;
+                            }
+                        }
+                    }
+                }
+                UiEvent::PlanStepEnd { step_id, success } => {
+                    if let Some(ref mut tracker) = self.plan_tracker {
+                        for step in &mut tracker.steps {
+                            if step.id == step_id {
+                                step.status = if success {
+                                    crate::ui::types::PlanStepStatus::Success
+                                } else {
+                                    crate::ui::types::PlanStepStatus::Failed
+                                };
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }

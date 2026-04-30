@@ -77,6 +77,8 @@ pub(crate) struct App {
     pub(crate) last_usage: Option<(u32, u32, u32)>,
     /// Pending plan for user review (Plan mode).
     pub(crate) pending_plan: Option<clarity_core::agent::Plan>,
+    /// Live execution tracker for an active plan.
+    pub(crate) plan_tracker: Option<crate::ui::types::PlanExecutionTracker>,
     /// Task creation modal state.
     pub(crate) task_create_modal_open: bool,
     /// Task creation form fields.

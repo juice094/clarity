@@ -45,6 +45,37 @@ pub enum UiEvent {
         total_tokens: u32,
     },
     PlanReady(Plan),
+    PlanStepBegin {
+        step_id: String,
+        tool_name: String,
+    },
+    PlanStepEnd {
+        step_id: String,
+        success: bool,
+    },
+}
+
+/// Live tracker for an executing plan.
+#[derive(Clone, Debug)]
+pub struct PlanExecutionTracker {
+    pub title: String,
+    pub steps: Vec<PlanStepTracker>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlanStepTracker {
+    pub id: String,
+    pub description: String,
+    pub tool_name: String,
+    pub status: PlanStepStatus,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PlanStepStatus {
+    Pending,
+    Running,
+    Success,
+    Failed,
 }
 
 #[derive(Clone)]
