@@ -76,7 +76,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 **Sprint 11 — 超越 Kimi CLI（🔄 当前）**
 
-- Phase A 🔄: 上下文注入 — `GitContext` + 项目元数据 + 文件树自动注入主 Agent
+- Phase A ✅: 上下文注入 — `SystemPromptBuilder` 自动汇流 `GitContext` + `ActiveFiles` + `ProjectMetadata`
 - Phase B 🔄: 编辑精度升级 — `file_edit` 批量替换 + unified diff 预览
 - Phase C 🔄: 终端体验补齐 — TUI `/yolo`/`/interactive` + Headless stdin 管道
 
