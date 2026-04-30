@@ -666,3 +666,102 @@ async fn test_refresh_context_populates_fields() {
         .expect("project_metadata should be populated");
     assert!(meta.contains("refresh-test"));
 }
+
+
+// ------------------------------------------------------------------
+// V2 端到端验证 — Sprint 11 能力闭环
+// ------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_end_to_end_context_injection() {
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Initialize a git repo
+    let output = std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(temp_dir.path())
+        .output();
+    if output.is_err() || !output.unwrap().status.success() {
+        return; // Skip if git unavailable
+    }
+
+    // Create a file and commit it
+    let file_path = temp_dir.path().join("lib.rs");
+    let mut file = std::fs::File::create(&file_path).unwrap();
+    writeln!(file, "fn main() {{}}").unwrap();
+
+    std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["commit", "-m", "init", "--no-gpg-sign"])
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap();
+
+    // Create Cargo.toml
+    let cargo_toml = temp_dir.path().join("Cargo.toml");
+    let mut file = std::fs::File::create(&cargo_toml).unwrap();
+    writeln!(file, "[package]").unwrap();
+    writeln!(file, "name = \"e2e-test\"").unwrap();
+
+    let registry = ToolRegistry::new();
+    let mut config = AgentConfig::new();
+    config.working_dir = temp_dir.path().to_path_buf();
+    let agent = Agent::with_config(registry, config);
+
+    agent.set_active_file_paths(vec![std::path::PathBuf::from("lib.rs")]);
+
+    agent.refresh_context().await;
+
+    let prompt = agent.build_system_prompt();
+
+    // V2 验证: System Prompt 必须包含三类注入上下文
+    assert!(
+        prompt.contains("Git Context"),
+        "should contain Git Context section:\n{}",
+        prompt
+    );
+    assert!(
+        prompt.contains("Active Files"),
+        "should contain Active Files section:\n{}",
+        prompt
+    );
+    assert!(
+        prompt.contains("lib.rs"),
+        "should mention lib.rs:\n{}",
+        prompt
+    );
+    assert!(
+        prompt.contains("Project Metadata"),
+        "should contain Project Metadata section:\n{}",
+        prompt
+    );
+    assert!(
+        prompt.contains("e2e-test"),
+        "should contain package name:\n{}",
+        prompt
+    );
+}
+
+#[test]
+fn test_approval_mode_switch() {
+    use crate::approval::ApprovalMode;
+
+    let registry = ToolRegistry::new();
+    let agent = Agent::with_config(registry, AgentConfig::new());
+
+    // Default is Interactive
+    assert_eq!(agent.approval_mode(), ApprovalMode::Interactive);
+
+    agent.set_approval_mode(ApprovalMode::Yolo);
+    assert_eq!(agent.approval_mode(), ApprovalMode::Yolo);
+
+    agent.set_approval_mode(ApprovalMode::Plan);
+    assert_eq!(agent.approval_mode(), ApprovalMode::Plan);
+}

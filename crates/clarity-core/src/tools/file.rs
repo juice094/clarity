@@ -820,4 +820,49 @@ mod tests {
         let content = fs::read_to_string(&file_path).await.unwrap();
         assert_eq!(content, original, "file should remain unchanged on batch failure");
     }
+
+    #[tokio::test]
+    async fn test_legacy_single_replacement_backward_compatible() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("legacy.txt");
+        fs::write(&file_path, "Hello World").await.unwrap();
+
+        let tool = FileEditTool::new();
+        let ctx = ToolContext::new().with_working_dir(temp_dir.path());
+
+        let args = json!({
+            "path": "legacy.txt",
+            "old_string": "World",
+            "new_string": "Rust"
+        });
+
+        let result = tool.execute(args, ctx).await.unwrap();
+        assert_eq!(result["replacements"], 1);
+
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "Hello Rust");
+    }
+
+    #[tokio::test]
+    async fn test_legacy_replace_all_backward_compatible() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("multi.txt");
+        fs::write(&file_path, "foo foo foo").await.unwrap();
+
+        let tool = FileEditTool::new();
+        let ctx = ToolContext::new().with_working_dir(temp_dir.path());
+
+        let args = json!({
+            "path": "multi.txt",
+            "old_string": "foo",
+            "new_string": "bar",
+            "replace_all": true
+        });
+
+        let result = tool.execute(args, ctx).await.unwrap();
+        assert_eq!(result["replacements"], 3);
+
+        let content = fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "bar bar bar");
+    }
 }
