@@ -328,6 +328,7 @@ mod tests {
     use tokio::fs;
 
     #[tokio::test]
+    #[cfg_attr(target_os = "windows", ignore = "bash not available on Windows")]
     async fn test_bash_echo() {
         let tool = BashTool::new();
         let ctx = ToolContext::new();
@@ -341,6 +342,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(target_os = "windows", ignore = "bash not available on Windows")]
     async fn test_bash_with_working_dir() {
         let temp_dir = TempDir::new().unwrap();
         let tool = BashTool::new();

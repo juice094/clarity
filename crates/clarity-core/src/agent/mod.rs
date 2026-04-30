@@ -93,6 +93,12 @@ struct AgentInner {
     active_file_paths: Vec<std::path::PathBuf>,
     /// Approval mode (Interactive, Yolo, Plan)
     approval_mode: ApprovalMode,
+    /// Cached Git context string for SystemPromptBuilder injection.
+    git_context: Option<String>,
+    /// Cached active files description for SystemPromptBuilder injection.
+    active_files: Option<String>,
+    /// Cached project metadata (Cargo.toml, package.json, etc.) for SystemPromptBuilder injection.
+    project_metadata: Option<String>,
 }
 
 /// Simple mock LLM for testing
@@ -250,5 +256,119 @@ impl Agent {
                 }
             });
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Sprint 11 Phase A — Context Snapshot getters/setters
+    // ------------------------------------------------------------------
+
+    /// Set the cached Git context string.
+    pub fn set_git_context(&self, ctx: Option<String>) {
+        self.inner.write().unwrap().git_context = ctx;
+    }
+
+    /// Get the cached Git context string.
+    pub fn git_context(&self) -> Option<String> {
+        self.inner.read().unwrap().git_context.clone()
+    }
+
+    /// Set the cached active files description.
+    pub fn set_active_files(&self, files: Option<String>) {
+        self.inner.write().unwrap().active_files = files;
+    }
+
+    /// Get the cached active files description.
+    pub fn active_files(&self) -> Option<String> {
+        self.inner.read().unwrap().active_files.clone()
+    }
+
+    /// Set the cached project metadata string.
+    pub fn set_project_metadata(&self, meta: Option<String>) {
+        self.inner.write().unwrap().project_metadata = meta;
+    }
+
+    /// Get the cached project metadata string.
+    pub fn project_metadata(&self) -> Option<String> {
+        self.inner.read().unwrap().project_metadata.clone()
+    }
+
+    /// Refresh the cached context snapshot (Git, active files, project metadata).
+    /// Called at the start of each turn so the System Prompt reflects current state.
+    pub async fn refresh_context(&self) {
+        let working_dir = &self.config.working_dir;
+
+        // 1. Git context
+        let git_ctx = crate::subagents::collect_git_context(working_dir).await;
+        self.set_git_context(git_ctx);
+
+        // 2. Active files
+        let active_files = self.build_active_files_context();
+        self.set_active_files(active_files);
+
+        // 3. Project metadata
+        let metadata = self.collect_project_metadata();
+        self.set_project_metadata(metadata);
+    }
+
+    /// Build a text description of active files for the system prompt.
+    fn build_active_files_context(&self) -> Option<String> {
+        let paths = self.active_file_paths();
+        if paths.is_empty() {
+            return None;
+        }
+        let lines: Vec<String> = paths
+            .iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect();
+        if lines.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "The user is currently working with:\n- {}",
+            lines.join("\n- ")
+        ))
+    }
+
+    /// Collect project metadata (Cargo.toml or package.json) for the system prompt.
+    fn collect_project_metadata(&self) -> Option<String> {
+        let working_dir = &self.config.working_dir;
+
+        // Try Cargo.toml first
+        let cargo_toml = working_dir.join("Cargo.toml");
+        if cargo_toml.exists() {
+            match std::fs::read_to_string(&cargo_toml) {
+                Ok(content) => {
+                    let truncated = if content.len() > 2048 {
+                        format!("{}...\n(truncated)", &content[..2048])
+                    } else {
+                        content
+                    };
+                    return Some(format!("```toml\n{}\n```", truncated));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read Cargo.toml: {}", e);
+                }
+            }
+        }
+
+        // Fallback to package.json
+        let package_json = working_dir.join("package.json");
+        if package_json.exists() {
+            match std::fs::read_to_string(&package_json) {
+                Ok(content) => {
+                    let truncated = if content.len() > 2048 {
+                        format!("{}...\n(truncated)", &content[..2048])
+                    } else {
+                        content
+                    };
+                    return Some(format!("```json\n{}\n```", truncated));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read package.json: {}", e);
+                }
+            }
+        }
+
+        None
     }
 }

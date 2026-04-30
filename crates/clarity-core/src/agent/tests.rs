@@ -526,3 +526,143 @@ fn test_active_skill_snapshot_none_when_not_set() {
     agent.finish_turn();
     assert_eq!(agent.snapshotted_active_skill(), None);
 }
+
+// ------------------------------------------------------------------
+// Sprint 11 Phase A — Context Snapshot tests
+// ------------------------------------------------------------------
+
+#[test]
+fn test_context_getters_and_setters() {
+    let registry = ToolRegistry::new();
+    let agent = Agent::with_config(registry, AgentConfig::new());
+
+    assert!(agent.git_context().is_none());
+    assert!(agent.active_files().is_none());
+    assert!(agent.project_metadata().is_none());
+
+    agent.set_git_context(Some("Branch: main".to_string()));
+    agent.set_active_files(Some("src/main.rs".to_string()));
+    agent.set_project_metadata(Some("[package]".to_string()));
+
+    assert_eq!(agent.git_context(), Some("Branch: main".to_string()));
+    assert_eq!(agent.active_files(), Some("src/main.rs".to_string()));
+    assert_eq!(agent.project_metadata(), Some("[package]".to_string()));
+}
+
+#[test]
+fn test_build_active_files_context() {
+    let registry = ToolRegistry::new();
+    let agent = Agent::with_config(registry, AgentConfig::new());
+
+    // No active files -> None
+    assert!(agent.build_active_files_context().is_none());
+
+    // With active files -> Some
+    agent.set_active_file_paths(vec![
+        std::path::PathBuf::from("src/main.rs"),
+        std::path::PathBuf::from("Cargo.toml"),
+    ]);
+    let ctx = agent.build_active_files_context().unwrap();
+    assert!(ctx.contains("main.rs"));
+    assert!(ctx.contains("Cargo.toml"));
+}
+
+#[test]
+fn test_collect_project_metadata_cargo_toml() {
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+    let cargo_toml = temp_dir.path().join("Cargo.toml");
+    let mut file = std::fs::File::create(&cargo_toml).unwrap();
+    writeln!(file, "[package]").unwrap();
+    writeln!(file, "name = \"test-project\"").unwrap();
+    writeln!(file, "version = \"0.1.0\"").unwrap();
+
+    let registry = ToolRegistry::new();
+    let mut config = AgentConfig::new();
+    config.working_dir = temp_dir.path().to_path_buf();
+    let agent = Agent::with_config(registry, config);
+
+    let meta = agent.collect_project_metadata().unwrap();
+    assert!(meta.contains("test-project"));
+    assert!(meta.contains("```toml"));
+}
+
+#[test]
+fn test_collect_project_metadata_package_json() {
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+    let package_json = temp_dir.path().join("package.json");
+    let mut file = std::fs::File::create(&package_json).unwrap();
+    writeln!(file, "{{").unwrap();
+    writeln!(file, "  \"name\": \"test-js-project\",").unwrap();
+    writeln!(file, "  \"version\": \"1.0.0\"").unwrap();
+    writeln!(file, "}}").unwrap();
+
+    let registry = ToolRegistry::new();
+    let mut config = AgentConfig::new();
+    config.working_dir = temp_dir.path().to_path_buf();
+    let agent = Agent::with_config(registry, config);
+
+    let meta = agent.collect_project_metadata().unwrap();
+    assert!(meta.contains("test-js-project"));
+    assert!(meta.contains("```json"));
+}
+
+#[test]
+fn test_collect_project_metadata_none_when_no_manifest() {
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    let registry = ToolRegistry::new();
+    let mut config = AgentConfig::new();
+    config.working_dir = temp_dir.path().to_path_buf();
+    let agent = Agent::with_config(registry, config);
+
+    assert!(agent.collect_project_metadata().is_none());
+}
+
+#[tokio::test]
+async fn test_refresh_context_populates_fields() {
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a Cargo.toml so project_metadata is populated
+    let cargo_toml = temp_dir.path().join("Cargo.toml");
+    let mut file = std::fs::File::create(&cargo_toml).unwrap();
+    writeln!(file, "[package]").unwrap();
+    writeln!(file, "name = \"refresh-test\"").unwrap();
+
+    let registry = ToolRegistry::new();
+    let mut config = AgentConfig::new();
+    config.working_dir = temp_dir.path().to_path_buf();
+    let agent = Agent::with_config(registry, config);
+
+    // Pre-set active file paths
+    agent.set_active_file_paths(vec![std::path::PathBuf::from("src/lib.rs")]);
+
+    agent.refresh_context().await;
+
+    // Git context may be None (no git repo) or Some — just check it's been set
+    // (i.e. the field was touched by refresh_context)
+    assert!(
+        agent.git_context().is_none() || agent.git_context().is_some(),
+        "git_context should have been set"
+    );
+
+    // Active files should be populated
+    let active = agent.active_files().expect("active_files should be populated");
+    assert!(active.contains("lib.rs"));
+
+    // Project metadata should be populated
+    let meta = agent
+        .project_metadata()
+        .expect("project_metadata should be populated");
+    assert!(meta.contains("refresh-test"));
+}

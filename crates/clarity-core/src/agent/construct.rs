@@ -53,6 +53,9 @@ impl Agent {
                 file_prompt_cache: None,
                 active_file_paths: Vec::new(),
                 approval_mode: ApprovalMode::default(),
+                git_context: None,
+                active_files: None,
+                project_metadata: None,
             })),
         }
     }

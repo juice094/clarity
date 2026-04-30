@@ -21,6 +21,12 @@ pub enum PromptComponent {
     /// Offline-mode notice.
     #[allow(dead_code)]
     OfflineNotice,
+    /// Git repository context (branch, status, recent commits).
+    GitContext(String),
+    /// Active files currently being operated on.
+    ActiveFiles(String),
+    /// Project metadata (Cargo.toml, package.json, etc.).
+    ProjectMetadata(String),
 }
 
 /// Builder for assembling the system prompt from conditional components.
@@ -76,6 +82,30 @@ impl SystemPromptBuilder {
         self
     }
 
+    pub fn with_git_context(mut self, ctx: impl Into<String>) -> Self {
+        let ctx = ctx.into();
+        if !ctx.is_empty() {
+            self.components.push(PromptComponent::GitContext(ctx));
+        }
+        self
+    }
+
+    pub fn with_active_files(mut self, files: impl Into<String>) -> Self {
+        let files = files.into();
+        if !files.is_empty() {
+            self.components.push(PromptComponent::ActiveFiles(files));
+        }
+        self
+    }
+
+    pub fn with_project_metadata(mut self, meta: impl Into<String>) -> Self {
+        let meta = meta.into();
+        if !meta.is_empty() {
+            self.components.push(PromptComponent::ProjectMetadata(meta));
+        }
+        self
+    }
+
     pub fn with_template_vars(mut self, vars: HashMap<String, String>) -> Self {
         self.template_variables = vars;
         self
@@ -114,6 +144,15 @@ impl SystemPromptBuilder {
                         "## Network Status\nYou are currently offline. Only local tools are available."
                             .to_string(),
                     );
+                }
+                PromptComponent::GitContext(ctx) => {
+                    sections.push(format!("## Git Context\n{}", ctx));
+                }
+                PromptComponent::ActiveFiles(files) => {
+                    sections.push(format!("## Active Files\n{}", files));
+                }
+                PromptComponent::ProjectMetadata(meta) => {
+                    sections.push(format!("## Project Metadata\n{}", meta));
                 }
             }
         }
@@ -192,6 +231,9 @@ impl Agent {
             .with_skills(skill_contexts)
             .with_approval_mode(self.approval_mode())
             .with_template_vars(self.config.template_variables.clone())
+            .with_git_context(self.git_context().unwrap_or_default())
+            .with_active_files(self.active_files().unwrap_or_default())
+            .with_project_metadata(self.project_metadata().unwrap_or_default())
             .build()
     }
 
@@ -331,5 +373,48 @@ mod tests {
             .with_entry_context("")
             .build();
         assert_eq!(prompt, "Base.");
+    }
+
+    #[test]
+    fn test_builder_git_context() {
+        let prompt = SystemPromptBuilder::new()
+            .with_base("Base.")
+            .with_git_context("Branch: main\nStatus: clean")
+            .build();
+        assert!(prompt.contains("## Git Context"));
+        assert!(prompt.contains("Branch: main"));
+    }
+
+    #[test]
+    fn test_builder_active_files() {
+        let prompt = SystemPromptBuilder::new()
+            .with_base("Base.")
+            .with_active_files("file1.rs\nfile2.rs")
+            .build();
+        assert!(prompt.contains("## Active Files"));
+        assert!(prompt.contains("file1.rs"));
+    }
+
+    #[test]
+    fn test_builder_project_metadata() {
+        let prompt = SystemPromptBuilder::new()
+            .with_base("Base.")
+            .with_project_metadata("```toml\n[package]\nname = \"test\"\n```")
+            .build();
+        assert!(prompt.contains("## Project Metadata"));
+        assert!(prompt.contains("[package]"));
+    }
+
+    #[test]
+    fn test_builder_skips_empty_context_components() {
+        let prompt = SystemPromptBuilder::new()
+            .with_base("Base.")
+            .with_git_context("")
+            .with_active_files("")
+            .with_project_metadata("")
+            .build();
+        assert!(!prompt.contains("## Git Context"));
+        assert!(!prompt.contains("## Active Files"));
+        assert!(!prompt.contains("## Project Metadata"));
     }
 }

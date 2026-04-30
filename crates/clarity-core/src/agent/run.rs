@@ -181,6 +181,7 @@ impl Agent {
     /// The final response from the agent
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
+        self.refresh_context().await;
 
         // Plan mode: bypass the ReAct loop and use plan-driven execution.
         // This avoids the LLM "thinking step-by-step" and instead runs a
@@ -397,6 +398,7 @@ impl Agent {
         F: FnMut(&str) + Send + 'static,
     {
         self.ensure_initialized().await?;
+        self.refresh_context().await;
 
         let cancel_token = self.begin_turn()?;
 
