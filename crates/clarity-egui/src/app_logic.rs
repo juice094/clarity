@@ -223,6 +223,8 @@ impl App {
         if text.is_empty() && self.attachments.is_empty() {
             return;
         }
+        // Clear any stale plan tracker from a previous turn.
+        self.plan_tracker = None;
 
         // If currently streaming, queue the message for auto-send when done.
         if self.is_loading {

@@ -40,6 +40,16 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     {
                         app.skill_panel_open = false;
                     }
+                    if ui
+                        .button(
+                            egui::RichText::new("🔄")
+                                .size(12.0)
+                                .color(app.theme.text_dim),
+                        )
+                        .clicked()
+                    {
+                        let _ = app.state.agent.discover_skills();
+                    }
                 });
             });
             ui.add_space(8.0);

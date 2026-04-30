@@ -101,7 +101,9 @@ pub fn parse_unified_diff(patch: &str) -> Vec<DiffHunk> {
                 });
             }
         } else if let Some(ref mut hunk) = current_hunk {
-            if let Some(stripped) = line.strip_prefix('+') {
+            if line == "\\ No newline at end of file" {
+                // Skip this standard diff marker.
+            } else if let Some(stripped) = line.strip_prefix('+') {
                 if !line.starts_with("+++") {
                     hunk.lines
                         .push(DiffLine::Added(stripped.to_string() + "\n"));
@@ -249,6 +251,19 @@ mod tests {
         assert_eq!(parse_hunk_header("@@ -10,5 +20,7 @@"), Some((10, 20)));
         assert_eq!(parse_hunk_header("@@ -1 +1 @@"), Some((1, 1)));
         assert!(parse_hunk_header("not a header").is_none());
+    }
+
+    #[test]
+    fn test_parse_unified_diff_no_newline_marker() {
+        let patch = "--- a/test.txt\n+++ b/test.txt\n@@ -1,2 +1,2 @@\n line1\n-line2\n+line2x\n\\ No newline at end of file\n";
+        let hunks = parse_unified_diff(patch);
+        assert_eq!(hunks.len(), 1);
+        let hunk = &hunks[0];
+        assert_eq!(hunk.lines.len(), 3);
+        assert!(hunk
+            .lines
+            .iter()
+            .all(|l| !matches!(l, DiffLine::Context(s) if s.contains("No newline"))));
     }
 
     #[test]
