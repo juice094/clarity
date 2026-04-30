@@ -161,7 +161,21 @@ fn read_prompt(args: &Args) -> Result<String> {
         (Some(p), _) => Ok(p.clone()),
         (None, Some(path)) => std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read prompt file: {}", path)),
-        (None, None) => anyhow::bail!("Either --prompt or --file must be provided"),
+        (None, None) => {
+            use std::io::IsTerminal;
+            let stdin = std::io::stdin();
+            if stdin.is_terminal() {
+                anyhow::bail!(
+                    "Either --prompt, --file must be provided, or pipe input via stdin"
+                );
+            }
+            let buf = std::io::read_to_string(stdin.lock())
+                .context("Failed to read prompt from stdin")?;
+            if buf.trim().is_empty() {
+                anyhow::bail!("Stdin input is empty");
+            }
+            Ok(buf)
+        }
     }
 }
 

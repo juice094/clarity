@@ -6,6 +6,7 @@ use crate::popups::{diff_popup::DiffPopup, HelpPopup, ToolResultPopup};
 use anyhow::Result;
 use chrono::Local;
 use clarity_core::agent::{Agent, AgentController, Op};
+use clarity_core::approval::ApprovalMode;
 use clarity_core::background::BackgroundTaskManager;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
@@ -172,6 +173,17 @@ impl App {
     /// Whether the underlying agent is currently running a turn.
     pub fn is_generating(&self) -> bool {
         self.agent.is_running()
+    }
+
+    /// Set the agent's approval mode at runtime.
+    pub fn set_approval_mode(&self, mode: ApprovalMode) {
+        self.agent.set_approval_mode(mode);
+    }
+
+    /// Get the agent's current approval mode.
+    #[allow(dead_code)]
+    pub fn approval_mode(&self) -> ApprovalMode {
+        self.agent.approval_mode()
     }
 
     /// 向后兼容的 input 访问器

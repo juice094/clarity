@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::app::{App, Message, MessageType};
+use clarity_core::approval::ApprovalMode;
 
 pub trait CommandHandler: Send + Sync {
     fn execute(&self, app: &mut App, args: &[&str]);
@@ -253,6 +254,48 @@ impl CommandHandler for ParallelCommand {
     }
 }
 
+pub struct YoloCommand;
+impl CommandHandler for YoloCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.set_approval_mode(ApprovalMode::Yolo);
+        app.messages.push(Message::new(
+            "已切换到 YOLO 模式：工具将自动执行，无需审批。",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "切换到 YOLO 模式（自动执行工具）"
+    }
+}
+
+pub struct InteractiveCommand;
+impl CommandHandler for InteractiveCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.set_approval_mode(ApprovalMode::Interactive);
+        app.messages.push(Message::new(
+            "已切换到 Interactive 模式：敏感工具执行前需要审批。",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "切换到 Interactive 模式（工具需审批）"
+    }
+}
+
+pub struct PlanModeCommand;
+impl CommandHandler for PlanModeCommand {
+    fn execute(&self, app: &mut App, _args: &[&str]) {
+        app.set_approval_mode(ApprovalMode::Plan);
+        app.messages.push(Message::new(
+            "已切换到 Plan 模式：将按预生成计划逐步执行。",
+            MessageType::System,
+        ));
+    }
+    fn description(&self) -> &str {
+        "切换到 Plan 模式（按预生成计划执行）"
+    }
+}
+
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 
@@ -279,6 +322,10 @@ pub fn build_default_registry() -> CommandRegistry {
     registry.register("/plan", Arc::new(PlanCommand));
     registry.register("/execute", Arc::new(ExecuteCommand));
     registry.register("/parallel", Arc::new(ParallelCommand));
+
+    registry.register("/yolo", Arc::new(YoloCommand));
+    registry.register("/interactive", Arc::new(InteractiveCommand));
+    registry.register("/planmode", Arc::new(PlanModeCommand));
 
     registry
 }
