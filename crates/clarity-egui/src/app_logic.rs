@@ -508,7 +508,7 @@ impl App {
                     self.agent_status = AgentStatus::Online;
                     self.pending_plan = Some(plan);
                 }
-                UiEvent::PlanStepBegin { step_id, .. } => {
+                UiEvent::PlanStepBegin { step_id, tool_name: _ } => {
                     if let Some(ref mut tracker) = self.plan_tracker {
                         for step in &mut tracker.steps {
                             if step.id == step_id {

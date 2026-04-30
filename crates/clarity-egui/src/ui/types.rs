@@ -47,6 +47,7 @@ pub enum UiEvent {
     PlanReady(Plan),
     PlanStepBegin {
         step_id: String,
+        #[allow(dead_code)]
         tool_name: String,
     },
     PlanStepEnd {
