@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sprint 12 — egui 功能补齐** — 将 `clarity-core` 已完备的能力完整暴露到 `clarity-egui`：
+  - **Phase 1: 审批弹窗 UI** — `DiffPopup` 模态组件，拦截 `ToolCall` 事件，支持 Confirm/Reject/ApproveForSession 三态。`Area` blocker 拦截背景点击穿透，`ScrollArea` 内 `flatten_hunks` 逐行着色（红/绿/黄）。键盘快捷键：Enter = Approve, Esc = Reject, Shift+Enter = ApproveForSession。
+  - **Phase 2: Plan 步骤可视化** — `execute_plan()` 安全修复：改走 `execute_tool_call()` 获得完整审批/风险/diff 管道；步骤间 `CancellationToken` 检查支持取消。Wire 新增 `PlanStepBegin`/`PlanStepEnd`；egui 实时状态图标（⏳ Pending / ▶️ Running / ✅ Success / ❌ Failed）。
+  - **Phase 3: Skill 面板** — `SkillRegistry` 新增 `deactivate()`/`toggle_active()`/`list_skills()` API；egui 浮动窗口展示 Skill 卡片（name / description / tools / tags）+ ON/OFF 激活开关 + 🔄 刷新按钮触发 `discover_skills()`。Sidebar 新增 Skill 入口按钮。
+  - **Phase 4: Token 用量显示** — Session 累计用量格式化（千位分隔符：`1,234↑ 567↓ 1,801∑`）；Sidebar 底部摘要；`plan()` 调用后 `accumulate_usage` 补全 token 记录。
+  - **Polish**: `parse_unified_diff` 跳过 `\ No newline at end of file` 特殊标记；Skill 面板刷新按钮；`send()` 自动清除旧 `plan_tracker` 避免残留状态。
+- **架构修正**: `execute_plan()` 从直接 `registry.execute()` 改为通过 `execute_tool_call()`，统一安全管道。新建 `clarity-core::diff` 模块，TUI/egui 共用统一 diff 解析，消除重复实现。
 - **Sprint 9 Phase 1 — API Key 安全注入 + Settings 增量保存** — `GuiSettings::resolve_api_key()` 支持 `${env:VAR_NAME}` 语法，运行时解析环境变量，避免 API Key 明文落盘。`save()` 改为增量 merge（`merge_json` 递归合并），只写入变更字段，保留未知配置，规避 OpenClaw 式全配置覆盖风险。UI 输入框 placeholder 提示环境变量语法。
 - **Sprint 9 Phase 2 — ModelRegistry 动态接入 egui** — `get_available_models()` 从 `ModelRegistry::load()` 动态读取 provider/model 列表，registry 结果与硬编码 fallback **合并**（registry 优先，缺位补充）。`ensure_llm` 非 local provider 创建时优先尝试 `ModelRegistry`（支持 `models.toml` 自定义 provider），失败 fallback 到 `LlmFactory`。新增 `build_provider_from_registry_with_key()`，允许 UI 传入的 API key 覆盖环境变量。
 

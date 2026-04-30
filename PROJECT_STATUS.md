@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-04-27
-> Branch: `phase2/protocol-pilot` @ `54c5951`
-> Test baseline: **542 passed, 0 failed, 4 ignored**
+> Last updated: 2026-04-28
+> Branch: `phase2/protocol-pilot` @ `4c9f4de`
+> Test baseline: **568 passed, 0 failed, 4 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -22,7 +22,7 @@
 | 9 | **服务商支持硬化** | ✅ Complete | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 引用语法 `${env:VAR}` |
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
 | 11 | **超越 Kimi CLI** | ✅ Complete | V1 风险清偿 + V2 端到端验证通过 |
-| 12 | **egui 功能补齐** | 🔄 In Progress | 审批弹窗 → Plan 可视化 → Skill UI → Token 显示 |
+| 12 | **egui 功能补齐** | ✅ Complete | 审批弹窗 → Plan 可视化 → Skill UI → Token 显示 |
 
 ---
 
@@ -30,7 +30,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 412 passed, 6 ignored | 2026-04-28 |
+| Workspace lib tests | 568 passed, 4 ignored | 2026-04-28 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-27 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
 | Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
@@ -61,12 +61,12 @@
 | Agent 运行/流式 | ✅ | ✅ | — |
 | 工具调用可视化 | ✅ | ✅ | Running/Done 状态气泡 |
 | Compaction Banner | ✅ | ✅ | 压缩状态提示条 |
-| **审批交互 UI** | ✅ | ❌ | Interactive/Plan 模式无审批弹窗，实际无法使用 |
-| **Plan 步骤可视化** | ✅ | ❌ | 无计划步骤展示和分步审批界面 |
+| **审批交互 UI** | ✅ | ✅ | DiffPopup 模态弹窗 + 键盘快捷键 + 交互拦截 |
+| **Plan 步骤可视化** | ✅ | ✅ | 实时状态图标 ⏳/▶️/✅/❌ + 步骤间取消检查 |
 | **子代理/并行执行** | ✅ | ❌ | 无多 Agent 进度面板 |
 | 后台任务面板 | ✅ | 只读 | 无创建/取消/Cron 配置操作 |
-| **技能系统 UI** | ✅ | ❌ | 无 Skill 列表、激活/切换界面 |
-| **Token 用量显示** | ✅ | ❌ | `Usage` WireMessage 未处理 |
+| **技能系统 UI** | ✅ | ✅ | 浮动面板 + ON/OFF 切换 + 元数据展示 + 刷新按钮 |
+| **Token 用量显示** | ✅ | ✅ | Session 累计格式化（千位分隔符）+ Sidebar 底部摘要 |
 | **模型下载 GUI** | ✅ | ✅ | onboarding 首次启动引导 + HF 直链下载 + 进度条 |
 | **日志/Console 面板** | — | ❌ | Tauri 曾实现，egui 无 |
 | LSP 集成 | ✅ | ❌ | Tauri 曾实现，egui 无 |
@@ -97,9 +97,10 @@
 - 中期：补齐 `load()` 错误日志 + 损坏文件备份；修复 `default_with_env()` 互斥逻辑；补齐 `ensure_llm` 网络 fallback。
 - 长期：借鉴 Kimi CLI 的 settings 分层设计（环境变量 → 配置文件 → 交互式选择），见代办项 T_KIMICLI_REF。
 
-### A2. egui 交互型功能缺口（P2）
+### A2. egui 交互型功能缺口（P2）— ✅ Sprint 12 已修复
 
-审批弹窗、Plan 可视化、子代理进度、任务创建/取消、Token 用量显示为当前最大功能缺口，直接影响 core 能力的完整暴露。
+**状态**: 2026-04-28 Sprint 12 完成。审批弹窗、Plan 可视化、Skill UI、Token 用量显示已全部补齐。
+**剩余缺口**: 子代理进度面板、后台任务创建/取消 UI、日志/Console 面板。
 
 ### A3. Provider 配置架构缺陷（P0）
 
@@ -166,7 +167,7 @@
 3. **Self-Signed Certificate** — 无商业证书，SmartScreen可能拦截，文档已说明
 4. **Discord/Telegram Channels** — 因CVE禁用，Slack可用
 5. **cargo audit warnings** — 11个unmaintained（上游依赖），已标记为允许
-6. **egui 审批交互缺失** — Interactive/Plan approval mode 在 GUI 中暂不可用，建议当前使用 Yolo 模式
+6. ~~egui 审批交互缺失~~ — ✅ Sprint 12 已修复。Interactive/Plan/Yolo 三模式均已在 egui 可用。
 7. **egui 零测试** — 计划通过 `docs/plans/2026-04-27-egui-pretext-health-plan.md` 分阶段补齐
 
 ---
@@ -219,7 +220,7 @@
 ## Quality Gates (Every Commit)
 
 ```bash
-cargo test --workspace --lib              # 412 passed, 6 ignored
+cargo test --workspace --lib              # 568 passed, 0 failed, 4 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零警告
 cargo fmt --all -- --check               # 格式检查
 ```
