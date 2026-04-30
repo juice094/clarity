@@ -79,6 +79,8 @@ pub(crate) struct App {
     pub(crate) pending_plan: Option<clarity_core::agent::Plan>,
     /// Live execution tracker for an active plan.
     pub(crate) plan_tracker: Option<crate::ui::types::PlanExecutionTracker>,
+    /// Skill panel open state.
+    pub(crate) skill_panel_open: bool,
     /// Task creation modal state.
     pub(crate) task_create_modal_open: bool,
     /// Task creation form fields.
@@ -119,6 +121,10 @@ impl App {
 
     fn render_task_create_modal(&mut self, ctx: &egui::Context) {
         panels::task_create::render_task_create_modal(self, ctx);
+    }
+
+    fn render_skill_panel(&mut self, ctx: &egui::Context) {
+        panels::skill::render_skill_panel(self, ctx);
     }
 
     fn render_toasts(&mut self, ctx: &egui::Context) {
@@ -162,10 +168,13 @@ impl eframe::App for App {
         // Check if approval modal is active — if so, suppress main-UI shortcuts.
         let approval_active = !self.pending_approvals.is_empty();
 
-        // ESC closes settings modal (but not when approval modal is open).
-        if self.settings_open && !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape))
-        {
-            self.settings_open = false;
+        // ESC closes modals (but not when approval modal is open).
+        if !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.settings_open {
+                self.settings_open = false;
+            } else if self.skill_panel_open {
+                self.skill_panel_open = false;
+            }
         }
 
         if !self.settings_open
@@ -206,6 +215,8 @@ impl eframe::App for App {
         self.render_chat_area(ctx);
 
         self.render_settings_panel(ctx);
+
+        self.render_skill_panel(ctx);
 
         self.render_mcp_panel(ctx);
 

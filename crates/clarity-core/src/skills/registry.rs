@@ -167,6 +167,30 @@ impl SkillRegistry {
     pub fn active_ids(&self) -> HashSet<String> {
         self.active.read().unwrap().clone()
     }
+
+    /// Deactivate a skill by id.
+    /// Returns `true` if the skill was active and is now deactivated.
+    pub fn deactivate(&self, id: &str) -> bool {
+        self.active.write().unwrap().remove(id)
+    }
+
+    /// Toggle the active state of a skill.
+    /// Returns the new active state.
+    pub fn toggle_active(&self, id: &str) -> bool {
+        let mut active = self.active.write().unwrap();
+        if active.contains(id) {
+            active.remove(id);
+            false
+        } else {
+            active.insert(id.to_string());
+            true
+        }
+    }
+
+    /// List all registered skills.
+    pub fn list_skills(&self) -> Vec<super::Skill> {
+        self.skills.read().unwrap().values().cloned().collect()
+    }
 }
 
 #[cfg(test)]

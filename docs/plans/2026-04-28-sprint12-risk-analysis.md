@@ -255,3 +255,81 @@
 | Plan 执行中审批弹窗与流式输出并发 | 低 | 高 | `execute_plan` 不走流式，风险低于 `run_streaming` |
 | 步骤状态同步滞后 | 低 | 中 | wire 事件顺序保证（单生产者） |
 | 大 Plan（>50 步）UI 性能 | 低 | 低 | 虚拟列表或 `ScrollArea` |
+
+
+---
+
+## 十、Phase 2 交付审计（2026-04-28 执行后）
+
+### 已缓解风险
+
+| 风险 | 缓解措施 | 状态 |
+|------|---------|------|
+| `execute_plan` 绕过审批 | 改走 `execute_tool_call()`，每步获得完整安全管道 | ✅ 已缓解 |
+| `execute_plan` 无法取消 | `CancellationToken` 步骤间检查 | ✅ 已缓解 |
+| 步骤状态无法可视化 | `PlanStepBegin/End` wire 事件 + `PlanExecutionTracker` | ✅ 已缓解 |
+
+### 新发现风险（Phase 2 执行后）
+
+**R2.P1 `ToolCall` 手动构造的 JSON 往返序列化**
+- `execute_plan()` 中 `serde_json::to_string(&step.tool_params)` 再 `from_str`
+- 数值类型可能在往返中变化（如 `Value::Number` 的精度）
+- **缓解**: 当前工具参数均使用 `serde_json::Value`，往返一致；已观察通过测试
+
+**R2.P2 `plan_tracker` 需手动关闭**
+- 执行完成后面板一直保留，需用户点击 ✕
+- **缓解**: 低影响，可后续增加自动超时清除
+
+**R2.P3 Plan 执行中审批弹窗的 UX 未验证**
+- 理论：Plan 执行时如果某步触发审批弹窗，egui 会显示弹窗，用户确认后继续
+- 实际：未做端到端人工验证
+- **缓解**: 高优先级在后续迭代中验证
+
+---
+
+## 十一、Phase 3 启动分析：Skill 面板
+
+### 核心架构问题（L0）
+
+`SkillRegistry` **没有 `deactivate` 方法**。当前 API 只有：
+- `activate_by_path(paths)` — 按路径自动激活
+- `is_active(id)` / `active_ids()` — 查询激活状态
+
+这意味着：
+1. 用户无法手动停用已自动激活的 Skill
+2. egui 面板只能显示"激活"状态，无法切换
+
+**Phase 3 必须先补全 `SkillRegistry` 的激活控制 API，再做 UI。**
+
+### 执行方案
+
+**Step A — `SkillRegistry` API 补全**
+1. 新增 `deactivate(id: &str) -> bool`
+2. 新增 `toggle_active(id: &str) -> bool`
+3. 新增 `list_skills() -> Vec<Skill>`（返回完整 Skill 列表，不只是 summary）
+
+**Step B — `Agent` 代理方法**
+1. `Agent::list_skills() -> Vec<Skill>` — 代理到 `skill_registry`
+2. `Agent::skill_active_ids() -> HashSet<String>`
+3. `Agent::set_skill_active(id: &str, active: bool)` — 代理到 `SkillRegistry`
+4. `Agent::discover_skills() -> Vec<String>` — 触发路径扫描
+
+**Step C — egui Skill 面板**
+1. 新增 `panels/skill.rs`：Skill 列表 + 激活开关 + 元数据展示
+2. 面板入口放在 sidebar 底部或设置面板中
+3. 显示：id、name、description、tools、激活状态
+4. 手动刷新按钮（触发 `discover_skills`）
+
+**Step D — 持久化**
+1. 手动激活/停用状态是否需要跨会话持久化？
+2. 如果 `working_dir` 变化，自动发现的 Skill 会变化，手动状态可能失效
+3. **MVP 不做持久化**，仅当前会话有效
+
+### Phase 3 风险矩阵
+
+| 风险 | 概率 | 影响 | 缓解 |
+|------|------|------|------|
+| `SkillRegistry` 并发写冲突 | 低 | 中 | `RwLock` 已保护；toggle 操作原子 |
+| `Agent` 代理方法暴露过多内部状态 | 低 | 低 | 仅返回克隆数据，不暴露内部引用 |
+| egui 面板与 `active_skill` 字段不一致 | 中 | 中 | `active_skill` 是单 skill，`active_ids` 是多 skill；需明确语义 |
+| Skill 列表为空时的空状态 UI | 低 | 低 | 显示引导文字 "No skills found in .clarity/skills/" |

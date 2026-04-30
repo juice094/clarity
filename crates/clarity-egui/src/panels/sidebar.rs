@@ -203,13 +203,25 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 ui.add_space(8.0);
-                #[cfg(debug_assertions)]
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(format!("FPS: {:.0}", app.fps))
-                            .size(10.0)
-                            .color(app.theme.text_dim),
-                    );
+                    if ui
+                        .button(
+                            egui::RichText::new("🛠 Skills")
+                                .size(11.0)
+                                .color(app.theme.text),
+                        )
+                        .clicked()
+                    {
+                        app.skill_panel_open = true;
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        #[cfg(debug_assertions)]
+                        ui.label(
+                            egui::RichText::new(format!("FPS: {:.0}", app.fps))
+                                .size(10.0)
+                                .color(app.theme.text_dim),
+                        );
+                    });
                 });
             });
         });

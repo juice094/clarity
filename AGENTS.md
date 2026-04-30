@@ -89,8 +89,9 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - 目标: 将 `clarity-core` 中已完备的能力完整暴露到 `clarity-egui`
 - 关键交付:
   - ✅ Phase 1: 审批弹窗 UI — diff 预览 + 键盘快捷键 (Enter/Esc/Shift+Enter) + 交互拦截
+  - ✅ Phase 1: 审批弹窗 UI — diff 预览 + 键盘快捷键 (Enter/Esc/Shift+Enter) + 交互拦截
   - ✅ Phase 2: Plan 步骤可视化 — execute_plan 接入审批管道 + 实时状态图标 (⏳/▶️/✅/❌)
-  - ⏳ Phase 3: Skill 面板
+  - ✅ Phase 3: Skill 面板 — 手动激活/停用开关 + 自动发现状态 + 元数据展示
   - ⏳ Phase 4: Token 用量显示
 - 周期: 2 周
 

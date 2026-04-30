@@ -101,6 +101,37 @@ impl Agent {
         self.inner.read().unwrap().active_skill.clone()
     }
 
+    /// List all skills from the registry.
+    pub fn list_skills(&self) -> Vec<crate::skills::Skill> {
+        self.skill_registry()
+            .map(|r| r.list_skills())
+            .unwrap_or_default()
+    }
+
+    /// Get the set of active skill ids from the registry.
+    pub fn skill_active_ids(&self) -> std::collections::HashSet<String> {
+        self.skill_registry()
+            .map(|r| r.active_ids())
+            .unwrap_or_default()
+    }
+
+    /// Set a skill's active state in the registry.
+    pub fn set_skill_active(&self, id: &str, active: bool) {
+        if let Some(ref registry) = self.skill_registry() {
+            let currently_active = registry.is_active(id);
+            if active != currently_active {
+                registry.toggle_active(id);
+            }
+        }
+    }
+
+    /// Discover skills for the current working directory.
+    pub fn discover_skills(&self) -> Vec<String> {
+        self.skill_registry()
+            .map(|r| r.discover_for_path(&self.config.working_dir))
+            .unwrap_or_default()
+    }
+
     /// Set the file paths representing the current user operation.
     /// These paths are used to dynamically activate skills at turn start.
     pub fn set_active_file_paths(&self, paths: Vec<std::path::PathBuf>) {
