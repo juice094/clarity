@@ -77,6 +77,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 **Sprint 11 — 超越 Kimi CLI（🔄 当前）**
 
 - Phase A ✅: 上下文注入 — `SystemPromptBuilder` 自动汇流 `GitContext` + `ActiveFiles` + `ProjectMetadata`
+  - ⚠️ 风险/优化：① `active_file_paths` 格式化只取文件名，丢失目录结构；② 元数据 2KB 截断可能截断 `[dependencies]`；③ `run_with_messages_sync`/`run_streaming_with_messages` 未接入上下文；④ `refresh_context()` 中 `std::fs::read_to_string` 为 sync I/O 运行在 async 上下文（文件小，当前可接受）
 - Phase B 🔄: 编辑精度升级 — `file_edit` 批量替换 + unified diff 预览
 - Phase C 🔄: 终端体验补齐 — TUI `/yolo`/`/interactive` + Headless stdin 管道
 

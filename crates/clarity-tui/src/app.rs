@@ -871,8 +871,22 @@ impl App {
         if has_diff {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&tool.params) {
                 if let Some(diff_preview) = json.get("_diff_preview") {
+                    let path = json.get("path").and_then(|v| v.as_str());
+
+                    // Sprint 11 Phase B: unified diff patch string
+                    if let Some(patch) = diff_preview.as_str() {
+                        if let Some(path) = path {
+                            self.popup = Some(Box::new(DiffPopup::from_patch(
+                                path.to_string(),
+                                patch.to_string(),
+                            )));
+                            return;
+                        }
+                    }
+
+                    // Legacy: {old, new} object (backward compatible)
                     if let (Some(path), Some(old), Some(new)) = (
-                        json.get("path").and_then(|v| v.as_str()),
+                        path,
                         diff_preview.get("old").and_then(|v| v.as_str()),
                         diff_preview.get("new").and_then(|v| v.as_str()),
                     ) {

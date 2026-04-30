@@ -909,6 +909,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
+ "similar",
  "tempfile",
  "thiserror 1.0.69",
  "tokenizers 0.21.4",
