@@ -269,6 +269,14 @@ impl ProviderRegistry {
         list
     }
 
+    /// Update the model list for a provider in memory (does not save to disk).
+    /// Used by the Provider panel after fetching models from the API.
+    pub fn update_models(&mut self, id: &str, models: Vec<String>) {
+        if let Some(def) = self.providers.get_mut(id) {
+            def.models = models;
+        }
+    }
+
     /// List only custom (non-builtin) providers.
     #[allow(dead_code)]
     pub fn list_custom(&self) -> Vec<&ProviderDefinition> {

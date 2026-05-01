@@ -110,6 +110,28 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         .network_available
         .load(std::sync::atomic::Ordering::Relaxed);
 
+    // Layer 0 — Runtime provider config: check BEFORE binding shortcut.
+    // When the user clicks Apply in the settings panel, set_provider_config()
+    // writes to ACTIVE_CONFIG. Without this ordering, binding_matches would
+    // short-circuit on the same provider name and the new config would never
+    // be consumed, even if the user changed model / key / base_url.
+    if let Some(cfg) = clarity_core::llm::runtime::get_active_config() {
+        let _load_guard = state.llm_load_lock.lock().await;
+        let desc = format!("runtime:{}:{}", cfg.provider_id, cfg.model);
+        let llm = clarity_core::llm::runtime::build_from_active_config()
+            .await
+            .map_err(|e| crate::error::EguiError::LlmLoad(format!(
+                "Failed to build provider from runtime config: {}", e
+            )))?;
+        bind_llm(&state.agent, llm.into(), &desc);
+        let mut guard = state.llm_binding.lock();
+        *guard = Some(LlmBinding {
+            provider: desired_provider,
+            local_model_path: String::new(),
+        });
+        return Ok(());
+    }
+
     let current_binding = {
         let guard = state.llm_binding.lock();
         if binding_matches(&guard, &desired_provider, "") && state.agent.llm().is_some() {
@@ -125,28 +147,6 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         if binding_matches(&guard, &desired_provider, "") && state.agent.llm().is_some() {
             return Ok(());
         }
-    }
-
-    // Layer 0 — Runtime provider config: if the frontend has set an active
-    // runtime config (via the Provider management panel), use it directly.
-    // This bypasses both the ModelRegistry and the legacy LlmFactory path.
-    if let Some(cfg) = clarity_core::llm::runtime::get_active_config() {
-        let llm = clarity_core::llm::runtime::build_from_active_config()
-            .await
-            .map_err(|e| crate::error::EguiError::LlmLoad(format!(
-                "Failed to build provider from runtime config: {}", e
-            )))?;
-        bind_llm(
-            &state.agent,
-            llm.into(),
-            &format!("runtime:{}:{}", cfg.provider_id, cfg.model),
-        );
-        let mut guard = state.llm_binding.lock();
-        *guard = Some(LlmBinding {
-            provider: desired_provider,
-            local_model_path: String::new(),
-        });
-        return Ok(());
     }
 
     // Layer 1 — Policy: pure function decides which provider to load.

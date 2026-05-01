@@ -1,7 +1,7 @@
 use crate::App;
 
 pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.skill_panel_open {
+    if !app.ui_store.skill_panel_open {
         return;
     }
 
@@ -17,8 +17,8 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_CENTER, egui::vec2(-20.0, 0.0))
         .frame(
             egui::Frame::group(&ctx.style())
-                .fill(app.theme.surface)
-                .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
+                .fill(app.ui_store.theme.surface)
+                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
                 .inner_margin(egui::Margin::same(16)),
         )
         .show(ctx, |ui| {
@@ -27,24 +27,24 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     egui::RichText::new("Skills")
                         .size(16.0)
                         .strong()
-                        .color(app.theme.text),
+                        .color(app.ui_store.theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .button(
                             egui::RichText::new("✕")
                                 .size(12.0)
-                                .color(app.theme.text_dim),
+                                .color(app.ui_store.theme.text_dim),
                         )
                         .clicked()
                     {
-                        app.skill_panel_open = false;
+                        app.ui_store.skill_panel_open = false;
                     }
                     if ui
                         .button(
                             egui::RichText::new("🔄")
                                 .size(12.0)
-                                .color(app.theme.text_dim),
+                                .color(app.ui_store.theme.text_dim),
                         )
                         .clicked()
                     {
@@ -52,7 +52,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(app.theme.space_8);
+            ui.add_space(app.ui_store.theme.space_8);
 
             if skills.is_empty() {
                 ui.label(
@@ -60,7 +60,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                         "No skills found.\nPlace .md files in .clarity/skills/ to add skills.",
                     )
                     .size(12.0)
-                    .color(app.theme.text_dim),
+                    .color(app.ui_store.theme.text_dim),
                 );
             } else {
                 ui.label(
@@ -70,9 +70,9 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                         active_ids.len()
                     ))
                     .size(11.0)
-                    .color(app.theme.text_dim),
+                    .color(app.ui_store.theme.text_dim),
                 );
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
 
                 egui::ScrollArea::vertical()
                     .max_height(320.0)
@@ -82,8 +82,8 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                             let id = skill.meta.id.clone();
 
                             egui::Frame::new()
-                                .fill(app.theme.bg_accent)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                                .fill(app.ui_store.theme.bg_accent)
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                                 .inner_margin(egui::Margin::same(10))
                                 .show(ui, |ui| {
                                     ui.set_min_width(ui.available_width());
@@ -92,7 +92,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                             egui::RichText::new(&skill.meta.name)
                                                 .size(13.0)
                                                 .strong()
-                                                .color(app.theme.text),
+                                                .color(app.ui_store.theme.text),
                                         );
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
@@ -100,9 +100,9 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                                 let toggle_text =
                                                     if is_active { "ON" } else { "OFF" };
                                                 let toggle_color = if is_active {
-                                                    app.theme.ok
+                                                    app.ui_store.theme.ok
                                                 } else {
-                                                    app.theme.text_dim
+                                                    app.ui_store.theme.text_dim
                                                 };
                                                 if ui
                                                     .button(
@@ -123,7 +123,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                         ui.label(
                                             egui::RichText::new(&skill.meta.description)
                                                 .size(11.0)
-                                                .color(app.theme.text_dim),
+                                                .color(app.ui_store.theme.text_dim),
                                         );
                                     }
                                     if !skill.meta.tools.is_empty() {
@@ -131,13 +131,13 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                             ui.label(
                                                 egui::RichText::new("Tools:")
                                                     .size(10.0)
-                                                    .color(app.theme.text_dim),
+                                                    .color(app.ui_store.theme.text_dim),
                                             );
                                             for tool in &skill.meta.tools {
                                                 ui.label(
                                                     egui::RichText::new(format!("• {}", tool))
                                                         .size(10.0)
-                                                        .color(app.theme.accent),
+                                                        .color(app.ui_store.theme.accent),
                                                 );
                                             }
                                         });
@@ -148,13 +148,13 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                                 ui.label(
                                                     egui::RichText::new(format!("#{}", tag))
                                                         .size(10.0)
-                                                        .color(app.theme.text_dim),
+                                                        .color(app.ui_store.theme.text_dim),
                                                 );
                                             }
                                         });
                                     }
                                 });
-                            ui.add_space(app.theme.space_8);
+                            ui.add_space(app.ui_store.theme.space_8);
                         }
                     });
             }

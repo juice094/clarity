@@ -1,14 +1,14 @@
 use crate::App;
 
 pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.mcp_panel_open {
+    if !app.mcp_store.mcp_panel_open {
         return;
     }
-    let mut config_opt = app.mcp_config.take();
+    let mut config_opt = app.mcp_store.mcp_config.take();
     let mut save_clicked = false;
     let mut cancel_clicked = false;
     let mut create_clicked = false;
-    let mut open = app.mcp_panel_open;
+    let mut open = app.mcp_store.mcp_panel_open;
 
     egui::Window::new("MCP Servers")
         .open(&mut open)
@@ -18,19 +18,19 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
             egui::Frame::window(&ctx.style())
-                .fill(app.theme.surface)
-                .corner_radius(egui::CornerRadius::same(app.theme.radius_lg as u8)),
+                .fill(app.ui_store.theme.surface)
+                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8)),
         )
         .show(ctx, |ui| {
             ui.set_min_width(360.0);
             if let Some(ref mut config) = config_opt {
                 let mut changed = false;
-                crate::ui::mcp_panel::render_mcp_panel(ui, config, &app.theme, &mut changed);
+                crate::ui::mcp_panel::render_mcp_panel(ui, config, &app.ui_store.theme, &mut changed);
                 if changed {
-                    app.mcp_changed = true;
+                    app.mcp_store.mcp_changed = true;
                 }
-                if app.mcp_changed {
-                    ui.add_space(app.theme.space_12);
+                if app.mcp_store.mcp_changed {
+                    ui.add_space(app.ui_store.theme.space_12);
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui
@@ -38,9 +38,9 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                                     egui::Button::new(
                                         egui::RichText::new("Save")
                                             .size(13.0)
-                                            .color(app.theme.text),
+                                            .color(app.ui_store.theme.text),
                                     )
-                                    .fill(app.theme.accent)
+                                    .fill(app.ui_store.theme.accent)
                                     .min_size(egui::vec2(80.0, 32.0)),
                                 )
                                 .clicked()
@@ -52,9 +52,9 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                                     egui::Button::new(
                                         egui::RichText::new("Cancel")
                                             .size(13.0)
-                                            .color(app.theme.text),
+                                            .color(app.ui_store.theme.text),
                                     )
-                                    .fill(app.theme.border)
+                                    .fill(app.ui_store.theme.border)
                                     .min_size(egui::vec2(80.0, 32.0)),
                                 )
                                 .clicked()
@@ -66,21 +66,21 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                 }
             } else {
                 ui.vertical_centered(|ui| {
-                    ui.add_space(app.theme.space_40);
+                    ui.add_space(app.ui_store.theme.space_40);
                     ui.label(
                         egui::RichText::new("No MCP config found")
                             .size(13.0)
-                            .color(app.theme.text_dim),
+                            .color(app.ui_store.theme.text_dim),
                     );
-                    ui.add_space(app.theme.space_8);
+                    ui.add_space(app.ui_store.theme.space_8);
                     if ui
                         .add(
                             egui::Button::new(
                                 egui::RichText::new("Create Config")
                                     .size(13.0)
-                                    .color(app.theme.text),
+                                    .color(app.ui_store.theme.text),
                             )
-                            .fill(app.theme.accent)
+                            .fill(app.ui_store.theme.accent)
                             .min_size(egui::vec2(140.0, 36.0)),
                         )
                         .clicked()
@@ -91,14 +91,14 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
             }
         });
 
-    app.mcp_panel_open = open;
+    app.mcp_store.mcp_panel_open = open;
 
     if save_clicked {
         if let Some(ref mut config) = config_opt {
             match crate::ui::mcp_panel::save_mcp_config(config) {
                 Ok(()) => {
                     app.push_toast("MCP config saved", crate::ui::types::ToastLevel::Info);
-                    app.mcp_changed = false;
+                    app.mcp_store.mcp_changed = false;
                 }
                 Err(e) => app.push_toast(
                     format!("Save failed: {}", e),
@@ -109,13 +109,13 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     }
     if cancel_clicked {
         config_opt = crate::ui::mcp_panel::load_mcp_config();
-        app.mcp_changed = false;
-        app.mcp_panel_open = false;
+        app.mcp_store.mcp_changed = false;
+        app.mcp_store.mcp_panel_open = false;
     }
     if create_clicked {
         config_opt = Some(clarity_core::mcp::config::McpConfig::default());
-        app.mcp_changed = true;
+        app.mcp_store.mcp_changed = true;
     }
 
-    app.mcp_config = config_opt;
+    app.mcp_store.mcp_config = config_opt;
 }

@@ -1,7 +1,7 @@
 use crate::{App, SIDEBAR_WIDTH};
 
 pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
-    if app.sidebar_collapsed {
+    if app.ui_store.sidebar_collapsed {
         return;
     }
     egui::SidePanel::left("sidebar")
@@ -11,50 +11,50 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(app.theme.bg_accent)
+                .fill(app.ui_store.theme.bg_accent)
                 .inner_margin(egui::Margin::same(4)),
         )
         .show(ctx, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.add_space(app.theme.space_12);
+            ui.add_space(app.ui_store.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Clarity")
                         .size(18.0)
                         .strong()
-                        .color(app.theme.text),
+                        .color(app.ui_store.theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add(
                             egui::Button::new(egui::RichText::new("⬅").size(14.0))
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
                         .clicked()
                     {
-                        app.sidebar_collapsed = true;
+                        app.ui_store.sidebar_collapsed = true;
                     }
                 });
             });
-            ui.add_space(app.theme.space_16);
+            ui.add_space(app.ui_store.theme.space_16);
 
             // ── Fixed category list (vertical) ──
             let categories = [("emotion", app.t("Emotion")), ("knowledge", app.t("Knowledge")), ("engineering", app.t("Engineering"))];
             for (cat, label) in categories {
-                let is_active = app.active_category == cat;
+                let is_active = app.session_store.active_category == cat;
                 let bg = if is_active {
-                    app.theme.surface
+                    app.ui_store.theme.surface
                 } else {
-                    app.theme.bg_accent
+                    app.ui_store.theme.bg_accent
                 };
                 let text_color = if is_active {
-                    app.theme.text
+                    app.ui_store.theme.text
                 } else {
-                    app.theme.text_dim
+                    app.ui_store.theme.text_dim
                 };
                 let stroke = if is_active {
-                    egui::Stroke::new(2.0, app.theme.accent)
+                    egui::Stroke::new(2.0, app.ui_store.theme.accent)
                 } else {
                     egui::Stroke::NONE
                 };
@@ -64,7 +64,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             egui::RichText::new(label).size(13.0).color(text_color),
                         )
                         .fill(bg)
-                        .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
+                        .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
                         .stroke(stroke)
                         .min_size(egui::vec2(ui.available_width(), 36.0)),
                     )
@@ -73,16 +73,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     app.switch_category(cat);
                 }
             }
-            ui.add_space(app.theme.space_12);
+            ui.add_space(app.ui_store.theme.space_12);
 
-            ui.add_space(app.theme.space_16);
+            ui.add_space(app.ui_store.theme.space_16);
             ui.label(
                 egui::RichText::new("Files")
                     .size(11.0)
-                    .color(app.theme.text_dim)
+                    .color(app.ui_store.theme.text_dim)
                     .weak(),
             );
-            ui.add_space(app.theme.space_4);
+            ui.add_space(app.ui_store.theme.space_4);
             let mut clicked_file: Option<std::path::PathBuf> = None;
             let files_height = (ui.available_height() - 260.0).max(100.0);
             egui::ScrollArea::vertical()
@@ -93,7 +93,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         crate::ui::file_browser::render_file_tree(
                             ui,
                             &cwd,
-                            &app.theme,
+                            &app.ui_store.theme,
                             0,
                             &mut |path| {
                                 clicked_file = Some(path.to_path_buf());
@@ -107,36 +107,36 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 let content = std::fs::read_to_string(&path).ok();
-                app.preview_file = content.map(|c| (name, c));
+                app.ui_store.preview_file = content.map(|c| (name, c));
             }
 
             // File preview panel
-            if let Some((ref name, ref content)) = app.preview_file {
+            if let Some((ref name, ref content)) = app.ui_store.preview_file {
                 let preview_name = name.clone();
                 let preview_content = content.clone();
-                ui.add_space(app.theme.space_12);
+                ui.add_space(app.ui_store.theme.space_12);
                 ui.separator();
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("Preview")
                             .size(11.0)
-                            .color(app.theme.text_dim)
+                            .color(app.ui_store.theme.text_dim)
                             .weak(),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("×").clicked() {
-                            app.preview_file = None;
+                            app.ui_store.preview_file = None;
                         }
                     });
                 });
                 ui.label(
                     egui::RichText::new(&preview_name)
                         .size(12.0)
-                        .color(app.theme.text)
+                        .color(app.ui_store.theme.text)
                         .monospace(),
                 );
-                ui.add_space(app.theme.space_4);
+                ui.add_space(app.ui_store.theme.space_4);
                 let mut preview_text = if preview_content.chars().count() > 2000 {
                     let truncated: String = preview_content.chars().take(2000).collect();
                     format!(
@@ -156,27 +156,27 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             egui::TextEdit::multiline(&mut preview_text)
                                 .desired_rows(10)
                                 .font(egui::TextStyle::Monospace)
-                                .text_color(app.theme.text_dim)
+                                .text_color(app.ui_store.theme.text_dim)
                                 .margin(egui::vec2(8.0, 6.0)),
                         );
                     });
             }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.horizontal(|ui| {
                     if ui
                         .button(
                             egui::RichText::new("🛠 Skills")
                                 .size(11.0)
-                                .color(app.theme.text),
+                                .color(app.ui_store.theme.text),
                         )
                         .clicked()
                     {
-                        app.skill_panel_open = true;
+                        app.ui_store.skill_panel_open = true;
                     }
                     // Locale toggle
-                    let locale_label = match app.locale {
+                    let locale_label = match app.ui_store.locale {
                         crate::i18n::Locale::EnUS => "EN",
                         crate::i18n::Locale::ZhCN => "中",
                     };
@@ -184,30 +184,30 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         .button(
                             egui::RichText::new(locale_label)
                                 .size(10.0)
-                                .color(app.theme.text_dim)
+                                .color(app.ui_store.theme.text_dim)
                                 .monospace(),
                         )
                         .clicked()
                     {
-                        app.locale = match app.locale {
+                        app.ui_store.locale = match app.ui_store.locale {
                             crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
                             crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
                         };
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if let Some((_, _, t)) = app.last_usage {
+                        if let Some((_, _, t)) = app.chat_store.last_usage {
                             ui.label(
                                 egui::RichText::new(format!("{}∑", t))
                                     .size(10.0)
-                                    .color(app.theme.text_dim)
+                                    .color(app.ui_store.theme.text_dim)
                                     .monospace(),
                             );
                         }
                         #[cfg(debug_assertions)]
                         ui.label(
-                            egui::RichText::new(format!("FPS: {:.0}", app.fps))
+                            egui::RichText::new(format!("FPS: {:.0}", app.ui_store.fps))
                                 .size(10.0)
-                                .color(app.theme.text_dim),
+                                .color(app.ui_store.theme.text_dim),
                         );
                     });
                 });

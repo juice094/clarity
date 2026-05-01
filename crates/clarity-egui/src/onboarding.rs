@@ -57,7 +57,7 @@ pub fn should_show_onboarding() -> bool {
 
 /// Render the onboarding overlay (full-screen modal).
 pub fn render_onboarding(app: &mut App, ctx: &egui::Context) {
-    let state = app.onboarding_state.clone();
+    let state = app.onboarding_store.onboarding_state.clone();
     match state {
         OnboardingState::Hidden => (),
         OnboardingState::ChooseProvider => render_choose_provider(app, ctx),
@@ -86,19 +86,19 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.theme.bg_elevated))
+        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Welcome to Clarity");
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.label(
                     egui::RichText::new("Local-first AI agent runtime")
-                        .color(app.theme.text_dim)
+                        .color(app.ui_store.theme.text_dim)
                         .size(14.0),
                 );
-                ui.add_space(app.theme.space_24);
+                ui.add_space(app.ui_store.theme.space_24);
                 ui.label("Get started by choosing how you'd like to run Clarity:");
-                ui.add_space(app.theme.space_16);
+                ui.add_space(app.ui_store.theme.space_16);
 
                 if ui
                     .add_sized(
@@ -107,11 +107,11 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     )
                     .clicked()
                 {
-                    app.settings_open = true;
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.settings_store.settings_open = true;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
 
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
 
                 if ui
                     .add_sized(
@@ -123,22 +123,22 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     start_model_download(app);
                 }
 
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
 
                 if ui
                     .add_sized([280.0, 36.0], egui::Button::new("Skip for Now"))
                     .clicked()
                 {
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
 
-                ui.add_space(app.theme.space_16);
+                ui.add_space(app.ui_store.theme.space_16);
                 ui.label(
                     egui::RichText::new(
                         "Note: Local models use the Qwen2 architecture. \
                          Download other architectures manually via Settings.",
                     )
-                    .color(app.theme.text_dim)
+                    .color(app.ui_store.theme.text_dim)
                     .size(11.0),
                 );
             });
@@ -160,7 +160,7 @@ fn render_downloading(
 
     // Poll for progress updates from the download task
     let mut channel_disconnected = false;
-    if let Some(ref mut rx) = app.onboarding_progress_rx {
+    if let Some(ref mut rx) = app.onboarding_store.onboarding_progress_rx {
         let rx: &mut std::sync::mpsc::Receiver<
             clarity_core::model_download::ModelDownloadProgress,
         > = rx;
@@ -174,7 +174,7 @@ fn render_downloading(
                     bytes_downloaded,
                     total_bytes,
                 }) => {
-                    app.onboarding_state = OnboardingState::Downloading {
+                    app.onboarding_store.onboarding_state = OnboardingState::Downloading {
                         bytes_downloaded,
                         total_bytes,
                     };
@@ -182,11 +182,11 @@ fn render_downloading(
                 Ok(ModelDownloadProgress::Complete) => {
                     let dest = clarity_core::model_download::default_model_dir()
                         .join(clarity_core::model_download::PRECONFIGURED_MODELS[0].filename);
-                    app.onboarding_state = OnboardingState::DownloadComplete { model_path: dest };
+                    app.onboarding_store.onboarding_state = OnboardingState::DownloadComplete { model_path: dest };
                     break;
                 }
                 Ok(ModelDownloadProgress::Failed(err)) => {
-                    app.onboarding_state = OnboardingState::DownloadFailed(err);
+                    app.onboarding_store.onboarding_state = OnboardingState::DownloadFailed(err);
                     break;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
@@ -199,19 +199,19 @@ fn render_downloading(
     }
 
     // Fallback: if channel disconnected without explicit Complete/Failed, treat as interrupted.
-    if channel_disconnected && matches!(app.onboarding_state, OnboardingState::Downloading { .. }) {
-        app.onboarding_state = OnboardingState::DownloadFailed("Download interrupted".into());
+    if channel_disconnected && matches!(app.onboarding_store.onboarding_state, OnboardingState::Downloading { .. }) {
+        app.onboarding_store.onboarding_state = OnboardingState::DownloadFailed("Download interrupted".into());
     }
 
     egui::Window::new("Downloading Model")
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.theme.bg_elevated))
+        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Downloading Local Model");
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
 
                 let (fraction, label) = if let Some(total) = total_bytes {
                     let pct = if total > 0 {
@@ -231,20 +231,20 @@ fn render_downloading(
                 };
 
                 ui.label(&label);
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.add(
                     egui::ProgressBar::new(fraction.min(1.0))
                         .show_percentage()
                         .desired_width(280.0),
                 );
-                ui.add_space(app.theme.space_16);
+                ui.add_space(app.ui_store.theme.space_16);
 
                 if ui
                     .add_sized([120.0, 28.0], egui::Button::new("Cancel"))
                     .clicked()
                 {
                     // Abort is best-effort; we just hide the onboarding.
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
             });
         });
@@ -262,31 +262,31 @@ fn render_download_complete(app: &mut App, ctx: &egui::Context, model_path: &std
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.theme.bg_elevated))
+        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Download Complete");
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.label(format!("Model saved to: {}", model_path.display()));
-                ui.add_space(app.theme.space_16);
+                ui.add_space(app.ui_store.theme.space_16);
 
                 if ui
                     .add_sized([200.0, 36.0], egui::Button::new("Start Using Clarity"))
                     .clicked()
                 {
                     // Auto-configure settings to local provider
-                    app.settings_edit.provider = "local".to_string();
-                    app.settings_edit.model = model_path
+                    app.settings_store.settings_edit.provider = "local".to_string();
+                    app.settings_store.settings_edit.model = model_path
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| "local".to_string());
-                    app.settings_edit.local_model_path = Some(model_path.display().to_string());
-                    let _ = app.settings_edit.save();
+                    app.settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
+                    let _ = app.settings_store.settings_edit.save();
 
                     // Sync to AppState and reload LLM
                     {
                         let mut guard = app.state.cached_settings.lock();
-                        *guard = app.settings_edit.clone();
+                        *guard = app.settings_store.settings_edit.clone();
                     }
                     let state = app.state.clone();
                     app.runtime.spawn(async move {
@@ -295,7 +295,7 @@ fn render_download_complete(app: &mut App, ctx: &egui::Context, model_path: &std
                         }
                     });
 
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
             });
         });
@@ -313,13 +313,13 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
         .collapsible(false)
         .resizable(false)
         .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.theme.bg_elevated))
+        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Download Failed");
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 ui.label(egui::RichText::new(err).color(egui::Color32::LIGHT_RED));
-                ui.add_space(app.theme.space_16);
+                ui.add_space(app.ui_store.theme.space_16);
 
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Try Again"))
@@ -327,20 +327,20 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
                 {
                     start_model_download(app);
                 }
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Enter API Key Instead"))
                     .clicked()
                 {
-                    app.settings_open = true;
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.settings_store.settings_open = true;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
-                ui.add_space(app.theme.space_8);
+                ui.add_space(app.ui_store.theme.space_8);
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Skip"))
                     .clicked()
                 {
-                    app.onboarding_state = OnboardingState::Hidden;
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
             });
         });
@@ -355,8 +355,8 @@ fn start_model_download(app: &mut App) {
     let dest = default_model_dir();
 
     let (tx, rx) = std::sync::mpsc::channel::<ModelDownloadProgress>();
-    app.onboarding_progress_rx = Some(rx);
-    app.onboarding_state = OnboardingState::Downloading {
+    app.onboarding_store.onboarding_progress_rx = Some(rx);
+    app.onboarding_store.onboarding_state = OnboardingState::Downloading {
         bytes_downloaded: 0,
         total_bytes: None,
     };

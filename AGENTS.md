@@ -121,6 +121,20 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
 
+**Sprint 13.5 — 前端架构重构（已完成，2026-05-01）**
+
+- 对比分析 `openhanako-main` 前端架构，提取成熟前端理论映射
+- 错误边界：`render_safe()` + `std::panic::catch_unwind` — 单 panel panic 不崩溃整应用
+- 事件处理分离：`process_events` 从 200+ 行 monolith 拆分为 15 个独立 handler（Flux 分发器模式）
+- Zustand-style Store 提取：`App` 从 50+ 平铺字段 → 8 个嵌套 domain store
+  - `SessionStore` / `ChatStore` / `SettingsStore` / `TaskStore`
+  - `UiStore` / `SubAgentStore` / `McpStore` / `OnboardingStore`
+- Services 拆分：`send()` / `poll_parallel_batches()` / `refresh_tasks()` 提取至 `services/` 模块
+  - `services/agent_runner.rs` / `gateway_poller.rs` / `task_service.rs`
+- 验证：`cargo test --workspace --lib` 584 passed / 0 failed / 6 ignored
+
+> 详细对比报告见 [`docs/frontend-architecture-comparison.md`](./docs/frontend-architecture-comparison.md)
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅

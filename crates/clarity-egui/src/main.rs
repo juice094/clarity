@@ -11,7 +11,7 @@
 use eframe::egui;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod app_state;
 mod error;
@@ -25,11 +25,12 @@ mod session;
 mod settings;
 mod theme;
 mod ui;
+mod stores;
+mod services;
 
 use app_state::AppState;
 
-use settings::GuiSettings;
-use theme::Theme;
+
 use ui::types::*;
 
 // ============================================================================
@@ -40,92 +41,24 @@ const SIDEBAR_WIDTH: f32 = 240.0;
 const TITLEBAR_HEIGHT: f32 = 36.0;
 
 pub(crate) struct App {
+    // === Core Runtime ===
     pub(crate) state: Arc<AppState>,
     pub(crate) runtime: tokio::runtime::Runtime,
     pub(crate) ui_tx: Sender<UiEvent>,
     pub(crate) ui_rx: Receiver<UiEvent>,
-    pub(crate) sessions: Vec<Session>,
-    pub(crate) active_session_id: String,
-    pub(crate) sidebar_collapsed: bool,
-    pub(crate) input: String,
-    /// Per-session draft buffer. Key = session_id.
-    ///
-    /// FIXME-WEEK1-RISK: Drafts are memory-only; process restart loses them.
-    ///   Optimize: Persist alongside session files or as a JSON sidecar.
-    /// FIXME-WEEK1-RISK: No upper bound on HashMap size; long-lived sessions
-    ///   may accumulate memory. Optimize: Add LRU eviction for stale drafts.
-    pub(crate) drafts: std::collections::HashMap<String, String>,
-    pub(crate) is_loading: bool,
-    pub(crate) agent_status: AgentStatus,
-    pub(crate) network_banner: Option<String>,
-    pub(crate) tool_calls: Vec<ToolCallInfo>,
-    pub(crate) compacting: bool,
-    pub(crate) settings_open: bool,
-    pub(crate) settings_edit: GuiSettings,
     #[allow(dead_code)]
-    pub(crate) settings_vm: clarity_core::view_models::settings::SettingsViewModel,
     #[allow(dead_code)]
     pub(crate) wire: Arc<clarity_wire::Wire>,
-    pub(crate) frame_count: u64,
-    pub(crate) last_fps_time: f64,
-    pub(crate) fps: f64,
-    #[allow(dead_code)]
-    pub(crate) start: Instant,
-    pub(crate) locale: i18n::Locale,
-    pub(crate) theme: Theme,
-    pub(crate) provider_registry: provider::ProviderRegistry,
-    pub(crate) settings_active_tab: u8,
-    pub(crate) show_add_provider: bool,
-    pub(crate) add_provider_name: String,
-    pub(crate) add_provider_url: String,
-    pub(crate) add_provider_key: String,
-    pub(crate) add_provider_format: String,
-    pub(crate) attachments: Vec<Attachment>,
-    pub(crate) task_panel_open: bool,
-    pub(crate) tasks: Vec<clarity_core::background::TaskInfo>,
-    pub(crate) last_task_refresh: Instant,
-    /// SubAgent parallel batch progress snapshots (polled from Gateway).
-    pub(crate) parallel_batches: Vec<crate::ui::types::SubAgentProgress>,
-    pub(crate) last_parallel_poll: Instant,
-    pub(crate) toasts: Vec<Toast>,
-    pub(crate) mcp_panel_open: bool,
-    pub(crate) mcp_config: Option<clarity_core::mcp::config::McpConfig>,
-    pub(crate) mcp_changed: bool,
-    /// Last frame's scroll offset for virtual list culling.
-    pub(crate) last_scroll_offset: f32,
-    /// File preview: (file_name, content_text).
-    pub(crate) preview_file: Option<(String, String)>,
-    /// Queued message to auto-send when current streaming finishes.
-    pub(crate) pending_send: Option<(String, Vec<Attachment>)>,
-    /// Timestamp of the most recent input modification (used to detect IME
-    /// composition activity and suppress premature Enter-send).
-    pub(crate) last_input_modified: Instant,
-    /// Pending approval requests from the agent runtime (populated each frame).
-    pub(crate) pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
-    /// Latest token usage for the active session.
-    pub(crate) last_usage: Option<(u32, u32, u32)>,
-    /// Pending plan for user review (Plan mode).
-    pub(crate) pending_plan: Option<clarity_core::agent::Plan>,
-    /// Live execution tracker for an active plan.
-    pub(crate) plan_tracker: Option<crate::ui::types::PlanExecutionTracker>,
-    /// Skill panel open state.
-    pub(crate) skill_panel_open: bool,
-    /// Right toolbar (generic tools panel) open state.
-    pub(crate) toolbar_open: bool,
-    /// Active session category: emotion / knowledge / engineering / tools.
-    pub(crate) active_category: String,
-    /// Task creation modal state.
-    pub(crate) task_create_modal_open: bool,
-    /// Task creation form fields.
-    pub(crate) task_create_name: String,
-    pub(crate) task_create_desc: String,
-    pub(crate) task_create_prompt: String,
-    pub(crate) task_create_priority: u8,
-    /// First-run onboarding state.
-    pub(crate) onboarding_state: onboarding::OnboardingState,
-    /// Progress receiver for model download (std channel bridged from tokio).
-    pub(crate) onboarding_progress_rx:
-        Option<std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress>>,
+
+    // === Domain Stores (Zustand-style slices) ===
+    pub(crate) session_store: stores::SessionStore,
+    pub(crate) chat_store: stores::ChatStore,
+    pub(crate) settings_store: stores::SettingsStore,
+    pub(crate) task_store: stores::TaskStore,
+    pub(crate) ui_store: stores::UiStore,
+    pub(crate) subagent_store: stores::SubAgentStore,
+    pub(crate) mcp_store: stores::McpStore,
+    pub(crate) onboarding_store: stores::OnboardingStore,
 }
 
 mod app_logic;
@@ -149,8 +82,29 @@ impl App {
     ///   Button sub-layout (right_to_left) is rendered second, so its buttons
     ///   have higher z-order than the drag region — clicks on buttons are
     ///   NOT swallowed by the drag.
+    /// Render a panel with panic isolation (error boundary).
+    /// Mimics React ErrorBoundary: a child panel panic does not crash the entire app.
+    fn render_safe<F>(&mut self, ctx: &egui::Context, name: &str, mut render: F)
+    where
+        F: FnMut(&mut Self, &egui::Context),
+    {
+        if let Err(e) =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(self, ctx)))
+        {
+            let payload = if let Some(s) = e.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = e.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            tracing::error!("Panel '{}' panicked: {}", name, payload);
+            self.push_toast(format!("UI error in {} panel", name), ToastLevel::Error);
+        }
+    }
+
     fn render_titlebar(&mut self, ctx: &egui::Context) {
-        let theme = &self.theme;
+        let theme = &self.ui_store.theme;
         let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
         egui::TopBottomPanel::top("titlebar")
@@ -166,7 +120,7 @@ impl App {
                     ui.set_min_height(TITLEBAR_HEIGHT);
 
                     // Sidebar toggle when collapsed
-                    if self.sidebar_collapsed {
+                    if self.ui_store.sidebar_collapsed {
                         if ui
                             .add(
                                 egui::Button::new(egui::RichText::new("☰").size(14.0))
@@ -175,7 +129,7 @@ impl App {
                             )
                             .clicked()
                         {
-                            self.sidebar_collapsed = false;
+                            self.ui_store.sidebar_collapsed = false;
                         }
                         ui.add_space(8.0);
                     }
@@ -294,11 +248,11 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let now = ctx.input(|i| i.time);
-        self.frame_count += 1;
-        if now - self.last_fps_time >= 1.0 {
-            self.fps = self.frame_count as f64 / (now - self.last_fps_time);
-            self.frame_count = 0;
-            self.last_fps_time = now;
+        self.ui_store.frame_count += 1;
+        if now - self.ui_store.last_fps_time >= 1.0 {
+            self.ui_store.fps = self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
+            self.ui_store.frame_count = 0;
+            self.ui_store.last_fps_time = now;
         }
 
         self.process_events();
@@ -308,7 +262,7 @@ impl eframe::App for App {
             self.push_toast(msg, ToastLevel::Info);
         }
 
-        if self.is_loading {
+        if self.chat_store.is_loading {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
 
@@ -321,25 +275,25 @@ impl eframe::App for App {
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_default();
-                    self.attachments.push(Attachment { path, name });
+                    self.chat_store.attachments.push(Attachment { path, name });
                 }
             }
         }
 
         // Check if approval modal is active — if so, suppress main-UI shortcuts.
-        let approval_active = !self.pending_approvals.is_empty();
+        let approval_active = !self.ui_store.pending_approvals.is_empty();
 
         // ESC closes modals (but not when approval modal is open).
         if !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            if self.settings_open {
-                self.settings_open = false;
-            } else if self.skill_panel_open {
-                self.skill_panel_open = false;
+            if self.settings_store.settings_open {
+                self.settings_store.settings_open = false;
+            } else if self.ui_store.skill_panel_open {
+                self.ui_store.skill_panel_open = false;
             }
         }
 
-        if !self.settings_open
-            && !self.is_loading
+        if !self.settings_store.settings_open
+            && !self.chat_store.is_loading
             && !approval_active
             && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
         {
@@ -347,30 +301,30 @@ impl eframe::App for App {
         }
 
         // Ctrl+C stops the running agent turn (only when generating).
-        if self.is_loading
+        if self.chat_store.is_loading
             && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
         {
             self.stop();
         }
 
         // Refresh task list periodically when panel is open
-        if self.task_panel_open && self.last_task_refresh.elapsed() > Duration::from_secs(3) {
+        if self.task_store.task_panel_open && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3) {
             self.refresh_tasks();
         }
 
         // Poll parallel batch status when panel is open
-        if self.task_panel_open
-            && !self.parallel_batches.is_empty()
-            && self.last_parallel_poll.elapsed() > Duration::from_secs(2)
+        if self.task_store.task_panel_open
+            && !self.subagent_store.parallel_batches.is_empty()
+            && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
         {
             self.poll_parallel_batches();
         }
 
         use clarity_core::agent::AgentState;
-        self.agent_status = match self.state.agent.state() {
+        self.chat_store.agent_status = match self.state.agent.state() {
             AgentState::Unconfigured => AgentStatus::Unconfigured,
             AgentState::Idle => {
-                if self.is_loading {
+                if self.chat_store.is_loading {
                     AgentStatus::Busy
                 } else {
                     AgentStatus::Online
@@ -381,31 +335,20 @@ impl eframe::App for App {
         };
 
         ctx.style_mut(|style| {
-            self.theme.apply(style);
+            self.ui_store.theme.apply(style);
         });
 
-        self.render_titlebar(ctx);
-
-        self.render_sidebar(ctx);
-
-        self.render_task_panel(ctx);
-
-        self.render_toolbar(ctx);
-
-        self.render_chat_area(ctx);
-
-        self.render_settings_panel(ctx);
-
-        self.render_skill_panel(ctx);
-
-        self.render_mcp_panel(ctx);
-
-        self.render_toasts(ctx);
-
-        self.render_approval_modal(ctx);
-
-        self.render_task_create_modal(ctx);
-
+        self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
+        self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
+        self.render_safe(ctx, "task", |app, ctx| app.render_task_panel(ctx));
+        self.render_safe(ctx, "toolbar", |app, ctx| app.render_toolbar(ctx));
+        self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
+        self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
+        self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
+        self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
+        self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
+        self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
+        self.render_safe(ctx, "task_create", |app, ctx| app.render_task_create_modal(ctx));
         onboarding::render_onboarding(self, ctx);
     }
 

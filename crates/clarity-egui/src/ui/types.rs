@@ -56,6 +56,17 @@ pub enum UiEvent {
         step_id: String,
         success: bool,
     },
+    /// Provider test connection result (async callback from Provider panel).
+    ProviderTestResult {
+        provider_id: String,
+        success: bool,
+        error: Option<String>,
+    },
+    /// Provider model list fetched from API (async callback from Provider panel).
+    ProviderModelList {
+        provider_id: String,
+        models: Vec<String>,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.

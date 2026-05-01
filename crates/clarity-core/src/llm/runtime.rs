@@ -299,10 +299,12 @@ mod tests {
     }
 
     #[test]
-    fn test_set_and_get_provider_config() {
+    fn test_provider_config_set_get_clear_and_replace() {
+        // Step 1: initial state is None
         clear_provider_config();
         assert!(get_active_config().is_none());
 
+        // Step 2: set and read back
         let cfg = RuntimeProviderConfig {
             provider_id: "test".into(),
             base_url: "https://test.com/v1".into(),
@@ -319,26 +321,7 @@ mod tests {
         assert_eq!(cached.api_key, "sk-test");
         assert_eq!(cached.model, "test-model");
 
-        clear_provider_config();
-        assert!(get_active_config().is_none());
-    }
-
-    #[test]
-    fn test_set_provider_config_replaces_old() {
-        clear_provider_config();
-
-        let cfg1 = RuntimeProviderConfig {
-            provider_id: "first".into(),
-            base_url: "https://first.com/v1".into(),
-            api_format: "openai_chat".into(),
-            api_key: "sk-1".into(),
-            model: "model-1".into(),
-        };
-        set_provider_config(cfg1);
-
-        let cached = get_active_config().expect("config should be set");
-        assert_eq!(cached.provider_id, "first");
-
+        // Step 3: replace config
         let cfg2 = RuntimeProviderConfig {
             provider_id: "second".into(),
             base_url: "https://second.com/v1".into(),
@@ -352,6 +335,8 @@ mod tests {
         assert_eq!(cached.provider_id, "second");
         assert_eq!(cached.api_format, "anthropic_messages");
 
+        // Step 4: clear
         clear_provider_config();
+        assert!(get_active_config().is_none());
     }
 }

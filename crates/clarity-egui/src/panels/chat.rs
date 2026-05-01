@@ -16,46 +16,46 @@ fn format_thousands(n: u32) -> String {
 
 pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
     egui::CentralPanel::default()
-        .frame(egui::Frame::central_panel(&ctx.style()).fill(app.theme.bg))
+        .frame(egui::Frame::central_panel(&ctx.style()).fill(app.ui_store.theme.bg))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                if app.sidebar_collapsed
+                if app.ui_store.sidebar_collapsed
                     && ui
                         .add(
                             egui::Button::new(egui::RichText::new("➡").size(14.0))
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
                         .clicked()
                 {
-                    app.sidebar_collapsed = false;
+                    app.ui_store.sidebar_collapsed = false;
                 }
                 // ── Category instance tabs (hidden for emotion) ──
-                if app.active_category != "emotion" {
+                if app.session_store.active_category != "emotion" {
                     let category_sessions: Vec<(String, String, bool)> = app
-                        .sessions
+                        .session_store.sessions
                         .iter()
-                        .filter(|s| s.category == app.active_category)
-                        .map(|s| (s.id.clone(), s.title.clone(), s.id == app.active_session_id))
+                        .filter(|s| s.category == app.session_store.active_category)
+                        .map(|s| (s.id.clone(), s.title.clone(), s.id == app.session_store.active_session_id))
                         .collect();
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         for (id, title, is_active) in &category_sessions {
                             let bg = if *is_active {
-                                app.theme.surface
+                                app.ui_store.theme.surface
                             } else {
-                                app.theme.bg_elevated
+                                app.ui_store.theme.bg_elevated
                             };
                             let text_color = if *is_active {
-                                app.theme.text_strong
+                                app.ui_store.theme.text_strong
                             } else {
-                                app.theme.text_dim
+                                app.ui_store.theme.text_dim
                             };
                             let stroke = if *is_active {
-                                egui::Stroke::new(1.5, app.theme.accent)
+                                egui::Stroke::new(1.5, app.ui_store.theme.accent)
                             } else {
-                                egui::Stroke::new(1.0, app.theme.border)
+                                egui::Stroke::new(1.0, app.ui_store.theme.border)
                             };
                             let tab_id = id.clone();
                             if ui
@@ -64,21 +64,21 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                         egui::RichText::new(title).size(12.0).color(text_color),
                                     )
                                     .fill(bg)
-                                    .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                                     .stroke(stroke)
                                     .min_size(egui::vec2(60.0, 28.0)),
                                 )
                                 .clicked()
                             {
                                 app.save_current_session();
-                                let old_id = app.active_session_id.clone();
-                                if !app.input.trim().is_empty() {
-                                    app.drafts.insert(old_id, app.input.clone());
+                                let old_id = app.session_store.active_session_id.clone();
+                                if !app.chat_store.input.trim().is_empty() {
+                                    app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
                                 } else {
-                                    app.drafts.remove(&old_id);
+                                    app.session_store.drafts.remove(&old_id);
                                 }
-                                app.active_session_id = tab_id.clone();
-                                app.input = app.drafts.remove(&tab_id).unwrap_or_default();
+                                app.session_store.active_session_id = tab_id.clone();
+                                app.chat_store.input = app.session_store.drafts.remove(&tab_id).unwrap_or_default();
                             }
                         }
                         // New-tab button (browser style)
@@ -86,7 +86,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .add(
                                 egui::Button::new(egui::RichText::new("+").size(14.0))
                                     .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                             )
                             .clicked()
                         {
@@ -99,7 +99,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         egui::RichText::new("情感")
                             .size(16.0)
                             .strong()
-                            .color(app.theme.text),
+                            .color(app.ui_store.theme.text),
                     );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -109,18 +109,18 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         .add(
                             egui::Button::new(egui::RichText::new("⚙").size(14.0))
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
                         .clicked()
                     {
-                        app.settings_open = true;
-                        app.settings_edit = {
+                        app.settings_store.settings_open = true;
+                        app.settings_store.settings_edit = {
                             let guard = app.state.cached_settings.lock();
                             guard.clone()
                         };
                     }
                     // Tasks
-                    let active_tasks = app.tasks.iter().filter(|t| !t.status.is_terminal()).count();
+                    let active_tasks = app.task_store.tasks.iter().filter(|t| !t.status.is_terminal()).count();
                     let task_btn = if active_tasks > 0 {
                         format!("📝 {}", active_tasks)
                     } else {
@@ -130,17 +130,17 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         .add(
                             egui::Button::new(egui::RichText::new(&task_btn).size(12.0))
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
                         .clicked()
                     {
-                        app.task_panel_open = !app.task_panel_open;
-                        if app.task_panel_open {
+                        app.task_store.task_panel_open = !app.task_store.task_panel_open;
+                        if app.task_store.task_panel_open {
                             app.refresh_tasks();
                         }
                     }
                     // MCP
-                    let mcp_count = app.mcp_config.as_ref().map_or(0, |c| c.servers.len());
+                    let mcp_count = app.mcp_store.mcp_config.as_ref().map_or(0, |c| c.servers.len());
                     let mcp_btn = if mcp_count > 0 {
                         format!("🔌 {}", mcp_count)
                     } else {
@@ -150,18 +150,18 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         .add(
                             egui::Button::new(egui::RichText::new(&mcp_btn).size(12.0))
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
+                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
                         .clicked()
                     {
-                        app.mcp_panel_open = !app.mcp_panel_open;
+                        app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
                     }
                     // Status
-                    let (status_color, status_label) = match app.agent_status {
-                        AgentStatus::Online => (app.theme.status_online, "Online"),
-                        AgentStatus::Busy => (app.theme.status_busy, "Busy"),
-                        AgentStatus::Unconfigured => (app.theme.status_offline, "Unconfigured"),
-                        AgentStatus::Offline => (app.theme.status_offline, "Offline"),
+                    let (status_color, status_label) = match app.chat_store.agent_status {
+                        AgentStatus::Online => (app.ui_store.theme.status_online, "Online"),
+                        AgentStatus::Busy => (app.ui_store.theme.status_busy, "Busy"),
+                        AgentStatus::Unconfigured => (app.ui_store.theme.status_offline, "Unconfigured"),
+                        AgentStatus::Offline => (app.ui_store.theme.status_offline, "Offline"),
                     };
                     let (rect, _) =
                         ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
@@ -169,10 +169,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     ui.label(
                         egui::RichText::new(status_label)
                             .size(12.0)
-                            .color(app.theme.text_dim),
+                            .color(app.ui_store.theme.text_dim),
                     );
                     // Token usage (session cumulative)
-                    if let Some((p, c, t)) = app.last_usage {
+                    if let Some((p, c, t)) = app.chat_store.last_usage {
                         ui.label(
                             egui::RichText::new(format!(
                                 "Session: {}↑ {}↓ {}∑",
@@ -181,47 +181,47 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 format_thousands(t)
                             ))
                             .size(11.0)
-                            .color(app.theme.text_dim)
+                            .color(app.ui_store.theme.text_dim)
                             .monospace(),
                         );
                     }
                 });
             });
-            ui.add_space(app.theme.space_4);
+            ui.add_space(app.ui_store.theme.space_4);
             ui.separator();
 
-            let banner_text = app.network_banner.clone();
+            let banner_text = app.ui_store.network_banner.clone();
             if let Some(banner) = banner_text {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(&banner)
                             .size(12.0)
-                            .color(app.theme.status_busy),
+                            .color(app.ui_store.theme.status_busy),
                     );
                     if ui.button("×").clicked() {
-                        app.network_banner = None;
+                        app.ui_store.network_banner = None;
                     }
                 });
                 ui.separator();
             }
 
-            if app.compacting {
+            if app.chat_store.compacting {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("Compacting conversation history…")
                             .size(12.0)
-                            .color(app.theme.text_dim),
+                            .color(app.ui_store.theme.text_dim),
                     );
                 });
                 ui.separator();
             }
 
             let available_height = ui.available_height() - 70.0;
-            let is_loading = app.is_loading;
-            let theme = app.theme.clone();
-            let active_id = app.active_session_id.clone();
-            let tool_calls = app.tool_calls.clone();
-            let scroll_y = app.last_scroll_offset;
+            let is_loading = app.chat_store.is_loading;
+            let theme = app.ui_store.theme.clone();
+            let active_id = app.session_store.active_session_id.clone();
+            let tool_calls = app.chat_store.tool_calls.clone();
+            let scroll_y = app.ui_store.last_scroll_offset;
             let mut configure_clicked = false;
 
             let output = egui::ScrollArea::vertical()
@@ -230,7 +230,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 .auto_shrink([false; 2])
                 .max_height(available_height)
                 .show(ui, |ui| {
-                    if let Some(session) = app.sessions.iter_mut().find(|s| s.id == active_id) {
+                    if let Some(session) = app.session_store.sessions.iter_mut().find(|s| s.id == active_id) {
                         if session.messages.is_empty() && !is_loading {
                             ui.vertical_centered(|ui| {
                                 ui.add_space(120.0);
@@ -240,13 +240,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                         .strong()
                                         .color(theme.text_dim),
                                 );
-                                ui.add_space(app.theme.space_8);
+                                ui.add_space(app.ui_store.theme.space_8);
                                 ui.label(
                                     egui::RichText::new("Local-first AI agent runtime")
                                         .size(14.0)
                                         .color(theme.text_dim),
                                 );
-                                ui.add_space(app.theme.space_24);
+                                ui.add_space(app.ui_store.theme.space_24);
                                 if ui
                                     .add(
                                         egui::Button::new(
@@ -323,10 +323,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     }
                 });
 
-            app.last_scroll_offset = output.state.offset.y;
+            app.ui_store.last_scroll_offset = output.state.offset.y;
             if configure_clicked {
-                app.settings_open = true;
-                app.settings_edit = {
+                app.settings_store.settings_open = true;
+                app.settings_store.settings_edit = {
                     let guard = app.state.cached_settings.lock();
                     guard.clone()
                 };
@@ -335,13 +335,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             ui.separator();
 
             // Plan review card above input bar
-            if let Some(ref plan) = app.pending_plan {
+            if let Some(ref plan) = app.chat_store.pending_plan {
                 let mut execute = false;
                 let mut cancel = false;
                 egui::Frame::group(ui.style())
-                    .fill(app.theme.surface)
-                    .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
-                    .stroke(egui::Stroke::new(1.0, app.theme.accent))
+                    .fill(app.ui_store.theme.surface)
+                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
+                    .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
@@ -349,28 +349,28 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             egui::RichText::new(format!("📋 Plan Review: {}", plan.title))
                                 .size(13.0)
                                 .strong()
-                                .color(app.theme.text),
+                                .color(app.ui_store.theme.text),
                         );
-                        ui.add_space(app.theme.space_8);
+                        ui.add_space(app.ui_store.theme.space_8);
                         for step in &plan.steps {
                             ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new(format!("{}.", step.id))
                                         .size(11.0)
                                         .strong()
-                                        .color(app.theme.text),
+                                        .color(app.ui_store.theme.text),
                                 );
                                 ui.label(
                                     egui::RichText::new(&step.description)
                                         .size(11.0)
-                                        .color(app.theme.text),
+                                        .color(app.ui_store.theme.text),
                                 );
                             });
                             ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new("→")
                                         .size(10.0)
-                                        .color(app.theme.text_dim),
+                                        .color(app.ui_store.theme.text_dim),
                                 );
                                 ui.label(
                                     egui::RichText::new(format!(
@@ -378,13 +378,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                         step.tool_name, step.tool_params
                                     ))
                                     .size(10.0)
-                                    .color(app.theme.text_dim)
+                                    .color(app.ui_store.theme.text_dim)
                                     .monospace(),
                                 );
                             });
                             ui.add_space(2.0);
                         }
-                        ui.add_space(app.theme.space_8);
+                        ui.add_space(app.ui_store.theme.space_8);
                         ui.horizontal(|ui| {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -395,9 +395,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                             egui::Button::new(
                                                 egui::RichText::new("Cancel")
                                                     .size(12.0)
-                                                    .color(app.theme.text),
+                                                    .color(app.ui_store.theme.text),
                                             )
-                                            .fill(app.theme.border),
+                                            .fill(app.ui_store.theme.border),
                                         )
                                         .clicked()
                                     {
@@ -409,9 +409,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                             egui::Button::new(
                                                 egui::RichText::new("Execute")
                                                     .size(12.0)
-                                                    .color(app.theme.text),
+                                                    .color(app.ui_store.theme.text),
                                             )
-                                            .fill(app.theme.accent),
+                                            .fill(app.ui_store.theme.accent),
                                         )
                                         .clicked()
                                     {
@@ -422,9 +422,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         });
                     });
                 if execute {
-                    let plan = app.pending_plan.take().unwrap();
+                    let plan = app.chat_store.pending_plan.take().unwrap();
                     // Initialize live execution tracker.
-                    app.plan_tracker = Some(crate::ui::types::PlanExecutionTracker {
+                    app.chat_store.plan_tracker = Some(crate::ui::types::PlanExecutionTracker {
                         title: plan.title.clone(),
                         steps: plan
                             .steps
@@ -439,8 +439,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     });
                     let state = app.state.clone();
                     let tx = app.ui_tx.clone();
-                    app.is_loading = true;
-                    app.agent_status = AgentStatus::Busy;
+                    app.chat_store.is_loading = true;
+                    app.chat_store.agent_status = AgentStatus::Busy;
                     app.runtime.spawn(async move {
                         match state.agent.execute_plan(&plan).await {
                             Ok(results) => {
@@ -470,18 +470,18 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 } else if cancel {
-                    app.pending_plan = None;
+                    app.chat_store.pending_plan = None;
                 }
                 ui.separator();
             }
 
             // Plan execution tracker panel
-            if let Some(ref tracker) = app.plan_tracker {
+            if let Some(ref tracker) = app.chat_store.plan_tracker {
                 let mut dismiss = false;
                 egui::Frame::group(ui.style())
-                    .fill(app.theme.surface)
-                    .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
-                    .stroke(egui::Stroke::new(1.0, app.theme.accent))
+                    .fill(app.ui_store.theme.surface)
+                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
+                    .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
@@ -490,31 +490,31 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 egui::RichText::new(format!("📋 {}", tracker.title))
                                     .size(13.0)
                                     .strong()
-                                    .color(app.theme.text),
+                                    .color(app.ui_store.theme.text),
                             );
                             if ui
                                 .button(
                                     egui::RichText::new("✕")
                                         .size(12.0)
-                                        .color(app.theme.text_dim),
+                                        .color(app.ui_store.theme.text_dim),
                                 )
                                 .clicked()
                             {
                                 dismiss = true;
                             }
                         });
-                        ui.add_space(app.theme.space_8);
+                        ui.add_space(app.ui_store.theme.space_8);
                         for step in &tracker.steps {
                             let (icon, color) = match step.status {
                                 crate::ui::types::PlanStepStatus::Pending => {
-                                    ("⏳", app.theme.text_dim)
+                                    ("⏳", app.ui_store.theme.text_dim)
                                 }
                                 crate::ui::types::PlanStepStatus::Running => {
-                                    ("▶️", app.theme.accent)
+                                    ("▶️", app.ui_store.theme.accent)
                                 }
-                                crate::ui::types::PlanStepStatus::Success => ("✅", app.theme.ok),
+                                crate::ui::types::PlanStepStatus::Success => ("✅", app.ui_store.theme.ok),
                                 crate::ui::types::PlanStepStatus::Failed => {
-                                    ("❌", app.theme.danger)
+                                    ("❌", app.ui_store.theme.danger)
                                 }
                             };
                             ui.horizontal(|ui| {
@@ -523,16 +523,16 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     egui::RichText::new(format!("{}.", step.id))
                                         .size(11.0)
                                         .strong()
-                                        .color(app.theme.text),
+                                        .color(app.ui_store.theme.text),
                                 );
                                 ui.label(
                                     egui::RichText::new(&step.description)
                                         .size(11.0)
-                                        .color(app.theme.text),
+                                        .color(app.ui_store.theme.text),
                                 );
                             });
                             ui.horizontal(|ui| {
-                                ui.add_space(app.theme.space_20);
+                                ui.add_space(app.ui_store.theme.space_20);
                                 ui.label(
                                     egui::RichText::new(format!("→ {}", step.tool_name))
                                         .size(10.0)
@@ -544,25 +544,25 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 if dismiss {
-                    app.plan_tracker = None;
+                    app.chat_store.plan_tracker = None;
                 }
                 ui.separator();
             }
 
             // Attachment chips above input bar
-            if !app.attachments.is_empty() {
+            if !app.chat_store.attachments.is_empty() {
                 let mut to_remove: Option<usize> = None;
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
                         egui::RichText::new("Attachments:")
                             .size(11.0)
-                            .color(app.theme.text_dim),
+                            .color(app.ui_store.theme.text_dim),
                     );
-                    for (i, att) in app.attachments.iter().enumerate() {
+                    for (i, att) in app.chat_store.attachments.iter().enumerate() {
                         egui::Frame::group(ui.style())
-                            .fill(app.theme.surface)
-                            .corner_radius(egui::CornerRadius::same(app.theme.radius_full as u8))
-                            .stroke(egui::Stroke::new(1.0, app.theme.border))
+                            .fill(app.ui_store.theme.surface)
+                            .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_full as u8))
+                            .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
                             .inner_margin(egui::Margin::symmetric(8, 4))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
@@ -570,7 +570,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     ui.label(
                                         egui::RichText::new(&att.name)
                                             .size(11.0)
-                                            .color(app.theme.text)
+                                            .color(app.ui_store.theme.text)
                                             .monospace(),
                                     );
                                     if ui.small_button("×").clicked() {
@@ -581,47 +581,47 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     }
                 });
                 if let Some(i) = to_remove {
-                    app.attachments.remove(i);
+                    app.chat_store.attachments.remove(i);
                 }
                 ui.separator();
             }
 
             // Input bar card
             egui::Frame::group(ui.style())
-                .fill(app.theme.input_bg)
-                .corner_radius(egui::CornerRadius::same(app.theme.radius_lg as u8))
-                .stroke(egui::Stroke::new(1.0, app.theme.border))
+                .fill(app.ui_store.theme.input_bg)
+                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
+                .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
                 .inner_margin(egui::Margin::same(6))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         let available_width = ui.available_width();
-                        let btn_area_width = if app.is_loading { 100.0 } else { 52.0 };
+                        let btn_area_width = if app.chat_store.is_loading { 100.0 } else { 52.0 };
                         let input_width = available_width - btn_area_width;
                         ui.allocate_ui_with_layout(
                             egui::vec2(input_width, 44.0),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                let hint = if app.pending_send.is_some() {
+                                let hint = if app.chat_store.pending_send.is_some() {
                                     "Steer message queued — will send when current response stops..."
-                                } else if !app.attachments.is_empty() {
+                                } else if !app.chat_store.attachments.is_empty() {
                                     "Type a message (files attached)..."
                                 } else {
                                     "Type a message..."
                                 };
-                                let prev_input = app.input.clone();
-                                let line_count = app.input.matches('\n').count() + 1;
+                                let prev_input = app.chat_store.input.clone();
+                                let line_count = app.chat_store.input.matches('\n').count() + 1;
                                 let input_height =
                                     (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
-                                let text_edit = egui::TextEdit::multiline(&mut app.input)
+                                let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
                                     .desired_rows(line_count.max(1))
                                     .hint_text(hint)
                                     .margin(egui::vec2(8.0, 8.0));
                                 ui.add_sized(egui::vec2(input_width, input_height), text_edit);
 
                                 // Track input modifications for IME suppression heuristic.
-                                if app.input != prev_input {
-                                    app.last_input_modified = std::time::Instant::now();
+                                if app.chat_store.input != prev_input {
+                                    app.ui_store.last_input_modified = std::time::Instant::now();
                                 }
 
                                 // Enter sends; Shift+Enter inserts newline.
@@ -634,13 +634,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 //   in settings or detect IME state once egui supports it.
                                 let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
                                 if enter_pressed && !ui.input(|i| i.modifiers.shift) {
-                                    while app.input.ends_with('\n') {
-                                        app.input.pop();
+                                    while app.chat_store.input.ends_with('\n') {
+                                        app.chat_store.input.pop();
                                     }
-                                    let recent_ime = app.last_input_modified.elapsed()
+                                    let recent_ime = app.ui_store.last_input_modified.elapsed()
                                         < std::time::Duration::from_millis(300);
-                                    if app.input == prev_input
-                                        && !app.input.trim().is_empty()
+                                    if app.chat_store.input == prev_input
+                                        && !app.chat_store.input.trim().is_empty()
                                         && !recent_ime
                                     {
                                         app.send();
@@ -649,19 +649,19 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             },
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if app.is_loading {
+                            if app.chat_store.is_loading {
                                 // Queue-send button (rightmost) — enabled only if input has content.
                                 let can_queue =
-                                    !app.input.trim().is_empty() || !app.attachments.is_empty();
+                                    !app.chat_store.input.trim().is_empty() || !app.chat_store.attachments.is_empty();
                                 let queue_color = if can_queue {
-                                    app.theme.accent
+                                    app.ui_store.theme.accent
                                 } else {
-                                    app.theme.bg_elevated
+                                    app.ui_store.theme.bg_elevated
                                 };
                                 let queue_text = if can_queue {
-                                    app.theme.text
+                                    app.ui_store.theme.text
                                 } else {
-                                    app.theme.text_dim
+                                    app.ui_store.theme.text_dim
                                 };
                                 let queue_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
@@ -670,7 +670,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     )
                                     .fill(queue_color)
                                     .corner_radius(
-                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                        egui::CornerRadius::same(app.ui_store.theme.radius_full as u8),
                                     ),
                                 );
                                 if queue_btn.clicked() && can_queue {
@@ -688,11 +688,11 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let stop_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("■").size(16.0).color(app.theme.text),
+                                        egui::RichText::new("■").size(16.0).color(app.ui_store.theme.text),
                                     )
-                                    .fill(app.theme.danger)
+                                    .fill(app.ui_store.theme.danger)
                                     .corner_radius(
-                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                        egui::CornerRadius::same(app.ui_store.theme.radius_full as u8),
                                     ),
                                 );
                                 if stop_btn.clicked() {
@@ -704,11 +704,11 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("▶").size(16.0).color(app.theme.text),
+                                        egui::RichText::new("▶").size(16.0).color(app.ui_store.theme.text),
                                     )
-                                    .fill(app.theme.accent)
+                                    .fill(app.ui_store.theme.accent)
                                     .corner_radius(
-                                        egui::CornerRadius::same(app.theme.radius_full as u8),
+                                        egui::CornerRadius::same(app.ui_store.theme.radius_full as u8),
                                     ),
                                 );
                                 if btn.clicked() {
