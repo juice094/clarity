@@ -7,16 +7,13 @@ pub const ICON_SEND: &str = "\u{E394}";
 pub const ICON_SETTINGS: &str = "\u{E270}";
 pub const ICON_PLAY: &str = "\u{E3D0}";
 pub const ICON_STOP: &str = "\u{E46C}";
-pub const ICON_PAUSE: &str = "\u{E39E}";
 pub const ICON_HOURGLASS: &str = "\u{E2B2}";
-pub const ICON_SPINNER: &str = "\u{E66A}";
 pub const ICON_CHECK: &str = "\u{E182}";
 pub const ICON_X: &str = "\u{E4F6}";
 pub const ICON_WARNING: &str = "\u{E4E0}";
 pub const ICON_PAPERCLIP: &str = "\u{E39A}";
 pub const ICON_LIST: &str = "\u{E2F0}";
 pub const ICON_ARROW_LEFT: &str = "\u{E058}";
-pub const ICON_ARROW_RIGHT: &str = "\u{E06C}";
 pub const ICON_PROHIBIT: &str = "\u{E3DE}";
 pub const ICON_QUESTION: &str = "\u{E3E8}";
 

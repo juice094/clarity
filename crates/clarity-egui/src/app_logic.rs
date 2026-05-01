@@ -126,8 +126,6 @@ impl App {
             &settings_snapshot,
             profile_list,
         );
-        let wire = Arc::new(clarity_wire::Wire::new());
-
         Self {
             state,
             runtime,
@@ -152,7 +150,6 @@ impl App {
                 plan_tracker: None,
                 stick_to_bottom: true,
             },
-            wire,
             settings_store: crate::stores::SettingsStore {
                 settings_open: false,
                 settings_edit,

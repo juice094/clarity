@@ -46,10 +46,6 @@ pub(crate) struct App {
     pub(crate) runtime: tokio::runtime::Runtime,
     pub(crate) ui_tx: Sender<UiEvent>,
     pub(crate) ui_rx: Receiver<UiEvent>,
-    #[allow(dead_code)]
-    #[allow(dead_code)]
-    pub(crate) wire: Arc<clarity_wire::Wire>,
-
     // === Domain Stores (Zustand-style slices) ===
     pub(crate) session_store: stores::SessionStore,
     pub(crate) chat_store: stores::ChatStore,
