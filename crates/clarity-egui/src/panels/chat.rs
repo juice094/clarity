@@ -224,9 +224,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             let scroll_y = app.ui_store.last_scroll_offset;
             let mut configure_clicked = false;
 
+            let mut scroll_up = false;
             let output = egui::ScrollArea::vertical()
                 .id_salt("chat_scroll")
-                .stick_to_bottom(true)
+                .stick_to_bottom(app.chat_store.stick_to_bottom)
                 .auto_shrink([false; 2])
                 .max_height(available_height)
                 .show(ui, |ui| {
@@ -321,8 +322,21 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                     }
+                    // Detect user scroll-up intent to release stick-to-bottom.
+                    ui.input(|i| {
+                        for event in &i.events {
+                            if let egui::Event::MouseWheel { delta, .. } = event {
+                                if delta.y > 0.0 {
+                                    scroll_up = true;
+                                }
+                            }
+                        }
+                    });
                 });
 
+            if scroll_up {
+                app.chat_store.stick_to_bottom = false;
+            }
             app.ui_store.last_scroll_offset = output.state.offset.y;
             if configure_clicked {
                 app.settings_store.settings_open = true;
@@ -625,24 +639,20 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 }
 
                                 // Enter sends; Shift+Enter inserts newline.
-                                // IME safeguard: if the input was modified very recently
-                                // (< 300 ms), treat Enter as composition confirmation
-                                // rather than send intent.
-                                //
-                                // FIXME-WEEK1-RISK: 300ms heuristic may fail for slow
-                                //   IME composition (e.g., Rime). Optimize: expose threshold
-                                //   in settings or detect IME state once egui supports it.
+                                // IME safeguard: detect IMECommit event instead of
+                                // relying on a fragile time threshold.
                                 let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
-                                if enter_pressed && !ui.input(|i| i.modifiers.shift) {
+                                let ime_commit = ui.input(|i| {
+                                    i.events.iter().any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Commit(_))))
+                                });
+                                if enter_pressed && !ui.input(|i| i.modifiers.shift) && !ime_commit {
                                     while app.chat_store.input.ends_with('\n') {
                                         app.chat_store.input.pop();
                                     }
-                                    let recent_ime = app.ui_store.last_input_modified.elapsed()
-                                        < std::time::Duration::from_millis(300);
                                     if app.chat_store.input == prev_input
                                         && !app.chat_store.input.trim().is_empty()
-                                        && !recent_ime
                                     {
+                                        app.chat_store.stick_to_bottom = true;
                                         app.send();
                                     }
                                 }
@@ -674,6 +684,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     ),
                                 );
                                 if queue_btn.clicked() && can_queue {
+                                    app.chat_store.stick_to_bottom = true;
                                     app.send();
                                 }
                                 if can_queue {
@@ -712,6 +723,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     ),
                                 );
                                 if btn.clicked() {
+                                    app.chat_store.stick_to_bottom = true;
                                     app.send();
                                 }
                                 btn.on_hover_text("Send message");

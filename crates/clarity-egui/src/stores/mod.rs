@@ -51,6 +51,8 @@ pub struct ChatStore {
     pub pending_plan: Option<clarity_core::agent::Plan>,
     /// Live execution tracker for an active plan.
     pub plan_tracker: Option<PlanExecutionTracker>,
+    /// Whether the chat scroll should stick to bottom (auto-released on manual scroll-up).
+    pub stick_to_bottom: bool,
 }
 
 // ============================================================================

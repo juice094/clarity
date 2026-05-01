@@ -150,6 +150,7 @@ impl App {
                 last_usage: None,
                 pending_plan: None,
                 plan_tracker: None,
+                stick_to_bottom: true,
             },
             wire,
             settings_store: crate::stores::SettingsStore {
