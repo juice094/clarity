@@ -163,6 +163,8 @@ impl App {
             task_panel_open: false,
             tasks: vec![],
             last_task_refresh: now,
+            parallel_batches: vec![],
+            last_parallel_poll: now,
             toasts: vec![],
             mcp_panel_open: false,
             mcp_config: crate::ui::mcp_panel::load_mcp_config(),
@@ -202,6 +204,36 @@ impl App {
         if self.toasts.len() > 5 {
             self.toasts.remove(0);
         }
+    }
+
+    /// Poll all tracked parallel batch statuses from the Gateway.
+    pub(crate) fn poll_parallel_batches(&mut self) {
+        let gateway = std::env::var("CLARITY_GATEWAY_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:18790".to_string());
+        let batch_ids: Vec<String> =
+            self.parallel_batches.iter().map(|b| b.batch_id.clone()).collect();
+        let tx = self.ui_tx.clone();
+
+        self.last_parallel_poll = std::time::Instant::now();
+
+        self.runtime.spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            for batch_id in &batch_ids {
+                let url = format!("{}/v1/parallel/{}/status", gateway, batch_id);
+                match client.get(&url).send().await {
+                    Ok(resp) if resp.status().is_success() => {
+                        if let Ok(status) = resp.json::<serde_json::Value>().await {
+                            let _ = tx.send(UiEvent::SubAgentBatch(batch_id.clone(), status));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
     }
 
     pub(crate) fn refresh_tasks(&self) {
@@ -516,6 +548,49 @@ impl App {
                 UiEvent::TaskList(tasks) => {
                     self.tasks = tasks;
                     self.last_task_refresh = Instant::now();
+                }
+                UiEvent::SubAgentBatch(batch_id, status) => {
+                    use crate::ui::types::{AgentStatusEntry, SubAgentProgress};
+                    let total = status["total"].as_u64().unwrap_or(0) as usize;
+                    let completed = status["completed"].as_u64().unwrap_or(0) as usize;
+                    let failed = status["failed"].as_u64().unwrap_or(0) as usize;
+                    let status_str = status["status"].as_str().unwrap_or("Running").to_string();
+                    let elapsed = status["elapsed_ms"].as_u64().unwrap_or(0);
+
+                    let agent_statuses: Vec<AgentStatusEntry> = status["agent_statuses"]
+                        .as_array()
+                        .map(|arr| {
+                            arr.iter()
+                                .map(|v| AgentStatusEntry {
+                                    agent_id: v["agent_id"].as_str().unwrap_or("").to_string(),
+                                    status: v["status"].as_str().unwrap_or("").to_string(),
+                                    summary: v["summary"].as_str().map(|s| s.to_string()),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    // Update or insert
+                    let entry = SubAgentProgress {
+                        batch_id: batch_id.clone(),
+                        total,
+                        completed,
+                        failed,
+                        status: status_str,
+                        elapsed_ms: elapsed,
+                        agent_statuses,
+                        last_poll: Instant::now(),
+                    };
+                    if let Some(existing) = self
+                        .parallel_batches
+                        .iter_mut()
+                        .find(|b| b.batch_id == batch_id)
+                    {
+                        *existing = entry;
+                    } else {
+                        self.parallel_batches.push(entry);
+                    }
+                    self.last_parallel_poll = Instant::now();
                 }
                 UiEvent::Usage {
                     prompt_tokens,

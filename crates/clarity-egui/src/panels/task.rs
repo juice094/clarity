@@ -23,8 +23,22 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(app.theme.space_8);
+
+            // ---- Regular task list ----
             let action = crate::ui::task_panel::render_task_panel(ui, &app.tasks, &app.theme);
+            if let crate::ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
+                let store = app.state.task_store.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = store
+                        .update_status(&task_id, clarity_core::background::TaskStatus::Cancelled)
+                        .await
+                    {
+                        tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+                    }
+                });
+            }
+
+            // ---- Create task button ----
             ui.add_space(app.theme.space_8);
             if ui
                 .add(
@@ -40,16 +54,15 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
             {
                 app.task_create_modal_open = true;
             }
-            if let crate::ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
-                let store = app.state.task_store.clone();
-                app.runtime.spawn(async move {
-                    if let Err(e) = store
-                        .update_status(&task_id, clarity_core::background::TaskStatus::Cancelled)
-                        .await
-                    {
-                        tracing::warn!("Failed to cancel task {}: {}", task_id, e);
-                    }
+
+            // ---- SubAgent parallel progress ----
+            ui.add_space(app.theme.space_12);
+            egui::Frame::group(ui.style())
+                .fill(app.theme.bg)
+                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                .inner_margin(egui::Margin::same(8))
+                .show(ui, |ui| {
+                    crate::panels::subagent_progress::render_subagent_progress(app, ui);
                 });
-            }
         });
 }

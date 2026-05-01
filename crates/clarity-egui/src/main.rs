@@ -84,6 +84,9 @@ pub(crate) struct App {
     pub(crate) task_panel_open: bool,
     pub(crate) tasks: Vec<clarity_core::background::TaskInfo>,
     pub(crate) last_task_refresh: Instant,
+    /// SubAgent parallel batch progress snapshots (polled from Gateway).
+    pub(crate) parallel_batches: Vec<crate::ui::types::SubAgentProgress>,
+    pub(crate) last_parallel_poll: Instant,
     pub(crate) toasts: Vec<Toast>,
     pub(crate) mcp_panel_open: bool,
     pub(crate) mcp_config: Option<clarity_core::mcp::config::McpConfig>,
@@ -353,6 +356,14 @@ impl eframe::App for App {
         // Refresh task list periodically when panel is open
         if self.task_panel_open && self.last_task_refresh.elapsed() > Duration::from_secs(3) {
             self.refresh_tasks();
+        }
+
+        // Poll parallel batch status when panel is open
+        if self.task_panel_open
+            && !self.parallel_batches.is_empty()
+            && self.last_parallel_poll.elapsed() > Duration::from_secs(2)
+        {
+            self.poll_parallel_batches();
         }
 
         use clarity_core::agent::AgentState;

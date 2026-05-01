@@ -44,6 +44,8 @@ pub enum UiEvent {
         completion_tokens: u32,
         total_tokens: u32,
     },
+    /// SubAgent parallel batch status update from Gateway polling.
+    SubAgentBatch(String, serde_json::Value),
     PlanReady(Plan),
     PlanStepBegin {
         step_id: String,
@@ -54,6 +56,26 @@ pub enum UiEvent {
         step_id: String,
         success: bool,
     },
+}
+
+/// Progress summary for a parallel batch of subagents.
+#[derive(Clone, Debug)]
+pub struct SubAgentProgress {
+    pub batch_id: String,
+    pub total: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub status: String,
+    pub elapsed_ms: u64,
+    pub agent_statuses: Vec<AgentStatusEntry>,
+    pub last_poll: std::time::Instant,
+}
+
+#[derive(Clone, Debug)]
+pub struct AgentStatusEntry {
+    pub agent_id: String,
+    pub status: String,
+    pub summary: Option<String>,
 }
 
 /// Live tracker for an executing plan.
