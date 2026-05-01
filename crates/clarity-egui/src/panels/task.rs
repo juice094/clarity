@@ -13,7 +13,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Tasks")
-                        .size(16.0)
+                        .size(app.ui_store.theme.text_lg)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );

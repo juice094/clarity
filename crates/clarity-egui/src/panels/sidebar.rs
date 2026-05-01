@@ -75,6 +75,90 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             }
             ui.add_space(app.ui_store.theme.space_12);
 
+            // ── Session list for active category ──
+            ui.label(
+                egui::RichText::new("Sessions")
+                    .size(app.ui_store.theme.text_sm)
+                    .color(app.ui_store.theme.text_dim)
+                    .weak(),
+            );
+            ui.add_space(app.ui_store.theme.space_4);
+            let session_list_height = (ui.available_height() * 0.25).max(80.0);
+            egui::ScrollArea::vertical()
+                .id_salt("session_list_scroll")
+                .max_height(session_list_height)
+                .show(ui, |ui| {
+                    let active_cat = app.session_store.active_category.clone();
+                    let category_sessions: Vec<(String, String)> = app
+                        .session_store
+                        .sessions
+                        .iter()
+                        .filter(|s| s.category == active_cat)
+                        .map(|s| (s.id.clone(), s.title.clone()))
+                        .collect();
+                    if category_sessions.is_empty() {
+                        ui.label(
+                            egui::RichText::new("No sessions")
+                                .size(app.ui_store.theme.text_xs)
+                                .color(app.ui_store.theme.text_dim),
+                        );
+                    } else {
+                        for (id, title) in &category_sessions {
+                            let is_active = id == &app.session_store.active_session_id;
+                            let text_color = if is_active {
+                                app.ui_store.theme.text_strong
+                            } else {
+                                app.ui_store.theme.text_dim
+                            };
+                            let bg = if is_active {
+                                app.ui_store.theme.surface
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
+                            let session_id = id.clone();
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(title)
+                                            .size(app.ui_store.theme.text_sm)
+                                            .color(text_color),
+                                    )
+                                    .fill(bg)
+                                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
+                                    .min_size(egui::vec2(ui.available_width(), 28.0)),
+                                )
+                                .clicked()
+                            {
+                                app.save_current_session();
+                                let old_id = app.session_store.active_session_id.clone();
+                                if !app.chat_store.input.trim().is_empty() {
+                                    app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
+                                } else {
+                                    app.session_store.drafts.remove(&old_id);
+                                }
+                                app.session_store.active_session_id = session_id.clone();
+                                app.chat_store.input = app.session_store.drafts.remove(&session_id).unwrap_or_default();
+                            }
+                        }
+                    }
+                    // New session quick button
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("+ New Session")
+                                    .size(app.ui_store.theme.text_xs)
+                                    .color(app.ui_store.theme.accent),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
+                            .min_size(egui::vec2(ui.available_width(), 24.0)),
+                        )
+                        .clicked()
+                    {
+                        app.new_session();
+                    }
+                });
+
             ui.add_space(app.ui_store.theme.space_16);
             ui.label(
                 egui::RichText::new("Files")
@@ -84,7 +168,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             );
             ui.add_space(app.ui_store.theme.space_4);
             let mut clicked_file: Option<std::path::PathBuf> = None;
-            let files_height = (ui.available_height() - 260.0).max(100.0);
+            let files_height = (ui.available_height() * 0.25).max(80.0);
             egui::ScrollArea::vertical()
                 .id_salt("file_tree_scroll")
                 .max_height(files_height)

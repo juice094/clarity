@@ -24,7 +24,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Tools")
-                        .size(16.0)
+                        .size(app.ui_store.theme.text_lg)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );

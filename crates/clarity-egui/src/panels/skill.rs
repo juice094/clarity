@@ -25,7 +25,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.heading(
                     egui::RichText::new("Skills")
-                        .size(16.0)
+                        .size(app.ui_store.theme.text_lg)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );

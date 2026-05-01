@@ -18,6 +18,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
     egui::CentralPanel::default()
         .frame(egui::Frame::central_panel(&ctx.style()).fill(app.ui_store.theme.bg))
         .show(ctx, |ui| {
+            // Swiss Style reading line-length protection
+            ui.set_max_width(720.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if app.ui_store.sidebar_collapsed
@@ -93,14 +95,6 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             app.new_session();
                         }
                     });
-                } else {
-                    // Emotion: show a static title instead of tabs
-                    ui.label(
-                        egui::RichText::new("情感")
-                            .size(16.0)
-                            .strong()
-                            .color(app.ui_store.theme.text),
-                    );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
@@ -676,7 +670,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let queue_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("▶").size(16.0).color(queue_text),
+                                        egui::RichText::new("▶").size(app.ui_store.theme.text_lg).color(queue_text),
                                     )
                                     .fill(queue_color)
                                     .corner_radius(
@@ -699,7 +693,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let stop_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("■").size(16.0).color(app.ui_store.theme.text),
+                                        egui::RichText::new("■").size(app.ui_store.theme.text_lg).color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.danger)
                                     .corner_radius(
@@ -715,7 +709,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("▶").size(16.0).color(app.ui_store.theme.text),
+                                        egui::RichText::new("▶").size(app.ui_store.theme.text_lg).color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.accent)
                                     .corner_radius(
