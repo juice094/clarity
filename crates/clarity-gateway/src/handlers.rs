@@ -1757,8 +1757,7 @@ mod tests {
 
 // ==================== MCP 服务器管理 API ====================
 
-use crate::session_store::PersistentSessionStore;
-use clarity_memory::PersistentMemoryStore;
+use clarity_core::memory::{MemoryStore, PersistentMemoryStore};
 
 /// Overview of a single MCP server entry (from `mcp.json`).
 #[derive(Serialize)]
@@ -1813,9 +1812,146 @@ pub async fn list_mcp_servers() -> Response {
     }
 }
 
+/// Get a single MCP server by name.
+pub async fn get_mcp_server(
+    axum::extract::Path(name): axum::extract::Path<String>,
+) -> Response {
+    match clarity_core::mcp::config::McpConfig::load_default() {
+        Ok(config) => match config.servers.get(&name) {
+            Some(entry) => (
+                StatusCode::OK,
+                Json(McpServerOverview {
+                    name: name.clone(),
+                    command: entry.command.clone(),
+                    args: entry.args.clone(),
+                    disabled: entry.disabled,
+                    transport: entry.transport.clone(),
+                    url: entry.url.clone(),
+                }),
+            )
+                .into_response(),
+            None => (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "MCP server not found"})),
+            )
+                .into_response(),
+        },
+        Err(e) => {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": format!("Failed to load MCP config: {}", e)})),
+            )
+                .into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct McpServerUpdate {
+    pub command: Option<String>,
+    pub args: Option<Vec<String>>,
+    pub disabled: Option<bool>,
+    pub transport: Option<String>,
+    pub url: Option<String>,
+    pub headers: Option<std::collections::HashMap<String, String>>,
+    pub env: Option<std::collections::HashMap<String, String>>,
+}
+
+/// Create or update an MCP server.
+pub async fn update_mcp_server(
+    axum::extract::Path(name): axum::extract::Path<String>,
+    Json(req): Json<McpServerUpdate>,
+) -> Response {
+    let default_path = clarity_core::mcp::config::default_config_path();
+    let path = match default_path {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    };
+
+    // Load existing config or create new
+    let mut config = clarity_core::mcp::config::McpConfig::load(&path).unwrap_or_default();
+
+    let entry = config.servers.entry(name.clone()).or_insert_with(|| {
+        clarity_core::mcp::config::McpServerEntry {
+            command: req.command.clone().unwrap_or_default(),
+            ..Default::default()
+        }
+    });
+
+    if let Some(cmd) = req.command {
+        entry.command = cmd;
+    }
+    if let Some(a) = req.args {
+        entry.args = a;
+    }
+    if let Some(d) = req.disabled {
+        entry.disabled = d;
+    }
+    if let Some(t) = req.transport {
+        entry.transport = Some(t);
+    }
+    if let Some(u) = req.url {
+        entry.url = Some(u);
+    }
+    if let Some(h) = req.headers {
+        entry.headers = h;
+    }
+    if let Some(e) = req.env {
+        entry.env = e;
+    }
+
+    match config.save(&path) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"saved": true}))).into_response(),
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Delete an MCP server.
+pub async fn delete_mcp_server(
+    axum::extract::Path(name): axum::extract::Path<String>,
+) -> Response {
+    let default_path = clarity_core::mcp::config::default_config_path();
+    let path = match default_path {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    };
+
+    let mut config = clarity_core::mcp::config::McpConfig::load(&path).unwrap_or_default();
+    config.servers.remove(&name);
+
+    match config.save(&path) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response(),
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
 // ==================== Cron 任务管理 API ====================
 
-use clarity_core::background::{CronSchedule, CronScheduler, CronTask};
+
 
 #[derive(Serialize)]
 pub struct CronTaskOverview {
@@ -1853,8 +1989,8 @@ pub async fn list_cron_tasks(
         .into_iter()
         .map(|t| CronTaskOverview {
             task_id: t.task_id.clone(),
-            name: t.spec.name.clone(),
-            cron_expr: t.cron_expr.clone(),
+            name: t.task_spec.name.clone(),
+            cron_expr: t.schedule.expr.clone(),
             enabled: t.enabled,
             next_run: None, // computed on next scheduler tick
         })
@@ -1867,7 +2003,7 @@ pub async fn create_cron_task(
     Json(req): Json<CreateCronRequest>,
 ) -> Response {
     let spec = clarity_core::background::TaskSpec::new(req.name.clone(), req.prompt)
-        .with_agent_type(&req.agent_type.unwrap_or_else(|| "default".into()))
+        .with_agent_type(req.agent_type.unwrap_or_else(|| "default".into()))
         .with_max_iterations(req.max_iterations.unwrap_or(10));
 
     match state.task_manager.schedule_cron(spec, &req.cron_expr).await {
@@ -1953,17 +2089,18 @@ pub async fn search_memory(
             .into_response();
     }
 
-    match PersistentMemoryStore::new(&memory_db) {
+    match PersistentMemoryStore::new(memory_db.as_path()).await {
         Ok(memory) => {
-            match memory.search_fulltext(&req.query, req.limit).await {
-                Ok(facts) => {
-                    let results: Vec<SearchResult> = facts
+            let memories = memory.search(&req.query, req.limit).await;
+            match memories {
+                Ok(memories) => {
+                    let results: Vec<SearchResult> = memories
                         .into_iter()
-                        .map(|f| SearchResult {
-                            fact_id: f.id.to_string(),
-                            content: f.content,
-                            tags: f.tags,
-                            score: 1.0, // BM25 native score not exposed; default to 1.0
+                        .map(|m| SearchResult {
+                            fact_id: m.id,
+                            content: m.content,
+                            tags: m.tags,
+                            score: m.importance,
                         })
                         .collect();
                     let total = results.len();

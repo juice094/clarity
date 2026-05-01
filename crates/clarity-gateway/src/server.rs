@@ -3,7 +3,7 @@ use axum::{
     http::{header, HeaderValue, Method, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -232,6 +232,16 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/api/files/write", post(handlers::file_write))
         .route("/api/files/glob", get(handlers::file_glob))
         .route("/api/provider", post(handlers::admin_switch_provider))
+        .route("/api/mcp/servers", get(handlers::list_mcp_servers))
+        .route(
+            "/api/mcp/servers/:name",
+            get(handlers::get_mcp_server)
+                .post(handlers::update_mcp_server)
+                .delete(handlers::delete_mcp_server),
+        )
+        .route("/api/cron/tasks", get(handlers::list_cron_tasks).post(handlers::create_cron_task))
+        .route("/api/cron/tasks/:id", delete(handlers::delete_cron_task))
+        .route("/api/search", post(handlers::search_memory))
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
