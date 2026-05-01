@@ -152,6 +152,13 @@ impl App {
             start: now,
             theme,
             locale: crate::i18n::Locale::default(),
+            provider_registry: crate::provider::ProviderRegistry::load(),
+            settings_active_tab: 0,
+            show_add_provider: false,
+            add_provider_name: String::new(),
+            add_provider_url: String::new(),
+            add_provider_key: String::new(),
+            add_provider_format: "openai-completions".into(),
             attachments: vec![],
             task_panel_open: false,
             tasks: vec![],
@@ -626,6 +633,39 @@ impl App {
     /// Convenience: translate `key` for the current locale.
     pub(crate) fn t(&self, key: &'static str) -> &'static str {
         self.locale.t(key)
+    }
+
+    /// Save current settings to disk and reload the LLM.
+    pub(crate) fn save_settings_and_reload(&mut self) {
+        if let Err(e) = self.settings_edit.save() {
+            tracing::error!("Failed to save settings: {}", e);
+        } else {
+            {
+                let mut guard = self.state.cached_settings.lock();
+                *guard = self.settings_edit.clone();
+            }
+            let mode = crate::app_state::parse_approval_mode(
+                &self.settings_edit.approval_mode,
+            );
+            self.state.agent.set_approval_mode(mode);
+            self.state.mode_aware_approval_runtime.set_mode(mode);
+            let state = self.state.clone();
+            self.runtime.spawn(async move {
+                if let Err(e) = crate::app_state::reload_llm(&state).await {
+                    tracing::warn!("reload_llm failed: {}", e);
+                }
+            });
+        }
+    }
+
+    /// Save settings to disk without reloading LLM.
+    pub(crate) fn save_settings_internal(&self) {
+        if let Err(e) = self.settings_edit.save() {
+            tracing::error!("Failed to save settings: {}", e);
+        } else {
+            let mut guard = self.state.cached_settings.lock();
+            *guard = self.settings_edit.clone();
+        }
     }
 
     #[allow(dead_code)]

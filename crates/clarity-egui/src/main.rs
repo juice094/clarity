@@ -20,6 +20,7 @@ mod llm_binder;
 mod llm_loader;
 mod llm_policy;
 mod panels;
+mod provider;
 mod session;
 mod settings;
 mod theme;
@@ -70,6 +71,13 @@ pub(crate) struct App {
     pub(crate) start: Instant,
     pub(crate) locale: i18n::Locale,
     pub(crate) theme: Theme,
+    pub(crate) provider_registry: provider::ProviderRegistry,
+    pub(crate) settings_active_tab: u8,
+    pub(crate) show_add_provider: bool,
+    pub(crate) add_provider_name: String,
+    pub(crate) add_provider_url: String,
+    pub(crate) add_provider_key: String,
+    pub(crate) add_provider_format: String,
     pub(crate) attachments: Vec<Attachment>,
     pub(crate) task_panel_open: bool,
     pub(crate) tasks: Vec<clarity_core::background::TaskInfo>,
@@ -189,25 +197,39 @@ impl App {
                     // Window control buttons (right-aligned)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
-                        if ui.add_sized(btn_size,
+                        let close_resp = ui.add_sized(btn_size,
                             egui::Button::new(egui::RichText::new("✕").size(12.0).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
-                        ).clicked() {
+                        );
+                        if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        } else if close_resp.hovered() {
+                            // Paint hover highlight on the response rect
+                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::ZERO, theme.danger.linear_multiply(0.25));
+                            // Re-draw the character in white on hover
+                            ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✕", egui::FontId::proportional(12.0), egui::Color32::WHITE);
                         }
+
                         // Maximize
-                        if ui.add_sized(btn_size,
+                        let max_resp = ui.add_sized(btn_size,
                             egui::Button::new(egui::RichText::new("□").size(11.0).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
-                        ).clicked() {
+                        );
+                        if max_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                        } else if max_resp.hovered() {
+                            ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::ZERO, theme.overlay_medium);
                         }
+
                         // Minimize
-                        if ui.add_sized(btn_size,
+                        let min_resp = ui.add_sized(btn_size,
                             egui::Button::new(egui::RichText::new("─").size(11.0).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
-                        ).clicked() {
+                        );
+                        if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        } else if min_resp.hovered() {
+                            ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::ZERO, theme.overlay_medium);
                         }
                     });
                 });

@@ -119,6 +119,45 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Start Using Clarity", "开始使用 Clarity");
     m.insert("Try Again", "重试");
     m.insert("Enter API Key Instead", "改用 API Key");
+    m.insert("Tools", "工具");
+    m.insert("No skills found.", "未找到技能。");
+    m.insert("Place .md files in .clarity/skills/ to add skills.", "将 .md 文件放入 .clarity/skills/ 目录以添加技能。");
+    m.insert("skill(s) loaded", "个技能已加载");
+    m.insert("Skill(s)", "技能");
+    m.insert("Active tasks:", "活跃任务：");
+    m.insert("Category:", "分类：");
+    m.insert("No tasks yet", "暂无任务");
+    m.insert("Name", "名称");
+    m.insert("Description", "描述");
+    m.insert("Prompt", "提示词");
+    m.insert("Priority", "优先级");
+    m.insert("Tool:", "工具：");
+    m.insert("Arguments:", "参数：");
+    m.insert("Preview:", "预览：");
+    m.insert("Reject", "拒绝");
+    m.insert("Approve", "批准");
+    m.insert("Approve for Session", "本次会话批准");
+    m.insert("Enabled", "已启用");
+    m.insert("Environment:", "环境变量：");
+    m.insert("Compacting conversation history…", "正在压缩对话历史…");
+    // ── Settings ──
+    m.insert("General", "通用");
+    m.insert("Provider", "服务商");
+    m.insert("Interface", "界面");
+    m.insert("About", "关于");
+    m.insert("Theme", "主题");
+    m.insert("Language", "语言");
+    m.insert("Model", "模型");
+    m.insert("API Key", "API 密钥");
+    m.insert("Approval Mode", "审批模式");
+    m.insert("Built-in", "内置");
+    m.insert("Custom", "自定义");
+    m.insert("Delete", "删除");
+    m.insert("+ Add Custom Provider", "+ 添加自定义服务商");
+    m.insert("Add Custom Provider", "添加自定义服务商");
+    m.insert("Name", "名称");
+    m.insert("Clear Batch Grants", "清除批量授权");
+    m.insert("No custom providers configured.", "未配置自定义服务商。");
 
     m
 });
