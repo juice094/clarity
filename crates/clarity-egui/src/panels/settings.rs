@@ -105,39 +105,57 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
 
             let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::click());
             let bg = if resp.hovered() { app.ui_store.theme.surface_strong } else { app.ui_store.theme.surface };
-            ui.painter().rect_filled(rect, egui::CornerRadius::same(app.ui_store.theme.radius_md as u8), bg);
-            ui.painter().rect_stroke(rect, egui::CornerRadius::same(app.ui_store.theme.radius_md as u8), s, egui::StrokeKind::Outside);
 
-            let cx = rect.left() + 12.0;
-            let cy = rect.center().y;
+            ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                egui::Frame::group(ui.style())
+                    .fill(bg)
+                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
+                    .stroke(s)
+                    .inner_margin(egui::Margin::symmetric(12, 0))
+                    .show(ui, |ui| {
+                        ui.set_min_height(h);
+                        ui.horizontal(|ui| {
+                            let has_key = !p.api_key_ref.is_empty();
+                            let dot = if has_key { app.ui_store.theme.status_online } else { app.ui_store.theme.text_dim };
+                            ui.label(egui::RichText::new("●").color(dot).size(8.0));
 
-            // Status dot
-            let has_key = !p.api_key_ref.is_empty();
-            let dot = if has_key { app.ui_store.theme.status_online } else { app.ui_store.theme.text_dim };
-            ui.painter().circle_filled(egui::pos2(cx + 4.0, cy), 4.0, dot);
+                            ui.add_space(8.0);
 
-            // Name
-            ui.painter().text(egui::pos2(cx + 16.0, cy - 8.0), egui::Align2::LEFT_CENTER,
-                p.display(), egui::FontId::new(app.ui_store.theme.text_base, egui::FontFamily::Proportional),
-                if is_active { app.ui_store.theme.accent } else { app.ui_store.theme.text });
+                            ui.vertical(|ui| {
+                                ui.label(egui::RichText::new(p.display())
+                                    .font(egui::FontId::new(app.ui_store.theme.text_base, egui::FontFamily::Proportional))
+                                    .color(if is_active { app.ui_store.theme.accent } else { app.ui_store.theme.text }));
+                                let url = if p.base_url.len() > 40 { format!("{}...", &p.base_url[..37]) } else { p.base_url.clone() };
+                                ui.label(egui::RichText::new(&url)
+                                    .font(egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace))
+                                    .color(app.ui_store.theme.text_dim));
+                            });
 
-            // URL
-            let url = if p.base_url.len() > 40 { format!("{}...", &p.base_url[..37]) } else { p.base_url.clone() };
-            ui.painter().text(egui::pos2(cx + 16.0, cy + 8.0), egui::Align2::LEFT_CENTER,
-                &url, egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
-
-            // API badge
-            let badge = p.api_format.as_str();
-            let bw = badge.len() as f32 * 7.0 + 14.0;
-            let br = egui::Rect::from_min_size(egui::pos2(rect.right() - bw - 10.0, cy - 9.0), egui::vec2(bw, 18.0));
-            ui.painter().rect_filled(br, egui::CornerRadius::same(4), app.ui_store.theme.bg_hover);
-            ui.painter().text(br.center(), egui::Align2::CENTER_CENTER, badge, egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
-
-            // Active badge
-            if is_active {
-                ui.painter().text(egui::pos2(rect.right() - 10.0, cy + 8.0), egui::Align2::RIGHT_CENTER,
-                    "Active", egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Proportional), app.ui_store.theme.ok);
-            }
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.vertical(|ui| {
+                                    let badge = p.api_format.as_str();
+                                    egui::Frame::new()
+                                        .fill(app.ui_store.theme.bg_hover)
+                                        .corner_radius(egui::CornerRadius::same(4))
+                                        .inner_margin(egui::Margin::symmetric(7, 2))
+                                        .stroke(egui::Stroke::NONE)
+                                        .show(ui, |ui| {
+                                            ui.label(egui::RichText::new(badge)
+                                                .font(egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace))
+                                                .color(app.ui_store.theme.text_dim));
+                                        });
+                                    if is_active {
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            ui.label(egui::RichText::new("Active")
+                                                .font(egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Proportional))
+                                                .color(app.ui_store.theme.ok));
+                                        });
+                                    }
+                                });
+                            });
+                        });
+                    });
+            });
 
             if resp.clicked() && !is_active {
                 app.settings_store.settings_edit.provider = id.clone();

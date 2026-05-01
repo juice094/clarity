@@ -14,72 +14,104 @@ use crate::ui::types::{Message, Role, ToolCallInfo, ToolCallStatus};
 // Render — Message bubbles, tool calls, typing indicator
 // ============================================================================
 
-/// Render a user or AI message bubble using pre-parsed markdown blocks.
+/// Render a user or AI message using pre-parsed markdown blocks.
 /// Returns the actual rendered height (including trailing space).
+///
+/// Dispatches to:
+/// - `user_bubble()` for user messages (right-aligned bubble)
+/// - `agent_message()` for agent messages (straight layout + avatar)
+/// - `error_bubble()` for error messages (prominent left-aligned bubble)
 pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    if msg.is_error {
+        error_bubble(ui, msg, theme)
+    } else {
+        match msg.role {
+            Role::User => user_bubble(ui, msg, theme),
+            Role::Agent => agent_message(ui, msg, theme),
+        }
+    }
+}
+
+fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.82).max(280.0);
 
-    let (align, bg, text_color, radius, stroke) = if msg.is_error {
-        (
-            egui::Align::LEFT,
-            theme.error_bubble,
-            theme.error_text,
-            egui::CornerRadius::same(theme.radius_lg as u8),
-            egui::Stroke::new(1.0, theme.danger),
-        )
-    } else {
-        match msg.role {
-            Role::User => (
-                egui::Align::RIGHT,
-                theme.user_bubble,
-                egui::Color32::WHITE,
-                egui::CornerRadius {
-                    nw: (theme.radius_lg as u8),
-                    ne: 4,
-                    sw: (theme.radius_lg as u8),
-                    se: 4,
-                },
-                egui::Stroke::NONE,
-            ),
-            Role::Agent => (
-                egui::Align::LEFT,
-                theme.ai_bubble,
-                theme.chat_text,
-                egui::CornerRadius {
-                    nw: 4,
-                    ne: (theme.radius_lg as u8),
-                    sw: 4,
-                    se: (theme.radius_lg as u8),
-                },
-                egui::Stroke::NONE,
-            ),
-        }
-    };
-
-    ui.with_layout(egui::Layout::top_down(align), |ui| {
+    ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
         ui.set_max_width(max_width);
         egui::Frame::group(ui.style())
-            .fill(bg)
-            .corner_radius(radius)
-            .stroke(stroke)
+            .fill(theme.user_bubble)
+            .corner_radius(egui::CornerRadius {
+                nw: (theme.radius_lg as u8),
+                ne: 4,
+                sw: (theme.radius_lg as u8),
+                se: 4,
+            })
+            .stroke(egui::Stroke::NONE)
             .shadow(theme.shadow_card)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
                 ui.set_min_width(48.0);
-                if msg.is_error {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("⚠").size(theme.text_base));
-                        ui.label(
-                            egui::RichText::new("Error")
-                                .size(theme.text_sm)
-                                .strong()
-                                .color(text_color),
-                        );
-                    });
-                    ui.add_space(theme.space_4);
-                }
-                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, text_color);
+                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, egui::Color32::WHITE);
+            });
+    });
+    ui.add_space(theme.space_16);
+    ui.cursor().min.y - start_y
+}
+
+fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    let start_y = ui.cursor().min.y;
+    let max_width = (ui.available_width() * 0.82).max(280.0);
+
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+        // Avatar placeholder: 28px circle with agent initial
+        let avatar_size = 28.0;
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(avatar_size, avatar_size), egui::Sense::hover());
+        ui.painter().circle_filled(rect.center(), avatar_size / 2.0, theme.surface_strong);
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "A",
+            egui::FontId::proportional(theme.text_sm),
+            theme.text_strong,
+        );
+
+        ui.add_space(10.0);
+
+        // Content: straight layout, no outer bubble frame
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            ui.set_max_width(max_width);
+            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+        });
+    });
+    ui.add_space(theme.space_16);
+    ui.cursor().min.y - start_y
+}
+
+fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    let start_y = ui.cursor().min.y;
+    let max_width = (ui.available_width() * 0.82).max(280.0);
+
+    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+        ui.set_max_width(max_width);
+        egui::Frame::group(ui.style())
+            .fill(theme.error_bubble)
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .stroke(egui::Stroke::new(1.0, theme.danger))
+            .shadow(theme.shadow_card)
+            .inner_margin(egui::Margin::symmetric(18, 14))
+            .show(ui, |ui| {
+                ui.set_min_width(48.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("⚠").size(theme.text_base));
+                    ui.label(
+                        egui::RichText::new("Error")
+                            .size(theme.text_sm)
+                            .strong()
+                            .color(theme.error_text),
+                    );
+                });
+                ui.add_space(theme.space_4);
+                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.error_text);
             });
     });
     ui.add_space(theme.space_16);

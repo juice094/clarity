@@ -312,15 +312,32 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
         .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            if !lang.is_empty() {
-                ui.label(
-                    egui::RichText::new(lang)
-                        .size(theme.text_sm)
-                        .color(theme.text_dim)
-                        .monospace(),
-                );
-                ui.add_space(theme.space_4);
-            }
+            ui.horizontal(|ui| {
+                if !lang.is_empty() {
+                    ui.label(
+                        egui::RichText::new(lang)
+                            .size(theme.text_sm)
+                            .color(theme.text_dim)
+                            .monospace(),
+                    );
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("Copy")
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim),
+                            )
+                            .frame(false),
+                        )
+                        .clicked()
+                    {
+                        ui.ctx().copy_text(code.to_string());
+                    }
+                });
+            });
+            ui.add_space(2.0);
             // Immutable monospace label — no per-frame String allocation
             ui.label(
                 egui::RichText::new(code)
