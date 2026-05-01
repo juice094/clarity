@@ -677,7 +677,7 @@ impl App {
         let config =
             clarity_core::subagents::ParallelConfig::new().with_max_concurrency(specs.len().min(4));
 
-        match self.agent.run_parallel(specs, config).await {
+        match self.agent.run_parallel(specs, config, None).await {
             Ok(result) => {
                 let elapsed_s = result.total_elapsed_ms as f64 / 1000.0;
                 let total = result.results.len() + result.failures.len();

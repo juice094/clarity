@@ -49,6 +49,22 @@ impl McpConfig {
     pub fn load_default() -> anyhow::Result<Self> {
         Self::load(default_config_path()?)
     }
+
+    /// Save this configuration to the given JSON file (pretty-printed).
+    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Save to the default config path.
+    pub fn save_default(&self) -> anyhow::Result<()> {
+        self.save(default_config_path()?)
+    }
 }
 
 /// Returns the default MCP config path.

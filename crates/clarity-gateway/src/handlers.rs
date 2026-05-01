@@ -1754,3 +1754,242 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
+
+// ==================== MCP 服务器管理 API ====================
+
+use crate::session_store::PersistentSessionStore;
+use clarity_memory::PersistentMemoryStore;
+
+/// Overview of a single MCP server entry (from `mcp.json`).
+#[derive(Serialize)]
+pub struct McpServerOverview {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub disabled: bool,
+    pub transport: Option<String>,
+    pub url: Option<String>,
+}
+
+/// Response for listing MCP servers.
+#[derive(Serialize)]
+pub struct McpServersResponse {
+    pub servers: Vec<McpServerOverview>,
+    pub config_path: String,
+}
+
+pub async fn list_mcp_servers() -> Response {
+    let mcp_path = clarity_core::mcp::config::default_config_path().ok();
+    match clarity_core::mcp::config::McpConfig::load_default() {
+        Ok(config) => {
+            let servers: Vec<McpServerOverview> = config
+                .servers
+                .into_iter()
+                .map(|(name, entry)| McpServerOverview {
+                    name,
+                    command: entry.command,
+                    args: entry.args,
+                    disabled: entry.disabled,
+                    transport: entry.transport,
+                    url: entry.url,
+                })
+                .collect();
+            let config_path = mcp_path
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            (StatusCode::OK, Json(McpServersResponse { servers, config_path })).into_response()
+        }
+        Err(e) => {
+            warn!("Failed to load MCP config: {}", e);
+            (
+                StatusCode::OK,
+                Json(McpServersResponse {
+                    servers: Vec::new(),
+                    config_path: String::new(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ==================== Cron 任务管理 API ====================
+
+use clarity_core::background::{CronSchedule, CronScheduler, CronTask};
+
+#[derive(Serialize)]
+pub struct CronTaskOverview {
+    pub task_id: String,
+    pub name: String,
+    pub cron_expr: String,
+    pub enabled: bool,
+    pub next_run: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CronTasksResponse {
+    pub tasks: Vec<CronTaskOverview>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateCronRequest {
+    pub name: String,
+    pub prompt: String,
+    pub cron_expr: String,
+    pub agent_type: Option<String>,
+    pub max_iterations: Option<usize>,
+}
+
+#[derive(Serialize)]
+pub struct CreateCronResponse {
+    pub task_id: String,
+}
+
+pub async fn list_cron_tasks(
+    State(state): State<Arc<AppState>>,
+) -> Json<CronTasksResponse> {
+    let tasks = state.task_manager.list_cron_tasks().await.unwrap_or_default();
+    let overviews: Vec<CronTaskOverview> = tasks
+        .into_iter()
+        .map(|t| CronTaskOverview {
+            task_id: t.task_id.clone(),
+            name: t.spec.name.clone(),
+            cron_expr: t.cron_expr.clone(),
+            enabled: t.enabled,
+            next_run: None, // computed on next scheduler tick
+        })
+        .collect();
+    Json(CronTasksResponse { tasks: overviews })
+}
+
+pub async fn create_cron_task(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<CreateCronRequest>,
+) -> Response {
+    let spec = clarity_core::background::TaskSpec::new(req.name.clone(), req.prompt)
+        .with_agent_type(&req.agent_type.unwrap_or_else(|| "default".into()))
+        .with_max_iterations(req.max_iterations.unwrap_or(10));
+
+    match state.task_manager.schedule_cron(spec, &req.cron_expr).await {
+        Ok(task_id) => {
+            info!("Created cron task: {} ({})", req.name, task_id);
+            (StatusCode::CREATED, Json(CreateCronResponse { task_id })).into_response()
+        }
+        Err(e) => {
+            error!("Failed to create cron task: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+pub async fn delete_cron_task(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(task_id): axum::extract::Path<String>,
+) -> Response {
+    match state.task_manager.cancel_cron(&task_id).await {
+        Ok(()) => {
+            info!("Deleted cron task: {}", task_id);
+            (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response()
+        }
+        Err(e) => {
+            error!("Failed to delete cron task {}: {}", task_id, e);
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ==================== 跨会话全文检索 API ====================
+
+#[derive(Deserialize)]
+pub struct SearchRequest {
+    pub query: String,
+    #[serde(default = "default_search_limit")]
+    pub limit: usize,
+}
+
+fn default_search_limit() -> usize {
+    20
+}
+
+#[derive(Serialize)]
+pub struct SearchResult {
+    pub fact_id: String,
+    pub content: String,
+    pub tags: Vec<String>,
+    pub score: f32,
+}
+
+#[derive(Serialize)]
+pub struct SearchResponse {
+    pub results: Vec<SearchResult>,
+    pub total: usize,
+}
+
+pub async fn search_memory(
+    Json(req): Json<SearchRequest>,
+) -> Response {
+    // Try to open the persistent memory store from the default location
+    let clarity_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(".clarity");
+    let memory_db = clarity_dir.join("memory.db");
+
+    if !memory_db.exists() {
+        return (
+            StatusCode::OK,
+            Json(SearchResponse {
+                results: Vec::new(),
+                total: 0,
+            }),
+        )
+            .into_response();
+    }
+
+    match PersistentMemoryStore::new(&memory_db) {
+        Ok(memory) => {
+            match memory.search_fulltext(&req.query, req.limit).await {
+                Ok(facts) => {
+                    let results: Vec<SearchResult> = facts
+                        .into_iter()
+                        .map(|f| SearchResult {
+                            fact_id: f.id.to_string(),
+                            content: f.content,
+                            tags: f.tags,
+                            score: 1.0, // BM25 native score not exposed; default to 1.0
+                        })
+                        .collect();
+                    let total = results.len();
+                    (
+                        StatusCode::OK,
+                        Json(SearchResponse { results, total }),
+                    )
+                        .into_response()
+                }
+                Err(e) => {
+                    error!("Memory search failed: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": e.to_string()})),
+                    )
+                        .into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to open memory store: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    }
+}

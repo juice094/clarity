@@ -237,11 +237,24 @@
 
 ---
 
+## Phase 0 审计：已知风险与待优化（2026-05-01）
+
+| 风险 | 级别 | 说明 | 缓解/修复状态 |
+|------|------|------|-------------|
+| `parallel_batches` HashMap 无限增长 | 🔴 | Gateway 每次 `/v1/parallel` 插入一条进度记录，之前无清理机制 | ✅ 已修复 — 每5分钟后台清理非运行中批次 |
+| `clarity-tui` `run_parallel` 旧签名 | 🟡 | TUI 调用 `run_parallel(specs, config)` 缺 `progress` 参数 | ✅ 已修复 — 补传 `None` |
+| Claw `quick_chat` 每次创建新 Tokio Runtime | 🟢 | 同步线程内无法复用主 Runtime，每次 HTTP 调用新建 Runtime | ⏸️ 低风险 — HTTP 请求完成即释放，偶发调用可接受 |
+| Contract `Error` 类型迁移暂缓 | 🟡 | `ToolError::sanitize_paths()` 依赖 `dirs`，无法直接迁入 contract | ⏸️ 依赖 `dirs` 解耦后方可迁移 |
+| `SubAgentProgress` JSON 反序列化宽容 | 🟢 | 使用 `unwrap_or_default` 静默忽略 Gateway 响应格式变化 | ⏸️ 低风险 — 仅在 API 变更时可能隐藏错误 |
+| `clarity-egui settings.rs` 本地格式变更 | 🟢 | 编辑器可能自动格式化 `settings.rs`，引入不存在的 Theme 字段引用 | ✅ 已恢复 — `git checkout` 还原 |
+
+---
+
 ## Quality Gates (Every Commit)
 
 ```bash
-cargo test --workspace --lib              # 568 passed, 0 failed, 4 ignored
-cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零警告
+cargo test --workspace --lib              # 583+ passed, 0 failed
+cargo clippy -p clarity-contract -p clarity-core -p clarity-gateway -p clarity-claw -p clarity-tui -- -D warnings  # 零警告
 cargo fmt --all -- --check               # 格式检查
 ```
 

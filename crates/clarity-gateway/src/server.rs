@@ -94,6 +94,29 @@ pub async fn run(
         }
     });
 
+    // 并行批次进度清理（每5分钟清除所有非运行中的批次记录）
+    // egui 面板已缓存副本，服务端清理不影响 UI
+    let batch_cleanup_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            let mut batches = batch_cleanup_state.parallel_batches.write().await;
+            let before = batches.len();
+            batches.retain(|_batch_id, progress| {
+                if let Ok(p) = progress.lock() {
+                    p.status == clarity_core::subagents::BatchStatus::Running
+                } else {
+                    false
+                }
+            });
+            let removed = before - batches.len();
+            if removed > 0 {
+                info!("Cleaned up {} stale parallel batch progress records", removed);
+            }
+        }
+    });
+
     // 创建 API 服务器 (端口 18790) — 允许外部访问
     let api_app = create_api_router(state.clone());
     let api_addr: SocketAddr = "0.0.0.0:18790".parse()?;
