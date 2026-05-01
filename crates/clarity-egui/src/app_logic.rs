@@ -168,6 +168,8 @@ impl App {
             pending_plan: None,
             plan_tracker: None,
             skill_panel_open: false,
+            toolbar_open: true,
+            active_category: "engineering".to_string(),
             task_create_modal_open: false,
             task_create_name: String::new(),
             task_create_desc: String::new(),

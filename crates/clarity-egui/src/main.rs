@@ -94,6 +94,10 @@ pub(crate) struct App {
     pub(crate) plan_tracker: Option<crate::ui::types::PlanExecutionTracker>,
     /// Skill panel open state.
     pub(crate) skill_panel_open: bool,
+    /// Right toolbar (generic tools panel) open state.
+    pub(crate) toolbar_open: bool,
+    /// Active session category: emotion / knowledge / engineering / tools.
+    pub(crate) active_category: String,
     /// Task creation modal state.
     pub(crate) task_create_modal_open: bool,
     /// Task creation form fields.
@@ -138,6 +142,10 @@ impl App {
 
     fn render_skill_panel(&mut self, ctx: &egui::Context) {
         panels::skill::render_skill_panel(self, ctx);
+    }
+
+    fn render_toolbar(&mut self, ctx: &egui::Context) {
+        panels::toolbar::render_toolbar(self, ctx);
     }
 
     fn render_toasts(&mut self, ctx: &egui::Context) {
@@ -237,6 +245,8 @@ impl eframe::App for App {
         self.render_sidebar(ctx);
 
         self.render_task_panel(ctx);
+
+        self.render_toolbar(ctx);
 
         self.render_chat_area(ctx);
 

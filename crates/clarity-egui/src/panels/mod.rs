@@ -7,3 +7,4 @@ pub mod skill;
 pub mod task;
 pub mod task_create;
 pub mod toast;
+pub mod toolbar;
