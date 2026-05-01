@@ -12,7 +12,7 @@ pub enum TaskPanelAction {
 pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -> TaskPanelAction {
     if tasks.is_empty() {
         ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
+            ui.add_space(theme.space_40);
             ui.label(
                 egui::RichText::new("No tasks yet")
                     .size(13.0)
@@ -63,7 +63,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                                 {
                                     action = TaskPanelAction::Cancel(task.id.clone());
                                 }
-                                ui.add_space(4.0);
+                                ui.add_space(theme.space_4);
                             }
                             ui.label(
                                 egui::RichText::new(task.status.as_str())

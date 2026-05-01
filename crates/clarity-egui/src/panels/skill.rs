@@ -52,7 +52,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
 
             if skills.is_empty() {
                 ui.label(
@@ -72,7 +72,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     .size(11.0)
                     .color(app.theme.text_dim),
                 );
-                ui.add_space(8.0);
+                ui.add_space(app.theme.space_8);
 
                 egui::ScrollArea::vertical()
                     .max_height(320.0)
@@ -154,7 +154,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                         });
                                     }
                                 });
-                            ui.add_space(6.0);
+                            ui.add_space(app.theme.space_8);
                         }
                     });
             }

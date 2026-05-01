@@ -16,7 +16,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Clarity")
@@ -37,10 +37,10 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(16.0);
+            ui.add_space(app.theme.space_16);
 
             // ── Fixed category list (vertical) ──
-            let categories = [("emotion", "情感"), ("knowledge", "知识"), ("engineering", "工程")];
+            let categories = [("emotion", app.t("Emotion")), ("knowledge", app.t("Knowledge")), ("engineering", app.t("Engineering"))];
             for (cat, label) in categories {
                 let is_active = app.active_category == cat;
                 let bg = if is_active {
@@ -73,16 +73,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     app.switch_category(cat);
                 }
             }
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
 
-            ui.add_space(16.0);
+            ui.add_space(app.theme.space_16);
             ui.label(
                 egui::RichText::new("Files")
                     .size(11.0)
                     .color(app.theme.text_dim)
                     .weak(),
             );
-            ui.add_space(4.0);
+            ui.add_space(app.theme.space_4);
             let mut clicked_file: Option<std::path::PathBuf> = None;
             let files_height = (ui.available_height() - 260.0).max(100.0);
             egui::ScrollArea::vertical()
@@ -114,9 +114,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             if let Some((ref name, ref content)) = app.preview_file {
                 let preview_name = name.clone();
                 let preview_content = content.clone();
-                ui.add_space(12.0);
+                ui.add_space(app.theme.space_12);
                 ui.separator();
-                ui.add_space(8.0);
+                ui.add_space(app.theme.space_8);
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("Preview")
@@ -136,7 +136,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         .color(app.theme.text)
                         .monospace(),
                 );
-                ui.add_space(4.0);
+                ui.add_space(app.theme.space_4);
                 let mut preview_text = if preview_content.chars().count() > 2000 {
                     let truncated: String = preview_content.chars().take(2000).collect();
                     format!(
@@ -163,7 +163,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.add_space(8.0);
+                ui.add_space(app.theme.space_8);
                 ui.horizontal(|ui| {
                     if ui
                         .button(
@@ -174,6 +174,25 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         .clicked()
                     {
                         app.skill_panel_open = true;
+                    }
+                    // Locale toggle
+                    let locale_label = match app.locale {
+                        crate::i18n::Locale::EnUS => "EN",
+                        crate::i18n::Locale::ZhCN => "中",
+                    };
+                    if ui
+                        .button(
+                            egui::RichText::new(locale_label)
+                                .size(10.0)
+                                .color(app.theme.text_dim)
+                                .monospace(),
+                        )
+                        .clicked()
+                    {
+                        app.locale = match app.locale {
+                            crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
+                            crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
+                        };
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if let Some((_, _, t)) = app.last_usage {

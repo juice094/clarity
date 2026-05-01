@@ -11,7 +11,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen_rect,
         egui::CornerRadius::ZERO,
-        egui::Color32::from_black_alpha(100),
+        app.theme.overlay,
     );
 
     egui::Window::new("Settings")
@@ -27,7 +27,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.set_min_width(420.0);
-            ui.add_space(4.0);
+            ui.add_space(app.theme.space_4);
 
             let commands = app.settings_vm.commands();
             let mut actions = Vec::new();

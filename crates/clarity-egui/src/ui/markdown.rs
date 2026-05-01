@@ -208,13 +208,13 @@ pub fn render_blocks(
         }
         match block {
             RenderBlock::Paragraph(spans) => {
-                render_spans(ui, spans, theme, text_color, 14.0, false);
+                render_spans(ui, spans, theme, text_color, 15.0, false);
             }
             RenderBlock::Heading(level, spans) => {
                 let size = match level {
                     1 => 18.0,
                     2 => 16.0,
-                    _ => 14.0,
+                    _ => 15.0,
                 };
                 render_spans(ui, spans, theme, text_color, size, true);
             }
@@ -223,8 +223,8 @@ pub fn render_blocks(
             }
             RenderBlock::ListItem(spans) => {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("•").size(14.0).color(text_color));
-                    render_spans(ui, spans, theme, text_color, 14.0, false);
+                    ui.label(egui::RichText::new("•").size(15.0).color(text_color));
+                    render_spans(ui, spans, theme, text_color, 15.0, false);
                 });
             }
             RenderBlock::Blockquote(spans) => {
@@ -233,8 +233,8 @@ pub fn render_blocks(
                         ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
                     ui.painter()
                         .rect_filled(rect, egui::CornerRadius::same(2), theme.accent);
-                    ui.add_space(6.0);
-                    render_spans(ui, spans, theme, theme.text_muted, 14.0, false);
+                    ui.add_space(theme.space_8);
+                    render_spans(ui, spans, theme, theme.text_muted, 15.0, false);
                 });
             }
             RenderBlock::HorizontalRule => {
@@ -290,8 +290,8 @@ fn render_span(
                 egui::RichText::new(text)
                     .monospace()
                     .color(theme.text_strong)
-                    .background_color(theme.bg_hover)
-                    .size(13.0),
+                    .background_color(theme.code_block_bg)
+                    .size(14.0),
             );
         }
         InlineSpan::Link { text, url } => {
@@ -306,10 +306,10 @@ fn render_span(
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
     egui::Frame::group(ui.style())
-        .fill(theme.bg_elevated)
+        .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
         .stroke(egui::Stroke::new(1.0, theme.border))
-        .inner_margin(egui::Margin::symmetric(12, 10))
+        .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             if !lang.is_empty() {
@@ -319,14 +319,15 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                         .color(theme.text_dim)
                         .monospace(),
                 );
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
             }
             // Immutable monospace label — no per-frame String allocation
             ui.label(
                 egui::RichText::new(code)
                     .monospace()
                     .color(theme.text)
-                    .size(13.0),
+                    .size(14.0)
+                    .line_height(Some(22.0)),
             );
         });
     ui.add_space(theme.space_4);

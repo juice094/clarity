@@ -30,7 +30,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                     app.mcp_changed = true;
                 }
                 if app.mcp_changed {
-                    ui.add_space(12.0);
+                    ui.add_space(app.theme.space_12);
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui
@@ -66,13 +66,13 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                 }
             } else {
                 ui.vertical_centered(|ui| {
-                    ui.add_space(40.0);
+                    ui.add_space(app.theme.space_40);
                     ui.label(
                         egui::RichText::new("No MCP config found")
                             .size(13.0)
                             .color(app.theme.text_dim),
                     );
-                    ui.add_space(8.0);
+                    ui.add_space(app.theme.space_8);
                     if ui
                         .add(
                             egui::Button::new(

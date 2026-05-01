@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 mod app_state;
 mod error;
+mod i18n;
 mod llm_binder;
 mod llm_loader;
 mod llm_policy;
@@ -35,6 +36,7 @@ use ui::types::*;
 // ============================================================================
 
 const SIDEBAR_WIDTH: f32 = 240.0;
+const TITLEBAR_HEIGHT: f32 = 36.0;
 
 pub(crate) struct App {
     pub(crate) state: Arc<AppState>,
@@ -66,6 +68,7 @@ pub(crate) struct App {
     pub(crate) fps: f64,
     #[allow(dead_code)]
     pub(crate) start: Instant,
+    pub(crate) locale: i18n::Locale,
     pub(crate) theme: Theme,
     pub(crate) attachments: Vec<Attachment>,
     pub(crate) task_panel_open: bool,
@@ -116,6 +119,101 @@ mod app_logic;
 mod onboarding;
 
 impl App {
+    /// Render a custom titlebar with window drag and control buttons.
+    ///
+    /// LAYOUT (two independent sub-layouts at the same vertical origin):
+    ///   ┌─ left_to_right ──────────────────────────┐  ┌─ right_to_left ─┐
+    ///   │ [☰] Clarity  [drag region ─── elastic]  │  │ [─] [□] [✕]    │
+    ///   └──────────────────────────────────────────┘  └─────────────────┘
+    ///
+    /// ARCHITECTURE NOTE:
+    ///   The drag region uses `allocate_exact_size` ONLY inside a horizontal
+    ///   sub-layout, so `avail` is REMAINING WIDTH — not the full panel height.
+    ///   This avoids the layout feedback loop where the drag region consumed
+    ///   the entire panel, forcing content below and causing panel growth
+    ///   every frame.
+    ///
+    ///   Button sub-layout (right_to_left) is rendered second, so its buttons
+    ///   have higher z-order than the drag region — clicks on buttons are
+    ///   NOT swallowed by the drag.
+    fn render_titlebar(&mut self, ctx: &egui::Context) {
+        let theme = &self.theme;
+        let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
+
+        egui::TopBottomPanel::top("titlebar")
+            .min_height(TITLEBAR_HEIGHT)
+            .frame(egui::Frame::new()
+                .fill(theme.bg)
+                .inner_margin(egui::Margin::symmetric(8, 0)))
+            .show(ctx, |ui| {
+                ui.set_min_height(TITLEBAR_HEIGHT);
+
+                // Single horizontal row: [toggle?] [title] [elastic drag] [buttons]
+                ui.horizontal_centered(|ui| {
+                    ui.set_min_height(TITLEBAR_HEIGHT);
+
+                    // Sidebar toggle when collapsed
+                    if self.sidebar_collapsed {
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new("☰").size(14.0))
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                            )
+                            .clicked()
+                        {
+                            self.sidebar_collapsed = false;
+                        }
+                        ui.add_space(8.0);
+                    }
+
+                    ui.label(
+                        egui::RichText::new("Clarity")
+                            .size(13.0)
+                            .strong()
+                            .color(theme.text_muted),
+                    );
+
+                    // Elastic filler — drag to move window.
+                    // Using `allocate_exact_size` with remaining horizontal space
+                    // creates a click-and-drag region that fills the titlebar.
+                    let drag_w = ui.available_size().x.max(40.0);
+                    let (_drag_id, drag_resp) = ui.allocate_exact_size(
+                        egui::vec2(drag_w, TITLEBAR_HEIGHT),
+                        egui::Sense::click_and_drag(),
+                    );
+                    if drag_resp.drag_started_by(egui::PointerButton::Primary) {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
+
+                    // Window control buttons (right-aligned)
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Close
+                        if ui.add_sized(btn_size,
+                            egui::Button::new(egui::RichText::new("✕").size(12.0).color(theme.text_dim))
+                                .fill(egui::Color32::TRANSPARENT)
+                        ).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        // Maximize
+                        if ui.add_sized(btn_size,
+                            egui::Button::new(egui::RichText::new("□").size(11.0).color(theme.text_dim))
+                                .fill(egui::Color32::TRANSPARENT)
+                        ).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                        }
+                        // Minimize
+                        if ui.add_sized(btn_size,
+                            egui::Button::new(egui::RichText::new("─").size(11.0).color(theme.text_dim))
+                                .fill(egui::Color32::TRANSPARENT)
+                        ).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        }
+                    });
+                });
+            });
+    }
+
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
         panels::settings::render_settings_panel(self, ctx);
     }
@@ -242,6 +340,8 @@ impl eframe::App for App {
             self.theme.apply(style);
         });
 
+        self.render_titlebar(ctx);
+
         self.render_sidebar(ctx);
 
         self.render_task_panel(ctx);
@@ -300,7 +400,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 700.0])
-            .with_min_inner_size([900.0, 600.0]),
+            .with_min_inner_size([900.0, 600.0])
+            .with_decorations(false),
         ..Default::default()
     };
 

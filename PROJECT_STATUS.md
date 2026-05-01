@@ -1,6 +1,6 @@
 # Clarity Project Status
 
-> Last updated: 2026-04-30
+> Last updated: 2026-05-01
 > Branch: `phase2/protocol-pilot` @ `a4c1a2cf`
 > Test baseline: **577 passed, 0 failed, 6 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
@@ -26,6 +26,7 @@
 | 13 | **安全止血 + 审批一致性** | ✅ Complete | A: 熔断/脱敏/Prompt边界；B: 超时/竞态/身份分层 |
 | 13.5 | **UX Hardening** | ✅ Complete | Multiline + Draft Persistence + Steer + Smart Approval |
 | Phase C | **架构解耦** | ✅ Complete | `ensure_llm` 三层解耦 + `list_pending` trait化 |
+| 14 | **egui 设计系统硬化** | ✅ Complete | 配色深蓝灰+铜色、overlay阴影token、间距规范化、i18n、自绘标题栏 |
 
 ---
 
@@ -41,8 +42,12 @@
 | EXE launch test | `clarity-tauri.exe` starts (GUI blocking) | 2026-04-26 |
 | Frontend npm build | `npm run build` succeeds (75 modules) | 2026-04-26 |
 | CI workflow syntax | YAML valid, `working-directory` set | 2026-04-26 |
-| egui dev build | `cargo run -p clarity-egui` starts | 2026-04-27 |
-| egui clippy | 0 warnings (11 resolved) | 2026-04-27 |
+| egui dev build | `cargo run -p clarity-egui` starts | 2026-05-01 |
+| egui clippy | 1 warning (Locale::label unused) | 2026-05-01 |
+| Custom titlebar | `with_decorations(false)` + drag region + min/max/close | 2026-05-01 |
+| i18n framework | `i18n.rs` + `t()` + EN/中文 toggle in sidebar | 2026-05-01 |
+| Theme overhaul | Deep navy + copper, 13 new tokens | 2026-05-01 |
+| Spacing normalization | 50+ `add_space(N)` → `theme.space_*` | 2026-05-01 |
 
 ---
 
@@ -134,15 +139,19 @@
 
 **来源**：egui GUI 美化审计（2026-04-27）。
 
-| 问题 | 优先级 | 说明 |
-|------|--------|------|
-| 色彩系统扁平 | P1 | 单层深灰背景，需语义分层（基底/一级表面/二级表面/悬停） |
-| 布局靠线框分割 | P1 | 侧边栏与主区之间用边框而非间距区分 |
-| 输入区无工具栏 | P1 | 底部只有发送按钮，缺附件/MCP 工具选择 |
-| 消息 Segment 结构 | P2 | 头像+内容+时间戳未组件化 |
-| 弹窗无阴影/动画 | P2 | Settings/MCP 弹窗缺出现动画和阴影 |
-| 图标不统一 | P3 | 使用 emoji，跨平台显示不一致 |
-| 无边框窗口 | P3 | OS 标题栏未自定义 |
+| 问题 | 优先级 | 说明 | 状态 |
+|------|--------|------|------|
+| 色彩系统扁平 | P1 | 单层深灰背景，需语义分层 | ✅ Overlay 5级 + shadow 4级 + 语义表面色3种（Phase 1/3）|
+| 布局靠线框分割 | P1 | 侧边栏与主区之间用边框而非间距区分 | ⏸️ |
+| 输入区无工具栏 | P1 | 底部只有发送按钮，缺附件/MCP 工具选择 | ⏸️ |
+| 间距硬编码 | P1 | 50+处 `add_space(N)` 未使用 token | ✅ 全部替换为 `theme.space_*`（Phase 2）|
+| 消息 Segment 结构 | P2 | 头像+内容+时间戳未组件化 | ⏸️ |
+| 弹窗无阴影/动画 | P2 | Settings/MCP 弹窗缺出现动画和阴影 | ✅ shadow token + toast fade-in（Phase 3/4）|
+| 图标不统一 | P3 | 使用 emoji，跨平台显示不一致 | ⏸️ |
+| 无边框窗口 | P3 | OS 标题栏未自定义 | ✅ 自绘标题栏 + drag region + 按钮 |
+| i18n 支持 | P1 | 无中英文切换 | ✅ `i18n.rs` + 侧边栏切换 |
+| 字体/代码可读性 | P1 | 字号偏小、代码块无区分 | ✅ 14→15px 正文、code_block_bg、行高22px |
+| 配色长期疲劳 | P1 | 纯黑+亮紫 | ✅ 深蓝灰+铜色、降低蓝光 |
 
 ---
 

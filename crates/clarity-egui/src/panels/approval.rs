@@ -24,7 +24,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             ui.painter_at(response.rect).rect_filled(
                 response.rect,
                 0.0,
-                egui::Color32::from_black_alpha(120),
+                app.theme.overlay,
             );
         });
 
@@ -66,7 +66,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             ui.set_max_width(600.0);
 
             ui.heading(egui::RichText::new("Tool Call Approval").color(app.theme.text));
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
 
             // Tool name
             ui.horizontal(|ui| {
@@ -76,7 +76,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 );
             });
 
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
 
             // Arguments (monospace JSON block)
             ui.label(
@@ -108,7 +108,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
             // Diff preview (for file_edit etc.)
             if let Some(ref patch) = request.diff_preview {
-                ui.add_space(8.0);
+                ui.add_space(app.theme.space_8);
                 ui.label(
                     egui::RichText::new("Preview:")
                         .strong()
@@ -140,14 +140,14 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
             // Risk / sensitivity description
             if let Some(ref desc) = request.description {
-                ui.add_space(8.0);
+                ui.add_space(app.theme.space_8);
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("⚠️ ").size(14.0));
                     ui.label(egui::RichText::new(desc).color(app.theme.danger).size(13.0));
                 });
             }
 
-            ui.add_space(16.0);
+            ui.add_space(app.theme.space_16);
 
             // Action buttons
             ui.horizontal(|ui| {

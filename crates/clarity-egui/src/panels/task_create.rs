@@ -21,7 +21,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
             ui.set_min_width(360.0);
             ui.set_max_width(480.0);
             ui.heading(egui::RichText::new("New Background Task").color(app.theme.text));
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
             ui.label(
                 egui::RichText::new("Name")
                     .size(12.0)
@@ -29,7 +29,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                     .strong(),
             );
             ui.add(egui::TextEdit::singleline(&mut app.task_create_name).hint_text("Task name"));
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             ui.label(
                 egui::RichText::new("Description")
                     .size(12.0)
@@ -40,7 +40,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                 egui::TextEdit::singleline(&mut app.task_create_desc)
                     .hint_text("Short description"),
             );
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             ui.label(
                 egui::RichText::new("Prompt")
                     .size(12.0)
@@ -51,7 +51,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                 egui::vec2(ui.available_width(), 80.0),
                 egui::TextEdit::multiline(&mut app.task_create_prompt).hint_text("Agent prompt..."),
             );
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             ui.label(
                 egui::RichText::new("Priority")
                     .size(12.0)
@@ -74,7 +74,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                     ui.selectable_value(&mut app.task_create_priority, 3, "High");
                     ui.selectable_value(&mut app.task_create_priority, 4, "Critical");
                 });
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let can_create = !app.task_create_name.trim().is_empty()

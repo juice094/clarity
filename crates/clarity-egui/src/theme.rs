@@ -3,13 +3,9 @@ use eframe::egui;
 // ============================================================================
 // Design Token System — Phase A Foundation
 // ============================================================================
-// Based on OpenClaw Dashboard token architecture, adapted for egui.
-// Accent: Indigo (#6366f1) per user selection (calm, low saturation, dev-friendly)
-//
-// Reference:
-//   OpenClaw: 78 tokens, 4 themes (claw/knot/dash × dark/light/system)
-//   Kimi: Naive UI variable system, 4-level grayscale
-//   Tauri: GitHub-style CSS variables (15 tokens)
+// Accent: Warm copper (#c98a5e) — chosen for low blue-light content and
+// long-session visual comfort. Backgrounds use warm slate (dark) / warm
+// off-white (light) instead of pure black/white to reduce pupil strain.
 // ============================================================================
 
 /// Complete design token set for a single theme variant.
@@ -61,23 +57,48 @@ pub struct Theme {
     pub focus_glow: egui::Color32,
     pub selection: egui::Color32,
 
+    // --- Overlay (transparency layers for modal scrims and depth hints) ---
+    /// Modal backdrop / scrim (e.g. dim the content behind a settings dialog).
+    pub overlay: egui::Color32,
+    /// Faint white/black layer for component hover / card glow.
+    pub overlay_subtle: egui::Color32,
+    pub overlay_light: egui::Color32,
+    pub overlay_medium: egui::Color32,
+    pub overlay_strong: egui::Color32,
+
     // --- Fonts ---
     pub font_body: String,
     pub font_mono: String,
 
-    // --- Spacing (4/8/12/16/20/24 px scale) ---
+    // --- Spacing (8 px baseline grid: 4/8/12/16/20/24/40 px) ---
     pub space_4: f32,
     pub space_8: f32,
     pub space_12: f32,
     pub space_16: f32,
     pub space_20: f32,
     pub space_24: f32,
+    /// Section-level spacing (5× baseline, for large block separators / empty states).
+    pub space_40: f32,
 
     // --- Radius (6/10/12/9999 px scale) ---
     pub radius_sm: f32,
     pub radius_md: f32,
     pub radius_lg: f32,
     pub radius_full: f32,
+
+    // --- Semantic surface (content-type backgrounds beyond chat bubbles) ---
+    /// Tool call lifecycle indicator bg (distinct from chat bubbles).
+    pub tool_call_bg: egui::Color32,
+    /// Code block background in markdown rendering.
+    pub code_block_bg: egui::Color32,
+    /// Agent mood / status message background.
+    pub mood_bg: egui::Color32,
+
+    // --- Shadow (z-depth hierarchy: card → panel → modal → toast) ---
+    pub shadow_card: egui::Shadow,
+    pub shadow_panel: egui::Shadow,
+    pub shadow_modal: egui::Shadow,
+    pub shadow_toast: egui::Shadow,
 
     // --- Animation ---
     pub duration_fast: f32,
@@ -93,53 +114,66 @@ impl Default for Theme {
 
 #[allow(dead_code)]
 impl Theme {
-    /// Dark theme — based on OpenClaw "claw:dark" with indigo accent.
+    /// Dark theme — deep navy-black + copper accent.
+    ///
+    /// Design rationale:
+    /// - Backgrounds use deep blue-gray (not pure black) to reduce pupil strain
+    ///   while maintaining an crisp, technical feel.
+    /// - Warm copper accent provides contrast against the cool background.
+    /// - Text is slightly warm to balance the cool bg.
     pub fn dark() -> Self {
         Self {
-            // Backgrounds: Linear + Zed inspired deep space palette
-            bg: hex("#0f0f11"),
-            bg_accent: hex("#18181b"),
-            bg_elevated: hex("#27272a"),
-            bg_hover: hex("#3f3f46"),
-            surface: hex("#18181b"),
-            surface_strong: hex("#27272a"),
+            // Backgrounds: deep blue-gray — cool, technical, depth
+            bg: hex("#12141e"),
+            bg_accent: hex("#181a26"),
+            bg_elevated: hex("#1e2030"),
+            bg_hover: hex("#282a3a"),
+            surface: hex("#181a26"),
+            surface_strong: hex("#1e2030"),
 
-            // Text: crisp grayscale for OLED readability
-            text: hex("#fafafa"),
-            text_strong: hex("#ffffff"),
-            text_muted: hex("#a1a1aa"),
-            text_dim: hex("#71717a"),
+            // Text: warm off-white balances the cool bg
+            text: hex("#e4e3e8"),
+            text_strong: hex("#f0eff4"),
+            text_muted: hex("#9493a0"),
+            text_dim: hex("#6c6b78"),
 
-            // Accent: Violet (#8b5cf6) — modern, distinctive
-            accent: hex("#8b5cf6"),
-            accent_hover: hex("#a78bfa"),
-            accent_subtle: hex_alpha("#8b5cf6", 0.10),
+            // Accent: Warm copper — contrast against cool bg
+            accent: hex("#c98a5e"),
+            accent_hover: hex("#d4a07a"),
+            accent_subtle: hex_alpha("#c98a5e", 0.12),
 
             // Chat bubbles
-            user_bubble: hex("#8b5cf6"),
-            ai_bubble: hex("#27272a"),
-            chat_text: hex("#d4d4d8"),
-            error_bubble: hex_alpha("#ef4444", 0.15),
-            error_text: hex("#fafafa"),
+            user_bubble: hex("#c98a5e"),
+            ai_bubble: hex("#1e2030"),
+            chat_text: hex("#dad9e0"),
+            error_bubble: hex_alpha("#c97060", 0.15),
+            error_text: hex("#f0eff4"),
 
-            // Status
-            status_online: hex("#22c55e"),
-            status_busy: hex("#f59e0b"),
-            status_offline: hex("#ef4444"),
-            ok: hex("#22c55e"),
-            warn: hex("#f59e0b"),
-            danger: hex("#ef4444"),
+            // Status: warm-muted
+            status_online: hex("#6bb87a"),
+            status_busy: hex("#d4a050"),
+            status_offline: hex("#c97060"),
+            ok: hex("#6bb87a"),
+            warn: hex("#d4a050"),
+            danger: hex("#c97060"),
 
-            // Borders
-            border: hex("#3f3f46"),
-            border_strong: hex("#52525b"),
-            border_hover: hex("#71717a"),
-            input_bg: hex("#27272a"),
+            // Borders: cool-tinted
+            border: hex("#2a2c3e"),
+            border_strong: hex("#3a3c4e"),
+            border_hover: hex("#4a4c5e"),
+            input_bg: hex("#1e2030"),
 
-            // Focus
-            focus_ring: hex_alpha("#8b5cf6", 0.20),
-            focus_glow: hex_alpha("#8b5cf6", 0.15),
-            selection: hex_alpha("#1e3a8a", 0.55),
+            // Focus: accent-matched
+            focus_ring: hex_alpha("#c98a5e", 0.25),
+            focus_glow: hex_alpha("#c98a5e", 0.15),
+            selection: hex_alpha("#c98a5e", 0.20),
+
+            // Overlay: scrim + depth layers (white-on-black in dark theme)
+            overlay: hex_alpha("#000000", 0.50),
+            overlay_subtle: hex_alpha("#ffffff", 0.03),
+            overlay_light: hex_alpha("#ffffff", 0.06),
+            overlay_medium: hex_alpha("#ffffff", 0.10),
+            overlay_strong: hex_alpha("#ffffff", 0.18),
 
             // Fonts
             font_body: "Inter".into(),
@@ -152,12 +186,44 @@ impl Theme {
             space_16: 16.0,
             space_20: 20.0,
             space_24: 24.0,
+            space_40: 40.0,
 
             // Radius
             radius_sm: 6.0,
             radius_md: 10.0,
             radius_lg: 12.0,
             radius_full: 9999.0,
+
+            // Semantic surfaces
+            tool_call_bg: hex_alpha("#c98a5e", 0.08),
+            code_block_bg: hex("#191b27"),
+            mood_bg: hex_alpha("#d4a07a", 0.06),
+
+            // Shadow: z-depth hierarchy
+            shadow_card: egui::Shadow {
+                offset: [0, 1],
+                blur: 3,
+                spread: 0,
+                color: hex_alpha("#000000", 0.15),
+            },
+            shadow_panel: egui::Shadow {
+                offset: [0, 2],
+                blur: 8,
+                spread: 0,
+                color: hex_alpha("#000000", 0.20),
+            },
+            shadow_modal: egui::Shadow {
+                offset: [0, 8],
+                blur: 24,
+                spread: 0,
+                color: hex_alpha("#000000", 0.25),
+            },
+            shadow_toast: egui::Shadow {
+                offset: [0, 4],
+                blur: 12,
+                spread: 0,
+                color: hex_alpha("#000000", 0.20),
+            },
 
             // Animation
             duration_fast: 0.10,
@@ -166,46 +232,60 @@ impl Theme {
         }
     }
 
-    /// Light theme — inverted surfaces, preserved accent.
+    /// Light theme — cool off-white with copper accent.
     pub fn light() -> Self {
         Self {
-            bg: hex("#ffffff"),
-            bg_accent: hex("#f6f8fa"),
-            bg_elevated: hex("#eaeef2"),
-            bg_hover: hex("#e1e4e8"),
-            surface: hex("#f6f8fa"),
-            surface_strong: hex("#eaeef2"),
+            // Backgrounds: cool off-white
+            bg: hex("#f0f1f6"),
+            bg_accent: hex("#e8eaf0"),
+            bg_elevated: hex("#e0e2ea"),
+            bg_hover: hex("#d6d8e0"),
+            surface: hex("#e8eaf0"),
+            surface_strong: hex("#e0e2ea"),
 
-            text: hex("#1f2328"),
-            text_strong: hex("#000000"),
-            text_muted: hex("#656d76"),
-            text_dim: hex("#8c959f"),
+            // Text: cool dark
+            text: hex("#1e1d24"),
+            text_strong: hex("#121118"),
+            text_muted: hex("#6c6a76"),
+            text_dim: hex("#9a98a4"),
 
-            accent: hex("#8b5cf6"),
-            accent_hover: hex("#7c3aed"),
-            accent_subtle: hex_alpha("#8b5cf6", 0.08),
+            // Accent: same warm copper as dark theme
+            accent: hex("#c98a5e"),
+            accent_hover: hex("#b87a4e"),
+            accent_subtle: hex_alpha("#c98a5e", 0.08),
 
-            user_bubble: hex("#8b5cf6"),
-            ai_bubble: hex("#f6f8fa"),
-            chat_text: hex("#1f2328"),
-            error_bubble: hex_alpha("#ef4444", 0.10),
-            error_text: hex("#1f2328"),
+            // Chat bubbles
+            user_bubble: hex("#c98a5e"),
+            ai_bubble: hex("#e8eaf0"),
+            chat_text: hex("#1e1d24"),
+            error_bubble: hex_alpha("#c97060", 0.10),
+            error_text: hex("#1e1d24"),
 
-            status_online: hex("#22c55e"),
-            status_busy: hex("#f59e0b"),
-            status_offline: hex("#ef4444"),
-            ok: hex("#22c55e"),
-            warn: hex("#f59e0b"),
-            danger: hex("#ef4444"),
+            // Status: same palette as dark, works on light bg
+            status_online: hex("#6bb87a"),
+            status_busy: hex("#d4a050"),
+            status_offline: hex("#c97060"),
+            ok: hex("#6bb87a"),
+            warn: hex("#d4a050"),
+            danger: hex("#c97060"),
 
-            border: hex("#d0d7de"),
-            border_strong: hex("#b0b7be"),
-            border_hover: hex("#9099a2"),
-            input_bg: hex("#f6f8fa"),
+            // Borders: warm-tinted
+            border: hex("#d0d2da"),
+            border_strong: hex("#b8bac6"),
+            border_hover: hex("#a0a3b2"),
+            input_bg: hex("#e8eaf0"),
 
-            focus_ring: hex_alpha("#8b5cf6", 0.20),
-            focus_glow: hex_alpha("#8b5cf6", 0.10),
-            selection: hex_alpha("#60a5fa", 0.35),
+            // Focus: accent-matched
+            focus_ring: hex_alpha("#c98a5e", 0.20),
+            focus_glow: hex_alpha("#c98a5e", 0.10),
+            selection: hex_alpha("#c98a5e", 0.20),
+
+            // Overlay: scrim + depth layers (black-on-white in light theme)
+            overlay: hex_alpha("#000000", 0.35),
+            overlay_subtle: hex_alpha("#000000", 0.03),
+            overlay_light: hex_alpha("#000000", 0.06),
+            overlay_medium: hex_alpha("#000000", 0.10),
+            overlay_strong: hex_alpha("#000000", 0.18),
 
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
@@ -216,11 +296,43 @@ impl Theme {
             space_16: 16.0,
             space_20: 20.0,
             space_24: 24.0,
+            space_40: 40.0,
 
             radius_sm: 6.0,
             radius_md: 10.0,
             radius_lg: 12.0,
             radius_full: 9999.0,
+
+            // Semantic surfaces
+            tool_call_bg: hex_alpha("#c98a5e", 0.06),
+            code_block_bg: hex("#e0e2ea"),
+            mood_bg: hex_alpha("#c98a5e", 0.04),
+
+            // Shadow: z-depth hierarchy
+            shadow_card: egui::Shadow {
+                offset: [0, 1],
+                blur: 3,
+                spread: 0,
+                color: hex_alpha("#000000", 0.08),
+            },
+            shadow_panel: egui::Shadow {
+                offset: [0, 2],
+                blur: 8,
+                spread: 0,
+                color: hex_alpha("#000000", 0.10),
+            },
+            shadow_modal: egui::Shadow {
+                offset: [0, 8],
+                blur: 24,
+                spread: 0,
+                color: hex_alpha("#000000", 0.15),
+            },
+            shadow_toast: egui::Shadow {
+                offset: [0, 4],
+                blur: 12,
+                spread: 0,
+                color: hex_alpha("#000000", 0.12),
+            },
 
             duration_fast: 0.10,
             duration_normal: 0.18,
@@ -242,8 +354,8 @@ impl Theme {
         style.visuals.selection.bg_fill = self.selection;
         style.visuals.selection.stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);
-        style.visuals.window_shadow = egui::Shadow::NONE;
-        style.visuals.popup_shadow = egui::Shadow::NONE;
+        style.visuals.window_shadow = self.shadow_panel;
+        style.visuals.popup_shadow = self.shadow_panel;
         style.visuals.window_stroke = egui::Stroke::NONE;
         style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
         style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
@@ -270,6 +382,7 @@ impl Theme {
             .fill(self.surface)
             .corner_radius(egui::CornerRadius::same(self.radius_md as u8))
             .stroke(egui::Stroke::new(1.0, self.border))
+            .shadow(self.shadow_card)
     }
 
     /// Create a frame for the sidebar.
@@ -367,7 +480,7 @@ mod tests {
     #[test]
     fn test_light_theme_construction() {
         let t = Theme::light();
-        assert!(t.bg.r() > 240, "light bg expected");
+        assert!(t.bg.r() >= 240, "light bg expected");
         assert!(t.text.r() < 50, "dark text expected");
     }
 

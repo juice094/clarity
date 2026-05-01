@@ -9,7 +9,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
         .resizable(false)
         .frame(egui::Frame::side_top_panel(&ctx.style()).fill(app.theme.bg_accent))
         .show(ctx, |ui| {
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Tasks")
@@ -23,9 +23,9 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             let action = crate::ui::task_panel::render_task_panel(ui, &app.tasks, &app.theme);
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             if ui
                 .add(
                     egui::Button::new(

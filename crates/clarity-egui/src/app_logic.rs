@@ -151,6 +151,7 @@ impl App {
             fps: 0.0,
             start: now,
             theme,
+            locale: crate::i18n::Locale::default(),
             attachments: vec![],
             task_panel_open: false,
             tasks: vec![],
@@ -622,6 +623,11 @@ impl App {
         // run_streaming will detect cancellation, return AgentError::Cancelled,
         // and send UiEvent::Done → process_events calls reset() and is_loading=false.
     }
+    /// Convenience: translate `key` for the current locale.
+    pub(crate) fn t(&self, key: &'static str) -> &'static str {
+        self.locale.t(key)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn delete_session(&mut self, id: String) {
         self.sessions.retain(|s| s.id != id);

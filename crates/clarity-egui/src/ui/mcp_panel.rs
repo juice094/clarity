@@ -11,17 +11,17 @@ pub fn render_mcp_panel(
     theme: &Theme,
     changed: &mut bool,
 ) {
-    ui.add_space(8.0);
+    ui.add_space(theme.space_8);
 
     if config.servers.is_empty() {
         ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
+            ui.add_space(theme.space_40);
             ui.label(
                 egui::RichText::new("No MCP servers configured")
                     .size(13.0)
                     .color(theme.text_dim),
             );
-            ui.add_space(8.0);
+            ui.add_space(theme.space_8);
             ui.label(
                 egui::RichText::new("Add servers to ~/.config/clarity/mcp.json")
                     .size(11.0)
@@ -65,7 +65,7 @@ pub fn render_mcp_panel(
                     });
                 });
 
-                ui.add_space(4.0);
+                ui.add_space(theme.space_4);
 
                 // Command
                 if !entry.command.is_empty() {
@@ -140,7 +140,7 @@ pub fn render_mcp_panel(
                     );
                     for (k, v) in &entry.env {
                         ui.horizontal(|ui| {
-                            ui.add_space(8.0);
+                            ui.add_space(theme.space_8);
                             ui.label(
                                 egui::RichText::new(format!("{}={}", k, v))
                                     .size(10.0)

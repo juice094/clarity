@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sprint 14 — egui 设计系统硬化 + i18n + 自绘标题栏**
+  - **配色重调**：背景从纯黑 (#0f0f11) 改为深蓝灰 (#12141e)，强调色从亮紫 (#8b5cf6) 改为暖铜 (#c98a5e)。降低蓝光含量，减少长时间使用的视觉疲劳。亮色主题同步调整为冷调白。
+  - **Overlay 透明度层级系统**：新增 `overlay`/`overlay_subtle`/`overlay_light`/`overlay_medium`/`overlay_strong` 5 级透明度 token。`settings.rs` 和 `approval.rs` 的硬编码 scrim 统一为 `theme.overlay`。
+  - **Shadow 层级系统**：新增 `shadow_card`/`shadow_panel`/`shadow_modal`/`shadow_toast` 4 级阴影 token。`window_shadow`/`popup_shadow` 从 `NONE` 改为 `shadow_panel`。`card_frame()`、气泡、tool_call、typing_indicator 均使用 `shadow_card`。
+  - **语义表面色**：新增 `tool_call_bg`、`code_block_bg`、`mood_bg`。`render_code_block()` 背景改为 `code_block_bg`。
+  - **间距规范化**：50+ 处 `ui.add_space(N)` 替换为 `theme.space_*` 调用，涉及 12 个文件。新增 `space_40` token（5× baseline）。
+  - **字体渲染优化**：正文 14→15px，代码内联 13→14px，代码块行高设为 22px。
+  - **气泡密度调整**：气泡间距从 `space_12` 增至 `space_16`，内边距增大 2px。
+  - **Toast fade-in 动画**：新增 `ease_out_cubic`，180ms 渐入。
+  - **i18n 框架**：新增 `i18n.rs` 模块（`Locale` 枚举 + `ZH_CN` 翻译映射表 30+ 条）。`t()` 辅助方法挂载到 `App`。侧边栏底部 `EN`/`中` 切换按钮，分类标签已接入 `app.t()`。
+  - **自绘标题栏**：`with_decorations(false)` 移除 OS 标题栏。自定义 36px 标题栏含 sidebar toggle、drag region（`ViewportCommand::StartDrag`）、min/max/close 按钮。
+  - **Design Token §4 合规审计**：全量 grep 确认无残留硬编码颜色/间距（排除 onboarding 4 处 `from_black_alpha(180)` + 3 处 2px 微间距 + 1 处 120px 布局 hack）。
+  - 38 个单元测试全部通过，编译零错误。
+
 - **Sprint 13 Phase A — 安全止血（Agent 熔断 + 路径脱敏 + Prompt 边界）**
   - **A1: 控制流熔断** — `ToolError` 新增 `is_recoverable()` 分类（`IoError`/`Timeout`/`Unavailable` = 可恢复，其余 = 不可恢复）。`dispatch_tool_calls()` 返回类型改为 `Result<>`；并发执行完成后扫描不可恢复错误，存在则返回 `AgentError::ToolExecutionFailed`，`run_sync_loop` 通过 `?` 终止 turn，防止 LLM 无限重试直至 `Maximum iterations exceeded`。
   - **A2: 错误消息路径脱敏** — `ToolError` 新增 `sanitize_paths()`：替换 `dirs::home_dir()` 为 `~`，Windows 绝对路径（`C:\...`）替换为 `<absolute-path>`。脱敏在错误加入 messages 前执行，防止 `C:\Users\<name>\...` 等绝对路径通过工具错误回显泄露给 LLM 和用户。

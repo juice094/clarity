@@ -20,7 +20,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.add_space(12.0);
+            ui.add_space(app.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Tools")
@@ -34,7 +34,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
 
             // ── Status overview ──
             let active_tasks = app.tasks.iter().filter(|t| !t.status.is_terminal()).count();
@@ -51,7 +51,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                         .color(app.theme.text_muted),
                 );
             });
-            ui.add_space(4.0);
+            ui.add_space(app.theme.space_4);
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("●").size(10.0).color(app.theme.status_online));
                 ui.label(
@@ -60,13 +60,13 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                         .color(app.theme.text_muted),
                 );
             });
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             ui.separator();
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
 
             // ── Task list (reuses existing task_panel renderer) ──
             let action = crate::ui::task_panel::render_task_panel(ui, &app.tasks, &app.theme);
-            ui.add_space(8.0);
+            ui.add_space(app.theme.space_8);
             if ui
                 .add(
                     egui::Button::new(

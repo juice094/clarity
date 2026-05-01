@@ -187,7 +187,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(4.0);
+            ui.add_space(app.theme.space_4);
             ui.separator();
 
             let banner_text = app.network_banner.clone();
@@ -240,13 +240,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                         .strong()
                                         .color(theme.text_dim),
                                 );
-                                ui.add_space(8.0);
+                                ui.add_space(app.theme.space_8);
                                 ui.label(
                                     egui::RichText::new("Local-first AI agent runtime")
                                         .size(14.0)
                                         .color(theme.text_dim),
                                 );
-                                ui.add_space(24.0);
+                                ui.add_space(app.theme.space_24);
                                 if ui
                                     .add(
                                         egui::Button::new(
@@ -351,7 +351,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 .strong()
                                 .color(app.theme.text),
                         );
-                        ui.add_space(6.0);
+                        ui.add_space(app.theme.space_8);
                         for step in &plan.steps {
                             ui.horizontal(|ui| {
                                 ui.label(
@@ -384,7 +384,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             });
                             ui.add_space(2.0);
                         }
-                        ui.add_space(6.0);
+                        ui.add_space(app.theme.space_8);
                         ui.horizontal(|ui| {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -503,7 +503,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 dismiss = true;
                             }
                         });
-                        ui.add_space(6.0);
+                        ui.add_space(app.theme.space_8);
                         for step in &tracker.steps {
                             let (icon, color) = match step.status {
                                 crate::ui::types::PlanStepStatus::Pending => {
@@ -532,7 +532,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 );
                             });
                             ui.horizontal(|ui| {
-                                ui.add_space(20.0);
+                                ui.add_space(app.theme.space_20);
                                 ui.label(
                                     egui::RichText::new(format!("→ {}", step.tool_name))
                                         .size(10.0)
