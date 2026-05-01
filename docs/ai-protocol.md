@@ -122,6 +122,12 @@
 
 **决策**：基于 Kimi 网页版 Swiss International Style + Agent-Native UI 参考，对 clarity-egui 进行 Phase 1-5 全面翻新。
 
+**战略背景**：
+- Clarity 长期目标是成为独立 Agent 操作系统
+- 替代路径：**kimi-cli → zeroclaw → openhanako**
+- Claw 运行时（基于 openclaw + zeroclaw 开发）为后端另一条长主线，**尚未完成**，待后端资源就绪后启动
+- 当前 Sprint 14 前端翻新不阻塞 Claw 运行时开发，两者可并行
+
 **美学评分**：4.6/10（色彩 6/10、排版 5/10、布局 5/10、组件 4/10、交互 4/10、信息层级 5/10、品牌 6/10）
 
 **TOP 5 设计缺陷**：

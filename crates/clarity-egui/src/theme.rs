@@ -557,6 +557,30 @@ impl Theme {
             .fill(egui::Color32::TRANSPARENT)
             .corner_radius(egui::CornerRadius::same(self.radius_sm as u8))
     }
+
+    // ------------------------------------------------------------------
+    // Typography helpers
+    // ------------------------------------------------------------------
+
+    /// Proportional font at the given semantic size token.
+    pub fn font(&self, size: f32) -> egui::FontId {
+        egui::FontId::new(size, egui::FontFamily::Proportional)
+    }
+
+    /// Monospace font at the given semantic size token.
+    pub fn font_mono(&self, size: f32) -> egui::FontId {
+        egui::FontId::new(size, egui::FontFamily::Monospace)
+    }
+
+    /// Bold font at the given semantic size token (requires bold face registered).
+    pub fn font_bold(&self, size: f32) -> egui::FontId {
+        egui::FontId::new(size, egui::FontFamily::Name("bold".into()))
+    }
+
+    /// Italic font at the given semantic size token (requires italic face registered).
+    pub fn font_italic(&self, size: f32) -> egui::FontId {
+        egui::FontId::new(size, egui::FontFamily::Name("italic".into()))
+    }
 }
 
 // ---- Helpers ----
@@ -577,13 +601,28 @@ fn hex_alpha(s: &str, alpha: f32) -> egui::Color32 {
 
 pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-    let candidates = [
-        "C:\\Windows\\Fonts\\simhei.ttf",
-        "C:\\Windows\\Fonts\\msyh.ttc",
-        "C:\\Windows\\Fonts\\simsun.ttc",
-        "C:\\Windows\\Fonts\\msyhbd.ttc",
+
+    // ------------------------------------------------------------------
+    // CJK fonts — cross-platform probing
+    // ------------------------------------------------------------------
+    let cjk_candidates: &[&str] = &[
+        // Windows
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\simhei.ttf",
+        r"C:\Windows\Fonts\simsun.ttc",
+        r"C:\Windows\Fonts\msyhbd.ttc",
+        // macOS
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+        // Linux
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ];
-    for path in &candidates {
+
+    for path in cjk_candidates {
         if let Ok(bytes) = std::fs::read(path) {
             let name = std::path::Path::new(path)
                 .file_stem()
@@ -607,6 +646,57 @@ pub fn setup_fonts(ctx: &egui::Context) {
             break;
         }
     }
+
+    // ------------------------------------------------------------------
+    // Bold / Italic faces — best-effort system font loading
+    // ------------------------------------------------------------------
+    let bold_candidates: &[(&str, &str)] = &[
+        (r"C:\Windows\Fonts\segoeuib.ttf", "segoeuib"),
+        (r"C:\Windows\Fonts\msyhbd.ttc", "msyhbd"),
+        ("/System/Library/Fonts/Helvetica.ttc", "helvetica"),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "dejavu-sans-bold"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "liberation-sans-bold"),
+    ];
+
+    for (path, key) in bold_candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts.font_data.insert(
+                (*key).into(),
+                egui::FontData::from_owned(bytes).into(),
+            );
+            fonts
+                .families
+                .entry(egui::FontFamily::Name("bold".into()))
+                .or_default()
+                .push((*key).into());
+            tracing::info!("Loaded bold font from {}", path);
+            break;
+        }
+    }
+
+    let italic_candidates: &[(&str, &str)] = &[
+        (r"C:\Windows\Fonts\segoeuii.ttf", "segoeuii"),
+        ("/System/Library/Fonts/Helvetica.ttc", "helvetica-italic"),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", "dejavu-sans-oblique"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf", "liberation-sans-italic"),
+    ];
+
+    for (path, key) in italic_candidates {
+        if let Ok(bytes) = std::fs::read(path) {
+            fonts.font_data.insert(
+                (*key).into(),
+                egui::FontData::from_owned(bytes).into(),
+            );
+            fonts
+                .families
+                .entry(egui::FontFamily::Name("italic".into()))
+                .or_default()
+                .push((*key).into());
+            tracing::info!("Loaded italic font from {}", path);
+            break;
+        }
+    }
+
     ctx.set_fonts(fonts);
 }
 

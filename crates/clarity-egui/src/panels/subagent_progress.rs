@@ -138,7 +138,7 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                                 let truncated: String = summary.chars().take(40).collect();
                                 ui.label(
                                     egui::RichText::new(truncated)
-                                        .size(9.0)
+                                        .size(app.ui_store.theme.text_xs)
                                         .color(app.ui_store.theme.text_dim),
                                 );
                             }

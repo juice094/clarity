@@ -131,7 +131,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
             let bw = badge.len() as f32 * 7.0 + 14.0;
             let br = egui::Rect::from_min_size(egui::pos2(rect.right() - bw - 10.0, cy - 9.0), egui::vec2(bw, 18.0));
             ui.painter().rect_filled(br, egui::CornerRadius::same(4), app.ui_store.theme.bg_hover);
-            ui.painter().text(br.center(), egui::Align2::CENTER_CENTER, badge, egui::FontId::new(9.0, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
+            ui.painter().text(br.center(), egui::Align2::CENTER_CENTER, badge, egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
 
             // Active badge
             if is_active {
