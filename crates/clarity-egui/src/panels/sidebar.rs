@@ -39,10 +39,50 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(16.0);
 
+            // ── Fixed category tabs ──
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let categories = [("emotion", "情感"), ("knowledge", "知识"), ("engineering", "工程")];
+                for (cat, label) in categories {
+                    let is_active = app.active_category == cat;
+                    let bg = if is_active {
+                        app.theme.accent
+                    } else {
+                        app.theme.surface
+                    };
+                    let text_color = if is_active {
+                        app.theme.text_strong
+                    } else {
+                        app.theme.text
+                    };
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(label).size(13.0).color(text_color),
+                            )
+                            .fill(bg)
+                            .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                            .min_size(egui::vec2(70.0, 36.0)),
+                        )
+                        .clicked()
+                    {
+                        app.switch_category(cat);
+                    }
+                }
+            });
+            ui.add_space(12.0);
+
+            // New-session button for the current category
+            let new_label = match app.active_category.as_str() {
+                "emotion" => "+ 新建情感",
+                "knowledge" => "+ 新建知识",
+                "engineering" => "+ 新建工程",
+                _ => "+ New Chat",
+            };
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new("+ New Chat")
+                        egui::RichText::new(new_label)
                             .size(13.0)
                             .color(app.theme.text),
                     )
@@ -55,73 +95,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 app.new_session();
             }
             ui.add_space(12.0);
-
-            ui.label(
-                egui::RichText::new("Sessions")
-                    .size(11.0)
-                    .color(app.theme.text_dim)
-                    .weak(),
-            );
-            ui.add_space(4.0);
-
-            let mut to_delete: Option<String> = None;
-            let sessions_clone: Vec<(String, String, bool)> = app
-                .sessions
-                .iter()
-                .map(|s| (s.id.clone(), s.title.clone(), s.id == app.active_session_id))
-                .collect();
-            for (id, title, is_active) in sessions_clone {
-                let bg = if is_active {
-                    app.theme.surface
-                } else {
-                    app.theme.bg_accent
-                };
-                let text_color = if is_active {
-                    app.theme.text
-                } else {
-                    app.theme.text_dim
-                };
-                let stroke = if is_active {
-                    egui::Stroke::new(2.0, app.theme.accent)
-                } else {
-                    egui::Stroke::NONE
-                };
-                ui.horizontal(|ui| {
-                    let response = ui.add(
-                        egui::Button::new(egui::RichText::new(&title).size(13.0).color(text_color))
-                            .fill(bg)
-                            .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
-                            .stroke(stroke)
-                            .min_size(egui::vec2(ui.available_width() - 28.0, 36.0)),
-                    );
-                    if response.clicked() {
-                        app.save_current_session();
-                        // Save draft for the session we're leaving.
-                        let old_id = app.active_session_id.clone();
-                        if !app.input.trim().is_empty() {
-                            app.drafts.insert(old_id, app.input.clone());
-                        } else {
-                            app.drafts.remove(&old_id);
-                        }
-                        app.active_session_id = id.clone();
-                        // Restore draft for the session we're entering.
-                        app.input = app.drafts.remove(&id).unwrap_or_default();
-                    }
-                    if ui
-                        .add(
-                            egui::Button::new("🗑")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8)),
-                        )
-                        .clicked()
-                    {
-                        to_delete = Some(id);
-                    }
-                });
-            }
-            if let Some(id) = to_delete {
-                app.delete_session(id);
-            }
 
             ui.add_space(16.0);
             ui.label(

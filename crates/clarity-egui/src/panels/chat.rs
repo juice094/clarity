@@ -31,12 +31,56 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 {
                     app.sidebar_collapsed = false;
                 }
-                ui.label(
-                    egui::RichText::new("Chat")
-                        .size(16.0)
-                        .strong()
-                        .color(app.theme.text),
-                );
+                // ── Category instance tabs ──
+                let category_sessions: Vec<(String, String, bool)> = app
+                    .sessions
+                    .iter()
+                    .filter(|s| s.category == app.active_category)
+                    .map(|s| (s.id.clone(), s.title.clone(), s.id == app.active_session_id))
+                    .collect();
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    for (id, title, is_active) in &category_sessions {
+                        let bg = if *is_active {
+                            app.theme.surface
+                        } else {
+                            app.theme.bg_elevated
+                        };
+                        let text_color = if *is_active {
+                            app.theme.text_strong
+                        } else {
+                            app.theme.text_dim
+                        };
+                        let stroke = if *is_active {
+                            egui::Stroke::new(1.5, app.theme.accent)
+                        } else {
+                            egui::Stroke::new(1.0, app.theme.border)
+                        };
+                        let tab_id = id.clone();
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(title).size(12.0).color(text_color),
+                                )
+                                .fill(bg)
+                                .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
+                                .stroke(stroke)
+                                .min_size(egui::vec2(60.0, 28.0)),
+                            )
+                            .clicked()
+                        {
+                            app.save_current_session();
+                            let old_id = app.active_session_id.clone();
+                            if !app.input.trim().is_empty() {
+                                app.drafts.insert(old_id, app.input.clone());
+                            } else {
+                                app.drafts.remove(&old_id);
+                            }
+                            app.active_session_id = tab_id.clone();
+                            app.input = app.drafts.remove(&tab_id).unwrap_or_default();
+                        }
+                    }
+                });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     // Settings

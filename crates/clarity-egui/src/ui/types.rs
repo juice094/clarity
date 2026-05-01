@@ -83,6 +83,7 @@ pub enum PlanStepStatus {
 pub struct Session {
     pub id: String,
     pub title: String,
+    pub category: String,
     pub messages: Vec<Message>,
     pub updated_at: u64,
 }

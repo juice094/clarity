@@ -93,7 +93,7 @@ impl App {
         let now = Instant::now();
         let loaded = load_sessions();
         let (sessions, active_id) = if loaded.is_empty() {
-            let s = new_session();
+            let s = new_session("engineering");
             let id = s.id.clone();
             (vec![s], id)
         } else {
@@ -556,6 +556,32 @@ impl App {
             }
         }
     }
+    pub(crate) fn switch_category(&mut self, category: &str) {
+        if self.active_category == category {
+            return;
+        }
+        self.save_current_session();
+        let old_id = self.active_session_id.clone();
+        if !self.input.trim().is_empty() {
+            self.drafts.insert(old_id, self.input.clone());
+        } else {
+            self.drafts.remove(&old_id);
+        }
+        self.active_category = category.to_string();
+        // Find an existing session of this category, or create one.
+        if let Some(s) = self.sessions.iter().find(|s| s.category == category) {
+            self.active_session_id = s.id.clone();
+            self.input = self.drafts.remove(&s.id).unwrap_or_default();
+        } else {
+            let s = new_session(category);
+            let id = s.id.clone();
+            self.sessions.push(s);
+            self.active_session_id = id.clone();
+            self.input = String::new();
+        }
+        self.last_usage = None;
+    }
+
     pub(crate) fn new_session(&mut self) {
         self.save_current_session();
         // Save draft for current session before switching.
@@ -566,16 +592,23 @@ impl App {
             self.drafts.remove(&old_id);
         }
         // Lazy creation: if an empty session already exists, focus it instead of creating another.
+        let category = self.active_category.clone();
+        let _default_title = match category.as_str() {
+            "emotion" => "New Emotion",
+            "knowledge" => "New Knowledge",
+            "engineering" => "New Engineering",
+            _ => "New Chat",
+        };
         if let Some(existing) = self
             .sessions
             .iter()
-            .find(|s| s.messages.is_empty() && s.title == "New Chat")
+            .find(|s| s.messages.is_empty() && s.category == category)
         {
             self.active_session_id = existing.id.clone();
             self.input = self.drafts.remove(&existing.id).unwrap_or_default();
             return;
         }
-        let s = new_session();
+        let s = new_session(&category);
         let id = s.id.clone();
         self.sessions.push(s);
         self.active_session_id = id.clone();
@@ -587,6 +620,7 @@ impl App {
         // run_streaming will detect cancellation, return AgentError::Cancelled,
         // and send UiEvent::Done → process_events calls reset() and is_loading=false.
     }
+    #[allow(dead_code)]
     pub(crate) fn delete_session(&mut self, id: String) {
         self.sessions.retain(|s| s.id != id);
         self.drafts.remove(&id);

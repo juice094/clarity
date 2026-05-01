@@ -32,6 +32,7 @@ pub fn load_sessions() -> Vec<Session> {
                         sessions.push(Session {
                             id: data.id,
                             title: data.title,
+                            category: data.category.unwrap_or_else(|| "engineering".to_string()),
                             messages: data
                                 .messages
                                 .into_iter()
@@ -70,6 +71,7 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     let data = SessionData {
         id: session.id.clone(),
         title: session.title.clone(),
+        category: Some(session.category.clone()),
         created_at: session.updated_at,
         updated_at: now_millis(),
         messages: session
@@ -88,11 +90,18 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
-pub fn new_session() -> Session {
+pub fn new_session(category: &str) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
+    let title = match category {
+        "emotion" => "New Emotion",
+        "knowledge" => "New Knowledge",
+        "engineering" => "New Engineering",
+        _ => "New Chat",
+    };
     Session {
         id: id.clone(),
-        title: "New Chat".into(),
+        title: title.into(),
+        category: category.into(),
         messages: vec![],
         updated_at: now_millis(),
     }
@@ -109,6 +118,7 @@ pub fn now_millis() -> u64 {
 struct SessionData {
     id: String,
     title: String,
+    category: Option<String>,
     created_at: u64,
     updated_at: u64,
     messages: Vec<MessageData>,
