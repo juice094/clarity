@@ -1,6 +1,6 @@
 //! clarity-claw —— 系统托盘常驻应用（运行时监控器）
 //!
-//! 格雷的物理居所。
+//! Claw system-tray background monitor.
 //! 常驻系统托盘，监控后台任务状态，提供快速入口。
 
 use std::sync::{Arc, Mutex};

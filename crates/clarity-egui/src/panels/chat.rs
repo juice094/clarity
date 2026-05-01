@@ -96,7 +96,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 } else {
                     // Emotion: show a static title instead of tabs
                     ui.label(
-                        egui::RichText::new("格雷")
+                        egui::RichText::new("情感")
                             .size(16.0)
                             .strong()
                             .color(app.theme.text),
