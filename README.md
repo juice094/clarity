@@ -88,6 +88,7 @@ cargo run -p clarity-egui
 
 ```
 crates/
+├── clarity-contract  # Core contract types (ToolCall, FunctionCall) — PoC for downstream decoupling
 ├── clarity-core      # Agent loop, tools, memory, MCP, subagents
 ├── clarity-memory    # BM25 + vector hybrid search, chunking, compilation
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store
@@ -107,7 +108,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 568 tests, 0 failed, 4 ignored
+cargo test --workspace --lib                          # 584 tests, 0 failed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

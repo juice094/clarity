@@ -98,6 +98,27 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > 详见 [`docs/plans/2026-04-28-sprint12-egui-feature-parity.md`](./docs/plans/2026-04-28-sprint12-egui-feature-parity.md)
 > 风险与优化分析: [`docs/plans/2026-04-28-sprint12-risk-analysis.md`](./docs/plans/2026-04-28-sprint12-risk-analysis.md)（7 项风险 + 4 决策点 + 5 优化）
 
+**Sprint 13 — 稳定性硬化 + 架构解耦（✅ 已完成，2026-04-27 ~ 2026-05-03）**
+
+- Week 1（安全止血）:
+  - ✅ A1: 智能断路器 — 同一工具连续 3 次 recoverable 失败升级为 fatal
+  - ✅ A2-A5: 代码风险/优化点标注（approval_mode 热路径、path sanitization、ToolExecutionFailed 脱敏、SystemPrompt 防泄露指令）
+- Week 2（Approval 状态一致性）:
+  - ✅ B2: Approval Request ID 一致性校验（AgentController 层防御 stale/forged ID）
+  - ✅ B1: Approval 持久化 — `PersistingApprovalRuntime` 委托 `clarity-memory` 存储 JSON 记录
+  - ✅ B3: Plan 类型解耦 — `Plan`/`PlanStep`/`PlanResult` 上提 `types.rs`
+- Week 3（Provider 抽象 + 循环依赖打破）:
+  - ✅ C1: `ProviderSelectionPolicy` trait + `DefaultProviderSelectionPolicy`（纯同步、可插拔）
+  - ✅ C2: 网络探测设计确认 — probe 只驱动 UI banner，永不自动切换 provider
+  - ✅ P1-1: `background↔subagents` 循环打破 — `AgentTypeDefinition` + `LaborMarket` 上提 `types.rs`
+- Week 4（PoC 提取 + Trait 抽象）:
+  - ✅ P1-2: `AgentExecutor` trait — `subagents::runner::execute_agent` 接收 `&dyn AgentExecutor`
+  - ✅ P2: `clarity-contract` crate PoC — `ToolCall` + `FunctionCall` 提取，core 重新导出保持兼容
+  - ✅ P3: MCP 提取评估 — 当前被 `clarity-contract` 成熟度阻塞，暂缓
+
+> 详细执行计划见 [`docs/plans/BACKLOG.md`](./docs/plans/BACKLOG.md)
+> 长程计划见 [`docs/plans/black-widow-stature-john-stewart.md`](./docs/plans/black-widow-stature-john-stewart.md)
+
 > 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
@@ -148,12 +169,19 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > **Status update (2026-04-27):** Previously flagged coupling issues resolved. v0.3.1 adds `model_download.rs` and `onboarding.rs` — core responsibility bloat tracked as new item #5.
 >
+> **Status update (2026-05-03, Sprint 13 complete):** 4-week architecture decoupling delivered. See Sprint 13 section above for full list.
+>
 > ### Resolved ✅
 > - ~~`agent ↔ approval` cycle~~ — Fixed by extracting `ToolCall`/`FunctionCall` to `types.rs`.
 > - ~~`agent ↔ llm` cycle~~ — Fixed by extracting `Message`/`LlmProvider`/`LlmResponse`/`StreamDelta` to `llm/api.rs`.
 > - ~~`agent ↔ compaction` cycle~~ — Fixed by correcting import paths in `compaction.rs`.
 > - ~~`run()` / `run_with_messages_sync()` duplication~~ — Fixed by extracting `Agent::run_sync_loop()`.
 > - ~~Inline SSE parsing in `OpenAiCompatibleLlm`~~ — Fixed by extracting `llm/sse.rs` (`SseParser`).
+> - ~~`background ↔ subagents` cycle~~ — Fixed by uplifting `AgentTypeDefinition` + `LaborMarket` to `types.rs` (P1-1, Sprint 13 Week 3).
+>
+> ### Partially Resolved / PoC ✅
+> - **`subagents ↔ agent` cycle** — `AgentExecutor` trait introduced (`agent/executor.rs`); `subagents::runner::execute_agent` now takes `&dyn AgentExecutor` instead of `&Agent` (P1-2, Sprint 13 Week 4). Builder methods (`with_llm`, etc.) remain on concrete `Agent`; full abstraction deferred.
+> - **`clarity-contract` crate** — PoC created with `ToolCall` + `FunctionCall`. `clarity-core` re-exports to maintain backward compatibility. Full downstream migration deferred until contract surface stabilizes.
 >
 > ### Remaining ⚠️
 > 1. **`clarity-core` ↔ `clarity-gateway`**: `AgentController` lives in `core`, but its `Op` enum (`Op::ConversationTurn`) had to be extended to support Gateway's OpenAI-compatible message history. Gateway-driven requirements can still ripple back into core agent abstractions.
@@ -161,6 +189,15 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > 3. **`AppState` bloat**: `AppState` currently carries `agent`, `session_manager`, `tool_registry`, and `task_manager`. The `tool_registry` field is actually redundant because `agent.registry()` already holds it (kept for the admin API convenience).
 > 4. **`std::sync::RwLock` in `Agent.inner`**: Intentionally kept as `std::sync::RwLock<AgentInner>`. `Agent` getters/setters are synchronous and may be called from non-async contexts (TUI event loop, Gateway handlers). All critical sections are short field reads/writes only. `background/` module locks have been migrated to `tokio::sync` (`1141ba9`).
 > 5. **`clarity-core` responsibility bloat (v0.3.1)**: `model_download.rs` (HF streaming download + progress callbacks) and `view_models/settings.rs` (Settings ViewModel) both landed in `clarity-core`. Core now carries GUI onboarding logic, network I/O, and settings serialization — blurring the "pure business logic" boundary. Long-term: evaluate extracting `clarity-infrastructure` for I/O-heavy modules (download, settings persistence, network probing).
+>
+> ### New Abstractions (Sprint 13)
+> | Trait / Type | Location | Purpose |
+> |-------------|----------|---------|
+> | `AgentExecutor` | `agent/executor.rs` | Minimal trait for agent turn execution; breaks `subagents↔agent` coupling |
+> | `ProviderSelectionPolicy` | `llm/policy.rs` | Pluggable provider selection (Preferred / Fallback / LocalOnly) |
+> | `DefaultProviderSelectionPolicy` | `llm/policy.rs` | Default impl: cloud preferred, fallback to local on network failure |
+> | `PersistingApprovalRuntime` | `approval/mod.rs` | Wraps any `ApprovalRuntime` and persists resolved approvals to `MemoryStore` |
+> | `ApprovalRecord` | `approval/mod.rs` | Serializable snapshot of an approval decision |
 >
 > **Recommendation for future refactors**: Extract a `ChatDriver` or `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own message-building strategies without modifying core enums.
 
@@ -276,6 +313,16 @@ Week 3-4 (5.13-5.19): Phase 3 收尾 + Phase 4 设计
 
 ## Security Notes
 
+### Runtime Hardening (Sprint 13)
+
+- **Smart Circuit Breaker** — Recoverable tool failures (`IoError`/`Timeout`/`Unavailable`) are no longer retried indefinitely. After the **same tool** fails recoverably **3 times in a single turn**, the failure is upgraded to fatal (`AgentError::ToolExecutionFailed`), stopping the agent loop.
+- **Path Sanitization** — `ToolError::sanitize_paths()` redacts absolute paths (e.g. `C:\Users\name\secret.txt` → `~\secret.txt`) before errors reach the user or wire channel. Applied in `dispatch_tool_calls` and approval descriptions.
+- **Approval Request ID Validation** — `AgentController` validates incoming `Op::ToolApproval` request IDs against the pending list before calling `runtime.resolve()`. Stale or forged IDs are rejected with a warning.
+- **System Prompt Security Boundary** — `SystemPromptBuilder` unconditionally appends a `## Security Notice` block to every system prompt, instructing the LLM never to reveal system instructions, internal context, git hashes, or file paths.
+- **Approval Persistence Audit** — `PersistingApprovalRuntime` writes every resolved approval as a JSON `ApprovalRecord` to `clarity-memory` (tags: `["approval", "record"]`). Storage failures are logged but never block the approval flow.
+
+### MCP Security
+
 - **MCP stdio command validation is active** (since 2026-04-17). Before spawning any MCP server, Clarity validates the `command` field:
   - Shell metacharacters and `..` sequences are rejected.
   - Relative paths are rejected.
@@ -297,6 +344,7 @@ Week 3-4 (5.13-5.19): Phase 3 收尾 + Phase 4 设计
 | 云端 provider 失败静默 fallback | ✅ 已修复 | `ensure_llm` 中明确指定 provider（非 auto/空）时，加载失败直接返回错误，不再静默 fallback 到 `auto_arc()`。只有未配置或显式 auto 时才自动探测。 |
 | 离线模式自动 fallback | ✅ 已交付 | 后台每 30s TCP 探测 `1.1.1.1:443`（防抖阈值=2）；离线时自动切 local provider，恢复后切回；前端显示 banner 提示。启动时预加载避免首次请求阻塞。并发加载互斥锁防止重复加载。Settings 内存缓存避免每次请求读磁盘。 |
 | `clarity-tauri` 运行时依赖系统 WebView | ⚠️ 已知限制 | Tauri 2 复用系统 WebView 引擎（Windows: WebView2 Runtime；macOS: WebKit；Linux: WebKit2GTK）。Release 构建后的 `.exe`/`.app` 不依赖 Node.js，但需要目标系统已安装对应 WebView 引擎。Windows 11 预装 WebView2；Windows 10 首次运行可能需要自动下载。TUI/Gateway/Headless/Claw 无此限制。 |
+| `clarity-egui` i18n dead code | ⚠️ 已知限制 | `clarity-egui/src/i18n.rs:49` 的 `Locale::label()` 方法未被调用，触发 clippy `dead_code` warning。不影响功能，待清理。 |
 | `clarity-claw` 系统控件依赖（已修复） | ✅ 已修复 | `inputbox` crate 0.1 在 Windows 上调用 `TaskDialogIndirect`（Common Controls v6），但程序未声明 manifest 依赖，导致旧版 `comctl32.dll` 找不到入口点。已移除 `inputbox`，改为 `cmd /c start` 打开浏览器。教训：任何调用系统对话框/UI 的 crate 都必须验证目标系统的最低版本和 manifest 声明。 |
 
 已修复的历史问题见 [`CHANGELOG.md`](./CHANGELOG.md)。
