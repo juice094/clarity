@@ -47,7 +47,7 @@ impl App {
         }
         self.chat_store.attachments.clear();
 
-        if let Some(session) = self.active_session_mut() {
+        if let Some(session) = self.session_store.active_session_mut() {
             let mut msg = Message {
                 role: Role::User,
                 content: full_message.clone(),

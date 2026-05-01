@@ -70,6 +70,14 @@ pub struct Theme {
     pub font_body: String,
     pub font_mono: String,
 
+    // --- Typography (semantic size tokens) ---
+    pub text_xs: f32,
+    pub text_sm: f32,
+    pub text_base: f32,
+    pub text_lg: f32,
+    pub text_xl: f32,
+    pub text_2xl: f32,
+
     // --- Spacing (8 px baseline grid: 4/8/12/16/20/24/40 px) ---
     pub space_4: f32,
     pub space_8: f32,
@@ -179,6 +187,14 @@ impl Theme {
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
 
+            // Typography tokens
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_lg: 16.0,
+            text_xl: 20.0,
+            text_2xl: 26.0,
+
             // Spacing: 8px baseline grid
             space_4: 4.0,
             space_8: 8.0,
@@ -223,6 +239,131 @@ impl Theme {
                 blur: 12,
                 spread: 0,
                 color: hex_alpha("#000000", 0.20),
+            },
+
+            // Animation
+            duration_fast: 0.10,
+            duration_normal: 0.18,
+            duration_slow: 0.30,
+        }
+    }
+
+    /// OLED Black theme — pure black base for OLED screens + copper accent.
+    ///
+    /// Design rationale:
+    /// - True black (#000000) background for OLED pixel-off immersion.
+    /// - Elevated surfaces use subtle warm grays to avoid pure-black flatness.
+    /// - Same copper accent as dark theme for brand consistency.
+    pub fn oled_black() -> Self {
+        Self {
+            // Backgrounds: OLED pure black with warm gray elevations
+            bg: hex("#000000"),
+            bg_accent: hex("#0a0a0e"),
+            bg_elevated: hex("#141418"),
+            bg_hover: hex("#1e1e22"),
+            surface: hex("#0a0a0e"),
+            surface_strong: hex("#141418"),
+
+            // Text: slightly warmer than dark theme for contrast against true black
+            text: hex("#e8e7ec"),
+            text_strong: hex("#ffffff"),
+            text_muted: hex("#8e8d98"),
+            text_dim: hex("#5c5b68"),
+
+            // Accent: same warm copper
+            accent: hex("#c98a5e"),
+            accent_hover: hex("#d4a07a"),
+            accent_subtle: hex_alpha("#c98a5e", 0.12),
+
+            // Chat bubbles
+            user_bubble: hex("#c98a5e"),
+            ai_bubble: hex("#141418"),
+            chat_text: hex("#d8d7dc"),
+            error_bubble: hex_alpha("#c97060", 0.15),
+            error_text: hex("#f0eff4"),
+
+            // Status: same palette
+            status_online: hex("#6bb87a"),
+            status_busy: hex("#d4a050"),
+            status_offline: hex("#c97060"),
+            ok: hex("#6bb87a"),
+            warn: hex("#d4a050"),
+            danger: hex("#c97060"),
+
+            // Borders: warmer tinted against black
+            border: hex("#1e1e26"),
+            border_strong: hex("#2e2e38"),
+            border_hover: hex("#3e3e48"),
+            input_bg: hex("#141418"),
+
+            // Focus: accent-matched
+            focus_ring: hex_alpha("#c98a5e", 0.25),
+            focus_glow: hex_alpha("#c98a5e", 0.15),
+            selection: hex_alpha("#c98a5e", 0.20),
+
+            // Overlay: scrim + depth layers
+            overlay: hex_alpha("#000000", 0.60),
+            overlay_subtle: hex_alpha("#ffffff", 0.03),
+            overlay_light: hex_alpha("#ffffff", 0.06),
+            overlay_medium: hex_alpha("#ffffff", 0.10),
+            overlay_strong: hex_alpha("#ffffff", 0.18),
+
+            // Fonts
+            font_body: "Inter".into(),
+            font_mono: "JetBrains Mono".into(),
+
+            // Typography tokens
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_lg: 16.0,
+            text_xl: 20.0,
+            text_2xl: 26.0,
+
+            // Spacing: 8px baseline grid
+            space_4: 4.0,
+            space_8: 8.0,
+            space_12: 12.0,
+            space_16: 16.0,
+            space_20: 20.0,
+            space_24: 24.0,
+            space_40: 40.0,
+
+            // Radius
+            radius_sm: 6.0,
+            radius_md: 10.0,
+            radius_lg: 12.0,
+            radius_full: 9999.0,
+
+            // Semantic surfaces
+            tool_call_bg: hex_alpha("#c98a5e", 0.08),
+            code_block_bg: hex("#0f0f14"),
+            mood_bg: hex_alpha("#d4a07a", 0.06),
+
+            // Shadow: z-depth hierarchy (stronger against pure black)
+            shadow_card: egui::Shadow {
+                offset: [0, 1],
+                blur: 4,
+                spread: 0,
+                color: hex_alpha("#000000", 0.30),
+            },
+            shadow_panel: egui::Shadow {
+                offset: [0, 2],
+                blur: 10,
+                spread: 0,
+                color: hex_alpha("#000000", 0.35),
+            },
+            shadow_modal: egui::Shadow {
+                offset: [0, 8],
+                blur: 28,
+                spread: 0,
+                color: hex_alpha("#000000", 0.40),
+            },
+            shadow_toast: egui::Shadow {
+                offset: [0, 4],
+                blur: 14,
+                spread: 0,
+                color: hex_alpha("#000000", 0.35),
             },
 
             // Animation
@@ -289,6 +430,14 @@ impl Theme {
 
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
+
+            // Typography tokens
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_lg: 16.0,
+            text_xl: 20.0,
+            text_2xl: 26.0,
 
             space_4: 4.0,
             space_8: 8.0,

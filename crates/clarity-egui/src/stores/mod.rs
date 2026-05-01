@@ -27,7 +27,6 @@ impl SessionStore {
         self.sessions.iter().find(|s| s.id == self.active_session_id)
     }
 
-    #[allow(dead_code)]
     pub fn active_session_mut(&mut self) -> Option<&mut Session> {
         self.sessions.iter_mut().find(|s| s.id == self.active_session_id)
     }

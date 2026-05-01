@@ -224,17 +224,6 @@ impl App {
         }
     }
 
-    pub(crate) fn active_session(&self) -> Option<&Session> {
-        self.session_store.sessions
-            .iter()
-            .find(|s| s.id == self.session_store.active_session_id)
-    }
-    pub(crate) fn active_session_mut(&mut self) -> Option<&mut Session> {
-        self.session_store.sessions
-            .iter_mut()
-            .find(|s| s.id == self.session_store.active_session_id)
-    }
-
     pub(crate) fn process_events(&mut self) {
         while let Ok(event) = self.ui_rx.try_recv() {
             match event {
@@ -281,7 +270,7 @@ impl App {
     }
 
     fn on_chunk(&mut self, text: String) {
-        if let Some(session) = self.active_session_mut() {
+        if let Some(session) = self.session_store.active_session_mut() {
             if let Some(last) = session.messages.last_mut() {
                 if last.role == Role::Agent {
                     last.content.push_str(&text);
@@ -357,7 +346,7 @@ impl App {
             }
             self.chat_store.attachments.append(&mut attachments);
         }
-        if let Some(session) = self.active_session_mut() {
+        if let Some(session) = self.session_store.active_session_mut() {
             let mut m = Message {
                 role: Role::Agent,
                 content: msg.clone(),
@@ -510,7 +499,7 @@ impl App {
     }
 
     pub(crate) fn save_current_session(&self) {
-        if let Some(session) = self.active_session() {
+        if let Some(session) = self.session_store.active_session() {
             if let Err(e) = save_session_internal(session) {
                 tracing::warn!("Failed to save session: {}", e);
             }
