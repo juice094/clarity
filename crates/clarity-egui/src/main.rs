@@ -25,6 +25,7 @@ mod session;
 mod settings;
 mod theme;
 mod ui;
+mod widgets;
 mod stores;
 mod services;
 mod handlers;
