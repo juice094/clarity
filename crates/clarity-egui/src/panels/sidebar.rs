@@ -39,60 +39,39 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(16.0);
 
-            // ── Fixed category tabs ──
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.0;
-                let categories = [("emotion", "情感"), ("knowledge", "知识"), ("engineering", "工程")];
-                for (cat, label) in categories {
-                    let is_active = app.active_category == cat;
-                    let bg = if is_active {
-                        app.theme.accent
-                    } else {
-                        app.theme.surface
-                    };
-                    let text_color = if is_active {
-                        app.theme.text_strong
-                    } else {
-                        app.theme.text
-                    };
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(label).size(13.0).color(text_color),
-                            )
-                            .fill(bg)
-                            .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
-                            .min_size(egui::vec2(70.0, 36.0)),
+            // ── Fixed category list (vertical) ──
+            let categories = [("emotion", "情感"), ("knowledge", "知识"), ("engineering", "工程")];
+            for (cat, label) in categories {
+                let is_active = app.active_category == cat;
+                let bg = if is_active {
+                    app.theme.surface
+                } else {
+                    app.theme.bg_accent
+                };
+                let text_color = if is_active {
+                    app.theme.text
+                } else {
+                    app.theme.text_dim
+                };
+                let stroke = if is_active {
+                    egui::Stroke::new(2.0, app.theme.accent)
+                } else {
+                    egui::Stroke::NONE
+                };
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(label).size(13.0).color(text_color),
                         )
-                        .clicked()
-                    {
-                        app.switch_category(cat);
-                    }
-                }
-            });
-            ui.add_space(12.0);
-
-            // New-session button for the current category
-            let new_label = match app.active_category.as_str() {
-                "emotion" => "+ 新建情感",
-                "knowledge" => "+ 新建知识",
-                "engineering" => "+ 新建工程",
-                _ => "+ New Chat",
-            };
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::RichText::new(new_label)
-                            .size(13.0)
-                            .color(app.theme.text),
+                        .fill(bg)
+                        .corner_radius(egui::CornerRadius::same(app.theme.radius_md as u8))
+                        .stroke(stroke)
+                        .min_size(egui::vec2(ui.available_width(), 36.0)),
                     )
-                    .fill(app.theme.surface)
-                    .corner_radius(egui::CornerRadius::same(app.theme.radius_sm as u8))
-                    .min_size(egui::vec2(ui.available_width(), 36.0)),
-                )
-                .clicked()
-            {
-                app.new_session();
+                    .clicked()
+                {
+                    app.switch_category(cat);
+                }
             }
             ui.add_space(12.0);
 

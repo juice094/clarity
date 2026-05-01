@@ -591,14 +591,16 @@ impl App {
         } else {
             self.drafts.remove(&old_id);
         }
-        // Lazy creation: if an empty session already exists, focus it instead of creating another.
         let category = self.active_category.clone();
-        let _default_title = match category.as_str() {
-            "emotion" => "New Emotion",
-            "knowledge" => "New Knowledge",
-            "engineering" => "New Engineering",
-            _ => "New Chat",
-        };
+        // Emotion is singleton: refuse to create multiple emotion sessions.
+        if category == "emotion" {
+            if let Some(existing) = self.sessions.iter().find(|s| s.category == "emotion") {
+                self.active_session_id = existing.id.clone();
+                self.input = self.drafts.remove(&existing.id).unwrap_or_default();
+                return;
+            }
+        }
+        // Lazy creation: if an empty session already exists, focus it instead of creating another.
         if let Some(existing) = self
             .sessions
             .iter()
