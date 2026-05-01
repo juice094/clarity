@@ -15,6 +15,7 @@ pub mod local_gguf;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
+pub mod runtime;
 pub mod sse;
 
 // Re-export provider types

@@ -138,7 +138,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
             )))?;
         bind_llm(
             &state.agent,
-            llm,
+            llm.into(),
             &format!("runtime:{}:{}", cfg.provider_id, cfg.model),
         );
         let mut guard = state.llm_binding.lock();
