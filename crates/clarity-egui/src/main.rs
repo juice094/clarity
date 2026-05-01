@@ -62,7 +62,9 @@ pub(crate) struct App {
     pub(crate) compacting: bool,
     pub(crate) settings_open: bool,
     pub(crate) settings_edit: GuiSettings,
+    #[allow(dead_code)]
     pub(crate) settings_vm: clarity_core::view_models::settings::SettingsViewModel,
+    #[allow(dead_code)]
     pub(crate) wire: Arc<clarity_wire::Wire>,
     pub(crate) frame_count: u64,
     pub(crate) last_fps_time: f64,
@@ -198,16 +200,25 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
                         let close_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("✕").size(12.0).color(theme.text_dim))
+                            egui::Button::new(egui::RichText::new("×").size(14.0).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        } else if close_resp.hovered() {
-                            // Paint hover highlight on the response rect
-                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::ZERO, theme.danger.linear_multiply(0.25));
-                            // Re-draw the character in white on hover
-                            ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER, "✕", egui::FontId::proportional(12.0), egui::Color32::WHITE);
+                        } else {
+                            let fill = if close_resp.hovered() {
+                                theme.danger.linear_multiply(0.25)
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
+                            let text_col = if close_resp.hovered() {
+                                egui::Color32::WHITE
+                            } else {
+                                theme.text_dim
+                            };
+                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::ZERO, fill);
+                            ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
+                                "×", egui::FontId::proportional(14.0), text_col);
                         }
 
                         // Maximize

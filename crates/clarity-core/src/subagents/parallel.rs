@@ -9,7 +9,7 @@
 use crate::background::{BackgroundTaskManager, TaskResult, TaskSpec, TaskStatus};
 use crate::subagents::runner::{RunSpec, SubagentError, SubagentResult, SubagentRunner};
 use crate::subagents::store::SubagentStore;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
@@ -171,6 +171,66 @@ impl SubagentBatch {
     }
 }
 
+// ------------------------------------------------------------------
+// Batch progress tracking — enables UI progress panels
+// ------------------------------------------------------------------
+
+/// Progress state of an in-flight parallel batch.
+#[derive(Debug, Clone)]
+pub struct BatchProgress {
+    /// Unique batch identifier.
+    pub batch_id: String,
+    /// Total number of subagents in this batch.
+    pub total: usize,
+    /// Number of subagents that have completed.
+    pub completed: usize,
+    /// Number of subagents that have failed.
+    pub failed: usize,
+    /// Agent IDs currently executing.
+    pub running: Vec<String>,
+    /// Current status of the batch.
+    pub status: BatchStatus,
+    /// Unix timestamp (seconds) when execution started.
+    pub started_at: u64,
+    /// Elapsed milliseconds so far.
+    pub elapsed_ms: u64,
+    /// Subagent results collected so far.
+    pub results: Vec<SubagentResult>,
+    /// Failures collected so far.
+    pub failures: Vec<(String, String)>,
+}
+
+impl BatchProgress {
+    pub fn new(batch_id: String, specs: &[RunSpec]) -> Self {
+        let total = specs.len();
+        let started_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        Self {
+            batch_id,
+            total,
+            completed: 0,
+            failed: 0,
+            running: specs.iter().map(|s| s.description.clone()).collect(),
+            status: BatchStatus::Running,
+            started_at,
+            elapsed_ms: 0,
+            results: Vec::new(),
+            failures: Vec::new(),
+        }
+    }
+}
+
+/// Status of a parallel batch.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BatchStatus {
+    Running,
+    Completed,
+    Cancelled,
+    Failed(String),
+}
+
 /// 并行执行器
 ///
 /// 基于 BackgroundTaskManager 实现子代理并行执行
@@ -188,8 +248,12 @@ impl ParallelExecutor {
         }
     }
 
-    /// 并行执行多个子代理
-    pub async fn execute(&mut self, batch: SubagentBatch) -> anyhow::Result<ParallelResult> {
+    /// 并行执行多个子代理，可选的 progress 回调用于外部进度跟踪。
+    pub async fn execute(
+        &mut self,
+        batch: SubagentBatch,
+        progress: Option<Arc<Mutex<BatchProgress>>>,
+    ) -> anyhow::Result<ParallelResult> {
         if batch.is_empty() {
             return Ok(ParallelResult {
                 results: Vec::new(),

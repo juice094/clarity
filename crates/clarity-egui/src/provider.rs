@@ -105,6 +105,7 @@ struct ProviderConfigFile {
 
 impl ProviderDefinition {
     /// Resolve the actual API key from `api_key_ref` (supports `${env:VAR}`).
+    #[allow(dead_code)]
     pub fn resolve_api_key(&self) -> Option<String> {
         let ref_str = self.api_key_ref.trim();
         if ref_str.is_empty() {
@@ -242,6 +243,7 @@ impl ProviderRegistry {
     }
 
     /// Delete a custom provider definition (built-in ones cannot be deleted).
+    #[allow(dead_code)]
     pub fn delete_custom(&self, id: &str) -> Result<(), String> {
         if let Some(def) = self.providers.get(id) {
             if def.builtin {
@@ -268,6 +270,7 @@ impl ProviderRegistry {
     }
 
     /// List only custom (non-builtin) providers.
+    #[allow(dead_code)]
     pub fn list_custom(&self) -> Vec<&ProviderDefinition> {
         self.providers.values().filter(|p| !p.builtin).collect()
     }

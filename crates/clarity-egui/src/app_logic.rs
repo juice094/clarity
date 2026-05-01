@@ -636,6 +636,7 @@ impl App {
     }
 
     /// Save current settings to disk and reload the LLM.
+    #[allow(dead_code)]
     pub(crate) fn save_settings_and_reload(&mut self) {
         if let Err(e) = self.settings_edit.save() {
             tracing::error!("Failed to save settings: {}", e);
@@ -658,7 +659,25 @@ impl App {
         }
     }
 
+    /// Auto-save after any change (no user confirmation needed).
+    pub(crate) fn auto_save_settings(&mut self) {
+        if let Err(e) = self.settings_edit.save() {
+            tracing::error!("Failed to save settings: {}", e);
+        } else {
+            {
+                let mut guard = self.state.cached_settings.lock();
+                *guard = self.settings_edit.clone();
+            }
+            let mode = crate::app_state::parse_approval_mode(
+                &self.settings_edit.approval_mode,
+            );
+            self.state.agent.set_approval_mode(mode);
+            self.state.mode_aware_approval_runtime.set_mode(mode);
+        }
+    }
+
     /// Save settings to disk without reloading LLM.
+    #[allow(dead_code)]
     pub(crate) fn save_settings_internal(&self) {
         if let Err(e) = self.settings_edit.save() {
             tracing::error!("Failed to save settings: {}", e);
