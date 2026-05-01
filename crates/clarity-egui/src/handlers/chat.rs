@@ -1,0 +1,139 @@
+use std::time::Instant;
+
+use crate::stores::{ChatStore, SessionStore};
+use crate::ui::types::{AgentStatus, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus};
+
+// TODO: decompose App dependency
+pub fn on_done(app: &mut crate::App) {
+    app.chat_store.is_loading = false;
+    app.chat_store.agent_status = AgentStatus::Online;
+    app.state.agent.reset();
+    app.save_current_session();
+    // Auto-send any queued message.
+    if let Some((text, attachments)) = app.chat_store.pending_send.take() {
+        app.chat_store.input = text;
+        app.chat_store.attachments = attachments;
+        app.send();
+    }
+}
+
+// TODO: decompose App dependency
+pub fn on_error(app: &mut crate::App, msg: String) {
+    app.chat_store.is_loading = false;
+    app.chat_store.agent_status = AgentStatus::Online;
+    crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
+    // Release queued message back to input so user can retry.
+    if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {
+        if app.chat_store.input.is_empty() {
+            app.chat_store.input = text;
+        } else {
+            app.chat_store.input.push('\n');
+            app.chat_store.input.push_str(&text);
+        }
+        app.chat_store.attachments.append(&mut attachments);
+    }
+    if let Some(session) = app.session_store.active_session_mut() {
+        let mut m = Message {
+            role: Role::Agent,
+            content: msg.clone(),
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: true,
+        };
+        m.prepare();
+        session.messages.push(m);
+    }
+}
+
+pub fn on_chunk(session_store: &mut SessionStore, text: String) {
+    if let Some(session) = session_store.active_session_mut() {
+        if let Some(last) = session.messages.last_mut() {
+            if last.role == Role::Agent {
+                last.content.push_str(&text);
+                last.prepare();
+                return;
+            }
+        }
+        let mut msg = Message {
+            role: Role::Agent,
+            content: text,
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+        };
+        msg.prepare();
+        session.messages.push(msg);
+    }
+}
+
+pub fn on_tool_start(
+    chat_store: &mut ChatStore,
+    id: String,
+    name: String,
+    arguments: serde_json::Value,
+) {
+    chat_store.tool_calls.push(ToolCallInfo {
+        id,
+        name,
+        status: ToolCallStatus::Running,
+        result: Some(arguments.to_string()),
+    });
+}
+
+pub fn on_tool_result(chat_store: &mut ChatStore, id: String, result: String) {
+    if let Some(tc) = chat_store.tool_calls.iter_mut().find(|t| t.id == id) {
+        tc.status = ToolCallStatus::Done;
+        tc.result = Some(result);
+    }
+}
+
+pub fn on_compaction_begin(chat_store: &mut ChatStore) {
+    chat_store.compacting = true;
+}
+
+pub fn on_compaction_end(chat_store: &mut ChatStore) {
+    chat_store.compacting = false;
+}
+
+pub fn on_usage(
+    chat_store: &mut ChatStore,
+    prompt_tokens: u32,
+    completion_tokens: u32,
+    total_tokens: u32,
+) {
+    chat_store.last_usage = Some((prompt_tokens, completion_tokens, total_tokens));
+}
+
+pub fn on_plan_ready(chat_store: &mut ChatStore, plan: clarity_core::agent::Plan) {
+    chat_store.is_loading = false;
+    chat_store.agent_status = AgentStatus::Online;
+    chat_store.pending_plan = Some(plan);
+}
+
+pub fn on_plan_step_begin(chat_store: &mut ChatStore, step_id: String, _tool_name: String) {
+    if let Some(ref mut tracker) = chat_store.plan_tracker {
+        for step in &mut tracker.steps {
+            if step.id == step_id {
+                step.status = crate::ui::types::PlanStepStatus::Running;
+                break;
+            }
+        }
+    }
+}
+
+pub fn on_plan_step_end(chat_store: &mut ChatStore, step_id: String, success: bool) {
+    if let Some(ref mut tracker) = chat_store.plan_tracker {
+        for step in &mut tracker.steps {
+            if step.id == step_id {
+                step.status = if success {
+                    crate::ui::types::PlanStepStatus::Success
+                } else {
+                    crate::ui::types::PlanStepStatus::Failed
+                };
+                break;
+            }
+        }
+    }
+}

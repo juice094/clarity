@@ -27,6 +27,7 @@ mod theme;
 mod ui;
 mod stores;
 mod services;
+mod handlers;
 
 use app_state::AppState;
 
