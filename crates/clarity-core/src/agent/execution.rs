@@ -119,10 +119,10 @@ impl Agent {
                 "Tool call rejected by user".to_string(),
             )),
             Ok(Ok(ApprovalResponse::ApproveForSession)) => {
-                runtime
-                    .resolve(&request_id, ApprovalResponse::ApproveForSession)
-                    .await
-                    .map_err(|e| ToolError::execution_failed(format!("Approval error: {}", e)))?;
+                // The runtime (e.g. ModeAwareApprovalRuntime) has already handled
+                // session-level approval in its resolve() path.  No need to call
+                // resolve() again here — the request has already been resolved
+                // by the UI layer.
                 Ok(())
             }
             Ok(Err(e)) => Err(ToolError::execution_failed(format!(
