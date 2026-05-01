@@ -32,8 +32,8 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .button(
-                            egui::RichText::new("✕")
-                                .size(app.ui_store.theme.text_sm)
+                            egui::RichText::new(crate::theme::ICON_X)
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
                                 .color(app.ui_store.theme.text_dim),
                         )
                         .clicked()

@@ -138,7 +138,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             if let Some(ref desc) = request.description {
                 ui.add_space(app.ui_store.theme.space_8);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("⚠️ ").size(14.0));
+                    ui.label(egui::RichText::new(crate::theme::ICON_WARNING).font(app.ui_store.theme.font_icon(14.0)));
                     ui.label(egui::RichText::new(desc).color(app.ui_store.theme.danger).size(13.0));
                 });
             }
@@ -150,7 +150,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Reject
                     if ui
-                        .button(egui::RichText::new("❌ Reject (Esc)").color(app.ui_store.theme.danger))
+                        .button(egui::RichText::new(format!("{} Reject (Esc)", crate::theme::ICON_X)).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)).color(app.ui_store.theme.danger))
                         .clicked()
                     {
                         let req_id = request.id.clone();
@@ -163,7 +163,8 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     // Approve for Session
                     if ui
                         .button(
-                            egui::RichText::new("✅ Approve for Session (Shift+Enter)")
+                            egui::RichText::new(format!("{} Approve for Session (Shift+Enter)", crate::theme::ICON_CHECK))
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
                                 .color(app.ui_store.theme.accent),
                         )
                         .clicked()
@@ -177,7 +178,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
                     // Approve
                     if ui
-                        .button(egui::RichText::new("✅ Approve (Enter)").color(app.ui_store.theme.ok))
+                        .button(egui::RichText::new(format!("{} Approve (Enter)", crate::theme::ICON_CHECK)).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)).color(app.ui_store.theme.ok))
                         .clicked()
                     {
                         let req_id = request.id.clone();

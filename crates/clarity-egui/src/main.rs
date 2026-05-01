@@ -123,7 +123,7 @@ impl App {
                     if self.ui_store.sidebar_collapsed {
                         if ui
                             .add(
-                                egui::Button::new(egui::RichText::new("☰").size(theme.text_base))
+                                egui::Button::new(egui::RichText::new(crate::theme::ICON_LIST).font(theme.font_icon(theme.text_base)))
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                             )
@@ -157,7 +157,7 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
                         let close_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("×").size(theme.text_base).color(theme.text_dim))
+                            egui::Button::new(egui::RichText::new(crate::theme::ICON_X).font(theme.font_icon(theme.text_base)).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if close_resp.clicked() {
@@ -175,7 +175,7 @@ impl App {
                             };
                             ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::ZERO, fill);
                             ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
-                                "×", egui::FontId::proportional(14.0), text_col);
+                                crate::theme::ICON_X, theme.font_icon(14.0), text_col);
                         }
 
                         // Maximize

@@ -29,7 +29,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                         .color(app.ui_store.theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("×").clicked() {
+                    if ui.button(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))).clicked() {
                         app.ui_store.toolbar_open = false;
                     }
                 });

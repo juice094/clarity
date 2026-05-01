@@ -102,7 +102,7 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
             .show(ui, |ui| {
                 ui.set_min_width(48.0);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("⚠").size(theme.text_base));
+                    ui.label(egui::RichText::new(crate::theme::ICON_WARNING).font(theme.font_icon(theme.text_base)));
                     ui.label(
                         egui::RichText::new("Error")
                             .size(theme.text_sm)
@@ -122,8 +122,8 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
     let bg = theme.tool_call_bg;
     let icon = match tc.status {
-        ToolCallStatus::Running => "⏳",
-        ToolCallStatus::Done => "✅",
+        ToolCallStatus::Running => crate::theme::ICON_HOURGLASS,
+        ToolCallStatus::Done => crate::theme::ICON_CHECK,
     };
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -136,7 +136,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(icon).size(theme.text_base));
+                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_base)));
                     ui.label(
                         egui::RichText::new(&tc.name)
                             .size(theme.text_sm)

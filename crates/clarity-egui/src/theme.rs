@@ -1,6 +1,26 @@
 use eframe::egui;
 
 // ============================================================================
+// Phosphor Icons — Regular (unicode mapped from embedded Phosphor.ttf)
+// ============================================================================
+pub const ICON_SEND: &str = "\u{E394}";
+pub const ICON_SETTINGS: &str = "\u{E270}";
+pub const ICON_PLAY: &str = "\u{E3D0}";
+pub const ICON_STOP: &str = "\u{E46C}";
+pub const ICON_PAUSE: &str = "\u{E39E}";
+pub const ICON_HOURGLASS: &str = "\u{E2B2}";
+pub const ICON_SPINNER: &str = "\u{E66A}";
+pub const ICON_CHECK: &str = "\u{E182}";
+pub const ICON_X: &str = "\u{E4F6}";
+pub const ICON_WARNING: &str = "\u{E4E0}";
+pub const ICON_PAPERCLIP: &str = "\u{E39A}";
+pub const ICON_LIST: &str = "\u{E2F0}";
+pub const ICON_ARROW_LEFT: &str = "\u{E058}";
+pub const ICON_ARROW_RIGHT: &str = "\u{E06C}";
+pub const ICON_PROHIBIT: &str = "\u{E3DE}";
+pub const ICON_QUESTION: &str = "\u{E3E8}";
+
+// ============================================================================
 // Design Token System — Phase A Foundation
 // ============================================================================
 // Accent: Warm copper (#c98a5e) — chosen for low blue-light content and
@@ -581,6 +601,11 @@ impl Theme {
     pub fn font_italic(&self, size: f32) -> egui::FontId {
         egui::FontId::new(size, egui::FontFamily::Name("italic".into()))
     }
+
+    /// Icon font at the given semantic size token (requires Phosphor icon font registered).
+    pub fn font_icon(&self, size: f32) -> egui::FontId {
+        egui::FontId::new(size, egui::FontFamily::Name("icons".into()))
+    }
 }
 
 // ---- Helpers ----
@@ -696,6 +721,20 @@ pub fn setup_fonts(ctx: &egui::Context) {
             break;
         }
     }
+
+    // ------------------------------------------------------------------
+    // Icon font — Phosphor Regular (embedded)
+    // ------------------------------------------------------------------
+    let icon_font_bytes = include_bytes!("../assets/fonts/Phosphor.ttf");
+    fonts.font_data.insert(
+        "phosphor".into(),
+        egui::FontData::from_static(icon_font_bytes).into(),
+    );
+    fonts
+        .families
+        .entry(egui::FontFamily::Name("icons".into()))
+        .or_default()
+        .push("phosphor".into());
 
     ctx.set_fonts(fonts);
 }

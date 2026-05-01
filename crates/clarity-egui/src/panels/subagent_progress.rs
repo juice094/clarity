@@ -44,12 +44,12 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                 // Header: batch_id + overall status
                 ui.horizontal(|ui| {
                     let icon = match batch.status.as_str() {
-                        "Running" => "⏳",
-                        "Completed" => "✅",
-                        "Failed" => "❌",
-                        _ => "❓",
+                        "Running" => crate::theme::ICON_HOURGLASS,
+                        "Completed" => crate::theme::ICON_CHECK,
+                        "Failed" => crate::theme::ICON_X,
+                        _ => crate::theme::ICON_QUESTION,
                     };
-                        ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_sm));
+                        ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)));
                         ui.label(
                             egui::RichText::new(format!(
                                 "Batch {}",
@@ -122,13 +122,13 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                     ui.add_space(app.ui_store.theme.space_4);
                     for agent in &batch.agent_statuses {
                         let (icon, color) = match agent.status.as_str() {
-                            "Running" => ("▶", app.ui_store.theme.status_online),
-                            "Completed" => ("✅", app.ui_store.theme.status_online),
-                            "Failed" => ("❌", app.ui_store.theme.danger),
-                            _ => ("⏳", app.ui_store.theme.text_dim),
+                            "Running" => (crate::theme::ICON_PLAY, app.ui_store.theme.status_online),
+                            "Completed" => (crate::theme::ICON_CHECK, app.ui_store.theme.status_online),
+                            "Failed" => (crate::theme::ICON_X, app.ui_store.theme.danger),
+                            _ => (crate::theme::ICON_HOURGLASS, app.ui_store.theme.text_dim),
                         };
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_xs));
+                            ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_xs)));
                             ui.label(
                                 egui::RichText::new(&agent.agent_id)
                                     .size(app.ui_store.theme.text_xs)

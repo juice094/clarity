@@ -25,7 +25,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 if app.ui_store.sidebar_collapsed
                     && ui
                         .add(
-                            egui::Button::new(egui::RichText::new("➡").size(app.ui_store.theme.text_base))
+                            egui::Button::new(egui::RichText::new(crate::theme::ICON_SEND).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -101,7 +101,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     // Settings
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new("⚙").size(app.ui_store.theme.text_base))
+                            egui::Button::new(egui::RichText::new(crate::theme::ICON_SETTINGS).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -192,7 +192,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.status_busy),
                     );
-                    if ui.button("×").clicked() {
+                    if ui.button(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))).clicked() {
                         app.ui_store.network_banner = None;
                     }
                 });
@@ -457,7 +457,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     text.push_str(&format!(
                                         "**Step {}**: {}\n```\n{}\n```\n\n",
                                         r.step_id,
-                                        if r.success { "✅" } else { "❌" },
+                                        if r.success { crate::theme::ICON_CHECK } else { crate::theme::ICON_X },
                                         r.output
                                     ));
                                 }
@@ -502,8 +502,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             );
                             if ui
                                 .button(
-                                    egui::RichText::new("✕")
-                                        .size(app.ui_store.theme.text_sm)
+                                    egui::RichText::new(crate::theme::ICON_X)
+                                        .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
                                         .color(app.ui_store.theme.text_dim),
                                 )
                                 .clicked()
@@ -515,18 +515,18 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         for step in &tracker.steps {
                             let (icon, color) = match step.status {
                                 crate::ui::types::PlanStepStatus::Pending => {
-                                    ("⏳", app.ui_store.theme.text_dim)
+                                    (crate::theme::ICON_HOURGLASS, app.ui_store.theme.text_dim)
                                 }
                                 crate::ui::types::PlanStepStatus::Running => {
-                                    ("▶️", app.ui_store.theme.accent)
+                                    (crate::theme::ICON_PLAY, app.ui_store.theme.accent)
                                 }
-                                crate::ui::types::PlanStepStatus::Success => ("✅", app.ui_store.theme.ok),
+                                crate::ui::types::PlanStepStatus::Success => (crate::theme::ICON_CHECK, app.ui_store.theme.ok),
                                 crate::ui::types::PlanStepStatus::Failed => {
-                                    ("❌", app.ui_store.theme.danger)
+                                    (crate::theme::ICON_X, app.ui_store.theme.danger)
                                 }
                             };
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_sm));
+                                ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)));
                                 ui.label(
                                     egui::RichText::new(format!("{}.", step.id))
                                         .size(app.ui_store.theme.text_sm)
@@ -574,14 +574,14 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .inner_margin(egui::Margin::symmetric(8, 4))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("📎").size(app.ui_store.theme.text_sm));
+                                    ui.label(egui::RichText::new(crate::theme::ICON_PAPERCLIP).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)));
                                     ui.label(
                                         egui::RichText::new(&att.name)
                                             .size(app.ui_store.theme.text_sm)
                                             .color(app.ui_store.theme.text)
                                             .monospace(),
                                     );
-                                    if ui.small_button("×").clicked() {
+                                    if ui.add(egui::Button::new(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_xs))).small()).clicked() {
                                         to_remove = Some(i);
                                     }
                                 });
@@ -670,7 +670,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let queue_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("▶").size(app.ui_store.theme.text_lg).color(queue_text),
+                                        egui::RichText::new(crate::theme::ICON_PLAY).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_lg)).color(queue_text),
                                     )
                                     .fill(queue_color)
                                     .corner_radius(
@@ -693,7 +693,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let stop_btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("■").size(app.ui_store.theme.text_lg).color(app.ui_store.theme.text),
+                                        egui::RichText::new(crate::theme::ICON_STOP).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_lg)).color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.danger)
                                     .corner_radius(
@@ -709,7 +709,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 let btn = ui.add_sized(
                                     egui::vec2(44.0, 44.0),
                                     egui::Button::new(
-                                        egui::RichText::new("▶").size(app.ui_store.theme.text_lg).color(app.ui_store.theme.text),
+                                        egui::RichText::new(crate::theme::ICON_PLAY).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_lg)).color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.accent)
                                     .corner_radius(

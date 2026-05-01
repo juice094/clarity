@@ -27,11 +27,11 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
     egui::ScrollArea::vertical().show(ui, |ui| {
         for task in tasks {
             let (icon, status_color) = match task.status {
-                TaskStatus::Pending => ("⏳", theme.status_busy),
-                TaskStatus::Running => ("▶", theme.status_online),
-                TaskStatus::Completed => ("✅", theme.status_online),
-                TaskStatus::Failed => ("❌", theme.danger),
-                TaskStatus::Cancelled => ("🚫", theme.text_dim),
+                TaskStatus::Pending => (crate::theme::ICON_HOURGLASS, theme.status_busy),
+                TaskStatus::Running => (crate::theme::ICON_PLAY, theme.status_online),
+                TaskStatus::Completed => (crate::theme::ICON_CHECK, theme.status_online),
+                TaskStatus::Failed => (crate::theme::ICON_X, theme.danger),
+                TaskStatus::Cancelled => (crate::theme::ICON_PROHIBIT, theme.text_dim),
             };
 
             egui::Frame::group(ui.style())
@@ -42,7 +42,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(icon).size(theme.text_sm));
+                        ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
                         ui.label(
                             egui::RichText::new(&task.spec.name)
                                 .size(theme.text_sm)

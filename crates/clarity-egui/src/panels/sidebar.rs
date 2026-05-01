@@ -27,7 +27,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new("⬅").size(app.ui_store.theme.text_base))
+                            egui::Button::new(egui::RichText::new(crate::theme::ICON_ARROW_LEFT).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -209,7 +209,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .weak(),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("×").clicked() {
+                        if ui.add(egui::Button::new(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_xs))).small()).clicked() {
                             app.ui_store.preview_file = None;
                         }
                     });
