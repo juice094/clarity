@@ -1,5 +1,4 @@
 use crate::App;
-use clarity_core::approval::ApprovalRuntime;
 
 pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     // Refresh pending approvals each frame from the shared runtime.
@@ -43,10 +42,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     }
     if let Some(response) = keyboard_approval {
         let req_id = request.id.clone();
-        let rt = app.state.approval_runtime.clone();
-        let _ = app
-            .runtime
-            .block_on(async move { rt.resolve(&req_id, response).await });
+        let _ = app.ui_tx.send(crate::UiEvent::ResolveApproval { req_id, response });
         return;
     }
 
@@ -158,10 +154,9 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         .clicked()
                     {
                         let req_id = request.id.clone();
-                        let rt = app.state.approval_runtime.clone();
-                        let _ = app.runtime.block_on(async move {
-                            rt.resolve(&req_id, clarity_core::approval::ApprovalResponse::Reject)
-                                .await
+                        let _ = app.ui_tx.send(crate::UiEvent::ResolveApproval {
+                            req_id,
+                            response: clarity_core::approval::ApprovalResponse::Reject,
                         });
                     }
 
@@ -174,13 +169,9 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         .clicked()
                     {
                         let req_id = request.id.clone();
-                        let rt = app.state.approval_runtime.clone();
-                        let _ = app.runtime.block_on(async move {
-                            rt.resolve(
-                                &req_id,
-                                clarity_core::approval::ApprovalResponse::ApproveForSession,
-                            )
-                            .await
+                        let _ = app.ui_tx.send(crate::UiEvent::ResolveApproval {
+                            req_id,
+                            response: clarity_core::approval::ApprovalResponse::ApproveForSession,
                         });
                     }
 
@@ -190,10 +181,9 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         .clicked()
                     {
                         let req_id = request.id.clone();
-                        let rt = app.state.approval_runtime.clone();
-                        let _ = app.runtime.block_on(async move {
-                            rt.resolve(&req_id, clarity_core::approval::ApprovalResponse::Approve)
-                                .await
+                        let _ = app.ui_tx.send(crate::UiEvent::ResolveApproval {
+                            req_id,
+                            response: clarity_core::approval::ApprovalResponse::Approve,
                         });
                     }
                 });

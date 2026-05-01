@@ -8,6 +8,7 @@ use crate::settings::GuiSettings;
 use crate::theme::Theme;
 use crate::ui::types::*;
 use crate::App;
+use clarity_core::approval::ApprovalRuntime;
 
 impl App {
     pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -265,6 +266,9 @@ impl App {
                     provider_id,
                     models,
                 } => self.on_provider_model_list(provider_id, models),
+                UiEvent::ResolveApproval { req_id, response } => {
+                    self.on_resolve_approval(req_id, response);
+                }
             }
         }
     }
@@ -479,6 +483,15 @@ impl App {
                 ToastLevel::Error,
             );
         }
+    }
+
+    fn on_resolve_approval(&self, req_id: String, response: clarity_core::approval::ApprovalResponse) {
+        let rt = self.state.approval_runtime.clone();
+        self.runtime.spawn(async move {
+            if let Err(e) = rt.resolve(&req_id, response).await {
+                tracing::warn!("Approval resolve failed for {}: {}", req_id, e);
+            }
+        });
     }
 
     fn on_provider_model_list(&mut self, provider_id: String, models: Vec<String>) {

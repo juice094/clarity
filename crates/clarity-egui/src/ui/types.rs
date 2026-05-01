@@ -67,6 +67,11 @@ pub enum UiEvent {
         provider_id: String,
         models: Vec<String>,
     },
+    /// Resolve an approval request asynchronously (moved off the UI thread).
+    ResolveApproval {
+        req_id: String,
+        response: clarity_core::approval::ApprovalResponse,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.
