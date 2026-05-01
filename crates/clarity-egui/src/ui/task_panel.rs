@@ -15,7 +15,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
             ui.add_space(theme.space_40);
             ui.label(
                 egui::RichText::new("No tasks yet")
-                    .size(13.0)
+                    .size(theme.text_base)
                     .color(theme.text_dim),
             );
         });
@@ -42,10 +42,10 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(icon).size(12.0));
+                        ui.label(egui::RichText::new(icon).size(theme.text_sm));
                         ui.label(
                             egui::RichText::new(&task.spec.name)
-                                .size(12.0)
+                                .size(theme.text_sm)
                                 .strong()
                                 .color(theme.text),
                         );
@@ -53,7 +53,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                             if !task.status.is_terminal() {
                                 if ui
                                     .add(
-                                        egui::Button::new(egui::RichText::new("Cancel").size(10.0))
+                                        egui::Button::new(egui::RichText::new("Cancel").size(theme.text_xs))
                                             .fill(theme.danger)
                                             .corner_radius(egui::CornerRadius::same(
                                                 theme.radius_sm as u8,
@@ -67,7 +67,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                             }
                             ui.label(
                                 egui::RichText::new(task.status.as_str())
-                                    .size(10.0)
+                                    .size(theme.text_xs)
                                     .color(status_color),
                             );
                         });
@@ -75,7 +75,7 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                     if !task.spec.description.is_empty() {
                         ui.label(
                             egui::RichText::new(&task.spec.description)
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
                     }
@@ -83,12 +83,12 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                         let priority_label = format!("{:?}", task.spec.priority);
                         ui.label(
                             egui::RichText::new(priority_label)
-                                .size(10.0)
+                                .size(theme.text_xs)
                                 .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(format_timestamp(task.created_at))
-                                .size(10.0)
+                                .size(theme.text_xs)
                                 .color(theme.text_dim),
                         );
                     });

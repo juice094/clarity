@@ -44,19 +44,19 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                 app.ui_store.theme.status_online
             };
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("●").size(10.0).color(status_color));
+                ui.label(egui::RichText::new("●").size(app.ui_store.theme.text_xs).color(status_color));
                 ui.label(
                     egui::RichText::new(format!("Active tasks: {}", active_tasks))
-                        .size(12.0)
+                        .size(app.ui_store.theme.text_sm)
                         .color(app.ui_store.theme.text_muted),
                 );
             });
             ui.add_space(app.ui_store.theme.space_4);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("●").size(10.0).color(app.ui_store.theme.status_online));
+                ui.label(egui::RichText::new("●").size(app.ui_store.theme.text_xs).color(app.ui_store.theme.status_online));
                 ui.label(
                     egui::RichText::new(format!("Category: {}", app.session_store.active_category))
-                        .size(12.0)
+                        .size(app.ui_store.theme.text_sm)
                         .color(app.ui_store.theme.text_muted),
                 );
             });
@@ -71,7 +71,7 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                 .add(
                     egui::Button::new(
                         egui::RichText::new("+ Create Task")
-                            .size(13.0)
+                            .size(app.ui_store.theme.text_base)
                             .color(app.ui_store.theme.text),
                     )
                     .fill(app.ui_store.theme.accent)

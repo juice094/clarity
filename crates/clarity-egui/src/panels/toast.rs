@@ -37,7 +37,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                         ui.label(
                             egui::RichText::new(&toast.message)
                                 .color(text_color.linear_multiply(alpha))
-                                .size(13.0),
+                                .size(app.ui_store.theme.text_base),
                         );
                     });
             });

@@ -23,7 +23,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 if app.ui_store.sidebar_collapsed
                     && ui
                         .add(
-                            egui::Button::new(egui::RichText::new("➡").size(14.0))
+                            egui::Button::new(egui::RichText::new("➡").size(app.ui_store.theme.text_base))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -61,7 +61,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        egui::RichText::new(title).size(12.0).color(text_color),
+                                        egui::RichText::new(title).size(app.ui_store.theme.text_sm).color(text_color),
                                     )
                                     .fill(bg)
                                     .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
@@ -84,7 +84,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         // New-tab button (browser style)
                         if ui
                             .add(
-                                egui::Button::new(egui::RichText::new("+").size(14.0))
+                                egui::Button::new(egui::RichText::new("+").size(app.ui_store.theme.text_base))
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                             )
@@ -107,7 +107,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     // Settings
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new("⚙").size(14.0))
+                            egui::Button::new(egui::RichText::new("⚙").size(app.ui_store.theme.text_base))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -128,7 +128,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     };
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new(&task_btn).size(12.0))
+                            egui::Button::new(egui::RichText::new(&task_btn).size(app.ui_store.theme.text_sm))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -148,7 +148,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     };
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new(&mcp_btn).size(12.0))
+                            egui::Button::new(egui::RichText::new(&mcp_btn).size(app.ui_store.theme.text_sm))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -168,7 +168,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     ui.painter().circle_filled(rect.center(), 4.0, status_color);
                     ui.label(
                         egui::RichText::new(status_label)
-                            .size(12.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.text_dim),
                     );
                     // Token usage (session cumulative)
@@ -180,7 +180,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 format_thousands(c),
                                 format_thousands(t)
                             ))
-                            .size(11.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.text_dim)
                             .monospace(),
                         );
@@ -195,7 +195,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(&banner)
-                            .size(12.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.status_busy),
                     );
                     if ui.button("×").clicked() {
@@ -209,7 +209,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("Compacting conversation history…")
-                            .size(12.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.text_dim),
                     );
                 });
@@ -244,7 +244,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 ui.add_space(app.ui_store.theme.space_8);
                                 ui.label(
                                     egui::RichText::new("Local-first AI agent runtime")
-                                        .size(14.0)
+                                        .size(app.ui_store.theme.text_base)
                                         .color(theme.text_dim),
                                 );
                                 ui.add_space(app.ui_store.theme.space_24);
@@ -252,7 +252,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     .add(
                                         egui::Button::new(
                                             egui::RichText::new("Configure Settings")
-                                                .size(13.0)
+                                                .size(app.ui_store.theme.text_base)
                                                 .color(theme.text),
                                         )
                                         .fill(theme.surface)
@@ -361,7 +361,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         ui.set_min_width(ui.available_width());
                         ui.label(
                             egui::RichText::new(format!("📋 Plan Review: {}", plan.title))
-                                .size(13.0)
+                                .size(app.ui_store.theme.text_base)
                                 .strong()
                                 .color(app.ui_store.theme.text),
                         );
@@ -370,20 +370,20 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new(format!("{}.", step.id))
-                                        .size(11.0)
+                                        .size(app.ui_store.theme.text_sm)
                                         .strong()
                                         .color(app.ui_store.theme.text),
                                 );
                                 ui.label(
                                     egui::RichText::new(&step.description)
-                                        .size(11.0)
+                                        .size(app.ui_store.theme.text_sm)
                                         .color(app.ui_store.theme.text),
                                 );
                             });
                             ui.horizontal(|ui| {
                                 ui.label(
                                     egui::RichText::new("→")
-                                        .size(10.0)
+                                        .size(app.ui_store.theme.text_xs)
                                         .color(app.ui_store.theme.text_dim),
                                 );
                                 ui.label(
@@ -391,7 +391,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                         "{}({})",
                                         step.tool_name, step.tool_params
                                     ))
-                                    .size(10.0)
+                                    .size(app.ui_store.theme.text_xs)
                                     .color(app.ui_store.theme.text_dim)
                                     .monospace(),
                                 );
@@ -408,7 +408,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                             egui::vec2(80.0, 32.0),
                                             egui::Button::new(
                                                 egui::RichText::new("Cancel")
-                                                    .size(12.0)
+                                                    .size(app.ui_store.theme.text_sm)
                                                     .color(app.ui_store.theme.text),
                                             )
                                             .fill(app.ui_store.theme.border),
@@ -422,7 +422,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                             egui::vec2(80.0, 32.0),
                                             egui::Button::new(
                                                 egui::RichText::new("Execute")
-                                                    .size(12.0)
+                                                    .size(app.ui_store.theme.text_sm)
                                                     .color(app.ui_store.theme.text),
                                             )
                                             .fill(app.ui_store.theme.accent),
@@ -502,14 +502,14 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         ui.horizontal(|ui| {
                             ui.label(
                                 egui::RichText::new(format!("📋 {}", tracker.title))
-                                    .size(13.0)
+                                    .size(app.ui_store.theme.text_base)
                                     .strong()
                                     .color(app.ui_store.theme.text),
                             );
                             if ui
                                 .button(
                                     egui::RichText::new("✕")
-                                        .size(12.0)
+                                        .size(app.ui_store.theme.text_sm)
                                         .color(app.ui_store.theme.text_dim),
                                 )
                                 .clicked()
@@ -532,16 +532,16 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 }
                             };
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(icon).size(12.0));
+                                ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_sm));
                                 ui.label(
                                     egui::RichText::new(format!("{}.", step.id))
-                                        .size(11.0)
+                                        .size(app.ui_store.theme.text_sm)
                                         .strong()
                                         .color(app.ui_store.theme.text),
                                 );
                                 ui.label(
                                     egui::RichText::new(&step.description)
-                                        .size(11.0)
+                                        .size(app.ui_store.theme.text_sm)
                                         .color(app.ui_store.theme.text),
                                 );
                             });
@@ -549,7 +549,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 ui.add_space(app.ui_store.theme.space_20);
                                 ui.label(
                                     egui::RichText::new(format!("→ {}", step.tool_name))
-                                        .size(10.0)
+                                        .size(app.ui_store.theme.text_xs)
                                         .color(color)
                                         .monospace(),
                                 );
@@ -569,7 +569,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(
                         egui::RichText::new("Attachments:")
-                            .size(11.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.text_dim),
                     );
                     for (i, att) in app.chat_store.attachments.iter().enumerate() {
@@ -580,10 +580,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             .inner_margin(egui::Margin::symmetric(8, 4))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("📎").size(11.0));
+                                    ui.label(egui::RichText::new("📎").size(app.ui_store.theme.text_sm));
                                     ui.label(
                                         egui::RichText::new(&att.name)
-                                            .size(11.0)
+                                            .size(app.ui_store.theme.text_sm)
                                             .color(app.ui_store.theme.text)
                                             .monospace(),
                                     );

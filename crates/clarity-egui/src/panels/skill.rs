@@ -33,7 +33,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     if ui
                         .button(
                             egui::RichText::new("✕")
-                                .size(12.0)
+                                .size(app.ui_store.theme.text_sm)
                                 .color(app.ui_store.theme.text_dim),
                         )
                         .clicked()
@@ -43,7 +43,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     if ui
                         .button(
                             egui::RichText::new("🔄")
-                                .size(12.0)
+                                .size(app.ui_store.theme.text_sm)
                                 .color(app.ui_store.theme.text_dim),
                         )
                         .clicked()
@@ -59,7 +59,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     egui::RichText::new(
                         "No skills found.\nPlace .md files in .clarity/skills/ to add skills.",
                     )
-                    .size(12.0)
+                    .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.text_dim),
                 );
             } else {
@@ -69,7 +69,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                         skills.len(),
                         active_ids.len()
                     ))
-                    .size(11.0)
+                    .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.text_dim),
                 );
                 ui.add_space(app.ui_store.theme.space_8);
@@ -90,7 +90,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                     ui.horizontal(|ui| {
                                         ui.label(
                                             egui::RichText::new(&skill.meta.name)
-                                                .size(13.0)
+                                                .size(app.ui_store.theme.text_base)
                                                 .strong()
                                                 .color(app.ui_store.theme.text),
                                         );
@@ -107,7 +107,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                                 if ui
                                                     .button(
                                                         egui::RichText::new(toggle_text)
-                                                            .size(11.0)
+                                                            .size(app.ui_store.theme.text_sm)
                                                             .color(toggle_color),
                                                     )
                                                     .clicked()
@@ -122,7 +122,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                     if !skill.meta.description.is_empty() {
                                         ui.label(
                                             egui::RichText::new(&skill.meta.description)
-                                                .size(11.0)
+                                                .size(app.ui_store.theme.text_sm)
                                                 .color(app.ui_store.theme.text_dim),
                                         );
                                     }
@@ -130,13 +130,13 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                         ui.horizontal_wrapped(|ui| {
                                             ui.label(
                                                 egui::RichText::new("Tools:")
-                                                    .size(10.0)
+                                                    .size(app.ui_store.theme.text_xs)
                                                     .color(app.ui_store.theme.text_dim),
                                             );
                                             for tool in &skill.meta.tools {
                                                 ui.label(
                                                     egui::RichText::new(format!("• {}", tool))
-                                                        .size(10.0)
+                                                        .size(app.ui_store.theme.text_xs)
                                                         .color(app.ui_store.theme.accent),
                                                 );
                                             }
@@ -147,7 +147,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                                             for tag in &skill.meta.tags {
                                                 ui.label(
                                                     egui::RichText::new(format!("#{}", tag))
-                                                        .size(10.0)
+                                                        .size(app.ui_store.theme.text_xs)
                                                         .color(app.ui_store.theme.text_dim),
                                                 );
                                             }

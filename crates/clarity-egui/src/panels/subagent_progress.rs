@@ -12,7 +12,7 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space(app.ui_store.theme.space_8);
             ui.label(
                 egui::RichText::new("No parallel batches running")
-                    .size(11.0)
+                    .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.text_dim),
             );
         });
@@ -22,7 +22,7 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(app.ui_store.theme.space_8);
     ui.label(
         egui::RichText::new("Parallel Batches")
-            .size(13.0)
+            .size(app.ui_store.theme.text_base)
             .strong()
             .color(app.ui_store.theme.text),
     );
@@ -49,20 +49,20 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                         "Failed" => "❌",
                         _ => "❓",
                     };
-                        ui.label(egui::RichText::new(icon).size(12.0));
+                        ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_sm));
                         ui.label(
                             egui::RichText::new(format!(
                                 "Batch {}",
                                 &batch.batch_id[..8.min(batch.batch_id.len())]
                             ))
-                            .size(12.0)
+                            .size(app.ui_store.theme.text_sm)
                             .strong()
                             .color(app.ui_store.theme.text),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
                                 egui::RichText::new(&batch.status)
-                                    .size(10.0)
+                                    .size(app.ui_store.theme.text_xs)
                                     .color(match batch.status.as_str() {
                                         "Running" => app.ui_store.theme.status_online,
                                         "Completed" => app.ui_store.theme.status_online,
@@ -114,7 +114,7 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                             "{}/{} completed · {} failed · {}ms",
                             batch.completed, batch.total, batch.failed, batch.elapsed_ms
                         ))
-                        .size(10.0)
+                        .size(app.ui_store.theme.text_xs)
                         .color(app.ui_store.theme.text_dim),
                     );
 
@@ -128,10 +128,10 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                             _ => ("⏳", app.ui_store.theme.text_dim),
                         };
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(icon).size(10.0));
+                            ui.label(egui::RichText::new(icon).size(app.ui_store.theme.text_xs));
                             ui.label(
                                 egui::RichText::new(&agent.agent_id)
-                                    .size(10.0)
+                                    .size(app.ui_store.theme.text_xs)
                                     .color(color),
                             );
                             if let Some(ref summary) = agent.summary {

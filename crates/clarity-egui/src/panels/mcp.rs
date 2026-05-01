@@ -37,7 +37,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                                 .add(
                                     egui::Button::new(
                                         egui::RichText::new("Save")
-                                            .size(13.0)
+                                            .size(app.ui_store.theme.text_base)
                                             .color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.accent)
@@ -51,7 +51,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                                 .add(
                                     egui::Button::new(
                                         egui::RichText::new("Cancel")
-                                            .size(13.0)
+                                            .size(app.ui_store.theme.text_base)
                                             .color(app.ui_store.theme.text),
                                     )
                                     .fill(app.ui_store.theme.border)
@@ -69,7 +69,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                     ui.add_space(app.ui_store.theme.space_40);
                     ui.label(
                         egui::RichText::new("No MCP config found")
-                            .size(13.0)
+                            .size(app.ui_store.theme.text_base)
                             .color(app.ui_store.theme.text_dim),
                     );
                     ui.add_space(app.ui_store.theme.space_8);
@@ -77,7 +77,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                         .add(
                             egui::Button::new(
                                 egui::RichText::new("Create Config")
-                                    .size(13.0)
+                                    .size(app.ui_store.theme.text_base)
                                     .color(app.ui_store.theme.text),
                             )
                             .fill(app.ui_store.theme.accent)

@@ -18,13 +18,13 @@ pub fn render_mcp_panel(
             ui.add_space(theme.space_40);
             ui.label(
                 egui::RichText::new("No MCP servers configured")
-                    .size(13.0)
+                    .size(theme.text_base)
                     .color(theme.text_dim),
             );
             ui.add_space(theme.space_8);
             ui.label(
                 egui::RichText::new("Add servers to ~/.config/clarity/mcp.json")
-                    .size(11.0)
+                    .size(theme.text_sm)
                     .color(theme.text_dim),
             );
         });
@@ -52,7 +52,7 @@ pub fn render_mcp_panel(
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(name.as_str())
-                            .size(13.0)
+                            .size(theme.text_base)
                             .strong()
                             .color(theme.text),
                     );
@@ -72,12 +72,12 @@ pub fn render_mcp_panel(
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("Command:")
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(&entry.command)
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .monospace()
                                 .color(theme.text_muted),
                         );
@@ -89,12 +89,12 @@ pub fn render_mcp_panel(
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("Args:")
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(entry.args.join(" "))
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .monospace()
                                 .color(theme.text_muted),
                         );
@@ -104,10 +104,10 @@ pub fn render_mcp_panel(
                 // URL (for HTTP/SSE transport)
                 if let Some(ref url) = entry.url {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("URL:").size(11.0).color(theme.text_dim));
+                        ui.label(egui::RichText::new("URL:").size(theme.text_sm).color(theme.text_dim));
                         ui.label(
                             egui::RichText::new(url)
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .monospace()
                                 .color(theme.text_muted),
                         );
@@ -119,12 +119,12 @@ pub fn render_mcp_panel(
                     ui.horizontal(|ui| {
                         ui.label(
                             egui::RichText::new("Transport:")
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
                         ui.label(
                             egui::RichText::new(transport)
-                                .size(11.0)
+                                .size(theme.text_sm)
                                 .color(theme.text_muted),
                         );
                     });
@@ -135,7 +135,7 @@ pub fn render_mcp_panel(
                     ui.add_space(2.0);
                     ui.label(
                         egui::RichText::new("Environment:")
-                            .size(11.0)
+                            .size(theme.text_sm)
                             .color(theme.text_dim),
                     );
                     for (k, v) in &entry.env {
@@ -143,7 +143,7 @@ pub fn render_mcp_panel(
                             ui.add_space(theme.space_8);
                             ui.label(
                                 egui::RichText::new(format!("{}={}", k, v))
-                                    .size(10.0)
+                                    .size(theme.text_xs)
                                     .monospace()
                                     .color(theme.text_dim),
                             );

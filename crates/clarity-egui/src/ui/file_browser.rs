@@ -45,7 +45,7 @@ pub fn render_file_tree(
         if is_dir {
             let header = egui::CollapsingHeader::new(
                 egui::RichText::new(format!("📁 {}", name))
-                    .size(12.0)
+                    .size(theme.text_sm)
                     .color(theme.text),
             )
             .id_salt(full_path.to_string_lossy().to_string())
@@ -67,7 +67,7 @@ pub fn render_file_tree(
                     text_pos,
                     egui::Align2::LEFT_TOP,
                     format!("📄 {}", name),
-                    egui::FontId::new(12.0, egui::FontFamily::Proportional),
+                    egui::FontId::new(theme.text_sm, egui::FontFamily::Proportional),
                     theme.text_dim,
                 );
                 if response.hovered() {

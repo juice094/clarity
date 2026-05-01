@@ -20,14 +20,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Clarity")
-                        .size(18.0)
+                        .size(app.ui_store.theme.text_xl)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add(
-                            egui::Button::new(egui::RichText::new("⬅").size(14.0))
+                            egui::Button::new(egui::RichText::new("⬅").size(app.ui_store.theme.text_base))
                                 .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
                         )
@@ -61,7 +61,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 if ui
                     .add(
                         egui::Button::new(
-                            egui::RichText::new(label).size(13.0).color(text_color),
+                            egui::RichText::new(label).size(app.ui_store.theme.text_base).color(text_color),
                         )
                         .fill(bg)
                         .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
@@ -78,7 +78,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             ui.add_space(app.ui_store.theme.space_16);
             ui.label(
                 egui::RichText::new("Files")
-                    .size(11.0)
+                    .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.text_dim)
                     .weak(),
             );
@@ -120,7 +120,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("Preview")
-                            .size(11.0)
+                            .size(app.ui_store.theme.text_sm)
                             .color(app.ui_store.theme.text_dim)
                             .weak(),
                     );
@@ -132,7 +132,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 });
                 ui.label(
                     egui::RichText::new(&preview_name)
-                        .size(12.0)
+                        .size(app.ui_store.theme.text_sm)
                         .color(app.ui_store.theme.text)
                         .monospace(),
                 );
@@ -168,7 +168,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     if ui
                         .button(
                             egui::RichText::new("🛠 Skills")
-                                .size(11.0)
+                                .size(app.ui_store.theme.text_sm)
                                 .color(app.ui_store.theme.text),
                         )
                         .clicked()
@@ -183,7 +183,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     if ui
                         .button(
                             egui::RichText::new(locale_label)
-                                .size(10.0)
+                                .size(app.ui_store.theme.text_xs)
                                 .color(app.ui_store.theme.text_dim)
                                 .monospace(),
                         )
@@ -198,7 +198,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         if let Some((_, _, t)) = app.chat_store.last_usage {
                             ui.label(
                                 egui::RichText::new(format!("{}∑", t))
-                                    .size(10.0)
+                                    .size(app.ui_store.theme.text_xs)
                                     .color(app.ui_store.theme.text_dim)
                                     .monospace(),
                             );
@@ -206,7 +206,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         #[cfg(debug_assertions)]
                         ui.label(
                             egui::RichText::new(format!("FPS: {:.0}", app.ui_store.fps))
-                                .size(10.0)
+                                .size(app.ui_store.theme.text_xs)
                                 .color(app.ui_store.theme.text_dim),
                         );
                     });

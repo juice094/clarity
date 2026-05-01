@@ -69,10 +69,10 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                 ui.set_min_width(48.0);
                 if msg.is_error {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("⚠").size(14.0));
+                        ui.label(egui::RichText::new("⚠").size(theme.text_base));
                         ui.label(
                             egui::RichText::new("Error")
-                                .size(12.0)
+                                .size(theme.text_sm)
                                 .strong()
                                 .color(text_color),
                         );
@@ -104,10 +104,10 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(icon).size(14.0));
+                    ui.label(egui::RichText::new(icon).size(theme.text_base));
                     ui.label(
                         egui::RichText::new(&tc.name)
-                            .size(12.0)
+                            .size(theme.text_sm)
                             .strong()
                             .color(theme.text_muted),
                     );
@@ -115,7 +115,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
                 if let Some(ref result) = tc.result {
                     ui.label(
                         egui::RichText::new(truncate(result, 200))
-                            .size(11.0)
+                            .size(theme.text_sm)
                             .color(theme.text_muted),
                     );
                 }
@@ -142,7 +142,7 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
             .show(ui, |ui| {
                 ui.label(
                     egui::RichText::new("● ● ●")
-                        .size(12.0)
+                        .size(theme.text_sm)
                         .color(theme.text_muted),
                 );
             });

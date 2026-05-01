@@ -44,7 +44,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                 .add(
                     egui::Button::new(
                         egui::RichText::new("+ Create Task")
-                            .size(13.0)
+                            .size(app.ui_store.theme.text_base)
                             .color(app.ui_store.theme.text),
                     )
                     .fill(app.ui_store.theme.accent)

@@ -123,7 +123,7 @@ impl App {
                     if self.ui_store.sidebar_collapsed {
                         if ui
                             .add(
-                                egui::Button::new(egui::RichText::new("☰").size(14.0))
+                                egui::Button::new(egui::RichText::new("☰").size(theme.text_base))
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                             )
@@ -136,7 +136,7 @@ impl App {
 
                     ui.label(
                         egui::RichText::new("Clarity")
-                            .size(13.0)
+                            .size(theme.text_base)
                             .strong()
                             .color(theme.text_muted),
                     );
@@ -157,7 +157,7 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
                         let close_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("×").size(14.0).color(theme.text_dim))
+                            egui::Button::new(egui::RichText::new("×").size(theme.text_base).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if close_resp.clicked() {
@@ -180,7 +180,7 @@ impl App {
 
                         // Maximize
                         let max_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("□").size(11.0).color(theme.text_dim))
+                            egui::Button::new(egui::RichText::new("□").size(theme.text_sm).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if max_resp.clicked() {
@@ -191,7 +191,7 @@ impl App {
 
                         // Minimize
                         let min_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("─").size(11.0).color(theme.text_dim))
+                            egui::Button::new(egui::RichText::new("─").size(theme.text_sm).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if min_resp.clicked() {

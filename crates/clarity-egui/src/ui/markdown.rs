@@ -223,7 +223,7 @@ pub fn render_blocks(
             }
             RenderBlock::ListItem(spans) => {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("•").size(15.0).color(text_color));
+                    ui.label(egui::RichText::new("•").size(theme.text_lg).color(text_color));
                     render_spans(ui, spans, theme, text_color, 15.0, false);
                 });
             }
@@ -291,7 +291,7 @@ fn render_span(
                     .monospace()
                     .color(theme.text_strong)
                     .background_color(theme.code_block_bg)
-                    .size(14.0),
+                    .size(theme.text_base),
             );
         }
         InlineSpan::Link { text, url } => {
@@ -315,7 +315,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
             if !lang.is_empty() {
                 ui.label(
                     egui::RichText::new(lang)
-                        .size(11.0)
+                        .size(theme.text_sm)
                         .color(theme.text_dim)
                         .monospace(),
                 );
@@ -326,7 +326,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                 egui::RichText::new(code)
                     .monospace()
                     .color(theme.text)
-                    .size(14.0)
+                    .size(theme.text_base)
                     .line_height(Some(22.0)),
             );
         });

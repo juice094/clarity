@@ -59,7 +59,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                             let is = i as u8 == at;
                             let bg = if is { app.ui_store.theme.surface } else { egui::Color32::TRANSPARENT };
                             let tc = if is { app.ui_store.theme.text } else { app.ui_store.theme.text_muted };
-                            if ui.add(egui::Button::new(egui::RichText::new(*name).size(13.0).color(tc))
+                            if ui.add(egui::Button::new(egui::RichText::new(*name).size(app.ui_store.theme.text_base).color(tc))
                                 .fill(bg).corner_radius(app.ui_store.theme.radius_sm as u8)
                                 .min_size(egui::vec2(90.0, 28.0))).clicked() { at = i as u8; }
                         }
@@ -87,9 +87,9 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
 // ============================================================================
 
 fn render_provider(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new(app.t("Provider")).color(app.ui_store.theme.text).size(15.0).strong());
+    ui.label(egui::RichText::new(app.t("Provider")).color(app.ui_store.theme.text).size(app.ui_store.theme.text_lg).strong());
     ui.add_space(4.0);
-    ui.label(egui::RichText::new("Connect to an AI service").size(11.0).color(app.ui_store.theme.text_dim));
+    ui.label(egui::RichText::new("Connect to an AI service").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text_dim));
     ui.add_space(12.0);
 
     let all: Vec<ProviderDefinition> = app.settings_store.provider_registry.list().into_iter().cloned().collect();
@@ -118,13 +118,13 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
 
             // Name
             ui.painter().text(egui::pos2(cx + 16.0, cy - 8.0), egui::Align2::LEFT_CENTER,
-                p.display(), egui::FontId::new(13.0, egui::FontFamily::Proportional),
+                p.display(), egui::FontId::new(app.ui_store.theme.text_base, egui::FontFamily::Proportional),
                 if is_active { app.ui_store.theme.accent } else { app.ui_store.theme.text });
 
             // URL
             let url = if p.base_url.len() > 40 { format!("{}...", &p.base_url[..37]) } else { p.base_url.clone() };
             ui.painter().text(egui::pos2(cx + 16.0, cy + 8.0), egui::Align2::LEFT_CENTER,
-                &url, egui::FontId::new(10.0, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
+                &url, egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace), app.ui_store.theme.text_dim);
 
             // API badge
             let badge = p.api_format.as_str();
@@ -136,7 +136,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
             // Active badge
             if is_active {
                 ui.painter().text(egui::pos2(rect.right() - 10.0, cy + 8.0), egui::Align2::RIGHT_CENTER,
-                    "Active", egui::FontId::new(10.0, egui::FontFamily::Proportional), app.ui_store.theme.ok);
+                    "Active", egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Proportional), app.ui_store.theme.ok);
             }
 
             if resp.clicked() && !is_active {
@@ -155,7 +155,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
     // ── Model for active provider ──
     if let Some(prov) = app.settings_store.provider_registry.get(&current) {
         if !prov.models.is_empty() {
-            ui.label(egui::RichText::new(app.t("Model")).size(12.0).color(app.ui_store.theme.text).strong());
+            ui.label(egui::RichText::new(app.t("Model")).size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text).strong());
             let mut models = prov.models.clone();
             if !models.contains(&app.settings_store.settings_edit.model) { models.push(app.settings_store.settings_edit.model.clone()); }
             let cur = models.iter().position(|m| *m == app.settings_store.settings_edit.model).unwrap_or(0);
@@ -169,7 +169,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(app.ui_store.theme.space_8);
 
     // ── Approval mode ──
-    ui.label(egui::RichText::new(app.t("Approval Mode")).size(12.0).color(app.ui_store.theme.text).strong());
+    ui.label(egui::RichText::new(app.t("Approval Mode")).size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text).strong());
     let modes = ["interactive","smart","plan","yolo"];
     let cur = modes.iter().position(|m| *m == app.settings_store.settings_edit.approval_mode).unwrap_or(0);
     let mut ms = cur;
@@ -192,7 +192,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
 
         // Test Connection
         let test_label = if is_testing { "Testing..." } else { "Test Connection" };
-        let test_btn = egui::Button::new(egui::RichText::new(test_label).size(12.0))
+        let test_btn = egui::Button::new(egui::RichText::new(test_label).size(app.ui_store.theme.text_sm))
             .fill(app.ui_store.theme.surface)
             .corner_radius(app.ui_store.theme.radius_sm as u8);
         if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
@@ -236,7 +236,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
 
         // Refresh Models
         let refresh_label = if is_refreshing { "Refreshing..." } else { "Refresh Models" };
-        let refresh_btn = egui::Button::new(egui::RichText::new(refresh_label).size(12.0))
+        let refresh_btn = egui::Button::new(egui::RichText::new(refresh_label).size(app.ui_store.theme.text_sm))
             .fill(app.ui_store.theme.surface)
             .corner_radius(app.ui_store.theme.radius_sm as u8);
         if ui.add_enabled(!is_local && !is_refreshing, refresh_btn).clicked() {
@@ -277,7 +277,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
         }
 
         // Apply
-        let apply_btn = egui::Button::new(egui::RichText::new("Apply").size(12.0).color(app.ui_store.theme.text))
+        let apply_btn = egui::Button::new(egui::RichText::new("Apply").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text))
             .fill(app.ui_store.theme.accent)
             .corner_radius(app.ui_store.theme.radius_sm as u8);
         if ui.add_enabled(!is_local, apply_btn).clicked() {
@@ -315,22 +315,22 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
     egui::Frame::new().fill(app.ui_store.theme.bg_accent)
         .corner_radius(app.ui_store.theme.radius_md as u8).stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
         .inner_margin(egui::Margin::same(12)).show(ui, |ui| {
-        ui.label(egui::RichText::new("Add Custom Provider").strong().color(app.ui_store.theme.text).size(13.0));
+        ui.label(egui::RichText::new("Add Custom Provider").strong().color(app.ui_store.theme.text).size(app.ui_store.theme.text_base));
         ui.add_space(8.0);
-        ui.label(egui::RichText::new("Name").size(11.0).color(app.ui_store.theme.text));
+        ui.label(egui::RichText::new("Name").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text));
         ui.add(egui::TextEdit::singleline(&mut app.settings_store.add_provider_name).hint_text("my-provider").desired_width(240.0));
         ui.add_space(4.0);
-        ui.label(egui::RichText::new("Base URL").size(11.0).color(app.ui_store.theme.text));
+        ui.label(egui::RichText::new("Base URL").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text));
         ui.add(egui::TextEdit::singleline(&mut app.settings_store.add_provider_url).hint_text("https://...").desired_width(240.0));
         ui.add_space(4.0);
-        ui.label(egui::RichText::new("API Format").size(11.0).color(app.ui_store.theme.text));
+        ui.label(egui::RichText::new("API Format").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text));
         let fmts = ["openai-completions","anthropic-messages"];
         let mut fi = fmts.iter().position(|f| *f == app.settings_store.add_provider_format).unwrap_or(0);
         egui::ComboBox::from_id_salt("add_fmt").selected_text(app.settings_store.add_provider_format.as_str())
             .show_ui(ui, |ui| { for (i,f) in fmts.iter().enumerate() { ui.selectable_value(&mut fi, i, *f); }});
         if fi < fmts.len() { app.settings_store.add_provider_format = fmts[fi].to_string(); }
         ui.add_space(4.0);
-        ui.label(egui::RichText::new("API Key").size(11.0).color(app.ui_store.theme.text));
+        ui.label(egui::RichText::new("API Key").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text));
         ui.add(egui::TextEdit::singleline(&mut app.settings_store.add_provider_key).hint_text("${env:KEY}").desired_width(240.0));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -359,9 +359,9 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
 // ============================================================================
 
 fn render_interface(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new(app.t("Interface")).color(app.ui_store.theme.text).size(15.0).strong());
+    ui.label(egui::RichText::new(app.t("Interface")).color(app.ui_store.theme.text).size(app.ui_store.theme.text_lg).strong());
     ui.add_space(16.0);
-    ui.label(egui::RichText::new(app.t("Theme")).size(12.0).color(app.ui_store.theme.text).strong());
+    ui.label(egui::RichText::new(app.t("Theme")).size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text).strong());
     let themes = ["dark","light"];
     let ct = themes.iter().position(|t| *t == app.settings_store.settings_edit.theme).unwrap_or(0);
     let mut ts = ct;
@@ -371,14 +371,14 @@ fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         app.ui_store.theme = if app.settings_store.settings_edit.theme == "light" { crate::theme::Theme::light() } else { crate::theme::Theme::dark() };
         app.auto_save_settings(); }
     ui.add_space(12.0);
-    ui.label(egui::RichText::new(app.t("Language")).size(12.0).color(app.ui_store.theme.text).strong());
+    ui.label(egui::RichText::new(app.t("Language")).size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text).strong());
     ui.horizontal(|ui| {
         let en = matches!(app.ui_store.locale, crate::i18n::Locale::EnUS);
         let zh = matches!(app.ui_store.locale, crate::i18n::Locale::ZhCN);
-        if ui.add(egui::Button::new(egui::RichText::new("English").size(12.0))
+        if ui.add(egui::Button::new(egui::RichText::new("English").size(app.ui_store.theme.text_sm))
             .fill(if en { app.ui_store.theme.accent } else { app.ui_store.theme.surface })
             .corner_radius(app.ui_store.theme.radius_sm as u8)).clicked() { app.ui_store.locale = crate::i18n::Locale::EnUS; }
-        if ui.add(egui::Button::new(egui::RichText::new("Simplified Chinese").size(12.0))
+        if ui.add(egui::Button::new(egui::RichText::new("Simplified Chinese").size(app.ui_store.theme.text_sm))
             .fill(if zh { app.ui_store.theme.accent } else { app.ui_store.theme.surface })
             .corner_radius(app.ui_store.theme.radius_sm as u8)).clicked() { app.ui_store.locale = crate::i18n::Locale::ZhCN; }
     });
@@ -390,13 +390,13 @@ fn render_interface(app: &mut App, ui: &mut egui::Ui) {
 
 fn render_about(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
-        ui.label(egui::RichText::new("Clarity").size(26.0).strong().color(app.ui_store.theme.text));
-        ui.label(egui::RichText::new("Local-first AI agent runtime").size(13.0).color(app.ui_store.theme.text_muted));
+        ui.label(egui::RichText::new("Clarity").size(app.ui_store.theme.text_2xl).strong().color(app.ui_store.theme.text));
+        ui.label(egui::RichText::new("Local-first AI agent runtime").size(app.ui_store.theme.text_base).color(app.ui_store.theme.text_muted));
         ui.add_space(12.0);
-        ui.label(egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).size(12.0).color(app.ui_store.theme.text_dim));
-        ui.label(egui::RichText::new("egui 0.31 · glow").size(11.0).color(app.ui_store.theme.text_dim));
+        ui.label(egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text_dim));
+        ui.label(egui::RichText::new("egui 0.31 · glow").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.text_dim));
         ui.add_space(8.0);
-        ui.hyperlink_to(egui::RichText::new("github.com/juice094/clarity").size(11.0).color(app.ui_store.theme.accent),
+        ui.hyperlink_to(egui::RichText::new("github.com/juice094/clarity").size(app.ui_store.theme.text_sm).color(app.ui_store.theme.accent),
             "https://github.com/juice094/clarity");
     });
 }

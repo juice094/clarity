@@ -94,7 +94,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                 ui.label(
                     egui::RichText::new("Local-first AI agent runtime")
                         .color(app.ui_store.theme.text_dim)
-                        .size(14.0),
+                        .size(app.ui_store.theme.text_base),
                 );
                 ui.add_space(app.ui_store.theme.space_24);
                 ui.label("Get started by choosing how you'd like to run Clarity:");
@@ -139,7 +139,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                          Download other architectures manually via Settings.",
                     )
                     .color(app.ui_store.theme.text_dim)
-                    .size(11.0),
+                    .size(app.ui_store.theme.text_sm),
                 );
             });
         });
