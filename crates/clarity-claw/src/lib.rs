@@ -61,6 +61,89 @@ pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::
 }
 
 // ------------------------------------------------------------------
+// HTTP helpers for Gateway interaction
+// ------------------------------------------------------------------
+
+/// Send a quick chat message to the Gateway (non-streaming).
+/// Returns the assistant's reply text.
+pub async fn quick_chat(
+    gateway_url: &str,
+    input: &str,
+) -> anyhow::Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?;
+
+    let payload = serde_json::json!({
+        "model": "default",
+        "messages": [
+            {"role": "user", "content": input}
+        ],
+        "stream": false
+    });
+
+    let url = format!("{}/v1/chat/completions", gateway_url);
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let body: serde_json::Value = resp.json().await?;
+    let reply = body["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("(no response)");
+
+    Ok(reply.to_string())
+}
+
+/// Create a background task via Gateway.
+pub async fn create_remote_task(
+    gateway_url: &str,
+    name: &str,
+    prompt: &str,
+) -> anyhow::Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+
+    let payload = serde_json::json!({
+        "name": name,
+        "prompt": prompt,
+        "max_iterations": 10
+    });
+
+    let url = format!("{}/v1/tasks", gateway_url);
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let body: serde_json::Value = resp.json().await?;
+    let task_id = body["task_id"].as_str().unwrap_or("unknown").to_string();
+    Ok(task_id)
+}
+
+/// Cancel a background task via Gateway.
+pub async fn cancel_remote_task(
+    gateway_url: &str,
+    task_id: &str,
+) -> anyhow::Result<()> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+
+    let url = format!("{}/v1/tasks/{}", gateway_url, task_id);
+    client.delete(&url).send().await?.error_for_status()?;
+    Ok(())
+}
+
+use std::time::Duration;
+
+// ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------
 

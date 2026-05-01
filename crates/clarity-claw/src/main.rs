@@ -18,26 +18,105 @@ use tray_icon::{
     MouseButton, TrayIconBuilder, TrayIconEvent,
 };
 
-use clarity_claw::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
+use clarity_claw::{TaskListPayload, POLL_INTERVAL_SECS};
+
+/// 用户输入对话框的桥接：外部进程弹出输入框，通过 stdout 返回结果。
+///
+/// 返回 `Some(input)` 如果用户输入了内容，`None` 如果取消。
+/// 用户输入对话框的桥接：弹出原生系统输入框，返回用户输入的内容。
+///
+/// Windows 下使用 PowerShell + Microsoft.VisualBasic.InputBox，
+/// macOS 下使用 osascript，Linux 下使用 zenity。
+fn prompt_input(title: &str, prompt: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let ps_script = format!(
+            "Add-Type -AssemblyName Microsoft.VisualBasic; $input = [Microsoft.VisualBasic.Interaction]::InputBox('{}', '{}'); if ($input) {{ Write-Output $input }}",
+            prompt.replace('\'', "''"),
+            title.replace('\'', "''")
+        );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &ps_script])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            r#"display dialog "{}" default answer "" with title "{}" buttons {{"Cancel", "OK"}} default button "OK""#,
+            prompt.replace('"', "\\\""),
+            title.replace('"', "\\\"")
+        );
+        let output = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .ok()?;
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout);
+            if let Some(text) = s.split("text returned:").nth(1) {
+                let val = text.split(',').next().unwrap_or("").trim().to_string();
+                if !val.is_empty() {
+                    return Some(val);
+                }
+            }
+        }
+        None
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let output = std::process::Command::new("zenity")
+            .args(["--entry", "--title", title, "--text", prompt])
+            .output()
+            .ok()?;
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    }
+}
+
+
 
 /// 自定义事件，用于 Tao 事件循环的跨线程通信。
-///
-/// 后台任务（Wire 监听、Gateway 轮询、输入框结果）通过 `EventLoopProxy` 发送这些事件，
-/// 由主事件循环统一处理。
 #[derive(Clone, Debug)]
 enum UserEvent {
     /// A message arrived from the backend wire.
     WireMsg(WireMessage),
-    /// Open Gateway Web UI in browser.
-    OpenGateway,
+
     /// Task list update from Gateway polling.
     TaskUpdate(Vec<TaskSummary>),
+    /// Show quick input dialog.
+    QuickInput,
+    /// Show task creation dialog.
+    CreateTask,
+    /// Cancel a specific task.
+    CancelTask(String),
+}
+
+/// 本地 TaskSummary（与 Gateway 返回的 JSON 对齐）
+#[derive(Clone, Debug)]
+struct TaskSummary {
+    task_id: String,
+    name: String,
+    status: String,
 }
 
 /// Clarity Claw 入口。
-///
-/// 初始化日志、创建系统托盘、启动后台任务轮询与 Wire 监听，
-/// 最终进入 Tao 事件循环，直至用户选择 Quit。
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -56,18 +135,27 @@ async fn main() -> anyhow::Result<()> {
     let mut ui_side = wire.ui_side(true);
 
     // ------------------------------------------------------------------
-    // Tray menu
+    // Tray menu with task management
     // ------------------------------------------------------------------
     let menu = Menu::new();
+    let quick_ask_item = MenuItem::new("Quick Ask...", true, None);
     let new_chat_item = MenuItem::new("New Chat", true, None);
+    let separator1 = PredefinedMenuItem::separator();
+
+    // Task management items
+    let create_task_item = MenuItem::new("Create Task...", true, None);
+    let refresh_tasks_item = MenuItem::new("Refresh Tasks", true, None);
     let view_tasks_item = MenuItem::new("View Tasks", true, None);
-    let open_window_item = MenuItem::new("Open Window", true, None);
-    let separator = PredefinedMenuItem::separator();
+    let separator2 = PredefinedMenuItem::separator();
     let quit_item = MenuItem::new("Quit", true, None);
+
+    let _ = menu.append(&quick_ask_item);
     let _ = menu.append(&new_chat_item);
+    let _ = menu.append(&separator1);
+    let _ = menu.append(&create_task_item);
+    let _ = menu.append(&refresh_tasks_item);
     let _ = menu.append(&view_tasks_item);
-    let _ = menu.append(&open_window_item);
-    let _ = menu.append(&separator);
+    let _ = menu.append(&separator2);
     let _ = menu.append(&quit_item);
 
     // ------------------------------------------------------------------
@@ -83,7 +171,7 @@ async fn main() -> anyhow::Result<()> {
     let tray_channel = TrayIconEvent::receiver();
 
     // ------------------------------------------------------------------
-    // Event loop (with user events so background tasks can wake us)
+    // Event loop
     // ------------------------------------------------------------------
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -121,6 +209,9 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
         .join(".clarity")
         .join("tasks");
+    let task_cache: Arc<Mutex<Vec<TaskSummary>>> = Arc::new(Mutex::new(Vec::new()));
+    let task_cache_bg = task_cache.clone();
+
     tokio::spawn(async move {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
@@ -128,7 +219,6 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| reqwest::Client::new());
         let mut last_running: Vec<String> = Vec::new();
 
-        // Filesystem watcher: accelerates notification when local tasks change
         let (fs_tx, mut fs_rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(10);
         let _watcher = if tasks_dir.exists() {
             match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
@@ -145,15 +235,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         } else {
-            tracing::warn!(
-                "Tasks directory {:?} does not exist, filesystem watcher disabled",
-                tasks_dir
-            );
             None
         };
 
         loop {
-            // Wait for either the polling interval or a filesystem event
             let timeout = tokio::time::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
             tokio::select! {
                 _ = timeout => {}
@@ -165,27 +250,27 @@ async fn main() -> anyhow::Result<()> {
             match client.get(&poll_url).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(payload) = resp.json::<TaskListPayload>().await {
-                        let running_now: Vec<String> = payload
+                        let tasks: Vec<TaskSummary> = payload
                             .tasks
+                            .iter()
+                            .map(|t| TaskSummary {
+                                task_id: t.task_id.clone(),
+                                name: t.name.clone(),
+                                status: t.status.clone(),
+                            })
+                            .collect();
+                        *task_cache_bg.lock().unwrap() = tasks.clone();
+
+                        let running_now: Vec<String> = tasks
                             .iter()
                             .filter(|t| t.status == "Running")
                             .map(|t| t.task_id.clone())
                             .collect();
 
-                        // Detect tasks that were running but no longer are
                         for old_id in &last_running {
                             if !running_now.iter().any(|id| id == old_id) {
-                                if let Some(task) =
-                                    payload.tasks.iter().find(|t| &t.task_id == old_id)
-                                {
-                                    let (summary, urgency) = match task.status.as_str() {
-                                        "Completed" => ("✅ Task completed", None),
-                                        "Failed" => {
-                                            ("❌ Task failed", Some(notify_rust::Urgency::Critical))
-                                        }
-                                        "Cancelled" => ("🚫 Task cancelled", None),
-                                        _ => ("Task finished", None),
-                                    };
+                                if let Some(task) = tasks.iter().find(|t| &t.task_id == old_id) {
+                                    let (summary, urgency) = clarity_claw::classify_task_status(&task.status);
                                     let mut notif = notify_rust::Notification::new();
                                     notif
                                         .summary(&format!("Clarity — {}", task.name))
@@ -199,11 +284,10 @@ async fn main() -> anyhow::Result<()> {
                         }
 
                         last_running = running_now;
-                        let _ = poll_proxy.send_event(UserEvent::TaskUpdate(payload.tasks));
+                        let _ = poll_proxy.send_event(UserEvent::TaskUpdate(tasks.clone()));
                     }
                 }
                 _ => {
-                    // Gateway unavailable — silently degrade
                     let _ = poll_proxy.send_event(UserEvent::TaskUpdate(Vec::new()));
                 }
             }
@@ -211,20 +295,16 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // ------------------------------------------------------------------
-    // Main window (hidden by default)
+    // Main window (hidden by default — used for event loop)
     // ------------------------------------------------------------------
-    let window = WindowBuilder::new()
+    let _window = WindowBuilder::new()
         .with_visible(false)
         .with_title("Clarity Claw")
-        .with_inner_size(tao::dpi::LogicalSize::new(420.0, 200.0))
+        .with_inner_size(tao::dpi::LogicalSize::new(1, 1))
         .build(&event_loop)
         .ok();
 
-    // Shared state for recent messages
-    let recent_messages: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
-    let is_connected = Arc::new(Mutex::new(false));
-
-    tracing::info!("Claw tray icon active. Right-click for menu, left-click for quick ask.");
+    tracing::info!("Claw tray icon active.");
 
     // ------------------------------------------------------------------
     // Event loop
@@ -233,43 +313,112 @@ async fn main() -> anyhow::Result<()> {
         *control_flow = ControlFlow::Wait;
 
         // --------------------------------------------------------------
-        // 1. Custom user events (from background tasks)
+        // 1. Custom user events
         // --------------------------------------------------------------
         if let Event::UserEvent(user_event) = &event {
+            let gw_url = gateway_url.clone();
+            let _cache = task_cache.clone();
+            let proxy = proxy.clone();
+
             match user_event {
-                UserEvent::WireMsg(msg) => {
-                    let mut msgs = recent_messages.lock().unwrap();
-                    match msg {
-                        WireMessage::StatusUpdate { message } => {
-                            if message.to_lowercase().contains("connected")
-                                || message.contains("在线")
-                            {
-                                *is_connected.lock().unwrap() = true;
-                            } else if message.to_lowercase().contains("disconnected")
-                                || message.contains("离线")
-                            {
-                                *is_connected.lock().unwrap() = false;
+                UserEvent::QuickInput => {
+                    tracing::info!("Quick Ask triggered");
+                    let _proxy = proxy.clone();
+                    // 弹出输入对话框（在异步任务中执行以避免阻塞事件循环）
+                    std::thread::spawn(move || {
+                        if let Some(input) = prompt_input("Clarity Quick Ask", "Enter your message:") {
+                            let input = input.trim().to_string();
+                            if !input.is_empty() {
+                                let gw = gw_url.clone();
+                                let rt = tokio::runtime::Runtime::new().unwrap();
+                                match rt.block_on(clarity_claw::quick_chat(&gw, &input)) {
+                                    Ok(reply) => {
+                                        let _ = notify_rust::Notification::new()
+                                            .summary("Clarity Reply")
+                                            .body(&truncate_notification(&reply, 200))
+                                            .show();
+                                    }
+                                    Err(e) => {
+                                        let _ = notify_rust::Notification::new()
+                                            .summary("Clarity Error")
+                                            .body(&format!("Failed: {}", e))
+                                            .urgency(notify_rust::Urgency::Critical)
+                                            .show();
+                                    }
+                                }
                             }
-                            msgs.push(("System".to_string(), message.clone()));
                         }
-                        WireMessage::ContentPart { text } => {
-                            msgs.push(("Clarity".to_string(), text.clone()));
+                    });
+                }
+                UserEvent::CreateTask => {
+                    tracing::info!("Create Task triggered");
+                    let _proxy = proxy.clone();
+                    std::thread::spawn(move || {
+                        let name = prompt_input("New Task", "Task name:");
+                        if let Some(name) = name {
+                            let name = name.trim().to_string();
+                            if !name.is_empty() {
+                                let prompt = prompt_input("New Task", &format!("Prompt for '{}':", name));
+                                if let Some(prompt) = prompt {
+                                    let prompt = prompt.trim().to_string();
+                                    if !prompt.is_empty() {
+                                        let gw = gw_url.clone();
+                                        let rt = tokio::runtime::Runtime::new().unwrap();
+                                        match rt.block_on(clarity_claw::create_remote_task(&gw, &name, &prompt)) {
+                                            Ok(task_id) => {
+                                                let _ = notify_rust::Notification::new()
+                                                    .summary("Clarity Task Created")
+                                                    .body(&format!("{} ({})", name, task_id))
+                                                    .show();
+                                            }
+                                            Err(e) => {
+                                                let _ = notify_rust::Notification::new()
+                                                    .summary("Clarity Error")
+                                                    .body(&format!("Failed to create task: {}", e))
+                                                    .urgency(notify_rust::Urgency::Critical)
+                                                    .show();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+                    });
+                }
+                UserEvent::CancelTask(task_id) => {
+                    tracing::info!("Cancel task: {}", task_id);
+                    let task_id = task_id.clone();
+                    let gw = gw_url.clone();
+                    std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new().unwrap();
+                        match rt.block_on(clarity_claw::cancel_remote_task(&gw, &task_id)) {
+                            Ok(()) => {
+                                let _ = notify_rust::Notification::new()
+                                    .summary("Clarity")
+                                    .body(&format!("Task {} cancelled", task_id))
+                                    .show();
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+                            }
+                        }
+                    });
+                }
+                UserEvent::WireMsg(msg) => {
+                    if let Some(text) = match msg {
+                        WireMessage::ContentPart { text } => Some(text.clone()),
                         WireMessage::TurnBegin { user_input } => {
-                            msgs.push(("You".to_string(), user_input.clone()));
+                            Some(format!("You: {}", user_input))
                         }
-                        _ => {}
-                    }
-                    while msgs.len() > 5 {
-                        msgs.remove(0);
+                        _ => None,
+                    } {
+                        let _ = notify_rust::Notification::new()
+                            .summary("Clarity")
+                            .body(&text)
+                            .show();
                     }
                 }
-                UserEvent::OpenGateway => {
-                    let gateway = clarity_claw::resolve_gateway_url();
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "start", "", &gateway])
-                        .spawn();
-                }
+
                 UserEvent::TaskUpdate(tasks) => {
                     let running = tasks.iter().filter(|t| t.status == "Running").count();
                     let pending = tasks.iter().filter(|t| t.status == "Pending").count();
@@ -280,63 +429,75 @@ async fn main() -> anyhow::Result<()> {
         }
 
         // --------------------------------------------------------------
-        // 2. Tray icon events (left click → quick input)
+        // 2. Tray icon events (left click → quick ask)
         // --------------------------------------------------------------
         if let Ok(TrayIconEvent::Click {
             button: MouseButton::Left,
             ..
         }) = tray_channel.try_recv()
         {
-            let proxy = proxy.clone();
-            let _ = proxy.send_event(UserEvent::OpenGateway);
+            let _ = proxy.send_event(UserEvent::QuickInput);
         }
 
         // --------------------------------------------------------------
         // 3. Tray menu events
         // --------------------------------------------------------------
         if let Ok(menu_event) = menu_channel.try_recv() {
-            match menu_event.id {
-                id if id == new_chat_item.id() => {
-                    tracing::info!("Menu: New Chat");
-                    let url = format!("{}/chat.html", gateway_url);
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "start", "", &url])
-                        .spawn();
-                }
-                id if id == view_tasks_item.id() => {
-                    tracing::info!("Menu: View Tasks");
-                    let url = format!("{}/chat.html", gateway_url);
-                    let _ = std::process::Command::new("cmd")
-                        .args(["/C", "start", "", &url])
-                        .spawn();
-                }
-                id if id == open_window_item.id() => {
-                    tracing::info!("Menu: Open Window");
-                    if let Some(ref win) = window {
-                        win.set_visible(true);
-                        win.set_focus();
-                    }
-                }
-                id if id == quit_item.id() => {
-                    tracing::info!("Menu: Quit");
-                    *control_flow = ControlFlow::Exit;
-                }
-                _ => {}
-            }
-        }
+            let id = menu_event.id;
 
-        // --------------------------------------------------------------
-        // 4. Window events
-        // --------------------------------------------------------------
-        if let Event::WindowEvent {
-            event: tao::event::WindowEvent::CloseRequested,
-            ..
-        } = event
-        {
-            // Hide window instead of quitting
-            if let Some(ref win) = window {
-                win.set_visible(false);
+            if id == quick_ask_item.id() {
+                let _ = proxy.send_event(UserEvent::QuickInput);
+            } else if id == new_chat_item.id() {
+                let url = format!("{}/chat.html", gateway_url);
+                let _ = open_url(&url);
+            } else if id == create_task_item.id() {
+                let _ = proxy.send_event(UserEvent::CreateTask);
+            } else if id == refresh_tasks_item.id() {
+                // 强制刷新：发送空事件触发下一次轮询结果
+                let _ = proxy.send_event(UserEvent::TaskUpdate(
+                    task_cache.lock().unwrap().clone()
+                ));
+            } else if id == view_tasks_item.id() {
+                let url = format!("{}/chat.html", gateway_url);
+                let _ = open_url(&url);
+            } else if id == quit_item.id() {
+                tracing::info!("Menu: Quit");
+                *control_flow = ControlFlow::Exit;
+            } else {
+                // 检查是否为动态取消菜单项
+                // 格式: "cancel-{task_id}"
+                let id_str = id.0.as_str();
+                if let Some(task_id) = id_str.strip_prefix("cancel-") {
+                    let _ = proxy.send_event(UserEvent::CancelTask(task_id.to_string()));
+                }
             }
         }
     });
+}
+
+/// 跨平台打开 URL
+fn open_url(url: &str) -> std::io::Result<std::process::Child> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).spawn()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open").arg(url).spawn()
+    }
+}
+
+/// 截断通知文本
+fn truncate_notification(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max])
+    }
 }
