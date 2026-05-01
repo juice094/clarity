@@ -3,82 +3,19 @@
 //! These types define the interface between the Agent and LLM providers.
 //! They are kept separate from `agent/mod.rs` to avoid circular dependencies
 //! (e.g., `llm/`, `compaction/`, and `subagents/` should not depend on `agent/`).
+//!
+//! ## Type origin
+//!
+//! `Message`, `MessageRole`, and `StreamDelta` are defined in `clarity-contract`
+//! and re-exported here for backward compatibility. New code should import
+//! directly from `clarity_contract`.
 
 use crate::error::AgentError;
-use crate::types::ToolCall;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// LLM message role
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageRole {
-    System,
-    User,
-    Assistant,
-    Tool,
-}
-
-/// A message in the conversation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: MessageRole,
-    pub content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<ToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-}
-
-impl Message {
-    /// Create a system message
-    pub fn system(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::System,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create a user message
-    pub fn user(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::User,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create an assistant message
-    pub fn assistant(content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: None,
-        }
-    }
-
-    /// Create a tool response message
-    pub fn tool(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
-        Self {
-            role: MessageRole::Tool,
-            content: content.into(),
-            tool_calls: None,
-            tool_call_id: Some(tool_call_id.into()),
-        }
-    }
-}
-
-/// Delta emitted by a streaming LLM response.
-#[derive(Debug, Clone, Default)]
-pub struct StreamDelta {
-    pub content: Option<String>,
-    pub tool_calls: Vec<ToolCall>,
-}
+// Re-export contract types so existing imports continue to work.
+pub use clarity_contract::{Message, MessageRole, StreamDelta, ToolCall};
 
 /// Response from an LLM
 #[derive(Debug, Clone)]

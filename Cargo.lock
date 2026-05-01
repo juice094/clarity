@@ -943,6 +943,7 @@ dependencies = [
  "eframe",
  "egui",
  "parking_lot",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",

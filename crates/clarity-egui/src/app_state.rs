@@ -127,6 +127,28 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         }
     }
 
+    // Layer 0 — Runtime provider config: if the frontend has set an active
+    // runtime config (via the Provider management panel), use it directly.
+    // This bypasses both the ModelRegistry and the legacy LlmFactory path.
+    if let Some(cfg) = clarity_core::llm::runtime::get_active_config() {
+        let llm = clarity_core::llm::runtime::build_from_active_config()
+            .await
+            .map_err(|e| crate::error::EguiError::LlmLoad(format!(
+                "Failed to build provider from runtime config: {}", e
+            )))?;
+        bind_llm(
+            &state.agent,
+            llm,
+            &format!("runtime:{}:{}", cfg.provider_id, cfg.model),
+        );
+        let mut guard = state.llm_binding.lock();
+        *guard = Some(LlmBinding {
+            provider: desired_provider,
+            local_model_path: String::new(),
+        });
+        return Ok(());
+    }
+
     // Layer 1 — Policy: pure function decides which provider to load.
     let selection = resolve_provider(&desired_provider, network_available, &current_binding);
 
