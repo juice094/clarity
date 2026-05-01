@@ -278,7 +278,7 @@ impl ToolRegistry {
 
         // Verify capability token if present
         if let Some(ref token) = ctx.capability_token {
-            if let Err(e) = token.verify(name, &ctx) {
+            if let Err(e) = token.verify(name, &ctx.working_dir) {
                 return Err(ToolError::PermissionDenied(e.to_string()));
             }
         }

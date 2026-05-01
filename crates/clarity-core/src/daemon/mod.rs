@@ -5,6 +5,9 @@
 //! - Graceful shutdown via Ctrl+C / SIGTERM
 //! - Process liveness detection (best-effort)
 //!
+//! NOTE: This module is currently inactive and kept for future integration.
+#![allow(dead_code, unused_imports)]
+//!
 //! # Example
 //!
 //! ```rust,no_run

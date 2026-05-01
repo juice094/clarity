@@ -1,7 +1,6 @@
 //! Capability Token for subagent permission isolation
 
-use crate::tools::helpers::normalize_path;
-use crate::tools::ToolContext;
+use crate::types::normalize_path;
 use std::path::PathBuf;
 
 /// Error type for capability token verification
@@ -104,7 +103,7 @@ impl CapabilityToken {
     }
 
     /// Verify if a tool call is permitted by this token
-    pub fn verify(&self, tool_name: &str, ctx: &ToolContext) -> Result<(), TokenError> {
+    pub fn verify(&self, tool_name: &str, working_dir: &std::path::Path) -> Result<(), TokenError> {
         // 1. Check whitelist
         if !self.allowed_tools.iter().any(|t| t == tool_name) {
             return Err(TokenError::ToolNotAllowed(tool_name.to_string()));
@@ -119,12 +118,12 @@ impl CapabilityToken {
         if let Some(ref sandbox) = self.sandbox_dir {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let sandbox_abs = normalize_path(&cwd.join(sandbox));
-            let working_abs = normalize_path(&cwd.join(&ctx.working_dir));
+            let working_abs = normalize_path(&cwd.join(working_dir));
 
             if !working_abs.starts_with(&sandbox_abs) {
                 return Err(TokenError::SandboxEscape {
                     tool: tool_name.to_string(),
-                    path: ctx.working_dir.clone(),
+                    path: working_dir.to_path_buf(),
                 });
             }
         }
@@ -144,7 +143,6 @@ fn is_write_tool(tool_name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ToolContext;
     use std::path::PathBuf;
 
     #[test]
@@ -167,15 +165,15 @@ mod tests {
     #[test]
     fn test_verify_allowed_tool() {
         let token = CapabilityToken::new(vec!["file_read".to_string()]);
-        let ctx = ToolContext::new();
-        assert!(token.verify("file_read", &ctx).is_ok());
+        let working_dir = PathBuf::from(".");
+        assert!(token.verify("file_read", &working_dir).is_ok());
     }
 
     #[test]
     fn test_verify_disallowed_tool() {
         let token = CapabilityToken::new(vec!["file_read".to_string()]);
-        let ctx = ToolContext::new();
-        let result = token.verify("bash", &ctx);
+        let working_dir = PathBuf::from(".");
+        let result = token.verify("bash", &working_dir);
         assert!(matches!(result, Err(TokenError::ToolNotAllowed(ref t)) if t == "bash"));
     }
 
@@ -183,8 +181,8 @@ mod tests {
     fn test_verify_read_only_blocks_write() {
         let token = CapabilityToken::new(vec!["file_read".to_string(), "file_write".to_string()])
             .with_read_only(true);
-        let ctx = ToolContext::new();
-        let result = token.verify("file_write", &ctx);
+        let working_dir = PathBuf::from(".");
+        let result = token.verify("file_write", &working_dir);
         assert!(matches!(result, Err(TokenError::ReadOnlyViolation(ref t)) if t == "file_write"));
     }
 
@@ -192,8 +190,8 @@ mod tests {
     fn test_verify_sandbox_escape() {
         let token = CapabilityToken::new(vec!["file_read".to_string()])
             .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
-        let ctx = ToolContext::new().with_working_dir(PathBuf::from("/tmp/other"));
-        let result = token.verify("file_read", &ctx);
+        let working_dir = PathBuf::from("/tmp/other");
+        let result = token.verify("file_read", &working_dir);
         assert!(
             matches!(result, Err(TokenError::SandboxEscape { ref tool, .. }) if tool == "file_read"),
             "Expected SandboxEscape, got {:?}",
@@ -205,8 +203,8 @@ mod tests {
     fn test_verify_sandbox_within() {
         let token = CapabilityToken::new(vec!["file_read".to_string()])
             .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
-        let ctx = ToolContext::new().with_working_dir(PathBuf::from("/tmp/sandbox/sub"));
-        assert!(token.verify("file_read", &ctx).is_ok());
+        let working_dir = PathBuf::from("/tmp/sandbox/sub");
+        assert!(token.verify("file_read", &working_dir).is_ok());
     }
 
     #[test]

@@ -4,6 +4,9 @@
 //! (typically nighttime). Uses the existing `CronScheduler` for timing and
 //! `clarity_memory::MemoryCompiler` for the actual consolidation work.
 //!
+//! NOTE: This module is currently inactive and kept for future integration.
+#![allow(dead_code, unused_imports)]
+//!
 //! # Example
 //!
 //! ```rust,no_run
