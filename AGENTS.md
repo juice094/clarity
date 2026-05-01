@@ -135,6 +135,20 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详细对比报告见 [`docs/frontend-architecture-comparison.md`](./docs/frontend-architecture-comparison.md)
 
+**Sprint 14 — 前端设计审查与全面翻新（已批准，2026-05-01）**
+
+- 参考 Kimi 网页版 Swiss International Style + Agent-Native UI 进行批评式设计审查
+- 美学评分 4.6/10，识别 20+ 设计缺陷，撰写完整审查报告
+- Phase 1 foundation ✅: `theme.rs` 语义化字号 token（text_xs→text_2xl）+ OLED Black 主题变体
+- Phase 1-5 全面翻新已批准（计划文件 `docs/plans/frontend-design-critique-2026-05-01.md`）
+  - Phase 1: 色彩/排版基础设施 + 字体注册 + CJK 运行时探测
+  - Phase 2: Sidebar 会话列表 + Swiss 行长保护 + 布局重构
+  - Phase 3: 混合气泡策略 + 组件 widget 化 + 图标字体
+  - Phase 4: block_on 移除 + IME 安全 + stick_to_bottom 智能释放
+  - Phase 5: 叙事层 + 技能外露 + Agent 仪表盘
+
+> 设计审查报告见 [`docs/plans/frontend-design-critique-2026-05-01.md`](./docs/plans/frontend-design-critique-2026-05-01.md)
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
