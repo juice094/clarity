@@ -8,19 +8,21 @@
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-04-29
-**当前分支**：`phase2/protocol-pilot` @ `48006e5`（已推送 origin）
-**架构模式**：CLI（单轮/短轮次）
+**最后更新**：2026-05-01
+**当前分支**：`phase2/protocol-pilot` @ `ba6d8201`（已推送 origin）
+**架构模式**：CLI → **已批准切换至 Claw**（长程任务：Phase 1-5 前端全面翻新）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
 - v0.3.1 已发布（tag `v0.3.1`）：model_download + onboarding + unwrap 审计 + egui release CI
 - clarity-tauri 完全归档移出仓库；Dependabot 报警清零
-- Settings 模型选择缺陷修复；Mutex 硬化完成；App::update() 550→64 行拆分完成
-- **新增**：OpenHanako / OpenClaw 服务商持久化调研完成，Provider 配置架构缺陷已识别
-- **新增**：egui GUI 美化审计完成，UI/UX 问题清单已建立
+- Settings 模型选择缺陷修复；Mutex 硬化完成
 - **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔓 已解锁
 - **Sprint 10 — 协议先行解锁**：D1 ✅ | D2 ✅ | D3 ✅ | D4 ✅
-- **Sprint 11 — 超越 Kimi CLI**：Phase A 🔄 (上下文注入) | Phase B 🔄 (编辑精度) | Phase C 🔄 (终端体验)
+- **Sprint 11 — 超越 Kimi CLI**：Phase A ✅ | Phase B ✅ | Phase C ✅
+- **Sprint 12 — egui 功能补齐**：✅ 已完成
+- **Sprint 13 — 稳定性硬化 + 架构解耦**：✅ 已完成（2026-04-27 ~ 2026-05-03）
+- **Sprint 13.5 — 前端架构重构**：✅ 已完成（Zustand-style Store + Services 拆分 + 错误边界）
+- **Sprint 14 — 前端设计审查与全面翻新**：🔄 已批准，Phase 1 foundation 完成（theme.rs tokenize + OLED Black）
 
 ---
 
@@ -115,6 +117,38 @@
 **关键教训（OpenClaw）**：Dashboard Save 覆盖全配置导致大面积数据丢失。Clarity 必须实现**增量保存**。
 
 **下一步**：Provider Schema 化（TOML/JSON 描述 baseURL/authType/modelListEndpoint），支持 `${env:VAR}` 语法注入 API Key。
+
+### 3.11 Sprint 14 — 前端设计审查与全面翻新（2026-05-01，已批准）
+
+**决策**：基于 Kimi 网页版 Swiss International Style + Agent-Native UI 参考，对 clarity-egui 进行 Phase 1-5 全面翻新。
+
+**美学评分**：4.6/10（色彩 6/10、排版 5/10、布局 5/10、组件 4/10、交互 4/10、信息层级 5/10、品牌 6/10）
+
+**TOP 5 设计缺陷**：
+1. Approval modal render 路径 `block_on` 同步阻塞 UI 线程
+2. IME 300ms 时间阈值对 CJK 输入法歧视性误触发
+3. `stick_to_bottom(true)` 无逃逸机制，劫持阅读流
+4. Settings provider cards 使用 raw painter API，丧失 hover/focus/accessibility
+5. Sidebar 无会话列表，240px 侧边栏空心化
+
+**Phase 路线图**：
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| 1 | 色彩/排版基础设施（tokenize + OLED Black + 字体注册 + CJK 探测） | 🔄 foundation 完成 |
+| 2 | 布局重构（Sidebar 会话列表、Swiss 行长保护、emotion 统一） | ⏳ 待启动 |
+| 3 | 组件体系（混合气泡策略、widget 化、图标字体替换 emoji） | ⏳ 待启动 |
+| 4 | 交互优化（block_on 移除、IME 安全、stick_to_bottom 智能释放） | ⏳ 待启动 |
+| 5 | 品牌气质（叙事层、技能外露、Agent 仪表盘） | ⏳ 待启动 |
+
+**计划文件**：`docs/plans/frontend-design-critique-2026-05-01.md`
+**Commit**：`9086173a`（Phase 1 foundation）+ `ba6d8201`（AGENTS.md 更新）
+
+**架构约束**：
+- 必须在 `cargo test --workspace --lib` 零失败基线下推进
+- `clarity-egui` 为 binary crate，测试通过 `cargo test -p clarity-egui` 运行
+- 任何 UI 重构不得破坏 `clarity-tui` / `clarity-gateway` 的协议兼容性
+
+---
 
 ### 3.10 Sprint 9 — 服务商支持硬化（2026-04-29）
 
@@ -316,8 +350,8 @@ clarity-wire
 
 | 方向 | 工作量 | 前提条件 |
 |------|--------|----------|
+| **Sprint 14 — 前端全面翻新（Phase 1-5）** | 10-14 天 | ✅ 已批准，需在 Claw 架构下推进 |
 | egui Settings 模型选择短期修复 | ½ 天 | 无 |
-| egui Pretext 健康度运维硬化（三阶段） | 6 周 | Phase 1 已完成（settings 修复、Mutex 替换、`App::update()` 550→64 行拆分） |
 | egui 关键 Parity 差距修复 | 4 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-parity-gap-plan.md` |
 | Phase A：WebSocket MCP + Gateway↔BTM | 2 周 | 用户确认启动 |
 | Release v0.3.1（质量硬化） | ½ 天 | 无 |
