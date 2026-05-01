@@ -64,16 +64,7 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 
     ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
         // Avatar placeholder: 28px circle with agent initial
-        let avatar_size = 28.0;
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(avatar_size, avatar_size), egui::Sense::hover());
-        ui.painter().circle_filled(rect.center(), avatar_size / 2.0, theme.surface_strong);
-        ui.painter().text(
-            rect.center(),
-            egui::Align2::CENTER_CENTER,
-            "A",
-            egui::FontId::proportional(theme.text_sm),
-            theme.text_strong,
-        );
+        crate::components::chat::avatar::avatar(ui, "A", theme);
 
         ui.add_space(10.0);
 

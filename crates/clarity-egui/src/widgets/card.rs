@@ -1,5 +1,6 @@
 /// Card container using egui Frame::group.
 /// Replaces repeated `Frame::group(...).fill(...).corner_radius(...).stroke(...).inner_margin(...).show(...)` patterns.
+#[allow(dead_code)]
 pub fn card(
     ui: &mut egui::Ui,
     fill: egui::Color32,

@@ -116,8 +116,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
                         ui.set_min_height(h);
                         ui.horizontal(|ui| {
                             let has_key = !p.api_key_ref.is_empty();
-                            let dot = if has_key { app.ui_store.theme.status_online } else { app.ui_store.theme.text_dim };
-                            ui.label(egui::RichText::new("●").color(dot).size(8.0));
+                            crate::widgets::status_dot(ui, has_key, &app.ui_store.theme);
 
                             ui.add_space(8.0);
 
@@ -133,17 +132,7 @@ fn render_provider(app: &mut App, ui: &mut egui::Ui) {
 
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 ui.vertical(|ui| {
-                                    let badge = p.api_format.as_str();
-                                    egui::Frame::new()
-                                        .fill(app.ui_store.theme.bg_hover)
-                                        .corner_radius(egui::CornerRadius::same(4))
-                                        .inner_margin(egui::Margin::symmetric(7, 2))
-                                        .stroke(egui::Stroke::NONE)
-                                        .show(ui, |ui| {
-                                            ui.label(egui::RichText::new(badge)
-                                                .font(egui::FontId::new(app.ui_store.theme.text_xs, egui::FontFamily::Monospace))
-                                                .color(app.ui_store.theme.text_dim));
-                                        });
+                                    crate::widgets::badge(ui, p.api_format.as_str(), &app.ui_store.theme);
                                     if is_active {
                                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                             ui.label(egui::RichText::new("Active")

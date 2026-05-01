@@ -17,13 +17,13 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         if app.ui_store.sidebar_collapsed
-            && ui
-                .add(
-                    egui::Button::new(egui::RichText::new(crate::theme::ICON_SEND).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)))
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
-                )
-                .clicked()
+            && crate::widgets::icon_button_toolbar(
+                ui,
+                crate::theme::ICON_SEND,
+                app.ui_store.theme.text_base,
+                &app.ui_store.theme,
+            )
+            .clicked()
         {
             app.ui_store.sidebar_collapsed = false;
         }
@@ -94,13 +94,13 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             // Settings
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(crate::theme::ICON_SETTINGS).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)))
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
-                )
-                .clicked()
+            if crate::widgets::icon_button_toolbar(
+                ui,
+                crate::theme::ICON_SETTINGS,
+                app.ui_store.theme.text_base,
+                &app.ui_store.theme,
+            )
+            .clicked()
             {
                 app.settings_store.settings_open = true;
                 app.settings_store.settings_edit = {
@@ -187,7 +187,14 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                     .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.status_busy),
             );
-            if ui.button(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))).clicked() {
+            if crate::widgets::icon_button_toolbar(
+                ui,
+                crate::theme::ICON_X,
+                app.ui_store.theme.text_sm,
+                &app.ui_store.theme,
+            )
+            .clicked()
+            {
                 app.ui_store.network_banner = None;
             }
         });
