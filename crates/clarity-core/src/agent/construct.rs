@@ -495,6 +495,7 @@ impl Agent {
         &self,
         specs: Vec<crate::subagents::RunSpec>,
         config: crate::subagents::ParallelConfig,
+        progress: Option<std::sync::Arc<std::sync::Mutex<crate::subagents::BatchProgress>>>,
     ) -> anyhow::Result<crate::subagents::ParallelResult> {
         use crate::subagents::SubagentManager;
 
@@ -512,7 +513,7 @@ impl Agent {
             user_input: format!("parallel execution ({} tasks)", specs.len()),
         });
 
-        let result = manager.run_parallel(specs, config).await;
+        let result = manager.run_parallel(specs, config, progress).await;
 
         self.send_wire_message(WireMessage::TurnEnd);
 

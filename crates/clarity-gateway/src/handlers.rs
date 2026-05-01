@@ -739,7 +739,7 @@ pub async fn run_parallel(
 
     let agent = state.agent.read().await.clone();
 
-    match agent.run_parallel(specs, config).await {
+    match agent.run_parallel(specs, config, None).await {
         Ok(result) => {
             let success_rate = result.success_rate();
             let total_elapsed_ms = result.total_elapsed_ms;

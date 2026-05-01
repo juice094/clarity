@@ -18,7 +18,10 @@ pub mod team;
 pub mod token;
 
 pub use builder::SubagentBuilder;
-pub use parallel::{run_parallel, ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch};
+pub use parallel::{
+    run_parallel, BatchProgress, BatchProgressHandle, BatchStatus, ParallelConfig, ParallelExecutor,
+    ParallelResult, SubagentBatch,
+};
 pub use registry::{AgentTypeDefinition, LaborMarket};
 pub use runner::{
     collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
@@ -80,6 +83,7 @@ impl SubagentManager {
         &mut self,
         specs: Vec<RunSpec>,
         config: ParallelConfig,
+        progress: Option<std::sync::Arc<std::sync::Mutex<BatchProgress>>>,
     ) -> anyhow::Result<ParallelResult> {
         use crate::background::BackgroundTaskManager;
 
@@ -92,7 +96,7 @@ impl SubagentManager {
         let batch = SubagentBatch::new().add_many(specs).with_config(config);
 
         let mut executor = ParallelExecutor::new(task_manager, self.runner.clone());
-        executor.execute(batch).await
+        executor.execute(batch, progress).await
     }
 
     /// Execute an [`AgentTeam`] and return a unified [`TeamResult`].

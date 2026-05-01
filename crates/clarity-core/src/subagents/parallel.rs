@@ -222,6 +222,9 @@ impl BatchProgress {
     }
 }
 
+/// Convenience alias for shared progress handle.
+pub type BatchProgressHandle = Arc<Mutex<BatchProgress>>;
+
 /// Status of a parallel batch.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BatchStatus {
@@ -336,7 +339,7 @@ impl ParallelExecutor {
             task_ids.push(task_id);
         }
 
-        // 收集结果
+        // 收集结果（带进度回调）
         let mut results = Vec::new();
         let mut failures = Vec::new();
         let mut should_cancel_others = false;
@@ -348,20 +351,43 @@ impl ParallelExecutor {
                         if let Ok(subagent_result) =
                             serde_json::from_str::<SubagentResult>(&task_result.output)
                         {
-                            results.push(subagent_result);
+                            results.push(subagent_result.clone());
+                            // 更新进度：一个子代理完成
+                            if let Some(ref p) = progress {
+                                let mut p = p.lock().unwrap();
+                                p.completed += 1;
+                                p.running.retain(|id| id != &subagent_result.agent_id);
+                                p.results.push(subagent_result);
+                                p.elapsed_ms = start_time.elapsed().as_millis() as u64;
+                            }
                         } else {
                             failures.push((
                                 task_id.clone(),
                                 "Failed to parse subagent result".to_string(),
                             ));
+                            if let Some(ref p) = progress {
+                                let mut p = p.lock().unwrap();
+                                p.failed += 1;
+                                p.elapsed_ms = start_time.elapsed().as_millis() as u64;
+                            }
                         }
                     } else if task_result.status == TaskStatus::Cancelled {
                         failures.push((task_id.clone(), "Task was cancelled".to_string()));
+                        if let Some(ref p) = progress {
+                            let mut p = p.lock().unwrap();
+                            p.failed += 1;
+                            p.elapsed_ms = start_time.elapsed().as_millis() as u64;
+                        }
                     } else {
                         failures.push((
                             task_id.clone(),
                             format!("task failed: {}", task_result.output),
                         ));
+                        if let Some(ref p) = progress {
+                            let mut p = p.lock().unwrap();
+                            p.failed += 1;
+                            p.elapsed_ms = start_time.elapsed().as_millis() as u64;
+                        }
 
                         // 如果需要，取消其他正在运行的任务
                         if config.cancel_on_error && !should_cancel_others {
@@ -379,8 +405,27 @@ impl ParallelExecutor {
                 }
                 Err(e) => {
                     failures.push((task_id.clone(), format!("wait failed: {}", e)));
+                    if let Some(ref p) = progress {
+                        let mut p = p.lock().unwrap();
+                        p.failed += 1;
+                        p.elapsed_ms = start_time.elapsed().as_millis() as u64;
+                    }
                 }
             }
+        }
+
+        // 标记进度为完成
+        if let Some(ref p) = progress {
+            let mut p = p.lock().unwrap();
+            p.running.clear();
+            if failures.is_empty() {
+                p.status = BatchStatus::Completed;
+            } else if results.is_empty() {
+                p.status = BatchStatus::Failed("All subagents failed".to_string());
+            } else {
+                p.status = BatchStatus::Completed; // partial success
+            }
+            p.elapsed_ms = start_time.elapsed().as_millis() as u64;
         }
 
         let elapsed = start_time.elapsed().as_millis() as u64;
@@ -451,11 +496,12 @@ pub async fn run_parallel(
     runner: SubagentRunner,
     task_manager: BackgroundTaskManager,
     config: ParallelConfig,
+    progress: Option<Arc<Mutex<BatchProgress>>>,
 ) -> anyhow::Result<ParallelResult> {
     let batch = SubagentBatch::new().add_many(specs).with_config(config);
 
     let mut executor = ParallelExecutor::new(task_manager, runner);
-    executor.execute(batch).await
+    executor.execute(batch, progress).await
 }
 
 #[cfg(test)]
@@ -554,7 +600,7 @@ mod tests {
         let mut executor = ParallelExecutor::new(task_manager, runner);
         let batch = SubagentBatch::new();
 
-        let result = executor.execute(batch).await.unwrap();
+        let result = executor.execute(batch, None).await.unwrap();
         assert!(result.results.is_empty());
         assert!(result.failures.is_empty());
     }
