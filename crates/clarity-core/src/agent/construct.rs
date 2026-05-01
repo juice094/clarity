@@ -57,6 +57,7 @@ impl Agent {
                 active_files: None,
                 project_metadata: None,
                 provider_label: None,
+                recoverable_failure_counts: std::collections::HashMap::new(),
             })),
         }
     }
@@ -455,6 +456,7 @@ impl Agent {
                     total_tokens: 0,
                 };
                 inner.snapshotted_skill = inner.active_skill.clone();
+                inner.recoverable_failure_counts.clear();
                 Ok(token)
             }
         }

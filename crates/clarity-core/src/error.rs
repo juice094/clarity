@@ -34,6 +34,32 @@ pub enum ToolError {
     Unavailable(String),
 }
 
+/// Sanitize absolute paths from a string to prevent leaking
+/// host directory structure (e.g. `C:\Users\<name>` → `~`).
+pub fn sanitize_path_str(s: &str) -> String {
+    let mut out = s.to_string();
+    // Replace home directory with ~ (covers both Unix and Windows)
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy().to_string();
+        out = out.replace(&home_str, "~");
+    }
+    // Replace any remaining Windows-style absolute paths
+    // Heuristic: look for `C:\` or similar drive letters
+    out.split_whitespace()
+        .map(|word| {
+            if word.len() > 3
+                && word.as_bytes()[1] == b':'
+                && word.as_bytes()[2] == b'\\'
+            {
+                "<absolute-path>".to_string()
+            } else {
+                word.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl ToolError {
     /// Create an invalid parameters error
     pub fn invalid_params<S: Into<String>>(msg: S) -> Self {
@@ -60,40 +86,17 @@ impl ToolError {
         matches!(self, Self::IoError(_) | Self::Timeout(_) | Self::Unavailable(_))
     }
 
-    /// Sanitize absolute paths from error messages to prevent leaking
-    /// host directory structure (e.g. `C:\Users\<name>` → `~`).
+    /// Sanitize absolute paths from error messages.
+    /// O1: Called before ToolExecutionFailed is constructed in dispatch_tool_calls
+    /// so that fatal errors never leak absolute paths to the user or wire channel.
     pub fn sanitize_paths(&self) -> Self {
-        let sanitize = |s: &str| -> String {
-            let mut out = s.to_string();
-            // Replace home directory with ~ (covers both Unix and Windows)
-            if let Some(home) = dirs::home_dir() {
-                let home_str = home.to_string_lossy().to_string();
-                out = out.replace(&home_str, "~");
-            }
-            // Replace any remaining Windows-style absolute paths
-            // Heuristic: look for `C:\` or similar drive letters
-            out = out.split_whitespace()
-                .map(|word| {
-                    if word.len() > 3
-                        && word.as_bytes()[1] == b':'
-                        && word.as_bytes()[2] == b'\\'
-                    {
-                        "<absolute-path>".to_string()
-                    } else {
-                        word.to_string()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-            out
-        };
         match self {
-            Self::InvalidParameters(m) => Self::InvalidParameters(sanitize(m)),
-            Self::ExecutionFailed(m) => Self::ExecutionFailed(sanitize(m)),
-            Self::NotFound(m) => Self::NotFound(sanitize(m)),
-            Self::IoError(m) => Self::IoError(sanitize(m)),
-            Self::PermissionDenied(m) => Self::PermissionDenied(sanitize(m)),
-            Self::Unavailable(m) => Self::Unavailable(sanitize(m)),
+            Self::InvalidParameters(m) => Self::InvalidParameters(sanitize_path_str(m)),
+            Self::ExecutionFailed(m) => Self::ExecutionFailed(sanitize_path_str(m)),
+            Self::NotFound(m) => Self::NotFound(sanitize_path_str(m)),
+            Self::IoError(m) => Self::IoError(sanitize_path_str(m)),
+            Self::PermissionDenied(m) => Self::PermissionDenied(sanitize_path_str(m)),
+            Self::Unavailable(m) => Self::Unavailable(sanitize_path_str(m)),
             Self::Timeout(s) => Self::Timeout(*s),
         }
     }

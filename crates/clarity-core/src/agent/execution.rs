@@ -159,9 +159,11 @@ impl Agent {
 
         // 如果配置了审批运行时，先请求审批
         if let Some(ref runtime) = self.approval_runtime {
+            // O3: sensitive_path is sanitized before display in approval UI to
+            // prevent leaking absolute paths (e.g. C:\Users\name\secret.txt).
             let mut description = sensitive_path
                 .as_ref()
-                .map(|p| format!("Sensitive file access: {}", p));
+                .map(|p| format!("Sensitive file access: {}", crate::error::sanitize_path_str(p)));
 
             if tool_requires_approval {
                 description = Some(description.unwrap_or_else(|| {
@@ -199,6 +201,9 @@ impl Agent {
                     tool_call.clone()
                 };
 
+            // O2: approval_mode is read per-tool-call; caching it at the top of
+            // dispatch_tool_calls (or passing it down) would save N-1 RwLock reads
+            // when multiple tools are dispatched concurrently.
             let mode = self.inner.read().unwrap().approval_mode;
             let needs_approval = match mode {
                 ApprovalMode::Interactive => {

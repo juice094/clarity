@@ -6,10 +6,12 @@
 use crate::error::AgentError;
 use crate::types::ToolCall;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::sync::oneshot;
+use tracing::warn;
 use uuid::Uuid;
 
 /// The source of an approval request
@@ -34,7 +36,7 @@ impl ApprovalSource {
 }
 
 /// Response to an approval request
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ApprovalResponse {
     /// Approve this request
     Approve,
@@ -645,6 +647,85 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
     }
 }
 
+/// Serializable snapshot of an approval decision for persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalRecord {
+    pub request_id: String,
+    pub approved: bool,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+/// B1: Wrapper runtime that persists every resolved approval to a `MemoryStore`.
+///
+/// This delegates all operations to an inner runtime and only intercepts `resolve`
+/// to write an `ApprovalRecord` to the optional store.
+///
+/// Risk: Storage failures are silently logged (warn!) to avoid breaking the approval
+/// flow. This means audit gaps are possible if the memory store is unreachable.
+/// Consider a background retry queue if audit completeness becomes critical.
+pub struct PersistingApprovalRuntime<R: ApprovalRuntime> {
+    inner: Arc<R>,
+    store: Option<Arc<dyn crate::memory::MemoryStore>>,
+}
+
+impl<R: ApprovalRuntime> PersistingApprovalRuntime<R> {
+    pub fn new(inner: Arc<R>, store: Option<Arc<dyn crate::memory::MemoryStore>>) -> Self {
+        Self { inner, store }
+    }
+}
+
+#[async_trait]
+impl<R: ApprovalRuntime> ApprovalRuntime for PersistingApprovalRuntime<R> {
+    async fn create_request(
+        &self,
+        tool_call: &ToolCall,
+        source: ApprovalSource,
+        description: Option<String>,
+        diff_preview: Option<String>,
+    ) -> Result<String, AgentError> {
+        self.inner
+            .create_request(tool_call, source, description, diff_preview)
+            .await
+    }
+
+    async fn wait_for_response(&self, request_id: &str) -> Result<ApprovalResponse, AgentError> {
+        self.inner.wait_for_response(request_id).await
+    }
+
+    async fn resolve(
+        &self,
+        request_id: &str,
+        response: ApprovalResponse,
+    ) -> Result<(), AgentError> {
+        self.inner.resolve(request_id, response).await?;
+
+        if let Some(ref store) = self.store {
+            let record = ApprovalRecord {
+                request_id: request_id.to_string(),
+                approved: matches!(
+                    response,
+                    ApprovalResponse::Approve | ApprovalResponse::ApproveForSession
+                ),
+                timestamp: chrono::Utc::now(),
+            };
+            let memory = crate::memory::Memory::new(
+                serde_json::to_string(&record).unwrap_or_default(),
+            )
+            .with_tags(vec!["approval".to_string(), "record".to_string()])
+            .with_importance(0.8);
+            if let Err(e) = store.store(memory).await {
+                warn!("Failed to persist approval record: {}", e);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn list_pending(&self) -> Vec<ApprovalRequest> {
+        self.inner.list_pending()
+    }
+}
+
 impl Clone for ApprovalRequest {
     fn clone(&self) -> Self {
         Self {
@@ -663,6 +744,7 @@ impl Clone for ApprovalRequest {
 mod tests {
     use super::*;
     use crate::agent::{FunctionCall, ToolCall};
+    use crate::memory::MemoryStore;
 
     fn create_test_tool_call() -> ToolCall {
         ToolCall {
@@ -1102,6 +1184,37 @@ mod tests {
             .resolve(&request_id, ApprovalResponse::Approve)
             .await
             .expect("Should resolve");
+    }
+
+    #[tokio::test]
+    async fn test_persisting_runtime_records_approval() {
+        let inner = std::sync::Arc::new(InMemoryApprovalRuntime::new());
+        let store = std::sync::Arc::new(crate::memory::InMemoryStore::new());
+        let runtime = PersistingApprovalRuntime::new(inner.clone(), Some(store.clone()));
+
+        let tool_call = create_test_tool_call();
+        let source = ApprovalSource::ForegroundTurn {
+            turn_id: "turn-persist".to_string(),
+        };
+        let request_id = runtime
+            .create_request(&tool_call, source, None, None)
+            .await
+            .expect("Failed to create request");
+
+        runtime
+            .resolve(&request_id, ApprovalResponse::Approve)
+            .await
+            .expect("Should resolve");
+
+        let memories = store.get_all().await.expect("Should get memories");
+        assert_eq!(memories.len(), 1, "Expected one persisted approval record");
+        let memory = &memories[0];
+        assert!(memory.tags.contains(&"approval".to_string()));
+        assert!(memory.tags.contains(&"record".to_string()));
+        let record: ApprovalRecord =
+            serde_json::from_str(&memory.content).expect("Should parse record");
+        assert_eq!(record.request_id, request_id);
+        assert!(record.approved);
     }
 }
 

@@ -268,6 +268,19 @@ impl AgentController {
                         Some(Op::ToolApproval { request_id, approved }) => {
                             debug!("Controller: ToolApproval {} approved={}", request_id, approved);
                             if let Some(ref rt) = self.agent.approval_runtime() {
+                                // B2: Validate request_id against the pending list before resolving.
+                                // Prevents stale or forged IDs from reaching the runtime.
+                                // Risk: `list_pending()` iterates all requests; negligible for
+                                // typical pending counts (<100), but monitor if queue grows.
+                                let pending: std::collections::HashSet<String> =
+                                    rt.list_pending().into_iter().map(|r| r.id).collect();
+                                if !pending.contains(&request_id) {
+                                    warn!(
+                                        "ToolApproval for unknown/stale request_id: {}",
+                                        request_id
+                                    );
+                                    continue;
+                                }
                                 let response = if approved {
                                     ApprovalResponse::Approve
                                 } else {

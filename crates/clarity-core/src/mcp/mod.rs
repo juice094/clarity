@@ -10,6 +10,17 @@
 //! - **SSE Transport**: Connect to streaming MCP servers via Server-Sent Events
 //! - **OAuth Support**: Authentication support for remote servers
 //!
+//! ## Extractability Assessment (P3 — Week 4)
+//!
+//! Moving this module into a standalone `clarity-mcp` crate is **blocked**
+//! on `clarity-contract` maturity.  MCP currently depends on core-internal
+//! types (`Tool`, `ToolContext`, `ToolResult`, `ToolRegistry`, `AgentError`)
+//! which are not yet available in `clarity-contract`.
+//!
+//! The current `mcp` feature gate (`#[cfg(feature = "mcp")]`) already
+//! satisfies the "optional compilation" requirement.  Re-evaluate extraction
+//! after `clarity-contract` covers the tool-interface surface.
+//!
 //! ## Example
 //!
 //! ```rust,no_run

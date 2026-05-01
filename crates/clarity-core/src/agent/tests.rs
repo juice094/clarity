@@ -912,6 +912,110 @@ async fn test_non_recoverable_tool_error_stops_turn() {
     }
 }
 
+/// Mock tool that always fails with a recoverable IoError.
+struct RecoverableFailingTool;
+
+#[async_trait::async_trait]
+impl crate::tools::Tool for RecoverableFailingTool {
+    fn name(&self) -> &str {
+        "recoverable_failing_tool"
+    }
+
+    fn description(&self) -> &str {
+        "A tool that always fails with recoverable error for testing"
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {}
+        })
+    }
+
+    async fn execute(
+        &self,
+        _args: serde_json::Value,
+        _ctx: crate::tools::ToolContext,
+    ) -> crate::error::ToolResult<serde_json::Value> {
+        Err(crate::error::ToolError::IoError(
+            "transient network failure".to_string(),
+        ))
+    }
+}
+
+/// Mock LLM that always emits a call to `recoverable_failing_tool`.
+struct MockLlmRecoverableLoop;
+
+#[async_trait::async_trait]
+impl LlmProvider for MockLlmRecoverableLoop {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<LlmResponse, AgentError> {
+        Ok(LlmResponse {
+            content: "I'll try recoverable_failing_tool".to_string(),
+            tool_calls: vec![ToolCall {
+                id: "call_recover".to_string(),
+                call_type: "function".to_string(),
+                function: FunctionCall {
+                    name: "recoverable_failing_tool".to_string(),
+                    arguments: "{}".to_string(),
+                },
+            }],
+            is_complete: false,
+        })
+    }
+
+    fn stream(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("Mock".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
+        });
+        Ok(rx)
+    }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
+}
+
+#[tokio::test]
+async fn test_recoverable_tool_circuit_breaker() {
+    let registry = ToolRegistry::new();
+    registry.register(RecoverableFailingTool).unwrap();
+
+    let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(10))
+        .with_llm(Arc::new(MockLlmRecoverableLoop));
+
+    let result = agent.run("trigger recoverable failing tool").await;
+
+    assert!(
+        result.is_err(),
+        "Expected turn to stop after 3 recoverable failures, got: {:?}",
+        result
+    );
+    let err = result.unwrap_err();
+    match err {
+        AgentError::ToolExecutionFailed(tool_name, msg) => {
+            assert_eq!(tool_name, "recoverable_failing_tool");
+            assert!(
+                msg.contains("recoverable errors exhausted"),
+                "Expected circuit-breaker message, got: {}",
+                msg
+            );
+        }
+        other => panic!("Expected ToolExecutionFailed, got: {:?}", other),
+    }
+}
+
 #[test]
 fn test_tool_error_sanitize_paths() {
     // Home-directory redaction

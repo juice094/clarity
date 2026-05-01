@@ -8,7 +8,9 @@ use crate::background::{AgentTaskExecutor, TaskSpec};
 use crate::llm::{build_provider_from_registry, ModelRegistry};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
-use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
+// P1-1: Import from `types` instead of `subagents::registry` to break the
+// background↔subagents circular dependency.
+use crate::types::{AgentTypeDefinition, LaborMarket};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::warn;

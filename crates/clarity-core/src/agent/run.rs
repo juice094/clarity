@@ -52,6 +52,11 @@ impl Agent {
     /// If any tool fails with a **non-recoverable** error, the function returns
     /// `AgentError::ToolExecutionFailed` immediately after all concurrent calls
     /// complete, preventing the LLM from entering an infinite retry loop.
+    ///
+    /// R1: Recoverable errors (IoError/Timeout/Unavailable) are intentionally NOT
+    /// fatal on first failure — the LLM may retry with a different strategy.
+    /// To prevent infinite loops, a per-turn circuit breaker upgrades to fatal
+    /// after the SAME tool fails recoverably 3 times in a single turn.
     async fn dispatch_tool_calls(
         &self,
         tool_calls: &[ToolCall],
@@ -102,6 +107,22 @@ impl Agent {
             if let Err(ref e) = sanitized {
                 if !e.is_recoverable() {
                     fatal = Some((tool_call.function.name.clone(), e.to_string()));
+                } else {
+                    let mut inner = self.inner.write().unwrap();
+                    let count = inner
+                        .recoverable_failure_counts
+                        .entry(tool_call.function.name.clone())
+                        .or_insert(0);
+                    *count += 1;
+                    if *count >= 3 {
+                        fatal = Some((
+                            tool_call.function.name.clone(),
+                            format!(
+                                "Tool '{}' failed {} times (recoverable errors exhausted)",
+                                tool_call.function.name, *count
+                            ),
+                        ));
+                    }
                 }
             }
         }
@@ -147,6 +168,8 @@ impl Agent {
             )
             .await
             .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            // O4: Character-count/4 is a rough heuristic; replace with real tokenizer
+            // count when clarity-core gains a tokenizer abstraction.
             let completion_tokens = response.content.len().div_ceil(4) as u32;
             self.accumulate_usage(prompt_tokens, completion_tokens);
             final_response = response.content.clone();
@@ -746,7 +769,9 @@ impl Agent {
     }
 }
 
-fn format_plan_results(results: &[crate::agent::PlanResult]) -> String {
+// B3: Uses `crate::types::PlanResult` directly since the type was moved out of
+// the `agent` module to reduce coupling.
+fn format_plan_results(results: &[crate::types::PlanResult]) -> String {
     if results.is_empty() {
         return "Plan executed with no steps.".to_string();
     }

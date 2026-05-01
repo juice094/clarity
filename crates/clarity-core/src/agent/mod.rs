@@ -20,10 +20,14 @@ pub mod ops;
 
 mod construct;
 mod execution;
+mod executor;
 pub mod plan;
-pub use plan::{Plan, PlanResult, PlanStep};
+// B3: Re-export Plan types from `types.rs` to maintain backwards compatibility.
+// New code should prefer `use clarity_core::types::{Plan, PlanResult, PlanStep}`.
+pub use crate::types::{Plan, PlanResult, PlanStep};
 mod prompt;
 mod run;
+pub use executor::AgentExecutor;
 
 #[cfg(test)]
 mod tests;
@@ -102,6 +106,9 @@ struct AgentInner {
     /// Provider label for internal logging (e.g. "deepseek-chat", "claude-3-7-sonnet").
     /// NOT injected into the system prompt; used only for tracing/audit.
     provider_label: Option<String>,
+    /// Track recoverable tool failures per turn (tool_name -> count).
+    /// Reset at the start of each turn via `begin_turn()`.
+    recoverable_failure_counts: std::collections::HashMap<String, u32>,
 }
 
 /// Simple mock LLM for testing

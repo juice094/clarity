@@ -7,41 +7,7 @@
 use super::Agent;
 use crate::error::AgentError;
 use crate::llm::api::{LlmResponse, Message};
-use serde::{Deserialize, Serialize};
-
-/// A single step inside an execution plan.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PlanStep {
-    /// Human-readable identifier (e.g. "1", "2a")
-    pub id: String,
-    /// What this step does in plain language.
-    pub description: String,
-    /// The tool to invoke (must exist in the registry).
-    pub tool_name: String,
-    /// JSON payload for the tool call.
-    #[serde(default)]
-    pub tool_params: serde_json::Value,
-}
-
-/// A structured execution plan produced by `Agent::plan()`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Plan {
-    /// Short title summarising the plan.
-    pub title: String,
-    /// Ordered steps to execute.
-    pub steps: Vec<PlanStep>,
-}
-
-/// Result of executing a single plan step.
-#[derive(Debug, Clone)]
-pub struct PlanResult {
-    /// The step that was executed.
-    pub step_id: String,
-    /// Whether the tool call succeeded.
-    pub success: bool,
-    /// Stringified tool output (or error message).
-    pub output: String,
-}
+use crate::types::{Plan, PlanResult};
 
 impl Plan {
     /// Render the plan as human-readable Markdown.
@@ -234,6 +200,7 @@ mod tests {
     use crate::agent::AgentConfig;
     use crate::llm::api::LlmProvider;
     use crate::registry::ToolRegistry;
+    use crate::types::PlanStep;
     use std::sync::Arc;
 
     #[tokio::test]

@@ -881,6 +881,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clarity-contract"
+version = "0.3.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "clarity-core"
 version = "0.3.0"
 dependencies = [
@@ -891,6 +898,7 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "chrono",
+ "clarity-contract",
  "clarity-memory",
  "clarity-wire",
  "criterion",

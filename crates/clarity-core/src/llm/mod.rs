@@ -14,6 +14,7 @@ pub mod llama_server;
 pub mod local_gguf;
 pub mod model_registry;
 pub mod ollama;
+pub mod policy;
 pub mod sse;
 
 // Re-export provider types
@@ -29,6 +30,9 @@ pub use model_registry::{
 pub use ollama::OllamaProvider;
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
+pub use policy::{
+    DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy,
+};
 
 use crate::error::AgentError;
 use async_trait::async_trait;

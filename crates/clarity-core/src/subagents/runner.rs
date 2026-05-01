@@ -7,7 +7,10 @@
 //! - std::io 的读写抽象
 //! - Rust 错误处理的最佳实践
 
-use crate::agent::Agent;
+// P1-2: Import the trait alongside the concrete type.
+// `execute_agent` now accepts `&dyn AgentExecutor`, but `build_agent` still
+// returns the concrete `Agent` so that caller-side builder methods work.
+use crate::agent::{Agent, AgentExecutor};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};
 use crate::llm::api::{LlmProvider, Message};
@@ -1004,7 +1007,7 @@ impl SubagentRunner {
     /// 执行代理循环
     async fn execute_agent(
         &self,
-        agent: &Agent,
+        agent: &dyn AgentExecutor,
         prompt: &str,
         _context: &mut ExecutionContext,
         collector: &mut OutputCollector,
@@ -1013,7 +1016,7 @@ impl SubagentRunner {
         collector.stage("execution_started");
 
         // 执行代理
-        let result = agent.run(prompt).await;
+        let result = agent.run_turn(prompt).await;
 
         match result {
             Ok(response) => {
@@ -1032,7 +1035,7 @@ Your previous response was too brief. Please provide a more comprehensive summar
 3. All important information that should be known
 "#;
 
-                    match agent.run(continuation_prompt).await {
+                    match agent.run_turn(continuation_prompt).await {
                         Ok(extended) => {
                             collector.stage("continuation_succeeded");
                             Ok(format!("{}\n\n{}", response, extended))

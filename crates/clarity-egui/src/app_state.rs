@@ -103,6 +103,9 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     apply_profile_overlay(&mut settings);
 
     let desired_provider = settings.provider.clone();
+    // C2: `network_available` is a cached flag updated by the background probe
+    // (every ~30 s).  The probe drives UI banners only; it never auto-switches
+    // the active provider.  Provider selection is always explicit via Policy.
     let network_available = state
         .network_available
         .load(std::sync::atomic::Ordering::Relaxed);
@@ -154,6 +157,8 @@ pub async fn reload_llm(state: &AppState) -> Result<(), EguiError> {
     ensure_llm(state).await
 }
 
+/// C2: Lightweight TCP probe used solely for UI state (banner icons).
+/// Never blocks provider loading or triggers automatic fallback.
 pub async fn check_network(probe: &str) -> bool {
     matches!(
         tokio::time::timeout(
