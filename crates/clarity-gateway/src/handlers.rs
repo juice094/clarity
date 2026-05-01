@@ -711,6 +711,8 @@ pub struct RunParallelResponse {
     pub total_elapsed_ms: u64,
     pub results: Vec<ParallelTaskResult>,
     pub failures: Vec<ParallelFailure>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
 }
 
 pub async fn run_parallel(
@@ -725,21 +727,41 @@ pub async fn run_parallel(
             .into_response();
     }
 
-    let specs: Vec<clarity_core::subagents::RunSpec> = req
+    let batch_id = uuid::Uuid::new_v4().to_string();
+
+    // Clone task specs before moving them into batch_progress
+    let task_refs: Vec<(String, String)> = req
         .tasks
-        .into_iter()
-        .map(|t| {
-            clarity_core::subagents::RunSpec::new(format!("parallel-{}", t.agent_type), t.prompt)
-                .with_type(&t.agent_type)
+        .iter()
+        .map(|t| (t.agent_type.clone(), t.prompt.clone()))
+        .collect();
+
+    let specs: Vec<clarity_core::subagents::RunSpec> = task_refs
+        .iter()
+        .map(|(agent_type, prompt)| {
+            clarity_core::subagents::RunSpec::new(
+                format!("parallel-{}", agent_type),
+                prompt.clone(),
+            )
+            .with_type(agent_type)
         })
         .collect();
+
+    // Create and register batch progress
+    let progress = Arc::new(std::sync::Mutex::new(
+        clarity_core::subagents::BatchProgress::new(batch_id.clone(), &specs),
+    ));
+    {
+        let mut batches = state.parallel_batches.write().await;
+        batches.insert(batch_id.clone(), progress.clone());
+    }
 
     let config = clarity_core::subagents::ParallelConfig::new()
         .with_max_concurrency(req.max_concurrency.unwrap_or(4).max(1));
 
     let agent = state.agent.read().await.clone();
 
-    match agent.run_parallel(specs, config, None).await {
+    match agent.run_parallel(specs, config, Some(progress.clone())).await {
         Ok(result) => {
             let success_rate = result.success_rate();
             let total_elapsed_ms = result.total_elapsed_ms;
@@ -769,10 +791,15 @@ pub async fn run_parallel(
                 total_elapsed_ms,
                 results,
                 failures,
+                batch_id: Some(batch_id.clone()),
             };
             (StatusCode::OK, Json(response)).into_response()
         }
         Err(e) => {
+            // Mark progress as failed
+            if let Ok(mut p) = progress.lock() {
+                p.status = clarity_core::subagents::BatchStatus::Failed(e.to_string());
+            }
             error!("Parallel execution failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -780,6 +807,87 @@ pub async fn run_parallel(
             )
                 .into_response()
         }
+    }
+}
+
+/// Query the current progress of a parallel batch.
+#[derive(Serialize)]
+pub struct ParallelStatusResponse {
+    pub batch_id: String,
+    pub total: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub status: String,
+    pub elapsed_ms: u64,
+    pub agent_statuses: Vec<AgentStatusSummary>,
+}
+
+#[derive(Serialize)]
+pub struct AgentStatusSummary {
+    pub agent_id: String,
+    pub status: String,
+    pub summary: Option<String>,
+}
+
+pub async fn get_parallel_status(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(batch_id): axum::extract::Path<String>,
+) -> Response {
+    let batches = state.parallel_batches.read().await;
+    match batches.get(&batch_id) {
+        Some(progress_arc) => {
+            let p = progress_arc.lock().unwrap();
+            let status_str = match &p.status {
+                clarity_core::subagents::BatchStatus::Running => "Running",
+                clarity_core::subagents::BatchStatus::Completed => "Completed",
+                clarity_core::subagents::BatchStatus::Cancelled => "Cancelled",
+                clarity_core::subagents::BatchStatus::Failed(_) => "Failed",
+            };
+
+            let mut agent_statuses: Vec<AgentStatusSummary> = p
+                .results
+                .iter()
+                .map(|r| AgentStatusSummary {
+                    agent_id: r.agent_id.clone(),
+                    status: "Completed".to_string(),
+                    summary: Some(r.summary.clone()),
+                })
+                .collect();
+
+            // Add running agents
+            for id in &p.running {
+                agent_statuses.push(AgentStatusSummary {
+                    agent_id: id.clone(),
+                    status: "Running".to_string(),
+                    summary: None,
+                });
+            }
+
+            // Add failures
+            for (id, err) in &p.failures {
+                agent_statuses.push(AgentStatusSummary {
+                    agent_id: id.clone(),
+                    status: "Failed".to_string(),
+                    summary: Some(err.clone()),
+                });
+            }
+
+            let response = ParallelStatusResponse {
+                batch_id: p.batch_id.clone(),
+                total: p.total,
+                completed: p.completed,
+                failed: p.failed,
+                status: status_str.to_string(),
+                elapsed_ms: p.elapsed_ms,
+                agent_statuses,
+            };
+            (StatusCode::OK, Json(response)).into_response()
+        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Batch not found"})),
+        )
+            .into_response(),
     }
 }
 

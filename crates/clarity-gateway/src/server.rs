@@ -23,6 +23,9 @@ use chrono::{DateTime, Utc};
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
+use clarity_core::subagents::BatchProgress;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// 应用状态
 pub struct AppState {
@@ -32,6 +35,8 @@ pub struct AppState {
     pub activity_logger: ActivityLogger,
     pub started_at: DateTime<Utc>,
     pub active_connections: AtomicUsize,
+    /// Registry of in-flight parallel batch progress for UI polling.
+    pub parallel_batches: Arc<RwLock<HashMap<String, Arc<Mutex<BatchProgress>>>>>,
 }
 
 impl AppState {
@@ -65,6 +70,7 @@ impl AppState {
             activity_logger: ActivityLogger::new(),
             started_at: Utc::now(),
             active_connections: AtomicUsize::new(0),
+            parallel_batches: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -194,6 +200,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             get(handlers::get_task).delete(handlers::cancel_task),
         )
         .route("/v1/parallel", post(handlers::run_parallel))
+        .route(
+            "/v1/parallel/:batch_id/status",
+            get(handlers::get_parallel_status),
+        )
         .route("/api/files/tree", get(handlers::file_tree))
         .route("/api/files/read", get(handlers::file_read))
         .route("/api/files/write", post(handlers::file_write))
