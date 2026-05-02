@@ -36,6 +36,8 @@ pub struct Theme {
     pub bg_hover: egui::Color32,
     pub surface: egui::Color32,
     pub surface_strong: egui::Color32,
+    pub glass: egui::Color32,
+    pub glass_strong: egui::Color32,
 
     // --- Text ---
     pub text: egui::Color32,
@@ -113,6 +115,7 @@ pub struct Theme {
     pub radius_sm: f32,
     pub radius_md: f32,
     pub radius_lg: f32,
+    pub radius_xl: f32,
     pub radius_full: f32,
 
     // --- Semantic surface (content-type backgrounds beyond chat bubbles) ---
@@ -155,11 +158,13 @@ impl Theme {
         Self {
             // Backgrounds: deep black base + translucent glass layers
             bg: hex("#050507"),
-            bg_accent: rgba(20, 20, 28, 0.80),
+            bg_accent: rgba(20, 20, 28, 0.35),
             bg_elevated: rgba(35, 35, 48, 0.80),
             bg_hover: rgba(45, 45, 62, 0.65),
-            surface: rgba(28, 28, 38, 0.72),
-            surface_strong: rgba(38, 38, 52, 0.85),
+            surface: rgba(32, 32, 45, 0.45),
+            surface_strong: rgba(38, 38, 52, 0.60),
+            glass: rgba(255, 255, 255, 0.04),
+            glass_strong: rgba(255, 255, 255, 0.10),
 
             // Text: high contrast on dark glass
             text: hex("#E8EAEF"),
@@ -188,8 +193,8 @@ impl Theme {
             danger: hex("#EF6B6B"),
 
             // Borders: semi-transparent white (glass reflection edge)
-            border: rgba(255, 255, 255, 0.06),
-            border_strong: rgba(255, 255, 255, 0.10),
+            border: rgba(255, 255, 255, 0.04),
+            border_strong: rgba(255, 255, 255, 0.08),
             border_hover: rgba(255, 255, 255, 0.14),
             input_bg: rgba(18, 18, 26, 0.60),
 
@@ -230,9 +235,10 @@ impl Theme {
             space_40: 40.0,
 
             // Radius: modern glassmorphism scale
-            radius_sm: 6.0,
-            radius_md: 12.0,
-            radius_lg: 20.0,
+            radius_sm: 8.0,
+            radius_md: 16.0,
+            radius_lg: 28.0,
+            radius_xl: 36.0,
             radius_full: 999.0,
 
             // Semantic surfaces
@@ -283,11 +289,13 @@ impl Theme {
         Self {
             // Backgrounds: OLED pure black with glass elevations
             bg: hex("#000000"),
-            bg_accent: rgba(10, 10, 14, 0.90),
+            bg_accent: rgba(20, 20, 28, 0.35),
             bg_elevated: rgba(35, 35, 48, 0.80),
             bg_hover: rgba(45, 45, 62, 0.65),
-            surface: rgba(28, 28, 38, 0.72),
-            surface_strong: rgba(38, 38, 52, 0.85),
+            surface: rgba(32, 32, 45, 0.45),
+            surface_strong: rgba(38, 38, 52, 0.60),
+            glass: rgba(255, 255, 255, 0.04),
+            glass_strong: rgba(255, 255, 255, 0.10),
 
             // Text: high contrast
             text: hex("#E8EAEF"),
@@ -316,8 +324,8 @@ impl Theme {
             danger: hex("#EF6B6B"),
 
             // Borders: glass reflection edge
-            border: rgba(255, 255, 255, 0.06),
-            border_strong: rgba(255, 255, 255, 0.10),
+            border: rgba(255, 255, 255, 0.04),
+            border_strong: rgba(255, 255, 255, 0.08),
             border_hover: rgba(255, 255, 255, 0.14),
             input_bg: rgba(18, 18, 26, 0.60),
 
@@ -358,9 +366,10 @@ impl Theme {
             space_40: 40.0,
 
             // Radius: modern glassmorphism scale
-            radius_sm: 6.0,
-            radius_md: 12.0,
-            radius_lg: 20.0,
+            radius_sm: 8.0,
+            radius_md: 16.0,
+            radius_lg: 28.0,
+            radius_xl: 36.0,
             radius_full: 999.0,
 
             // Semantic surfaces
@@ -411,6 +420,8 @@ impl Theme {
             bg_hover: hex("#d6d8e0"),
             surface: hex("#e8eaf0"),
             surface_strong: hex("#e0e2ea"),
+            glass: rgba(0, 0, 0, 0.04),
+            glass_strong: rgba(0, 0, 0, 0.10),
 
             // Text: cool dark
             text: hex("#1e1d24"),
@@ -481,6 +492,7 @@ impl Theme {
             radius_sm: 6.0,
             radius_md: 10.0,
             radius_lg: 12.0,
+            radius_xl: 36.0,
             radius_full: 9999.0,
 
             // Semantic surfaces

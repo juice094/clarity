@@ -10,7 +10,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("Thinking Log")
-                .size(theme.text_lg)
+                .size(theme.text_sm)
                 .strong()
                 .color(theme.text),
         );
@@ -48,20 +48,18 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
 
     ui.add_space(theme.space_8);
 
-    // ── Tool call list in glass card ──
-    egui::Frame::group(ui.style())
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
-        .inner_margin(egui::Margin::same(8))
-        .show(ui, |ui| {
-            if app.chat_store.tool_calls.is_empty() {
-                ui.label(
-                    egui::RichText::new("No tool calls yet.")
-                        .size(theme.text_sm)
-                        .color(theme.text_dim),
-                );
-            } else {
+    if app.chat_store.tool_calls.is_empty() {
+        ui.label(
+            egui::RichText::new("No tool calls yet.")
+                .size(theme.text_xs)
+                .color(theme.text_dim),
+        );
+    } else {
+        egui::Frame::new()
+            .fill(theme.surface)
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
                 for tc in app.chat_store.tool_calls.iter().rev().take(20) {
                     let (icon, color) = match tc.status {
                         crate::ui::types::ToolCallStatus::Running => ("⏳", theme.status_busy),
@@ -88,8 +86,8 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                                 .color(theme.text_dim),
                         );
                     }
-                    ui.add_space(theme.space_4);
+                    ui.add_space(2.0);
                 }
-            }
-        });
+            });
+    }
 }

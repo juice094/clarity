@@ -17,7 +17,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("Tools")
-                .size(theme.text_lg)
+                .size(theme.text_sm)
                 .strong()
                 .color(theme.text),
         );
@@ -52,22 +52,18 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("●").size(theme.text_xs).color(status_color));
         ui.label(
-            egui::RichText::new(format!("Active tasks: {}", active_tasks))
-                .size(theme.text_sm)
+            egui::RichText::new(format!("Active: {}", active_tasks))
+                .size(theme.text_xs)
                 .color(theme.text_muted),
         );
-    });
-    ui.add_space(theme.space_4);
-    ui.horizontal(|ui| {
+        ui.add_space(8.0);
         ui.label(egui::RichText::new("●").size(theme.text_xs).color(theme.status_online));
         ui.label(
-            egui::RichText::new(format!("Category: {}", app.session_store.active_category))
-                .size(theme.text_sm)
+            egui::RichText::new(format!("{}", app.session_store.active_category))
+                .size(theme.text_xs)
                 .color(theme.text_muted),
         );
     });
-    ui.add_space(theme.space_8);
-    ui.separator();
     ui.add_space(theme.space_8);
 
     // ── Task list ──
@@ -89,12 +85,14 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     if ui
         .add(
             egui::Button::new(
-                egui::RichText::new("+ Create Task")
-                    .size(theme.text_base)
-                    .color(theme.text),
+                egui::RichText::new("+ Task")
+                    .size(theme.text_sm)
+                    .color(theme.accent),
             )
-            .fill(theme.accent)
-            .min_size(egui::vec2(ui.available_width(), 36.0)),
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::new(1.0, theme.accent))
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+            .min_size(egui::vec2(0.0, 28.0)),
         )
         .clicked()
     {

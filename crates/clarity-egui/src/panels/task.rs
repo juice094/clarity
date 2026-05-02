@@ -8,9 +8,8 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
-                .fill(app.ui_store.theme.bg_accent)
-                .inner_margin(egui::Margin::symmetric(12, 8))
-                .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border)),
+                .fill(app.ui_store.theme.bg)
+                .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
             ui.add_space(app.ui_store.theme.space_12);

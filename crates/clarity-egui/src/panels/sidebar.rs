@@ -11,9 +11,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(app.ui_store.theme.bg_accent)
-                .inner_margin(egui::Margin::same(4))
-                .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border)),
+                .fill(app.ui_store.theme.bg)
+                .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
             ui.set_min_width(ui.available_width());
@@ -42,9 +41,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     for (cat, label) in categories {
                         let is_active = app.session_store.active_category == cat;
                         let bg = if is_active {
-                            app.ui_store.theme.surface
+                            app.ui_store.theme.glass_strong
                         } else {
-                            app.ui_store.theme.bg_accent
+                            egui::Color32::TRANSPARENT
                         };
                         let text_color = if is_active {
                             app.ui_store.theme.text
@@ -52,7 +51,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             app.ui_store.theme.text_dim
                         };
                         let stroke = if is_active {
-                            egui::Stroke::new(2.0, app.ui_store.theme.accent)
+                            egui::Stroke::new(1.5, app.ui_store.theme.accent)
                         } else {
                             egui::Stroke::NONE
                         };
@@ -64,7 +63,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .fill(bg)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
                                 .stroke(stroke)
-                                .min_size(egui::vec2(ui.available_width(), 36.0)),
+                                .min_size(egui::vec2(ui.available_width(), 32.0)),
                             )
                             .clicked()
                         {

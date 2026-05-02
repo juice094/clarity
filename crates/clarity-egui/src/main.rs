@@ -173,7 +173,7 @@ impl App {
                             } else {
                                 theme.text_dim
                             };
-                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::ZERO, fill);
+                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), fill);
                             ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
                                 crate::theme::ICON_X, theme.font_icon(14.0), text_col);
                         }
@@ -186,7 +186,7 @@ impl App {
                         if max_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
                         } else if max_resp.hovered() {
-                            ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::ZERO, theme.overlay_medium);
+                            ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), theme.overlay_medium);
                         }
 
                         // Minimize
@@ -197,7 +197,7 @@ impl App {
                         if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         } else if min_resp.hovered() {
-                            ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::ZERO, theme.overlay_medium);
+                            ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), theme.overlay_medium);
                         }
                     });
                 });

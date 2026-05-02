@@ -10,14 +10,9 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("Web Tabs")
-                .size(theme.text_lg)
+                .size(theme.text_sm)
                 .strong()
                 .color(theme.text),
-        );
-        ui.label(
-            egui::RichText::new(format!("{}", app.ui_store.web_tabs.len()))
-                .size(theme.text_sm)
-                .color(theme.text_muted),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let arrow = if expanded { "▼" } else { "▶" };
@@ -40,20 +35,18 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
 
     ui.add_space(theme.space_8);
 
-    // ── Tab list in glass card ──
-    egui::Frame::group(ui.style())
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
-        .inner_margin(egui::Margin::same(8))
-        .show(ui, |ui| {
-            if app.ui_store.web_tabs.is_empty() {
-                ui.label(
-                    egui::RichText::new("No web tabs yet.")
-                        .size(theme.text_sm)
-                        .color(theme.text_dim),
-                );
-            } else {
+    if app.ui_store.web_tabs.is_empty() {
+        ui.label(
+            egui::RichText::new("No web tabs yet.")
+                .size(theme.text_xs)
+                .color(theme.text_dim),
+        );
+    } else {
+        egui::Frame::new()
+            .fill(theme.surface)
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
                 for idx in 0..app.ui_store.web_tabs.len() {
                     let tab = app.ui_store.web_tabs[idx].clone();
                     ui.horizontal(|ui| {
@@ -121,8 +114,8 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
                         });
                     });
                 }
-            }
-        });
+            });
+    }
 
     ui.add_space(theme.space_8);
 
@@ -131,17 +124,18 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
         let response = ui.add(
             egui::TextEdit::singleline(&mut app.ui_store.editing_title)
                 .hint_text("Paste URL…")
-                .desired_width(ui.available_width() - 48.0),
+                .desired_width(ui.available_width() - 48.0)
+                .margin(egui::Margin::symmetric(6, 4)),
         );
 
         if ui
             .add(
                 egui::Button::new(
                     egui::RichText::new("Add")
-                        .size(theme.text_sm)
-                        .color(theme.text),
+                        .size(theme.text_xs)
+                        .color(theme.accent),
                 )
-                .fill(theme.accent)
+                .fill(egui::Color32::TRANSPARENT)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
             )
             .clicked()
