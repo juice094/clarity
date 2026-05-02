@@ -38,25 +38,43 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                 .collect();
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
+                let mut rename_commit: Option<(String, String)> = None;
                 for (id, title, is_active) in &category_sessions {
-                    let bg = if *is_active {
-                        app.ui_store.theme.surface
+                    let editing = app.ui_store.editing_session_id.as_ref() == Some(id);
+                    if editing {
+                        // Inline rename TextEdit
+                        let mut buf = app.ui_store.editing_title.clone();
+                        let resp = ui.add_sized(
+                            egui::vec2(120.0, 28.0),
+                            egui::TextEdit::singleline(&mut buf)
+                                .font(egui::FontId::proportional(app.ui_store.theme.text_sm))
+                                .margin(egui::vec2(6.0, 4.0)),
+                        );
+                        app.ui_store.editing_title = buf;
+                        if resp.lost_focus() {
+                            rename_commit = Some((id.clone(), app.ui_store.editing_title.clone()));
+                        }
+                        if resp.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            rename_commit = Some((id.clone(), app.ui_store.editing_title.clone()));
+                        }
                     } else {
-                        app.ui_store.theme.bg_elevated
-                    };
-                    let text_color = if *is_active {
-                        app.ui_store.theme.text_strong
-                    } else {
-                        app.ui_store.theme.text_dim
-                    };
-                    let stroke = if *is_active {
-                        egui::Stroke::new(1.5, app.ui_store.theme.accent)
-                    } else {
-                        egui::Stroke::new(1.0, app.ui_store.theme.border)
-                    };
-                    let tab_id = id.clone();
-                    if ui
-                        .add(
+                        let bg = if *is_active {
+                            app.ui_store.theme.surface
+                        } else {
+                            app.ui_store.theme.bg_elevated
+                        };
+                        let text_color = if *is_active {
+                            app.ui_store.theme.text_strong
+                        } else {
+                            app.ui_store.theme.text_dim
+                        };
+                        let stroke = if *is_active {
+                            egui::Stroke::new(1.5, app.ui_store.theme.accent)
+                        } else {
+                            egui::Stroke::new(1.0, app.ui_store.theme.border)
+                        };
+                        let tab_id = id.clone();
+                        let resp = ui.add(
                             egui::Button::new(
                                 egui::RichText::new(title).size(app.ui_store.theme.text_sm).color(text_color),
                             )
@@ -64,19 +82,31 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                             .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                             .stroke(stroke)
                             .min_size(egui::vec2(60.0, 28.0)),
-                        )
-                        .clicked()
-                    {
-                        app.save_current_session();
-                        let old_id = app.session_store.active_session_id.clone();
-                        if !app.chat_store.input.trim().is_empty() {
-                            app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
-                        } else {
-                            app.session_store.drafts.remove(&old_id);
+                        );
+                        if resp.clicked() {
+                            app.save_current_session();
+                            let old_id = app.session_store.active_session_id.clone();
+                            if !app.chat_store.input.trim().is_empty() {
+                                app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
+                            } else {
+                                app.session_store.drafts.remove(&old_id);
+                            }
+                            app.session_store.active_session_id = tab_id.clone();
+                            app.chat_store.input = app.session_store.drafts.remove(&tab_id).unwrap_or_default();
                         }
-                        app.session_store.active_session_id = tab_id.clone();
-                        app.chat_store.input = app.session_store.drafts.remove(&tab_id).unwrap_or_default();
+                        if resp.double_clicked() {
+                            app.ui_store.editing_session_id = Some(id.clone());
+                            app.ui_store.editing_title = title.clone();
+                        }
                     }
+                }
+                if let Some((sid, new_title)) = rename_commit {
+                    if let Some(session) = app.session_store.sessions.iter_mut().find(|s| s.id == sid) {
+                        session.title = new_title;
+                        let _ = crate::session::save_session_internal(session);
+                    }
+                    app.ui_store.editing_session_id = None;
+                    app.ui_store.editing_title.clear();
                 }
                 // New-tab button (browser style)
                 if ui

@@ -104,6 +104,8 @@ pub struct UiStore {
     pub start: Instant,
     pub locale: crate::i18n::Locale,
     pub theme: crate::theme::Theme,
+    /// Max content width for the chat area (user-adjustable).
+    pub content_max_width: f32,
     /// Last frame's scroll offset for virtual list culling.
     pub last_scroll_offset: f32,
     /// File preview: (file_name, content_text).
@@ -117,6 +119,10 @@ pub struct UiStore {
     pub skill_panel_open: bool,
     /// Right toolbar open state.
     pub toolbar_open: bool,
+    /// Session tab currently being renamed (double-click).
+    pub editing_session_id: Option<String>,
+    /// Buffer for the in-progress rename.
+    pub editing_title: String,
 }
 
 // ============================================================================

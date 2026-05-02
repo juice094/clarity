@@ -24,7 +24,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         ui.add_space(120.0);
                         ui.label(
                             egui::RichText::new("Clarity")
-                                .size(32.0)
+                                .size(theme.text_2xl)
                                 .strong()
                                 .color(theme.text_dim),
                         );
@@ -133,5 +133,4 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         };
     }
 
-    ui.separator();
 }

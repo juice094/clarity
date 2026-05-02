@@ -92,7 +92,7 @@ impl App {
         let now = Instant::now();
         let loaded = load_sessions();
         let (sessions, active_id) = if loaded.is_empty() {
-            let s = new_session("engineering");
+            let s = new_session("engineering", 0);
             let id = s.id.clone();
             (vec![s], id)
         } else {
@@ -106,6 +106,9 @@ impl App {
         cc.egui_ctx.set_style(style);
 
         let settings_edit = GuiSettings::load();
+        let font_scale = settings_edit.font_scale.unwrap_or(1.0);
+        let content_width = settings_edit.content_width.unwrap_or(720.0);
+        let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
             model: settings_edit.model.clone(),
@@ -180,6 +183,7 @@ impl App {
                 fps: 0.0,
                 start: now,
                 theme,
+                content_max_width: content_width,
                 locale: crate::i18n::Locale::default(),
                 last_scroll_offset: 0.0,
                 preview_file: None,
@@ -188,6 +192,8 @@ impl App {
                 toasts: vec![],
                 skill_panel_open: false,
                 toolbar_open: true,
+                editing_session_id: None,
+                editing_title: String::new(),
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
@@ -241,7 +247,8 @@ impl App {
             self.session_store.active_session_id = s.id.clone();
             self.chat_store.input = self.session_store.drafts.remove(&s.id).unwrap_or_default();
         } else {
-            let s = new_session(category);
+            let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
+            let s = new_session(category, count);
             let id = s.id.clone();
             self.session_store.sessions.push(s);
             self.session_store.active_session_id = id.clone();
@@ -278,7 +285,8 @@ impl App {
             self.chat_store.input = self.session_store.drafts.remove(&existing.id).unwrap_or_default();
             return;
         }
-        let s = new_session(&category);
+        let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
+        let s = new_session(&category, count);
         let id = s.id.clone();
         self.session_store.sessions.push(s);
         self.session_store.active_session_id = id.clone();

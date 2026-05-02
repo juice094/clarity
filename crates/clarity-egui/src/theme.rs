@@ -91,9 +91,13 @@ pub struct Theme {
     pub text_xs: f32,
     pub text_sm: f32,
     pub text_base: f32,
+    pub text_md: f32,
     pub text_lg: f32,
     pub text_xl: f32,
     pub text_2xl: f32,
+
+    // --- Font scale ---
+    pub font_scale: f32,
 
     // --- Spacing (8 px baseline grid: 4/8/12/16/20/24/40 px) ---
     pub space_4: f32,
@@ -139,78 +143,82 @@ impl Default for Theme {
 
 #[allow(dead_code)]
 impl Theme {
-    /// Dark theme — deep navy-black + copper accent.
+    /// Dark theme — Glassmorphism (dark glass) with ice-blue accent.
     ///
     /// Design rationale:
-    /// - Backgrounds use deep blue-gray (not pure black) to reduce pupil strain
-    ///   while maintaining an crisp, technical feel.
-    /// - Warm copper accent provides contrast against the cool background.
-    /// - Text is slightly warm to balance the cool bg.
+    /// - Deep black base (#050507) provides OLED-friendly contrast.
+    /// - Semi-transparent surfaces with subtle white borders simulate glass
+    ///   layers without backdrop-blur (not supported by egui).
+    /// - Ice-blue accent (#5B8DEF) harmonises with the cool glass aesthetic.
+    /// - Larger corner radii (12/20 px) reinforce the modern glass feel.
     pub fn dark() -> Self {
         Self {
-            // Backgrounds: deep blue-gray — cool, technical, depth
-            bg: hex("#12141e"),
-            bg_accent: hex("#181a26"),
-            bg_elevated: hex("#1e2030"),
-            bg_hover: hex("#282a3a"),
-            surface: hex("#181a26"),
-            surface_strong: hex("#1e2030"),
+            // Backgrounds: deep black base + translucent glass layers
+            bg: hex("#050507"),
+            bg_accent: rgba(20, 20, 28, 0.80),
+            bg_elevated: rgba(35, 35, 48, 0.80),
+            bg_hover: rgba(45, 45, 62, 0.65),
+            surface: rgba(28, 28, 38, 0.72),
+            surface_strong: rgba(38, 38, 52, 0.85),
 
-            // Text: warm off-white balances the cool bg
-            text: hex("#e4e3e8"),
-            text_strong: hex("#f0eff4"),
-            text_muted: hex("#9493a0"),
-            text_dim: hex("#6c6b78"),
+            // Text: high contrast on dark glass
+            text: hex("#E8EAEF"),
+            text_strong: hex("#FFFFFF"),
+            text_muted: rgba(200, 205, 220, 0.70),
+            text_dim: rgba(200, 205, 220, 0.55),
 
-            // Accent: Warm copper — contrast against cool bg
-            accent: hex("#c98a5e"),
-            accent_hover: hex("#d4a07a"),
-            accent_subtle: hex_alpha("#c98a5e", 0.12),
+            // Accent: ice blue
+            accent: hex("#5B8DEF"),
+            accent_hover: hex("#7DA8F2"),
+            accent_subtle: rgba(91, 141, 239, 0.12),
 
-            // Chat bubbles
-            user_bubble: hex("#c98a5e"),
-            ai_bubble: hex("#1e2030"),
-            chat_text: hex("#dad9e0"),
-            error_bubble: hex_alpha("#c97060", 0.15),
-            error_text: hex("#f0eff4"),
+            // Chat bubbles: translucent glass
+            user_bubble: rgba(91, 141, 239, 0.18),
+            ai_bubble: rgba(255, 255, 255, 0.04),
+            chat_text: hex("#E8EAEF"),
+            error_bubble: rgba(239, 91, 91, 0.28),
+            error_text: hex("#EF8A8A"),
 
-            // Status: warm-muted
-            status_online: hex("#6bb87a"),
-            status_busy: hex("#d4a050"),
-            status_offline: hex("#c97060"),
-            ok: hex("#6bb87a"),
-            warn: hex("#d4a050"),
-            danger: hex("#c97060"),
+            // Status: semantic palette
+            status_online: hex("#6BCB8A"),
+            status_busy: hex("#D4A050"),
+            status_offline: hex("#EF6B6B"),
+            ok: hex("#6BCB8A"),
+            warn: hex("#D4A050"),
+            danger: hex("#EF6B6B"),
 
-            // Borders: cool-tinted
-            border: hex("#2a2c3e"),
-            border_strong: hex("#3a3c4e"),
-            border_hover: hex("#4a4c5e"),
-            input_bg: hex("#1e2030"),
+            // Borders: semi-transparent white (glass reflection edge)
+            border: rgba(255, 255, 255, 0.06),
+            border_strong: rgba(255, 255, 255, 0.10),
+            border_hover: rgba(255, 255, 255, 0.14),
+            input_bg: rgba(18, 18, 26, 0.60),
 
-            // Focus: accent-matched
-            focus_ring: hex_alpha("#c98a5e", 0.25),
-            focus_glow: hex_alpha("#c98a5e", 0.15),
-            selection: hex_alpha("#c98a5e", 0.20),
+            // Focus: blue glow
+            focus_ring: rgba(91, 141, 239, 0.60),
+            focus_glow: rgba(91, 141, 239, 0.20),
+            selection: rgba(91, 141, 239, 0.25),
 
-            // Overlay: scrim + depth layers (white-on-black in dark theme)
+            // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.50),
-            overlay_subtle: hex_alpha("#ffffff", 0.03),
-            overlay_light: hex_alpha("#ffffff", 0.06),
-            overlay_medium: hex_alpha("#ffffff", 0.10),
-            overlay_strong: hex_alpha("#ffffff", 0.18),
+            overlay_subtle: rgba(255, 255, 255, 0.03),
+            overlay_light: rgba(255, 255, 255, 0.06),
+            overlay_medium: rgba(255, 255, 255, 0.10),
+            overlay_strong: rgba(255, 255, 255, 0.18),
 
             // Fonts
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
 
-            // Typography tokens
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_lg: 16.0,
-            text_xl: 20.0,
-            text_2xl: 26.0,
+            font_scale: 1.0,
+
+            // Typography tokens — compact scale for desktop density
+            text_xs: 9.0,
+            text_sm: 11.0,
+            text_base: 12.0,
+            text_md: 13.0,
+            text_lg: 15.0,
+            text_xl: 18.0,
+            text_2xl: 24.0,
 
             // Spacing: 8px baseline grid
             space_4: 4.0,
@@ -221,41 +229,41 @@ impl Theme {
             space_24: 24.0,
             space_40: 40.0,
 
-            // Radius
+            // Radius: modern glassmorphism scale
             radius_sm: 6.0,
-            radius_md: 10.0,
-            radius_lg: 12.0,
-            radius_full: 9999.0,
+            radius_md: 12.0,
+            radius_lg: 20.0,
+            radius_full: 999.0,
 
             // Semantic surfaces
-            tool_call_bg: hex_alpha("#c98a5e", 0.08),
-            code_block_bg: hex("#191b27"),
-            mood_bg: hex_alpha("#d4a07a", 0.06),
+            tool_call_bg: rgba(91, 141, 239, 0.08),
+            code_block_bg: rgba(0, 0, 0, 0.40),
+            mood_bg: rgba(91, 141, 239, 0.06),
 
-            // Shadow: z-depth hierarchy
+            // Shadow: subtle dark depth for glass layers
             shadow_card: egui::Shadow {
                 offset: [0, 1],
-                blur: 3,
+                blur: 8,
                 spread: 0,
-                color: hex_alpha("#000000", 0.15),
+                color: rgba(0, 0, 0, 0.31),
             },
             shadow_panel: egui::Shadow {
                 offset: [0, 2],
-                blur: 8,
+                blur: 16,
                 spread: 0,
-                color: hex_alpha("#000000", 0.20),
+                color: rgba(0, 0, 0, 0.39),
             },
             shadow_modal: egui::Shadow {
                 offset: [0, 8],
-                blur: 24,
+                blur: 32,
                 spread: 0,
-                color: hex_alpha("#000000", 0.25),
+                color: rgba(0, 0, 0, 0.47),
             },
             shadow_toast: egui::Shadow {
                 offset: [0, 4],
-                blur: 12,
+                blur: 16,
                 spread: 0,
-                color: hex_alpha("#000000", 0.20),
+                color: rgba(0, 0, 0, 0.39),
             },
 
             // Animation
@@ -265,77 +273,80 @@ impl Theme {
         }
     }
 
-    /// OLED Black theme — pure black base for OLED screens + copper accent.
+    /// OLED Black theme — pure black base + Glassmorphism glass layers.
     ///
     /// Design rationale:
     /// - True black (#000000) background for OLED pixel-off immersion.
-    /// - Elevated surfaces use subtle warm grays to avoid pure-black flatness.
-    /// - Same copper accent as dark theme for brand consistency.
+    /// - Glass surfaces use the same translucent palette as dark theme,
+    ///   but appear more dramatic against the pure-black void.
     pub fn oled_black() -> Self {
         Self {
-            // Backgrounds: OLED pure black with warm gray elevations
+            // Backgrounds: OLED pure black with glass elevations
             bg: hex("#000000"),
-            bg_accent: hex("#0a0a0e"),
-            bg_elevated: hex("#141418"),
-            bg_hover: hex("#1e1e22"),
-            surface: hex("#0a0a0e"),
-            surface_strong: hex("#141418"),
+            bg_accent: rgba(10, 10, 14, 0.90),
+            bg_elevated: rgba(35, 35, 48, 0.80),
+            bg_hover: rgba(45, 45, 62, 0.65),
+            surface: rgba(28, 28, 38, 0.72),
+            surface_strong: rgba(38, 38, 52, 0.85),
 
-            // Text: slightly warmer than dark theme for contrast against true black
-            text: hex("#e8e7ec"),
-            text_strong: hex("#ffffff"),
-            text_muted: hex("#8e8d98"),
-            text_dim: hex("#5c5b68"),
+            // Text: high contrast
+            text: hex("#E8EAEF"),
+            text_strong: hex("#FFFFFF"),
+            text_muted: rgba(200, 205, 220, 0.70),
+            text_dim: rgba(200, 205, 220, 0.55),
 
-            // Accent: same warm copper
-            accent: hex("#c98a5e"),
-            accent_hover: hex("#d4a07a"),
-            accent_subtle: hex_alpha("#c98a5e", 0.12),
+            // Accent: ice blue
+            accent: hex("#5B8DEF"),
+            accent_hover: hex("#7DA8F2"),
+            accent_subtle: rgba(91, 141, 239, 0.12),
 
             // Chat bubbles
-            user_bubble: hex("#c98a5e"),
-            ai_bubble: hex("#141418"),
-            chat_text: hex("#d8d7dc"),
-            error_bubble: hex_alpha("#c97060", 0.15),
-            error_text: hex("#f0eff4"),
+            user_bubble: rgba(91, 141, 239, 0.18),
+            ai_bubble: rgba(255, 255, 255, 0.04),
+            chat_text: hex("#E8EAEF"),
+            error_bubble: rgba(239, 91, 91, 0.28),
+            error_text: hex("#EF8A8A"),
 
-            // Status: same palette
-            status_online: hex("#6bb87a"),
-            status_busy: hex("#d4a050"),
-            status_offline: hex("#c97060"),
-            ok: hex("#6bb87a"),
-            warn: hex("#d4a050"),
-            danger: hex("#c97060"),
+            // Status
+            status_online: hex("#6BCB8A"),
+            status_busy: hex("#D4A050"),
+            status_offline: hex("#EF6B6B"),
+            ok: hex("#6BCB8A"),
+            warn: hex("#D4A050"),
+            danger: hex("#EF6B6B"),
 
-            // Borders: warmer tinted against black
-            border: hex("#1e1e26"),
-            border_strong: hex("#2e2e38"),
-            border_hover: hex("#3e3e48"),
-            input_bg: hex("#141418"),
+            // Borders: glass reflection edge
+            border: rgba(255, 255, 255, 0.06),
+            border_strong: rgba(255, 255, 255, 0.10),
+            border_hover: rgba(255, 255, 255, 0.14),
+            input_bg: rgba(18, 18, 26, 0.60),
 
-            // Focus: accent-matched
-            focus_ring: hex_alpha("#c98a5e", 0.25),
-            focus_glow: hex_alpha("#c98a5e", 0.15),
-            selection: hex_alpha("#c98a5e", 0.20),
+            // Focus: blue glow
+            focus_ring: rgba(91, 141, 239, 0.60),
+            focus_glow: rgba(91, 141, 239, 0.20),
+            selection: rgba(91, 141, 239, 0.25),
 
             // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.60),
-            overlay_subtle: hex_alpha("#ffffff", 0.03),
-            overlay_light: hex_alpha("#ffffff", 0.06),
-            overlay_medium: hex_alpha("#ffffff", 0.10),
-            overlay_strong: hex_alpha("#ffffff", 0.18),
+            overlay_subtle: rgba(255, 255, 255, 0.03),
+            overlay_light: rgba(255, 255, 255, 0.06),
+            overlay_medium: rgba(255, 255, 255, 0.10),
+            overlay_strong: rgba(255, 255, 255, 0.18),
 
             // Fonts
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
 
-            // Typography tokens
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_lg: 16.0,
-            text_xl: 20.0,
-            text_2xl: 26.0,
+            font_scale: 1.0,
+
+            // Typography tokens — compact scale for desktop density
+            text_xs: 9.0,
+            text_sm: 11.0,
+            text_base: 12.0,
+            text_md: 13.0,
+            text_lg: 15.0,
+            text_xl: 18.0,
+            text_2xl: 24.0,
 
             // Spacing: 8px baseline grid
             space_4: 4.0,
@@ -346,41 +357,41 @@ impl Theme {
             space_24: 24.0,
             space_40: 40.0,
 
-            // Radius
+            // Radius: modern glassmorphism scale
             radius_sm: 6.0,
-            radius_md: 10.0,
-            radius_lg: 12.0,
-            radius_full: 9999.0,
+            radius_md: 12.0,
+            radius_lg: 20.0,
+            radius_full: 999.0,
 
             // Semantic surfaces
-            tool_call_bg: hex_alpha("#c98a5e", 0.08),
-            code_block_bg: hex("#0f0f14"),
-            mood_bg: hex_alpha("#d4a07a", 0.06),
+            tool_call_bg: rgba(91, 141, 239, 0.08),
+            code_block_bg: rgba(0, 0, 0, 0.40),
+            mood_bg: rgba(91, 141, 239, 0.06),
 
-            // Shadow: z-depth hierarchy (stronger against pure black)
+            // Shadow: stronger against pure black
             shadow_card: egui::Shadow {
                 offset: [0, 1],
-                blur: 4,
+                blur: 8,
                 spread: 0,
-                color: hex_alpha("#000000", 0.30),
+                color: rgba(0, 0, 0, 0.31),
             },
             shadow_panel: egui::Shadow {
                 offset: [0, 2],
-                blur: 10,
+                blur: 16,
                 spread: 0,
-                color: hex_alpha("#000000", 0.35),
+                color: rgba(0, 0, 0, 0.39),
             },
             shadow_modal: egui::Shadow {
                 offset: [0, 8],
-                blur: 28,
+                blur: 32,
                 spread: 0,
-                color: hex_alpha("#000000", 0.40),
+                color: rgba(0, 0, 0, 0.47),
             },
             shadow_toast: egui::Shadow {
                 offset: [0, 4],
-                blur: 14,
+                blur: 16,
                 spread: 0,
-                color: hex_alpha("#000000", 0.35),
+                color: rgba(0, 0, 0, 0.39),
             },
 
             // Animation
@@ -448,13 +459,16 @@ impl Theme {
             font_body: "Inter".into(),
             font_mono: "JetBrains Mono".into(),
 
-            // Typography tokens
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_lg: 16.0,
-            text_xl: 20.0,
-            text_2xl: 26.0,
+            font_scale: 1.0,
+
+            // Typography tokens — compact scale for desktop density
+            text_xs: 9.0,
+            text_sm: 11.0,
+            text_base: 12.0,
+            text_md: 13.0,
+            text_lg: 15.0,
+            text_xl: 18.0,
+            text_2xl: 24.0,
 
             space_4: 4.0,
             space_8: 8.0,
@@ -526,6 +540,13 @@ impl Theme {
         style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
         style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
+        // Scale default text styles so markdown/chat content follows the theme font scale.
+        let scale = self.font_scale;
+        style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::new(self.text_xl * scale, egui::FontFamily::Proportional));
+        style.text_styles.insert(egui::TextStyle::Body, egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional));
+        style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::new(self.text_sm * scale, egui::FontFamily::Monospace));
+        style.text_styles.insert(egui::TextStyle::Button, egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional));
+        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::new(self.text_xs * scale, egui::FontFamily::Proportional));
     }
 
     /// Create a frame for chat bubbles.
@@ -599,6 +620,19 @@ impl Theme {
         egui::FontId::new(size, egui::FontFamily::Name("italic".into()))
     }
 
+    /// Scale all typography tokens by a factor (e.g. 0.9 for compact, 1.15 for large).
+    pub fn with_font_scale(mut self, scale: f32) -> Self {
+        self.font_scale = scale;
+        self.text_xs *= scale;
+        self.text_sm *= scale;
+        self.text_base *= scale;
+        self.text_md *= scale;
+        self.text_lg *= scale;
+        self.text_xl *= scale;
+        self.text_2xl *= scale;
+        self
+    }
+
     /// Icon font at the given semantic size token (requires Phosphor icon font registered).
     pub fn font_icon(&self, size: f32) -> egui::FontId {
         egui::FontId::new(size, egui::FontFamily::Name("icons".into()))
@@ -621,6 +655,11 @@ fn hex_alpha(s: &str, alpha: f32) -> egui::Color32 {
     egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a)
 }
 
+fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
+    let a = (a * 255.0).clamp(0.0, 255.0) as u8;
+    egui::Color32::from_rgba_premultiplied(r, g, b, a)
+}
+
 pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
@@ -628,7 +667,8 @@ pub fn setup_fonts(ctx: &egui::Context) {
     // CJK fonts — cross-platform probing
     // ------------------------------------------------------------------
     let cjk_candidates: &[&str] = &[
-        // Windows
+        // Windows — prefer Light weight for softer CJK rendering
+        r"C:\Windows\Fonts\msyhl.ttc",
         r"C:\Windows\Fonts\msyh.ttc",
         r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\simsun.ttc",

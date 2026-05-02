@@ -60,7 +60,7 @@ impl App {
             session.messages.push(msg);
             session.updated_at = now_millis();
             // Auto-name session from first user message
-            if session.title == "New Chat" {
+            if session.title.starts_with("New ") {
                 let trimmed = text.trim();
                 session.title = if trimmed.chars().count() > 20 {
                     format!("{}…", trimmed.chars().take(20).collect::<String>())

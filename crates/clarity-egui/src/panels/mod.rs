@@ -1,7 +1,6 @@
 pub mod approval;
 pub mod chat;
 pub mod mcp;
-pub mod settings;
 pub mod sidebar;
 pub mod skill;
 pub mod subagent_progress;

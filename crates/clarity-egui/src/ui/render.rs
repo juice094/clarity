@@ -8,7 +8,7 @@
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §1.2, §2.1.
 
 use crate::theme::Theme;
-use crate::ui::types::{Message, Role, ToolCallInfo, ToolCallStatus};
+use crate::ui::types::{Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus};
 
 // ============================================================================
 // Render — Message bubbles, tool calls, typing indicator
@@ -18,9 +18,9 @@ use crate::ui::types::{Message, Role, ToolCallInfo, ToolCallStatus};
 /// Returns the actual rendered height (including trailing space).
 ///
 /// Dispatches to:
-/// - `user_bubble()` for user messages (right-aligned bubble)
-/// - `agent_message()` for agent messages (straight layout + avatar)
-/// - `error_bubble()` for error messages (prominent left-aligned bubble)
+/// - `user_bubble()` for user messages (right-aligned glass card)
+/// - `agent_message()` for agent messages (Swiss plain text OR glass card)
+/// - `error_bubble()` for error messages (left-aligned glass card)
 pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     if msg.is_error {
         error_bubble(ui, msg, theme)
@@ -32,68 +32,130 @@ pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     }
 }
 
+// ── Agent ──
+
+fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    let start_y = ui.cursor().min.y;
+
+    if has_structure(msg) {
+        agent_structured_card(ui, msg, theme);
+    } else {
+        agent_text_plain(ui, msg, theme);
+    }
+
+    ui.cursor().min.y - start_y
+}
+
+/// Agent plain text — Swiss Style: no bubble, full-width, bottom border separator.
+fn agent_text_plain(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
+    // Header: avatar + label
+    ui.horizontal(|ui| {
+        crate::components::chat::avatar::avatar(ui, "A", theme);
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new("Agent")
+                .size(theme.text_xs)
+                .color(theme.text_dim),
+        );
+    });
+    ui.add_space(theme.space_4);
+
+    // Content: straight layout, text directly on page background
+    let max_width = ui.available_width();
+    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+        ui.set_max_width(max_width);
+        crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+    });
+
+    // Bottom border separator (Swiss Style list item divider)
+    ui.add_space(theme.space_8);
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 1.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, egui::CornerRadius::same(0), theme.border);
+    ui.add_space(theme.space_8);
+}
+
+/// Agent structured content — Glassmorphism card for code blocks, tools, etc.
+fn agent_structured_card(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
+    // Header: avatar + label (outside the card)
+    ui.horizontal(|ui| {
+        crate::components::chat::avatar::avatar(ui, "A", theme);
+        ui.add_space(8.0);
+        ui.label(
+            egui::RichText::new("Agent")
+                .size(theme.text_xs)
+                .color(theme.text_dim),
+        );
+    });
+    ui.add_space(theme.space_4);
+
+    // Glass card container — subtract padding to avoid parent overflow
+    let max_width = (ui.available_width() - 32.0).max(120.0);
+    egui::Frame::group(ui.style())
+        .fill(theme.surface)
+        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+        .stroke(egui::Stroke::new(1.0, theme.border))
+        .shadow(egui::Shadow::NONE)
+        .inner_margin(egui::Margin::symmetric(16, 12))
+        .show(ui, |ui| {
+            ui.set_max_width(max_width);
+            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+        });
+
+    ui.add_space(theme.space_16);
+}
+
+/// Check if message contains structured blocks (code blocks, etc.) that need a card container.
+fn has_structure(msg: &Message) -> bool {
+    msg.parsed
+        .iter()
+        .any(|b| matches!(b, RenderBlock::CodeBlock { .. }))
+}
+
+// ── User ──
+
 fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
-    let max_width = (ui.available_width() * 0.82).max(280.0);
+    let max_width = (ui.available_width() * 0.72).max(280.0);
 
     ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
         ui.set_max_width(max_width);
         egui::Frame::group(ui.style())
             .fill(theme.user_bubble)
-            .corner_radius(egui::CornerRadius {
-                nw: (theme.radius_lg as u8),
-                ne: 4,
-                sw: (theme.radius_lg as u8),
-                se: 4,
-            })
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::NONE)
-            .shadow(theme.shadow_card)
+            .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
                 ui.set_min_width(48.0);
-                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, egui::Color32::WHITE);
+                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text_strong);
             });
     });
     ui.add_space(theme.space_16);
     ui.cursor().min.y - start_y
 }
 
-fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
-    let start_y = ui.cursor().min.y;
-    let max_width = (ui.available_width() * 0.82).max(280.0);
-
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-        // Avatar placeholder: 28px circle with agent initial
-        crate::components::chat::avatar::avatar(ui, "A", theme);
-
-        ui.add_space(10.0);
-
-        // Content: straight layout, no outer bubble frame
-        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-            ui.set_max_width(max_width);
-            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
-        });
-    });
-    ui.add_space(theme.space_16);
-    ui.cursor().min.y - start_y
-}
+// ── Error ──
 
 fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
-    let max_width = (ui.available_width() * 0.82).max(280.0);
+    let max_width = (ui.available_width() * 0.72).max(280.0);
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
         egui::Frame::group(ui.style())
             .fill(theme.error_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .stroke(egui::Stroke::new(1.0, theme.danger))
-            .shadow(theme.shadow_card)
+            .stroke(egui::Stroke::new(1.0, theme.error_text))
+            .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
                 ui.set_min_width(48.0);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(crate::theme::ICON_WARNING).font(theme.font_icon(theme.text_base)));
+                    ui.label(
+                        egui::RichText::new(crate::theme::ICON_WARNING)
+                            .font(theme.font_icon(theme.text_base)),
+                    );
                     ui.label(
                         egui::RichText::new("Error")
                             .size(theme.text_sm)
@@ -109,6 +171,10 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     ui.cursor().min.y - start_y
 }
 
+// ============================================================================
+// Tool call bubble
+// ============================================================================
+
 /// Render a tool-call lifecycle indicator bubble.
 pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
     let bg = theme.tool_call_bg;
@@ -123,11 +189,13 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
             .fill(bg)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::new(1.0, theme.border))
-            .shadow(theme.shadow_card)
+            .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_base)));
+                    ui.label(
+                        egui::RichText::new(icon).font(theme.font_icon(theme.text_base)),
+                    );
                     ui.label(
                         egui::RichText::new(&tc.name)
                             .size(theme.text_sm)
@@ -147,20 +215,19 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
     ui.add_space(theme.space_12);
 }
 
+// ============================================================================
+// Typing indicator
+// ============================================================================
+
 /// Render a typing indicator "..." bubble.
 pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(ui.available_width() * 0.78);
         egui::Frame::group(ui.style())
             .fill(theme.ai_bubble)
-            .corner_radius(egui::CornerRadius {
-                nw: 4,
-                ne: (theme.radius_lg as u8),
-                sw: 4,
-                se: (theme.radius_lg as u8),
-            })
+            .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::NONE)
-            .shadow(theme.shadow_card)
+            .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 12))
             .show(ui, |ui| {
                 ui.label(

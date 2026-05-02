@@ -208,13 +208,13 @@ pub fn render_blocks(
         }
         match block {
             RenderBlock::Paragraph(spans) => {
-                render_spans(ui, spans, theme, text_color, 15.0, false);
+                render_spans(ui, spans, theme, text_color, theme.text_base, false);
             }
             RenderBlock::Heading(level, spans) => {
                 let size = match level {
-                    1 => 18.0,
-                    2 => 16.0,
-                    _ => 15.0,
+                    1 => theme.text_lg,
+                    2 => theme.text_md,
+                    _ => theme.text_base,
                 };
                 render_spans(ui, spans, theme, text_color, size, true);
             }
@@ -223,8 +223,8 @@ pub fn render_blocks(
             }
             RenderBlock::ListItem(spans) => {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("•").size(theme.text_lg).color(text_color));
-                    render_spans(ui, spans, theme, text_color, 15.0, false);
+                    ui.label(egui::RichText::new("•").size(theme.text_base).color(text_color));
+                    render_spans(ui, spans, theme, text_color, theme.text_base, false);
                 });
             }
             RenderBlock::Blockquote(spans) => {
@@ -234,7 +234,7 @@ pub fn render_blocks(
                     ui.painter()
                         .rect_filled(rect, egui::CornerRadius::same(2), theme.accent);
                     ui.add_space(theme.space_8);
-                    render_spans(ui, spans, theme, theme.text_muted, 15.0, false);
+                    render_spans(ui, spans, theme, theme.text_muted, theme.text_base, false);
                 });
             }
             RenderBlock::HorizontalRule => {

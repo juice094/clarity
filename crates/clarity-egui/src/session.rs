@@ -90,17 +90,22 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
-pub fn new_session(category: &str) -> Session {
+pub fn new_session(category: &str, index: usize) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
-    let title = match category {
-        "emotion" => "New Emotion",
-        "knowledge" => "New Knowledge",
-        "engineering" => "New Engineering",
-        _ => "New Chat",
+    let base = match category {
+        "emotion" => "Emotion",
+        "knowledge" => "Knowledge",
+        "engineering" => "Engineering",
+        _ => "Chat",
+    };
+    let title = if index == 0 {
+        format!("New {}", base)
+    } else {
+        format!("New {} {}", base, index + 1)
     };
     Session {
         id: id.clone(),
-        title: title.into(),
+        title,
         category: category.into(),
         messages: vec![],
         updated_at: now_millis(),

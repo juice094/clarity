@@ -37,6 +37,10 @@ pub struct GuiSettings {
     pub api_key: Option<String>,
     #[serde(default)]
     pub active_profile: Option<String>,
+    #[serde(default)]
+    pub font_scale: Option<f32>,
+    #[serde(default)]
+    pub content_width: Option<f32>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -202,6 +206,8 @@ impl Default for GuiSettings {
             language: Some("zh".into()),
             api_key: None,
             active_profile: None,
+            font_scale: None,
+            content_width: None,
             profiles: HashMap::new(),
         }
     }

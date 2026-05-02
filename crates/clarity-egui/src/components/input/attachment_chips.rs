@@ -6,6 +6,9 @@ pub fn attachment_chips(
     attachments: &[Attachment],
     theme: &Theme,
 ) -> Option<usize> {
+    if attachments.is_empty() {
+        return None;
+    }
     let mut to_remove: Option<usize> = None;
     ui.horizontal_wrapped(|ui| {
         ui.label(

@@ -4,6 +4,10 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     if !app.mcp_store.mcp_panel_open {
         return;
     }
+    // Safety: if a previous panic left mcp_config as None, reload from disk.
+    if app.mcp_store.mcp_config.is_none() {
+        app.mcp_store.mcp_config = crate::ui::mcp_panel::load_mcp_config();
+    }
     let mut config_opt = app.mcp_store.mcp_config.take();
     let mut save_clicked = false;
     let mut cancel_clicked = false;

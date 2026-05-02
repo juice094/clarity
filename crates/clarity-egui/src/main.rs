@@ -204,7 +204,7 @@ impl App {
     }
 
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
-        panels::settings::render_settings_panel(self, ctx);
+        components::settings::render_settings_panel(self, ctx);
     }
 
     fn render_chat_area(&mut self, ctx: &egui::Context) {
