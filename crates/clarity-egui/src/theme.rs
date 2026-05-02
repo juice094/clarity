@@ -201,7 +201,7 @@ impl Theme {
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
             focus_glow: rgba(91, 141, 239, 0.20),
-            selection: rgba(91, 141, 239, 0.25),
+            selection: rgba(91, 141, 239, 0.45),
 
             // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.50),
@@ -332,7 +332,7 @@ impl Theme {
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
             focus_glow: rgba(91, 141, 239, 0.20),
-            selection: rgba(91, 141, 239, 0.25),
+            selection: rgba(91, 141, 239, 0.45),
 
             // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.60),
@@ -458,7 +458,7 @@ impl Theme {
             // Focus: accent-matched
             focus_ring: hex_alpha("#c98a5e", 0.20),
             focus_glow: hex_alpha("#c98a5e", 0.10),
-            selection: hex_alpha("#c98a5e", 0.20),
+            selection: hex_alpha("#c98a5e", 0.35),
 
             // Overlay: scrim + depth layers (black-on-white in light theme)
             overlay: hex_alpha("#000000", 0.35),

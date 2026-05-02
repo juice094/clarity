@@ -4,13 +4,6 @@ pub mod about_tab;
 pub mod interface_tab;
 pub mod provider_tab;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SettingsTab {
-    Provider,
-    Interface,
-    About,
-}
-
 pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     if !app.settings_store.settings_open {
         return;
@@ -19,7 +12,6 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     let screen = ctx.screen_rect();
 
     // ── Dimmer + outside-click-to-close ──
-    // Use a deeper scrim than theme.overlay for modal-quality focus.
     let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen,
@@ -41,17 +33,10 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
             }
         });
 
-    let tabs = [
-        (SettingsTab::Provider, app.t("Provider")),
-        (SettingsTab::Interface, app.t("Interface")),
-        (SettingsTab::About, app.t("About")),
-    ];
-    let mut at = app.settings_store.settings_active_tab;
-
-    egui::Window::new(app.t("Settings"))
+    egui::Window::new("")
         .collapsible(false)
         .resizable(false)
-        .default_size(egui::vec2(640.0, 520.0))
+        .default_size(egui::vec2(640.0, 560.0))
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
             egui::Frame::window(&ctx.style())
@@ -60,65 +45,35 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                 .inner_margin(egui::Margin::same(0)),
         )
         .show(ctx, |ui| {
-            // ── Tab bar ──
-            egui::Frame::new()
-                .fill(app.ui_store.theme.bg_accent)
-                .inner_margin(egui::Margin::symmetric(8, 0))
-                .corner_radius(egui::CornerRadius {
-                    nw: app.ui_store.theme.radius_lg as u8,
-                    ne: app.ui_store.theme.radius_lg as u8,
-                    sw: 0,
-                    se: 0,
-                })
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
                 .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.set_min_height(34.0);
-                        for (i, (_t, name)) in tabs.iter().enumerate() {
-                            let is = i as u8 == at;
-                            let bg = if is {
-                                app.ui_store.theme.surface
-                            } else {
-                                egui::Color32::TRANSPARENT
-                            };
-                            let tc = if is {
-                                app.ui_store.theme.text
-                            } else {
-                                app.ui_store.theme.text_muted
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(*name)
-                                            .size(app.ui_store.theme.text_base)
-                                            .color(tc),
-                                    )
-                                    .fill(bg)
-                                    .corner_radius(app.ui_store.theme.radius_sm as u8)
-                                    .min_size(egui::vec2(90.0, 28.0)),
-                                )
-                                .clicked()
-                            {
-                                at = i as u8;
-                            }
-                        }
-                    });
-                });
+                    egui::Frame::new()
+                        .fill(egui::Color32::TRANSPARENT)
+                        .inner_margin(egui::Margin::symmetric(16, 12))
+                        .show(ui, |ui| {
+                            // ── Provider ──
+                            provider_tab::render_provider(app, ui);
 
-            // ── Content ──
-            egui::Frame::new()
-                .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin::symmetric(16, 12))
-                .show(ui, |ui| {
-                    ui.set_min_height(350.0);
-                    match tabs[at as usize].0 {
-                        SettingsTab::Provider => provider_tab::render_provider(app, ui),
-                        SettingsTab::Interface => interface_tab::render_interface(app, ui),
-                        SettingsTab::About => about_tab::render_about(app, ui),
-                    }
+                            // Divider
+                            ui.add_space(app.ui_store.theme.space_16);
+                            ui.separator();
+                            ui.add_space(app.ui_store.theme.space_16);
+
+                            // ── Interface ──
+                            interface_tab::render_interface(app, ui);
+
+                            // Divider
+                            ui.add_space(app.ui_store.theme.space_16);
+                            ui.separator();
+                            ui.add_space(app.ui_store.theme.space_16);
+
+                            // ── About ──
+                            about_tab::render_about(app, ui);
+                        });
                 });
         });
 
-    app.settings_store.settings_active_tab = at;
     if close_requested {
         app.settings_store.settings_open = false;
     }

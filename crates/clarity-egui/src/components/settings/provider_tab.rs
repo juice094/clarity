@@ -58,7 +58,6 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
     let current = app.settings_store.settings_edit.provider.clone();
 
     egui::ScrollArea::vertical()
-        .max_height(280.0)
         .show(ui, |ui| {
             for p in &all {
                 let is_active = p.id == current;
