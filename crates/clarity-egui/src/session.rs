@@ -29,30 +29,37 @@ pub fn load_sessions() -> Vec<Session> {
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     if let Ok(data) = serde_json::from_str::<SessionData>(&content) {
+                        let messages: Vec<Message> = data
+                            .messages
+                            .into_iter()
+                            .map(|m| {
+                                let mut msg = Message {
+                                    role: if m.role == "user" {
+                                        Role::User
+                                    } else {
+                                        Role::Agent
+                                    },
+                                    content: m.content,
+                                    timestamp: Instant::now(),
+                                    parsed: vec![],
+                                    cached_height: None,
+                                    is_error: false,
+                                };
+                                msg.prepare();
+                                msg
+                            })
+                            .collect();
+                        // Empty sessions are transient — don't load them and clean up
+                        // the orphaned file so they never clutter the tab bar.
+                        if messages.is_empty() {
+                            let _ = std::fs::remove_file(&path);
+                            continue;
+                        }
                         sessions.push(Session {
                             id: data.id,
                             title: data.title,
                             category: data.category.unwrap_or_else(|| "engineering".to_string()),
-                            messages: data
-                                .messages
-                                .into_iter()
-                                .map(|m| {
-                                    let mut msg = Message {
-                                        role: if m.role == "user" {
-                                            Role::User
-                                        } else {
-                                            Role::Agent
-                                        },
-                                        content: m.content,
-                                        timestamp: Instant::now(),
-                                        parsed: vec![],
-                                        cached_height: None,
-                                        is_error: false,
-                                    };
-                                    msg.prepare();
-                                    msg
-                                })
-                                .collect(),
+                            messages,
                             updated_at: data.updated_at,
                         });
                     }
@@ -65,9 +72,17 @@ pub fn load_sessions() -> Vec<Session> {
 }
 
 pub fn save_session_internal(session: &Session) -> Result<(), String> {
+    let path = session_path(&session.id);
+    // Empty sessions are transient — don't write them to disk.
+    // If a previously-non-empty session became empty, delete its file.
+    if session.messages.is_empty() {
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+        }
+        return Ok(());
+    }
     let dir = sessions_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = session_path(&session.id);
     let data = SessionData {
         id: session.id.clone(),
         title: session.title.clone(),

@@ -277,29 +277,52 @@ impl App {
     }
 
     pub(crate) fn new_session(&mut self) {
-        let old_id = self.session_store.active_session_id.clone();
+        let category = self.session_store.active_category.clone();
 
-        // If the current session has no messages, remove it instead of
-        // accumulating empty tabs. This prevents the "blank tab" problem
-        // where users click (+) repeatedly without ever sending a message.
-        let was_empty = self
+        // Mature AI clients (ChatGPT, Claude, Cursor) never accumulate blank chats.
+        // If the current session has no messages, reuse it — just refresh the title.
+        // The user stays on the same tab; no new empty tab is created.
+        let is_empty = self
             .session_store
             .active_session()
             .map(|s| s.messages.is_empty())
             .unwrap_or(false);
-        if was_empty {
-            self.session_store.sessions.retain(|s| s.id != old_id);
-            self.session_store.drafts.remove(&old_id);
-        } else {
-            self.save_current_session();
-            if !self.chat_store.input.trim().is_empty() {
-                self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+        if is_empty {
+            let count = self
+                .session_store
+                .sessions
+                .iter()
+                .filter(|s| s.category == category && !s.messages.is_empty())
+                .count();
+            let base = match category.as_str() {
+                "emotion" => "Emotion",
+                "knowledge" => "Knowledge",
+                "engineering" => "Engineering",
+                _ => "Chat",
+            };
+            let title = if count == 0 {
+                format!("New {}", base)
             } else {
-                self.session_store.drafts.remove(&old_id);
+                format!("New {} {}", base, count + 1)
+            };
+            if let Some(active) = self.session_store.active_session_mut() {
+                active.title = title;
+                active.updated_at = crate::session::now_millis();
             }
+            self.chat_store.input = String::new();
+            self.chat_store.last_usage = None;
+            return;
         }
 
-        let category = self.session_store.active_category.clone();
+        // Current session has real messages — save it and create a fresh one.
+        let old_id = self.session_store.active_session_id.clone();
+        self.save_current_session();
+        if !self.chat_store.input.trim().is_empty() {
+            self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+        } else {
+            self.session_store.drafts.remove(&old_id);
+        }
+
         // Emotion is singleton: refuse to create multiple emotion sessions.
         if category == "emotion" {
             if let Some(existing) = self.session_store.sessions.iter().find(|s| s.category == "emotion") {
