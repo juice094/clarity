@@ -171,8 +171,10 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - 窗口圆角：Windows 直角边框，需 `DwmSetWindowAttribute`（仅 Win11）
   - 最大化按钮 Unicode "□" 在某些字体下异常
   - 响应式自动收缩：无 Hanako 式 `CHAT_MIN_WIDTH` 自动折叠逻辑
+  - `toolbar.rs` 残留：`panels/toolbar.rs`、`render_toolbar`、`toolbar_open` 未完全清理（编译 warning 但不影响功能）
+- **已完成（本轮）**
+  - P0 ✅ — 输入框固定在底部：`TopBottomPanel::bottom` 固定输入栏，`CentralPanel` 内 `ScrollArea` 滚动 message_list + preview + plan；输入栏宽度跟随 `content_max_width` 居中
 - **下一周期规划（待决策）**
-  - P0 — 输入框固定在底部：message_list + 预览放入共享 ScrollArea，输入框始终可见（边读边问）
   - P1 — 文件预览可折叠/钉住：预览卡片不常驻占用 message_list 空间
   - P2 — 左侧 Activity Bar 视图切换：窄条图标切换对话/文件/网页/设置（VS Code 模式）
   - P3 — Cursor 式内联对话：文件预览本身成为 Agent message 的一种，支持选中文段直接提问

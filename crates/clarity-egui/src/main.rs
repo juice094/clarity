@@ -211,6 +211,10 @@ impl App {
         panels::chat::render_chat_area(self, ctx);
     }
 
+    fn render_input_panel(&mut self, ctx: &egui::Context) {
+        panels::chat::render_input_panel(self, ctx);
+    }
+
     fn render_sidebar(&mut self, ctx: &egui::Context) {
         panels::sidebar::render_sidebar(self, ctx);
     }
@@ -340,6 +344,7 @@ impl eframe::App for App {
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
         self.render_safe(ctx, "task", |app, ctx| app.render_task_panel(ctx));
+        self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));

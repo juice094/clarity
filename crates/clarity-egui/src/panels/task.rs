@@ -49,7 +49,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 let content = std::fs::read_to_string(&path).ok();
-                app.ui_store.preview_file = content.map(|c| (name, c));
+                app.ui_store.preview_item = content.map(|c| crate::ui::types::PreviewItem::File { name: name.clone(), content: c });
             }
         });
 }

@@ -63,6 +63,9 @@ pub fn process_events(app: &mut App) {
                 provider_id,
                 models,
             ),
+            UiEvent::WebPageFetched { title, url, content } => {
+                chat::on_web_page_fetched(&mut app.ui_store, title, url, content);
+            }
             UiEvent::ResolveApproval { req_id, response } => {
                 system::on_resolve_approval(
                     app.state.approval_runtime.clone(),

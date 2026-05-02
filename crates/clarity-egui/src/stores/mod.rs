@@ -108,10 +108,16 @@ pub struct UiStore {
     pub content_max_width: f32,
     /// Last frame's scroll offset for virtual list culling.
     pub last_scroll_offset: f32,
-    /// File preview: (file_name, content_text).
-    pub preview_file: Option<(String, String)>,
+    /// Preview item in chat area (file or web page).
+    pub preview_item: Option<PreviewItem>,
     /// Timestamp of the most recent input modification.
     pub last_input_modified: Instant,
+    /// Web tabs managed in the left sidebar.
+    pub web_tabs: Vec<WebTab>,
+    /// Whether the web tabs section is expanded in the sidebar.
+    pub web_tabs_expanded: bool,
+    /// Whether the thinking log section is expanded in the sidebar.
+    pub thinking_log_expanded: bool,
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,

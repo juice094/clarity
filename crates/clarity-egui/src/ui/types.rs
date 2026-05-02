@@ -67,6 +67,12 @@ pub enum UiEvent {
         provider_id: String,
         models: Vec<String>,
     },
+    /// Async web page fetch completed — payload delivered to chat preview area.
+    WebPageFetched {
+        title: String,
+        url: String,
+        content: String,
+    },
     /// Resolve an approval request asynchronously (moved off the UI thread).
     ResolveApproval {
         req_id: String,
@@ -219,4 +225,20 @@ pub enum RenderBlock {
     ListItem(Vec<InlineSpan>),
     Blockquote(Vec<InlineSpan>),
     HorizontalRule,
+}
+
+// ============================================================================
+// Preview — reused glass-card preview in chat area for files and web pages
+// ============================================================================
+
+#[derive(Clone, Debug)]
+pub enum PreviewItem {
+    File { name: String, content: String },
+    WebPage { title: String, url: String, content: String },
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct WebTab {
+    pub title: String,
+    pub url: String,
 }

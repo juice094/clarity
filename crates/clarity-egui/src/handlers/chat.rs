@@ -137,3 +137,12 @@ pub fn on_plan_step_end(chat_store: &mut ChatStore, step_id: String, success: bo
         }
     }
 }
+
+pub fn on_web_page_fetched(
+    ui_store: &mut crate::stores::UiStore,
+    title: String,
+    url: String,
+    content: String,
+) {
+    ui_store.preview_item = Some(crate::ui::types::PreviewItem::WebPage { title, url, content });
+}
