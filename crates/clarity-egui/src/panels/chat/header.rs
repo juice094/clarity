@@ -48,11 +48,14 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                 egui::vec2(tab_max, 28.0),
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 4.0;
-                        let mut rename_commit: Option<(String, String)> = None;
-                        let mut tab_to_close: Option<String> = None;
-                        for (id, title, is_active) in &category_sessions {
+                    egui::ScrollArea::horizontal()
+                        .id_salt("session_tabs_scroll")
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 4.0;
+                                let mut rename_commit: Option<(String, String)> = None;
+                                let mut tab_to_close: Option<String> = None;
+                                for (id, title, is_active) in &category_sessions {
                             let editing = app.ui_store.editing_session_id.as_ref() == Some(id);
                             if editing {
                                 // Inline rename TextEdit
@@ -220,8 +223,9 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                             app.new_session();
                         }
                     });
-                },
-            );
+                });
+            },
+        );
         }
         ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

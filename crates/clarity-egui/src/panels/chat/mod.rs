@@ -51,6 +51,11 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 .inner_margin(egui::Margin::symmetric(app.ui_store.theme.space_20 as i8, app.ui_store.theme.space_16 as i8)),
         )
         .show(ctx, |ui| {
+            // Header uses the full CentralPanel width (not constrained by content_max_width).
+            // This gives the tab bar maximum breathing room; overflow is handled by
+            // ScrollArea::horizontal inside render_header.
+            render_header(app, ui);
+
             let available = ui.available_width();
             let content_w = available.min(max_w);
             let side_pad = ((available - content_w) / 2.0).max(0.0);
@@ -64,8 +69,6 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     .max_rect(centered_rect)
                     .layout(egui::Layout::top_down(egui::Align::LEFT)),
                 |ui| {
-                    render_header(app, ui);
-
                     // Scrollable content area (messages + preview + plan)
                     egui::ScrollArea::vertical()
                         .auto_shrink([false; 2])
