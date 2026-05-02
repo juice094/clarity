@@ -9,7 +9,7 @@
 //! * resolve pending tool approvals, and
 //! * shut the agent down gracefully.
 
-use crate::agent::driver::{ChatDriver, DefaultChatDriver};
+use crate::agent::driver::ChatDriver;
 use crate::agent::ops::Op;
 use crate::agent::Agent;
 use crate::approval::ApprovalResponse;

@@ -1,7 +1,5 @@
 //! Operations that can be dispatched to an AgentController.
 
-use crate::llm::api::Message;
-
 /// An operation submitted to the controller.
 #[derive(Debug, Clone)]
 pub enum Op {

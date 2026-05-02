@@ -190,6 +190,15 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 设计审查报告见 [`docs/plans/frontend-design-critique-2026-05-01.md`](./docs/plans/frontend-design-critique-2026-05-01.md)
 
+**Sprint 14.5 — 架构解耦与代码健康（✅ 已完成，2026-05-02）**
+
+> 详见 [`docs/plans/nightcrawler-drax-atom.md`](./docs/plans/nightcrawler-drax-atom.md)
+
+- **Phase A ✅**: 统一 Agent Streaming Loop — 提取 `run_streaming_turn()` 共享编排逻辑（setup → loop → teardown），`run_streaming()` 与 `run_streaming_with_messages()` 缩减为纯消息构建包装器
+- **Phase B ✅**: 复活 `ChatDriver` trait + 解耦 `Op` 枚举 — Gateway 通过 `ConversationChatDriver` 注入 OpenAI 风格消息历史；移除 `Op::ConversationTurn` / `Op::ConversationTurnSync`；`Op` 恢复为 5 个纯生命周期变体
+- **Phase C ✅**: 清理 AppState — 移除 `initialized`（egui）、`active_connections`（gateway）死字段；统一 `approval_runtime` 为 `mode_aware_approval_runtime.inner()`；去除 Gateway `Agent` 外层 `RwLock`（Agent 内部已是 `std::sync::RwLock<AgentInner>`）
+- **验证**: `cargo test --workspace --lib` = 438 passed / 0 failed / 6 ignored；`cargo check --workspace --lib` 0 warnings
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
@@ -241,6 +250,8 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > **Status update (2026-05-03, Sprint 13 complete):** 4-week architecture decoupling delivered. See Sprint 13 section above for full list.
 >
 > ### Resolved ✅
+> - ~~`clarity-core` ↔ `clarity-gateway` coupling~~ — Fixed by introducing `ChatDriver` trait (`driver.rs`) and removing `Op::ConversationTurn` / `Op::ConversationTurnSync` variants. Gateway now injects message history via `ConversationChatDriver` instead of extending core enums (Sprint 14.5, `d7a40c79`).
+> - ~~`Agent::run_streaming` vs `run_streaming_with_messages` duplication~~ — Fixed by extracting `run_streaming_turn()` containing shared orchestration (setup → loop → teardown). Both entry points are now thin message-building wrappers (Sprint 14.5, `d7a40c79`).
 > - ~~`agent ↔ approval` cycle~~ — Fixed by extracting `ToolCall`/`FunctionCall` to `types.rs`.
 > - ~~`AppState` dead fields~~ — `initialized: AtomicBool` removed from `clarity-egui`; `active_connections: AtomicUsize` removed from `clarity-gateway`. Outer `tokio::sync::RwLock<Agent>` removed from gateway (Agent uses `std::sync::RwLock` internally; the async wrapper was redundant). `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`.
 > - ~~`agent ↔ llm` cycle~~ — Fixed by extracting `Message`/`LlmProvider`/`LlmResponse`/`StreamDelta` to `llm/api.rs`.
@@ -256,7 +267,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > ### Remaining ⚠️
 > 1. **`clarity-core` ↔ `clarity-gateway`**: `AgentController` lives in `core`, but its `Op` enum (`Op::ConversationTurn`) had to be extended to support Gateway's OpenAI-compatible message history. Gateway-driven requirements can still ripple back into core agent abstractions.
 > 2. **`Agent::run_streaming` vs `run_streaming_with_messages`**: Two public entry points remain. Consider extracting a pure "agent loop" trait in future refactors to avoid duplicating compaction / wire / memory logic.
-> 3. **`AppState` bloat**: `active_connections` and `initialized` dead fields removed (Phase C, 2026-05-02). `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`. Remaining: `tool_registry` is redundant because `agent.registry()` already holds it (kept for the admin API convenience).
+> 3. **`AppState` bloat**: `active_connections` (gateway) and `initialized` (egui) dead fields removed. `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`. Remaining: `tool_registry` is redundant because `agent.registry()` already holds it (kept for the admin API convenience). (Sprint 14.5, `d7a40c79`)
 > 4. **`std::sync::RwLock` in `Agent.inner`**: Intentionally kept as `std::sync::RwLock<AgentInner>`. `Agent` getters/setters are synchronous and may be called from non-async contexts (TUI event loop, Gateway handlers). All critical sections are short field reads/writes only. `background/` module locks have been migrated to `tokio::sync` (`1141ba9`).
 > 5. **`clarity-core` responsibility bloat (v0.3.1)**: `model_download.rs` (HF streaming download + progress callbacks) and `view_models/settings.rs` (Settings ViewModel) both landed in `clarity-core`. Core now carries GUI onboarding logic, network I/O, and settings serialization — blurring the "pure business logic" boundary. Long-term: evaluate extracting `clarity-infrastructure` for I/O-heavy modules (download, settings persistence, network probing).
 >
@@ -269,7 +280,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > | `PersistingApprovalRuntime` | `approval/mod.rs` | Wraps any `ApprovalRuntime` and persists resolved approvals to `MemoryStore` |
 > | `ApprovalRecord` | `approval/mod.rs` | Serializable snapshot of an approval decision |
 >
-> **Recommendation for future refactors**: Extract a `ChatDriver` or `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own message-building strategies without modifying core enums.
+> **Recommendation for future refactors**: Extract a `ConversationEngine` trait from `Agent` so that `Gateway` and `TUI` can inject their own turn-building strategies without modifying core enums. `ChatDriver` already decouples message history; a full `ConversationEngine` would also abstract skill discovery and tool schema fetch.
 
 ## Capability Islands & Sleeping Mines
 
