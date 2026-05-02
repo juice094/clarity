@@ -19,10 +19,12 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     let screen = ctx.screen_rect();
 
     // ── Dimmer + outside-click-to-close ──
+    // Use a deeper scrim than theme.overlay for modal-quality focus.
+    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen,
         egui::CornerRadius::same(0),
-        app.ui_store.theme.overlay,
+        scrim,
     );
 
     // Click outside the settings window → close
@@ -53,7 +55,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
             egui::Frame::window(&ctx.style())
-                .fill(app.ui_store.theme.surface)
+                .fill(app.ui_store.theme.bg)
                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
                 .inner_margin(egui::Margin::same(0)),
         )

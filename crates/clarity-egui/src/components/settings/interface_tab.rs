@@ -44,110 +44,103 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             set_theme(app, "light");
         }
     });
-    ui.add_space(theme.space_16);
+    ui.add_space(theme.space_20);
 
     // ── Font Size ──
-    crate::widgets::settings_row(
-        ui,
-        &theme,
-        app.t("Font Size"),
-        None,
-        |ui| {
-            let scales = [(0.9, "Small"), (1.0, "Medium"), (1.15, "Large")];
-            let current_scale = app.settings_store.settings_edit.font_scale.unwrap_or(1.0);
-            ui.horizontal(|ui| {
-                for (val, label) in &scales {
-                    let active = (current_scale - val).abs() < 0.01;
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(*label).size(theme.text_sm),
-                            )
-                            .fill(if active { theme.accent } else { theme.surface })
-                            .corner_radius(theme.radius_sm as u8),
-                        )
-                        .clicked()
-                    {
-                        app.settings_store.settings_edit.font_scale = Some(*val);
-                        let theme_name = app.settings_store.settings_edit.theme.clone();
-                        app.ui_store.theme = if theme_name == "light" {
-                            Theme::light().with_font_scale(*val)
-                        } else {
-                            Theme::dark().with_font_scale(*val)
-                        };
-                        app.auto_save_settings();
-                    }
-                }
-            });
-        },
+    ui.label(
+        egui::RichText::new(app.t("Font Size"))
+            .size(theme.text_sm)
+            .color(theme.text)
+            .strong(),
     );
+    ui.add_space(theme.space_4);
+    let scales = [(0.9, "Small"), (1.0, "Medium"), (1.15, "Large")];
+    let current_scale = app.settings_store.settings_edit.font_scale.unwrap_or(1.0);
+    ui.horizontal(|ui| {
+        for (val, label) in &scales {
+            let active = (current_scale - val).abs() < 0.01;
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
+                        .fill(if active { theme.accent } else { theme.surface })
+                        .corner_radius(theme.radius_sm as u8),
+                )
+                .clicked()
+            {
+                app.settings_store.settings_edit.font_scale = Some(*val);
+                let theme_name = app.settings_store.settings_edit.theme.clone();
+                app.ui_store.theme = if theme_name == "light" {
+                    Theme::light().with_font_scale(*val)
+                } else {
+                    Theme::dark().with_font_scale(*val)
+                };
+                app.auto_save_settings();
+            }
+        }
+    });
+    ui.add_space(theme.space_16);
 
     // ── Content Width ──
-    crate::widgets::settings_row(
-        ui,
-        &theme,
-        app.t("Content Width"),
-        None,
-        |ui| {
-            let widths = [(600.0, "Narrow"), (720.0, "Medium"), (900.0, "Wide")];
-            let current_width = app.settings_store.settings_edit.content_width.unwrap_or(720.0);
-            ui.horizontal(|ui| {
-                for (val, label) in &widths {
-                    let active = (current_width - val).abs() < 1.0;
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new(*label).size(theme.text_sm),
-                            )
-                            .fill(if active { theme.accent } else { theme.surface })
-                            .corner_radius(theme.radius_sm as u8),
-                        )
-                        .clicked()
-                    {
-                        app.settings_store.settings_edit.content_width = Some(*val);
-                        app.ui_store.content_max_width = *val;
-                        app.auto_save_settings();
-                    }
-                }
-            });
-        },
+    ui.label(
+        egui::RichText::new(app.t("Content Width"))
+            .size(theme.text_sm)
+            .color(theme.text)
+            .strong(),
     );
+    ui.add_space(theme.space_4);
+    let widths = [(600.0, "Narrow"), (720.0, "Medium"), (900.0, "Wide")];
+    let current_width = app.settings_store.settings_edit.content_width.unwrap_or(720.0);
+    ui.horizontal(|ui| {
+        for (val, label) in &widths {
+            let active = (current_width - val).abs() < 1.0;
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
+                        .fill(if active { theme.accent } else { theme.surface })
+                        .corner_radius(theme.radius_sm as u8),
+                )
+                .clicked()
+            {
+                app.settings_store.settings_edit.content_width = Some(*val);
+                app.ui_store.content_max_width = *val;
+                app.auto_save_settings();
+            }
+        }
+    });
+    ui.add_space(theme.space_16);
 
     // ── Language ──
-    crate::widgets::settings_row(
-        ui,
-        &theme,
-        app.t("Language"),
-        None,
-        |ui| {
-            let en = matches!(app.ui_store.locale, crate::i18n::Locale::EnUS);
-            let zh = matches!(app.ui_store.locale, crate::i18n::Locale::ZhCN);
-            ui.horizontal(|ui| {
-                if ui
-                    .add(
-                        egui::Button::new(egui::RichText::new("English").size(theme.text_sm))
-                            .fill(if en { theme.accent } else { theme.surface })
-                            .corner_radius(theme.radius_sm as u8),
-                    )
-                    .clicked()
-                {
-                    app.ui_store.locale = crate::i18n::Locale::EnUS;
-                }
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("Simplified Chinese").size(theme.text_sm),
-                        )
-                        .fill(if zh { theme.accent } else { theme.surface })
-                        .corner_radius(theme.radius_sm as u8),
-                    )
-                    .clicked()
-                {
-                    app.ui_store.locale = crate::i18n::Locale::ZhCN;
-                }
-            });
-        },
+    ui.label(
+        egui::RichText::new(app.t("Language"))
+            .size(theme.text_sm)
+            .color(theme.text)
+            .strong(),
     );
+    ui.add_space(theme.space_4);
+    ui.horizontal(|ui| {
+        let en = matches!(app.ui_store.locale, crate::i18n::Locale::EnUS);
+        let zh = matches!(app.ui_store.locale, crate::i18n::Locale::ZhCN);
+        if ui
+            .add(
+                egui::Button::new(egui::RichText::new("English").size(theme.text_sm))
+                    .fill(if en { theme.accent } else { theme.surface })
+                    .corner_radius(theme.radius_sm as u8),
+            )
+            .clicked()
+        {
+            app.ui_store.locale = crate::i18n::Locale::EnUS;
+        }
+        if ui
+            .add(
+                egui::Button::new(egui::RichText::new("Simplified Chinese").size(theme.text_sm))
+                    .fill(if zh { theme.accent } else { theme.surface })
+                    .corner_radius(theme.radius_sm as u8),
+            )
+            .clicked()
+        {
+            app.ui_store.locale = crate::i18n::Locale::ZhCN;
+        }
+    });
 }
 
 fn set_theme(app: &mut App, name: &str) {

@@ -8,6 +8,7 @@ use crate::theme::Theme;
 /// │  hint text                                    │
 /// └─────────────────────────────────────────────┘
 /// ```
+#[allow(dead_code)]
 pub fn settings_row(
     ui: &mut egui::Ui,
     theme: &Theme,

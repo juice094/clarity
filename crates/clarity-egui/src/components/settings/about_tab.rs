@@ -11,7 +11,7 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
         ui.painter().rect_filled(
             logo_rect,
             egui::CornerRadius::same(theme.radius_md as u8),
-            theme.glass_strong,
+            theme.surface,
         );
         ui.painter().text(
             logo_rect.center(),
