@@ -540,9 +540,14 @@ impl Theme {
         style.visuals.extreme_bg_color = self.bg_accent;
         style.visuals.widgets.inactive.weak_bg_fill = self.surface;
         style.visuals.widgets.inactive.bg_fill = self.surface;
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
         style.visuals.widgets.hovered.weak_bg_fill = self.bg_hover;
         style.visuals.widgets.hovered.bg_fill = self.bg_hover;
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
         style.visuals.widgets.active.bg_fill = self.bg_hover;
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+        style.visuals.widgets.noninteractive.bg_fill = self.surface;
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
         style.visuals.selection.bg_fill = self.selection;
         style.visuals.selection.stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);

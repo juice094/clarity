@@ -19,6 +19,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
             egui::Frame::group(&ctx.style())
                 .fill(app.ui_store.theme.surface)
                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
+                .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::same(16)),
         )
         .show(ctx, |ui| {

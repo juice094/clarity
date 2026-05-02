@@ -102,8 +102,9 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                     });
                 });
 
-            // ── Content — fixed height ──
+            // ── Content ──
             egui::Frame::new()
+                .fill(egui::Color32::TRANSPARENT)
                 .inner_margin(egui::Margin::symmetric(16, 12))
                 .show(ui, |ui| {
                     ui.set_min_height(350.0);
