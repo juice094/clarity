@@ -58,6 +58,7 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
     let current = app.settings_store.settings_edit.provider.clone();
 
     egui::ScrollArea::vertical()
+        .min_scrolled_height(200.0)
         .show(ui, |ui| {
             for p in &all {
                 let is_active = p.id == current;
@@ -221,8 +222,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
 
     ui.add_space(theme.space_12);
 
-    // ── API Key (read-only with show/hide) ──
-    let show_key_id = ui.id().with("show_key");
+    // ── API Key (editable with show/hide) ──
+    let show_key_id = ui.id().with(&prov.id).with("show_key");
     let mut show_key = ui.data(|d| d.get_temp::<bool>(show_key_id).unwrap_or(false));
 
     ui.label(
@@ -230,6 +231,11 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .font(theme.font(theme.text_sm))
             .color(theme.text_muted),
     );
+    let key_edit_id = ui.id().with(&prov.id).with("api_key_edit");
+    let mut key_buffer = ui.data(|d| {
+        d.get_temp::<String>(key_edit_id)
+            .unwrap_or_else(|| prov.api_key_ref.clone())
+    });
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -237,20 +243,20 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                let key_display = if let Some(key) = prov.resolve_api_key() {
-                    if show_key {
-                        key
-                    } else {
-                        "••••••••••••".into()
-                    }
-                } else {
-                    "Not configured".into()
-                };
-                ui.label(
-                    egui::RichText::new(key_display)
-                        .font(theme.font(theme.text_base))
-                        .color(theme.text),
-                );
+                let mut te = egui::TextEdit::singleline(&mut key_buffer)
+                    .password(!show_key)
+                    .desired_width(ui.available_width() - 50.0)
+                    .font(theme.font(theme.text_base));
+                if prov.api_key_ref.is_empty() {
+                    te = te.hint_text("Enter API key...");
+                }
+                let resp = ui.add(te);
+                if resp.changed() {
+                    ui.data_mut(|d| d.insert_temp(key_edit_id, key_buffer.clone()));
+                    let mut updated = prov.clone();
+                    updated.api_key_ref = key_buffer;
+                    let _ = app.settings_store.provider_registry.update_provider(&updated);
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let eye_text = if show_key { "Hide" } else { "Show" };
                     if ui.add(theme.ghost_button(eye_text)).clicked() {
@@ -263,23 +269,36 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
 
     ui.add_space(theme.space_8);
 
-    // ── Base URL ──
+    // ── Base URL (editable) ──
     ui.label(
         egui::RichText::new("Base URL")
             .font(theme.font(theme.text_sm))
             .color(theme.text_muted),
     );
+    let url_edit_id = ui.id().with(&prov.id).with("base_url_edit");
+    let mut url_buffer = ui.data(|d| {
+        d.get_temp::<String>(url_edit_id)
+            .unwrap_or_else(|| prov.base_url.clone())
+    });
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(&prov.base_url)
-                    .font(theme.font(theme.text_base))
-                    .color(theme.text),
-            );
+            let mut te = egui::TextEdit::singleline(&mut url_buffer)
+                .desired_width(ui.available_width())
+                .font(theme.font(theme.text_base));
+            if prov.base_url.is_empty() {
+                te = te.hint_text("https://api.example.com/v1");
+            }
+            let resp = ui.add(te);
+            if resp.changed() {
+                ui.data_mut(|d| d.insert_temp(url_edit_id, url_buffer.clone()));
+                let mut updated = prov.clone();
+                updated.base_url = url_buffer;
+                let _ = app.settings_store.provider_registry.update_provider(&updated);
+            }
         });
 
     ui.add_space(theme.space_12);

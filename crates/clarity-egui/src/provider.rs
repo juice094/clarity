@@ -277,6 +277,12 @@ impl ProviderRegistry {
         }
     }
 
+    /// Update a provider definition in memory and persist to disk.
+    pub fn update_provider(&mut self, def: &ProviderDefinition) -> Result<(), String> {
+        self.providers.insert(def.id.clone(), def.clone());
+        self.save_custom(def)
+    }
+
     /// List only custom (non-builtin) providers.
     #[allow(dead_code)]
     pub fn list_custom(&self) -> Vec<&ProviderDefinition> {
