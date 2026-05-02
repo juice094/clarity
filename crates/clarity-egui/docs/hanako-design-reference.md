@@ -191,6 +191,8 @@ openhanako 有大量 CSS transition/animation：
 | InputArea | `components/InputArea.tsx` | `render_input` | `panels/chat/input.rs` | L1+L2 |
 | SessionList | `components/SessionList.tsx` | `render_header` (tabs) | `panels/chat/header.rs` | L1 结构 |
 | Sidebar | `components/Sidebar.tsx` | `render_sidebar` | `panels/sidebar.rs` | L1 结构 |
+| ToolsSection | `components/Toolbar.tsx` | `tools_section::render` | `components/tools_section.rs` | L2 视觉 |
+| FilesPanel | `components/FileTree.tsx` | `render_task_panel` | `panels/task.rs` | L1+L2 |
 | SettingsApp | `settings/SettingsApp.tsx` | `render_settings_panel` | `components/settings/mod.rs` | L1 结构 |
 | ProviderTab | `settings/tabs/ProviderTab.tsx` | `provider_tab::render_provider` | `components/settings/provider_tab.rs` | L2 视觉 |
 | StatusBar | `components/StatusBar.tsx` | 无（待实现） | — | L2 视觉 |
