@@ -63,6 +63,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                 .add(
                     egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
                         .fill(if active { theme.accent } else { theme.surface })
+                        .stroke(if active { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
                         .corner_radius(theme.radius_sm as u8),
                 )
                 .clicked()
@@ -97,6 +98,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                 .add(
                     egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
                         .fill(if active { theme.accent } else { theme.surface })
+                        .stroke(if active { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
                         .corner_radius(theme.radius_sm as u8),
                 )
                 .clicked()
@@ -124,6 +126,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .add(
                 egui::Button::new(egui::RichText::new("English").size(theme.text_sm))
                     .fill(if en { theme.accent } else { theme.surface })
+                    .stroke(if en { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
                     .corner_radius(theme.radius_sm as u8),
             )
             .clicked()
@@ -134,6 +137,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .add(
                 egui::Button::new(egui::RichText::new("Simplified Chinese").size(theme.text_sm))
                     .fill(if zh { theme.accent } else { theme.surface })
+                    .stroke(if zh { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
                     .corner_radius(theme.radius_sm as u8),
             )
             .clicked()

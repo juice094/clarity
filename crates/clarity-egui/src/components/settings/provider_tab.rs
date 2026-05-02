@@ -71,14 +71,10 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
                 );
 
                 let has_key = !p.api_key_ref.is_empty() && p.resolve_api_key().is_some();
-                let text_color = if has_key {
-                    if is_active {
-                        theme.accent
-                    } else {
-                        theme.text
-                    }
+                let text_color = if is_active {
+                    theme.accent
                 } else {
-                    theme.text_dim
+                    theme.text
                 };
 
                 let bg = if is_active || resp.hovered() {
@@ -100,7 +96,7 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
                 }
 
                 ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(rect.shrink2(egui::vec2(10.0, 0.0))),
+                    egui::UiBuilder::new().max_rect(rect.shrink2(egui::vec2(6.0, 0.0))),
                     |ui| {
                         ui.horizontal(|ui| {
                             ui.set_min_height(h);
@@ -238,7 +234,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .stroke(egui::Stroke::NONE)
+        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -277,7 +273,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .stroke(egui::Stroke::NONE)
+        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             ui.label(
@@ -363,6 +359,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             egui::RichText::new(test_label).size(theme.text_sm),
         )
         .fill(theme.surface)
+        .stroke(egui::Stroke::new(1.0, theme.border))
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
             let (display_name, base_url, api_fmt) = app
@@ -425,6 +422,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             egui::RichText::new(refresh_label).size(theme.text_sm),
         )
         .fill(theme.surface)
+        .stroke(egui::Stroke::new(1.0, theme.border))
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_refreshing, refresh_btn).clicked() {
             let (_, base_url, api_fmt) = app
