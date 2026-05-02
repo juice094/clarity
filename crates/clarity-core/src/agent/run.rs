@@ -584,13 +584,17 @@ impl Agent {
 
             let was_streamed = turn_response.is_some();
             let response = match turn_response {
-                Some(r) => r,
+                Some(r) => {
+                    debug!("Using streamed response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
+                    r
+                }
                 None => {
                     prompt_tokens =
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
                             &messages,
                         ) as u32;
                     let r = llm.complete(&messages, &tools).await?;
+                    debug!("Using complete() response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
                     completion_tokens = r.content.len().div_ceil(4) as u32;
                     r
                 }
@@ -612,7 +616,10 @@ impl Agent {
                     }
                 }
 
-                final_response = response.content;
+                final_response = response.content.clone();
+                if final_response.is_empty() {
+                    warn!("Empty final response on iteration {} (was_streamed={})", iteration + 1, was_streamed);
+                }
                 info!("Agent loop completed after {} iterations", iteration + 1);
                 completed = true;
                 break;
