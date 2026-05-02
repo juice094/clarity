@@ -64,7 +64,6 @@ pub struct SettingsStore {
     pub settings_edit: crate::settings::GuiSettings,
     #[allow(dead_code)]
     pub settings_vm: clarity_core::view_models::settings::SettingsViewModel,
-    #[allow(dead_code)]
     pub settings_active_tab: u8,
     pub show_add_provider: bool,
     pub add_provider_name: String,
