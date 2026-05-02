@@ -6,25 +6,54 @@
 
 ---
 
-## 一、当前 sprint（Sprint 13：稳定性硬化）
+## 一、已完成 Sprint
+
+### Sprint 13 — 稳定性硬化（2026-04-27 ~ 2026-05-03）
 
 来源：`docs/plans/2026-04-30-sprint13-stability-hardening.md`
 
 | ID | 事项 | 优先级 | 状态 |
 |----|------|--------|------|
-| S13-A1 | Agent 工具失败断路器（失败即停，不无限重试） | P0 | 未启动 |
-| S13-A2 | 错误消息路径脱敏（`C:\Users\...` → `~`） | P0 | 未启动 |
-| S13-A3 | System Prompt 边界硬化（防内部信息泄露） | P0 | 未启动 |
-| S13-B1 | Approval 状态持久化（InMemory → SQLite） | P0 | 未启动 |
-| S13-B2 | Approval Request ID 一致性校验 | P0 | 未启动 |
-| S13-B3 | Agent 身份统一（去除底层模型名引用） | P1 | 未启动 |
-| S13-C1 | `LLMProviderSelectionPolicy` 策略抽象 | P1 | 未启动 |
-| S13-C2 | 网络探测层重构（probe 只驱动 UI，不决定 provider） | P1 | 未启动 |
-| S13-C3 | `ensure_llm` God Function 拆分 | P1 | 未启动 |
+| S13-A1 | Agent 工具失败断路器（失败即停，不无限重试） | P0 | ✅ 已完成 |
+| S13-A2 | 错误消息路径脱敏（`C:\Users\...` → `~`） | P0 | ✅ 已完成 |
+| S13-A3 | System Prompt 边界硬化（防内部信息泄露） | P0 | ✅ 已完成 |
+| S13-B1 | Approval 状态持久化（InMemory → SQLite） | P0 | ✅ 已完成 |
+| S13-B2 | Approval Request ID 一致性校验 | P0 | ✅ 已完成 |
+| S13-B3 | Agent 身份统一（去除底层模型名引用） | P1 | ✅ 已完成 |
+| S13-C1 | `LLMProviderSelectionPolicy` 策略抽象 | P1 | ✅ 已完成 |
+| S13-C2 | 网络探测层重构（probe 只驱动 UI，不决定 provider） | P1 | ✅ 已完成 |
+| S13-C3 | `ensure_llm` God Function 拆分 | P1 | ⏸️ 冻结 |
+
+### Sprint 14.5 — 架构解耦与代码健康（2026-05-02）
+
+来源：`docs/plans/nightcrawler-drax-atom.md`
+
+| 事项 | 状态 | 说明 |
+|------|------|------|
+| Phase A：统一 Agent Streaming Loop | ✅ | 提取 `run_streaming_turn()`，消除 `run_streaming()` / `run_streaming_with_messages()` 重复编排 |
+| Phase B：复活 ChatDriver + 解耦 Op 枚举 | ✅ | `ConversationChatDriver` 接入 Gateway；`Op` 恢复 5 个纯生命周期变体 |
+| Phase C：清理 AppState 死字段 | ✅ | 移除 `initialized`、`active_connections`、外层 `RwLock<Agent>`、重复 `approval_runtime` |
+| **P0 Bug — Agent 空响应** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行 |
+
+**遗留问题（纳入 Sprint 15）**：
+- `run_streaming_with_messages()` 不调用 `refresh_context()` → Context Convergence Phase 1
+- `task_store` 孤儿问题 → 待决策
 
 ---
 
-## 二、解耦与架构健康（分发标准）
+## 二、当前 Sprint（Sprint 15 — Context Convergence Phase 1）
+
+| ID | 事项 | 优先级 | 状态 | 说明 |
+|----|------|--------|------|------|
+| S15-C1 | `refresh_context()` 统一移入 `run_streaming_turn()` | P0 | 未启动 | 确保 Gateway/egui/TUI 所有路径获取最新 Git/项目上下文 |
+| S15-C2 | `SystemPromptBuilder` 消耗 `GitContext` + `ProjectMetadata` | P0 | 未启动 | 主 Agent Prompt 自动包含 Git 分支、未提交变更、项目依赖 |
+| S15-C3 | Memory 检索迁移进 `SystemPromptBuilder` | P1 | 未启动 | 将 `memory_store.search()` 从 `run_streaming()` 移入 builder，统一上下文注入 |
+| S15-C4 | `filter_tools_value()` 端到端验证 | P1 | 未启动 | skill 激活时 tool schema 白名单验证 |
+| S15-C5 | 空响应防御机制评估 | P2 | 未启动 | 收集 1–2 周日志，决定是否添加自动重试/默认回退消息 |
+
+---
+
+## 三、解耦与架构健康（分发标准）
 
 来源：`docs/plans/2026-04-27-decoupling.md`、`docs/architecture/COUPLING_AUDIT.md`
 
@@ -46,7 +75,7 @@
 
 ---
 
-## 三、egui 功能 Parity（与 core 对齐）
+## 四、egui 功能 Parity（与 core 对齐）
 
 来源：`docs/PROJECT_STATUS.md` §3
 
@@ -66,7 +95,7 @@
 
 ---
 
-## 四、核心架构演进（Future Direction）
+## 五、核心架构演进（Future Direction）
 
 来源：`docs/FUTURE_DIRECTION.md`
 
@@ -110,18 +139,19 @@
 
 ---
 
-## 五、技术债务
+## 六、技术债务
 
 | 债务项 | 严重度 | 说明 | 计划 |
 |--------|--------|------|------|
 | egui 零测试 | 🔴 重大 | 当前 0 tests，违反 `test_governance.md` | Sprint 13+ 注入 ≥20 纯逻辑测试 |
+| Agent 空响应防御 | 🟡 中 | stream 空内容/LLM 返回空无自动回退 | 收集日志后决策（S15-C5） |
 | `unwrap()` 密度 | 🟡 中 | 171 总量 / ~39 真实风险 | 冻结新增，渐进清理（目标 ≤150） |
 | cargo audit 上游漏洞 | 🟡 低 | 3 处 Tauri 间接依赖（已归档） | 等上游更新，不主动投入 |
 | 文档过时 | 🟢 低 | 持续维护 | 每次重大重构后同步 |
 
 ---
 
-## 六、冻结项（6 个月内不启动）
+## 七、冻结项（6 个月内不启动）
 
 | ID | 事项 | 冻结原因 | 解除条件 |
 |----|------|----------|----------|
@@ -133,10 +163,10 @@
 
 ---
 
-## 七、验收命令（任何变更后必执行）
+## 八、验收命令（任何变更后必执行）
 
 ```bash
-cargo test --workspace --lib          # 577 passed, 0 failed
+cargo test --workspace --lib          # 438 passed, 0 failed, 6 ignored
 cargo clippy --workspace -- -D warnings  # 0 warnings
 cargo fmt --all -- --check            # 0 diff
 cargo doc --workspace --no-deps       # 0 doc warnings
@@ -145,4 +175,4 @@ cargo audit                           # 0 RUSTSEC
 
 ---
 
-*本文件随开发进度持续更新。下次审视：Sprint 13 结束时。*
+*本文件随开发进度持续更新。下次审视：Sprint 15 结束时。*

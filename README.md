@@ -113,7 +113,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 584 tests, 0 failed, 6 ignored
+cargo test --workspace --lib                          # 438 tests, 0 failed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

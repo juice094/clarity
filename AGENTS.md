@@ -199,6 +199,16 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - **Phase C ✅**: 清理 AppState — 移除 `initialized`（egui）、`active_connections`（gateway）死字段；统一 `approval_runtime` 为 `mode_aware_approval_runtime.inner()`；去除 Gateway `Agent` 外层 `RwLock`（Agent 内部已是 `std::sync::RwLock<AgentInner>`）
 - **验证**: `cargo test --workspace --lib` = 438 passed / 0 failed / 6 ignored；`cargo check --workspace --lib` 0 warnings
 
+**Bug 修复（本轮）**
+- **P0 — Agent 空响应**（`fix/agent-empty-response` 分支，commit `b74bc79f`）
+  - 根因 1：`llm.stream()` 中途报错后，旧代码清空积累内容并 break，但仍设置 `turn_response = Some(empty)`，导致跳过 `complete()` fallback，返回空字符串。修复：引入 `stream_ok` 标志，仅 stream 完整成功时才设置 `turn_response`。
+  - 根因 2：`run_streaming_turn()` 直接调用 `registry.get_tool_schemas()`，绕过 `filter_tools_value()`。当 skill 激活时发送全量工具描述，可能导致 LLM 忽略指令。修复：恢复 `filter_tools_value()` 调用。
+  - 根因 3：`run_streaming_loop()` 返回 Err 时，`?` 提前返回，`finish_turn()` 未执行，Agent 状态卡在 `Running`，后续输入被阻塞。修复：将 `finish_turn()` 移到结果检查之前。
+
+**遗留问题**
+- `run_streaming_with_messages()`（Gateway/ChatDriver 路径）不调用 `refresh_context()`，导致 Git 上下文和项目元数据可能 stale。修复方案：将 `refresh_context()` 移入 `run_streaming_turn()`（而非仅在 `run_streaming()` 中调用）。影响：Gateway 驱动的 turn 也能感知最新 Git 状态和项目文件变更。→ 纳入 Sprint 15 / Context Convergence Phase 1。
+- `task_store` 孤儿问题未处理，保留至后续 Sprint 决策
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
@@ -374,21 +384,26 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - 进入 Plan 模式 → 检索"过去同类 Plan 的执行时长/失败步骤"
 - 需扩展 `wire` 事件类型，由 `memory` crate 的 background listener 订阅并决策推送。
 
-### 执行优先级
+### 执行优先级（更新于 2026-05-02）
 
 ```text
-Week 1 (4.29-5.5):   Phase 1 上下文汇流
-  └─ 产出：主 Agent 能感知 Git + 文件树 + 记忆
-  └─ 验证：让 Clarity 处理一个真实 PR 描述，观察分支/未提交变更识别能力
+Week 1 (5.3-5.9):     🔥 Context Convergence Phase 1（高优先级，1.5–2.5 天）
+  └─ 产出：SystemPromptBuilder 消耗 GitContext + ProjectMetadata；
+          run_streaming_turn() 统一调用 refresh_context()；
+          memory 检索迁移进 builder
+  └─ 验证：Gateway 路径也能感知 Git 分支/未提交变更；
+          skill 激活时 tool schema 正确过滤（已部分修复，待验证）
 
-Week 2 (5.6-5.12):   Phase 2 执行并联 + Phase 3 UI 统一层启动
+Week 2 (5.10-5.16):   Phase 2 执行并联 + Phase 3 UI 统一层启动
   └─ 产出：Plan 并行执行 + /yolo 命令可用
   └─ 验证：一个 5 步骤 Plan，其中 3 个无依赖步骤并行完成
 
-Week 3-4 (5.13-5.19): Phase 3 收尾 + Phase 4 设计
+Week 3-4 (5.17-5.23): Phase 3 收尾 + Phase 4 设计
   └─ 产出：Headless/TUI/egui 共享同一套交互抽象
   └─ 验证：切换前端不改变审批行为和数据流
 ```
+
+> **决策变更（2026-05-02）**：原定 Sprint 15 egui 功能（文件预览折叠/Activity Bar/Cursor 式内联对话）推迟。空响应 bug 的修复暴露出 streaming 路径的上下文注入缺口（`refresh_context()` 未在 Gateway 路径调用），优先填补此缺口比新增 UI 功能更有架构价值。
 
 ---
 

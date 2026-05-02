@@ -75,6 +75,15 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
 | `clarity-egui` | 🚀 **已启动** | `crates/clarity-egui` 已创建，复刻 Tauri 深色主题风格。状态：**主力栈**，`clarity-tauri` 废弃归档。v0.4.0 起 Release 产出 egui 二进制 |
 
+### Sprint 14.5 — 架构解耦与空响应修复（2026-05-02，1 天）
+
+| 工作项 | 状态 | 说明 |
+|--------|------|------|
+| 统一 Agent Streaming Loop | ✅ | 提取 `run_streaming_turn()`，消除重复编排 |
+| 复活 ChatDriver + 解耦 Op | ✅ | Gateway 通过 `ConversationChatDriver` 注入消息历史；`Op` 恢复纯净 |
+| AppState 死字段清理 | ✅ | 移除 `initialized`、`active_connections`、外层 `RwLock`、重复 `approval_runtime` |
+| **Agent 空响应修复** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行（详见 `docs/plans/2026-05-02-agent-empty-response-followup.md`） |
+
 ### Phase 3：集群语义验证 + Claw 持续化（4-6 周）
 
 目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器；实现跨会话状态快照与多角色认知协同。
