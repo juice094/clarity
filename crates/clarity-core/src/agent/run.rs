@@ -543,6 +543,7 @@ impl Agent {
                     });
                     let mut accumulated = String::new();
                     let mut tool_calls: Vec<ToolCall> = Vec::new();
+                    let mut stream_ok = true;
                     while let Some(chunk_result) = stream_rx.recv().await {
                         match chunk_result {
                             Ok(delta) => {
@@ -559,18 +560,19 @@ impl Agent {
                             }
                             Err(e) => {
                                 warn!("Stream error: {}, falling back to complete()", e);
-                                accumulated.clear();
-                                tool_calls.clear();
+                                stream_ok = false;
                                 break;
                             }
                         }
                     }
-                    completion_tokens = accumulated.len().div_ceil(4) as u32;
-                    turn_response = Some(LlmResponse {
-                        content: accumulated,
-                        tool_calls,
-                        is_complete: true,
-                    });
+                    if stream_ok {
+                        completion_tokens = accumulated.len().div_ceil(4) as u32;
+                        turn_response = Some(LlmResponse {
+                            content: accumulated,
+                            tool_calls,
+                            is_complete: true,
+                        });
+                    }
                 }
                 Err(e) => {
                     debug!(
@@ -672,7 +674,7 @@ impl Agent {
         }
 
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
-        let tools = self.registry.get_tool_schemas()?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
         info!(
             "Starting streaming agent turn for query: {}",
@@ -685,7 +687,7 @@ impl Agent {
 
         let mut messages = messages;
         let mut on_chunk = on_chunk;
-        let (final_response, completed) = self
+        let loop_result = self
             .run_streaming_loop(
                 &mut messages,
                 &tools,
@@ -693,8 +695,10 @@ impl Agent {
                 &mut on_chunk,
                 &cancel_token,
             )
-            .await?;
+            .await;
         self.finish_turn();
+
+        let (final_response, completed) = loop_result?;
 
         // Teardown
         self.send_wire_message(WireMessage::TurnEnd);
