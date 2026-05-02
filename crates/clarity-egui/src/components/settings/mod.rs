@@ -49,7 +49,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     egui::Window::new(app.t("Settings"))
         .collapsible(false)
         .resizable(false)
-        .fixed_size(egui::vec2(560.0, 460.0))
+        .default_size(egui::vec2(640.0, 520.0))
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
             egui::Frame::window(&ctx.style())

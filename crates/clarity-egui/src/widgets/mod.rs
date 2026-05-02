@@ -1,10 +1,13 @@
 pub mod badge;
 pub mod card;
 pub mod icon_button;
+pub mod settings_row;
 pub mod status_dot;
+pub mod toggle;
 
-pub use badge::badge;
 pub use icon_button::icon_button;
 pub use icon_button::icon_button_primary;
 pub use icon_button::icon_button_toolbar;
+pub use settings_row::settings_row;
 pub use status_dot::status_dot;
+// pub use toggle::toggle; // TODO: enable when used in UI

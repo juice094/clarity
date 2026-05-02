@@ -2,6 +2,7 @@ use crate::theme::Theme;
 
 /// Small pill badge (e.g. "openai", "ollama" in provider cards).
 /// Replaces raw painter rect_filled + text constructions.
+#[allow(dead_code)]
 pub fn badge(ui: &mut egui::Ui, text: &str, theme: &Theme) -> egui::Response {
     egui::Frame::new()
         .fill(theme.bg_hover)
