@@ -340,7 +340,6 @@ impl eframe::App for App {
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
         self.render_safe(ctx, "task", |app, ctx| app.render_task_panel(ctx));
-        self.render_safe(ctx, "toolbar", |app, ctx| app.render_toolbar(ctx));
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));

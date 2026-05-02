@@ -191,7 +191,7 @@ impl App {
                 pending_approvals: Vec::new(),
                 toasts: vec![],
                 skill_panel_open: false,
-                toolbar_open: true,
+                toolbar_open: false,
                 editing_session_id: None,
                 editing_title: String::new(),
             },
