@@ -174,6 +174,8 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - `toolbar.rs` 残留：`panels/toolbar.rs`、`render_toolbar`、`toolbar_open` 未完全清理（编译 warning 但不影响功能）
 - **已完成（本轮）**
   - P0 ✅ — 输入框固定在底部：`TopBottomPanel::bottom` 固定输入栏，`CentralPanel` 内 `ScrollArea` 滚动 message_list + preview + plan；输入栏宽度跟随 `content_max_width` 居中
+  - Sidebar Web Tabs ✅ — 左侧 Sidebar 新增网页标签面板：URL 列表管理（添加/删除/持久化），点击后异步抓取网页纯文本并在 Chat 区以 glass card 预览（复用文件预览 UI）
+  - Sidebar Thinking Log ✅ — 左侧 Sidebar 新增思考日志面板：显示当前 Agent turn 的工具调用链（状态图标 + 工具名 + 参数），从 message_list 底部迁移至此
 - **下一周期规划（待决策）**
   - P1 — 文件预览可折叠/钉住：预览卡片不常驻占用 message_list 空间
   - P2 — 左侧 Activity Bar 视图切换：窄条图标切换对话/文件/网页/设置（VS Code 模式）

@@ -30,6 +30,7 @@ mod components;
 mod stores;
 mod services;
 mod handlers;
+mod platform;
 
 use app_state::AppState;
 
@@ -398,6 +399,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Clarity",
         options,
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(|cc| {
+            #[cfg(windows)]
+            let _ = platform::windows::apply_rounded_corners(cc);
+            Ok(Box::new(App::new(cc)))
+        }),
     )
 }

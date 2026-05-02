@@ -945,6 +945,7 @@ dependencies = [
  "html-escape",
  "once_cell",
  "parking_lot",
+ "raw-window-handle",
  "regex",
  "reqwest",
  "serde",
@@ -954,6 +955,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "windows",
 ]
 
 [[package]]
