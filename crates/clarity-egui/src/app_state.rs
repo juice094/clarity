@@ -31,11 +31,7 @@ pub struct AppState {
     pub llm_load_lock: tokio::sync::Mutex<()>,
     pub cached_settings: Mutex<GuiSettings>,
     pub prewarm_error: Mutex<Option<String>>,
-    #[allow(dead_code)]
-    pub initialized: AtomicBool,
     pub task_store: clarity_core::background::TaskStore,
-    /// Shared approval runtime for UI↔Agent coordination.
-    pub approval_runtime: Arc<clarity_core::approval::InMemoryApprovalRuntime>,
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
     pub mode_aware_approval_runtime:
         Arc<clarity_core::approval::ModeAwareApprovalRuntime<clarity_core::approval::InMemoryApprovalRuntime>>,
@@ -64,9 +60,7 @@ impl Default for AppState {
             llm_load_lock: tokio::sync::Mutex::new(()),
             cached_settings: Mutex::new(settings),
             prewarm_error: Mutex::new(None),
-            initialized: AtomicBool::new(false),
             task_store: clarity_core::background::TaskStore::new(task_dir),
-            approval_runtime: approval_rt,
             mode_aware_approval_runtime: mode_aware_rt,
         }
     }

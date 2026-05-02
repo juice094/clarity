@@ -107,7 +107,7 @@ impl StdioServer {
     /// to stdout until EOF or `agent/shutdown` is received.
     pub async fn run(self) -> Result<(), StdioServerError> {
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControllerEvent>();
-        let (controller, op_tx) = AgentController::new_with_events(self.agent, event_tx);
+        let (controller, op_tx) = AgentController::new_with_events(self.agent, event_tx, None);
 
         // Spawn the controller event loop
         let controller_handle = tokio::spawn(controller.run());

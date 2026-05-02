@@ -9,6 +9,7 @@
 //! * resolve pending tool approvals, and
 //! * shut the agent down gracefully.
 
+use crate::agent::driver::{ChatDriver, DefaultChatDriver};
 use crate::agent::ops::Op;
 use crate::agent::Agent;
 use crate::approval::ApprovalResponse;
@@ -56,6 +57,7 @@ pub struct AgentController {
     agent: Agent,
     rx: UnboundedReceiver<Op>,
     event_tx: Option<UnboundedSender<ControllerEvent>>,
+    chat_driver: Option<Arc<dyn ChatDriver>>,
 }
 
 impl AgentController {
@@ -66,6 +68,7 @@ impl AgentController {
             agent,
             rx,
             event_tx: None,
+            chat_driver: None,
         }
     }
 
@@ -78,6 +81,7 @@ impl AgentController {
                 agent,
                 rx,
                 event_tx: None,
+                chat_driver: None,
             },
             tx,
         )
@@ -92,6 +96,7 @@ impl AgentController {
     pub fn new_with_events(
         mut agent: Agent,
         event_tx: UnboundedSender<ControllerEvent>,
+        chat_driver: Option<Arc<dyn ChatDriver>>,
     ) -> (Self, UnboundedSender<Op>) {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -136,6 +141,7 @@ impl AgentController {
                 agent,
                 rx,
                 event_tx: Some(event_tx),
+                chat_driver,
             },
             tx,
         )
@@ -154,8 +160,9 @@ impl AgentController {
     pub fn spawn_with_events(
         agent: Agent,
         event_tx: UnboundedSender<ControllerEvent>,
+        chat_driver: Option<Arc<dyn ChatDriver>>,
     ) -> UnboundedSender<Op> {
-        let (controller, tx) = Self::new_with_events(agent, event_tx);
+        let (controller, tx) = Self::new_with_events(agent, event_tx, chat_driver);
         tokio::spawn(controller.run());
         tx
     }
@@ -183,80 +190,51 @@ impl AgentController {
                             let agent = self.agent.clone();
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
-                            let handle = tokio::spawn(async move {
-                                let result = agent.run_streaming(&prompt, move |chunk| {
-                                    if let Some(ref tx) = event_tx {
-                                        let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
-                                    }
-                                }).await;
-
-                                if let Some(ref tx) = event_tx2 {
-                                    match &result {
-                                        Ok(response) => {
-                                            let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                            let handle = if let Some(ref driver) = self.chat_driver {
+                                let system_prompt = self.agent.build_system_prompt();
+                                let messages = driver.build_messages(&prompt, &system_prompt);
+                                tokio::spawn(async move {
+                                    let result = agent.run_streaming_with_messages(messages, move |chunk| {
+                                        if let Some(ref tx) = event_tx {
+                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
                                         }
-                                        Err(e) => {
-                                            let _ = tx.send(ControllerEvent::Error(e.to_string()));
-                                        }
-                                    }
-                                }
+                                    }).await;
 
-                                result
-                            });
-                            state = ControllerState::Running(handle);
-                        }
-
-                        Some(Op::ConversationTurn(messages)) => {
-                            debug!("Controller: ConversationTurn ({} messages)", messages.len());
-                            self.agent.reset();
-                            let agent = self.agent.clone();
-                            let event_tx = self.event_tx.clone();
-                            let event_tx2 = event_tx.clone();
-                            let handle = tokio::spawn(async move {
-                                let result = agent.run_streaming_with_messages(messages, move |chunk| {
-                                    if let Some(ref tx) = event_tx {
-                                        let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
-                                    }
-                                }).await;
-
-                                if let Some(ref tx) = event_tx2 {
-                                    match &result {
-                                        Ok(response) => {
-                                            let _ = tx.send(ControllerEvent::Complete(response.clone()));
-                                        }
-                                        Err(e) => {
-                                            let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                    if let Some(ref tx) = event_tx2 {
+                                        match &result {
+                                            Ok(response) => {
+                                                let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                            }
                                         }
                                     }
-                                }
 
-                                result
-                            });
-                            state = ControllerState::Running(handle);
-                        }
-
-                        Some(Op::ConversationTurnSync(messages)) => {
-                            debug!("Controller: ConversationTurnSync ({} messages)", messages.len());
-                            self.agent.reset();
-                            let agent = self.agent.clone();
-                            let event_tx = self.event_tx.clone();
-                            let event_tx2 = event_tx.clone();
-                            let handle = tokio::spawn(async move {
-                                let result = agent.run_with_messages_sync(messages).await;
-
-                                if let Some(ref tx) = event_tx2 {
-                                    match &result {
-                                        Ok(response) => {
-                                            let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                    result
+                                })
+                            } else {
+                                tokio::spawn(async move {
+                                    let result = agent.run_streaming(&prompt, move |chunk| {
+                                        if let Some(ref tx) = event_tx {
+                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
                                         }
-                                        Err(e) => {
-                                            let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                    }).await;
+
+                                    if let Some(ref tx) = event_tx2 {
+                                        match &result {
+                                            Ok(response) => {
+                                                let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                            }
                                         }
                                     }
-                                }
 
-                                result
-                            });
+                                    result
+                                })
+                            };
                             state = ControllerState::Running(handle);
                         }
 
@@ -427,7 +405,7 @@ mod tests {
             Agent::with_config(registry, AgentConfig::default()).with_llm(Arc::new(MockLlm));
 
         let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControllerEvent>();
-        let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
+        let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, None);
         let handle = tokio::spawn(controller.run());
 
         op_tx.send(Op::UserTurn("hello".to_string())).unwrap();

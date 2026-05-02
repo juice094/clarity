@@ -7,10 +7,6 @@ use crate::llm::api::Message;
 pub enum Op {
     /// Start or continue a user turn.
     UserTurn(String),
-    /// Start or continue a turn with full message history.
-    ConversationTurn(Vec<Message>),
-    /// Start or continue a turn with full message history (non-streaming sync).
-    ConversationTurnSync(Vec<Message>),
     /// Cancel the current in-flight agent run.
     Interrupt,
     /// Respond to a pending tool-approval request.

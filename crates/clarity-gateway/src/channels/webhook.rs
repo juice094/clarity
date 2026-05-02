@@ -79,7 +79,7 @@ impl WebhookChannel {
     /// 构建 webhook router（可复用于测试）
     pub fn create_router(&self, agent: Arc<Agent>) -> Result<Router, ChannelError> {
         let app_state = WebhookAppState {
-            agent: Arc::new(RwLock::new((*agent).clone())),
+            agent: agent.clone(),
             auth_header: self.auth_header.clone(),
             auth_token: self.auth_token.clone(),
             webhook_secret: self.webhook_secret.clone(),
@@ -171,7 +171,7 @@ impl Channel for WebhookChannel {
 
 /// Webhook 应用状态
 struct WebhookAppState {
-    agent: Arc<RwLock<Agent>>,
+    agent: Arc<Agent>,
     auth_header: Option<String>,
     auth_token: Option<String>,
     webhook_secret: Option<String>,
@@ -259,7 +259,7 @@ async fn webhook_handler(
     info!("[Webhook] Message from {}: {}", user_id, message);
 
     // 使用 Agent 处理消息
-    let agent = state.agent.read().await.clone();
+    let agent = (*state.agent).clone();
     match agent.run(&message).await {
         Ok(response) => (
             StatusCode::OK,
@@ -341,7 +341,7 @@ async fn webhook_handler_with_platform(
     }
 
     // 处理消息
-    let agent = state.agent.read().await.clone();
+    let agent = (*state.agent).clone();
     match agent.run(&message).await {
         Ok(response) => {
             // 根据平台格式化响应

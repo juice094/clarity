@@ -242,6 +242,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 >
 > ### Resolved ✅
 > - ~~`agent ↔ approval` cycle~~ — Fixed by extracting `ToolCall`/`FunctionCall` to `types.rs`.
+> - ~~`AppState` dead fields~~ — `initialized: AtomicBool` removed from `clarity-egui`; `active_connections: AtomicUsize` removed from `clarity-gateway`. Outer `tokio::sync::RwLock<Agent>` removed from gateway (Agent uses `std::sync::RwLock` internally; the async wrapper was redundant). `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`.
 > - ~~`agent ↔ llm` cycle~~ — Fixed by extracting `Message`/`LlmProvider`/`LlmResponse`/`StreamDelta` to `llm/api.rs`.
 > - ~~`agent ↔ compaction` cycle~~ — Fixed by correcting import paths in `compaction.rs`.
 > - ~~`run()` / `run_with_messages_sync()` duplication~~ — Fixed by extracting `Agent::run_sync_loop()`.
@@ -255,7 +256,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > ### Remaining ⚠️
 > 1. **`clarity-core` ↔ `clarity-gateway`**: `AgentController` lives in `core`, but its `Op` enum (`Op::ConversationTurn`) had to be extended to support Gateway's OpenAI-compatible message history. Gateway-driven requirements can still ripple back into core agent abstractions.
 > 2. **`Agent::run_streaming` vs `run_streaming_with_messages`**: Two public entry points remain. Consider extracting a pure "agent loop" trait in future refactors to avoid duplicating compaction / wire / memory logic.
-> 3. **`AppState` bloat**: `AppState` currently carries `agent`, `session_manager`, `tool_registry`, and `task_manager`. The `tool_registry` field is actually redundant because `agent.registry()` already holds it (kept for the admin API convenience).
+> 3. **`AppState` bloat**: `active_connections` and `initialized` dead fields removed (Phase C, 2026-05-02). `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`. Remaining: `tool_registry` is redundant because `agent.registry()` already holds it (kept for the admin API convenience).
 > 4. **`std::sync::RwLock` in `Agent.inner`**: Intentionally kept as `std::sync::RwLock<AgentInner>`. `Agent` getters/setters are synchronous and may be called from non-async contexts (TUI event loop, Gateway handlers). All critical sections are short field reads/writes only. `background/` module locks have been migrated to `tokio::sync` (`1141ba9`).
 > 5. **`clarity-core` responsibility bloat (v0.3.1)**: `model_download.rs` (HF streaming download + progress callbacks) and `view_models/settings.rs` (Settings ViewModel) both landed in `clarity-core`. Core now carries GUI onboarding logic, network I/O, and settings serialization — blurring the "pure business logic" boundary. Long-term: evaluate extracting `clarity-infrastructure` for I/O-heavy modules (download, settings persistence, network probing).
 >

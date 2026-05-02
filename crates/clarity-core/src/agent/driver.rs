@@ -41,7 +41,7 @@ pub struct ConversationChatDriver {
 }
 
 impl ChatDriver for ConversationChatDriver {
-    fn build_messages(&self, query: &str, system_prompt: &str) -> Vec<Message> {
+    fn build_messages(&self, _query: &str, system_prompt: &str) -> Vec<Message> {
         let mut messages = self.history.clone();
         // Inject or update the system prompt at the front.
         if let Some(first) = messages.first_mut() {
@@ -53,7 +53,6 @@ impl ChatDriver for ConversationChatDriver {
         } else {
             messages.push(Message::system(system_prompt));
         }
-        messages.push(Message::user(query));
         messages
     }
 }

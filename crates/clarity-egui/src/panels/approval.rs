@@ -2,7 +2,7 @@ use crate::App;
 
 pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     // Refresh pending approvals each frame from the shared runtime.
-    app.ui_store.pending_approvals = app.state.approval_runtime.list_pending();
+    app.ui_store.pending_approvals = app.state.mode_aware_approval_runtime.inner().list_pending();
 
     let request = match app.ui_store.pending_approvals.first() {
         Some(r) => r.clone(),

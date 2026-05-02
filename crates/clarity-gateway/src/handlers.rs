@@ -9,7 +9,8 @@ use axum::{
 use chrono::Utc;
 use clarity_core::activity::WindowActivity;
 use clarity_core::agent::{
-    AgentController, ControllerEvent, Message as AgentMessage, MessageRole, Op,
+    driver::ConversationChatDriver, AgentController, ControllerEvent, Message as AgentMessage,
+    MessageRole, Op,
 };
 use clarity_core::llm::LlmFactory;
 use futures::stream;
@@ -123,7 +124,7 @@ pub async fn chat_completions(
     }
 
     // Create a per-request AgentController so that streaming events are isolated.
-    let agent = state.agent.read().await.clone();
+    let agent = (*state.agent).clone();
 
     // Security: log a warning when the agent is in Yolo mode via Gateway,
     // since HTTP clients cannot interactively approve dangerous tool calls.
@@ -189,15 +190,18 @@ pub async fn chat_completions(
     let prompt_tokens = messages.iter().map(|m| m.content.len()).sum::<usize>() as u32 / 4;
 
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ControllerEvent>();
-    let (controller, op_tx) = AgentController::new_with_events(agent, event_tx);
+    let driver = Arc::new(ConversationChatDriver { history: messages.clone() });
+    let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, Some(driver));
     tokio::spawn(controller.run());
 
-    let op = if req.stream {
-        Op::ConversationTurn(messages)
-    } else {
-        Op::ConversationTurnSync(messages)
-    };
-    if let Err(e) = op_tx.send(op) {
+    let last_user_query = req
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+    if let Err(e) = op_tx.send(Op::UserTurn(last_user_query)) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
@@ -457,7 +461,7 @@ pub struct ToolInfo {
 }
 
 pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let tools = match state.agent.read().await.registry().get_tool_schemas() {
+    let tools = match state.agent.registry().get_tool_schemas() {
         Ok(schemas) => {
             if let Some(functions) = schemas.as_array() {
                 functions
@@ -759,7 +763,7 @@ pub async fn run_parallel(
     let config = clarity_core::subagents::ParallelConfig::new()
         .with_max_concurrency(req.max_concurrency.unwrap_or(4).max(1));
 
-    let agent = state.agent.read().await.clone();
+    let agent = (*state.agent).clone();
 
     match agent.run_parallel(specs, config, Some(progress.clone())).await {
         Ok(result) => {
@@ -922,7 +926,7 @@ pub async fn admin_set_approval_mode(
         }
     };
 
-    state.agent.write().await.set_approval_mode(mode);
+    state.agent.set_approval_mode(mode);
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
     };
@@ -930,7 +934,7 @@ pub async fn admin_set_approval_mode(
 }
 
 pub async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mode = state.agent.read().await.approval_mode();
+    let mode = state.agent.approval_mode();
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
     };
@@ -958,7 +962,7 @@ pub async fn admin_switch_provider(
 
     match LlmFactory::create(&req.provider).await {
         Ok(new_llm) => {
-            state.agent.read().await.set_llm(Arc::from(new_llm));
+            state.agent.set_llm(Arc::from(new_llm));
             let resp = SwitchProviderResponse {
                 provider: req.provider,
                 message: "Provider switched successfully".to_string(),
@@ -1163,7 +1167,7 @@ pub async fn admin_set_config(
                 );
             }
             // Apply to agent
-            state.agent.read().await.set_llm(Arc::from(provider));
+            state.agent.set_llm(Arc::from(provider));
 
             let resp = ConfigResponse {
                 provider: req.provider.clone(),

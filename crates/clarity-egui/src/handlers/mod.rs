@@ -68,7 +68,7 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::ResolveApproval { req_id, response } => {
                 system::on_resolve_approval(
-                    app.state.approval_runtime.clone(),
+                    app.state.mode_aware_approval_runtime.inner().clone(),
                     &app.runtime,
                     req_id,
                     response,

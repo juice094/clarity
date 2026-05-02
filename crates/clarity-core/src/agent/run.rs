@@ -441,21 +441,6 @@ impl Agent {
         self.ensure_initialized().await?;
         self.refresh_context().await;
 
-        let cancel_token = self.begin_turn()?;
-
-        // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry() {
-            registry.discover_for_path(&self.config.working_dir);
-            let paths = self.active_file_paths();
-            if !paths.is_empty() {
-                registry.activate_by_path(&paths);
-            }
-        }
-
-        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
-
-        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
-
         let base_system_prompt = self.build_system_prompt();
         let mut system_prompt = base_system_prompt;
 
@@ -483,28 +468,7 @@ impl Agent {
             Message::user(query.as_ref()),
         ];
 
-        info!(
-            "Starting streaming agent loop for query: {}",
-            query.as_ref()
-        );
-
-        // Send TurnBegin message
-        self.send_wire_message(WireMessage::TurnBegin {
-            user_input: query.as_ref().to_string(),
-        });
-
-        let result = self
-            .run_streaming_loop(
-                messages,
-                query.as_ref(),
-                tools,
-                llm.clone(),
-                on_chunk,
-                &cancel_token,
-            )
-            .await;
-        self.finish_turn();
-        result
+        self.run_streaming_turn(messages, query.as_ref(), on_chunk).await
     }
 
     /// Run the streaming agent loop with a pre-built message list.
@@ -516,21 +480,6 @@ impl Agent {
     where
         F: FnMut(&str) + Send + 'static,
     {
-        let cancel_token = self.begin_turn()?;
-
-        // Discover project-local skills and activate those matching current file paths.
-        if let Some(ref registry) = self.skill_registry() {
-            registry.discover_for_path(&self.config.working_dir);
-            let paths = self.active_file_paths();
-            if !paths.is_empty() {
-                registry.activate_by_path(&paths);
-            }
-        }
-
-        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
-
-        let tools = self.registry.get_tool_schemas()?;
-
         let query_hint = messages
             .iter()
             .rev()
@@ -538,39 +487,17 @@ impl Agent {
             .map(|m| m.content.clone())
             .unwrap_or_default();
 
-        info!(
-            "Starting streaming agent loop with {} messages",
-            messages.len()
-        );
-
-        // Send TurnBegin message
-        self.send_wire_message(WireMessage::TurnBegin {
-            user_input: query_hint.clone(),
-        });
-
-        let result = self
-            .run_streaming_loop(
-                messages,
-                &query_hint,
-                tools,
-                llm.clone(),
-                on_chunk,
-                &cancel_token,
-            )
-            .await;
-        self.finish_turn();
-        result
+        self.run_streaming_turn(messages, &query_hint, on_chunk).await
     }
 
     async fn run_streaming_loop<F>(
         &self,
-        mut messages: Vec<Message>,
-        query_hint: &str,
-        tools: serde_json::Value,
+        mut messages: &mut Vec<Message>,
+        tools: &serde_json::Value,
         llm: Arc<dyn LlmProvider>,
-        mut on_chunk: F,
+        on_chunk: &mut F,
         cancel_token: &CancellationToken,
-    ) -> Result<String, AgentError>
+    ) -> Result<(String, bool), AgentError>
     where
         F: FnMut(&str) + Send + 'static,
     {
@@ -720,10 +647,58 @@ impl Agent {
             }
         }
 
-        // Send TurnEnd message
+        Ok((final_response, completed))
+    }
+
+    /// Shared orchestration for a streaming turn: setup → loop → teardown.
+    async fn run_streaming_turn<F>(
+        &self,
+        messages: Vec<Message>,
+        query_hint: &str,
+        on_chunk: F,
+    ) -> Result<String, AgentError>
+    where
+        F: FnMut(&str) + Send + 'static,
+    {
+        let cancel_token = self.begin_turn()?;
+
+        // Discover project-local skills and activate those matching current file paths.
+        if let Some(ref registry) = self.skill_registry() {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
+
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
+        let tools = self.registry.get_tool_schemas()?;
+
+        info!(
+            "Starting streaming agent turn for query: {}",
+            query_hint
+        );
+
+        self.send_wire_message(WireMessage::TurnBegin {
+            user_input: query_hint.to_string(),
+        });
+
+        let mut messages = messages;
+        let mut on_chunk = on_chunk;
+        let (final_response, completed) = self
+            .run_streaming_loop(
+                &mut messages,
+                &tools,
+                llm,
+                &mut on_chunk,
+                &cancel_token,
+            )
+            .await?;
+        self.finish_turn();
+
+        // Teardown
         self.send_wire_message(WireMessage::TurnEnd);
 
-        // Send usage report
         let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,

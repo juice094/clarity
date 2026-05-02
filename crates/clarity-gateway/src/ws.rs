@@ -27,11 +27,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let session_id = SessionId::new();
     info!("WebSocket connected: session_id={}", session_id);
 
-    // 增加活跃连接计数
-    state
-        .active_connections
-        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
     // 创建持久化会话
     if let Err(e) = state
         .session_store
@@ -107,10 +102,6 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    // 减少活跃连接计数（保留 SQLite 中的会话历史）
-    state
-        .active_connections
-        .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     info!("WebSocket disconnected: session_id={}", session_id);
 }
 
@@ -138,12 +129,7 @@ async fn handle_chat_with_wire(
 
     // Create wire and wire-enabled agent
     let wire = clarity_wire::Wire::new();
-    let agent = state
-        .agent
-        .read()
-        .await
-        .clone()
-        .with_wire(Arc::new(wire.clone()));
+    let agent = (*state.agent).clone().with_wire(Arc::new(wire.clone()));
 
     // Run agent in background
     let message_clone = message.clone();
@@ -315,8 +301,7 @@ async fn handle_request(
             }
 
             // 使用 Agent 处理消息
-            let agent = state.agent.read().await.clone();
-            match agent.run(&message).await {
+            match state.agent.run(&message).await {
                 Ok(response_text) => {
                     // 记录助手回复到持久化存储
                     let assistant_msg = SessionMessage::new("assistant", &response_text);

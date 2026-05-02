@@ -7,7 +7,6 @@ use axum::{
     Router,
 };
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::RwLock;
@@ -29,12 +28,11 @@ use std::sync::Mutex;
 
 /// 应用状态
 pub struct AppState {
-    pub agent: Arc<RwLock<Agent>>,
+    pub agent: Arc<Agent>,
     pub session_store: Arc<PersistentSessionStore>,
     pub task_manager: Arc<BackgroundTaskManager>,
     pub activity_logger: ActivityLogger,
     pub started_at: DateTime<Utc>,
-    pub active_connections: AtomicUsize,
     /// Registry of in-flight parallel batch progress for UI polling.
     pub parallel_batches: Arc<RwLock<HashMap<String, Arc<Mutex<BatchProgress>>>>>,
 }
@@ -64,12 +62,11 @@ impl AppState {
         };
 
         Self {
-            agent: Arc::new(RwLock::new((*agent).clone())),
+            agent: agent.clone(),
             session_store,
             task_manager,
             activity_logger: ActivityLogger::new(),
             started_at: Utc::now(),
-            active_connections: AtomicUsize::new(0),
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
         }
     }

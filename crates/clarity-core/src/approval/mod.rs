@@ -221,7 +221,7 @@ impl<R: ApprovalRuntime> ModeAwareApprovalRuntime<R> {
     }
 
     /// Get a reference to the inner runtime
-    pub fn inner(&self) -> &R {
+    pub fn inner(&self) -> &Arc<R> {
         &self.inner
     }
 
