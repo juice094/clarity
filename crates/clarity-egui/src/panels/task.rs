@@ -1,9 +1,6 @@
 use crate::App;
 
 pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.task_store.task_panel_open {
-        return;
-    }
     egui::SidePanel::right("task_panel")
         .default_width(260.0)
         .min_width(200.0)
@@ -19,58 +16,15 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
             ui.add_space(app.ui_store.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new("Tools")
+                    egui::RichText::new("Files")
                         .size(app.ui_store.theme.text_lg)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );
             });
 
-            // ---- Regular task list ----
-            let action = crate::ui::task_panel::render_task_panel(ui, &app.task_store.tasks, &app.ui_store.theme);
-            if let crate::ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
-                let store = app.state.task_store.clone();
-                app.runtime.spawn(async move {
-                    if let Err(e) = store
-                        .update_status(&task_id, clarity_core::background::TaskStatus::Cancelled)
-                        .await
-                    {
-                        tracing::warn!("Failed to cancel task {}: {}", task_id, e);
-                    }
-                });
-            }
-
-            // ---- Create task button ----
-            ui.add_space(app.ui_store.theme.space_8);
-            if ui
-                .add(
-                    egui::Button::new(
-                        egui::RichText::new("+ Create Task")
-                            .size(app.ui_store.theme.text_base)
-                            .color(app.ui_store.theme.accent),
-                    )
-                    .fill(app.ui_store.theme.accent_subtle)
-                    .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
-                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
-                    .min_size(egui::vec2(ui.available_width(), 36.0)),
-                )
-                .clicked()
-            {
-                app.task_store.task_create_modal_open = true;
-            }
-
-            // ---- SubAgent parallel progress ----
+            // ---- Files tree + preview (常驻) ----
             ui.add_space(app.ui_store.theme.space_12);
-            egui::Frame::group(ui.style())
-                .fill(app.ui_store.theme.bg)
-                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
-                .inner_margin(egui::Margin::same(8))
-                .show(ui, |ui| {
-                    crate::panels::subagent_progress::render_subagent_progress(app, ui);
-                });
-
-            // ---- Files (moved from sidebar) ----
-            ui.add_space(app.ui_store.theme.space_16);
             ui.label(
                 egui::RichText::new("Files")
                     .size(app.ui_store.theme.text_sm)

@@ -67,12 +67,8 @@ fn agent_text_plain(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
         crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
     });
 
-    // Bottom border separator (Swiss Style list item divider)
-    ui.add_space(theme.space_8);
-    let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 1.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, egui::CornerRadius::same(0), theme.border);
-    ui.add_space(theme.space_8);
+    // Bottom spacing — Swiss Style: whitespace instead of lines
+    ui.add_space(theme.space_12);
 }
 
 /// Agent structured content — Glassmorphism card for code blocks, tools, etc.

@@ -138,26 +138,6 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                     guard.clone()
                 };
             }
-            // Tasks
-            let active_tasks = app.task_store.tasks.iter().filter(|t| !t.status.is_terminal()).count();
-            let task_btn = if active_tasks > 0 {
-                format!("📝 {}", active_tasks)
-            } else {
-                "📝".to_string()
-            };
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(&task_btn).size(app.ui_store.theme.text_sm))
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
-                )
-                .clicked()
-            {
-                app.task_store.task_panel_open = !app.task_store.task_panel_open;
-                if app.task_store.task_panel_open {
-                    app.refresh_tasks();
-                }
-            }
             // MCP
             let mcp_count = app.mcp_store.mcp_config.as_ref().map_or(0, |c| c.servers.len());
             let mcp_btn = if mcp_count > 0 {
