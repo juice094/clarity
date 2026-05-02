@@ -226,8 +226,20 @@ impl App {
 
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
         let screen_rect = ctx.screen_rect();
-        let edge = 8.0;
+        let edge = 10.0;
+
+        // Skip resize when maximized; it may not work properly and conflicts with restore logic.
+        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        if is_maximized {
+            return;
+        }
+
         if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
+            // Do not trigger edge resize inside the titlebar area; it conflicts with drag-to-move.
+            if pos.y < screen_rect.min.y + TITLEBAR_HEIGHT + edge {
+                return;
+            }
+
             let on_left = pos.x < screen_rect.min.x + edge;
             let on_right = pos.x > screen_rect.max.x - edge;
             let on_top = pos.y < screen_rect.min.y + edge;
@@ -255,7 +267,7 @@ impl App {
 
             if let Some(dir) = direction {
                 ctx.set_cursor_icon(cursor);
-                if ctx.input(|i| i.pointer.button_down(egui::PointerButton::Primary)) {
+                if ctx.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary)) {
                     ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(dir));
                 }
             }

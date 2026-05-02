@@ -280,16 +280,6 @@ impl App {
                 return;
             }
         }
-        // Lazy creation: if an empty session already exists, focus it instead of creating another.
-        if let Some(existing) = self
-            .session_store.sessions
-            .iter()
-            .find(|s| s.messages.is_empty() && s.category == category)
-        {
-            self.session_store.active_session_id = existing.id.clone();
-            self.chat_store.input = self.session_store.drafts.remove(&existing.id).unwrap_or_default();
-            return;
-        }
         let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
         let s = new_session(&category, count);
         let id = s.id.clone();
