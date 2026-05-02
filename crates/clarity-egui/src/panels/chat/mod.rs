@@ -22,12 +22,22 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             let available = ui.available_width();
             let content_w = available.min(max_w);
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                ui.set_max_width(content_w);
-                render_header(app, ui);
-                render_message_list(app, ui);
-                render_plan(app, ui);
-                render_input(app, ui);
-            });
+            let side_pad = ((available - content_w) / 2.0).max(0.0);
+            let rect = ui.available_rect_before_wrap();
+            let centered_rect = egui::Rect::from_min_max(
+                egui::pos2(rect.min.x + side_pad, rect.min.y),
+                egui::pos2(rect.min.x + side_pad + content_w, rect.max.y),
+            );
+            ui.allocate_new_ui(
+                egui::UiBuilder::new()
+                    .max_rect(centered_rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                |ui| {
+                    render_header(app, ui);
+                    render_message_list(app, ui);
+                    render_plan(app, ui);
+                    render_input(app, ui);
+                },
+            );
         });
 }

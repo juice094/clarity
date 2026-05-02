@@ -25,13 +25,6 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
 
             // ---- Files tree + preview (常驻) ----
             ui.add_space(app.ui_store.theme.space_12);
-            ui.label(
-                egui::RichText::new("Files")
-                    .size(app.ui_store.theme.text_sm)
-                    .color(app.ui_store.theme.text_dim)
-                    .weak(),
-            );
-            ui.add_space(app.ui_store.theme.space_4);
             let mut clicked_file: Option<std::path::PathBuf> = None;
             let files_height = (ui.available_height() * 0.3).max(100.0);
             egui::ScrollArea::vertical()

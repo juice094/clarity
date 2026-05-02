@@ -119,6 +119,8 @@ pub struct UiStore {
     pub skill_panel_open: bool,
     /// Right toolbar open state.
     pub toolbar_open: bool,
+    /// Tools section expanded in left sidebar.
+    pub tools_expanded: bool,
     /// Session tab currently being renamed (double-click).
     pub editing_session_id: Option<String>,
     /// Buffer for the in-progress rename.
