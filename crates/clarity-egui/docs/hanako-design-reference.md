@@ -13,19 +13,19 @@ openhanako 的 `midnight.css` 是当前最成熟的 dark 主题，clarity 的 da
 
 | 语义 | openhanako (midnight) | clarity 当前 | 建议调整 |
 |------|----------------------|--------------|----------|
-| 主背景 | `#3B4A54` 深青蓝 | `#111318` 泛绿黑 | 改为冷调深蓝灰，消除绿感 |
-| 卡片背景 | `#445560` | `#1A1D23` | 提高明度差异，增加层次感 |
-| 侧边栏背景 | `#34424B` | `#0D0F14` | 与主背景形成微妙层级 |
-| 主文字 | `#C8D1D8` 冷灰白 | `#E8E8E8` | 降低亮度到 `#C8C8C8`，减少刺眼 |
-| 次要文字 | `#8A9BA8` | `#8E8E8E` | 增加蓝灰色调，与背景协调 |
-| 弱化文字 | `#5E7280` | `#5A5A5A` | 增加可读性 |
-| 强调色 | `#AA798D` 柔粉 | `#C98A5E` 铜色 | **关键**：冷暖冲突 → 改为柔粉或青蓝 |
-| 强调 hover | `#B78FA0` | — | 增加 hover 态 |
-| 边框 | `rgba(170,121,141,0.16)` | `#2A2D35` | 使用强调色的透明版，而非纯灰 |
+| 主背景 | `#3B4A54` 深青蓝 | `#050507` 极黑 | ✅ 已改为极黑，玻璃质感基底 |
+| 卡片背景 | `#445560` | `rgba(35,35,48,0.80)` | ✅ 已改为半透明深蓝灰 |
+| 侧边栏背景 | `#34424B` | `rgba(20,20,28,0.80)` | ✅ 与主背景形成微妙层级 |
+| 主文字 | `#C8D1D8` 冷灰白 | `#E8EAEF` | ✅ 保持高可读性 |
+| 次要文字 | `#8A9BA8` | `rgba(200,205,220,0.70)` | ✅ 半透明冷灰 |
+| 弱化文字 | `#5E7280` | `rgba(200,205,220,0.55)` | ✅ 半透明冷灰 |
+| 强调色 | `#AA798D` 柔粉 | `#5B8DEF` 冰蓝 | ✅ 已改为冰蓝，冷暖统一 |
+| 强调 hover | `#B78FA0` | `#7AA8F7` | ✅ hover 态已定义 |
+| 边框 | `rgba(170,121,141,0.16)` | `rgba(255,255,255,0.06)` | ✅ 纯白微透明，与玻璃协调 |
 | 成功色 | `#8CC790` | `#4CAF50` | 降低饱和度，更柔和 |
 | 危险色 | `#EAB2A0` 暖珊瑚 | `#FF5252` | 降低饱和度 |
-| 用户气泡 | `rgba(170,121,141,0.10)` | `#2A3F5F` | 使用强调色透明版 |
-| AI 气泡 | 透明（无背景） | 透明 | 保持一致 |
+| 用户气泡 | `rgba(170,121,141,0.10)` | `rgba(91,141,239,0.16)` | ✅ 强调色透明版 |
+| AI 气泡 | 透明（无背景） | 透明 | ✅ 保持一致 |
 
 ### 1.2 配色核心原则
 
@@ -37,10 +37,10 @@ openhanako 的 `midnight.css` 是当前最成熟的 dark 主题，clarity 的 da
 
 | 级别 | openhanako | clarity 当前 | 建议 |
 |------|-----------|--------------|------|
-| sm | 2px | 4px | 考虑缩小到 2-3px，更精致 |
-| md | 3px | 8px | 考虑缩小到 4-6px |
-| lg | 4px | 12px | 考虑缩小到 8px |
-| full | — | 999px | 仅 avatar/图标按钮使用 |
+| sm | 2px | 6px | ✅ 小按钮/标签圆角 |
+| md | 3px | 12px | ✅ 卡片/气泡圆角 |
+| lg | 4px | 20px | ✅ 输入框/大面板圆角 |
+| full | — | 999px | ✅ 仅 avatar/图标按钮使用 |
 
 ### 1.4 阴影系统
 
@@ -88,8 +88,9 @@ clarity 当前：`shadow_card` 有定义但效果较弱。建议：
 - 选中态：边框高亮
 
 **clarity 当前**：`ui/render.rs` 的 `user_bubble()`
-- 已有右侧对齐、82% 宽度、圆角不对称
-- 无头像、无附件展示、无操作栏
+- ✅ 右侧对齐、72% 宽度（响应式）、圆角 lg
+- ✅ 文字颜色 text_strong
+- ❌ 无头像、无附件展示、无操作栏
 
 **egui 实现建议**：
 - 头像：在气泡左侧或上方添加小圆形头像（28px）
@@ -110,8 +111,10 @@ clarity 当前：`shadow_card` 有定义但效果较弱。建议：
 - 代码块带语法高亮 + 复制按钮
 
 **clarity 当前**：`ui/render.rs` 的 `agent_message()`
-- 已有头像（avatar.rs）、straight layout
-- 无 thinking 块、无 tool 卡片折叠、无 subagent 卡片
+- ✅ 头像（avatar.rs）+ 名称 header
+- ✅ AB 混合：纯文本 = 无气泡 + 底边框；结构化 = 玻璃卡片
+- ✅ 代码块带 Copy 按钮
+- ❌ 无 thinking 块、无 tool 卡片折叠、无 subagent 卡片
 
 ### 2.4 输入区域（Input Area）
 
@@ -127,9 +130,11 @@ clarity 当前：`shadow_card` 有定义但效果较弱。建议：
 - 状态栏（token 预估、连接状态、模型信息）
 
 **clarity 当前**：`panels/chat/input.rs` + `components/input/`
-- 已有附件芯片、发送/停止/队列按钮
-- 无引用卡片、无技能徽章、无模型选择器、无 token 预估
-- 纯文本输入（无富文本）
+- ✅ 附件芯片（空状态时自动隐藏）
+- ✅ 发送/停止/队列按钮
+- ✅ 安全宽度计算（防溢出）
+- ❌ 无引用卡片、无技能徽章、无模型选择器、无 token 预估
+- ❌ 纯文本输入（无富文本）
 
 ---
 
@@ -184,7 +189,8 @@ openhanako 有大量 CSS transition/animation：
 | AssistantMessage | `components/chat/AssistantMessage.tsx` | `agent_message` | `ui/render.rs` | L2 视觉 |
 | ChatArea | `components/chat/ChatArea.tsx` | `render_chat_area` | `panels/chat/mod.rs` | L1 结构 |
 | InputArea | `components/InputArea.tsx` | `render_input` | `panels/chat/input.rs` | L1+L2 |
-| SessionList | `components/SessionList.tsx` | `render_sidebar` | `panels/sidebar.rs` | L1 结构 |
+| SessionList | `components/SessionList.tsx` | `render_header` (tabs) | `panels/chat/header.rs` | L1 结构 |
+| Sidebar | `components/Sidebar.tsx` | `render_sidebar` | `panels/sidebar.rs` | L1 结构 |
 | SettingsApp | `settings/SettingsApp.tsx` | `render_settings_panel` | `components/settings/mod.rs` | L1 结构 |
 | ProviderTab | `settings/tabs/ProviderTab.tsx` | `provider_tab::render_provider` | `components/settings/provider_tab.rs` | L2 视觉 |
 | StatusBar | `components/StatusBar.tsx` | 无（待实现） | — | L2 视觉 |

@@ -135,17 +135,33 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详细对比报告见 [`docs/frontend-architecture-comparison.md`](./docs/frontend-architecture-comparison.md)
 
-**Sprint 14 — 前端设计审查与全面翻新（已批准，2026-05-01）**
+**Sprint 14 — Glassmorphism 视觉精调（进行中，2026-05-01 ~ 2026-05-03）**
 
 - 参考 Kimi 网页版 Swiss International Style + Agent-Native UI 进行批评式设计审查
 - 美学评分 4.6/10，识别 20+ 设计缺陷，撰写完整审查报告
-- Phase 1 foundation ✅: `theme.rs` 语义化字号 token（text_xs→text_2xl）+ OLED Black 主题变体
-- Phase 1-5 全面翻新已批准（计划文件 `docs/plans/frontend-design-critique-2026-05-01.md`）
-  - Phase 1: 色彩/排版基础设施 + 字体注册 + CJK 运行时探测
-  - Phase 2: Sidebar 会话列表 + Swiss 行长保护 + 布局重构
-  - Phase 3: 混合气泡策略 + 组件 widget 化 + 图标字体
-  - Phase 4: block_on 移除 + IME 安全 + stick_to_bottom 智能释放
-  - Phase 5: 叙事层 + 技能外露 + Agent 仪表盘
+- **Phase 1 — 基础设施重写 ✅**
+  - `theme.rs` 语义化字号 token（text_xs→text_2xl）+ OLED Black 主题变体
+  - Glassmorphism 配色：冰蓝 accent `#5B8DEF`、半透明 surface `rgba(28,28,38,0.72)`、圆角系统 6/12/20/999
+  - 字体注册：CJK 优先 `msyhl.ttc` + Phosphor 图标字体嵌入
+- **Phase 2 — 布局重构 ✅**
+  - Settings 拆分：`panels/settings.rs` 426 行 → `components/settings/{mod,provider,interface,about}.rs`
+  - 三栏架构定型：左侧 Sidebar（分类导航）+ Central Chat + 右侧 Tools（Tasks + Files）
+  - Sessions 从 Sidebar 迁移至 Header tabs（浏览器式），支持双击重命名
+  - Files 从 Sidebar 迁移至右侧 Tools 面板底部
+  - 响应式最大宽度：`content_max_width` 600/720/900 可配置，持久化到 `gui-settings.json`
+- **Phase 3 — 消息渲染策略 ✅**
+  - AB 混合布局：Agent 纯文本 = 无气泡 + 底边框分隔；Agent 结构化 = 玻璃卡片；用户 = 右对齐玻璃气泡
+  - 用户气泡宽度 0.72×、错误背景不透明度 0.28、移除多余 separator
+  - Markdown 字号 token 化（硬编码 15.0/18.0/16.0 → theme.text_base/md/lg），随 Settings 同步缩放
+- **Phase 4 — 细节精调 ✅**
+  - 呼吸间距：CentralPanel 16→20、Input inner_margin 10→14、Task panel 12px
+  - 输入框安全宽度计算（防溢出）、底部 margin 12→16px
+  - Attachments 空状态隐藏、Session 默认标题加序号（New Engineering 2…）
+  - 任务按钮 ghost 化、移除 FPS 显示、侧边栏分隔线
+- **遗留问题**
+  - 窗口圆角：Windows 直角边框，需 `DwmSetWindowAttribute`（仅 Win11）
+  - 最大化按钮 Unicode "□" 在某些字体下异常
+  - 响应式自动收缩：无 Hanako 式 `CHAT_MIN_WIDTH` 自动折叠逻辑
 
 > 设计审查报告见 [`docs/plans/frontend-design-critique-2026-05-01.md`](./docs/plans/frontend-design-critique-2026-05-01.md)
 
