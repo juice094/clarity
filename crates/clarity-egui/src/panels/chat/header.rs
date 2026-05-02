@@ -39,6 +39,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 let mut rename_commit: Option<(String, String)> = None;
+                let mut tab_to_close: Option<String> = None;
                 for (id, title, is_active) in &category_sessions {
                     let editing = app.ui_store.editing_session_id.as_ref() == Some(id);
                     if editing {
@@ -73,30 +74,63 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                         } else {
                             egui::Stroke::new(1.0, app.ui_store.theme.border)
                         };
-                        let tab_id = id.clone();
-                        let resp = ui.add(
-                            egui::Button::new(
-                                egui::RichText::new(title).size(app.ui_store.theme.text_sm).color(text_color),
-                            )
-                            .fill(bg)
-                            .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
-                            .stroke(stroke)
-                            .min_size(egui::vec2(60.0, 28.0)),
+                        let tab_width = (title.chars().count() as f32 * 7.5 + 32.0).clamp(60.0, 160.0);
+                        let (tab_rect, tab_resp) = ui.allocate_exact_size(
+                            egui::vec2(tab_width, 28.0),
+                            egui::Sense::click(),
                         );
-                        if resp.clicked() {
-                            app.save_current_session();
-                            let old_id = app.session_store.active_session_id.clone();
-                            if !app.chat_store.input.trim().is_empty() {
-                                app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
-                            } else {
-                                app.session_store.drafts.remove(&old_id);
-                            }
-                            app.session_store.active_session_id = tab_id.clone();
-                            app.chat_store.input = app.session_store.drafts.remove(&tab_id).unwrap_or_default();
+                        let cr = egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8);
+                        ui.painter().rect_filled(tab_rect, cr, bg);
+                        if stroke.width > 0.0 {
+                            ui.painter().rect_stroke(tab_rect, cr, stroke, egui::StrokeKind::Inside);
                         }
-                        if resp.double_clicked() {
+                        // Title text
+                        ui.painter().text(
+                            egui::pos2(tab_rect.min.x + 10.0, tab_rect.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            title.as_str(),
+                            app.ui_store.theme.font(app.ui_store.theme.text_sm),
+                            text_color,
+                        );
+                        // Close button area
+                        let close_rect = egui::Rect::from_min_max(
+                            egui::pos2(tab_rect.max.x - 20.0, tab_rect.min.y + 2.0),
+                            egui::pos2(tab_rect.max.x - 2.0, tab_rect.max.y - 2.0),
+                        );
+                        let close_id = egui::Id::new(("tab_close", id.clone()));
+                        let close_resp = ui.interact(close_rect, close_id, egui::Sense::click());
+                        let close_col = if close_resp.hovered() {
+                            app.ui_store.theme.danger
+                        } else {
+                            text_color
+                        };
+                        ui.painter().text(
+                            close_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            crate::theme::ICON_X,
+                            app.ui_store.theme.font_icon(app.ui_store.theme.text_xs),
+                            close_col,
+                        );
+
+                        if close_resp.clicked() {
+                            tab_to_close = Some(id.clone());
+                        } else if tab_resp.double_clicked() {
                             app.ui_store.editing_session_id = Some(id.clone());
                             app.ui_store.editing_title = title.clone();
+                        } else if tab_resp.clicked() {
+                            if let Some(pos) = tab_resp.interact_pointer_pos() {
+                                if !close_rect.contains(pos) {
+                                    app.save_current_session();
+                                    let old_id = app.session_store.active_session_id.clone();
+                                    if !app.chat_store.input.trim().is_empty() {
+                                        app.session_store.drafts.insert(old_id, app.chat_store.input.clone());
+                                    } else {
+                                        app.session_store.drafts.remove(&old_id);
+                                    }
+                                    app.session_store.active_session_id = id.clone();
+                                    app.chat_store.input = app.session_store.drafts.remove(id).unwrap_or_default();
+                                }
+                            }
                         }
                     }
                 }
@@ -107,6 +141,24 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                     }
                     app.ui_store.editing_session_id = None;
                     app.ui_store.editing_title.clear();
+                }
+                // Handle tab close
+                if let Some(close_id) = tab_to_close {
+                    if let Some(session) = app.session_store.sessions.iter().find(|s| s.id == close_id) {
+                        let _ = crate::session::save_session_internal(session);
+                    }
+                    let was_active = app.session_store.active_session_id == close_id;
+                    app.session_store.sessions.retain(|s| s.id != close_id);
+                    if was_active {
+                        let category = app.session_store.active_category.clone();
+                        if let Some(next) = app.session_store.sessions.iter().find(|s| s.category == category) {
+                            let next_id = next.id.clone();
+                            app.session_store.active_session_id = next_id.clone();
+                            app.chat_store.input = app.session_store.drafts.remove(&next_id).unwrap_or_default();
+                        } else {
+                            app.new_session();
+                        }
+                    }
                 }
                 // New-tab button (browser style)
                 if ui

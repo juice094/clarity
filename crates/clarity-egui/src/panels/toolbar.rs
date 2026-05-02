@@ -1,5 +1,6 @@
 use crate::App;
 
+#[allow(dead_code)]
 pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
     if !app.ui_store.toolbar_open {
         return;

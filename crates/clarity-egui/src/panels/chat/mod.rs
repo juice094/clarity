@@ -84,7 +84,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 egui::Frame::group(ui.style())
                                     .fill(theme.surface)
                                     .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                                    .stroke(egui::Stroke::new(1.0, theme.border))
+                                    .stroke(egui::Stroke::NONE)
                                     .inner_margin(egui::Margin::symmetric(16, 12))
                                     .show(ui, |ui| {
                                         ui.horizontal(|ui| {

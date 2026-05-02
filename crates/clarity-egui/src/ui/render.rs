@@ -90,7 +90,7 @@ fn agent_structured_card(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
     egui::Frame::group(ui.style())
         .fill(theme.surface)
         .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
+        .stroke(egui::Stroke::NONE)
         .shadow(egui::Shadow::NONE)
         .inner_margin(egui::Margin::symmetric(16, 12))
         .show(ui, |ui| {

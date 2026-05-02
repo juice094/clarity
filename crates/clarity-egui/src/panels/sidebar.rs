@@ -40,29 +40,33 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     let categories = [("emotion", app.t("Emotion")), ("knowledge", app.t("Knowledge")), ("engineering", app.t("Engineering"))];
                     for (cat, label) in categories {
                         let is_active = app.session_store.active_category == cat;
-                        let bg = egui::Color32::TRANSPARENT;
-                        let text_color = if is_active {
-                            app.ui_store.theme.text
-                        } else {
-                            app.ui_store.theme.text_dim
-                        };
                         let stroke = if is_active {
                             egui::Stroke::new(1.5, app.ui_store.theme.accent)
                         } else {
                             egui::Stroke::NONE
                         };
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(label).size(app.ui_store.theme.text_base).color(text_color),
-                                )
-                                .fill(bg)
+                        let btn_resp = ui.add(
+                            egui::Button::new("")
+                                .fill(egui::Color32::TRANSPARENT)
                                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
                                 .stroke(stroke)
                                 .min_size(egui::vec2(ui.available_width(), 32.0)),
-                            )
-                            .clicked()
-                        {
+                        );
+                        let text_color = if is_active {
+                            app.ui_store.theme.text
+                        } else if btn_resp.hovered() {
+                            app.ui_store.theme.text
+                        } else {
+                            app.ui_store.theme.text_dim
+                        };
+                        ui.painter().text(
+                            btn_resp.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            label,
+                            app.ui_store.theme.font(app.ui_store.theme.text_base),
+                            text_color,
+                        );
+                        if btn_resp.clicked() {
                             app.switch_category(cat);
                         }
                     }

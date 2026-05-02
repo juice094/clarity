@@ -26,11 +26,11 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         let hint = if app.chat_store.pending_send.is_some() {
-                            "Steer message queued — will send when current response stops..."
+                            "消息已排队，将在当前回复结束后发送..."
                         } else if !app.chat_store.attachments.is_empty() {
-                            "Type a message (files attached)..."
+                            "输入消息（已附加文件）..."
                         } else {
-                            "Type a message..."
+                            "输入消息..."
                         };
                         let prev_input = app.chat_store.input.clone();
                         let line_count = app.chat_store.input.matches('\n').count() + 1;

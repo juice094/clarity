@@ -124,6 +124,7 @@ pub struct UiStore {
     /// Skill panel open state.
     pub skill_panel_open: bool,
     /// Right toolbar open state.
+    #[allow(dead_code)]
     pub toolbar_open: bool,
     /// Tools section expanded in left sidebar.
     pub tools_expanded: bool,
