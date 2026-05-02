@@ -49,6 +49,8 @@ clarity-egui
 cargo run -p clarity-egui
 ```
 
+> **Visual design**: Unified Canvas + Floating Cards — deep-black void with semi-transparent glass-morphism panels, ice-blue accent, and Win11-native rounded window corners. No web stack, no Electron.
+
 **No API key? No problem.** Place a `.gguf` model in `~/models/` and select **Local (GGUF)** in Settings. Clarity falls back to local inference automatically when offline.
 
 ---
@@ -59,6 +61,9 @@ cargo run -p clarity-egui
 
 - ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway）
 - 🔄 进行中：三栏工作台 UI（左侧角色栏 / 顶部实例标签 / 右侧通用工具栏）
+  - ✅ Glassmorphism 设计系统（大圆角、半透明浮层、无边框面板）
+  - ✅ 侧边栏 Web Tabs + Thinking Log 集成
+  - ✅ Win11 原生窗口圆角
 - ⏸️ 未实现：跨会话 Agent 状态快照、子 Agent 上下文持久化（IS-1 后端就绪，前端待接入）、多窗口进程隔离、层级信息注入总线
 
 > 详细路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
