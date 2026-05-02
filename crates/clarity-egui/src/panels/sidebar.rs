@@ -73,8 +73,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── Web Tabs ──
+                    crate::components::web_tabs::render_web_tabs(app, ui);
+                    ui.add_space(app.ui_store.theme.space_16);
+
                     // ── Tools / Tasks (migrated from right panel) ──
                     crate::components::tools_section::render_tools_section(app, ui);
+                    ui.add_space(app.ui_store.theme.space_16);
+
+                    // ── Thinking Log ──
+                    crate::components::thinking_log::render_thinking_log(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // ── Bottom bar: Skills + Locale + Token usage ──

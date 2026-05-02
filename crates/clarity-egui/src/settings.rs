@@ -1,3 +1,4 @@
+use crate::ui::types::WebTab;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -41,6 +42,8 @@ pub struct GuiSettings {
     pub font_scale: Option<f32>,
     #[serde(default)]
     pub content_width: Option<f32>,
+    #[serde(default)]
+    pub web_tabs: Vec<WebTab>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -208,6 +211,7 @@ impl Default for GuiSettings {
             active_profile: None,
             font_scale: None,
             content_width: None,
+            web_tabs: Vec::new(),
             profiles: HashMap::new(),
         }
     }

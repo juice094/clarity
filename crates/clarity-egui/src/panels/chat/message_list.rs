@@ -7,7 +7,6 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let is_loading = app.chat_store.is_loading;
     let theme = app.ui_store.theme.clone();
     let active_id = app.session_store.active_session_id.clone();
-    let tool_calls = app.chat_store.tool_calls.clone();
     let scroll_y = app.ui_store.last_scroll_offset;
     let mut configure_clicked = false;
 
@@ -97,13 +96,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         ui.allocate_space(egui::vec2(ui.available_width(), bottom));
                     }
 
-                    // Tool calls & typing indicator (few items, always rendered)
-                    for tc in &tool_calls {
-                        ui::render::tool_call_bubble(ui, tc, &theme);
-                    }
                     if is_loading
                         && session.messages.last().is_none_or(|m| m.role == Role::User)
-                        && tool_calls.is_empty()
+                        && app.chat_store.tool_calls.is_empty()
                     {
                         ui::render::typing_indicator(ui, &theme);
                     }

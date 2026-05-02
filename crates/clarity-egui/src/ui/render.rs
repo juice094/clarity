@@ -172,6 +172,7 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 // ============================================================================
 
 /// Render a tool-call lifecycle indicator bubble.
+#[allow(dead_code)]
 pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
     let bg = theme.tool_call_bg;
     let icon = match tc.status {

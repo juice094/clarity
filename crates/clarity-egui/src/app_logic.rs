@@ -106,6 +106,7 @@ impl App {
         cc.egui_ctx.set_style(style);
 
         let settings_edit = GuiSettings::load();
+        let web_tabs = settings_edit.web_tabs.clone();
         let font_scale = settings_edit.font_scale.unwrap_or(1.0);
         let content_width = settings_edit.content_width.unwrap_or(720.0);
         let theme = Theme::default().with_font_scale(font_scale);
@@ -188,7 +189,7 @@ impl App {
                 last_scroll_offset: 0.0,
                 preview_item: None,
                 last_input_modified: now,
-                web_tabs: vec![],
+                web_tabs,
                 web_tabs_expanded: true,
                 thinking_log_expanded: false,
                 pending_approvals: Vec::new(),

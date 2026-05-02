@@ -71,9 +71,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         .show(ui, |ui| {
                             // File preview (rendered in main chat area when selected from workspace panel)
                             if let Some(ref item) = app.ui_store.preview_item {
-                                let (preview_name, preview_content) = match item {
-                                    crate::ui::types::PreviewItem::File { name, content } => (name.clone(), content.clone()),
-                                    crate::ui::types::PreviewItem::WebPage { title, content, .. } => (title.clone(), content.clone()),
+                                let (preview_name, preview_content, preview_url) = match item {
+                                    crate::ui::types::PreviewItem::File { name, content } => {
+                                        (name.clone(), content.clone(), None)
+                                    }
+                                    crate::ui::types::PreviewItem::WebPage { title, url, content } => {
+                                        (title.clone(), content.clone(), Some(url.clone()))
+                                    }
                                 };
                                 let theme = &app.ui_store.theme;
                                 ui.add_space(theme.space_12);
@@ -84,8 +88,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                     .inner_margin(egui::Margin::symmetric(16, 12))
                                     .show(ui, |ui| {
                                         ui.horizontal(|ui| {
+                                            let icon = if preview_url.is_some() { "🌐" } else { crate::theme::ICON_PAPERCLIP };
                                             ui.label(
-                                                egui::RichText::new(crate::theme::ICON_PAPERCLIP)
+                                                egui::RichText::new(icon)
                                                     .font(theme.font_icon(theme.text_sm)),
                                             );
                                             ui.label(
@@ -100,6 +105,13 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                                 }
                                             });
                                         });
+                                        if let Some(ref url) = preview_url {
+                                            ui.label(
+                                                egui::RichText::new(url)
+                                                    .size(theme.text_xs)
+                                                    .color(theme.text_muted),
+                                            );
+                                        }
                                         ui.add_space(theme.space_8);
                                         let mut text = if preview_content.chars().count() > 4000 {
                                             let truncated: String = preview_content.chars().take(4000).collect();
