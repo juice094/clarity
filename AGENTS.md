@@ -160,10 +160,12 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - 任务按钮 ghost 化、移除 FPS 显示、侧边栏分隔线
 - **Phase 5 — 布局精调 ✅**
   - 聊天区精确居中：`allocate_new_ui` + `UiBuilder::max_rect` 创建严格 `content_max_width` 宽的居中渲染区域，全屏下 Swiss Style 留白对称
-  - 三栏定型：左侧 Sidebar（分类导航 + 可折叠 Tools）+ 居中 Chat + 右侧 Files（常驻）
+  - 三栏定型：左侧 Sidebar（分类导航 + 可折叠 Tools）+ 居中 Chat + 右侧 Workspace（常驻）
   - Tools/Tasks 从右侧迁移至左侧 sidebar，移除冗余 `toolbar.rs` 面板
   - Tools 改为可折叠组件：默认折叠（标题栏 + 活跃任务数 + ▶/▼ 按钮），展开后复刻旧 toolbar.rs 视觉风格（状态圆点、分隔线、accent 按钮）
-  - Files 常驻右侧，标题统一为 "Files"，移除文件树上方重复标签
+  - Workspace 面板常驻右侧：default_width 320px（原 260px），标题 "Workspace"
+  - 文件树独占右侧全部垂直空间，无常驻 Preview 挤压
+  - 文件点击后在中间 Chat 区域以 glass card 全宽预览（4000 字符截断，可关闭）
   - Agent 消息底边框取消，改用 `space_12` 留白分隔
 - **遗留问题**
   - 窗口圆角：Windows 直角边框，需 `DwmSetWindowAttribute`（仅 Win11）
