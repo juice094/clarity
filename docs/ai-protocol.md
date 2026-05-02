@@ -8,8 +8,8 @@
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-05-01
-**当前分支**：`phase2/protocol-pilot` @ `ba6d8201`（已推送 origin）
+**最后更新**：2026-05-03
+**当前分支**：`phase2/protocol-pilot` @ `01990446`（已推送 origin）
 **架构模式**：CLI → **已批准切换至 Claw**（长程任务：Phase 1-5 前端全面翻新）
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
@@ -22,7 +22,7 @@
 - **Sprint 12 — egui 功能补齐**：✅ 已完成
 - **Sprint 13 — 稳定性硬化 + 架构解耦**：✅ 已完成（2026-04-27 ~ 2026-05-03）
 - **Sprint 13.5 — 前端架构重构**：✅ 已完成（Zustand-style Store + Services 拆分 + 错误边界）
-- **Sprint 14 — 前端设计审查与全面翻新**：🔄 已批准，Phase 1 foundation 完成（theme.rs tokenize + OLED Black）
+- **Sprint 14 — Glassmorphism 视觉精调**：✅ 已完成（2026-05-01 ~ 2026-05-03）
 
 ---
 

@@ -135,7 +135,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > 详细对比报告见 [`docs/frontend-architecture-comparison.md`](./docs/frontend-architecture-comparison.md)
 
-**Sprint 14 — Glassmorphism 视觉精调（进行中，2026-05-01 ~ 2026-05-03）**
+**Sprint 14 — Glassmorphism 视觉精调（✅ 已完成，2026-05-01 ~ 2026-05-03）**
 
 - 参考 Kimi 网页版 Swiss International Style + Agent-Native UI 进行批评式设计审查
 - 美学评分 4.6/10，识别 20+ 设计缺陷，撰写完整审查报告
@@ -167,15 +167,22 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - 文件树独占右侧全部垂直空间，无常驻 Preview 挤压
   - 文件点击后在中间 Chat 区域以 glass card 全宽预览（4000 字符截断，可关闭）
   - Agent 消息底边框取消，改用 `space_12` 留白分隔
+- **Bug 修复（本轮）**
+  - Header tabs 与右侧状态栏重叠 — `allocate_ui_with_layout` 限制 tab 最大宽度，恢复正确渲染顺序（`01990446`）
+  - 窗口控制按钮 tofu — Unicode `□/❐/─` 替换为 epaint 向量笔画（`365eba56`）
+  - 文件预览可编辑 — `PreviewItem::File` 新增 `path` 字段，TextEdit + Save 按钮写回磁盘（`365eba56`）
+  - Provider Tab 可编辑 — API Key / Base URL 改为 `TextEdit`，自动保存 via `ProviderRegistry::update_provider()`（`d0ae04b5`）
+  - Provider list 高度塌陷 — `min_scrolled_height(200.0)` 防止折叠到 2 项（`d0ae04b5`）
+  - 新-tab (+) 无效 — 移除 `app_logic.rs` 中 lazy-creation 逻辑，确保每次点击创建新 session
+  - 拖拽/resize 不可靠 — `button_down` → `button_pressed` + 标题栏排除 + 边缘阈值 8→10px + 最大化跳过（`48851ad1`）
 - **遗留问题**
-  - 窗口圆角：Windows 直角边框，需 `DwmSetWindowAttribute`（仅 Win11）
-  - 最大化按钮 Unicode "□" 在某些字体下异常
   - 响应式自动收缩：无 Hanako 式 `CHAT_MIN_WIDTH` 自动折叠逻辑
   - `toolbar.rs` 残留：`panels/toolbar.rs`、`render_toolbar`、`toolbar_open` 未完全清理（编译 warning 但不影响功能）
 - **已完成（本轮）**
   - P0 ✅ — 输入框固定在底部：`TopBottomPanel::bottom` 固定输入栏，`CentralPanel` 内 `ScrollArea` 滚动 message_list + preview + plan；输入栏宽度跟随 `content_max_width` 居中
   - Sidebar Web Tabs ✅ — 左侧 Sidebar 新增网页标签面板：URL 列表管理（添加/删除/持久化），点击后异步抓取网页纯文本并在 Chat 区以 glass card 预览（复用文件预览 UI）
   - Sidebar Thinking Log ✅ — 左侧 Sidebar 新增思考日志面板：显示当前 Agent turn 的工具调用链（状态图标 + 工具名 + 参数），从 message_list 底部迁移至此
+  - 窗口圆角 ✅ — Win11 `DwmSetWindowAttribute` + `DWMWA_WINDOW_CORNER_PREFERENCE`（`platform/windows.rs:apply_rounded_corners`）
 - **下一周期规划（待决策）**
   - P1 — 文件预览可折叠/钉住：预览卡片不常驻占用 message_list 空间
   - P2 — 左侧 Activity Bar 视图切换：窄条图标切换对话/文件/网页/设置（VS Code 模式）
