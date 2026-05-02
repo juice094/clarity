@@ -40,11 +40,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     let categories = [("emotion", app.t("Emotion")), ("knowledge", app.t("Knowledge")), ("engineering", app.t("Engineering"))];
                     for (cat, label) in categories {
                         let is_active = app.session_store.active_category == cat;
-                        let bg = if is_active {
-                            app.ui_store.theme.glass_strong
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
+                        let bg = egui::Color32::TRANSPARENT;
                         let text_color = if is_active {
                             app.ui_store.theme.text
                         } else {

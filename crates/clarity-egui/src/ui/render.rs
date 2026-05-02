@@ -123,8 +123,10 @@ fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
-                ui.set_min_width(48.0);
-                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text_strong);
+                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                    ui.set_min_width(48.0);
+                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text_strong);
+                });
             });
     });
     ui.add_space(theme.space_16);

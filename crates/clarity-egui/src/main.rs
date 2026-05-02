@@ -178,13 +178,14 @@ impl App {
                                 crate::theme::ICON_X, theme.font_icon(14.0), text_col);
                         }
 
-                        // Maximize
+                        // Maximize / Restore
                         let max_resp = ui.add_sized(btn_size,
                             egui::Button::new(egui::RichText::new("□").size(theme.text_sm).color(theme.text_dim))
                                 .fill(egui::Color32::TRANSPARENT)
                         );
                         if max_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                            let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                         } else if max_resp.hovered() {
                             ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), theme.overlay_medium);
                         }

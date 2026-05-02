@@ -178,7 +178,7 @@ impl Theme {
             accent_subtle: rgba(91, 141, 239, 0.12),
 
             // Chat bubbles: translucent glass
-            user_bubble: rgba(91, 141, 239, 0.18),
+            user_bubble: rgba(45, 80, 160, 0.30),
             ai_bubble: rgba(255, 255, 255, 0.04),
             chat_text: hex("#E8EAEF"),
             error_bubble: rgba(239, 91, 91, 0.28),
@@ -309,7 +309,7 @@ impl Theme {
             accent_subtle: rgba(91, 141, 239, 0.12),
 
             // Chat bubbles
-            user_bubble: rgba(91, 141, 239, 0.18),
+            user_bubble: rgba(45, 80, 160, 0.30),
             ai_bubble: rgba(255, 255, 255, 0.04),
             chat_text: hex("#E8EAEF"),
             error_bubble: rgba(239, 91, 91, 0.28),

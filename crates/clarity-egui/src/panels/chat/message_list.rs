@@ -10,10 +10,33 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let scroll_y = app.ui_store.last_scroll_offset;
     let mut configure_clicked = false;
 
+    // Pre-calculate content height to avoid stick-to-bottom when messages are short
+    // (prevents large top-padding and content clipping in windowed mode).
+    let total_estimated: f32 = if let Some(session) = app.session_store.sessions.iter().find(|s| s.id == active_id) {
+        if session.messages.is_empty() && !is_loading {
+            0.0
+        } else {
+            let typing_h = if is_loading
+                && session.messages.last().map_or(true, |m| m.role == Role::User)
+                && app.chat_store.tool_calls.is_empty()
+            {
+                60.0
+            } else {
+                0.0
+            };
+            session.messages.iter()
+                .map(|m| m.cached_height.unwrap_or_else(|| crate::ui::render::estimate_height(m)))
+                .sum::<f32>() + typing_h
+        }
+    } else {
+        0.0
+    };
+    let should_stick = app.chat_store.stick_to_bottom && total_estimated >= available_height;
+
     let mut scroll_up = false;
     let output = egui::ScrollArea::vertical()
         .id_salt("chat_scroll")
-        .stick_to_bottom(app.chat_store.stick_to_bottom)
+        .stick_to_bottom(should_stick)
         .auto_shrink([false; 2])
         .max_height(available_height)
         .show(ui, |ui| {
