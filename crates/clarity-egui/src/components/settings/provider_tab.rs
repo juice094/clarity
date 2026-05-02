@@ -232,9 +232,14 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .color(theme.text_muted),
     );
     let key_edit_id = ui.id().with(&prov.id).with("api_key_edit");
+    let resolved_key = if prov.api_key_ref.starts_with("${env:") {
+        prov.resolve_api_key().unwrap_or_default()
+    } else {
+        prov.api_key_ref.clone()
+    };
     let mut key_buffer = ui.data(|d| {
         d.get_temp::<String>(key_edit_id)
-            .unwrap_or_else(|| prov.api_key_ref.clone())
+            .unwrap_or(resolved_key.clone())
     });
     egui::Frame::new()
         .fill(theme.input_bg)
@@ -247,7 +252,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     .password(!show_key)
                     .desired_width(ui.available_width() - 50.0)
                     .font(theme.font(theme.text_base));
-                if prov.api_key_ref.is_empty() {
+                if resolved_key.is_empty() {
                     te = te.hint_text("Enter API key...");
                 }
                 let resp = ui.add(te);
