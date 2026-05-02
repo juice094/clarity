@@ -110,8 +110,13 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                         egui::StrokeKind::Inside,
                                     );
                                 }
-                                // Title text
-                                ui.painter().text(
+                                // Title text — clipped to tab interior so long titles
+                                // don't bleed into adjacent tabs or the close button.
+                                let text_clip = egui::Rect::from_min_max(
+                                    egui::pos2(tab_rect.min.x + 2.0, tab_rect.min.y),
+                                    egui::pos2(tab_rect.max.x - 22.0, tab_rect.max.y),
+                                );
+                                ui.painter_at(text_clip).text(
                                     egui::pos2(tab_rect.min.x + 10.0, tab_rect.center().y),
                                     egui::Align2::LEFT_CENTER,
                                     title.as_str(),

@@ -239,13 +239,27 @@ impl App {
         if self.session_store.active_category == category {
             return;
         }
-        self.save_current_session();
         let old_id = self.session_store.active_session_id.clone();
-        if !self.chat_store.input.trim().is_empty() {
-            self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
-        } else {
+
+        // Discard empty sessions when switching categories so they don't
+        // clutter the tab bar with blank tabs.
+        let was_empty = self
+            .session_store
+            .active_session()
+            .map(|s| s.messages.is_empty())
+            .unwrap_or(false);
+        if was_empty {
+            self.session_store.sessions.retain(|s| s.id != old_id);
             self.session_store.drafts.remove(&old_id);
+        } else {
+            self.save_current_session();
+            if !self.chat_store.input.trim().is_empty() {
+                self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+            } else {
+                self.session_store.drafts.remove(&old_id);
+            }
         }
+
         self.session_store.active_category = category.to_string();
         // Find an existing session of this category, or create one.
         if let Some(s) = self.session_store.sessions.iter().find(|s| s.category == category) {
@@ -263,14 +277,28 @@ impl App {
     }
 
     pub(crate) fn new_session(&mut self) {
-        self.save_current_session();
-        // Save draft for current session before switching.
         let old_id = self.session_store.active_session_id.clone();
-        if !self.chat_store.input.trim().is_empty() {
-            self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
-        } else {
+
+        // If the current session has no messages, remove it instead of
+        // accumulating empty tabs. This prevents the "blank tab" problem
+        // where users click (+) repeatedly without ever sending a message.
+        let was_empty = self
+            .session_store
+            .active_session()
+            .map(|s| s.messages.is_empty())
+            .unwrap_or(false);
+        if was_empty {
+            self.session_store.sessions.retain(|s| s.id != old_id);
             self.session_store.drafts.remove(&old_id);
+        } else {
+            self.save_current_session();
+            if !self.chat_store.input.trim().is_empty() {
+                self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+            } else {
+                self.session_store.drafts.remove(&old_id);
+            }
         }
+
         let category = self.session_store.active_category.clone();
         // Emotion is singleton: refuse to create multiple emotion sessions.
         if category == "emotion" {
