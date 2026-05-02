@@ -173,6 +173,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         }
+        ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             // Settings

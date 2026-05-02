@@ -233,7 +233,7 @@ pub enum RenderBlock {
 
 #[derive(Clone, Debug)]
 pub enum PreviewItem {
-    File { name: String, content: String },
+    File { name: String, content: String, path: String },
     WebPage { title: String, url: String, content: String },
 }
 

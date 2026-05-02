@@ -1,4 +1,5 @@
 use crate::App;
+use crate::ui::types::ToastLevel;
 
 pub mod header;
 pub mod input;
@@ -70,17 +71,24 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             // File preview (rendered in main chat area when selected from workspace panel)
-                            if let Some(ref item) = app.ui_store.preview_item {
-                                let (preview_name, preview_content, preview_url) = match item {
-                                    crate::ui::types::PreviewItem::File { name, content } => {
-                                        (name.clone(), content.clone(), None)
-                                    }
-                                    crate::ui::types::PreviewItem::WebPage { title, url, content } => {
-                                        (title.clone(), content.clone(), Some(url.clone()))
-                                    }
-                                };
-                                let theme = &app.ui_store.theme;
+                            if app.ui_store.preview_item.is_some() {
+                                let (preview_name, preview_content, preview_url, file_path) =
+                                    match app.ui_store.preview_item.as_ref().unwrap() {
+                                        crate::ui::types::PreviewItem::File { name, content, path } => {
+                                            (name.clone(), content.clone(), None, Some(path.clone()))
+                                        }
+                                        crate::ui::types::PreviewItem::WebPage { title, url, content } => {
+                                            (title.clone(), content.clone(), Some(url.clone()), None)
+                                        }
+                                    };
+                                let theme = app.ui_store.theme.clone();
                                 ui.add_space(theme.space_12);
+                                let edit_id = ui.id().with(&preview_name).with("preview_edit");
+                                let mut text = ui.data(|d| {
+                                    d.get_temp::<String>(edit_id)
+                                        .unwrap_or(preview_content.clone())
+                                });
+                                let is_dirty = text != preview_content;
                                 egui::Frame::group(ui.style())
                                     .fill(theme.surface)
                                     .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
@@ -100,8 +108,32 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                                     .monospace(),
                                             );
                                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                // Close
                                                 if ui.add(egui::Button::new(egui::RichText::new(crate::theme::ICON_X).font(theme.font_icon(theme.text_xs))).small()).clicked() {
                                                     app.ui_store.preview_item = None;
+                                                }
+                                                // Save (files only)
+                                                if let Some(ref path) = file_path {
+                                                    let save_btn = if is_dirty {
+                                                        theme.primary_button("Save")
+                                                    } else {
+                                                        theme.ghost_button("Save")
+                                                    };
+                                                    if ui.add(save_btn).clicked() && is_dirty {
+                                                        match std::fs::write(path, &text) {
+                                                            Ok(()) => {
+                                                                if let Some(ref mut item) = app.ui_store.preview_item {
+                                                                    if let crate::ui::types::PreviewItem::File { content, .. } = item {
+                                                                        *content = text.clone();
+                                                                    }
+                                                                }
+                                                                app.push_toast(format!("Saved: {}", preview_name), ToastLevel::Info);
+                                                            }
+                                                            Err(e) => {
+                                                                app.push_toast(format!("Save failed: {}", e), ToastLevel::Error);
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             });
                                         });
@@ -113,24 +145,22 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                             );
                                         }
                                         ui.add_space(theme.space_8);
-                                        let mut text = if preview_content.chars().count() > 4000 {
-                                            let truncated: String = preview_content.chars().take(4000).collect();
-                                            format!("{}…\n\n[Preview truncated: {} total characters]", truncated, preview_content.len())
-                                        } else {
-                                            preview_content
-                                        };
                                         egui::ScrollArea::vertical()
                                             .id_salt("preview_scroll_main")
                                             .max_height(400.0)
                                             .show(ui, |ui| {
-                                                ui.add_sized(
+                                                let te = egui::TextEdit::multiline(&mut text)
+                                                    .desired_rows(20)
+                                                    .font(egui::TextStyle::Monospace)
+                                                    .text_color(theme.text_dim)
+                                                    .margin(egui::vec2(8.0, 6.0));
+                                                let resp = ui.add_sized(
                                                     egui::vec2(ui.available_width(), 400.0),
-                                                    egui::TextEdit::multiline(&mut text)
-                                                        .desired_rows(20)
-                                                        .font(egui::TextStyle::Monospace)
-                                                        .text_color(theme.text_dim)
-                                                        .margin(egui::vec2(8.0, 6.0)),
+                                                    te,
                                                 );
+                                                if resp.changed() {
+                                                    ui.data_mut(|d| d.insert_temp(edit_id, text.clone()));
+                                                }
                                             });
                                     });
                                 ui.add_space(theme.space_12);

@@ -176,7 +176,6 @@ impl App {
 
                         // Maximize / Restore
                         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        let max_icon = if is_maximized { "❐" } else { "□" };
                         let max_resp = ui.add_sized(btn_size,
                             egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
@@ -187,8 +186,21 @@ impl App {
                         }
                         let max_fill = if max_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
                         ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), max_fill);
-                        ui.painter().text(max_resp.rect.center(), egui::Align2::CENTER_CENTER,
-                            max_icon, theme.font(theme.text_sm), theme.text_dim);
+                        let max_color = if max_resp.hovered() { theme.text } else { theme.text_dim };
+                        let max_c = max_resp.rect.center();
+                        let max_stroke = egui::Stroke::new(1.2, max_color);
+                        if is_maximized {
+                            // Restore: two overlapping rectangles
+                            let s = 4.5;
+                            let back = egui::Rect::from_center_size(egui::pos2(max_c.x - 1.0, max_c.y - 1.0), egui::vec2(s * 2.0, s * 2.0));
+                            let front = egui::Rect::from_center_size(egui::pos2(max_c.x + 1.0, max_c.y + 1.0), egui::vec2(s * 2.0, s * 2.0));
+                            ui.painter().rect_stroke(back, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
+                            ui.painter().rect_stroke(front, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
+                        } else {
+                            // Maximize: single rectangle
+                            let rect = egui::Rect::from_center_size(max_c, egui::vec2(10.0, 10.0));
+                            ui.painter().rect_stroke(rect, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
+                        }
 
                         // Minimize
                         let min_resp = ui.add_sized(btn_size,
@@ -201,8 +213,12 @@ impl App {
                         }
                         let min_fill = if min_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
                         ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), min_fill);
-                        ui.painter().text(min_resp.rect.center(), egui::Align2::CENTER_CENTER,
-                            "─", theme.font(theme.text_sm), theme.text_dim);
+                        let min_color = if min_resp.hovered() { theme.text } else { theme.text_dim };
+                        let min_c = min_resp.rect.center();
+                        ui.painter().line_segment(
+                            [egui::pos2(min_c.x - 5.0, min_c.y), egui::pos2(min_c.x + 5.0, min_c.y)],
+                            egui::Stroke::new(1.2, min_color),
+                        );
                     });
                 });
             });
