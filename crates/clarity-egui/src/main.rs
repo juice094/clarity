@@ -157,52 +157,93 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
                         let close_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new(crate::theme::ICON_X).font(theme.font_icon(theme.text_base)).color(theme.text_dim))
+                            egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                         );
                         if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        } else {
-                            let fill = if close_resp.hovered() {
-                                theme.danger.linear_multiply(0.25)
-                            } else {
-                                egui::Color32::TRANSPARENT
-                            };
-                            let text_col = if close_resp.hovered() {
-                                egui::Color32::WHITE
-                            } else {
-                                theme.text_dim
-                            };
-                            ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), fill);
-                            ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
-                                crate::theme::ICON_X, theme.font_icon(14.0), text_col);
                         }
+                        let close_fill = if close_resp.hovered() {
+                            theme.danger.linear_multiply(0.25)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        let close_text = if close_resp.hovered() { egui::Color32::WHITE } else { theme.text_dim };
+                        ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), close_fill);
+                        ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
+                            crate::theme::ICON_X, theme.font_icon(14.0), close_text);
 
                         // Maximize / Restore
+                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                        let max_icon = if is_maximized { "❐" } else { "□" };
                         let max_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("□").size(theme.text_sm).color(theme.text_dim))
+                            egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                         );
                         if max_resp.clicked() {
-                            let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                        } else if max_resp.hovered() {
-                            ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), theme.overlay_medium);
                         }
+                        let max_fill = if max_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
+                        ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), max_fill);
+                        ui.painter().text(max_resp.rect.center(), egui::Align2::CENTER_CENTER,
+                            max_icon, theme.font(theme.text_sm), theme.text_dim);
 
                         // Minimize
                         let min_resp = ui.add_sized(btn_size,
-                            egui::Button::new(egui::RichText::new("─").size(theme.text_sm).color(theme.text_dim))
+                            egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                         );
                         if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        } else if min_resp.hovered() {
-                            ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), theme.overlay_medium);
                         }
+                        let min_fill = if min_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
+                        ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), min_fill);
+                        ui.painter().text(min_resp.rect.center(), egui::Align2::CENTER_CENTER,
+                            "─", theme.font(theme.text_sm), theme.text_dim);
                     });
                 });
             });
+    }
+
+    fn handle_window_resize(&mut self, ctx: &egui::Context) {
+        let screen_rect = ctx.screen_rect();
+        let edge = 8.0;
+        if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
+            let on_left = pos.x < screen_rect.min.x + edge;
+            let on_right = pos.x > screen_rect.max.x - edge;
+            let on_top = pos.y < screen_rect.min.y + edge;
+            let on_bottom = pos.y > screen_rect.max.y - edge;
+
+            let (direction, cursor) = if on_top && on_left {
+                (Some(egui::ResizeDirection::NorthWest), egui::CursorIcon::ResizeNorthWest)
+            } else if on_top && on_right {
+                (Some(egui::ResizeDirection::NorthEast), egui::CursorIcon::ResizeNorthEast)
+            } else if on_bottom && on_left {
+                (Some(egui::ResizeDirection::SouthWest), egui::CursorIcon::ResizeSouthWest)
+            } else if on_bottom && on_right {
+                (Some(egui::ResizeDirection::SouthEast), egui::CursorIcon::ResizeSouthEast)
+            } else if on_left {
+                (Some(egui::ResizeDirection::West), egui::CursorIcon::ResizeHorizontal)
+            } else if on_right {
+                (Some(egui::ResizeDirection::East), egui::CursorIcon::ResizeHorizontal)
+            } else if on_top {
+                (Some(egui::ResizeDirection::North), egui::CursorIcon::ResizeVertical)
+            } else if on_bottom {
+                (Some(egui::ResizeDirection::South), egui::CursorIcon::ResizeVertical)
+            } else {
+                (None, egui::CursorIcon::Default)
+            };
+
+            if let Some(dir) = direction {
+                ctx.set_cursor_icon(cursor);
+                if ctx.input(|i| i.pointer.button_down(egui::PointerButton::Primary)) {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(dir));
+                }
+            }
+        }
     }
 
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
@@ -355,6 +396,7 @@ impl eframe::App for App {
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
         self.render_safe(ctx, "task_create", |app, ctx| app.render_task_create_modal(ctx));
         onboarding::render_onboarding(self, ctx);
+        self.handle_window_resize(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
