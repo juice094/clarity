@@ -30,7 +30,7 @@ pub use model_registry::{
 };
 pub use ollama::OllamaProvider;
 
-pub use api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
+pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta};
 pub use policy::{
     DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy,
 };
@@ -485,6 +485,13 @@ impl LlmProvider for OpenAiCompatibleLlm {
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.set_prompt_cache_key(key);
     }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }
 
 /// Kimi (Moonshot) LLM Provider
@@ -539,6 +546,13 @@ impl LlmProvider for KimiLlm {
 
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.inner.set_prompt_cache_key(key);
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
     }
 }
 
@@ -642,6 +656,13 @@ impl LlmProvider for OAuthLlm {
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }
 
 /// Backward-compatible alias for the Kimi Code LLM provider.
@@ -688,6 +709,26 @@ struct AnthropicContent {
     text: String,
 }
 
+/// Format a list of tools as a text block for prompt-guided tool calling.
+fn format_tools_for_prompt(tools: &Value) -> String {
+    let mut text = String::from(
+        "\n\nYou have access to the following tools. \
+         When you need to use a tool, output a JSON object in this exact format on its own line:\n\
+         {\"tool_calls\": [{\"id\": \"call_1\", \"type\": \"function\", \"function\": {\"name\": \"tool_name\", \"arguments\": {\"arg1\": \"value1\"}}}]\n\n\
+         Available tools:\n"
+    );
+    if let Some(arr) = tools.as_array() {
+        for tool in arr {
+            if let Some(func) = tool.get("function") {
+                let name = func.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let desc = func.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                text.push_str(&format!("- {}: {}\n", name, desc));
+            }
+        }
+    }
+    text
+}
+
 impl AnthropicLlm {
     /// Create from environment variables
     ///
@@ -727,13 +768,23 @@ impl LlmProvider for AnthropicLlm {
     async fn complete(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
+        // AnthropicLlm does not support native tool calling; fall back to
+        // prompt-guided tool invocation by injecting tool descriptions into
+        // the system prompt.
+        let has_tools = tools.as_array().map(|a| !a.is_empty()).unwrap_or(false);
+
         // Extract system message if present
-        let system_msg = messages
+        let mut system_msg = messages
             .iter()
             .find(|m| m.role == MessageRole::System)
             .map(|m| m.content.clone());
+
+        if has_tools {
+            let tool_text = format_tools_for_prompt(tools);
+            system_msg = Some(system_msg.unwrap_or_default() + &tool_text);
+        }
 
         // Convert messages (excluding system)
         let anthropic_messages: Vec<AnthropicMessage> = messages
@@ -803,13 +854,21 @@ impl LlmProvider for AnthropicLlm {
     fn stream(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        // Prompt-guided fallback: inject tool descriptions into system prompt.
+        let has_tools = tools.as_array().map(|a| !a.is_empty()).unwrap_or(false);
+
         // Extract system message if present
-        let system_msg = messages
+        let mut system_msg = messages
             .iter()
             .find(|m| m.role == MessageRole::System)
             .map(|m| m.content.clone());
+
+        if has_tools {
+            let tool_text = format_tools_for_prompt(tools);
+            system_msg = Some(system_msg.unwrap_or_default() + &tool_text);
+        }
 
         // Convert messages (excluding system)
         let anthropic_messages: Vec<AnthropicMessage> = messages
@@ -915,6 +974,13 @@ impl LlmProvider for AnthropicLlm {
     }
 
     fn set_prompt_cache_key(&mut self, _key: &str) {}
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: false,
+            ..Default::default()
+        }
+    }
 }
 
 /// Factory for creating LLM providers.

@@ -120,4 +120,11 @@ impl LlmProvider for LlamaServerProvider {
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }

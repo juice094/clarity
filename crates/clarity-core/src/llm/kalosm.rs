@@ -86,4 +86,11 @@ impl LlmProvider for KalosmProvider {
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.cache_key = Some(key.to_string());
     }
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }

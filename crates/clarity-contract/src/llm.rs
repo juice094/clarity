@@ -8,6 +8,30 @@ use crate::{AgentError, StreamDelta, Message, ToolCall};
 use async_trait::async_trait;
 use serde_json::Value;
 
+/// Provider self-reported capabilities.
+///
+/// Used by the agent runtime to decide whether to use native tool calling
+/// APIs or fall back to prompt-guided tool invocation.
+#[derive(Debug, Clone)]
+pub struct ProviderCapabilities {
+    /// Whether the provider supports native `tools` parameter in the API.
+    pub native_tool_calling: bool,
+    /// Whether the provider supports vision / image inputs.
+    pub vision: bool,
+    /// Whether the provider supports prompt caching.
+    pub prompt_caching: bool,
+}
+
+impl Default for ProviderCapabilities {
+    fn default() -> Self {
+        Self {
+            native_tool_calling: true,
+            vision: false,
+            prompt_caching: false,
+        }
+    }
+}
+
 /// Response from an LLM inference request.
 #[derive(Debug, Clone)]
 pub struct LlmResponse {
@@ -45,4 +69,68 @@ pub trait LlmProvider: Send + Sync {
 
     /// Set a prompt cache key for provider-side cache routing.
     fn set_prompt_cache_key(&mut self, key: &str);
+
+    /// Provider self-reported capabilities.
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            native_tool_calling: true,
+            vision: false,
+            prompt_caching: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_provider_capabilities_default() {
+        let caps = ProviderCapabilities::default();
+        assert!(caps.native_tool_calling);
+        assert!(!caps.vision);
+        assert!(!caps.prompt_caching);
+    }
+
+    #[test]
+    fn test_provider_capabilities_custom() {
+        let caps = ProviderCapabilities {
+            native_tool_calling: false,
+            vision: true,
+            prompt_caching: true,
+        };
+        assert!(!caps.native_tool_calling);
+        assert!(caps.vision);
+        assert!(caps.prompt_caching);
+    }
+
+    #[test]
+    fn test_llm_provider_default_capabilities() {
+        struct DummyProvider;
+        #[async_trait]
+        impl LlmProvider for DummyProvider {
+            async fn complete(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<LlmResponse, AgentError> {
+                unreachable!()
+            }
+            fn stream(
+                &self,
+                _messages: &[Message],
+                _tools: &Value,
+            ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+            {
+                unreachable!()
+            }
+            fn set_prompt_cache_key(&mut self, _key: &str) {}
+        }
+
+        let provider = DummyProvider;
+        let caps = provider.capabilities();
+        assert!(caps.native_tool_calling);
+        assert!(!caps.vision);
+        assert!(!caps.prompt_caching);
+    }
 }

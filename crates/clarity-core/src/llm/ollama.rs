@@ -371,6 +371,13 @@ impl LlmProvider for OllamaProvider {
     fn set_prompt_cache_key(&mut self, _key: &str) {
         // Ollama does not support prompt cache key
     }
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }
 
 #[cfg(test)]

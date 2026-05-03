@@ -91,6 +91,13 @@ impl LlmProvider for DeepSeekProvider {
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            native_tool_calling: true,
+            ..Default::default()
+        }
+    }
 }
 
 /// Available DeepSeek models
@@ -122,5 +129,12 @@ mod tests {
         assert_eq!(models::DEEPSEEK_CHAT, "deepseek-chat");
         assert_eq!(models::DEEPSEEK_REASONER, "deepseek-reasoner");
         assert_eq!(models::DEEPSEEK_CODER, "deepseek-coder");
+    }
+
+    #[test]
+    fn test_deepseek_capabilities() {
+        let provider = DeepSeekProvider::chat("test-key");
+        let caps = provider.capabilities();
+        assert!(caps.native_tool_calling);
     }
 }
