@@ -44,12 +44,14 @@ The summary should be detailed enough to maintain context continuity but concise
 /// System prompt for compaction
 const COMPACTION_SYSTEM_PROMPT: &str = "You are a helpful assistant that compacts conversation context. Your task is to create a concise but comprehensive summary of the provided conversation history.";
 
-/// Estimate the number of tokens in a text string using a character-based heuristic.
+/// Estimate the number of tokens in a text string using a weighted byte heuristic.
 ///
-/// This uses a simple approximation of ~4 characters per token for English text.
-/// Note: This is a rough estimate that works well for quick checks. For CJK text,
-/// it may underestimate, but this is acceptable for temporary estimates that get
-/// corrected on the next actual LLM call.
+/// This uses a differentiated approximation:
+/// - ASCII text: ~4 bytes per token (English words average 4-5 chars)
+/// - Non-ASCII text (CJK, emoji, etc.): ~2 bytes per token in UTF-8
+///
+/// This avoids the severe underestimation that `len()/4` causes for CJK text,
+/// where each character is 3 bytes in UTF-8 but typically 1-2 tokens.
 ///
 /// # Arguments
 ///
@@ -65,16 +67,20 @@ const COMPACTION_SYSTEM_PROMPT: &str = "You are a helpful assistant that compact
 /// use clarity_core::compaction::estimate_text_tokens;
 ///
 /// let tokens = estimate_text_tokens("Hello, world!");
-/// // Approximately 3-4 tokens (13 chars / 4)
+/// // Approximately 3-4 tokens (13 ascii bytes / 4)
 /// assert!(tokens >= 3);
+///
+/// let tokens = estimate_text_tokens("你好世界");
+/// // Approximately 6 tokens (12 non-ascii bytes / 2), closer to real ~4-8
+/// assert!(tokens >= 4);
 /// ```
 pub fn estimate_text_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    // ~4 chars per token for English; somewhat underestimates for CJK text,
-    // but this is a temporary estimate that gets corrected on the next LLM call.
-    text.len().div_ceil(4)
+    let ascii_bytes = text.bytes().filter(|b| b.is_ascii()).count();
+    let non_ascii_bytes = text.len() - ascii_bytes;
+    ascii_bytes.div_ceil(4) + non_ascii_bytes.div_ceil(2)
 }
 
 /// Estimate tokens for a slice of messages
@@ -450,17 +456,17 @@ mod tests {
         // Empty string
         assert_eq!(estimate_text_tokens(""), 0);
 
-        // Short English text (4 chars = 1 token approx)
-        assert_eq!(estimate_text_tokens("Hello"), 2); // 5 / 4 = 1.25 -> ceil = 2
-        assert_eq!(estimate_text_tokens("Hello, world!"), 4); // 13 / 4 = 3.25 -> ceil = 4
+        // Short English text (ASCII: ~4 bytes per token)
+        assert_eq!(estimate_text_tokens("Hello"), 2); // 5 / 4 = 2
+        assert_eq!(estimate_text_tokens("Hello, world!"), 4); // 13 / 4 = 4
 
         // Longer text
         let long_text = "This is a longer piece of text that should give us more tokens.";
-        assert_eq!(estimate_text_tokens(long_text), 16); // 63 / 4 = 15.75 -> ceil = 16
+        assert_eq!(estimate_text_tokens(long_text), 16); // 63 / 4 = 16
 
-        // CJK text (each char counts as 3 bytes in UTF-8)
+        // CJK text (non-ASCII: ~2 bytes per token in UTF-8)
         let cjk_text = "你好世界";
-        assert_eq!(estimate_text_tokens(cjk_text), 3); // 12 / 4 = 3
+        assert_eq!(estimate_text_tokens(cjk_text), 6); // 12 / 2 = 6, closer to real ~4-8
     }
 
     #[test]

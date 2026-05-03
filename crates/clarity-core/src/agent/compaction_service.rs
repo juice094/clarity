@@ -54,7 +54,7 @@ impl CompactionService {
         let mut accumulated = 0;
         let mut split_index = messages.len();
         for (i, msg) in messages.iter().enumerate() {
-            let tokens = msg.content.len().div_ceil(4);
+            let tokens = crate::compaction::estimate_text_tokens(&msg.content);
             accumulated += tokens;
             if total.saturating_sub(accumulated) <= self.config.history_retention_tokens {
                 split_index = i + 1;
@@ -77,10 +77,10 @@ impl CompactionService {
         }
     }
 
-    /// Estimate token count for a slice of messages using a character heuristic
-    /// (~4 characters per token).
+    /// Estimate token count for a slice of messages.
+    /// Delegates to the shared weighted heuristic in `crate::compaction`.
     pub fn estimate_tokens(messages: &[Message]) -> usize {
-        messages.iter().map(|m| m.content.len().div_ceil(4)).sum()
+        crate::compaction::estimate_message_tokens(messages)
     }
 
     /// Returns `true` when the total estimated tokens exceed `token_limit`
@@ -121,7 +121,7 @@ impl CompactionService {
         let mut split_index = messages.len();
 
         for (i, msg) in messages.iter().enumerate() {
-            let tokens = msg.content.len().div_ceil(4);
+            let tokens = crate::compaction::estimate_text_tokens(&msg.content);
             accumulated += tokens;
             if total.saturating_sub(accumulated) <= self.config.history_retention_tokens {
                 split_index = i + 1;
