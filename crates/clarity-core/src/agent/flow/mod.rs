@@ -161,6 +161,7 @@ pub fn parse_choice(text: &str) -> Option<String> {
     last_choice
 }
 
+pub mod d2;
 pub mod mermaid;
 pub mod runner;
 pub use runner::{FlowExecutor, FlowRunner};
