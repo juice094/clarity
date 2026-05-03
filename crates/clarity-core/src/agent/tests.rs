@@ -418,7 +418,7 @@ async fn test_agent_run_with_wire() {
 
 #[tokio::test]
 async fn test_agent_run_streaming_with_wire() {
-    use clarity_wire::Wire;
+    use clarity_wire::{DraftEvent, Wire};
     use std::sync::Arc;
     use std::sync::{Arc as StdArc, Mutex};
     use tokio::time::{timeout, Duration};
@@ -452,19 +452,34 @@ async fn test_agent_run_streaming_with_wire() {
         .expect("channel closed");
     assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "streaming test"));
 
-    // Verify ContentPart is received (empty start marker)
+    // Verify DraftEvent::Progress is received (loading indicator)
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
         .await
-        .expect("timeout waiting for ContentPart start")
+        .expect("timeout waiting for DraftEvent::Progress")
         .expect("channel closed");
-    assert!(matches!(msg, WireMessage::ContentPart { .. }));
+    assert!(
+        matches!(msg, WireMessage::DraftEvent { event: DraftEvent::Progress { .. } }),
+        "Expected DraftEvent::Progress, got {:?}",
+        msg
+    );
 
-    // Verify streaming ContentParts are received
+    // Verify DraftEvent::Clear is received before content
+    let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+        .await
+        .expect("timeout waiting for DraftEvent::Clear")
+        .expect("channel closed");
+    assert!(
+        matches!(msg, WireMessage::DraftEvent { event: DraftEvent::Clear }),
+        "Expected DraftEvent::Clear, got {:?}",
+        msg
+    );
+
+    // Verify streaming DraftEvent::Content chunks are received
     let mut content_received = false;
     loop {
         match timeout(Duration::from_millis(500), ui_side.recv()).await {
             Ok(Some(msg)) => match msg {
-                WireMessage::ContentPart { text } => {
+                WireMessage::DraftEvent { event: DraftEvent::Content { text } } => {
                     if !text.is_empty() {
                         content_received = true;
                     }
@@ -476,7 +491,7 @@ async fn test_agent_run_streaming_with_wire() {
             Err(_) => break, // Timeout
         }
     }
-    assert!(content_received, "Should have received content parts");
+    assert!(content_received, "Should have received DraftEvent::Content parts");
 
     // Wait for agent to complete
     let result = timeout(Duration::from_millis(1000), handle)

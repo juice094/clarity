@@ -24,6 +24,19 @@ use tracing::{debug, error, trace, warn};
 /// Default capacity for broadcast channels.
 const DEFAULT_CHANNEL_CAPACITY: usize = 1024;
 
+/// Streaming draft lifecycle event.
+/// Used by the UI to distinguish between loading states and actual content.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DraftEvent {
+    /// Clear the current draft area (e.g. remove loading spinner).
+    Clear,
+    /// Progress indicator: the model is still thinking / loading.
+    Progress { text: String },
+    /// Actual content chunk from the model.
+    Content { text: String },
+}
+
 /// Core message types flowing through the Wire.
 ///
 /// These messages represent the lifecycle of a conversation turn,
@@ -45,6 +58,9 @@ pub enum WireMessage {
 
     /// A content part (text chunk from the model).
     ContentPart { text: String },
+
+    /// Streaming draft lifecycle event (replaces simple ContentPart for streaming).
+    DraftEvent { event: DraftEvent },
 
     /// A tool call initiated by the model.
     ToolCall {
@@ -1061,5 +1077,34 @@ mod tests {
 
         let _ui2 = wire.ui_view_side();
         assert_eq!(wire.view_receiver_count(), 2);
+    }
+
+    #[test]
+    fn test_draft_event_serde_roundtrip() {
+        for event in [
+            DraftEvent::Clear,
+            DraftEvent::Progress {
+                text: "thinking...".to_string(),
+            },
+            DraftEvent::Content {
+                text: "Hello".to_string(),
+            },
+        ] {
+            let json = serde_json::to_string(&event).unwrap();
+            let decoded: DraftEvent = serde_json::from_str(&json).unwrap();
+            assert_eq!(event, decoded);
+        }
+    }
+
+    #[test]
+    fn test_wire_message_draft_event_serde_roundtrip() {
+        let msg = WireMessage::DraftEvent {
+            event: DraftEvent::Content {
+                text: "chunk".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: WireMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
     }
 }

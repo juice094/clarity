@@ -14,4 +14,4 @@
 pub use clarity_contract::{
     LlmProvider, LlmResponse, Message, MessageRole, StreamDelta, ToolCall,
 };
-pub use clarity_contract::llm::ProviderCapabilities;
+pub use clarity_contract::llm::{Pricing, ProviderCapabilities};

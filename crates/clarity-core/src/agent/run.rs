@@ -4,7 +4,7 @@ use super::Agent;
 use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::types::ToolCall;
-use clarity_wire::WireMessage;
+use clarity_wire::{DraftEvent, WireMessage};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
@@ -660,21 +660,30 @@ impl Agent {
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
                             messages,
                         ) as u32;
-                    // Send final content start notification
-                    self.send_wire_message(WireMessage::ContentPart {
-                        text: String::new(),
+                    // Send progress indicator before first chunk arrives
+                    self.send_wire_message(WireMessage::DraftEvent {
+                        event: DraftEvent::Progress {
+                            text: "thinking...".to_string(),
+                        },
                     });
                     let mut accumulated = String::new();
                     let mut tool_calls: Vec<ToolCall> = Vec::new();
                     let mut stream_ok = true;
+                    let mut draft_cleared = false;
                     while let Some(chunk_result) = stream_rx.recv().await {
                         match chunk_result {
                             Ok(delta) => {
                                 if let Some(content) = delta.content {
                                     accumulated.push_str(&content);
                                     on_chunk(&content);
-                                    self.send_wire_message(WireMessage::ContentPart {
-                                        text: content,
+                                    if !draft_cleared {
+                                        self.send_wire_message(WireMessage::DraftEvent {
+                                            event: DraftEvent::Clear,
+                                        });
+                                        draft_cleared = true;
+                                    }
+                                    self.send_wire_message(WireMessage::DraftEvent {
+                                        event: DraftEvent::Content { text: content },
                                     });
                                 }
                                 for call in delta.tool_calls {
@@ -687,6 +696,12 @@ impl Agent {
                                 break;
                             }
                         }
+                    }
+                    // If no content was received but we have tool_calls, clear the progress indicator
+                    if !draft_cleared && !tool_calls.is_empty() {
+                        self.send_wire_message(WireMessage::DraftEvent {
+                            event: DraftEvent::Clear,
+                        });
                     }
                     if stream_ok {
                         completion_tokens = accumulated.len().div_ceil(4) as u32;
