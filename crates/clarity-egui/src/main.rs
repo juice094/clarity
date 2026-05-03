@@ -332,6 +332,9 @@ impl eframe::App for App {
 
         self.process_events();
 
+        // Poll MCP config for external changes (hot-reload).
+        self.check_mcp_config_reload();
+
         // Drain batch-grant auto-approval notifications and show toasts.
         for msg in self.state.mode_aware_approval_runtime.drain_auto_approval_notifications() {
             self.push_toast(msg, ToastLevel::Info);

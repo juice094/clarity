@@ -80,12 +80,14 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::McpReloaded { success, tools, message } => {
                 app.mcp_store.connected_tools = tools;
-                let level = if success {
-                    crate::ui::types::ToastLevel::Info
-                } else {
-                    crate::ui::types::ToastLevel::Error
-                };
-                app.push_toast(message, level);
+                if !message.is_empty() {
+                    let level = if success {
+                        crate::ui::types::ToastLevel::Info
+                    } else {
+                        crate::ui::types::ToastLevel::Error
+                    };
+                    app.push_toast(message, level);
+                }
             }
             UiEvent::KimiCodeLoginStateUpdate { state, user_code, url, error } => {
                 app.settings_store.kimi_code_login_state = match state.as_str() {

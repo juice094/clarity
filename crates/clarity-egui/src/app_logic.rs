@@ -42,12 +42,22 @@ impl App {
                     let manager = clarity_core::mcp::McpManager::from_config(&config).await;
                     let server_count = manager.list_servers().len();
                     let tool_count = manager.tools().len();
+                    let tool_names: Vec<String> = manager
+                        .tools()
+                        .iter()
+                        .map(|t| t.name().to_string())
+                        .collect();
                     manager.register_all(state_for_monitor.agent.registry());
                     tracing::info!(
                         "MCP auto-connect: {} server(s), {} tool(s) registered",
                         server_count,
                         tool_count
                     );
+                    let _ = tx_for_monitor.send(crate::ui::types::UiEvent::McpReloaded {
+                        success: true,
+                        tools: tool_names,
+                        message: String::new(),
+                    });
                 }
                 Err(e) => {
                     tracing::debug!("MCP config not loaded ({}), skipping auto-connect", e);
@@ -175,6 +185,10 @@ impl App {
             &settings_snapshot,
             profile_list,
         );
+        let initial_mcp_mtime = clarity_core::mcp::config::default_config_path()
+            .ok()
+            .and_then(|p| std::fs::metadata(&p).ok())
+            .and_then(|m| m.modified().ok());
         Self {
             state,
             runtime,
@@ -258,6 +272,8 @@ impl App {
                 mcp_config: crate::ui::mcp_panel::load_mcp_config(),
                 mcp_changed: false,
                 connected_tools: vec![],
+                last_mcp_poll: now,
+                last_mcp_mtime: initial_mcp_mtime,
             },
             onboarding_store: crate::stores::OnboardingStore {
                 onboarding_state: if crate::onboarding::should_show_onboarding() {
@@ -272,6 +288,77 @@ impl App {
 
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, level: ToastLevel) {
         crate::handlers::system::push_toast(&mut self.ui_store, message, level);
+    }
+
+    /// Poll mcp.json for external changes and hot-reload if modified.
+    pub(crate) fn check_mcp_config_reload(&mut self) {
+        if self.mcp_store.last_mcp_poll.elapsed() < Duration::from_secs(5) {
+            return;
+        }
+        self.mcp_store.last_mcp_poll = Instant::now();
+
+        let path = match clarity_core::mcp::config::default_config_path() {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::debug!("MCP default config path unavailable: {}", e);
+                return;
+            }
+        };
+
+        let mtime = match std::fs::metadata(&path).and_then(|m| m.modified()) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                tracing::debug!("Failed to read mcp.json metadata: {}", e);
+                None
+            }
+        };
+
+        if mtime == self.mcp_store.last_mcp_mtime {
+            return;
+        }
+        self.mcp_store.last_mcp_mtime = mtime;
+
+        let config = match clarity_core::mcp::config::McpConfig::load_default() {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("MCP config reload failed: {}", e);
+                self.push_toast(
+                    format!("MCP 配置加载失败: {}", e),
+                    ToastLevel::Error,
+                );
+                return;
+            }
+        };
+
+        self.hot_reload_mcp(config);
+    }
+
+    /// Disconnect old MCP tools and register new ones from the given config.
+    pub(crate) fn hot_reload_mcp(&mut self, config: clarity_core::mcp::config::McpConfig) {
+        let old_tools = self.mcp_store.connected_tools.clone();
+        let agent = self.state.agent.clone();
+        let tx = self.ui_tx.clone();
+        self.runtime.spawn(async move {
+            for name in &old_tools {
+                let _ = agent.registry().unregister(name);
+            }
+            let manager = clarity_core::mcp::McpManager::from_config(&config).await;
+            let tool_names: Vec<String> = manager
+                .tools()
+                .iter()
+                .map(|t| t.name().to_string())
+                .collect();
+            manager.register_all(agent.registry());
+            let _ = tx.send(crate::ui::types::UiEvent::McpReloaded {
+                success: true,
+                tools: tool_names,
+                message: format!(
+                    "MCP 配置已重新加载: {} 个服务器, {} 个工具",
+                    manager.list_servers().len(),
+                    manager.tools().len()
+                ),
+            });
+        });
     }
 
     pub(crate) fn process_events(&mut self) {

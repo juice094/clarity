@@ -112,6 +112,70 @@ impl App {
             return;
         }
 
+        // Subagent shortcuts: /coder <query> and /explore <query>
+        let subagent_prefix = if text.starts_with("/coder ") {
+            Some(("coder", "/coder "))
+        } else if text.starts_with("/explore ") {
+            Some(("explore", "/explore "))
+        } else {
+            None
+        };
+
+        if let Some((agent_type, prefix)) = subagent_prefix {
+            let subagent_prompt = query.strip_prefix(prefix).unwrap_or(&query).to_string();
+            self.runtime.spawn(async move {
+                if let Err(e) = ensure_llm(&state).await {
+                    if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {
+                        tracing::warn!("Failed to send Error: {}", err);
+                    }
+                    return;
+                }
+                let registry = state.agent.registry().clone();
+                let working_dir = state.agent.config().working_dir.clone();
+                let llm = match state.agent.llm() {
+                    Some(llm) => llm,
+                    None => {
+                        if let Err(err) = tx.send(UiEvent::Error("No LLM configured".to_string())) {
+                            tracing::warn!("Failed to send Error: {}", err);
+                        }
+                        return;
+                    }
+                };
+                let context_dir = dirs::data_dir()
+                    .map(|d| d.join("clarity").join("subagents"))
+                    .unwrap_or_else(|| working_dir.join("subagents"));
+                let runner = clarity_core::subagents::SubagentRunner::new(
+                    registry,
+                    &working_dir,
+                    &context_dir,
+                )
+                .with_llm(llm);
+                let mut store = clarity_core::subagents::SubagentStore::new(&context_dir);
+                let spec = clarity_core::subagents::RunSpec::new(&subagent_prompt, &subagent_prompt)
+                    .with_type(agent_type);
+                match runner.run(spec, &mut store, None).await {
+                    Ok(result) => {
+                        let content =
+                            format!("🤖 **{}** subagent result\n\n{}", agent_type, result.summary);
+                        if let Err(e) = tx.send(UiEvent::Chunk(content)) {
+                            tracing::warn!("Failed to send Chunk: {}", e);
+                        }
+                        if let Err(e) = tx.send(UiEvent::Done) {
+                            tracing::warn!("Failed to send Done: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        if let Err(err) =
+                            tx.send(UiEvent::Error(format!("Subagent /{} failed: {}", agent_type, e)))
+                        {
+                            tracing::warn!("Failed to send Error: {}", err);
+                        }
+                    }
+                }
+            });
+            return;
+        }
+
         self.runtime.spawn(async move {
             if let Err(e) = ensure_llm(&state).await {
                 if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {

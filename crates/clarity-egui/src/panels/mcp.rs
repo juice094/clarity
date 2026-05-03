@@ -126,34 +126,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
                     app.mcp_store.mcp_changed = false;
 
                     // Hot-reload MCP tools after config save
-                    let old_tools = app.mcp_store.connected_tools.clone();
-                    let agent = app.state.agent.clone();
-                    let tx = app.ui_tx.clone();
-                    let config_clone = config.clone();
-                    app.runtime.spawn(async move {
-                        // 1. Unregister old MCP tools
-                        for name in &old_tools {
-                            let _ = agent.registry().unregister(name);
-                        }
-
-                        // 2. Re-connect and register new tools
-                        let manager = clarity_core::mcp::McpManager::from_config(&config_clone).await;
-                        let tool_names: Vec<String> = manager
-                            .tools()
-                            .iter()
-                            .map(|t: &clarity_core::mcp::McpToolAdapter| t.name().to_string())
-                            .collect();
-                        manager.register_all(agent.registry());
-                        let _ = tx.send(crate::ui::types::UiEvent::McpReloaded {
-                            success: true,
-                            tools: tool_names,
-                            message: format!(
-                                "MCP reloaded: {} server(s), {} tool(s)",
-                                manager.list_servers().len(),
-                                manager.tools().len()
-                            ),
-                        });
-                    });
+                    app.hot_reload_mcp(config.clone());
                 }
                 Err(e) => app.push_toast(
                     format!("Save failed: {}", e),
