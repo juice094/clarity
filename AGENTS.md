@@ -286,18 +286,28 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ---
 
-**Sprint 17 — ZeroClaw 吸收与工程深化（🔄 已规划，2026-05-03 ~ 2026-05-10）**
+**Sprint 17 — ZeroClaw 吸收与工程深化（✅ 已完成，2026-05-03 ~ 2026-05-04）**
 
 > 详见 plan file: `~/.kimi/plans/sprint-17-zeroclaw-absorption.md`
 
 | 优先级 | 任务 | 来源 | 状态 |
 |--------|------|------|------|
-| P0 | **LoopDetector** — 输出哈希比对检测重复调用 | `zeroclaw/src/agent/loop_detector.rs` | 🔄 待执行 |
-| P0 | **ProviderCapabilities** — provider 自声明 + prompt-guided fallback | `zeroclaw/src/providers/traits.rs:272-305` | 🔄 待执行 |
-| P0 | **测试去 Registry 化 Phase 2** — 剩余 ~25 个测试 | — | 🔄 待执行 |
-| P1 | **Memory time decay** — 检索结果时间半衰期降权 | `zeroclaw/src/memory/decay.rs` | 🔄 待执行 |
-| P1 | **运行时预算控制** — USD/turn 上限拦截 | `zeroclaw/src/agent/loop_.rs:2508` | 🔄 待执行 |
-| P1 | **DraftEvent 三态流** — Clear/Progress/Content 区分 | `zeroclaw/src/agent/loop_.rs:267-276` | 🔄 待执行 |
+| P0 | **LoopDetector** — 输出哈希比对检测重复调用 | `zeroclaw/src/agent/loop_detector.rs` | ✅ `cae045bd` |
+| P0 | **ProviderCapabilities** — provider 自声明 + prompt-guided fallback | `zeroclaw/src/providers/traits.rs:272-305` | ✅ `67f24d42` |
+| P0 | **测试去 Registry 化 Phase 2** — 剩余 ~25 个测试 | — | ✅ 完成；`registry.rs::test_get_schemas` 和 `tool_map.rs::test_filter_registry` 保留 `with_builtin_tools()` 为合理设计决策 |
+| P1 | **Memory time decay** — 检索结果时间半衰期降权 | `zeroclaw/src/memory/decay.rs` | ✅ `81db30d2` |
+| P1 | **运行时预算控制** — USD/turn 上限拦截 | `zeroclaw/src/agent/loop_.rs:2508` | ✅ `d4a54281` |
+| P1 | **DraftEvent 三态流** — Clear/Progress/Content 区分 | `zeroclaw/src/agent/loop_.rs:267-276` | ✅ `f055d82a` |
+| P2 | **Vision provider routing** — 自动切换 vision provider | `zeroclaw/src/agent/loop_.rs:2425` | ✅ `949dc395` |
+| P2 | **Hooks 系统** — before/after tool_call + llm_input | `zeroclaw/src/agent/loop_.rs:2948` | ✅ 混入 `d7eac154` |
+| P2 | **多格式工具解析器** — XML/MiniMax/Perl fallback | `zeroclaw/src/agent/loop_.rs` | ✅ `d7eac154` |
+| — | **`~` 路径展开修复** | 用户报告 | ✅ `73dd66e2` |
+| — | **测试稳定性修复** | `test_budget_day_limit` tiktoken 不稳定 | ✅ `ac4881e3` |
+| — | **`execute_flags` 声明修复** | P2.3 提交遗漏 | ✅ `71ebe441` |
+
+**验证**: `cargo test --workspace --lib -- --test-threads=1` = 709 passed / 0 failed / 6 ignored
+
+**Sprint 18 前瞻**: 架构解耦（`TurnContext` 提取、`run.rs` 拆分、`AgentLoop` trait）+ Claw runtime 集成（`FederalAgentSession` 接入 `clarity_core::Agent`）
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
