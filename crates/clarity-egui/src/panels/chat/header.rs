@@ -42,8 +42,18 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                     )
                 })
                 .collect();
-            let right_reserve = 220.0;
-            let tab_max = (ui.available_width() - right_reserve - 8.0).max(200.0);
+            // Responsive right-side toolbar: shrink reserved space as window narrows.
+            let available = ui.available_width();
+            let right_reserve = if available >= 900.0 {
+                220.0
+            } else if available >= 700.0 {
+                180.0
+            } else if available >= 500.0 {
+                140.0
+            } else {
+                100.0
+            };
+            let tab_max = (available - right_reserve - 8.0).max(200.0);
             ui.allocate_ui_with_layout(
                 egui::vec2(tab_max, 28.0),
                 egui::Layout::left_to_right(egui::Align::Center),
@@ -78,8 +88,10 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                         Some((id.clone(), app.ui_store.editing_title.clone()));
                                 }
                             } else {
+                                // Active tab bg = content bg for "connected" look;
+                                // inactive tabs float above with elevated bg.
                                 let bg = if *is_active {
-                                    app.ui_store.theme.surface
+                                    app.ui_store.theme.bg
                                 } else {
                                     app.ui_store.theme.bg_elevated
                                 };
@@ -88,26 +100,42 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                 } else {
                                     app.ui_store.theme.text_dim
                                 };
-                                let stroke = if *is_active {
-                                    egui::Stroke::new(1.5, app.ui_store.theme.accent)
-                                } else {
-                                    egui::Stroke::new(1.0, app.ui_store.theme.border)
-                                };
-                                let tab_width =
-                                    (title.chars().count() as f32 * 7.5 + 32.0).clamp(60.0, 160.0);
+                                // Precise text width measurement via egui galley.
+                                let font_id = app.ui_store.theme.font(app.ui_store.theme.text_sm);
+                                let text_galley = ui.painter().layout_no_wrap(
+                                    title.clone(),
+                                    font_id,
+                                    egui::Color32::PLACEHOLDER,
+                                );
+                                let text_width = text_galley.rect.width();
+                                let tab_width = (text_width + 32.0).clamp(60.0, 160.0);
                                 let (tab_rect, tab_resp) = ui.allocate_exact_size(
                                     egui::vec2(tab_width, 28.0),
                                     egui::Sense::click(),
                                 );
-                                let cr =
-                                    egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8);
+                                // Active tab: bottom corners square (connect to content).
+                                // Inactive tab: all corners rounded.
+                                let cr = if *is_active {
+                                    egui::CornerRadius {
+                                        nw: app.ui_store.theme.radius_sm as u8,
+                                        ne: app.ui_store.theme.radius_sm as u8,
+                                        sw: 0,
+                                        se: 0,
+                                    }
+                                } else {
+                                    egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)
+                                };
                                 ui.painter().rect_filled(tab_rect, cr, bg);
-                                if stroke.width > 0.0 {
-                                    ui.painter().rect_stroke(
-                                        tab_rect,
-                                        cr,
-                                        stroke,
-                                        egui::StrokeKind::Inside,
+                                // Active tab: 2px accent line at the top.
+                                if *is_active {
+                                    let accent_line = egui::Rect::from_min_max(
+                                        egui::pos2(tab_rect.min.x, tab_rect.min.y),
+                                        egui::pos2(tab_rect.max.x, tab_rect.min.y + 2.0),
+                                    );
+                                    ui.painter().rect_filled(
+                                        accent_line,
+                                        egui::CornerRadius::ZERO,
+                                        app.ui_store.theme.accent,
                                     );
                                 }
                                 // Title text — clipped to tab interior so long titles
@@ -123,34 +151,44 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                     app.ui_store.theme.font(app.ui_store.theme.text_sm),
                                     text_color,
                                 );
-                                // Close button area
-                                let close_rect = egui::Rect::from_min_max(
-                                    egui::pos2(tab_rect.max.x - 20.0, tab_rect.min.y + 2.0),
-                                    egui::pos2(tab_rect.max.x - 2.0, tab_rect.max.y - 2.0),
-                                );
-                                let close_id = egui::Id::new(("tab_close", id.clone()));
-                                let close_resp =
-                                    ui.interact(close_rect, close_id, egui::Sense::click());
-                                let close_col = if close_resp.hovered() {
-                                    app.ui_store.theme.danger
-                                } else {
-                                    text_color
-                                };
-                                ui.painter().text(
-                                    close_rect.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    crate::theme::ICON_X,
-                                    app.ui_store.theme.font_icon(app.ui_store.theme.text_xs),
-                                    close_col,
-                                );
+                                // Close button: always show for active tab;
+                                // only show on hover for inactive tabs.
+                                let show_close = *is_active || tab_resp.hovered();
+                                let mut close_clicked = false;
+                                if show_close {
+                                    let close_rect = egui::Rect::from_min_max(
+                                        egui::pos2(tab_rect.max.x - 20.0, tab_rect.min.y + 2.0),
+                                        egui::pos2(tab_rect.max.x - 2.0, tab_rect.max.y - 2.0),
+                                    );
+                                    let close_id = egui::Id::new(("tab_close", id.clone()));
+                                    let close_resp =
+                                        ui.interact(close_rect, close_id, egui::Sense::click());
+                                    let close_col = if close_resp.hovered() {
+                                        app.ui_store.theme.danger
+                                    } else {
+                                        text_color
+                                    };
+                                    ui.painter().text(
+                                        close_rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        crate::theme::ICON_X,
+                                        app.ui_store.theme.font_icon(app.ui_store.theme.text_xs),
+                                        close_col,
+                                    );
+                                    close_clicked = close_resp.clicked();
+                                }
 
-                                if close_resp.clicked() {
+                                if close_clicked {
                                     tab_to_close = Some(id.clone());
                                 } else if tab_resp.double_clicked() {
                                     app.ui_store.editing_session_id = Some(id.clone());
                                     app.ui_store.editing_title = title.clone();
                                 } else if tab_resp.clicked() {
                                     if let Some(pos) = tab_resp.interact_pointer_pos() {
+                                        let close_rect = egui::Rect::from_min_max(
+                                            egui::pos2(tab_rect.max.x - 20.0, tab_rect.min.y + 2.0),
+                                            egui::pos2(tab_rect.max.x - 2.0, tab_rect.max.y - 2.0),
+                                        );
                                         if !close_rect.contains(pos) {
                                             app.save_current_session();
                                             let old_id =
@@ -310,7 +348,8 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
         });
     });
     ui.add_space(app.ui_store.theme.space_4);
-    ui.separator();
+    // Separator removed: active tab now "connects" to content area
+    // via matching bg color and square bottom corners.
 
     let banner_text = app.ui_store.network_banner.clone();
     if let Some(banner) = banner_text {
