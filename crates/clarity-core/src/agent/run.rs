@@ -9,6 +9,54 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
+/// Check if an LLM error is caused by context window overflow.
+fn is_context_overflow_error(err: &AgentError) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("context length exceeded")
+        || msg.contains("context window")
+        || msg.contains("too many tokens")
+        || msg.contains("maximum context length")
+        || msg.contains("token limit")
+        || msg.contains("contextoverflow")
+}
+
+/// Fast-trim tool results from messages to recover from context window overflow.
+/// Removes the oldest non-system messages in pairs (assistant tool_call + tool result)
+/// until under the budget or no more trimmable messages remain.
+fn fast_trim_tool_results(messages: &mut Vec<Message>) {
+    // Identify indices of tool-result messages (role=Tool).
+    let tool_indices: Vec<usize> = messages
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.role == MessageRole::Tool)
+        .map(|(i, _)| i)
+        .collect();
+
+    if tool_indices.is_empty() {
+        // No tool results to trim; remove oldest user/assistant pair as last resort.
+        if messages.len() > 2 {
+            messages.remove(1); // oldest non-system
+        }
+        return;
+    }
+
+    // Remove up to half of the tool results (oldest first), keeping the most recent.
+    let to_remove = (tool_indices.len() / 2).max(1);
+    for &idx in tool_indices.iter().take(to_remove) {
+        // Also remove the preceding assistant message that issued the tool_call,
+        // if it exists and its tool_calls reference this result.
+        if idx > 0 && messages[idx - 1].role == MessageRole::Assistant {
+            messages.remove(idx - 1);
+            // After removing idx-1, the tool result is now at idx-1.
+            if idx - 1 < messages.len() && messages[idx - 1].role == MessageRole::Tool {
+                messages.remove(idx - 1);
+            }
+        } else {
+            messages.remove(idx);
+        }
+    }
+}
+
 /// Scrub sensitive credentials from tool output before injecting into LLM context.
 /// Prevents accidental leakage of API keys, tokens, passwords, and Bearer headers.
 fn scrub_credentials(input: &str) -> String {
@@ -206,12 +254,31 @@ impl Agent {
             let prompt_tokens =
                 crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
                     as u32;
-            let response = tokio::time::timeout(
+            let response = match tokio::time::timeout(
                 tokio::time::Duration::from_secs(45),
                 llm.complete(messages, tools),
             )
             .await
-            .map_err(|_| AgentError::Llm("LLM request timed out after 45s".into()))??;
+            {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) if is_context_overflow_error(&e) => {
+                    warn!("Context overflow detected in sync loop, trimming tool results and retrying");
+                    fast_trim_tool_results(messages);
+                    // Retry once after trimming.
+                    match tokio::time::timeout(
+                        tokio::time::Duration::from_secs(45),
+                        llm.complete(messages, tools),
+                    )
+                    .await
+                    {
+                        Ok(Ok(r)) => r,
+                        Ok(Err(e2)) => return Err(e2),
+                        Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
+                    }
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
+            };
             // O4: Character-count/4 is a rough heuristic; replace with real tokenizer
             // count when clarity-core gains a tokenizer abstraction.
             let completion_tokens = response.content.len().div_ceil(4) as u32;
@@ -635,7 +702,15 @@ impl Agent {
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
                             messages,
                         ) as u32;
-                    let r = llm.complete(messages, tools).await?;
+                    let r = match llm.complete(messages, tools).await {
+                        Ok(r) => r,
+                        Err(e) if is_context_overflow_error(&e) => {
+                            warn!("Context overflow detected in streaming loop, trimming tool results and retrying");
+                            fast_trim_tool_results(messages);
+                            llm.complete(messages, tools).await?
+                        }
+                        Err(e) => return Err(e),
+                    };
                     debug!("Using complete() response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
                     completion_tokens = r.content.len().div_ceil(4) as u32;
                     r
