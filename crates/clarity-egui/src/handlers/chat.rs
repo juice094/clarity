@@ -82,10 +82,28 @@ pub fn on_tool_start(
     });
 }
 
-pub fn on_tool_result(chat_store: &mut ChatStore, id: String, result: String) {
+pub fn on_tool_result(
+    session_store: &mut SessionStore,
+    chat_store: &mut ChatStore,
+    id: String,
+    name: String,
+    result: String,
+) {
     if let Some(tc) = chat_store.tool_calls.iter_mut().find(|t| t.id == id) {
         tc.status = ToolCallStatus::Done;
-        tc.result = Some(result);
+        tc.result = Some(result.clone());
+    }
+    if let Some(session) = session_store.active_session_mut() {
+        let mut msg = Message {
+            role: Role::Agent,
+            content: format!("🔧 **{}**\n```json\n{}\n```", name, result),
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+        };
+        msg.prepare();
+        session.messages.push(msg);
     }
 }
 

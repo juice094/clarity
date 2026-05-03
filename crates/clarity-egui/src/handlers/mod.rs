@@ -15,7 +15,11 @@ pub fn process_events(app: &mut App) {
                 chat::on_tool_start(&mut app.chat_store, id, name, arguments);
             }
             UiEvent::ToolResult { id, result } => {
-                chat::on_tool_result(&mut app.chat_store, id, result);
+                let name = app.chat_store.tool_calls.iter()
+                    .find(|t| t.id == id)
+                    .map(|t| t.name.clone())
+                    .unwrap_or_else(|| "tool".to_string());
+                chat::on_tool_result(&mut app.session_store, &mut app.chat_store, id, name, result);
             }
             UiEvent::StepBegin { tool_name } => {
                 system::on_step_begin(tool_name);

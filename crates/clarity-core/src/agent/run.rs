@@ -83,8 +83,11 @@ impl Agent {
             futures.push(self.execute_tool_call(tool_call));
         }
 
-        // Phase 2: await all results concurrently.
-        let results = futures::future::join_all(futures).await;
+        // Phase 2: await all results sequentially to avoid concurrent approval deadlock.
+        let mut results = Vec::new();
+        for future in futures {
+            results.push(future.await);
+        }
 
         // Phase 3: emit results in original order, append to messages, and
         // detect non-recoverable failures.
