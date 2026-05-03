@@ -1,17 +1,4 @@
-use crate::ui::types::AgentStatus;
 use crate::App;
-
-fn format_thousands(n: u32) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(c);
-    }
-    result
-}
 
 pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
@@ -42,18 +29,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                     )
                 })
                 .collect();
-            // Responsive right-side toolbar: shrink reserved space as window narrows.
-            let available = ui.available_width();
-            let right_reserve = if available >= 900.0 {
-                220.0
-            } else if available >= 700.0 {
-                180.0
-            } else if available >= 500.0 {
-                140.0
-            } else {
-                100.0
-            };
-            let tab_max = (available - right_reserve - 8.0).max(200.0);
+            let tab_max = (ui.available_width() - 8.0).max(200.0);
             ui.allocate_ui_with_layout(
                 egui::vec2(tab_max, 28.0),
                 egui::Layout::left_to_right(egui::Align::Center),
@@ -271,82 +247,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
             },
         );
         }
-        ui.add_space(8.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            // Settings
-            if crate::widgets::icon_button_toolbar(
-                ui,
-                crate::theme::ICON_SETTINGS,
-                app.ui_store.theme.text_base,
-                &app.ui_store.theme,
-            )
-            .clicked()
-            {
-                app.settings_store.settings_open = true;
-                app.settings_store.settings_edit = {
-                    let guard = app.state.cached_settings.lock();
-                    guard.clone()
-                };
-            }
-            // MCP (hide if space is tight)
-            if ui.available_width() > 60.0 {
-                let mcp_count = app
-                    .mcp_store
-                    .mcp_config
-                    .as_ref()
-                    .map_or(0, |c| c.servers.len());
-                let mcp_btn = if mcp_count > 0 {
-                    format!("🔌 {}", mcp_count)
-                } else {
-                    "🔌".to_string()
-                };
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(&mcp_btn).size(app.ui_store.theme.text_sm),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(
-                            app.ui_store.theme.radius_sm as u8,
-                        )),
-                    )
-                    .clicked()
-                {
-                    app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
-                }
-            }
-            // Status
-            let (status_color, status_label) = match app.chat_store.agent_status {
-                AgentStatus::Online => (app.ui_store.theme.status_online, "Online"),
-                AgentStatus::Busy => (app.ui_store.theme.status_busy, "Busy"),
-                AgentStatus::Unconfigured => (app.ui_store.theme.status_offline, "Unconfigured"),
-                AgentStatus::Offline => (app.ui_store.theme.status_offline, "Offline"),
-            };
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 4.0, status_color);
-            ui.label(
-                egui::RichText::new(status_label)
-                    .size(app.ui_store.theme.text_sm)
-                    .color(app.ui_store.theme.text_dim),
-            );
-            // Token usage (session cumulative) — hide when space is tight
-            if ui.available_width() > 100.0 {
-                if let Some((p, c, t)) = app.chat_store.last_usage {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "Session: {}↑ {}↓ {}∑",
-                            format_thousands(p),
-                            format_thousands(c),
-                            format_thousands(t)
-                        ))
-                        .size(app.ui_store.theme.text_sm)
-                        .color(app.ui_store.theme.text_dim)
-                        .monospace(),
-                    );
-                }
-            }
-        });
+
     });
     ui.add_space(app.ui_store.theme.space_4);
     // Separator removed: active tab now "connects" to content area

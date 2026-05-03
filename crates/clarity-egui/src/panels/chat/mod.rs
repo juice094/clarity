@@ -71,6 +71,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 |ui| {
                     // Scrollable content area (messages + preview + plan)
                     egui::ScrollArea::vertical()
+                        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             // File preview (rendered in main chat area when selected from workspace panel)
