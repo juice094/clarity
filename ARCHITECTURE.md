@@ -88,15 +88,18 @@
 
 | 维度 | Kimi CLI | Clarity egui | 差距 | 优先级 |
 |------|---------|-------------|------|--------|
-| **工具结果回显** | 自动插入聊天记录 | 只更新内部状态，聊天流不可见 | ❌ 大 | P0 |
-| **并发 Approval** | 串行处理 | `join_all` 并发，可能 timeout | ❌ 大 | P0 |
-| **上下文压缩** | 三级管道，精确 tokenizer | `SimpleCompaction`，字符÷4 估算 | ⚠️ 中 | P1 |
-| **Git 上下文** | 每次对话自动注入 | 有收集逻辑，不确定是否自动注入 | ⚠️ 中 | P1 |
-| **子 Agent 路由** | `/coder` `/explore` `/plan` 成熟 | 有模块但 UI 集成浅 | ⚠️ 中 | P2 |
-| **错误恢复** | Circuit breaker + retry | 有 recoverable 判断，无主动 retry | ⚠️ 中 | P2 |
-| **Skills 注入** | 动态激活，prompt 自动拼接 | 有 `build_context()`，注入时机需确认 | 🔧 小 | P2 |
+| **工具结果回显** | 自动插入聊天记录 | 已修复：`on_tool_result` 插入 `session.messages` | ✅ 已补齐 | — |
+| **并发 Approval** | 串行处理 | 已修复：`dispatch_tool_calls` 改为串行 `for` 循环 | ✅ 已对齐 | — |
+| **上下文压缩** | 三级管道，精确 tokenizer | 加权估算（ASCII ÷4 / 非 ASCII ÷2）+ tier1/tier2 压缩 | 🟡 接近 | P2 |
+| **Git 上下文** | 每次对话自动注入 | 已激活：`build_system_prompt()` 自动注入 `GitContext` + `ProjectMetadata` | ✅ 已补齐 | — |
+| **子 Agent 路由** | `/coder` `/explore` `/plan` 成熟 | `/plan` 已支持；`/coder` `/explore` 待 egui 接入 | ⚠️ 中 | P2 |
+| **错误恢复** | Circuit breaker + retry | 有 recoverable 判断 + Smart circuit breaker（3 次 fatal） | 🟡 接近 | P2 |
+| **Skills 注入** | 动态激活，prompt 自动拼接 | `SystemPromptBuilder` 自动拼接 active skills | ✅ 已补齐 | — |
+| **用户级 Skills** | `~/.config/kimi/skills` | 已支持：`~/.config/clarity/skills/` 全局扫描 | ✅ 已补齐 | — |
+| **绝对路径读取** | 允许跨目录 | 已支持：绝对路径直接返回，不限制在 working_dir | ✅ 已补齐 | — |
+| **扩展名优先 sniff** | `.txt` 信任扩展名 | 已支持：已知文本扩展名 bypass magic sniff | ✅ 已补齐 | — |
 | **Provider 系统** | 内置多 provider | 完整 TOML 驱动 + OAuth + 本地模型 | ✅ 平 | — |
-| **Approval 框架** | Interactive/Plan/Yolo | 四模式 + Smart batch grant + diff | ✅ 平 | — |
+| **Approval 框架** | Interactive/Plan/Yolo | 四模式 + Smart batch grant toast + diff | ✅ 平 | — |
 | **MCP 接入** | 有 | 自动连接 + 工具注册 | ✅ 平 | — |
 
 ---
@@ -117,7 +120,7 @@ ZeroClaw 从"待融合对象"降级为"架构对照组"。
 
 ---
 
-## 六、当前状态（截至 2025-05-02）
+## 六、当前状态（截至 2026-05-02）
 
 ### 已完成 ✅
 
@@ -126,44 +129,70 @@ ZeroClaw 从"待融合对象"降级为"架构对照组"。
 | Phase 1 Claw 编译修复 | 607 tests passed |
 | Agent Flow 移植 | `agent/flow/` — types + mermaid parser + runner |
 | Skill 系统扩展 | `skill_type` + `flow` 字段，loader 解析 mermaid/d2 blocks |
-| Agent Flow 集成 | `Agent::run_flow()` + `FlowExecutor` trait |
+| Agent Flow 集成 | `Agent::run_flow()` + `FlowExecutor` trait（已接入完整 `Agent::run` turn） |
 | egui 单体模式 | 直接嵌入 `clarity_core::Agent`，功能完整（chat/tools/plan/skills/mcp） |
 | Provider 系统 | 6 内置 provider + TOML 自定义 + OAuth |
+| **工具结果回显** | `handlers/chat.rs` — `on_tool_result` 插入 `Message` 到 `session.messages` |
+| **Approval 串行化** | `agent/run.rs` — `dispatch_tool_calls` 从 `join_all` 改为串行 `for` 循环 |
+| **Git 上下文自动注入** | `agent/prompt.rs` — `build_system_prompt()` 消费 `refresh_context()` 收集的数据 |
+| **ProjectMetadata 自动注入** | `agent/prompt.rs` — `Cargo.toml` / `package.json` 自动读取并注入 |
+| **工具结果截断** | `handlers/chat.rs` — 超过 2000 字符自动截断，带 "..." 提示 |
+| **Smart batch grant toast** | `main.rs` — 每帧轮询 `drain_auto_approval_notifications()` 并 toast |
+| **加权 token 估算** | `compaction.rs` — ASCII ÷4 vs 非 ASCII ÷2，修复 CJK 严重低估 |
+| **用户级 skill 目录** | `skills/discovery.rs` — 扫描 `~/.config/clarity/skills/` |
+| **扩展名优先 sniff** | `tools/file.rs` — `.txt/.md/.rs` 等 bypass magic 检测 |
+| **绝对路径读取** | `tools/helpers.rs` — 绝对路径直接返回，不限制在 working_dir |
+| **Windows 不注册 bash** | `tools/mod.rs` + `registry.rs` — 条件编译，仅 PowerShell |
+| **shell timeout 60s** | `tool.rs` — `ToolContext::new()` 默认 timeout 从 30s 改为 60s |
 
 ### 进行中 🔄
 
 | 模块 | 说明 |
 |------|------|
-| Flow 深度集成 | `FlowRunner` 仍为 stub，需接入真实 `_turn` 循环 |
-| d2.rs 解析器 | 仅 mermaid 已完整 |
+| d2.rs 解析器 | 仅 mermaid 已完整，D2 语法子集待实现 |
+| 子 Agent 快捷入口 | `/coder` `/explore` 前缀路由待 egui 接入（已有 `/plan`） |
+| 三级压缩管道 | 已有 tier1（截断）+ tier2（LLM 总结），budget 级待评估 |
 
 ### 已知 Bug 🔴
 
-| Bug | 位置 | 影响 | 修复方案 |
-|-----|------|------|---------|
-| 工具结果不回显到聊天流 | `handlers/chat.rs:85-90` | 用户看不到 tool 输出 | `on_tool_result` 插入 `session.messages` |
-| 并发 Approval timeout | `agent/run.rs:60-87` | 多工具 approval 时后面的 300s timeout | `dispatch_tool_calls` 改为串行 |
-| Tool-calling round content 丢失 | `agent/run.rs:629-633` | reasoning 不可见 | 确保非空 content 被推入 messages |
+| Bug | 位置 | 影响 | 状态 |
+|-----|------|------|------|
+| ~~工具结果不回显到聊天流~~ | ~~`handlers/chat.rs`~~ | ~~用户看不到 tool 输出~~ | ✅ 已修复（commit `2f526399`） |
+| ~~并发 Approval timeout~~ | ~~`agent/run.rs`~~ | ~~多工具 approval 时后面的 300s timeout~~ | ✅ 已修复（commit `2f526399`） |
+| ~~Tool-calling round content 丢失~~ | ~~`agent/run.rs`~~ | ~~reasoning 不可见~~ | ✅ 已修复（Sprint 14.5） |
+| Gateway 路径不调用 `refresh_context()` | `run_streaming_turn()` | Git 上下文在 Gateway 路径 stale | 🔄 遗留至 Sprint 15 |
 
 ---
 
 ## 七、演进路线图
 
-### Phase 0：止血（本周）
-- [ ] 修复工具结果不回显（Bug 1）
-- [ ] 修复并发 Approval timeout（Bug 2）
-- [ ] 验证 egui `cargo run` 能稳定完成 20 轮复杂任务
+### Phase 0：止血（已完成 ✅）
+- [x] 修复工具结果不回显（Bug 1）— commit `2f526399`
+- [x] 修复并发 Approval timeout（Bug 2）— commit `2f526399`
+- [x] 扩展名优先 sniff — commit `64c239e5`
+- [x] 允许绝对路径跨目录读取 — commit `64c239e5`
+- [x] Windows 不注册 bash — commit `64c239e5`
+- [x] shell timeout 60s — commit `64c239e5`
 
-### Phase 1：UX 补齐（下周）
-- [ ] Git 上下文自动注入到每次对话
-- [ ] 子 Agent 快捷入口（`/coder` `/explore`）
-- [ ] Smart 模式 batch grant UI 提示
+### Phase 1：UX 补齐（部分完成 🟡）
+- [x] Git 上下文自动注入到每次对话 — commit `62664b0d`
+- [x] ProjectMetadata 自动注入 — commit `62664b0d`
+- [x] 工具结果截断（>2000 字符）— commit `62664b0d`
+- [x] Smart 模式 batch grant UI 提示 — 已预存在 `main.rs`
+- [ ] 子 Agent 快捷入口（`/coder` `/explore`）— 待 egui 接入子 Agent 系统
 
-### Phase 2：上下文压缩升级（2 周后）
-- [ ] 接入精确 tokenizer（tiktoken/cl100k_base）
-- [ ] 三级压缩管道（budget → micro → full）
+### Phase 2：上下文压缩升级（部分完成 🟡）
+- [x] 加权 token 估算（ASCII ÷4 / 非 ASCII ÷2）— commit `353fccfc`
+- [x] 统一 `CompactionService::estimate_tokens` 委托 — commit `353fccfc`
+- [ ] 精确 tokenizer（tiktoken/cl100k_base）— 待模型感知动态选择
+- [x] 三级压缩管道基础（tier1 截断 + tier2 LLM 总结）— 已有实现
 
-### Phase 3：联邦化（1 个月后）
+### Phase 3：基础设施（部分完成 🟡）
+- [x] 用户级 skill 目录 `~/.config/clarity/skills/` — commit `16f92445`
+- [ ] MemoryNode 接入 egui
+- [ ] MCP 配置热重载
+
+### Phase 4：联邦化（1 个月后）
 - [ ] CoreNode 拆为独立进程
 - [ ] egui 通过本地 IPC/WebSocket 连接
 - [ ] + MemoryNode + GatewayNode 形成单机集群

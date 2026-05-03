@@ -407,6 +407,14 @@ impl Agent {
         &self.registry
     }
 
+    /// Bind a [`BackgroundTaskManager`] to the cron tools in the registry.
+    ///
+    /// Must be called after the task manager is created and before the agent
+    /// starts processing requests that may invoke cron tools.
+    pub fn with_cron_manager(&self, manager: Arc<crate::background::BackgroundTaskManager>) {
+        self.registry.with_cron_manager(manager);
+    }
+
     /// Get the LLM provider (if configured)
     pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
         self.inner.read().unwrap().llm.clone()

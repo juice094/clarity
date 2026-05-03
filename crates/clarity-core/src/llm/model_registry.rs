@@ -454,9 +454,9 @@ pub fn resolve_key_ref(raw: &str) -> Option<String> {
 
     // ${file:path:field}
     if let Some(inner) = raw.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
-        let mut parts = inner.splitn(2, ':');
-        let path_part = parts.next()?;
-        let field = parts.next()?;
+        let (path_part, field) = inner.split_once(':')?;
+        
+        
         let path = if path_part.starts_with("~/") {
             dirs::home_dir()
                 .map(|h| h.join(&path_part[2..]))

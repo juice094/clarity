@@ -159,6 +159,7 @@ fn set_theme(app: &mut App, name: &str) {
 }
 
 /// Theme preview card. Shows the theme's real background + text colors.
+#[allow(clippy::too_many_arguments)]
 fn theme_card(
     ui: &mut egui::Ui,
     width: f32,

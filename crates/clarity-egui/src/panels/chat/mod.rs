@@ -126,10 +126,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                                     if ui.add(save_btn).clicked() && is_dirty {
                                                         match std::fs::write(path, &text) {
                                                             Ok(()) => {
-                                                                if let Some(ref mut item) = app.ui_store.preview_item {
-                                                                    if let crate::ui::types::PreviewItem::File { content, .. } = item {
-                                                                        *content = text.clone();
-                                                                    }
+                                                                if let Some(crate::ui::types::PreviewItem::File { content, .. }) = app.ui_store.preview_item.as_mut() {
+                                                                    *content = text.clone();
                                                                 }
                                                                 app.push_toast(format!("Saved: {}", preview_name), ToastLevel::Info);
                                                             }

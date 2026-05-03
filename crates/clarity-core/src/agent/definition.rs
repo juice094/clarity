@@ -158,7 +158,7 @@ pub fn apply_to_config(
     // 3. Description (injected into entry_context for LLM visibility)
     if let Some(ref desc) = def.description {
         if !desc.is_empty() {
-            config.entry_context = format!("{}", desc);
+            config.entry_context = desc.to_string();
         }
     }
 

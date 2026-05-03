@@ -59,7 +59,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(8.0);
         ui.label(egui::RichText::new("●").size(theme.text_xs).color(theme.status_online));
         ui.label(
-            egui::RichText::new(format!("{}", app.session_store.active_category))
+            egui::RichText::new(app.session_store.active_category.to_string())
                 .size(theme.text_xs)
                 .color(theme.text_muted),
         );

@@ -170,8 +170,7 @@ fn parse_edge(line: &str) -> Option<(String, String, Option<String>)> {
 
         // Check for |label| after -->
         let mut label: Option<String> = None;
-        let dst_clean = if after_arrow.starts_with('|') {
-            let after_pipe = &after_arrow[1..];
+        let dst_clean = if let Some(after_pipe) = after_arrow.strip_prefix('|') {
             if let Some(pipe_end) = after_pipe.find('|') {
                 label = Some(after_pipe[..pipe_end].to_string());
                 extract_node_id(after_pipe[pipe_end + 1..].trim())
@@ -223,41 +222,41 @@ fn extract_all_nodes(line: &str) -> Vec<(String, String)> {
     let mut i = 0;
     while i < line.len() {
         let rest = &line[i..];
-        if rest.starts_with("[\"") {
+        if let Some(rest_after) = rest.strip_prefix("[\"") {
             // Find closing "\"]"
-            if let Some(close_quote) = rest[2..].find("\"]") {
+            if let Some(close_quote) = rest_after.find("\"]") {
                 let id = line[..i].trim();
-                let label = &rest[2..2 + close_quote];
+                let label = &rest_after[..close_quote];
                 if is_valid_node_id(id) {
                     result.push((id.to_string(), label.to_string()));
                 }
                 i += close_quote + 4;
                 continue;
             }
-        } else if rest.starts_with('[') {
-            if let Some(end) = rest[1..].find(']') {
+        } else if let Some(rest_after) = rest.strip_prefix('[') {
+            if let Some(end) = rest_after.find(']') {
                 let id = line[..i].trim();
-                let label = &rest[1..=end];
+                let label = &rest_after[..=end];
                 if is_valid_node_id(id) {
                     result.push((id.to_string(), label.to_string()));
                 }
                 i += end + 2;
                 continue;
             }
-        } else if rest.starts_with("([") {
-            if let Some(end) = rest[2..].find("])") {
+        } else if let Some(rest_after) = rest.strip_prefix("([") {
+            if let Some(end) = rest_after.find("])") {
                 let id = line[..i].trim();
-                let label = &rest[2..2 + end];
+                let label = &rest_after[..end];
                 if is_valid_node_id(id) {
                     result.push((id.to_string(), label.to_string()));
                 }
                 i += end + 4;
                 continue;
             }
-        } else if rest.starts_with('{') {
-            if let Some(end) = rest[1..].find('}') {
+        } else if let Some(rest_after) = rest.strip_prefix('{') {
+            if let Some(end) = rest_after.find('}') {
                 let id = line[..i].trim();
-                let label = &rest[1..=end];
+                let label = &rest_after[..=end];
                 if is_valid_node_id(id) {
                     result.push((id.to_string(), label.to_string()));
                 }

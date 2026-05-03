@@ -9,13 +9,13 @@
 //! - 通知集成
 
 pub mod agent_executor;
-pub mod cron;
+pub(crate) mod cron;
 pub mod store;
-pub mod worker;
+pub(crate) mod worker;
 
-pub use cron::{CronError, CronSchedule, CronScheduler, CronTask};
+pub(crate) use cron::CronScheduler;
 pub use store::{TaskId, TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore};
-pub use worker::{Worker, WorkerPool, WorkerStats};
+
 
 use async_trait::async_trait;
 
@@ -81,7 +81,7 @@ impl Ord for ScheduledTask {
 ///
 /// 使用优先级队列管理待执行任务
 #[derive(Debug)]
-pub struct TaskScheduler {
+pub(crate) struct TaskScheduler {
     /// 优先级队列
     queue: Mutex<BinaryHeap<ScheduledTask>>,
     /// 任务存储
@@ -745,7 +745,7 @@ impl BackgroundTaskManager {
 
 /// 任务句柄
 #[derive(Debug)]
-pub struct TaskHandle {
+pub(crate) struct TaskHandle {
     #[allow(dead_code)]
     task_id: TaskId,
     abort_handle: tokio::task::AbortHandle,

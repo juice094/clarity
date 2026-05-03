@@ -30,8 +30,10 @@ use std::path::PathBuf;
 /// Supported API format (i.e. the wire protocol expected by the provider).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum ApiFormat {
     /// OpenAI-compatible chat completions endpoint.
+    #[default]
     OpenaiCompletions,
     /// Anthropic Messages API.
     AnthropicMessages,
@@ -39,11 +41,6 @@ pub enum ApiFormat {
     Kimi,
 }
 
-impl Default for ApiFormat {
-    fn default() -> Self {
-        Self::OpenaiCompletions
-    }
-}
 
 impl ApiFormat {
     pub fn as_str(&self) -> &'static str {
@@ -183,9 +180,9 @@ impl ProviderDefinition {
 
         // ${file:path:field}
         if let Some(inner) = ref_str.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
-            let mut parts = inner.splitn(2, ':');
-            let path_part = parts.next()?;
-            let field = parts.next()?;
+            let (path_part, field) = inner.split_once(':')?;
+            
+            
             let path = if path_part.starts_with("~/") {
                 dirs::home_dir()
                     .map(|h| h.join(&path_part[2..]))

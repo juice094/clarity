@@ -320,6 +320,10 @@ async fn main() {
         )
     };
 
+    // Bind cron tools to the background task manager
+    agent.with_cron_manager(task_manager.clone());
+    info!("🔗 Bound cron tools to BackgroundTaskManager");
+
     // 加载渠道配置
     let (telegram_config, discord_config, webhook_config, slack_config) = load_channel_configs();
 

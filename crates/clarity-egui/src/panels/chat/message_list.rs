@@ -17,7 +17,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             0.0
         } else {
             let typing_h = if is_loading
-                && session.messages.last().map_or(true, |m| m.role == Role::User)
+                && session.messages.last().is_none_or(|m| m.role == Role::User)
                 && app.chat_store.tool_calls.is_empty()
             {
                 60.0

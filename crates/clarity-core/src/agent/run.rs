@@ -495,7 +495,7 @@ impl Agent {
 
     async fn run_streaming_loop<F>(
         &self,
-        mut messages: &mut Vec<Message>,
+        messages: &mut Vec<Message>,
         tools: &serde_json::Value,
         llm: Arc<dyn LlmProvider>,
         on_chunk: &mut F,
@@ -517,11 +517,11 @@ impl Agent {
 
             // Proactive compaction via CompactionService
             if let Some(ref service) = self.compaction_service {
-                let needs = service.needs_compaction(&messages);
+                let needs = service.needs_compaction(messages);
                 if needs {
                     self.send_wire_message(WireMessage::CompactionBegin);
                 }
-                if let Err(e) = service.maybe_compact(&mut messages, llm.as_ref()).await {
+                if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
                     warn!("Compaction failed: {}", e);
                 }
                 if needs {
@@ -534,11 +534,11 @@ impl Agent {
             let mut prompt_tokens = 0u32;
             let mut completion_tokens = 0u32;
 
-            match llm.stream(&messages, &tools) {
+            match llm.stream(messages, tools) {
                 Ok(mut stream_rx) => {
                     prompt_tokens =
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
-                            &messages,
+                            messages,
                         ) as u32;
                     // Send final content start notification
                     self.send_wire_message(WireMessage::ContentPart {
@@ -594,9 +594,9 @@ impl Agent {
                 None => {
                     prompt_tokens =
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
-                            &messages,
+                            messages,
                         ) as u32;
-                    let r = llm.complete(&messages, &tools).await?;
+                    let r = llm.complete(messages, tools).await?;
                     debug!("Using complete() response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
                     completion_tokens = r.content.len().div_ceil(4) as u32;
                     r
@@ -643,7 +643,7 @@ impl Agent {
             });
 
             if let Err(e) = self
-                .dispatch_tool_calls(&response.tool_calls, &mut messages)
+                .dispatch_tool_calls(&response.tool_calls, messages)
                 .await
             {
                 warn!("Tool execution failed in stream: {}", e);

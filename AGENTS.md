@@ -209,6 +209,35 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - `run_streaming_with_messages()`（Gateway/ChatDriver 路径）不调用 `refresh_context()`，导致 Git 上下文和项目元数据可能 stale。修复方案：将 `refresh_context()` 移入 `run_streaming_turn()`（而非仅在 `run_streaming()` 中调用）。影响：Gateway 驱动的 turn 也能感知最新 Git 状态和项目文件变更。→ 纳入 Sprint 15 / Context Convergence Phase 1。
 - `task_store` 孤儿问题未处理，保留至后续 Sprint 决策
 
+---
+
+**Sprint 15 — 多方面强化（进行中，2026-05-02 ~ ）**
+
+> 详见 plan file: `~/.kimi/plans/beast-boy-batgirl-spectre.md`
+
+**Phase 0: 工具层止血（✅ 已完成）**
+- commit `64c239e5` — 4 项工具层修复：
+  - 扩展名优先 sniff：`.txt/.md/.rs` 等 bypass magic 检测（防 MP3 误报）
+  - 允许绝对路径跨目录读取（`C:/Windows/.../hosts`）
+  - Windows 仅注册 PowerShell，不注册 BashTool
+  - shell timeout 默认 30s → 60s（与 Kimi CLI 对齐）
+
+**Phase 1: UX 补齐（部分完成）**
+- commit `62664b0d` — Git 上下文 + ProjectMetadata 自动注入 `SystemPromptBuilder`
+- commit `62664b0d` — 工具结果 >2000 字符自动截断
+- Smart batch grant toast — 已预存在 `main.rs`（每帧轮询 `drain_auto_approval_notifications`）
+- 子 Agent 快捷入口（`/coder` `/explore`）— 待 egui 接入子 Agent 系统
+
+**Phase 2: 上下文压缩升级（部分完成）**
+- commit `353fccfc` — 加权 token 估算（ASCII ÷4 vs 非 ASCII ÷2），修复 CJK 严重低估
+- `CompactionService::estimate_tokens` 统一委托 `crate::compaction::estimate_text_tokens`
+- 三级压缩基础已存在：tier1（本地截断）+ tier2（LLM 总结）
+
+**Phase 3: 基础设施（部分完成）**
+- commit `16f92445` — 用户级 skill 目录 `~/.config/clarity/skills/` 自动扫描
+
+**验证**: `cargo test -p clarity-core --lib` = 469 passed / 0 failed / 6 ignored
+
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
 - `LocalGgufProvider` 完善（Candle 原生 GGUF 推理）✅
@@ -337,8 +366,8 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 | 矿脉 | 实现位置 | 激活路径 | 断点 |
 |------|---------|---------|------|
-| Git 上下文 | `subagents/runner.rs:482-548` | `GitContext::collect()` | 仅注入 Subagent System Prompt，主 Agent 从不调用 |
-| 跨会话记忆 | `memory` crate (SQLite+BM25+Vector) | `memory_store.query_similar()` | 主 Agent Prompt 构建不自动检索历史相关记忆 |
+| Git 上下文 | `subagents/runner.rs:482-548` | `SystemPromptBuilder::with_git_context()` | ✅ 已激活：`refresh_context()` 收集 → `build_system_prompt()` 注入 |
+| 跨会话记忆 | `memory` crate (SQLite+BM25+Vector) | `memory_store.query_similar()` | 主 Agent Prompt 构建已自动检索（`run()` / `run_streaming()` 中注入） |
 | MCP 三协议 | `gateway` crate (stdio/HTTP/SSE) | Tool 注册完整 | Plan 模式工具调度未打通并行 |
 | 并发执行 | `agent/run.rs:51-96` (`join_all`) | `ReAct` 循环已支持 | Plan 模式 `execute_plan` 是顺序 `for` 循环 |
 | Skill 自动发现 | `skills/registry.rs:111-159` | 扫描 `.clarity/skills/` | 激活逻辑和上下文注入脱节 |
@@ -441,6 +470,9 @@ Week 3-4 (5.17-5.23): Phase 3 收尾 + Phase 4 设计
 | 离线模式自动 fallback | ✅ 已交付 | 后台每 30s TCP 探测 `1.1.1.1:443`（防抖阈值=2）；离线时自动切 local provider，恢复后切回；前端显示 banner 提示。启动时预加载避免首次请求阻塞。并发加载互斥锁防止重复加载。Settings 内存缓存避免每次请求读磁盘。 |
 | `clarity-tauri` 运行时依赖系统 WebView | ⚠️ 已知限制 | Tauri 2 复用系统 WebView 引擎（Windows: WebView2 Runtime；macOS: WebKit；Linux: WebKit2GTK）。Release 构建后的 `.exe`/`.app` 不依赖 Node.js，但需要目标系统已安装对应 WebView 引擎。Windows 11 预装 WebView2；Windows 10 首次运行可能需要自动下载。TUI/Gateway/Headless/Claw 无此限制。 |
 | `clarity-egui` i18n dead code | ⚠️ 已知限制 | `clarity-egui/src/i18n.rs:49` 的 `Locale::label()` 方法未被调用，触发 clippy `dead_code` warning。不影响功能，待清理。 |
+| 文件 sniff 误报 | ✅ 已修复 | `file_read` 扩展名优先策略：`.txt/.md/.rs` 等已知文本扩展名 bypass magic sniff，解决 `.txt` 被误判为 MP3 audio 的问题（commit `64c239e5`）。 |
+| 跨目录文件读取 | ✅ 已修复 | `resolve_path()` 允许绝对路径直接通过，不再限制必须在 working_dir 内（commit `64c239e5`）。 |
+| Windows bash 工具注册 | ✅ 已修复 | `registry.rs` 条件编译：Windows 仅注册 PowerShellTool，不注册 BashTool（commit `64c239e5`）。 |
 | `clarity-claw` 系统控件依赖（已修复） | ✅ 已修复 | `inputbox` crate 0.1 在 Windows 上调用 `TaskDialogIndirect`（Common Controls v6），但程序未声明 manifest 依赖，导致旧版 `comctl32.dll` 找不到入口点。已移除 `inputbox`，改为 `cmd /c start` 打开浏览器。教训：任何调用系统对话框/UI 的 crate 都必须验证目标系统的最低版本和 manifest 声明。 |
 
 已修复的历史问题见 [`CHANGELOG.md`](./CHANGELOG.md)。

@@ -201,9 +201,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .stroke(stroke)
                                 .min_size(egui::vec2(ui.available_width(), 32.0)),
                         );
-                        let text_color = if is_active {
-                            app.ui_store.theme.text
-                        } else if btn_resp.hovered() {
+                        let text_color = if is_active || btn_resp.hovered() {
                             app.ui_store.theme.text
                         } else {
                             app.ui_store.theme.text_dim

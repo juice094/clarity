@@ -49,7 +49,7 @@ pub mod tool;
 // ============================================================================
 
 /// A tool call from the LLM.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolCall {
     pub id: String,
     #[serde(rename = "type")]
@@ -58,7 +58,7 @@ pub struct ToolCall {
 }
 
 /// Function call details.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String, // JSON string
@@ -79,7 +79,7 @@ pub enum MessageRole {
 }
 
 /// A message in a conversation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
     pub role: MessageRole,
     pub content: String,
@@ -157,3 +157,6 @@ pub use federation::{
 };
 pub use llm::{LlmProvider, LlmResponse};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
+
+#[cfg(test)]
+mod tests;

@@ -3,7 +3,6 @@
 //! Each store owns a vertical slice of UI state.  Panels receive only the
 //! store(s) they need, enforcing data boundaries and making dependencies
 /// explicit.
-
 use crate::ui::types::*;
 use std::collections::HashMap;
 use std::time::Instant;
