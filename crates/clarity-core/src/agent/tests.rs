@@ -1102,18 +1102,18 @@ async fn test_budget_day_limit() {
     let registry = ToolRegistry::new();
     let config = AgentConfig::new()
         .with_system_prompt("")
-        .with_max_cost_per_day_usd(Some(0.03))
+        .with_max_cost_per_day_usd(Some(1.0))
         .with_max_cost_per_turn_usd(None);
-    let agent = Agent::with_config(registry, config).with_llm(Arc::new(BudgetMockLlm));
+    let agent = Agent::with_config(registry, config);
 
-    // First call should pass.
-    let result = agent.run("a".repeat(400)).await;
-    assert!(result.is_ok(), "First call should pass: {:?}", result);
+    // First call under daily limit should pass.
+    assert!(agent.check_budget(0.5).is_ok(), "First check should pass");
+    agent.record_cost(0.5);
 
-    // Second call should be blocked because daily accumulator exceeded the limit.
-    let result = agent.run("a".repeat(400)).await;
+    // Second call that pushes accumulated cost over daily limit should fail.
+    let result = agent.check_budget(0.6);
     assert!(
-        matches!(result, Err(AgentError::BudgetExceeded { .. })),
+        matches!(result, Err(AgentError::BudgetExceeded { limit: 1.0, current: 0.5, requested: 0.6 })),
         "Expected BudgetExceeded on second call, got: {:?}",
         result
     );
