@@ -343,6 +343,16 @@ impl Default for ToolRegistry {
 use serde_json::json;
 
 #[cfg(test)]
+pub fn mock_registry_with_tools(tools: Vec<Box<dyn Tool>>) -> ToolRegistry {
+    let reg = ToolRegistry::new();
+    for t in tools {
+        let shared: SharedTool = std::sync::Arc::from(t);
+        let _ = reg.register_shared(shared);
+    }
+    reg
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::tools::FileReadTool;

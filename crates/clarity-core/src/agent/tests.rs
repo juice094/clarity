@@ -29,8 +29,7 @@ fn test_agent_config() {
 
 #[tokio::test]
 async fn test_agent_direct_tool_execution() {
-    let registry = ToolRegistry::new();
-    registry.register(FileReadTool::new()).unwrap();
+    let registry = crate::registry::mock_registry_with_tools(vec![Box::new(FileReadTool::new())]);
 
     let agent = Agent::new(registry);
 
@@ -49,7 +48,7 @@ async fn test_agent_direct_tool_execution() {
 async fn test_agent_lazy_llm_factory() {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    let registry = ToolRegistry::with_builtin_tools();
+    let registry = crate::registry::mock_registry_with_tools(vec![]);
     let agent = Agent::with_config(registry, AgentConfig::default());
 
     // Agent starts unconfigured (no LLM)
@@ -258,8 +257,7 @@ async fn test_tool_call_approval_flow() {
         fn set_prompt_cache_key(&mut self, _key: &str) {}
     }
 
-    // 创建注册表并注册一个 Mock 工具
-    let registry = ToolRegistry::new();
+    let registry = crate::registry::mock_registry_with_tools(vec![]);
     // 由于我们没有真正的 mock_tool，我们期望工具执行失败
     // 但审批流程应该被触发
 
