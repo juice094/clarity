@@ -159,8 +159,9 @@ impl Agent {
         messages: &mut Vec<Message>,
     ) -> Result<Vec<String>, AgentError> {
         let mut tool_names = Vec::new();
-        let mut futures: Vec<Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, crate::error::ToolError>> + Send>>> = Vec::new();
         let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
+        let mut execute_flags: Vec<bool> = Vec::new();
+        let mut futures: Vec<Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, crate::error::ToolError>> + Send>>> = Vec::new();
 
         // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
         for tool_call in tool_calls {
