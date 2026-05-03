@@ -199,7 +199,6 @@ mod tests {
     use super::*;
     use crate::agent::AgentConfig;
     use crate::llm::api::LlmProvider;
-    use crate::registry::ToolRegistry;
     use crate::types::PlanStep;
     use std::sync::Arc;
 
@@ -234,7 +233,7 @@ mod tests {
             fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(PlanMock));
 
         let plan = agent.plan("do something").await.unwrap();
@@ -280,7 +279,7 @@ mod tests {
             fn set_prompt_cache_key(&mut self, _key: &str) {}
         }
 
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(BadMock));
 
         let err = agent.plan("test").await.unwrap_err();

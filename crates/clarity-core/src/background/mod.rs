@@ -1061,7 +1061,6 @@ mod tests {
     async fn test_spawn_agent_with_mock_llm() {
         use crate::agent::MockLlm;
         use crate::background::agent_executor::DefaultAgentTaskExecutor;
-        use crate::registry::ToolRegistry;
         use std::sync::Arc;
 
         let temp_dir = TempDir::new().unwrap();
@@ -1081,7 +1080,7 @@ mod tests {
             .contains("AgentTaskExecutor not configured"));
 
         // 配置 executor 后应能成功启动真实 Agent 任务
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let llm = Arc::new(MockLlm);
         let executor = Arc::new(DefaultAgentTaskExecutor::new(
             llm,
@@ -1121,14 +1120,13 @@ mod tests {
     async fn test_process_next_agent_task_scheduled() {
         use crate::agent::MockLlm;
         use crate::background::agent_executor::DefaultAgentTaskExecutor;
-        use crate::registry::ToolRegistry;
         use std::sync::Arc;
 
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path().join("store"));
         let scheduler = Arc::new(TaskScheduler::new(store));
 
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let llm = Arc::new(MockLlm);
         let executor = Arc::new(DefaultAgentTaskExecutor::new(
             llm,
@@ -1164,14 +1162,13 @@ mod tests {
     async fn test_start_agent_scheduler_loop() {
         use crate::agent::MockLlm;
         use crate::background::agent_executor::DefaultAgentTaskExecutor;
-        use crate::registry::ToolRegistry;
         use std::sync::Arc;
 
         let temp_dir = TempDir::new().unwrap();
         let store = TaskStore::new(temp_dir.path().join("store"));
         let scheduler = Arc::new(TaskScheduler::new(store));
 
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let llm = Arc::new(MockLlm);
         let executor = Arc::new(DefaultAgentTaskExecutor::new(
             llm,

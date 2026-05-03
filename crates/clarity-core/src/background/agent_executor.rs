@@ -172,13 +172,12 @@ mod tests {
     use super::*;
     use crate::agent::MockLlm;
     // use crate::background::TaskResult;
-    use crate::registry::ToolRegistry;
     use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_default_agent_executor_with_mock_llm() {
         let temp_dir = TempDir::new().unwrap();
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let llm = Arc::new(MockLlm);
 
         let executor = DefaultAgentTaskExecutor::new(llm, registry, temp_dir.path());
@@ -195,7 +194,7 @@ mod tests {
     #[tokio::test]
     async fn test_executor_uses_labor_market_type_def() {
         let temp_dir = TempDir::new().unwrap();
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         let llm = Arc::new(MockLlm);
 
         let mut market = LaborMarket::new();

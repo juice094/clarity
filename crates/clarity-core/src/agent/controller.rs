@@ -335,7 +335,7 @@ mod tests {
     use crate::registry::ToolRegistry;
 
     fn dummy_agent() -> Agent {
-        let registry = ToolRegistry::with_builtin_tools();
+        let registry = crate::registry::mock_registry_with_tools(vec![]);
         Agent::with_config(registry, AgentConfig::default())
     }
 
