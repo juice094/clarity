@@ -1163,3 +1163,128 @@ fn test_tool_error_sanitize_paths() {
         sanitized
     );
 }
+
+// ------------------------------------------------------------------
+// Vision Provider Routing tests
+// ------------------------------------------------------------------
+
+/// Mock LLM that records call count and returns configurable capabilities.
+struct VisionTrackingMockLlm {
+    vision: bool,
+    call_count: std::sync::atomic::AtomicUsize,
+    name: &'static str,
+}
+
+#[async_trait::async_trait]
+impl LlmProvider for VisionTrackingMockLlm {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<LlmResponse, AgentError> {
+        self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(LlmResponse {
+            content: format!("response from {}", self.name),
+            tool_calls: vec![],
+            is_complete: true,
+        })
+    }
+
+    fn stream(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("mock".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
+        });
+        Ok(rx)
+    }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            vision: self.vision,
+            ..Default::default()
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_vision_provider_switching() {
+    use std::sync::atomic::Ordering;
+
+    let registry = ToolRegistry::new();
+    let default_llm = Arc::new(VisionTrackingMockLlm {
+        vision: false,
+        call_count: std::sync::atomic::AtomicUsize::new(0),
+        name: "default",
+    });
+    let vision_llm = Arc::new(VisionTrackingMockLlm {
+        vision: true,
+        call_count: std::sync::atomic::AtomicUsize::new(0),
+        name: "vision",
+    });
+
+    let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(1))
+        .with_llm(default_llm.clone())
+        .with_vision_llm(vision_llm.clone());
+
+    let tools = serde_json::json!({});
+    let mut messages = vec![
+        Message::system("You are helpful"),
+        Message::user("What is in this image? <image>https://example.com/img.jpg</image>"),
+    ];
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+
+    let result = agent
+        .run_sync_loop(&mut messages, &tools, default_llm.clone(), &cancel_token)
+        .await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().0, "response from vision");
+    assert_eq!(default_llm.call_count.load(Ordering::SeqCst), 0);
+    assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn test_no_vision_no_switch() {
+    use std::sync::atomic::Ordering;
+
+    let registry = ToolRegistry::new();
+    let default_llm = Arc::new(VisionTrackingMockLlm {
+        vision: false,
+        call_count: std::sync::atomic::AtomicUsize::new(0),
+        name: "default",
+    });
+    let vision_llm = Arc::new(VisionTrackingMockLlm {
+        vision: true,
+        call_count: std::sync::atomic::AtomicUsize::new(0),
+        name: "vision",
+    });
+
+    let agent = Agent::with_config(registry, AgentConfig::new().with_max_iterations(1))
+        .with_llm(default_llm.clone())
+        .with_vision_llm(vision_llm.clone());
+
+    let tools = serde_json::json!({});
+    let mut messages = vec![
+        Message::system("You are helpful"),
+        Message::user("Hello, how are you?"),
+    ];
+    let cancel_token = tokio_util::sync::CancellationToken::new();
+
+    let result = agent
+        .run_sync_loop(&mut messages, &tools, default_llm.clone(), &cancel_token)
+        .await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().0, "response from default");
+    assert_eq!(default_llm.call_count.load(Ordering::SeqCst), 1);
+    assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 0);
+}

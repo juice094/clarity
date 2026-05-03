@@ -10,6 +10,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 /// Check if an LLM error is caused by context window overflow.
+/// Check if any message in the conversation contains image/vision content.
+fn messages_contain_vision(messages: &[Message]) -> bool {
+    messages.iter().any(|m| {
+        m.content.contains("<image>") || m.content.contains("![")
+    })
+}
+
 fn is_context_overflow_error(err: &AgentError) -> bool {
     let msg = err.to_string().to_lowercase();
     msg.contains("context length exceeded")
@@ -251,6 +258,24 @@ impl Agent {
         llm: Arc<dyn LlmProvider>,
         cancel_token: &CancellationToken,
     ) -> Result<(String, bool, Vec<String>), AgentError> {
+        let llm = if messages_contain_vision(messages) {
+            if !llm.capabilities().vision {
+                if let Some(ref vision_llm) = self.vision_llm() {
+                    if !std::sync::Arc::ptr_eq(&llm, vision_llm) {
+                        info!("Switching to vision provider for this turn");
+                    }
+                    vision_llm.clone()
+                } else {
+                    warn!("Vision content detected but no vision provider configured");
+                    llm
+                }
+            } else {
+                llm
+            }
+        } else {
+            llm
+        };
+
         let mut final_response = String::new();
         let mut completed = false;
         let mut tool_names = Vec::new();

@@ -61,8 +61,24 @@ impl Agent {
                 loop_detector: crate::agent::loop_detector::LoopDetector::new(3),
                 daily_cost_usd: 0.0,
                 last_cost_date: chrono::Utc::now().date_naive(),
+                vision_llm: None,
             })),
         }
+    }
+
+    /// Set the vision LLM provider (builder pattern).
+    pub fn with_vision_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.vision_llm = Some(llm);
+        }
+        self
+    }
+
+    /// Get the vision LLM provider, falling back to the default provider.
+    pub fn vision_llm(&self) -> Option<Arc<dyn LlmProvider>> {
+        let inner = self.inner.read().unwrap();
+        inner.vision_llm.clone().or_else(|| inner.llm.clone())
     }
 
     /// Set the LLM provider (builder pattern, for construction only)

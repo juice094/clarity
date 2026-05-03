@@ -41,6 +41,9 @@ pub struct AgentConfig {
     pub max_cost_per_turn_usd: Option<f64>,
     /// Maximum estimated cost per day in USD. None = unlimited.
     pub max_cost_per_day_usd: Option<f64>,
+    /// Optional vision model alias override. When set and the default provider
+    /// does not support vision, the agent will create a vision_provider instance.
+    pub vision_model_alias: Option<String>,
 }
 
 impl Default for AgentConfig {
@@ -62,6 +65,7 @@ impl Default for AgentConfig {
             approval_mode: None,
             max_cost_per_turn_usd: None,
             max_cost_per_day_usd: Some(5.0),
+            vision_model_alias: None,
         }
     }
 }
@@ -165,6 +169,12 @@ impl AgentConfig {
     /// Set maximum estimated cost per day in USD.
     pub fn with_max_cost_per_day_usd(mut self, limit: Option<f64>) -> Self {
         self.max_cost_per_day_usd = limit;
+        self
+    }
+
+    /// Set vision model alias override.
+    pub fn with_vision_model_alias(mut self, alias: impl Into<String>) -> Self {
+        self.vision_model_alias = Some(alias.into());
         self
     }
 }

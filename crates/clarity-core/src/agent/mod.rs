@@ -119,6 +119,8 @@ struct AgentInner {
     daily_cost_usd: f64,
     /// Date of the last cost record (to detect day boundary).
     last_cost_date: chrono::NaiveDate,
+    /// Optional vision-capable LLM provider. Created lazily when needed.
+    vision_llm: Option<Arc<dyn LlmProvider>>,
 }
 
 /// Simple mock LLM for testing
