@@ -35,7 +35,9 @@ pub use media::ReadMediaFileTool;
 pub use notify::{NotifyTool, PushNotificationTool};
 pub use plan::PlanTool;
 pub use search::{GlobTool, GrepTool};
-pub use shell::{BashTool, PowerShellTool};
+#[cfg(not(target_os = "windows"))]
+pub use shell::BashTool;
+pub use shell::PowerShellTool;
 pub use task::{TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool};
 pub use team::{TeamCreateTool, TeamDeleteTool, TeamListTool};
 pub use think::ThinkTool;
@@ -119,6 +121,11 @@ pub mod helpers {
         let base = &ctx.working_dir;
         let input = PathBuf::from(path);
 
+        // Allow absolute paths directly — user explicitly requested them
+        if input.is_absolute() {
+            return Ok(normalize_path(&input));
+        }
+
         // Ensure base is absolute for reliable comparison
         let base_abs = if base.is_absolute() {
             base.clone()
@@ -128,24 +135,19 @@ pub mod helpers {
                 .join(base)
         };
 
-        let resolved = if input.is_absolute() {
-            input.clone()
-        } else {
-            base_abs.join(&input)
-        };
-
+        let resolved = base_abs.join(&input);
         let base_norm = normalize_path(&base_abs);
         let resolved_norm = normalize_path(&resolved);
 
         if !resolved_norm.starts_with(&base_norm) {
             return Err(ToolError::invalid_params(format!(
-                "Path '{}' is outside working directory '{}'",
+                "Path '{}' escapes working directory '{}'",
                 path,
                 base.display()
             )));
         }
 
-        Ok(resolved)
+        Ok(resolved_norm)
     }
 }
 
@@ -177,14 +179,14 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_path_rejects_absolute_outside_base() {
+    fn test_resolve_path_allows_absolute_outside_base() {
         let base = test_base();
         let ctx = ToolContext::new().with_working_dir(base);
         #[cfg(unix)]
         let result = resolve_path(&ctx, "/etc/passwd");
         #[cfg(windows)]
-        let result = resolve_path(&ctx, r"C:\Windows\System32\calc.exe");
-        assert!(result.is_err());
+        let result = resolve_path(&ctx, r"C:\Windows\System32\drivers\etc\hosts");
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -194,6 +196,14 @@ mod tests {
         let abs = base.join("src/main.rs");
         let result = resolve_path(&ctx, abs.to_str().unwrap()).unwrap();
         assert!(result.starts_with(&base));
+    }
+
+    #[test]
+    fn test_resolve_path_rejects_relative_traversal() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base.clone());
+        let result = resolve_path(&ctx, "../outside.rs");
+        assert!(result.is_err());
     }
 
     #[test]

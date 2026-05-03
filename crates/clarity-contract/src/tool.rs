@@ -53,7 +53,7 @@ impl ToolContext {
         Self {
             working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             env: std::env::vars().collect(),
-            timeout_secs: 30,
+            timeout_secs: 60,
             max_output_size: 1024 * 1024, // 1MB
             read_only: false,
             approval_mode: ApprovalMode::Interactive,

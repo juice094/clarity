@@ -7,7 +7,10 @@ use clarity_core::error::AgentError;
 use clarity_core::llm::LlmFactory;
 use clarity_core::memory::{Memory, MemoryStore, MemoryTicker, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
-use clarity_core::tools::{BashTool, FileReadTool, Tool};
+#[cfg(not(target_os = "windows"))]
+use clarity_core::tools::BashTool;
+use clarity_core::tools::{FileReadTool, Tool};
+#[cfg(not(target_os = "windows"))]
 use serde_json::json;
 use std::sync::Arc;
 
@@ -83,12 +86,14 @@ fn test_builtin_tools_registration() {
     // Check specific tools
     assert!(registry.contains("file_read").unwrap());
     assert!(registry.contains("file_write").unwrap());
+    #[cfg(not(target_os = "windows"))]
     assert!(registry.contains("bash").unwrap());
     assert!(registry.contains("glob").unwrap());
     assert!(registry.contains("grep").unwrap());
 }
 
 #[tokio::test]
+#[cfg(not(target_os = "windows"))]
 async fn test_tool_execution_integration() {
     let registry = ToolRegistry::new();
     registry.register(BashTool::new()).unwrap();

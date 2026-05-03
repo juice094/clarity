@@ -206,6 +206,45 @@ pub async fn sniff_media_file(path: &Path) -> Option<&'static str> {
     None
 }
 
+/// Known text file extensions that bypass magic sniffing.
+fn is_text_file(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).as_deref(),
+        Some("txt")
+            | Some("md")
+            | Some("rs")
+            | Some("json")
+            | Some("yaml")
+            | Some("yml")
+            | Some("toml")
+            | Some("csv")
+            | Some("html")
+            | Some("css")
+            | Some("js")
+            | Some("ts")
+            | Some("py")
+            | Some("go")
+            | Some("java")
+            | Some("c")
+            | Some("cpp")
+            | Some("h")
+            | Some("hpp")
+            | Some("sh")
+            | Some("ps1")
+            | Some("bat")
+            | Some("cmd")
+            | Some("ini")
+            | Some("cfg")
+            | Some("conf")
+            | Some("log")
+            | Some("xml")
+            | Some("sql")
+            | Some("dockerfile")
+            | Some("gitignore")
+            | Some("lock")
+    )
+}
+
 /// Quick check whether a file is likely a media file based on extension.
 ///
 /// This is a lightweight filter used before attempting to sniff MIME types.
@@ -252,13 +291,16 @@ impl FileReadTool {
         offset: Option<usize>,
         limit: Option<usize>,
     ) -> ToolResult<String> {
-        // Media file sniffing
-        if let Some(media_type) = sniff_media_file(path).await {
-            return Err(ToolError::execution_failed(format!(
-                "Cannot read binary file {} as text (detected: {}). Use an appropriate tool.",
-                path.display(),
-                media_type
-            )));
+        // Media file sniffing — extension-first strategy
+        // Trust the file extension for known text files; only sniff if extension is unknown or media
+        if !is_text_file(path) {
+            if let Some(media_type) = sniff_media_file(path).await {
+                return Err(ToolError::execution_failed(format!(
+                    "Cannot read binary file {} as text (detected: {}). Use an appropriate tool.",
+                    path.display(),
+                    media_type
+                )));
+            }
         }
 
         let content = fs::read_to_string(path).await.map_err(|e| {
@@ -799,6 +841,22 @@ mod tests {
         let args = json!({"path": "tiny.txt"});
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["content"], "hi");
+    }
+
+    #[tokio::test]
+    async fn test_text_file_extension_bypasses_mp3_sniff() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("not-really-mp3.txt");
+        // Write text that starts with "ID3" — would match MP3 magic if sniffed
+        fs::write(&file_path, "ID3-tag-like-prefix\nHello World")
+            .await
+            .unwrap();
+
+        let tool = FileReadTool::new();
+        let ctx = ToolContext::new().with_working_dir(temp_dir.path());
+        let args = json!({"path": "not-really-mp3.txt"});
+        let result = tool.execute(args, ctx).await.unwrap();
+        assert_eq!(result["content"], "ID3-tag-like-prefix\nHello World");
     }
 
     #[tokio::test]
