@@ -9,8 +9,8 @@
 ## 一、当前会话锚点
 
 **最后更新**：2026-05-03
-**当前分支**：`phase2/protocol-pilot` @ `01990446`（已推送 origin）
-**架构模式**：CLI → **已批准切换至 Claw**（长程任务：Phase 1-5 前端全面翻新）
+**当前分支**：`main` @ `a090e5b6`（已推送 origin）
+**架构模式**：CLI
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
 - v0.3.1 已发布（tag `v0.3.1`）：model_download + onboarding + unwrap 审计 + egui release CI
@@ -23,6 +23,10 @@
 - **Sprint 13 — 稳定性硬化 + 架构解耦**：✅ 已完成（2026-04-27 ~ 2026-05-03）
 - **Sprint 13.5 — 前端架构重构**：✅ 已完成（Zustand-style Store + Services 拆分 + 错误边界）
 - **Sprint 14 — Glassmorphism 视觉精调**：✅ 已完成（2026-05-01 ~ 2026-05-03）
+- **Sprint 14.5 — 架构解耦与代码健康**：✅ 已完成（2026-05-02）
+- **Sprint 15 — 多方面强化**：✅ 已完成（2026-05-02 ~ 2026-05-03）
+- **Sprint 16 — 内核升级 + 基础设施**：✅ 已完成（2026-05-03）
+- **Sprint 17 — ZeroClaw 吸收与工程深化**：🔄 已规划（2026-05-03 ~ 2026-05-10）
 
 ---
 
@@ -185,6 +189,35 @@
 原冻结原因："需 Agent 架构重构后实施"。Kimi 交叉审计（参照 devbase 现状）识别出这是**叙事级软阻塞** —— `GuiSettings` 是独立数据模型，Agent 级 Provider 覆盖**不依赖** `agent/mod.rs` 的物理拆分。
 
 解锁路径：**协议先行，架构后置**。先定义 `AgentProfile` TOML 数据模型（`profiles.toml`），让 `GuiSettings` 支持 Agent 级覆盖；`agent/mod.rs` 物理拆分延后到 Wave 0。
+
+### 3.12 Sprint 16 — 内核升级 + 基础设施（2026-05-03）
+
+**决策**：基于 zeroclaw 实际代码审计，吸收其经过验证的安全/可靠性设计模式。
+
+**审计结论**：
+- zeroclaw 在 **Provider 自适应、工具解析鲁棒性、运行时安全（预算/脱敏/loop检测）、多通道广度** 上显著领先
+- clarity 在 **内存 compaction、BM25 搜索、Plan mode、Subagents、Wire 协议** 上更有深度
+- 两者 trait 边界高度相似，互相借鉴摩擦成本极低
+
+**已吸收模式**：
+
+| 模式 | 来源 | clarity 实现 | Commit |
+|------|------|-------------|--------|
+| 凭证脱敏 | `zeroclaw/src/agent/loop_.rs:216-257` | `scrub_credentials()` — regex 清洗 API key/token/password/Bearer/sk-xxx | `438f2e7e` |
+| 上下文溢出恢复 | `zeroclaw/src/agent/loop_.rs:2808-2837` | `is_context_overflow_error()` + `fast_trim_tool_results()` — trim 最旧 tool results 后重试 | `a090e5b6` |
+
+**Sprint 16 其他交付**：
+- P1 精确 tokenizer — `tiktoken-rs` (cl100k_base) 替换加权估算 (`a1900eaf`)
+- P2 d2.rs 解析器 — 与 mermaid.rs 同构的 D2 语法子集 (`876c47b3`)
+- P2 三级压缩 budget 级 — `BudgetRoles` 1:3:6 配额 + `budget_compact()` (`5688abfd`)
+- P3 MemoryNode 接入 egui — `clarity-memory` enrich query + turn 摘要保存 (`7333aa27`)
+- 测试去 Registry 化 Phase 1 — `mock_registry_with_tools()` 基础设施 + 3 个测试替换 (`e5fb1a7d`)
+
+**测试基线**：484 passed / 0 failed / 6 ignored
+
+**Sprint 17 计划**：详见 `~/.kimi/plans/sprint-17-zeroclaw-absorption.md`
+
+---
 
 ### 3.11 Kimi 交叉审计 — Clarity↔devbase（2026-04-29）
 

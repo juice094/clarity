@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sprint 16 — 内核升级 + 基础设施 + zeroclaw 吸收（2026-05-03）**
+  - **P1: 精确 tokenizer** — `tiktoken-rs` (cl100k_base) 替换加权估算，CJK token 计数误差从 ±30% → ±5%。
+  - **P2: D2 语法子集解析器** — 与 `mermaid.rs` 同构的 D2 解析器，支持节点/边/形状/决策推断，6 个测试通过。
+  - **P2: 三级压缩 budget 级** — `BudgetRoles` 1:3:6 配额（system:user:agent），`budget_compact()` 逆序扫描按角色权重丢弃旧消息。
+  - **P3: MemoryNode 接入 egui** — `clarity-memory` 统一记忆层接入 egui，`search_fulltext` 检索 enrich query，turn 完成后自动保存摘要。
+  - **zeroclaw 吸收 — 凭证脱敏** — `scrub_credentials()` 在工具结果注入 LLM 前自动清洗 API key/token/password/Bearer/sk-xxx 为 `[REDACTED]`，7 个单元测试覆盖。
+  - **zeroclaw 吸收 — 上下文溢出恢复** — `is_context_overflow_error()` + `fast_trim_tool_results()`：当 LLM 返回 context length exceeded 时，自动移除最旧 tool result 对并重试一次。
+  - **MockToolRegistry** — `#[cfg(test)]` 下新增 `mock_registry_with_tools()`，Phase 1 替换 3 个测试的 `with_builtin_tools()` 依赖。
+
+- **Sprint 15 — 多方面强化（2026-05-02 ~ 2026-05-03）**
+  - **Phase 0: 工具层止血** — 扩展名优先 sniff（.txt/.md/.rs bypass magic）、绝对路径跨目录读取、Windows 仅注册 PowerShell、shell timeout 60s。
+  - **Phase 1: UX 补齐** — Git 上下文 + ProjectMetadata 自动注入 `SystemPromptBuilder`；工具结果 >2000 字符自动截断；`/coder` `/explore` 子 Agent 快捷入口；Gateway 路径上下文刷新。
+  - **Phase 1.5: UI 视觉精调** — Pretext 结构化消息（`ContentBlock` 7 变体）；三栏边界分隔线；Sidebar 角色状态指示器；选中态统一；主题色板修复。
+
 - **Sprint 14 — egui 设计系统硬化 + i18n + 自绘标题栏**
   - **配色重调**：背景从纯黑 (#0f0f11) 改为深蓝灰 (#12141e)，强调色从亮紫 (#8b5cf6) 改为暖铜 (#c98a5e)。降低蓝光含量，减少长时间使用的视觉疲劳。亮色主题同步调整为冷调白。
   - **Overlay 透明度层级系统**：新增 `overlay`/`overlay_subtle`/`overlay_light`/`overlay_medium`/`overlay_strong` 5 级透明度 token。`settings.rs` 和 `approval.rs` 的硬编码 scrim 统一为 `theme.overlay`。

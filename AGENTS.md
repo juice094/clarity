@@ -265,7 +265,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ---
 
-**Sprint 16 — 内核升级 + 基础设施（进行中，2026-05-03 ~ ）**
+**Sprint 16 — 内核升级 + 基础设施（✅ 已完成，2026-05-03）**
 
 > 承接 Sprint 15，按用户指定优先级推进：精确 tokenizer → d2.rs 解析器 → 三级压缩 budget 级 → MemoryNode 接入 → 测试去 Registry 化。
 >
@@ -276,8 +276,28 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 | P1 | **精确 tokenizer** — tiktoken-rs (cl100k_base) 替换加权估算，`estimate_text_tokens` 精确到 ±5% | ✅ 已完成 (`a1900eaf`) |
 | P2 | **d2.rs 解析器** — 与 mermaid.rs 同构的 D2 语法子集，6 个测试通过 | ✅ 已完成 (`876c47b3`) |
 | P2 | **三级压缩 budget 级** — `BudgetRoles` 1:3:6 配额 + `budget_compact()` 逆序丢弃，14 个测试通过 | ✅ 已完成 (`5688abfd`) |
-| P3 | **MemoryNode 接入 egui** — 长期记忆检索 enrich query + turn 摘要保存，`cargo check/test` 全绿 | ✅ 已完成 |
-| — | **测试去 Registry 化** — 31 个测试引入 mock registry | 🔄 待执行 |
+| P3 | **MemoryNode 接入 egui** — 长期记忆检索 enrich query + turn 摘要保存，`cargo check/test` 全绿 | ✅ 已完成 (`7333aa27`) |
+| P3.5 | **sidebar UTF-8 安全截断** — `chars().take()` 替代 byte-index 切片，修复 CJK panic | ✅ 已完成 (`c325482f`) |
+| — | **测试去 Registry 化 Phase 1** — `mock_registry_with_tools()` 基础设施 + 3 个测试替换 | ✅ 已完成 (`e5fb1a7d`) |
+| — | **zeroclaw 吸收 — 凭证脱敏** — `scrub_credentials()` 清洗工具输出中的敏感信息 | ✅ 已完成 (`438f2e7e`) |
+| — | **zeroclaw 吸收 — 上下文溢出恢复** — `fast_trim_tool_results()` + 重试机制 | ✅ 已完成 (`a090e5b6`) |
+
+**验证**: `cargo test --workspace --lib -- --test-threads=1` = 484 passed / 0 failed / 6 ignored
+
+---
+
+**Sprint 17 — ZeroClaw 吸收与工程深化（🔄 已规划，2026-05-03 ~ 2026-05-10）**
+
+> 详见 plan file: `~/.kimi/plans/sprint-17-zeroclaw-absorption.md`
+
+| 优先级 | 任务 | 来源 | 状态 |
+|--------|------|------|------|
+| P0 | **LoopDetector** — 输出哈希比对检测重复调用 | `zeroclaw/src/agent/loop_detector.rs` | 🔄 待执行 |
+| P0 | **ProviderCapabilities** — provider 自声明 + prompt-guided fallback | `zeroclaw/src/providers/traits.rs:272-305` | 🔄 待执行 |
+| P0 | **测试去 Registry 化 Phase 2** — 剩余 ~25 个测试 | — | 🔄 待执行 |
+| P1 | **Memory time decay** — 检索结果时间半衰期降权 | `zeroclaw/src/memory/decay.rs` | 🔄 待执行 |
+| P1 | **运行时预算控制** — USD/turn 上限拦截 | `zeroclaw/src/agent/loop_.rs:2508` | 🔄 待执行 |
+| P1 | **DraftEvent 三态流** — Clear/Progress/Content 区分 | `zeroclaw/src/agent/loop_.rs:267-276` | 🔄 待执行 |
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
