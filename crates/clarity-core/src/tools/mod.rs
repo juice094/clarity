@@ -118,8 +118,19 @@ pub mod helpers {
     /// Returns an error if the resolved path escapes the working directory
     /// (e.g. via `..` traversal or an absolute path outside the working directory).
     pub fn resolve_path(ctx: &ToolContext, path: &str) -> Result<PathBuf, ToolError> {
+        // Expand leading ~ to home directory (cross-platform)
+        let input = if path.starts_with('~') {
+            dirs::home_dir()
+                .map(|home| {
+                    let rest = path[1..].trim_start_matches(|c| c == '/' || c == '\\');
+                    home.join(rest)
+                })
+                .unwrap_or_else(|| PathBuf::from(path))
+        } else {
+            PathBuf::from(path)
+        };
+
         let base = &ctx.working_dir;
-        let input = PathBuf::from(path);
 
         // Allow absolute paths directly — user explicitly requested them
         if input.is_absolute() {
@@ -176,6 +187,24 @@ mod tests {
         let ctx = ToolContext::new().with_working_dir(base);
         let result = resolve_path(&ctx, "../../../etc/passwd");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_path_expands_tilde() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base);
+        let home = dirs::home_dir().expect("home_dir should be available in tests");
+        let result = resolve_path(&ctx, "~/test.txt").unwrap();
+        assert_eq!(result, home.join("test.txt"));
+    }
+
+    #[test]
+    fn test_resolve_path_expands_tilde_backslash() {
+        let base = test_base();
+        let ctx = ToolContext::new().with_working_dir(base);
+        let home = dirs::home_dir().expect("home_dir should be available in tests");
+        let result = resolve_path(&ctx, "~\\test.txt").unwrap();
+        assert_eq!(result, home.join("test.txt"));
     }
 
     #[test]
