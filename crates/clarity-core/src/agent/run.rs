@@ -9,6 +9,46 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
+/// Scrub sensitive credentials from tool output before injecting into LLM context.
+/// Prevents accidental leakage of API keys, tokens, passwords, and Bearer headers.
+fn scrub_credentials(input: &str) -> String {
+    use regex::Regex;
+    use std::sync::OnceLock;
+
+    static RE_KEYVAL: OnceLock<Regex> = OnceLock::new();
+    static RE_BEARER: OnceLock<Regex> = OnceLock::new();
+    static RE_SK: OnceLock<Regex> = OnceLock::new();
+
+    let re_keyval = RE_KEYVAL.get_or_init(|| {
+        Regex::new(r#"(?i)(api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?[^\s"']+["']?"#)
+            .unwrap()
+    });
+    let re_bearer = RE_BEARER.get_or_init(|| {
+        Regex::new(r"Bearer\s+[\w\-]+").unwrap()
+    });
+    let re_sk = RE_SK.get_or_init(|| {
+        Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap()
+    });
+
+    let mut result = input.to_string();
+    result = re_keyval
+        .replace_all(&result, |caps: &regex::Captures| {
+            let m = caps.get(0).unwrap().as_str();
+            if let Some(eq) = m.find('=') {
+                format!("{}=[REDACTED]", &m[..eq])
+            } else if let Some(colon) = m.find(':') {
+                format!("{}: [REDACTED]", &m[..colon])
+            } else {
+                "[REDACTED]".to_string()
+            }
+        })
+        .to_string();
+    result = re_bearer.replace_all(&result, "Bearer [REDACTED]").to_string();
+    result = re_sk.replace_all(&result, "[REDACTED]").to_string();
+
+    result
+}
+
 impl Agent {
     /// Run proactive compaction and threshold-based compaction if needed.
     async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
@@ -105,7 +145,8 @@ impl Agent {
                 result: result_content.clone(),
             });
 
-            messages.push(Message::tool(&tool_call.id, result_content));
+            let scrubbed = scrub_credentials(&result_content);
+            messages.push(Message::tool(&tool_call.id, scrubbed));
 
             if let Err(ref e) = sanitized {
                 if !e.is_recoverable() {
@@ -770,4 +811,68 @@ fn format_plan_results(results: &[crate::types::PlanResult]) -> String {
         lines.push(format!("{} {}: {}", icon, r.step_id, r.output));
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scrub_credentials;
+
+    #[test]
+    fn test_scrub_api_key_colon() {
+        let input = "Response: api_key: sk-test12345\nMore text";
+        let out = scrub_credentials(input);
+        assert!(out.contains("api_key: [REDACTED]"));
+        assert!(!out.contains("sk-test12345"));
+    }
+
+    #[test]
+    fn test_scrub_api_key_equals() {
+        let input = "config = { api_key=secret_value, other = 1 }";
+        let out = scrub_credentials(input);
+        assert!(out.contains("api_key=[REDACTED]"));
+        assert!(!out.contains("secret_value"));
+    }
+
+    #[test]
+    fn test_scrub_bearer_token() {
+        let input = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+        let out = scrub_credentials(input);
+        assert!(out.contains("Bearer [REDACTED]"));
+        assert!(!out.contains("eyJhbGci"));
+    }
+
+    #[test]
+    fn test_scrub_sk_key() {
+        let input = "key: sk-abcdefghijklmnopqrstuvwxyz123456";
+        let out = scrub_credentials(input);
+        assert!(out.contains("[REDACTED]"));
+        assert!(!out.contains("sk-abcdefghijklmnopqrstuvwxyz123456"));
+    }
+
+    #[test]
+    fn test_scrub_password() {
+        let input = "login with password: my_secret_pass!";
+        let out = scrub_credentials(input);
+        assert!(out.contains("password: [REDACTED]"));
+        assert!(!out.contains("my_secret_pass"));
+    }
+
+    #[test]
+    fn test_scrub_no_false_positive() {
+        let input = "The api_key field is required but not provided in this response.";
+        let out = scrub_credentials(input);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn test_scrub_multiple_secrets() {
+        let input = "api_key=abc123\nBearer xyz789\npassword: hunter2";
+        let out = scrub_credentials(input);
+        assert!(out.contains("api_key=[REDACTED]"));
+        assert!(out.contains("Bearer [REDACTED]"));
+        assert!(out.contains("password: [REDACTED]"));
+        assert!(!out.contains("abc123"));
+        assert!(!out.contains("xyz789"));
+        assert!(!out.contains("hunter2"));
+    }
 }
