@@ -22,12 +22,10 @@ pub enum PromptComponent {
     #[allow(dead_code)]
     OfflineNotice,
     /// Git repository context (branch, status, recent commits).
-    #[allow(dead_code)]
     GitContext(String),
     /// Active files currently being operated on.
     ActiveFiles(String),
     /// Project metadata (Cargo.toml, package.json, etc.).
-    #[allow(dead_code)]
     ProjectMetadata(String),
 }
 
@@ -84,7 +82,6 @@ impl SystemPromptBuilder {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_git_context(mut self, ctx: impl Into<String>) -> Self {
         let ctx = ctx.into();
         if !ctx.is_empty() {
@@ -101,7 +98,6 @@ impl SystemPromptBuilder {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_project_metadata(mut self, meta: impl Into<String>) -> Self {
         let meta = meta.into();
         if !meta.is_empty() {
@@ -252,6 +248,8 @@ impl Agent {
             .with_approval_mode(self.approval_mode())
             .with_template_vars(self.config.template_variables.clone())
             .with_active_files(self.active_files().unwrap_or_default())
+            .with_git_context(self.git_context().unwrap_or_default())
+            .with_project_metadata(self.project_metadata().unwrap_or_default())
             .build()
     }
 

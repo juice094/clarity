@@ -764,15 +764,15 @@ async fn test_end_to_end_context_injection() {
 
     let prompt = agent.build_system_prompt();
 
-    // Sprint 13 A3: Git Context and Project Metadata must NOT leak into prompt.
+    // Git Context and Project Metadata should now be auto-injected into prompt.
     assert!(
-        !prompt.contains("Git Context"),
-        "must NOT contain Git Context section:\n{}",
+        prompt.contains("Git Context"),
+        "should contain Git Context section:\n{}",
         prompt
     );
     assert!(
-        !prompt.contains("Project Metadata"),
-        "must NOT contain Project Metadata section:\n{}",
+        prompt.contains("Project Metadata"),
+        "should contain Project Metadata section:\n{}",
         prompt
     );
 

@@ -94,9 +94,15 @@ pub fn on_tool_result(
         tc.result = Some(result.clone());
     }
     if let Some(session) = session_store.active_session_mut() {
+        let display_result = if result.chars().count() > 2000 {
+            let truncated: String = result.chars().take(2000).collect();
+            format!("{}\n... (truncated, {} chars total)", truncated, result.chars().count())
+        } else {
+            result
+        };
         let mut msg = Message {
             role: Role::Agent,
-            content: format!("🔧 **{}**\n```json\n{}\n```", name, result),
+            content: format!("🔧 **{}**\n```json\n{}\n```", name, display_result),
             timestamp: Instant::now(),
             parsed: vec![],
             cached_height: None,
