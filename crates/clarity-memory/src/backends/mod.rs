@@ -6,6 +6,7 @@
 //! - `HybridStore`: Hot memory cache + cold file storage
 //! - `MemoryStore`: Pure in-memory storage for testing
 
+use crate::store::DecayConfig;
 use crate::types::{Fact, Result};
 use async_trait::async_trait;
 
@@ -41,7 +42,7 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
     async fn search_by_tags(&self, tags: &[String], limit: usize) -> Result<Vec<Fact>>;
 
     /// Full-text search
-    async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>>;
+    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>>;
 
     /// Get facts by session ID
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>>;
@@ -70,8 +71,8 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
     }
 
     /// Search with semantic similarity (if supported)
-    async fn search_similar(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
-        let facts = self.search_fulltext(query, limit).await?;
+    async fn search_similar(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<(Fact, f32)>> {
+        let facts = self.search_fulltext(query, limit, decay).await?;
         Ok(facts.into_iter().map(|f| (f, 1.0)).collect())
     }
 
@@ -235,7 +236,7 @@ mod tests {
             )
             .await?;
 
-        let results = backend.search_fulltext("Rust", 10).await?;
+        let results = backend.search_fulltext("Rust", 10, &DecayConfig::default()).await?;
         assert_eq!(results.len(), 1);
 
         let results = backend.search_by_tags(&["tech".to_string()], 10).await?;

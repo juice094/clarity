@@ -95,6 +95,7 @@ pub use compiler::MemoryCompiler;
 pub use embedding::{CosineIndex, SparseVector, TfidfVectorizer, VectorStore};
 pub use extractor::{FactExtractor, LlmClient};
 pub use session_store::SessionStore;
+pub use store::DecayConfig;
 pub use store::MemoryStore;
 pub use ticker::{MemoryTicker, SharedMemoryTicker, DEFAULT_TURNS_PER_SUMMARY};
 pub use types::{
@@ -231,7 +232,7 @@ mod integration_tests {
         assert_eq!(fact.fact, "File store test");
 
         // Test search
-        let results = store.search_fulltext("File", 10).await.unwrap();
+        let results = store.search_fulltext("File", 10, &DecayConfig::default()).await.unwrap();
         assert_eq!(results.len(), 1);
     }
 

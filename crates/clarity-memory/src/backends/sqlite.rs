@@ -1,6 +1,7 @@
 //! SQLite storage backend with FTS5
 use crate::backends::StorageBackend;
 use crate::bm25::IncrementalBm25Index;
+use crate::store::DecayConfig;
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -308,23 +309,40 @@ impl StorageBackend for SqliteStore {
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
+    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
         let query = query.to_string();
         let conn = self.conn.clone();
+        let decay = *decay;
 
         tokio::task::spawn_blocking(move || {
             let conn = conn.lock().unwrap();
             let mut stmt = conn.prepare(
-                "SELECT f.id, f.fact, f.tags, f.time, f.session_id, f.created_at 
+                "SELECT f.id, f.fact, f.tags, f.time, f.session_id, f.created_at, fts.rank
                  FROM facts f JOIN facts_fts fts ON f.id = fts.rowid
-                 WHERE facts_fts MATCH ? ORDER BY rank LIMIT ?",
+                 WHERE facts_fts MATCH ?
+                 ORDER BY fts.rank",
             )?;
-            let rows = stmt.query_map(params![query, limit as i64], Self::row_to_fact)?;
+            let now = Utc::now();
+            let lambda = std::f64::consts::LN_2 / decay.half_life_days;
+            let mut scored: Vec<(Fact, f64)> = Vec::new();
+            let rows = stmt.query_map([&query], |row| {
+                let fact = Self::row_to_fact(row)?;
+                let rank: f64 = row.get(6)?;
+                Ok((fact, rank))
+            })?;
 
-            let mut facts = Vec::new();
             for row in rows {
-                facts.push(row?);
+                let (fact, rank) = row?;
+                let weight = if decay.enabled {
+                    let age_days = (now - fact.created_at).num_days() as f64;
+                    (-lambda * age_days).exp()
+                } else {
+                    1.0
+                };
+                scored.push((fact, rank * weight));
             }
+            scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            let facts: Vec<Fact> = scored.into_iter().map(|(f, _)| f).take(limit).collect();
             Ok::<_, MemoryError>(facts)
         })
         .await
@@ -408,11 +426,12 @@ impl StorageBackend for SqliteStore {
         .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
-    async fn search_similar(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
+    async fn search_similar(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<(Fact, f32)>> {
         let query = query.to_string();
+        let decay = *decay;
 
         // Step 1: FTS5 recall — fetch candidate documents (5x limit for reranking pool)
-        let candidates = self.search_fulltext(&query, limit * 5).await?;
+        let candidates = self.search_fulltext(&query, limit * 5, &decay).await?;
 
         if candidates.is_empty() {
             return Ok(Vec::new());
@@ -453,12 +472,20 @@ impl StorageBackend for SqliteStore {
 
         // Step 3: Rerank candidates using the cached index
         let cache = self.bm25_cache.read();
+        let now = Utc::now();
+        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
         let mut scored: Vec<(Fact, f32)> = if let Some(ref c) = *cache {
             candidates
                 .into_iter()
                 .map(|fact| {
-                    let score = c.score(&query, fact.id).unwrap_or(0.0);
-                    (fact, score)
+                    let bm25_score = c.score(&query, fact.id).unwrap_or(0.0);
+                    let weight = if decay.enabled {
+                        let age_days = (now - fact.created_at).num_days() as f64;
+                        (-lambda * age_days).exp() as f32
+                    } else {
+                        1.0
+                    };
+                    (fact, bm25_score * weight)
                 })
                 .collect()
         } else {
@@ -524,5 +551,77 @@ impl StorageBackend for SqliteStore {
             tx.commit()?;
             Ok::<_, MemoryError>(ids)
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::DecayConfig;
+    use chrono::Duration;
+
+    fn insert_fact_with_time(store: &SqliteStore, text: &str, created_at: DateTime<Utc>) -> i64 {
+        let conn = store.conn.lock().unwrap();
+        let tags = serde_json::to_string(&Vec::<String>::new()).unwrap();
+        conn.execute(
+            "INSERT INTO facts (fact, tags, time, session_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![text, tags, None::<String>, None::<String>, created_at.to_rfc3339()],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    #[tokio::test]
+    async fn test_decay_disabled() {
+        let store = SqliteStore::new_in_memory().unwrap();
+        let old_time = Utc::now() - Duration::days(365);
+        let id = insert_fact_with_time(&store, "old decay fact", old_time);
+
+        let decay = DecayConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        let results = store.search_fulltext("decay", 10, &decay).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
+    }
+
+    #[tokio::test]
+    async fn test_decay_6_months() {
+        let store = SqliteStore::new_in_memory().unwrap();
+        let old_time = Utc::now() - Duration::days(180);
+        insert_fact_with_time(&store, "decay test fact", old_time);
+        insert_fact_with_time(&store, "decay test fact", Utc::now());
+
+        let decay = DecayConfig::default();
+        let results = store.search_fulltext("decay", 10, &decay).await.unwrap();
+        assert_eq!(results.len(), 2);
+        // Recent fact should come first
+        assert!(results[0].created_at > results[1].created_at);
+
+        let similar = store.search_similar("decay", 10, &decay).await.unwrap();
+        assert_eq!(similar.len(), 2);
+        let recent_score = similar[0].1;
+        let old_score = similar[1].1;
+        let ratio = recent_score / old_score;
+        assert!(
+            ratio > 1.8 && ratio < 2.2,
+            "expected ratio ~2.0, got {}",
+            ratio
+        );
+    }
+
+    #[tokio::test]
+    async fn test_decay_recent() {
+        let store = SqliteStore::new_in_memory().unwrap();
+        let old_time = Utc::now() - Duration::days(365);
+        insert_fact_with_time(&store, "decay test fact", old_time);
+        let recent_id = insert_fact_with_time(&store, "decay test fact", Utc::now());
+
+        let decay = DecayConfig::default();
+        let results = store.search_fulltext("decay", 10, &decay).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, recent_id);
     }
 }

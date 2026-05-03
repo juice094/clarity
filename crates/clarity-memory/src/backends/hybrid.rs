@@ -1,6 +1,7 @@
 //! Hybrid storage - Hot cache + Cold storage
 use crate::backends::file::FileStore;
 use crate::backends::StorageBackend;
+use crate::store::DecayConfig;
 use crate::types::{Fact, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -231,13 +232,29 @@ impl StorageBackend for HybridStore {
         Ok(merged)
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
+    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
         let query_lower = query.to_lowercase();
         let cached = self.cached_facts(|f| f.fact.to_lowercase().contains(&query_lower));
-        let cold = self.cold_storage.search_fulltext(query, limit).await?;
-        let mut merged = self.merge_facts(cached, cold);
-        merged.truncate(limit);
-        Ok(merged)
+        let cold = self.cold_storage.search_fulltext(query, limit * 5, decay).await?;
+        let merged = self.merge_facts(cached, cold);
+
+        let now = Utc::now();
+        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
+        let mut scored: Vec<(Fact, f64)> = merged
+            .into_iter()
+            .map(|fact| {
+                let weight = if decay.enabled {
+                    let age_days = (now - fact.created_at).num_days() as f64;
+                    (-lambda * age_days).exp()
+                } else {
+                    1.0
+                };
+                (fact, weight)
+            })
+            .collect();
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let facts: Vec<Fact> = scored.into_iter().map(|(f, _)| f).take(limit).collect();
+        Ok(facts)
     }
 
     async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {

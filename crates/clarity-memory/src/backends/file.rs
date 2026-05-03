@@ -1,5 +1,6 @@
 //! File-based storage backend with atomic writes
 use crate::backends::StorageBackend;
+use crate::store::DecayConfig;
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -292,21 +293,29 @@ impl StorageBackend for FileStore {
         Ok(facts)
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
+    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
         let query_lower = query.to_lowercase();
-        let mut facts = Vec::new();
+        let mut scored = Vec::new();
+        let now = Utc::now();
+        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
 
         for entry in self.index.iter() {
             let ff = entry.value();
             if ff.fact.to_lowercase().contains(&query_lower) {
                 if let Some(fact) = self.get_fact(ff.id).await? {
-                    facts.push(fact);
-                    if facts.len() >= limit {
-                        break;
-                    }
+                    let weight = if decay.enabled {
+                        let age_days = (now - fact.created_at).num_days() as f64;
+                        (-lambda * age_days).exp()
+                    } else {
+                        1.0
+                    };
+                    scored.push((fact, weight));
                 }
             }
         }
+
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let facts: Vec<Fact> = scored.into_iter().map(|(f, _)| f).take(limit).collect();
 
         debug!("Found {} facts matching query '{}'", facts.len(), query);
         Ok(facts)

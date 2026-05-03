@@ -15,6 +15,34 @@ pub use crate::backends::SqliteStore;
 pub use crate::backends::{BackendConfig, StorageBackend, StorageFactory};
 pub use crate::backends::{FileStore, HybridStore};
 
+/// Configuration for time-decay weighting of search results.
+#[derive(Debug, Clone, Copy)]
+pub struct DecayConfig {
+    /// Half-life in days. Default: 180 (6 months).
+    pub half_life_days: f64,
+    /// Whether to apply time decay. Default: true.
+    pub enabled: bool,
+}
+
+impl Default for DecayConfig {
+    fn default() -> Self {
+        Self {
+            half_life_days: 180.0,
+            enabled: true,
+        }
+    }
+}
+
+/// Compute exponential decay weight for a fact based on its age.
+pub fn compute_decay_weight(created_at: chrono::DateTime<chrono::Utc>, decay: &DecayConfig) -> f64 {
+    if !decay.enabled {
+        return 1.0;
+    }
+    let age_days = (chrono::Utc::now() - created_at).num_days() as f64;
+    let lambda = std::f64::consts::LN_2 / decay.half_life_days;
+    (-lambda * age_days).exp()
+}
+
 /// SQLite-based fact store with FTS5 full-text search
 ///
 /// This is the primary storage implementation used by clarity-memory.
@@ -25,6 +53,7 @@ pub struct MemoryStore {
     inner: SqliteStore,
     #[cfg(not(feature = "sqlite"))]
     inner: FileStore,
+    decay_config: DecayConfig,
 }
 
 impl MemoryStore {
@@ -35,12 +64,18 @@ impl MemoryStore {
         #[cfg(feature = "sqlite")]
         {
             let inner = SqliteStore::new(db_path).await?;
-            Ok(Self { inner })
+            Ok(Self {
+                inner,
+                decay_config: DecayConfig::default(),
+            })
         }
         #[cfg(not(feature = "sqlite"))]
         {
             let inner = FileStore::new(db_path).await?;
-            Ok(Self { inner })
+            Ok(Self {
+                inner,
+                decay_config: DecayConfig::default(),
+            })
         }
     }
 
@@ -53,7 +88,10 @@ impl MemoryStore {
         #[cfg(feature = "sqlite")]
         {
             let inner = SqliteStore::new_in_memory()?;
-            Ok(Self { inner })
+            Ok(Self {
+                inner,
+                decay_config: DecayConfig::default(),
+            })
         }
         #[cfg(not(feature = "sqlite"))]
         {
@@ -66,8 +104,17 @@ impl MemoryStore {
             let inner = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(FileStore::new(&temp_dir))
             })?;
-            Ok(Self { inner })
+            Ok(Self {
+                inner,
+                decay_config: DecayConfig::default(),
+            })
         }
+    }
+
+    /// Set a custom decay configuration.
+    pub fn with_decay_config(mut self, config: DecayConfig) -> Self {
+        self.decay_config = config;
+        self
     }
 
     /// Save a fact to the store
@@ -88,7 +135,7 @@ impl MemoryStore {
 
     /// Full-text search using FTS5
     pub async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
-        self.inner.search_fulltext(query, limit).await
+        self.inner.search_fulltext(query, limit, &self.decay_config).await
     }
 
     /// Hybrid search: FTS5 recall + BM25 reranking
@@ -96,7 +143,7 @@ impl MemoryStore {
     /// Uses FTS5 for fast candidate retrieval, then reranks using BM25 scoring
     /// for better relevance on short-text documents (facts).
     pub async fn search_hybrid(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
-        self.inner.search_similar(query, limit).await
+        self.inner.search_similar(query, limit, &self.decay_config).await
     }
 
     /// Get facts by session ID
