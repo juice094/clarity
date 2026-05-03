@@ -211,7 +211,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ---
 
-**Sprint 15 — 多方面强化（进行中，2026-05-02 ~ ）**
+**Sprint 15 — 多方面强化（✅ 已完成，2026-05-02 ~ 2026-05-03）**
 
 > 详见 plan file: `~/.kimi/plans/beast-boy-batgirl-spectre.md`
 
@@ -222,24 +222,35 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - Windows 仅注册 PowerShell，不注册 BashTool
   - shell timeout 默认 30s → 60s（与 Kimi CLI 对齐）
 
-**Phase 1: UX 补齐（部分完成）**
+**Phase 1: UX 补齐（✅ 已完成）**
 - commit `62664b0d` — Git 上下文 + ProjectMetadata 自动注入 `SystemPromptBuilder`
 - commit `62664b0d` — 工具结果 >2000 字符自动截断
 - Smart batch grant toast — 已预存在 `main.rs`（每帧轮询 `drain_auto_approval_notifications`）
-- 子 Agent 快捷入口（`/coder` `/explore`）— 待 egui 接入子 Agent 系统
-
-**Phase 2: 上下文压缩升级（部分完成）**
-- commit `353fccfc` — 加权 token 估算（ASCII ÷4 vs 非 ASCII ÷2），修复 CJK 严重低估
-- `CompactionService::estimate_tokens` 统一委托 `crate::compaction::estimate_text_tokens`
-- 三级压缩基础已存在：tier1（本地截断）+ tier2（LLM 总结）
-
-**Phase 3: 基础设施（部分完成）**
-- commit `16f92445` — 用户级 skill 目录 `~/.config/clarity/skills/` 自动扫描
-- commit `53f6fb05` — MCP 配置热重载：每 5 秒轮询 mcp.json mtime，后台 async 重新加载 + UI toast
-
-**Phase 1 续: UX 补齐（新增完成）**
 - commit `53f6fb05` — 子 Agent 快捷入口 `/coder` `/explore`：输入框前缀检测 → `SubagentRunner` 异步执行 → 结果回显聊天区
 - commit `53f6fb05` — Gateway 路径上下文刷新：将 `refresh_context()` 从 `run()`/`run_streaming()` 移入 `run_streaming_turn()`，Gateway/ChatDriver 路径现在也能感知最新 Git 状态
+
+**Phase 1.5: UI 视觉精调（✅ 已完成）**
+- commit `9a81ce51` — Pretext 结构化消息 Phase 1：
+  - `ContentBlock` enum（7 变体：Text/Code/ToolCall/ToolResult/Think/Plan/FilePreview）
+  - `Message.blocks` 替代纯 content 字符串，按类型分策略渲染
+  - 序列化兼容：旧 session `blocks: None` 回退为 Text 块
+- commit `9a81ce51` — 三栏边界分隔线系统：左/右/顶/底 1px hairline `theme.border`
+- commit `9a81ce51` — Sidebar 角色状态指示器：活跃会话数绿点 + 最近实例名
+- commit `9a81ce51` — 选中态统一：背景填充 `theme.bg_hover` 替代 accent 描边
+- commit `9a81ce51` — 主题色板修复：暗色 `bg` #050507→#12121a，border 显化，亮色文字加深
+
+**Phase 2: 上下文压缩升级（部分完成 🟡）**
+- commit `353fccfc` — 加权 token 估算（ASCII ÷4 vs 非 ASCII ÷2），修复 CJK 严重低估
+- `CompactionService::estimate_tokens` 统一委托 `crate::compaction::estimate_text_tokens`
+- commit `9a81ce51` — Pretext 结构化消息 Phase 1（为精确 token 计数和上下文压缩打基础）
+- 三级压缩基础已存在：tier1（本地截断）+ tier2（LLM 总结）
+- ❌ 精确 tokenizer（tiktoken-rs）待评估
+- ❌ d2.rs 解析器 待实现
+
+**Phase 3: 基础设施（部分完成 🟡）**
+- commit `16f92445` — 用户级 skill 目录 `~/.config/clarity/skills/` 自动扫描
+- commit `53f6fb05` — MCP 配置热重载：每 5 秒轮询 mcp.json mtime，后台 async 重新加载 + UI toast
+- ❌ MemoryNode 接入 egui 待实现
 
 **健康检查（Sprint 15.5）**
 - commit `08e0e678` — Workspace 健康检查：
@@ -250,6 +261,23 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
   - cron tools 绑定到 `BackgroundTaskManager`（gateway）
 
 **验证**: `cargo test --workspace --lib --test-threads=1` = 665 passed / 0 failed / 6 ignored
+- `cargo clippy --workspace --lib --bins` = 0 warnings（允许少量 background dead_code）
+
+---
+
+**Sprint 16 — 内核升级 + 基础设施（进行中，2026-05-03 ~ ）**
+
+> 承接 Sprint 15，按用户指定优先级推进：精确 tokenizer → d2.rs 解析器 → 三级压缩 budget 级 → MemoryNode 接入 → 测试去 Registry 化。
+>
+> 详见 plan file: `~/.kimi/plans/beast-boy-batgirl-spectre.md`
+
+| 优先级 | 任务 | 状态 |
+|--------|------|------|
+| P1 | **精确 tokenizer** — 评估 tiktoken-rs vs tokenizers，替换加权估算 | 🔄 待执行 |
+| P2 | **d2.rs 解析器** — 与 mermaid.rs 同构的 D2 语法子集 | 🔄 待执行 |
+| P2 | **三级压缩 budget 级** — tier1/tier2 基础上增加预算控制 | 🔄 待执行 |
+| P3 | **MemoryNode 接入 egui** — 长期记忆检索替换本地 SQLite | 🔄 待执行 |
+| — | **测试去 Registry 化** — 31 个测试引入 mock registry | 🔄 待执行 |
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 
