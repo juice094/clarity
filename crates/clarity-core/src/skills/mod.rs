@@ -98,6 +98,14 @@ pub struct SkillMeta {
     /// File path patterns that trigger activation of this skill (gitignore-style globs)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paths: Option<Vec<String>>,
+
+    /// Skill type: "standard" or "flow"
+    #[serde(default = "default_skill_type")]
+    pub skill_type: String,
+}
+
+fn default_skill_type() -> String {
+    "standard".to_string()
 }
 
 /// A loaded skill template.
@@ -106,6 +114,8 @@ pub struct Skill {
     pub meta: SkillMeta,
     /// Markdown body (everything after the frontmatter)
     pub body: String,
+    /// Parsed flow (only for flow-type skills)
+    pub flow: Option<crate::agent::flow::Flow>,
 }
 
 impl Skill {
@@ -155,6 +165,7 @@ mod tests {
             tools: vec!["tool_a".to_string(), "tool_b".to_string()],
             tags: vec!["test".to_string()],
             paths: None,
+            skill_type: "standard".to_string(),
         }
     }
 
@@ -163,6 +174,7 @@ mod tests {
         let skill = Skill {
             meta: sample_meta(),
             body: "## Step 1\nDo something.".to_string(),
+            flow: None,
         };
         let ctx = skill.build_context();
         assert!(ctx.contains("Test Skill"));
@@ -175,6 +187,7 @@ mod tests {
         let skill = Skill {
             meta: sample_meta(),
             body: String::new(),
+            flow: None,
         };
         assert_eq!(
             skill.summary(),

@@ -1,6 +1,7 @@
 //! Skill registry — thread-safe, supports runtime discovery and activation.
 
 use super::{Skill, SkillDiscovery, SkillResult};
+use crate::error::AgentError;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -191,6 +192,33 @@ impl SkillRegistry {
     pub fn list_skills(&self) -> Vec<super::Skill> {
         self.skills.read().unwrap().values().cloned().collect()
     }
+
+    /// Run a flow-type skill.
+    ///
+    /// Returns the final response from the flow execution.
+    pub async fn run_flow(
+        &self,
+        agent: &crate::agent::Agent,
+        skill_id: &str,
+        args: &str,
+    ) -> Result<String, AgentError> {
+        let skill = self
+            .get(skill_id)
+            .ok_or_else(|| AgentError::registry(format!("Skill '{}' not found", skill_id)))?;
+
+        if skill.meta.skill_type != "flow" {
+            return Err(AgentError::registry(format!(
+                "Skill '{}' is not a flow-type skill",
+                skill_id
+            )));
+        }
+
+        let flow = skill.flow.as_ref().ok_or_else(|| {
+            AgentError::registry(format!("Skill '{}' has no parsed flow", skill_id))
+        })?;
+
+        agent.run_flow(flow, args).await
+    }
 }
 
 #[cfg(test)]
@@ -208,8 +236,10 @@ mod tests {
                 tools: vec![],
                 tags: tags.iter().map(|&s| s.to_string()).collect(),
                 paths: None,
+                skill_type: "standard".to_string(),
             },
             body: format!("# {}\nBody.", name),
+            flow: None,
         }
     }
 
@@ -326,8 +356,10 @@ mod tests {
                 tools: vec![],
                 tags: vec![],
                 paths: Some(vec!["*.rs".to_string(), "Cargo.toml".to_string()]),
+                skill_type: "standard".to_string(),
             },
             body: "Body.".to_string(),
+            flow: None,
         }]);
 
         let activated = reg.activate_by_path(&[
@@ -350,8 +382,10 @@ mod tests {
                 tools: vec![],
                 tags: vec![],
                 paths: Some(vec!["*.rs".to_string()]),
+                skill_type: "standard".to_string(),
             },
             body: "Body.".to_string(),
+            flow: None,
         }]);
 
         let activated = reg.activate_by_path(&[std::path::PathBuf::from("README.md")]);

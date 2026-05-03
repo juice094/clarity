@@ -139,6 +139,10 @@ pub enum AgentError {
     /// Federation communication error
     #[error("Federation error: {0}")]
     Federation(String),
+
+    /// Flow execution error
+    #[error("Flow execution error: {0}")]
+    FlowExecution(String),
 }
 
 impl AgentError {

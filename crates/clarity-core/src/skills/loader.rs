@@ -80,11 +80,40 @@ impl SkillLoader {
             return Err(SkillError::MissingField("name".to_string()));
         }
 
+        let flow = if meta.skill_type == "flow" {
+            if let Some(block) = extract_mermaid_block(body) {
+                Some(
+                    crate::agent::flow::mermaid::parse_mermaid_flowchart(&block)
+                        .map_err(|e| SkillError::InvalidFrontmatter(format!("Invalid flow: {}", e)))?,
+                )
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Ok(Skill {
             meta,
             body: body.to_string(),
+            flow,
         })
     }
+}
+
+/// Extract the first fenced mermaid code block from markdown text.
+fn extract_mermaid_block(body: &str) -> Option<String> {
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```mermaid") {
+            let start = body.find("```mermaid").unwrap_or(0) + "```mermaid".len();
+            let rest = &body[start..];
+            if let Some(end) = rest.find("```") {
+                return Some(rest[..end].trim().to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

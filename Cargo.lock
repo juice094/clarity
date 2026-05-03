@@ -864,7 +864,9 @@ name = "clarity-claw"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
+ "clarity-contract",
  "clarity-core",
  "clarity-wire",
  "image",

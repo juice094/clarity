@@ -1,18 +1,43 @@
-//! clarity-claw —— 系统托盘常驻应用（运行时监控器）
+//! clarity-claw —— 联邦运行时协调器
 //!
-//! 纯逻辑拆分至此，便于单元测试。
+//! Claw is the federation runtime for Project Clarity.
+//! It coordinates multiple federal nodes (core, memory, egui, gateway)
+//! via a central Coordinator and capability registry.
+//!
+//! ## Architecture
+//!
+//! ```text
+//! ┌─────────────┐
+//! │  Coordinator │  ← 联邦消息路由 + 能力注册表
+//! └──────┬──────┘
+//!        │
+//!   ┌────┴────┬────────┬────────┐
+//!   ▼         ▼        ▼        ▼
+//! Core    Memory   egui    Gateway
+//! Node    Node     Node     Node
+//! ```
 
 use serde::Deserialize;
+use std::time::Duration;
 
-/// 默认 Gateway 地址。
+// ------------------------------------------------------------------
+// Federation modules
+// ------------------------------------------------------------------
+
+pub mod coordinator;
+pub mod nodes;
+pub mod runtime;
+pub mod tray;
+
+// ------------------------------------------------------------------
+// Legacy tray helpers (retained for backward compatibility)
+// ------------------------------------------------------------------
+
+/// Default Gateway address.
 pub const GATEWAY_URL: &str = "http://127.0.0.1:18790";
 
-/// Gateway 轮询间隔（秒）。
+/// Gateway polling interval in seconds.
 pub const POLL_INTERVAL_SECS: u64 = 5;
-
-// ------------------------------------------------------------------
-// Data models (deserialized from Gateway JSON)
-// ------------------------------------------------------------------
 
 /// Minimal task info deserialized from Gateway `/v1/tasks`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -33,7 +58,7 @@ pub struct TaskListPayload {
 // Pure logic helpers
 // ------------------------------------------------------------------
 
-/// Resolve the Gateway URL from the environment, falling back to the default.
+/// Resolve the Gateway URL from the environment.
 pub fn resolve_gateway_url() -> String {
     std::env::var("CLARITY_GATEWAY_URL").unwrap_or_else(|_| GATEWAY_URL.to_string())
 }
@@ -50,7 +75,7 @@ pub fn format_tooltip(running: usize, pending: usize, total: usize) -> String {
     }
 }
 
-/// Classify a finished task status into a user-visible summary and optional urgency.
+/// Classify a task status into a notification summary.
 pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::Urgency>) {
     match status {
         "Completed" => ("✅ Task completed", None),
@@ -65,20 +90,14 @@ pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::
 // ------------------------------------------------------------------
 
 /// Send a quick chat message to the Gateway (non-streaming).
-/// Returns the assistant's reply text.
-pub async fn quick_chat(
-    gateway_url: &str,
-    input: &str,
-) -> anyhow::Result<String> {
+pub async fn quick_chat(gateway_url: &str, input: &str) -> anyhow::Result<String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()?;
 
     let payload = serde_json::json!({
         "model": "default",
-        "messages": [
-            {"role": "user", "content": input}
-        ],
+        "messages": [{"role": "user", "content": input}],
         "stream": false
     });
 
@@ -128,10 +147,7 @@ pub async fn create_remote_task(
 }
 
 /// Cancel a background task via Gateway.
-pub async fn cancel_remote_task(
-    gateway_url: &str,
-    task_id: &str,
-) -> anyhow::Result<()> {
+pub async fn cancel_remote_task(gateway_url: &str, task_id: &str) -> anyhow::Result<()> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()?;
@@ -140,8 +156,6 @@ pub async fn cancel_remote_task(
     client.delete(&url).send().await?.error_for_status()?;
     Ok(())
 }
-
-use std::time::Duration;
 
 // ------------------------------------------------------------------
 // Tests
@@ -153,7 +167,6 @@ mod tests {
 
     #[test]
     fn test_resolve_gateway_url_default() {
-        // Ensure env var is not set (or clear it)
         std::env::remove_var("CLARITY_GATEWAY_URL");
         assert_eq!(resolve_gateway_url(), GATEWAY_URL);
     }

@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+clarity-contract = { path = "../clarity-contract" }
 clarity-core = { workspace = true }
 clarity-wire = { path = "../clarity-wire" }
 tokio = { workspace = true }
@@ -34,3 +35,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 
 # Filesystem watch for real-time task notifications
 notify = { version = "7", default-features = false, features = ["macos_fsevent", "crossbeam-channel"] }
+
+# Async trait support (clarity-contract uses #[async_trait])
+async-trait = { workspace = true }

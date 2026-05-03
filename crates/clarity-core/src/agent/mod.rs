@@ -19,6 +19,7 @@ pub mod driver;
 pub mod enhanced;
 pub mod ops;
 pub mod tool_map;
+pub mod flow;
 
 mod construct;
 mod execution;
@@ -398,5 +399,32 @@ impl Agent {
         }
 
         None
+    }
+
+    /// Execute a flow-driven skill.
+    ///
+    /// Each node in the flow becomes one agent turn. Decision nodes branch
+    /// based on the LLM's `<choice>...</choice>` output.
+    pub async fn run_flow(
+        &self,
+        flow: &flow::Flow,
+        args: &str,
+    ) -> Result<String, AgentError> {
+        let runner = flow::FlowRunner::new(flow);
+        runner
+            .run(self, args)
+            .await
+            .map_err(|e| AgentError::FlowExecution(e.to_string()))
+    }
+}
+
+// ------------------------------------------------------------------
+// FlowExecutor integration
+// ------------------------------------------------------------------
+
+#[async_trait::async_trait]
+impl flow::FlowExecutor for Agent {
+    async fn execute(&self, prompt: &str) -> Result<String, AgentError> {
+        self.run(prompt).await
     }
 }
