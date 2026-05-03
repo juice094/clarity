@@ -6,6 +6,55 @@
 use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, Message, MessageRole};
 
+/// Budget allocation for different message roles.
+///
+/// Defines what fraction of the total token limit each role category
+/// is allowed to consume. Ratios should sum to ≤ 1.0.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BudgetRoles {
+    /// System prompt ratio (default: 0.1)
+    pub system: f64,
+    /// User messages ratio (default: 0.3)
+    pub user: f64,
+    /// Agent (assistant + tool) messages ratio (default: 0.6)
+    pub agent: f64,
+}
+
+impl Default for BudgetRoles {
+    fn default() -> Self {
+        Self {
+            system: 0.1,
+            user: 0.3,
+            agent: 0.6,
+        }
+    }
+}
+
+impl BudgetRoles {
+    /// Create a new budget with default ratios (1:3:6).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the system role ratio.
+    pub fn with_system(mut self, ratio: f64) -> Self {
+        self.system = ratio.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Set the user role ratio.
+    pub fn with_user(mut self, ratio: f64) -> Self {
+        self.user = ratio.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Set the agent role ratio.
+    pub fn with_agent(mut self, ratio: f64) -> Self {
+        self.agent = ratio.clamp(0.0, 1.0);
+        self
+    }
+}
+
 /// Configuration for the compaction service
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompactionServiceConfig {
@@ -15,6 +64,9 @@ pub struct CompactionServiceConfig {
     pub compaction_model: String,
     /// Number of tokens worth of recent messages to keep intact
     pub history_retention_tokens: usize,
+    /// Optional role-based budget allocation. When set, budget compaction
+    /// runs before tier1/tier2 to enforce per-role quotas (semantic drop).
+    pub budget: Option<BudgetRoles>,
 }
 
 /// Service that compacts conversation history by summarizing old messages
@@ -31,6 +83,49 @@ impl CompactionService {
             config,
             tier1_enabled: true,
         }
+    }
+
+    /// Budget compaction (Tier-0): enforce per-role token quotas by dropping
+    /// oldest messages that exceed their allocated budget.
+    ///
+    /// This runs *before* tier1/tier2 and performs semantic dropping:
+    /// messages are removed whole (not truncated) when their role category
+    /// exceeds its quota.
+    fn budget_compact(&self, messages: &mut Vec<Message>) {
+        let Some(budget) = self.config.budget else { return };
+
+        let system_quota = (self.config.token_limit as f64 * budget.system) as usize;
+        let user_quota = (self.config.token_limit as f64 * budget.user) as usize;
+        let agent_quota = (self.config.token_limit as f64 * budget.agent) as usize;
+
+        let mut rem_system = system_quota;
+        let mut rem_user = user_quota;
+        let mut rem_agent = agent_quota;
+
+        // Iterate from newest (end) to oldest (begin).
+        // Preserve recent messages that fit inside the remaining quota;
+        // drop older ones once quota is exhausted.
+        let mut keep = vec![true; messages.len()];
+        for (i, msg) in messages.iter().enumerate().rev() {
+            let t = crate::compaction::estimate_text_tokens(&msg.content);
+            let rem = match msg.role {
+                MessageRole::System => &mut rem_system,
+                MessageRole::User => &mut rem_user,
+                MessageRole::Assistant | MessageRole::Tool => &mut rem_agent,
+            };
+            if t <= *rem {
+                *rem -= t;
+            } else {
+                keep[i] = false;
+            }
+        }
+
+        let mut j = 0;
+        messages.retain(|_| {
+            let k = keep[j];
+            j += 1;
+            k
+        });
     }
 
     /// Convenience constructor (alias for `new`)
@@ -99,6 +194,15 @@ impl CompactionService {
     ) -> Result<(), AgentError> {
         if !self.needs_compaction(messages) {
             return Ok(());
+        }
+
+        // Tier 0: budget-based semantic drop (remove whole over-budget messages).
+        if self.config.budget.is_some() {
+            self.budget_compact(messages);
+            if !self.needs_compaction(messages) {
+                tracing::info!("Budget compaction resolved context pressure");
+                return Ok(());
+            }
         }
 
         // Tier 1: fast local truncation (no LLM call).
@@ -313,6 +417,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 5,
+            budget: None,
         };
         let service = CompactionService::new(config);
         // 15 short messages * ~1 token each = ~15 tokens > 10
@@ -326,6 +431,7 @@ mod tests {
             token_limit: 100,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 20,
+            budget: None,
         };
         let service = CompactionService::new(config);
         let messages = make_messages(3, 8); // 3 * 2 = 6 tokens
@@ -338,6 +444,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 6, // keep ~2 messages (each ~3 tokens via cl100k)
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -380,6 +487,7 @@ mod tests {
             token_limit: 5,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -415,6 +523,7 @@ mod tests {
             token_limit: 5,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -445,6 +554,7 @@ mod tests {
             token_limit: 1000,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 100,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -475,6 +585,7 @@ mod tests {
             token_limit: 5,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -503,6 +614,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -535,6 +647,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -563,6 +676,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
+            budget: None,
         };
         let service = CompactionService::with_config(config).with_tier1(false);
 
@@ -649,6 +763,7 @@ mod tests {
             token_limit: 5,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
+            budget: None,
         };
         let service = CompactionService::with_config(config);
 
@@ -667,5 +782,71 @@ mod tests {
 
         assert_eq!(llm.call_count.load(Ordering::SeqCst), 1);
         assert!(messages[1].content.contains("Recorded summary"));
+    }
+
+    #[test]
+    fn test_budget_compact_drops_old_preserves_recent() {
+        // Budget: system=0.1, user=0.3, agent=0.6 of token_limit=10
+        // system_quota=1, user_quota=3, agent_quota=6
+        let config = CompactionServiceConfig {
+            token_limit: 10,
+            compaction_model: "kimi-latest".to_string(),
+            history_retention_tokens: 4,
+            budget: Some(BudgetRoles::new()),
+        };
+        let service = CompactionService::with_config(config);
+
+        // Build a mix of user/agent/system messages with enough total tokens
+        // to exceed token_limit=10, forcing budget compaction to drop some.
+        let mut messages = vec![
+            Message::user("olduser"),
+            Message::assistant("oldagent"),
+            Message::user("miduser"),
+            Message::assistant("midagent"),
+            Message::user("recent"),
+            Message::assistant("last"),
+        ];
+        messages.insert(0, Message::system("sys"));
+        messages.insert(1, Message::user("extra1"));
+        messages.insert(3, Message::user("extra2"));
+        messages.push(Message::assistant("extra3"));
+        messages.push(Message::user("extra4"));
+
+        let before = messages.len();
+        service.budget_compact(&mut messages);
+        let after = messages.len();
+
+        // Budget compaction should have dropped at least one message.
+        assert!(after < before, "budget_compact should drop messages when over budget");
+        // The most recent user message should be preserved.
+        assert!(messages.iter().any(|m| m.content == "extra4"));
+        // The system prompt should be preserved (it fits within system_quota=1).
+        assert!(messages.iter().any(|m| m.content == "sys"));
+        // Oldest user messages should have been dropped.
+        assert!(!messages.iter().any(|m| m.content == "extra1"));
+    }
+
+    #[test]
+    fn test_budget_compact_resolves_without_tier1() {
+        let config = CompactionServiceConfig {
+            token_limit: 8,
+            compaction_model: "kimi-latest".to_string(),
+            history_retention_tokens: 4,
+            budget: Some(BudgetRoles::new()),
+        };
+        let service = CompactionService::with_config(config);
+
+        let mut messages = vec![
+            Message::system("sys"),
+            Message::user("msg1xxxxxxxx"),
+            Message::assistant("msg2xxxxxxxx"),
+            Message::user("msg3xxxxxxxx"),
+            Message::assistant("msg4xxxxxxxx"),
+            Message::user("recent"),
+        ];
+
+        service.budget_compact(&mut messages);
+        assert!(!service.needs_compaction(&messages));
+        assert!(!messages.iter().any(|m| m.content == "msg1xxxxxxxx"));
     }
 }
