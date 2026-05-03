@@ -33,6 +33,7 @@ windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 
 # Internal crates
 clarity-core = { workspace = true }
+clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
 
 [[bin]]

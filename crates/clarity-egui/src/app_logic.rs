@@ -12,7 +12,26 @@ impl App {
     pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
         crate::theme::setup_fonts(&cc.egui_ctx);
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
-        let state = Arc::new(AppState::default());
+        let mut state = AppState::default();
+
+        // Initialize long-term memory store
+        let memory_db = dirs::data_dir()
+            .map(|d| d.join("clarity").join("memory.db"))
+            .unwrap_or_else(|| std::path::PathBuf::from("memory.db"));
+        state.memory_store = runtime.block_on(async {
+            match clarity_memory::MemoryStore::new(&memory_db).await {
+                Ok(store) => {
+                    tracing::info!("MemoryStore initialized at {:?}", memory_db);
+                    Some(store)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize MemoryStore: {}", e);
+                    None
+                }
+            }
+        });
+
+        let state = Arc::new(state);
         let (ui_tx, ui_rx) = channel::<UiEvent>();
 
         let state_for_monitor = state.clone();

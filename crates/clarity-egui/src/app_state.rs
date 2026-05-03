@@ -35,6 +35,8 @@ pub struct AppState {
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
     pub mode_aware_approval_runtime:
         Arc<clarity_core::approval::ModeAwareApprovalRuntime<clarity_core::approval::InMemoryApprovalRuntime>>,
+    /// Long-term memory store for cross-session fact retrieval.
+    pub memory_store: Option<clarity_memory::MemoryStore>,
 }
 
 impl Default for AppState {
@@ -118,6 +120,7 @@ impl Default for AppState {
             prewarm_error: Mutex::new(None),
             task_store: clarity_core::background::TaskStore::new(task_dir),
             mode_aware_approval_runtime: mode_aware_rt,
+            memory_store: None,
         }
     }
 }

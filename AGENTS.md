@@ -273,10 +273,10 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 | 优先级 | 任务 | 状态 |
 |--------|------|------|
-| P1 | **精确 tokenizer** — 评估 tiktoken-rs vs tokenizers，替换加权估算 | 🔄 待执行 |
-| P2 | **d2.rs 解析器** — 与 mermaid.rs 同构的 D2 语法子集 | 🔄 待执行 |
-| P2 | **三级压缩 budget 级** — tier1/tier2 基础上增加预算控制 | 🔄 待执行 |
-| P3 | **MemoryNode 接入 egui** — 长期记忆检索替换本地 SQLite | 🔄 待执行 |
+| P1 | **精确 tokenizer** — tiktoken-rs (cl100k_base) 替换加权估算，`estimate_text_tokens` 精确到 ±5% | ✅ 已完成 (`a1900eaf`) |
+| P2 | **d2.rs 解析器** — 与 mermaid.rs 同构的 D2 语法子集，6 个测试通过 | ✅ 已完成 (`876c47b3`) |
+| P2 | **三级压缩 budget 级** — `BudgetRoles` 1:3:6 配额 + `budget_compact()` 逆序丢弃，14 个测试通过 | ✅ 已完成 (`5688abfd`) |
+| P3 | **MemoryNode 接入 egui** — 长期记忆检索 enrich query + turn 摘要保存，`cargo check/test` 全绿 | ✅ 已完成 |
 | — | **测试去 Registry 化** — 31 个测试引入 mock registry | 🔄 待执行 |
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**

@@ -957,6 +957,7 @@ version = "0.3.0"
 dependencies = [
  "chrono",
  "clarity-core",
+ "clarity-memory",
  "clarity-wire",
  "dirs 5.0.1",
  "eframe",

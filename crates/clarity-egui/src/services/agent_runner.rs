@@ -185,6 +185,44 @@ impl App {
                 return;
             }
 
+            // Retrieve relevant long-term memories and enrich the query.
+            let enriched_query = if let Some(ref store) = state.memory_store {
+                match store.search_fulltext(&query, 5).await {
+                    Ok(facts) if !facts.is_empty() => {
+                        let memory_context = facts
+                            .iter()
+                            .map(|f| format!("- {}", f.fact))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        tracing::debug!(
+                            "Injecting {} relevant memory facts into query",
+                            facts.len()
+                        );
+                        format!(
+                            "{}\n\n[Relevant memories from past conversations]\n{}",
+                            query, memory_context
+                        )
+                    }
+                    _ => query,
+                }
+            } else {
+                query
+            };
+
+            // Fire-and-forget: save the user query as a memory fact.
+            if let Some(ref store) = state.memory_store {
+                let store = store.clone();
+                let q = enriched_query.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = store
+                        .save_fact(&q, &["session".to_string(), "user_query".to_string()], None, None)
+                        .await
+                    {
+                        tracing::debug!("Failed to save memory fact: {}", e);
+                    }
+                });
+            }
+
             let wire = Arc::new(clarity_wire::Wire::new());
             let agent = state.agent.clone().with_wire(wire.clone());
 
@@ -239,7 +277,7 @@ impl App {
 
             let tx_chunk = tx.clone();
             let result = agent
-                .run_streaming(&query, move |chunk: &str| {
+                .run_streaming(&enriched_query, move |chunk: &str| {
                     if let Err(e) = tx_chunk.send(UiEvent::Chunk(chunk.to_string())) {
                         tracing::warn!("Failed to send Chunk: {}", e);
                     }
@@ -247,7 +285,23 @@ impl App {
                 .await;
 
             match result {
-                Ok(_) => {
+                Ok(final_response) => {
+                    // Fire-and-forget: save a turn summary to long-term memory.
+                    if let Some(ref store) = state.memory_store {
+                        let store = store.clone();
+                        let summary = format!(
+                            "Turn summary —\nUser: {}\nAgent: {}",
+                            enriched_query, final_response
+                        );
+                        tokio::spawn(async move {
+                            if let Err(e) = store
+                                .save_fact(&summary, &["session".to_string(), "turn".to_string()], None, None)
+                                .await
+                            {
+                                tracing::debug!("Failed to save turn memory: {}", e);
+                            }
+                        });
+                    }
                     if let Err(e) = tx.send(UiEvent::Done) {
                         tracing::warn!("Failed to send Done: {}", e);
                     }
