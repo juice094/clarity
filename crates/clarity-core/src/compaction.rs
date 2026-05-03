@@ -21,6 +21,7 @@
 use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, Message, MessageRole};
 use async_trait::async_trait;
+use std::sync::OnceLock;
 
 /// Default trigger ratio for compaction (80% of max tokens)
 pub const DEFAULT_TRIGGER_RATIO: f64 = 0.8;
@@ -44,14 +45,23 @@ The summary should be detailed enough to maintain context continuity but concise
 /// System prompt for compaction
 const COMPACTION_SYSTEM_PROMPT: &str = "You are a helpful assistant that compacts conversation context. Your task is to create a concise but comprehensive summary of the provided conversation history.";
 
-/// Estimate the number of tokens in a text string using a weighted byte heuristic.
+/// Lazily-initialized tiktoken tokenizer (cl100k_base — used by GPT-4, GPT-3.5, GPT-4o).
+static TOKENIZER: OnceLock<Option<tiktoken_rs::CoreBPE>> = OnceLock::new();
+
+fn get_tokenizer() -> Option<&'static tiktoken_rs::CoreBPE> {
+    TOKENIZER
+        .get_or_init(|| tiktoken_rs::cl100k_base().ok())
+        .as_ref()
+}
+
+/// Estimate the number of tokens in a text string.
 ///
-/// This uses a differentiated approximation:
-/// - ASCII text: ~4 bytes per token (English words average 4-5 chars)
+/// Uses `tiktoken-rs` (`cl100k_base`) for exact token counting when available.
+/// Falls back to a weighted byte heuristic if the tokenizer fails to initialize.
+///
+/// Weighted heuristic (fallback):
+/// - ASCII text: ~4 bytes per token
 /// - Non-ASCII text (CJK, emoji, etc.): ~2 bytes per token in UTF-8
-///
-/// This avoids the severe underestimation that `len()/4` causes for CJK text,
-/// where each character is 3 bytes in UTF-8 but typically 1-2 tokens.
 ///
 /// # Arguments
 ///
@@ -67,17 +77,22 @@ const COMPACTION_SYSTEM_PROMPT: &str = "You are a helpful assistant that compact
 /// use clarity_core::compaction::estimate_text_tokens;
 ///
 /// let tokens = estimate_text_tokens("Hello, world!");
-/// // Approximately 3-4 tokens (13 ascii bytes / 4)
+/// // Exact count via tiktoken (cl100k_base): 4 tokens
 /// assert!(tokens >= 3);
 ///
 /// let tokens = estimate_text_tokens("你好世界");
-/// // Approximately 6 tokens (12 non-ascii bytes / 2), closer to real ~4-8
+/// // Exact count via tiktoken: typically 4-6 tokens for CJK
 /// assert!(tokens >= 4);
 /// ```
 pub fn estimate_text_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
+    // Prefer exact tokenizer when available
+    if let Some(bpe) = get_tokenizer() {
+        return bpe.encode_with_special_tokens(text).len();
+    }
+    // Fallback to weighted heuristic
     let ascii_bytes = text.bytes().filter(|b| b.is_ascii()).count();
     let non_ascii_bytes = text.len() - ascii_bytes;
     ascii_bytes.div_ceil(4) + non_ascii_bytes.div_ceil(2)
@@ -456,17 +471,21 @@ mod tests {
         // Empty string
         assert_eq!(estimate_text_tokens(""), 0);
 
-        // Short English text (ASCII: ~4 bytes per token)
-        assert_eq!(estimate_text_tokens("Hello"), 2); // 5 / 4 = 2
-        assert_eq!(estimate_text_tokens("Hello, world!"), 4); // 13 / 4 = 4
+        // Short English text — tiktoken (cl100k_base) exact counts
+        assert_eq!(estimate_text_tokens("Hello"), 1);
+        assert_eq!(estimate_text_tokens("Hello, world!"), 4);
 
         // Longer text
         let long_text = "This is a longer piece of text that should give us more tokens.";
-        assert_eq!(estimate_text_tokens(long_text), 16); // 63 / 4 = 16
+        assert_eq!(estimate_text_tokens(long_text), 14);
 
-        // CJK text (non-ASCII: ~2 bytes per token in UTF-8)
+        // CJK text — each character typically 1-2 tokens in cl100k
         let cjk_text = "你好世界";
-        assert_eq!(estimate_text_tokens(cjk_text), 6); // 12 / 2 = 6, closer to real ~4-8
+        let cjk_tokens = estimate_text_tokens(cjk_text);
+        assert!(cjk_tokens >= 4 && cjk_tokens <= 8, "CJK tokens = {}", cjk_tokens);
+
+        // Verify tiktoken is active: exact counts should be lower than old heuristic
+        assert!(estimate_text_tokens("Hello") < 2); // heuristic would give 2
     }
 
     #[test]

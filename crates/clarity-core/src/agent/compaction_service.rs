@@ -297,14 +297,14 @@ mod tests {
     fn test_estimate_tokens() {
         assert_eq!(CompactionService::estimate_tokens(&[]), 0);
 
-        let msg = Message::user("abcd"); // 4 chars -> 1 token
+        let msg = Message::user("abcd"); // cl100k: 1 token
         assert_eq!(CompactionService::estimate_tokens(&[msg]), 1);
 
         let msgs = vec![
-            Message::user("abcdefgh"),      // 8 chars -> 2 tokens
-            Message::assistant("abcdefgh"), // 8 chars -> 2 tokens
+            Message::user("abcdefgh"),      // cl100k: 1 token
+            Message::assistant("abcdefgh"), // cl100k: 1 token
         ];
-        assert_eq!(CompactionService::estimate_tokens(&msgs), 4);
+        assert_eq!(CompactionService::estimate_tokens(&msgs), 2);
     }
 
     #[test]
@@ -315,7 +315,8 @@ mod tests {
             history_retention_tokens: 5,
         };
         let service = CompactionService::new(config);
-        let messages = make_messages(5, 8); // 5 * 2 = 10 tokens
+        // 15 short messages * ~1 token each = ~15 tokens > 10
+        let messages = make_messages(15, 8);
         assert!(service.needs_compaction(&messages));
     }
 
@@ -336,21 +337,21 @@ mod tests {
         let config = CompactionServiceConfig {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
-            history_retention_tokens: 4, // keep ~2 messages of 8 chars (2 tokens each)
+            history_retention_tokens: 6, // keep ~2 messages (each ~3 tokens via cl100k)
         };
         let service = CompactionService::with_config(config);
 
         let mut messages = vec![
             Message::system("You are helpful"),
-            Message::user("msg1".to_string() + &"x".repeat(4)), // 8 chars -> 2 tokens
+            Message::user("msg1".to_string() + &"x".repeat(4)), // ~3 tokens
             Message::assistant("msg2".to_string() + &"x".repeat(4)),
             Message::user("msg3".to_string() + &"x".repeat(4)),
             Message::assistant("msg4".to_string() + &"x".repeat(4)),
             Message::user("msg5".to_string() + &"x".repeat(4)),
         ];
-        // total = system(15 chars ~ 4 tokens) + 5*2 = 14 tokens
-        // retention = 4 tokens -> keep last 2 messages (4 tokens)
-        // old = system + first 3 user/assistant pairs
+        // total = system(~3) + 5*~3 = ~18 tokens > 10 -> triggers compaction
+        // retention = 6 -> keep last 2 messages (~6 tokens)
+        // old = system + first 3 user/assistant pairs -> compacted into summary
 
         let llm = MockLlm {
             response: "Summary text".to_string(),

@@ -61,7 +61,7 @@ pub fn render_file_tree(
             let row_rect =
                 egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
-            let is_selected = selected_path.map_or(false, |sp| {
+            let is_selected = selected_path.is_some_and(|sp| {
                 std::path::Path::new(sp) == full_path
             });
             if ui.is_rect_visible(row_rect) {
