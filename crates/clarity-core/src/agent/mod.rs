@@ -19,7 +19,9 @@ pub mod driver;
 pub mod enhanced;
 pub mod ops;
 pub mod tool_map;
+pub mod tool_parser;
 pub mod flow;
+pub mod hooks;
 
 mod construct;
 mod execution;
@@ -115,6 +117,8 @@ struct AgentInner {
     recoverable_failure_counts: std::collections::HashMap<String, u32>,
     /// Detects repeated identical tool outputs within a single turn.
     loop_detector: loop_detector::LoopDetector,
+    /// Optional lifecycle hook registry for intercepting tool calls and LLM input.
+    hook_registry: Option<std::sync::Arc<hooks::HookRegistry>>,
     /// Accumulated estimated cost today (USD). Reset daily or per session.
     daily_cost_usd: f64,
     /// Date of the last cost record (to detect day boundary).

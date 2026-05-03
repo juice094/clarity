@@ -59,6 +59,7 @@ impl Agent {
                 provider_label: None,
                 recoverable_failure_counts: std::collections::HashMap::new(),
                 loop_detector: crate::agent::loop_detector::LoopDetector::new(3),
+                hook_registry: None,
                 daily_cost_usd: 0.0,
                 last_cost_date: chrono::Utc::now().date_naive(),
                 vision_llm: None,
@@ -273,6 +274,12 @@ impl Agent {
     /// Set the hook registry for lifecycle interception.
     pub fn with_hook_registry(mut self, registry: crate::hooks::HookRegistry) -> Self {
         self.hook_registry = Some(registry);
+        self
+    }
+
+    /// Set the agent lifecycle hook registry (builder pattern).
+    pub fn with_hooks(self, hooks: super::hooks::HookRegistry) -> Self {
+        self.inner.write().unwrap().hook_registry = Some(std::sync::Arc::new(hooks));
         self
     }
 

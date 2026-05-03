@@ -5,6 +5,7 @@ use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole};
 use crate::types::ToolCall;
 use clarity_wire::{DraftEvent, WireMessage};
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
@@ -158,24 +159,48 @@ impl Agent {
         messages: &mut Vec<Message>,
     ) -> Result<Vec<String>, AgentError> {
         let mut tool_names = Vec::new();
-        let mut futures = Vec::new();
+        let mut futures: Vec<Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, crate::error::ToolError>> + Send>>> = Vec::new();
+        let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
 
-        // Phase 1: emit begin messages and start all tool executions concurrently.
+        // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
         for tool_call in tool_calls {
-            tool_names.push(tool_call.function.name.clone());
+            let mut tc = tool_call.clone();
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            let should_execute = if let Some(hooks) = hooks_opt {
+                match hooks.before_tool_call(&mut tc).await {
+                    super::hooks::HookResult::Cancel(e) => {
+                        let err = crate::error::ToolError::execution_failed(e.to_string());
+                        futures.push(Box::pin(async move { Err(err) }));
+                        false
+                    }
+                    super::hooks::HookResult::Replace(_) => true,
+                    super::hooks::HookResult::Continue => true,
+                }
+            } else {
+                true
+            };
+
+            tool_names.push(tc.function.name.clone());
             self.send_wire_message(WireMessage::StepBegin {
-                tool_name: tool_call.function.name.clone(),
+                tool_name: tc.function.name.clone(),
             });
 
-            let args: serde_json::Value = serde_json::from_str(&tool_call.function.arguments)
+            let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
                 .unwrap_or_else(|_| serde_json::json!({}));
             self.send_wire_message(WireMessage::ToolCall {
-                id: tool_call.id.clone(),
-                name: tool_call.function.name.clone(),
+                id: tc.id.clone(),
+                name: tc.function.name.clone(),
                 arguments: args,
             });
 
-            futures.push(self.execute_tool_call(tool_call));
+            modified_tool_calls.push(tc);
+            execute_flags.push(should_execute);
+        }
+
+        for (tc, flag) in modified_tool_calls.iter().zip(execute_flags.iter()) {
+            if *flag {
+                futures.push(Box::pin(self.execute_tool_call(tc)));
+            }
         }
 
         // Phase 2: await all results sequentially to avoid concurrent approval deadlock.
@@ -188,12 +213,19 @@ impl Agent {
         // detect non-recoverable failures.
         let mut fatal: Option<(String, String)> = None;
 
-        for (tool_call, result) in tool_calls.iter().zip(results.into_iter()) {
+        for (tool_call, result) in modified_tool_calls.iter().zip(results.into_iter()) {
             let sanitized = result.map_err(|e| e.sanitize_paths());
-            let result_content = match &sanitized {
-                Ok(value) => value.to_string(),
-                Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
+            let mut result_value = match &sanitized {
+                Ok(v) => v.clone(),
+                Err(e) => serde_json::json!({"error": e.to_string()}),
             };
+
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            if let Some(hooks) = hooks_opt {
+                hooks.after_tool_call(tool_call, &mut result_value).await;
+            }
+
+            let result_content = result_value.to_string();
 
             self.send_wire_message(WireMessage::ToolResult {
                 id: tool_call.id.clone(),
@@ -290,6 +322,11 @@ impl Agent {
 
             self.maybe_compact_turn(messages, llm.as_ref()).await;
 
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            if let Some(hooks) = hooks_opt {
+                hooks.on_llm_input(messages).await;
+            }
+
             let prompt_tokens =
                 crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
                     as u32;
@@ -352,7 +389,19 @@ impl Agent {
             self.accumulate_usage(actual_prompt_tokens, actual_completion_tokens);
             final_response = response.content.clone();
 
-            if response.tool_calls.is_empty() {
+            // Fallback: parse tool calls from content if native tool_calls are empty
+            let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
+                if let Some(format) = super::tool_parser::detect_tool_format(&response.content) {
+                    info!("Detected tool format {:?}, parsing tool calls from content", format);
+                    super::tool_parser::parse_tool_calls(&response.content, format)
+                } else {
+                    Vec::new()
+                }
+            } else {
+                response.tool_calls.clone()
+            };
+
+            if tool_calls.is_empty() {
                 self.send_wire_message(WireMessage::ContentPart {
                     text: response.content.clone(),
                 });
@@ -370,12 +419,12 @@ impl Agent {
             messages.push(Message {
                 role: MessageRole::Assistant,
                 content: response.content,
-                tool_calls: Some(response.tool_calls.clone()),
+                tool_calls: Some(tool_calls.clone()),
                 tool_call_id: None,
             });
 
             tool_names.extend(
-                self.dispatch_tool_calls(&response.tool_calls, messages)
+                self.dispatch_tool_calls(&tool_calls, messages)
                     .await?,
             );
         }
@@ -702,6 +751,11 @@ impl Agent {
                 }
             }
 
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            if let Some(hooks) = hooks_opt {
+                hooks.on_llm_input(messages).await;
+            }
+
             // Stream-first: try streaming, fall back to complete() if unsupported or errors.
             let mut turn_response: Option<LlmResponse> = None;
             let mut prompt_tokens = 0u32;
@@ -840,7 +894,19 @@ impl Agent {
 
             self.accumulate_usage(prompt_tokens, completion_tokens);
 
-            if response.tool_calls.is_empty() {
+            // Fallback: parse tool calls from content if native tool_calls are empty
+            let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
+                if let Some(format) = super::tool_parser::detect_tool_format(&response.content) {
+                    info!("Detected tool format {:?}, parsing tool calls from content", format);
+                    super::tool_parser::parse_tool_calls(&response.content, format)
+                } else {
+                    Vec::new()
+                }
+            } else {
+                response.tool_calls.clone()
+            };
+
+            if tool_calls.is_empty() {
                 // No tool calls: final answer.
                 // If we arrived here via fallback (turn_response was None), simulate
                 // streaming from the complete() response for smooth UI.
@@ -873,12 +939,12 @@ impl Agent {
             messages.push(Message {
                 role: MessageRole::Assistant,
                 content: response.content,
-                tool_calls: Some(response.tool_calls.clone()),
+                tool_calls: Some(tool_calls.clone()),
                 tool_call_id: None,
             });
 
             if let Err(e) = self
-                .dispatch_tool_calls(&response.tool_calls, messages)
+                .dispatch_tool_calls(&tool_calls, messages)
                 .await
             {
                 warn!("Tool execution failed in stream: {}", e);
