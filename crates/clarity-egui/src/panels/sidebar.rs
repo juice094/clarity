@@ -263,8 +263,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         // Latest instance name (truncated)
                         if let Some(s) = latest {
                             let name_y = dot_y + theme.text_xs + 4.0;
-                            let display = if s.title.len() > 18 {
-                                format!("└─ {}...", &s.title[..15])
+                            let display = if s.title.chars().count() > 18 {
+                                let truncated: String = s.title.chars().take(15).collect();
+                                format!("└─ {}...", truncated)
                             } else {
                                 format!("└─ {}", s.title)
                             };
