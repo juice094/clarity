@@ -10,6 +10,7 @@ pub struct SkillDiscovery;
 impl SkillDiscovery {
     /// Scan a single project directory for `.clarity/skills/` and `.claude/skills/`
     /// subdirectories and load all `.md` files found within them.
+    /// Also scans the user-level `~/.config/clarity/skills/` directory.
     pub fn scan_project_skills(project_dir: &Path) -> Vec<Skill> {
         let mut skills = Vec::new();
         let candidates = [
@@ -23,6 +24,23 @@ impl SkillDiscovery {
                     Ok(mut found) => skills.append(&mut found),
                     Err(e) => {
                         tracing::warn!("Failed to load skills from {}: {}", dir.display(), e);
+                    }
+                }
+            }
+        }
+
+        // User-level skills: ~/.config/clarity/skills/ (or %APPDATA%/clarity/skills on Windows)
+        if let Some(config_dir) = dirs::config_dir() {
+            let user_skills_dir = config_dir.join("clarity").join("skills");
+            if user_skills_dir.is_dir() {
+                match SkillLoader::load_dir(&user_skills_dir) {
+                    Ok(mut found) => skills.append(&mut found),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load user skills from {}: {}",
+                            user_skills_dir.display(),
+                            e
+                        );
                     }
                 }
             }
