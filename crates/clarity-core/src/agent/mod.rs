@@ -115,6 +115,10 @@ struct AgentInner {
     recoverable_failure_counts: std::collections::HashMap<String, u32>,
     /// Detects repeated identical tool outputs within a single turn.
     loop_detector: loop_detector::LoopDetector,
+    /// Accumulated estimated cost today (USD). Reset daily or per session.
+    daily_cost_usd: f64,
+    /// Date of the last cost record (to detect day boundary).
+    last_cost_date: chrono::NaiveDate,
 }
 
 /// Simple mock LLM for testing
@@ -402,6 +406,55 @@ impl Agent {
         }
 
         None
+    }
+
+    /// Check if the estimated cost exceeds per-turn or per-day budget.
+    fn check_budget(&self, estimated_cost: f64) -> Result<(), AgentError> {
+        let config = &self.config;
+        let mut inner = self.inner.write().unwrap();
+
+        // Day boundary reset
+        let today = chrono::Utc::now().date_naive();
+        if inner.last_cost_date != today {
+            inner.daily_cost_usd = 0.0;
+            inner.last_cost_date = today;
+        }
+
+        // Per-turn limit
+        if let Some(limit) = config.max_cost_per_turn_usd {
+            if estimated_cost > limit {
+                return Err(AgentError::BudgetExceeded {
+                    limit,
+                    current: 0.0,
+                    requested: estimated_cost,
+                });
+            }
+        }
+
+        // Per-day limit
+        if let Some(limit) = config.max_cost_per_day_usd {
+            let projected = inner.daily_cost_usd + estimated_cost;
+            if projected > limit {
+                return Err(AgentError::BudgetExceeded {
+                    limit,
+                    current: inner.daily_cost_usd,
+                    requested: estimated_cost,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Record actual cost after an LLM call.
+    fn record_cost(&self, cost: f64) {
+        let mut inner = self.inner.write().unwrap();
+        let today = chrono::Utc::now().date_naive();
+        if inner.last_cost_date != today {
+            inner.daily_cost_usd = 0.0;
+            inner.last_cost_date = today;
+        }
+        inner.daily_cost_usd += cost;
     }
 
     /// Execute a flow-driven skill.

@@ -37,6 +37,10 @@ pub struct AgentConfig {
     /// Approval mode override string (from agent.yaml): "interactive", "yolo", "plan", "smart".
     /// Applied by the caller after Agent construction.
     pub approval_mode: Option<String>,
+    /// Maximum estimated cost per turn in USD. None = unlimited.
+    pub max_cost_per_turn_usd: Option<f64>,
+    /// Maximum estimated cost per day in USD. None = unlimited.
+    pub max_cost_per_day_usd: Option<f64>,
 }
 
 impl Default for AgentConfig {
@@ -56,6 +60,8 @@ impl Default for AgentConfig {
             name: None,
             model_alias: None,
             approval_mode: None,
+            max_cost_per_turn_usd: None,
+            max_cost_per_day_usd: Some(5.0),
         }
     }
 }
@@ -147,6 +153,18 @@ impl AgentConfig {
     /// Set approval mode override string.
     pub fn with_approval_mode_str(mut self, mode: impl Into<String>) -> Self {
         self.approval_mode = Some(mode.into());
+        self
+    }
+
+    /// Set maximum estimated cost per turn in USD.
+    pub fn with_max_cost_per_turn_usd(mut self, limit: Option<f64>) -> Self {
+        self.max_cost_per_turn_usd = limit;
+        self
+    }
+
+    /// Set maximum estimated cost per day in USD.
+    pub fn with_max_cost_per_day_usd(mut self, limit: Option<f64>) -> Self {
+        self.max_cost_per_day_usd = limit;
         self
     }
 }

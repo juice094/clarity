@@ -59,6 +59,8 @@ impl Agent {
                 provider_label: None,
                 recoverable_failure_counts: std::collections::HashMap::new(),
                 loop_detector: crate::agent::loop_detector::LoopDetector::new(3),
+                daily_cost_usd: 0.0,
+                last_cost_date: chrono::Utc::now().date_naive(),
             })),
         }
     }

@@ -489,6 +489,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            pricing: Some(crate::llm::api::Pricing {
+                input_per_1m: 0.5,
+                output_per_1m: 1.5,
+            }),
             ..Default::default()
         }
     }
@@ -978,6 +982,10 @@ impl LlmProvider for AnthropicLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: false,
+            pricing: Some(crate::llm::api::Pricing {
+                input_per_1m: 3.0,
+                output_per_1m: 15.0,
+            }),
             ..Default::default()
         }
     }

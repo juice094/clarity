@@ -268,16 +268,35 @@ impl Agent {
             let prompt_tokens =
                 crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
                     as u32;
-            let response = match tokio::time::timeout(
+
+            // Budget check before LLM call
+            if let Some(pricing) = llm.capabilities().pricing {
+                let estimated_completion = prompt_tokens / 2;
+                let estimated_cost = pricing.estimate_cost(prompt_tokens, estimated_completion);
+                self.check_budget(estimated_cost)?;
+            }
+
+            let (response, actual_prompt_tokens, actual_completion_tokens) = match tokio::time::timeout(
                 tokio::time::Duration::from_secs(45),
                 llm.complete(messages, tools),
             )
             .await
             {
-                Ok(Ok(r)) => r,
+                Ok(Ok(r)) => {
+                    let completion_tokens = r.content.len().div_ceil(4) as u32;
+                    (r, prompt_tokens, completion_tokens)
+                }
                 Ok(Err(e)) if is_context_overflow_error(&e) => {
                     warn!("Context overflow detected in sync loop, trimming tool results and retrying");
                     fast_trim_tool_results(messages);
+                    let retry_prompt_tokens =
+                        crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
+                            as u32;
+                    if let Some(pricing) = llm.capabilities().pricing {
+                        let estimated_completion = retry_prompt_tokens / 2;
+                        let estimated_cost = pricing.estimate_cost(retry_prompt_tokens, estimated_completion);
+                        self.check_budget(estimated_cost)?;
+                    }
                     // Retry once after trimming.
                     match tokio::time::timeout(
                         tokio::time::Duration::from_secs(45),
@@ -285,7 +304,10 @@ impl Agent {
                     )
                     .await
                     {
-                        Ok(Ok(r)) => r,
+                        Ok(Ok(r)) => {
+                            let completion_tokens = r.content.len().div_ceil(4) as u32;
+                            (r, retry_prompt_tokens, completion_tokens)
+                        }
                         Ok(Err(e2)) => return Err(e2),
                         Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
                     }
@@ -293,10 +315,16 @@ impl Agent {
                 Ok(Err(e)) => return Err(e),
                 Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
             };
+
+            // Record actual cost
+            if let Some(pricing) = llm.capabilities().pricing {
+                let actual_cost = pricing.estimate_cost(actual_prompt_tokens, actual_completion_tokens);
+                self.record_cost(actual_cost);
+            }
+
             // O4: Character-count/4 is a rough heuristic; replace with real tokenizer
             // count when clarity-core gains a tokenizer abstraction.
-            let completion_tokens = response.content.len().div_ceil(4) as u32;
-            self.accumulate_usage(prompt_tokens, completion_tokens);
+            self.accumulate_usage(actual_prompt_tokens, actual_completion_tokens);
             final_response = response.content.clone();
 
             if response.tool_calls.is_empty() {
@@ -654,12 +682,20 @@ impl Agent {
             let mut prompt_tokens = 0u32;
             let mut completion_tokens = 0u32;
 
+            // Pre-stream budget check
+            let pre_stream_prompt_tokens =
+                crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
+                    as u32;
+            if let Some(pricing) = llm.capabilities().pricing {
+                let estimated_completion = pre_stream_prompt_tokens / 2;
+                let estimated_cost =
+                    pricing.estimate_cost(pre_stream_prompt_tokens, estimated_completion);
+                self.check_budget(estimated_cost)?;
+            }
+
             match llm.stream(messages, tools) {
                 Ok(mut stream_rx) => {
-                    prompt_tokens =
-                        crate::agent::compaction_service::CompactionService::estimate_tokens(
-                            messages,
-                        ) as u32;
+                    prompt_tokens = pre_stream_prompt_tokens;
                     // Send progress indicator before first chunk arrives
                     self.send_wire_message(WireMessage::DraftEvent {
                         event: DraftEvent::Progress {
@@ -710,6 +746,12 @@ impl Agent {
                             tool_calls,
                             is_complete: true,
                         });
+                        // Record actual cost for successful stream
+                        if let Some(pricing) = llm.capabilities().pricing {
+                            let actual_cost =
+                                pricing.estimate_cost(prompt_tokens, completion_tokens);
+                            self.record_cost(actual_cost);
+                        }
                     }
                 }
                 Err(e) => {
@@ -727,21 +769,46 @@ impl Agent {
                     r
                 }
                 None => {
-                    prompt_tokens =
+                    let mut fallback_prompt_tokens =
                         crate::agent::compaction_service::CompactionService::estimate_tokens(
                             messages,
                         ) as u32;
+                    if let Some(pricing) = llm.capabilities().pricing {
+                        let estimated_completion = fallback_prompt_tokens / 2;
+                        let estimated_cost =
+                            pricing.estimate_cost(fallback_prompt_tokens, estimated_completion);
+                        self.check_budget(estimated_cost)?;
+                    }
                     let r = match llm.complete(messages, tools).await {
                         Ok(r) => r,
                         Err(e) if is_context_overflow_error(&e) => {
                             warn!("Context overflow detected in streaming loop, trimming tool results and retrying");
                             fast_trim_tool_results(messages);
+                            fallback_prompt_tokens =
+                                crate::agent::compaction_service::CompactionService::estimate_tokens(
+                                    messages,
+                                ) as u32;
+                            if let Some(pricing) = llm.capabilities().pricing {
+                                let estimated_completion = fallback_prompt_tokens / 2;
+                                let estimated_cost = pricing.estimate_cost(
+                                    fallback_prompt_tokens,
+                                    estimated_completion,
+                                );
+                                self.check_budget(estimated_cost)?;
+                            }
                             llm.complete(messages, tools).await?
                         }
                         Err(e) => return Err(e),
                     };
                     debug!("Using complete() response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
+                    prompt_tokens = fallback_prompt_tokens;
                     completion_tokens = r.content.len().div_ceil(4) as u32;
+                    // Record actual cost for fallback complete
+                    if let Some(pricing) = llm.capabilities().pricing {
+                        let actual_cost =
+                            pricing.estimate_cost(prompt_tokens, completion_tokens);
+                        self.record_cost(actual_cost);
+                    }
                     r
                 }
             };

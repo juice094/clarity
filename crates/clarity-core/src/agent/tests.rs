@@ -1029,6 +1029,109 @@ async fn test_recoverable_tool_circuit_breaker() {
     }
 }
 
+// ------------------------------------------------------------------
+// Budget guard tests
+// ------------------------------------------------------------------
+
+/// Mock LLM with explicit pricing for budget tests.
+struct BudgetMockLlm;
+
+#[async_trait::async_trait]
+impl LlmProvider for BudgetMockLlm {
+    async fn complete(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<LlmResponse, AgentError> {
+        Ok(LlmResponse {
+            content: "This is a mock response".to_string(),
+            tool_calls: vec![],
+            is_complete: true,
+        })
+    }
+
+    fn stream(
+        &self,
+        _messages: &[Message],
+        _tools: &serde_json::Value,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx
+                .send(Ok(StreamDelta {
+                    content: Some("This is a mock response".to_string()),
+                    tool_calls: vec![],
+                }))
+                .await;
+        });
+        Ok(rx)
+    }
+
+    fn set_prompt_cache_key(&mut self, _key: &str) {}
+
+    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
+        crate::llm::api::ProviderCapabilities {
+            native_tool_calling: true,
+            pricing: Some(crate::llm::api::Pricing {
+                input_per_1m: 200.0,
+                output_per_1m: 200.0,
+            }),
+            ..Default::default()
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_budget_turn_limit() {
+    let registry = ToolRegistry::new();
+    let config = AgentConfig::new()
+        .with_system_prompt("")
+        .with_max_cost_per_turn_usd(Some(0.01));
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(BudgetMockLlm));
+
+    let result = agent.run("a".repeat(400)).await;
+    assert!(
+        matches!(result, Err(AgentError::BudgetExceeded { .. })),
+        "Expected BudgetExceeded, got: {:?}",
+        result
+    );
+}
+
+#[tokio::test]
+async fn test_budget_day_limit() {
+    let registry = ToolRegistry::new();
+    let config = AgentConfig::new()
+        .with_system_prompt("")
+        .with_max_cost_per_day_usd(Some(0.03))
+        .with_max_cost_per_turn_usd(None);
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(BudgetMockLlm));
+
+    // First call should pass.
+    let result = agent.run("a".repeat(400)).await;
+    assert!(result.is_ok(), "First call should pass: {:?}", result);
+
+    // Second call should be blocked because daily accumulator exceeded the limit.
+    let result = agent.run("a".repeat(400)).await;
+    assert!(
+        matches!(result, Err(AgentError::BudgetExceeded { .. })),
+        "Expected BudgetExceeded on second call, got: {:?}",
+        result
+    );
+}
+
+#[tokio::test]
+async fn test_budget_no_limit() {
+    let registry = ToolRegistry::new();
+    let config = AgentConfig::new()
+        .with_system_prompt("")
+        .with_max_cost_per_turn_usd(None)
+        .with_max_cost_per_day_usd(None);
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(BudgetMockLlm));
+
+    let result = agent.run("Hello").await;
+    assert!(result.is_ok(), "No limit should allow call: {:?}", result);
+}
+
 #[test]
 fn test_tool_error_sanitize_paths() {
     // Home-directory redaction

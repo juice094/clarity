@@ -143,6 +143,17 @@ pub enum AgentError {
     /// Flow execution error
     #[error("Flow execution error: {0}")]
     FlowExecution(String),
+
+    /// Budget exceeded (per-turn or per-day)
+    #[error("Budget exceeded: limit=${limit:.4}, current=${current:.4}, requested=${requested:.4}")]
+    BudgetExceeded {
+        /// The limit that was exceeded (USD)
+        limit: f64,
+        /// Current accumulated cost (USD)
+        current: f64,
+        /// Cost of the requested operation (USD)
+        requested: f64,
+    },
 }
 
 impl AgentError {
