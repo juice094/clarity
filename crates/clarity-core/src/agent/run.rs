@@ -217,6 +217,20 @@ impl Agent {
                     }
                 }
             }
+
+            // Check for repetitive output loops (only if no fatal error already).
+            if fatal.is_none() {
+                let mut inner = self.inner.write().unwrap();
+                if inner.loop_detector.record(&tool_call.function.name, &result_content) {
+                    fatal = Some((
+                        tool_call.function.name.clone(),
+                        format!(
+                            "Loop detected: tool produced identical output {} times",
+                            inner.loop_detector.max_repetitions()
+                        ),
+                    ));
+                }
+            }
         }
 
         if let Some((tool_name, error)) = fatal {

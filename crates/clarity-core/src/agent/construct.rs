@@ -58,6 +58,7 @@ impl Agent {
                 project_metadata: None,
                 provider_label: None,
                 recoverable_failure_counts: std::collections::HashMap::new(),
+                loop_detector: crate::agent::loop_detector::LoopDetector::new(3),
             })),
         }
     }
@@ -465,6 +466,7 @@ impl Agent {
                 };
                 inner.snapshotted_skill = inner.active_skill.clone();
                 inner.recoverable_failure_counts.clear();
+                inner.loop_detector.reset();
                 Ok(token)
             }
         }

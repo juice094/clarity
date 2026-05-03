@@ -24,6 +24,7 @@ pub mod flow;
 mod construct;
 mod execution;
 mod executor;
+pub mod loop_detector;
 pub mod plan;
 // B3: Re-export Plan types from `types.rs` to maintain backwards compatibility.
 // New code should prefer `use clarity_core::types::{Plan, PlanResult, PlanStep}`.
@@ -112,6 +113,8 @@ struct AgentInner {
     /// Track recoverable tool failures per turn (tool_name -> count).
     /// Reset at the start of each turn via `begin_turn()`.
     recoverable_failure_counts: std::collections::HashMap<String, u32>,
+    /// Detects repeated identical tool outputs within a single turn.
+    loop_detector: loop_detector::LoopDetector,
 }
 
 /// Simple mock LLM for testing
