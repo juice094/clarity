@@ -60,6 +60,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                 |ui| {
                     egui::ScrollArea::horizontal()
                         .id_salt("session_tabs_scroll")
+                        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 4.0;
