@@ -146,22 +146,8 @@ pub trait ApprovalRuntime: Send + Sync {
     }
 }
 
-/// Approval mode determining automatic vs manual approval behavior
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ApprovalMode {
-    /// Interactive mode - wait for user confirmation
-    #[default]
-    Interactive,
-    /// YOLO mode - automatically approve everything
-    Yolo,
-    /// Plan mode - special handling for planning context
-    Plan,
-    /// Smart mode - risk-based auto-approval with batch grants.
-    /// Low-risk tools auto-approved; medium-risk auto-approved after first
-    /// manual approval of the same tool (batch grant); high-risk always
-    /// requires explicit approval.
-    Smart,
-}
+// Re-export from contract layer.
+pub use clarity_contract::ApprovalMode;
 
 /// Wrapper that adds mode-aware behavior to any approval runtime
 pub struct ModeAwareApprovalRuntime<R: ApprovalRuntime> {

@@ -75,11 +75,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                         );
                     });
                     if let Some(ref args) = tc.result {
-                        let args_trimmed = if args.len() > 60 {
-                            format!("{}…", &args[..60])
-                        } else {
-                            args.clone()
-                        };
+                        let args_trimmed = crate::ui::render::truncate(args, 60);
                         ui.label(
                             egui::RichText::new(args_trimmed)
                                 .size(theme.text_xs)

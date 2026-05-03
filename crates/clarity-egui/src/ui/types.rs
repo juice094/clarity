@@ -78,6 +78,26 @@ pub enum UiEvent {
         req_id: String,
         response: clarity_core::approval::ApprovalResponse,
     },
+    /// MCP tools reloaded after config save.
+    McpReloaded {
+        success: bool,
+        tools: Vec<String>,
+        message: String,
+    },
+    /// OAuth login flow result (Kimi Code or any future OAuth provider).
+    KimiCodeLoginResult {
+        success: bool,
+        message: String,
+        /// Provider id to switch to on success (e.g. "kimi_code").
+        provider_id: String,
+    },
+    /// Kimi Code OAuth login intermediate state update.
+    KimiCodeLoginStateUpdate {
+        state: String,
+        user_code: Option<String>,
+        url: Option<String>,
+        error: Option<String>,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.

@@ -277,10 +277,12 @@ pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
     height
 }
 
-pub fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+/// Truncate a string to at most `max_chars` characters, appending "…" if truncated.
+/// UTF-8 safe: operates on character boundaries, not byte indices.
+pub fn truncate(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
         s.to_string()
     } else {
-        format!("{}…", &s[..max_len])
+        format!("{}…", s.chars().take(max_chars).collect::<String>())
     }
 }

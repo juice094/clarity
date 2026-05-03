@@ -32,8 +32,8 @@ pub fn map_tool_name(kimi_tool: &str) -> Option<&'static str> {
         "kimi_cli.tools.plan.enter:EnterPlanMode" => None,
         // Agent self-reference — not a tool
         "kimi_cli.tools.agent:Agent" => None,
-        // Not yet supported
-        "kimi_cli.tools.file:ReadMediaFile" => None,
+        // Media file reading (images, videos, audio)
+        "kimi_cli.tools.file:ReadMediaFile" => Some("read_media"),
         _ => None,
     }
 }
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(map_tool_name("kimi_cli.tools.agent:Agent"), None);
         assert_eq!(
             map_tool_name("kimi_cli.tools.file:ReadMediaFile"),
-            None
+            Some("read_media")
         );
         assert_eq!(map_tool_name("unknown_tool"), None);
         assert_eq!(map_tool_name(""), None);

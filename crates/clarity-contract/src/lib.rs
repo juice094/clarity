@@ -4,23 +4,25 @@
 //! Downstream crates (egui, tui, gateway, headless, future plugin SDK) should import
 //! fundamental types from here instead of pulling in the entire core runtime.
 //!
-//! ## Status: Phase 1 extraction
+//! ## Status: Phase 3 — Federation Contract Layer (May 2026)
 //!
-//! ### Extracted types (✅ done)
+//! ### Extracted types (done)
 //!
 //! | Type | Origin | Consumer |
 //! |------|--------|---------|
 //! | `ToolCall`, `FunctionCall` | `core::types` | Agent, LLM, Tools |
 //! | `Message`, `MessageRole` | `core::llm::api` | Agent, LLM, Compaction |
 //! | `StreamDelta` | `core::llm::api` | LLM streaming |
-//!
-//! ### Planned (future phases)
-//!
-//! | Type | Origin | Blocked by |
-//! |------|--------|------------|
-//! | `AgentError`, `ToolError` | `core::error` | `dirs` dependency in helper methods |
-//! | `LlmProvider` (trait) | `core::llm::api` | Needs stable trait definition |
-//! | `Tool` (trait) | `core::tools` | Needs stable registry API |
+//! | `ToolError` | `core::error` | Tool execution |
+//! | `ContractError` | **new** | Cross-crate federation |
+//! | `LlmProvider` (trait) | `core::llm::api` | All LLM consumers |
+//! | `LlmResponse` | `core::llm::api` | LLM consumers |
+//! | `Tool` (trait) | `core::tools` | All tool consumers |
+//! | `ToolContext` | `core::tools` | Tool execution |
+//! | `ApprovalMode` | `core::approval` | Tool execution |
+//! | `FederationNode` (trait) | **new** | Claw runtime |
+//! | `FederationMessage` | **new** | Claw runtime |
+//! | `Capability` | **new** | Claw runtime |
 //!
 //! ### Migration strategy
 //!
@@ -33,7 +35,17 @@
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
-// Phase 1: Core interchange types (Sprint 13 PoC)
+// Modules
+// ============================================================================
+
+pub mod capability;
+pub mod error;
+pub mod federation;
+pub mod llm;
+pub mod tool;
+
+// ============================================================================
+// Phase 1: Core interchange types
 // ============================================================================
 
 /// A tool call from the LLM.
@@ -53,7 +65,7 @@ pub struct FunctionCall {
 }
 
 // ============================================================================
-// Phase 2: Message types (extracted May 2026)
+// Phase 2: Message types
 // ============================================================================
 
 /// LLM message role.
@@ -132,3 +144,16 @@ impl StreamDelta {
         self.content.is_none() && self.tool_calls.is_empty()
     }
 }
+
+// ============================================================================
+// Re-exports from submodules
+// ============================================================================
+
+pub use capability::{CapabilityToken, TokenError};
+pub use error::{AgentError, ContractError, ContractResult, ToolError, ToolResult, sanitize_path_str};
+pub use federation::{
+    Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus,
+    TaskSpec, ToolSpec,
+};
+pub use llm::{LlmProvider, LlmResponse};
+pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};

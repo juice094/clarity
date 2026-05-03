@@ -32,6 +32,11 @@ pub struct AgentConfig {
     pub extract_memories: bool,
     /// Agent display name (from agent.yaml)
     pub name: Option<String>,
+    /// Default model alias override (from agent.yaml), resolved via ModelRegistry at runtime.
+    pub model_alias: Option<String>,
+    /// Approval mode override string (from agent.yaml): "interactive", "yolo", "plan", "smart".
+    /// Applied by the caller after Agent construction.
+    pub approval_mode: Option<String>,
 }
 
 impl Default for AgentConfig {
@@ -49,6 +54,8 @@ impl Default for AgentConfig {
             capability_token: None,
             extract_memories: false,
             name: None,
+            model_alias: None,
+            approval_mode: None,
         }
     }
 }
@@ -128,6 +135,18 @@ impl AgentConfig {
     /// Set agent display name.
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());
+        self
+    }
+
+    /// Set default model alias override.
+    pub fn with_model_alias(mut self, alias: impl Into<String>) -> Self {
+        self.model_alias = Some(alias.into());
+        self
+    }
+
+    /// Set approval mode override string.
+    pub fn with_approval_mode_str(mut self, mode: impl Into<String>) -> Self {
+        self.approval_mode = Some(mode.into());
         self
     }
 }

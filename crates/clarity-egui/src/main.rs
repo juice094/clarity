@@ -424,6 +424,13 @@ impl eframe::App for App {
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
         self.render_safe(ctx, "task_create", |app, ctx| app.render_task_create_modal(ctx));
+        self.render_safe(ctx, "kimi_login", |app, ctx| {
+            crate::components::login_modal::render_oauth_login_modal(
+                app,
+                ctx,
+                &clarity_core::auth::OAuthDeviceFlowConfig::default(),
+            );
+        });
         onboarding::render_onboarding(self, ctx);
         self.handle_window_resize(ctx);
     }

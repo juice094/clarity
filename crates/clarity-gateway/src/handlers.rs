@@ -1050,7 +1050,7 @@ pub async fn build_provider_from_config(
 ) -> Result<Box<dyn clarity_core::agent::LlmProvider>, String> {
     use clarity_core::llm::LlmFactory;
     use clarity_core::llm::{
-        AnthropicLlm, DeepSeekProvider, KimiCodeLlm, KimiLlm, OpenAiCompatibleLlm,
+        AnthropicLlm, DeepSeekProvider, KimiLlm, OAuthLlm, OpenAiCompatibleLlm,
     };
 
     let provider_lower = cfg.provider.to_lowercase();
@@ -1081,7 +1081,12 @@ pub async fn build_provider_from_config(
                 .clone()
                 .unwrap_or_else(|| "https://api.kimi.com/coding/v1".into());
             let model = cfg.model.clone().unwrap_or_else(|| "kimi-k2-07132k".into());
-            Ok(Box::new(KimiCodeLlm::new(&cfg.api_key, base, model)))
+            Ok(Box::new(OAuthLlm::new(
+                &cfg.api_key,
+                base,
+                model,
+                clarity_core::auth::OAuthTokenManager::new(),
+            )))
         }
         "anthropic" | "claude" => {
             let base = cfg

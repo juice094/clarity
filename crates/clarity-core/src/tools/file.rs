@@ -13,29 +13,80 @@ use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
 
 /// Check whether a path points to a known sensitive file.
+///
+/// Covers: SSH keys, API tokens, cloud credentials, password stores,
+/// browser profiles, shell history, and common secret files.
 pub fn is_sensitive_file(path: &Path) -> bool {
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
 
+    // Environment files
     if name == ".env" || name.starts_with(".env.") {
         return true;
     }
+
+    // SSH keys
     if matches!(
         name,
         "id_rsa"
             | "id_rsa.pub"
             | "id_ed25519"
             | "id_ed25519.pub"
-            | ".npmrc"
-            | ".pypirc"
-            | ".netrc"
-            | "kubeconfig"
+            | "id_ecdsa"
+            | "id_ecdsa.pub"
+            | "id_dsa"
+            | "id_dsa.pub"
+            | "authorized_keys"
+            | "known_hosts"
+            | "config"
     ) {
         return true;
     }
-    if name.ends_with(".key") || name.ends_with(".pem") {
+
+    // Package registry credentials
+    if matches!(name, ".npmrc" | ".pypirc" | ".netrc" | ".dockercfg" | "credentials") {
         return true;
     }
 
+    // Kubernetes / cloud credentials
+    if matches!(name, "kubeconfig" | ".kubeconfig") {
+        return true;
+    }
+
+    // Key / certificate files
+    if name.ends_with(".key")
+        || name.ends_with(".pem")
+        || name.ends_with(".p12")
+        || name.ends_with(".pfx")
+        || name.ends_with(".crt")
+        || name.ends_with(".cer")
+    {
+        return true;
+    }
+
+    // Password stores and browser profiles
+    if matches!(name, "Login Data" | "Cookies" | "Web Data") {
+        return true;
+    }
+
+    // Shell history
+    if matches!(
+        name,
+        ".bash_history"
+            | ".zsh_history"
+            | ".fish_history"
+            | ".python_history"
+            | ".mysql_history"
+            | ".psql_history"
+    ) {
+        return true;
+    }
+
+    // Git credentials
+    if name == ".git-credentials" {
+        return true;
+    }
+
+    // Path-based detection
     let components: Vec<&str> = path
         .components()
         .filter_map(|c| {
@@ -54,13 +105,22 @@ pub fn is_sensitive_file(path: &Path) -> bool {
         if window[0] == ".aws" && (window[1] == "credentials" || window[1] == "config") {
             return true;
         }
+        if window[0] == ".docker" && window[1] == "config.json" {
+            return true;
+        }
+        if window[0] == ".config" && window[1] == "gh" {
+            return true; // GitHub CLI hosts.yml
+        }
     }
 
     false
 }
 
 /// Sniff the first bytes of a file for known binary/media magic numbers.
-async fn sniff_media_file(path: &Path) -> Option<&'static str> {
+///
+/// Returns a human-readable description of the detected format.
+/// Covers: PNG, JPEG, GIF, WebP, BMP, ICO, MP4, WebM, AVI, MP3, WAV, OGG, PDF, ZIP.
+pub async fn sniff_media_file(path: &Path) -> Option<&'static str> {
     use tokio::io::AsyncReadExt;
 
     let metadata = fs::metadata(path).await.ok()?;
@@ -75,23 +135,102 @@ async fn sniff_media_file(path: &Path) -> Option<&'static str> {
         return None;
     }
 
-    if header.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+    // Images
+    if header.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
         return Some("PNG image");
     }
     if header.starts_with(&[0xFF, 0xD8, 0xFF]) {
         return Some("JPEG image");
     }
-    if header.starts_with(b"GIF8") {
+    if header.starts_with(b"GIF87a") || header.starts_with(b"GIF89a") {
         return Some("GIF image");
     }
+    if header.starts_with(b"RIFF") && header[8..12].eq(b"WEBP") {
+        return Some("WebP image");
+    }
+    if header.starts_with(b"BM") {
+        return Some("BMP image");
+    }
+    if header[0..4] == [0x00, 0x00, 0x01, 0x00] || header[0..4] == [0x00, 0x00, 0x02, 0x00] {
+        return Some("ICO image");
+    }
+
+    // Video
+    // MP4 / MOV / M4V: various ftyp signatures
+    if header[4..8].eq(b"ftyp") {
+        if header[8..12].eq(b"mp41") || header[8..12].eq(b"mp42") || header[8..12].eq(b"isom") {
+            return Some("MP4 video");
+        }
+        if header[8..12].eq(b"M4V ") {
+            return Some("MP4 video");
+        }
+        if header[8..12].eq(b"qt  ") {
+            return Some("QuickTime video");
+        }
+    }
+    // WebM: Matroska with EBML header
+    if header.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        return Some("WebM video");
+    }
+    // AVI: RIFF....AVI
+    if header.starts_with(b"RIFF") && header[8..12].eq(b"AVI ") {
+        return Some("AVI video");
+    }
+
+    // Audio
+    // MP3: ID3 tag or MPEG sync word
+    if header.starts_with(b"ID3") || (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0) {
+        return Some("MP3 audio");
+    }
+    // WAV: RIFF....WAVE
+    if header.starts_with(b"RIFF") && header[8..12].eq(b"WAVE") {
+        return Some("WAV audio");
+    }
+    // OGG
+    if header.starts_with(b"OggS") {
+        return Some("OGG audio");
+    }
+    // FLAC
+    if header.starts_with(b"fLaC") {
+        return Some("FLAC audio");
+    }
+
+    // Documents
     if header.starts_with(b"%PDF") {
         return Some("PDF document");
     }
     if header.starts_with(&[0x50, 0x4B, 0x03, 0x04]) {
-        return Some("ZIP archive (may be docx/xlsx)");
+        return Some("ZIP archive");
     }
 
     None
+}
+
+/// Quick check whether a file is likely a media file based on extension.
+///
+/// This is a lightweight filter used before attempting to sniff MIME types.
+pub fn is_media_file(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).as_deref(),
+        Some("png")
+            | Some("jpg")
+            | Some("jpeg")
+            | Some("gif")
+            | Some("webp")
+            | Some("bmp")
+            | Some("ico")
+            | Some("mp4")
+            | Some("webm")
+            | Some("avi")
+            | Some("mov")
+            | Some("mkv")
+            | Some("mp3")
+            | Some("wav")
+            | Some("ogg")
+            | Some("flac")
+            | Some("m4a")
+            | Some("pdf")
+    )
 }
 
 /// Tool for reading file contents

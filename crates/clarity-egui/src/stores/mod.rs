@@ -59,6 +59,21 @@ pub struct ChatStore {
 // Settings Store — provider config, model selection, add-provider form
 // ============================================================================
 
+#[derive(Clone, Debug)]
+pub enum KimiCodeLoginState {
+    Idle,
+    Requesting,
+    Waiting {
+        user_code: String,
+        #[allow(dead_code)]
+        verification_uri: String,
+        verification_uri_complete: String,
+    },
+    Polling,
+    Success,
+    Error(String),
+}
+
 pub struct SettingsStore {
     pub settings_open: bool,
     pub settings_edit: crate::settings::GuiSettings,
@@ -73,6 +88,10 @@ pub struct SettingsStore {
     pub provider_registry: crate::provider::ProviderRegistry,
     pub testing_provider: Option<String>,
     pub refreshing_provider: Option<String>,
+    /// Kimi Code OAuth login modal open state.
+    pub kimi_code_login_open: bool,
+    /// Current state of the Kimi Code OAuth login flow.
+    pub kimi_code_login_state: KimiCodeLoginState,
 }
 
 // ============================================================================
@@ -151,6 +170,8 @@ pub struct McpStore {
     pub mcp_panel_open: bool,
     pub mcp_config: Option<clarity_core::mcp::config::McpConfig>,
     pub mcp_changed: bool,
+    /// Names of currently connected MCP tools (for hot-reload unregister).
+    pub connected_tools: Vec<String>,
 }
 
 // ============================================================================

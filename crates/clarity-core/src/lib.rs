@@ -43,6 +43,7 @@
 pub mod activity;
 pub mod agent;
 pub mod approval;
+pub mod auth;
 pub(crate) mod autodream;
 pub mod background;
 pub mod capability;

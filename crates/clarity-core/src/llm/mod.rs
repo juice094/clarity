@@ -25,8 +25,8 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    build_provider_from_registry, build_provider_from_registry_with_key, ModelConfigFile,
-    ModelEntry, ModelRegistry, ProtocolType, ProviderConfig,
+    build_provider_from_registry, build_provider_from_registry_with_key, AuthType,
+    ModelConfigFile, ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
 };
 pub use ollama::OllamaProvider;
 
@@ -179,7 +179,7 @@ struct Choice {
 /// Works with any API that follows the OpenAI chat completions format
 #[derive(Debug, Clone)]
 pub struct OpenAiCompatibleLlm {
-    api_key: String,
+    api_key: Arc<std::sync::RwLock<String>>,
     base_url: String,
     model: String,
     client: reqwest::Client,
@@ -194,12 +194,17 @@ impl OpenAiCompatibleLlm {
         model: impl Into<String>,
     ) -> Self {
         Self {
-            api_key: api_key.into(),
+            api_key: Arc::new(std::sync::RwLock::new(api_key.into())),
             base_url: base_url.into(),
             model: model.into(),
             client: shared_http_client(),
             prompt_cache_key: None,
         }
+    }
+
+    /// Update the API key at runtime (used by OAuth token refresh).
+    pub fn update_api_key(&self, key: impl Into<String>) {
+        *self.api_key.write().unwrap() = key.into();
     }
 
     /// Create from environment variables
@@ -300,7 +305,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         let response = self
             .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Authorization", format!("Bearer {}", self.api_key.read().unwrap().clone()))
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/0.1.0 (Claude Code)")
             .json(&request_body)
@@ -403,7 +408,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             format!("{}/v1/chat/completions", base)
         };
-        let api_key = self.api_key.clone();
+        let api_key = self.api_key.read().unwrap().clone();
         let client = self.client.clone();
 
         let (tx, rx) = tokio::sync::mpsc::channel(128);
@@ -537,38 +542,50 @@ impl LlmProvider for KimiLlm {
     }
 }
 
-/// Kimi Code LLM Provider
+/// OAuth-backed LLM Provider
 ///
-/// Uses OpenAI-compatible API for Kimi Code programming plan.
-/// Keys start with `sk-kimi-` and use a separate endpoint from Moonshot.
+/// Wraps an OpenAI-compatible LLM with automatic OAuth token refresh.
+/// Supports any provider that uses OAuth 2.0 Device Authorization Grant.
 #[derive(Debug, Clone)]
-pub struct KimiCodeLlm {
+pub struct OAuthLlm {
     inner: OpenAiCompatibleLlm,
+    token_manager: crate::auth::OAuthTokenManager,
 }
 
-impl KimiCodeLlm {
-    /// Create from environment variables
-    pub fn from_env() -> Result<Self, AgentError> {
-        let api_key = env::var("KIMI_CODE_API_KEY")
-            .map_err(|_| AgentError::Llm("KIMI_CODE_API_KEY not set".into()))?;
-
-        let base_url = env::var("KIMI_CODE_BASE_URL")
-            .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
-
-        let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
-
-        Ok(Self::new(api_key, base_url, model))
-    }
-
-    /// Create with explicit parameters
+impl OAuthLlm {
+    /// Create with an explicit token manager.
     pub fn new(
         api_key: impl Into<String>,
         base_url: impl Into<String>,
         model: impl Into<String>,
+        token_manager: crate::auth::OAuthTokenManager,
     ) -> Self {
         Self {
             inner: OpenAiCompatibleLlm::new(api_key, base_url, model),
+            token_manager,
         }
+    }
+
+    /// Create with the default Kimi Code configuration (convenience alias).
+    pub fn kimi_code() -> Self {
+        Self {
+            inner: OpenAiCompatibleLlm::new(
+                "",
+                "https://api.kimi.com/coding/v1",
+                "kimi-k2.6",
+            ),
+            token_manager: crate::auth::OAuthTokenManager::new(),
+        }
+    }
+
+    /// Create from environment variables (backward-compatible with KimiCodeLlm::from_env).
+    pub fn from_env() -> Result<Self, AgentError> {
+        let api_key = env::var("KIMI_CODE_API_KEY")
+            .map_err(|_| AgentError::Llm("KIMI_CODE_API_KEY not set".into()))?;
+        let base_url = env::var("KIMI_CODE_BASE_URL")
+            .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
+        let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
+        Ok(Self::new(api_key, base_url, model, crate::auth::OAuthTokenManager::new()))
     }
 
     pub fn set_prompt_cache_key(&mut self, key: &str) {
@@ -577,12 +594,16 @@ impl KimiCodeLlm {
 }
 
 #[async_trait]
-impl LlmProvider for KimiCodeLlm {
+impl LlmProvider for OAuthLlm {
     async fn complete(
         &self,
         messages: &[Message],
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
+        if let Ok(Some(token)) = self.token_manager.try_fresh().await {
+            self.inner.update_api_key(token);
+        }
+        // If try_fresh returns None, fall back to the static api_key set at construction time.
         self.inner.complete(messages, tools).await
     }
 
@@ -591,13 +612,40 @@ impl LlmProvider for KimiCodeLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        self.inner.stream(messages, tools)
+        let inner = self.inner.clone();
+        let token_manager = self.token_manager.clone();
+        let messages = messages.to_vec();
+        let tools = tools.clone();
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
+
+        tokio::spawn(async move {
+            if let Ok(Some(token)) = token_manager.try_fresh().await {
+                inner.update_api_key(token);
+            }
+            match inner.stream(&messages, &tools) {
+                Ok(mut inner_rx) => {
+                    while let Some(item) = inner_rx.recv().await {
+                        if tx.send(item).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e)).await;
+                }
+            }
+        });
+
+        Ok(rx)
     }
 
     fn set_prompt_cache_key(&mut self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 }
+
+/// Backward-compatible alias for the Kimi Code LLM provider.
+pub type KimiCodeLlm = OAuthLlm;
 
 /// Anthropic LLM Provider
 ///
@@ -914,7 +962,12 @@ impl LlmFactory {
                 let base_url = env::var("KIMI_BASE_URL")
                     .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
                 let model = env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
-                return Ok(Box::new(KimiCodeLlm::new(kimi_key, base_url, model)));
+                return Ok(Box::new(OAuthLlm::new(
+                    kimi_key,
+                    base_url,
+                    model,
+                    crate::auth::OAuthTokenManager::new(),
+                )));
             }
             return Ok(Box::new(KimiLlm::from_env()?));
         }
@@ -981,8 +1034,8 @@ impl LlmFactory {
             "anthropic" | "claude" => Ok(Box::new(Self::anthropic()?)),
             "deepseek" => Ok(Box::new(Self::deepseek()?)),
             "openai" => Ok(Box::new(Self::openai()?)),
-            "kimi" | "kimi-code" | "moonshot" => {
-                if env::var("KIMI_CODE_API_KEY").is_ok() {
+            "kimi" | "kimi-code" | "moonshot" | "kimi_code" => {
+                if lower == "kimi_code" || env::var("KIMI_CODE_API_KEY").is_ok() {
                     Ok(Box::new(KimiCodeLlm::from_env()?))
                 } else {
                     Ok(Box::new(Self::kimi()?))
@@ -1021,13 +1074,14 @@ impl LlmFactory {
         api_key: &str,
         model: &str,
     ) -> Result<Box<dyn LlmProvider>, AgentError> {
-        if api_key.is_empty() {
+        let lower = name.to_lowercase();
+        // kimi_code supports OAuth: empty key is okay (token loaded from file)
+        if api_key.is_empty() && lower != "kimi_code" {
             return Err(AgentError::Llm(format!(
                 "Provider '{}' requires an API key. Please enter it in Settings.",
                 name
             )));
         }
-        let lower = name.to_lowercase();
         match lower.as_str() {
             "anthropic" | "claude" => Ok(Box::new(AnthropicLlm::new(
                 api_key,
@@ -1044,13 +1098,14 @@ impl LlmFactory {
                 "https://api.openai.com/v1",
                 if model.is_empty() { "gpt-4o" } else { model },
             ))),
-            "kimi" | "kimi-code" | "moonshot" => {
-                // sk-kimi-* keys belong to Kimi Code endpoint
-                if api_key.starts_with("sk-kimi-") {
-                    Ok(Box::new(KimiCodeLlm::new(
+            "kimi" | "kimi-code" | "moonshot" | "kimi_code" => {
+                let is_kimi_code = lower == "kimi_code" || api_key.starts_with("sk-kimi-");
+                if is_kimi_code {
+                    Ok(Box::new(OAuthLlm::new(
                         api_key,
                         "https://api.kimi.com/coding/v1",
                         if model.is_empty() { "kimi-k2.6" } else { model },
+                        crate::auth::OAuthTokenManager::new(),
                     )))
                 } else {
                     Ok(Box::new(KimiLlm::new(

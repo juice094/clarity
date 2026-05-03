@@ -40,8 +40,10 @@
 
 - ✅ Settings Panel 中本地模型路径配置 + 自动扫描
 - ✅ 离线模式检测（无网络时自动 fallback 到 LocalGgufProvider）
-- ✅ `clarity-tauri` 默认启用 `local-llm` feature
+- ✅ `clarity-egui` 默认启用 `local-llm` feature
 - ✅ 单二进制打包 + CI Release workflow（`.msi` / `.exe` / `.nsis`）已交付
+- ✅ egui 归一化 UI 完成（tab bar、sidebar 工具栏、统一弹窗、Frame 系统、Glassmorphism）
+- ✅ KimiCLI 兼容层（`agent.yaml` 声明式配置 + 工具映射 + 子代理定义）
 - ⏸️ 嵌入式模型自动下载（首次启动引导）
 
 ### 风险对冲
@@ -58,7 +60,9 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 
 ### Phase 1：GUI 奠基（Sprint 1-2 已完成 ✅）
 
-`clarity-tauri` 已可用：Chat Panel、Session Sidebar、Task Panel、Settings Panel、Theme System (Dark/Light/Auto)。
+> **归档注**：以下基于 `clarity-tauri`（React+Vite）的实现已废弃归档。v0.4.0 起全部功能由 `clarity-egui`（eframe/egui，纯 Rust）承接。
+>
+> ~~`clarity-tauri` 已可用：Chat Panel、Session Sidebar、Task Panel、Settings Panel、Theme System (Dark/Light/Auto)。~~
 
 ### Phase 2：核心补齐（部分已完成 ✅）
 
@@ -73,7 +77,9 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
 | 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），release 跑分待执行 |
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |
-| `clarity-egui` | 🚀 **已启动** | `crates/clarity-egui` 已创建，复刻 Tauri 深色主题风格。状态：**主力栈**，`clarity-tauri` 废弃归档。v0.4.0 起 Release 产出 egui 二进制 |
+| egui 归一化 UI | ✅ 已完成 | Sprint 14.5+ 密集迭代：全宽 tab bar、顶部全局工具栏、统一弹窗风格（Settings/MCP/Skill）、`Frame::new()` 归一化、Glassmorphism 视觉系统 |
+| KimiCLI 兼容层 | ✅ 已完成 | `agent.yaml` 解析器 + `tool_map.rs` 工具映射 + `AppState` 自动加载 + 8 个单元测试 |
+| `clarity-egui` | ✅ **主力栈成熟** | `crates/clarity-egui` 71 个 .rs 文件，承担全部桌面 GUI 功能。`clarity-tauri` 废弃归档 |
 
 ### Sprint 14.5 — 架构解耦与空响应修复（2026-05-02，1 天）
 
@@ -114,7 +120,7 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 
 | 债务项 | 状态 | 处理策略 |
 |--------|------|---------|
-| cargo audit 3 warnings (2 moderate, 1 low) | ⚠️ Tauri 上游间接依赖 | 已配置 `.cargo/audit.toml` 忽略；等待上游更新，不主动投入 |
+| cargo audit warnings | ⚠️ 待确认 | 需重新运行 `cargo audit` 确认当前警告来源；`.cargo/audit.toml` 已配置忽略规则 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
 | Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
 | `clarity-tauri` 冻结 | ⏸️ 冻结 | 停止新功能开发，仅维护现有代码至 egui 主控成熟 |

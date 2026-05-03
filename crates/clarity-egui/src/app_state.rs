@@ -58,10 +58,16 @@ impl Default for AppState {
                     let mut config = agent.config().clone();
                     match clarity_core::agent::definition::apply_to_config(&def, &mut config) {
                         Ok(()) => {
+                            // Apply approval_mode override from agent.yaml if present
+                            let effective_mode = if let Some(ref yaml_mode) = config.approval_mode {
+                                parse_approval_mode(yaml_mode)
+                            } else {
+                                mode
+                            };
                             agent = if def.tools.is_empty() {
                                 clarity_core::Agent::with_config(agent.registry().clone(), config)
                                     .with_approval_runtime(mode_aware_rt.clone())
-                                    .with_approval_mode(mode)
+                                    .with_approval_mode(effective_mode)
                             } else {
                                 match clarity_core::agent::tool_map::filter_registry(
                                     agent.registry(),
@@ -70,7 +76,7 @@ impl Default for AppState {
                                     Ok(filtered_registry) => {
                                         clarity_core::Agent::with_config(filtered_registry, config)
                                             .with_approval_runtime(mode_aware_rt.clone())
-                                            .with_approval_mode(mode)
+                                            .with_approval_mode(effective_mode)
                                     }
                                     Err(e) => {
                                         tracing::debug!(
@@ -82,7 +88,7 @@ impl Default for AppState {
                                             config,
                                         )
                                         .with_approval_runtime(mode_aware_rt.clone())
-                                        .with_approval_mode(mode)
+                                        .with_approval_mode(effective_mode)
                                     }
                                 }
                             };

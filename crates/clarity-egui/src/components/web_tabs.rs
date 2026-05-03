@@ -57,11 +57,7 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
                         } else {
                             &tab.title
                         };
-                        let display = if title.len() > 24 {
-                            format!("{}…", &title[..24])
-                        } else {
-                            title.to_string()
-                        };
+                        let display = crate::ui::render::truncate(title, 24);
 
                         if ui
                             .add(
@@ -143,11 +139,7 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
         {
             let url = app.ui_store.editing_title.trim().to_string();
             if !url.is_empty() {
-                let title = if url.len() > 32 {
-                    format!("{}…", &url[..32])
-                } else {
-                    url.clone()
-                };
+                let title = crate::ui::render::truncate(&url, 32);
                 app.ui_store.web_tabs.push(WebTab { title, url });
                 app.ui_store.editing_title.clear();
             }

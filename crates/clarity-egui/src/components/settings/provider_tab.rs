@@ -222,6 +222,70 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
 
     ui.add_space(theme.space_12);
 
+    // ── OAuth Login / Logout buttons ──
+    if prov.auth_type == crate::provider::AuthType::OAuth {
+        let token_key = if prov.auth_token_key.is_empty() {
+            &prov.id
+        } else {
+            &prov.auth_token_key
+        };
+        let has_token = clarity_core::auth::TokenStore::for_provider(token_key)
+            .load()
+            .ok()
+            .flatten()
+            .is_some();
+        let display = prov.display();
+        let login_label = if has_token {
+            format!("Re-login with {}", display)
+        } else {
+            format!("Login with {}", display)
+        };
+        ui.horizontal(|ui| {
+            if ui.add(theme.primary_button(&login_label)).clicked() {
+                app.settings_store.kimi_code_login_open = true;
+                app.settings_store.kimi_code_login_state =
+                    crate::stores::KimiCodeLoginState::Idle;
+            }
+            if has_token {
+                let logout_btn = egui::Button::new(
+                    egui::RichText::new("Logout")
+                        .font(theme.font(theme.text_sm))
+                        .color(theme.danger),
+                )
+                .fill(theme.surface)
+                .stroke(egui::Stroke::new(1.0, theme.border))
+                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                if ui.add(logout_btn).clicked() {
+                    match clarity_core::auth::TokenStore::for_provider(token_key).delete() {
+                        Ok(()) => {
+                            app.push_toast(
+                                format!("{} logged out", display),
+                                ToastLevel::Info,
+                            );
+                        }
+                        Err(e) => {
+                            app.push_toast(
+                                format!("Logout failed: {}", e),
+                                ToastLevel::Error,
+                            );
+                        }
+                    }
+                }
+            }
+        });
+        let status_text = if has_token {
+            egui::RichText::new("Connected ✓")
+                .color(theme.ok)
+                .font(theme.font(theme.text_sm))
+        } else {
+            egui::RichText::new("Not connected")
+                .color(theme.text_muted)
+                .font(theme.font(theme.text_sm))
+        };
+        ui.label(status_text);
+        ui.add_space(theme.space_8);
+    }
+
     // ── API Key (editable with show/hide) ──
     let show_key_id = ui.id().with(&prov.id).with("show_key");
     let mut show_key = ui.data(|d| d.get_temp::<bool>(show_key_id).unwrap_or(false));
@@ -637,7 +701,9 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                             api_format: ApiFormat::from_str(
                                 &app.settings_store.add_provider_format,
                             ),
+                            auth_type: crate::provider::AuthType::ApiKey,
                             api_key_ref: app.settings_store.add_provider_key.trim().into(),
+                            auth_token_key: String::new(),
                             models: vec![],
                             builtin: false,
                         };

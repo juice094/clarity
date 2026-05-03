@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-05-01
-> Branch: `phase2/protocol-pilot` @ `a4c1a2cf`
-> Test baseline: **577 passed, 0 failed, 6 ignored**
+> Last updated: 2026-05-03
+> Branch: `main`
+> Test baseline: **602 passed, 0 failed, 6 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -27,6 +27,8 @@
 | 13.5 | **UX Hardening** | ✅ Complete | Multiline + Draft Persistence + Steer + Smart Approval |
 | Phase C | **架构解耦** | ✅ Complete | `ensure_llm` 三层解耦 + `list_pending` trait化 |
 | 14 | **egui 设计系统硬化** | ✅ Complete | 配色深蓝灰+铜色、overlay阴影token、间距规范化、i18n、自绘标题栏 |
+| 15 | **OAuth Provider 架构重构** | ✅ Complete | 5 Phase 泛化：KimiCode→OAuthLlm/OAuthTokenManager/OAuthDeviceFlowClient，新增 provider 零代码 |
+| 16 | **契约层扩展 (Phase 0)** | ✅ Complete | `LlmProvider`/`Tool`/`AgentError`/`CapabilityToken` 提取到 `clarity-contract`，新增联邦原语 |
 
 ---
 
@@ -34,6 +36,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib tests | 602 passed, 6 ignored | 2026-05-03 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
@@ -56,6 +59,7 @@
 **主力 GUI 栈**：`clarity-egui`（egui 0.31 + glow backend）
 **废弃归档**：`clarity-tauri`（Tauri 2 + React/Vite）— 代码保留，新功能不追加
 **活跃后端**：`clarity-core` / `clarity-gateway` / `clarity-memory` / `clarity-wire`
+**契约层**：`clarity-contract` — 联邦类型共享，打破 core 单块依赖
 **维护模式**：`clarity-tui` / `clarity-claw` / `clarity-headless`
 
 ### 前后端功能 Parity（关键差距）
@@ -244,7 +248,7 @@
 | `parallel_batches` HashMap 无限增长 | 🔴 | Gateway 每次 `/v1/parallel` 插入一条进度记录，之前无清理机制 | ✅ 已修复 — 每5分钟后台清理非运行中批次 |
 | `clarity-tui` `run_parallel` 旧签名 | 🟡 | TUI 调用 `run_parallel(specs, config)` 缺 `progress` 参数 | ✅ 已修复 — 补传 `None` |
 | Claw `quick_chat` 每次创建新 Tokio Runtime | 🟢 | 同步线程内无法复用主 Runtime，每次 HTTP 调用新建 Runtime | ⏸️ 低风险 — HTTP 请求完成即释放，偶发调用可接受 |
-| Contract `Error` 类型迁移暂缓 | 🟡 | `ToolError::sanitize_paths()` 依赖 `dirs`，无法直接迁入 contract | ⏸️ 依赖 `dirs` 解耦后方可迁移 |
+| Contract `Error` 类型迁移暂缓 | 🟡 | `ToolError::sanitize_paths()` 依赖 `dirs`，无法直接迁入 contract | ✅ 已解决 — `dirs` 加入 contract 依赖，`AgentError`/`ToolError`/`CapabilityToken` 全量提取 |
 | `SubAgentProgress` JSON 反序列化宽容 | 🟢 | 使用 `unwrap_or_default` 静默忽略 Gateway 响应格式变化 | ⏸️ 低风险 — 仅在 API 变更时可能隐藏错误 |
 | `clarity-egui settings.rs` 本地格式变更 | 🟢 | 编辑器可能自动格式化 `settings.rs`，引入不存在的 Theme 字段引用 | ✅ 已恢复 — `git checkout` 还原 |
 
@@ -253,7 +257,7 @@
 ## Quality Gates (Every Commit)
 
 ```bash
-cargo test --workspace --lib              # 583+ passed, 0 failed
+cargo test --workspace --lib              # 602+ passed, 0 failed
 cargo clippy -p clarity-contract -p clarity-core -p clarity-gateway -p clarity-claw -p clarity-tui -- -D warnings  # 零警告
 cargo fmt --all -- --check               # 格式检查
 ```

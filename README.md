@@ -7,7 +7,7 @@
 ReAct/Plan agents · MCP ecosystem · BM25+vector memory · Multi-entry (TUI/Web/Tray/Desktop)
 
 [![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-purple.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
 [English](README.en.md) | [中文](README.zh.md)
@@ -59,12 +59,11 @@ cargo run -p clarity-egui
 
 **阶段性目标**：将 Clarity 打造为能替代 Kimi CLI 的本地开发环境，实现 Claw 模式的持续化存储与多角色认知协同。
 
-- ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway）
-- 🔄 进行中：三栏工作台 UI（左侧角色栏 / 顶部实例标签 / 右侧通用工具栏）
-  - ✅ Glassmorphism 设计系统（大圆角、半透明浮层、无边框面板）
-  - ✅ 侧边栏 Web Tabs + Thinking Log 集成
-  - ✅ Win11 原生窗口圆角
-- ⏸️ 未实现：跨会话 Agent 状态快照、子 Agent 上下文持久化（IS-1 后端就绪，前端待接入）、多窗口进程隔离、层级信息注入总线
+- ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway/Headless）
+- ✅ egui 归一化 UI：全宽 tab bar、顶部全局工具栏、统一弹窗风格（Settings/MCP/Skill）、归一化 Frame 系统
+- ✅ KimiCLI 兼容层：`agent.yaml` 声明式配置、工具名映射、子代理定义
+- 🔄 进行中：跨会话 Agent 状态快照、子 Agent 上下文持久化（后端就绪，前端待接入）
+- ⏸️ 未实现：多窗口进程隔离、层级信息注入总线、可视化工作流（D2/Mermaid）
 
 > 详细路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -82,6 +81,7 @@ cargo run -p clarity-egui
 | **Offline Fallback** | Network monitor probes every 30s. Auto-switch to local model when offline; restore cloud provider on reconnect. |
 | **First-Time UX** | Onboarding flow detects missing models, guides download, or prompts cloud provider setup. No manual config required. |
 | **Dynamic Prompts** | `SystemPromptBuilder` assembles context-aware prompts (approval notices, offline status, template variables). |
+| **Agent Config (YAML)** | Drop an `agent.yaml` in your working directory to declare system prompts, tool whitelists, and subagent refs — KimiCLI-style declarative config, no code changes. |
 | **Model Hot-Swap** | Change provider / model in Settings without restart. API keys stored locally, never leave the machine. |
 | **i18n** | Chinese / English language switching with persistent preference. |
 
@@ -113,7 +113,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 438 tests, 0 failed, 6 ignored
+cargo test --workspace --lib                          # 590 tests, 0 failed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings
@@ -145,7 +145,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide, architect
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 juice094 and contributors.
+[AGPL-3.0](LICENSE) — Copyright (c) 2026 juice094 and contributors.
+
+Clarity is licensed under the GNU Affero General Public License v3.0 (or later). This means:
+
+- **You can use, modify, and distribute** Clarity freely for personal, educational, or research purposes.
+- **If you modify Clarity and provide it as a service over a network** (e.g., hosting `clarity-gateway` as a SaaS), you **must** release your modified source code under AGPL-3.0 to all users of that service.
+- **You cannot** relicense Clarity or derivative works under proprietary or less-permissive terms.
+
+This license choice reflects our commitment to keeping the project open and preventing closed-source commercialization of community-contributed work. If you need a different licensing arrangement for legitimate use cases, open an issue to discuss.
 
 ---
 

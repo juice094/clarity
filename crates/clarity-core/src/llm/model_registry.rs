@@ -50,10 +50,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Protocol adapter type for provider communication
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolType {
-    /// OpenAI /v1/chat/completions compatible
+    /// OpenAI /v1/chat/completions compatible (default).
+    #[default]
     OpenAiChat,
     /// Anthropic /v1/messages API (content blocks, tool_use, etc.)
     AnthropicMessages,
@@ -66,8 +67,49 @@ pub enum ProtocolType {
     LlamaServer,
 }
 
+/// Authentication type for a provider.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthType {
+    /// Standard API key authentication (default).
+    #[default]
+    ApiKey,
+    /// OAuth 2.0 device flow or authorization code flow.
+    OAuth,
+    /// No authentication required (e.g. local Ollama).
+    None,
+}
+
+/// OAuth-specific configuration for a provider.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OAuthProviderConfig {
+    /// OAuth client ID.
+    pub client_id: String,
+    /// OAuth authorization host (e.g. `https://auth.kimi.com`).
+    #[serde(default = "default_oauth_host")]
+    pub host: String,
+    /// Device authorization endpoint path (default `/api/oauth/device_authorization`).
+    #[serde(default = "default_device_auth_path")]
+    pub device_auth_path: String,
+    /// Token endpoint path (default `/api/oauth/token`).
+    #[serde(default = "default_token_path")]
+    pub token_path: String,
+}
+
+fn default_oauth_host() -> String {
+    "https://auth.kimi.com".into()
+}
+
+fn default_device_auth_path() -> String {
+    "/api/oauth/device_authorization".into()
+}
+
+fn default_token_path() -> String {
+    "/api/oauth/token".into()
+}
+
 /// Provider-level connection configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
     pub protocol: ProtocolType,
     #[serde(default)]
@@ -75,6 +117,16 @@ pub struct ProviderConfig {
     /// Environment variable name that holds the API key
     #[serde(default)]
     pub api_key_env: Option<String>,
+    /// Authentication type (defaults to ApiKey).
+    #[serde(default)]
+    pub auth_type: AuthType,
+    /// OAuth token storage key. When `auth_type` is `OAuth`, this key is used
+    /// to look up the persisted access token. Defaults to the provider name.
+    #[serde(default)]
+    pub auth_token_key: Option<String>,
+    /// OAuth-specific configuration (only used when `auth_type` is `OAuth`).
+    #[serde(default)]
+    pub oauth: Option<OAuthProviderConfig>,
     /// Provider-specific extra settings (model_path for local, etc.)
     #[serde(default)]
     pub extra: HashMap<String, String>,
@@ -209,7 +261,7 @@ impl ModelRegistry {
                     protocol: ProtocolType::AnthropicMessages,
                     base_url: Some("https://api.anthropic.com".into()),
                     api_key_env: Some("ANTHROPIC_AUTH_TOKEN".into()),
-                    extra: HashMap::new(),
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -229,7 +281,13 @@ impl ModelRegistry {
                     protocol: ProtocolType::OpenAiChat,
                     base_url: Some("https://api.kimi.com/coding/v1".into()),
                     api_key_env: Some("KIMI_CODE_API_KEY".into()),
-                    extra: HashMap::new(),
+                    auth_type: AuthType::OAuth,
+                    auth_token_key: Some("kimi-code".into()),
+                    oauth: Some(OAuthProviderConfig {
+                        client_id: "17e5f671-d194-4dfb-9706-5516cb48c098".into(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -246,7 +304,7 @@ impl ModelRegistry {
                     protocol: ProtocolType::OpenAiChat,
                     base_url: Some("https://api.moonshot.cn/v1".into()),
                     api_key_env: Some("KIMI_API_KEY".into()),
-                    extra: HashMap::new(),
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -265,7 +323,7 @@ impl ModelRegistry {
                     protocol: ProtocolType::OpenAiChat,
                     base_url: Some("https://api.deepseek.com".into()),
                     api_key_env: Some("DEEPSEEK_API_KEY".into()),
-                    extra: HashMap::new(),
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -292,7 +350,7 @@ impl ModelRegistry {
                     protocol: ProtocolType::OpenAiChat,
                     base_url: Some("https://api.openai.com/v1".into()),
                     api_key_env: Some("OPENAI_API_KEY".into()),
-                    extra: HashMap::new(),
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -321,7 +379,9 @@ impl ModelRegistry {
                     protocol: ProtocolType::KalosmLocal,
                     base_url: None,
                     api_key_env: None,
+                    auth_type: AuthType::None,
                     extra,
+                    ..Default::default()
                 },
             );
             models.push(ModelEntry {
@@ -380,6 +440,44 @@ impl ModelRegistry {
     }
 }
 
+/// Expand a key reference string.
+///
+/// Supported syntax:
+/// - `${file:path:field}` — read `field` from JSON file at `path` (`~` is expanded).
+/// - `${env:VAR}` — read environment variable `VAR`.
+/// - plain string — treated as an env-var name for backward compat, or returned as-is.
+pub fn resolve_key_ref(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    // ${file:path:field}
+    if let Some(inner) = raw.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
+        let mut parts = inner.splitn(2, ':');
+        let path_part = parts.next()?;
+        let field = parts.next()?;
+        let path = if path_part.starts_with("~/") {
+            dirs::home_dir()
+                .map(|h| h.join(&path_part[2..]))
+                .unwrap_or_else(|| PathBuf::from(path_part))
+        } else {
+            PathBuf::from(path_part)
+        };
+        let content = std::fs::read_to_string(&path).ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+        return json.get(field).and_then(|v| v.as_str()).map(|s| s.to_string());
+    }
+
+    // ${env:VAR}
+    if let Some(var) = raw.strip_prefix("${env:").and_then(|s| s.strip_suffix('}')) {
+        return std::env::var(var).ok();
+    }
+
+    // Try env var, fall back to literal
+    std::env::var(raw).ok().or_else(|| Some(raw.to_string()))
+}
+
 /// Build a concrete provider from registry config + model_id.
 /// This is used by the legacy `LlmFactory` in `mod.rs`.
 pub async fn build_provider_from_registry(
@@ -399,12 +497,29 @@ pub async fn build_provider_from_registry_with_key(
         ProtocolType::OpenAiChat => {
             let api_key = override_key
                 .map(|s| s.to_string())
-                .or_else(|| cfg.api_key_env.as_ref().and_then(|env_var| std::env::var(env_var).ok()))
+                .or_else(|| cfg.api_key_env.as_ref().and_then(|s| resolve_key_ref(s)))
                 .unwrap_or_default();
             let base_url = cfg
                 .base_url
                 .clone()
                 .unwrap_or_else(|| "https://api.openai.com/v1".into());
+
+            // OAuth path: auto-refresh token when no static key is provided.
+            if cfg.auth_type == AuthType::OAuth {
+                let oauth_cfg = cfg.oauth.clone().unwrap_or_default();
+                let token_key = cfg.auth_token_key.clone()
+                    .unwrap_or_else(|| "kimi-code".into());
+                let manager = crate::auth::OAuthTokenManager::with_config(
+                    crate::auth::OAuthDeviceFlowConfig {
+                        client_id: oauth_cfg.client_id,
+                        oauth_host: oauth_cfg.host,
+                    },
+                    &token_key,
+                );
+                let llm = super::OAuthLlm::new(api_key, base_url, model_id, manager);
+                return Ok(Box::new(llm));
+            }
+
             let llm = OpenAiCompatibleLlm::new(api_key, base_url, model_id);
             Ok(Box::new(llm))
         }

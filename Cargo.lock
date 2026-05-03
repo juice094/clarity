@@ -884,7 +884,12 @@ dependencies = [
 name = "clarity-contract"
 version = "0.3.0"
 dependencies = [
+ "async-trait",
+ "dirs 5.0.1",
  "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

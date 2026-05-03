@@ -74,6 +74,53 @@ pub fn process_events(app: &mut App) {
                     response,
                 );
             }
+            UiEvent::McpReloaded { success, tools, message } => {
+                app.mcp_store.connected_tools = tools;
+                let level = if success {
+                    crate::ui::types::ToastLevel::Info
+                } else {
+                    crate::ui::types::ToastLevel::Error
+                };
+                app.push_toast(message, level);
+            }
+            UiEvent::KimiCodeLoginStateUpdate { state, user_code, url, error } => {
+                app.settings_store.kimi_code_login_state = match state.as_str() {
+                    "waiting" => crate::stores::KimiCodeLoginState::Waiting {
+                        user_code: user_code.unwrap_or_default(),
+                        verification_uri: url.clone().unwrap_or_default(),
+                        verification_uri_complete: url.unwrap_or_default(),
+                    },
+                    "polling" => crate::stores::KimiCodeLoginState::Polling,
+                    "success" => crate::stores::KimiCodeLoginState::Success,
+                    "error" => crate::stores::KimiCodeLoginState::Error(error.unwrap_or_default()),
+                    _ => crate::stores::KimiCodeLoginState::Idle,
+                };
+            }
+            UiEvent::KimiCodeLoginResult { success, message, provider_id } => {
+                app.settings_store.kimi_code_login_state = if success {
+                    crate::stores::KimiCodeLoginState::Success
+                } else {
+                    crate::stores::KimiCodeLoginState::Error(message.clone())
+                };
+                let level = if success {
+                    crate::ui::types::ToastLevel::Info
+                } else {
+                    crate::ui::types::ToastLevel::Error
+                };
+                app.push_toast(message, level);
+                if success {
+                    app.settings_store.settings_edit.provider = provider_id.clone();
+                    // Pick the first model from the provider's model list if currently empty
+                    if app.settings_store.settings_edit.model.is_empty() {
+                        if let Some(prov) = app.settings_store.provider_registry.get(&provider_id) {
+                            if !prov.models.is_empty() {
+                                app.settings_store.settings_edit.model = prov.models[0].clone();
+                            }
+                        }
+                    }
+                    app.save_settings_and_reload();
+                }
+            }
         }
     }
 }

@@ -63,6 +63,29 @@ impl ApiFormat {
     }
 }
 
+/// Authentication type for a provider.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthType {
+    /// Standard API key authentication.
+    #[default]
+    ApiKey,
+    /// OAuth 2.0 device flow or authorization code flow.
+    OAuth,
+    /// No authentication required (e.g. local Ollama).
+    None,
+}
+
+impl AuthType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AuthType::ApiKey => "api-key",
+            AuthType::OAuth => "oauth",
+            AuthType::None => "none",
+        }
+    }
+}
+
 /// A single provider definition.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProviderDefinition {
@@ -82,9 +105,21 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub api_format: ApiFormat,
 
+    /// Authentication type.
+    #[serde(default)]
+    pub auth_type: AuthType,
+
     /// Reference to API key — either literal or `${env:VAR_NAME}` syntax.
+    /// For OAuth providers this is usually empty; the token is read from
+    /// the token store via `auth_token_key`.
     #[serde(default)]
     pub api_key_ref: String,
+
+    /// OAuth token storage key. When `auth_type` is `OAuth`, this key is used
+    /// to look up the persisted access token in the global token store.
+    /// Defaults to the provider `id` when empty.
+    #[serde(default)]
+    pub auth_token_key: String,
 
     /// Optional list of known models from this provider.
     /// When empty, the UI should either fetch dynamically or accept free-text input.
@@ -104,22 +139,108 @@ struct ProviderConfigFile {
 }
 
 impl ProviderDefinition {
-    /// Resolve the actual API key from `api_key_ref` (supports `${env:VAR}`).
-    #[allow(dead_code)]
+    /// Resolve the actual API key or OAuth access token.
+    ///
+    /// For `AuthType::ApiKey` / `AuthType::None`:
+    ///   - `${env:VAR_NAME}` — read environment variable.
+    ///   - `${file:path:field}` — read `field` from JSON file at `path` (`~` expanded).
+    ///   - plain string — returned as-is.
+    ///
+    /// For `AuthType::OAuth`:
+    ///   - If `api_key_ref` is non-empty, resolves it as above (static override).
+    ///   - Otherwise reads the access token from the global OAuth token store
+    ///     using `auth_token_key` (falls back to provider `id`).
     pub fn resolve_api_key(&self) -> Option<String> {
         let ref_str = self.api_key_ref.trim();
+
+        // OAuth path: static key takes precedence, then token store
+        if self.auth_type == AuthType::OAuth {
+            if !ref_str.is_empty() {
+                return Self::resolve_key_ref(ref_str);
+            }
+            let token_key = if self.auth_token_key.is_empty() {
+                &self.id
+            } else {
+                &self.auth_token_key
+            };
+            let store = clarity_core::auth::TokenStore::for_provider(token_key);
+            return store.load().ok().flatten().map(|t| t.access_token);
+        }
+
+        // ApiKey / None path
         if ref_str.is_empty() {
             return None;
         }
+        Self::resolve_key_ref(ref_str)
+    }
+
+    /// Resolve a key reference string (env var, file field, or literal).
+    fn resolve_key_ref(ref_str: &str) -> Option<String> {
+        // ${env:VAR}
         if let Some(env_var) = ref_str.strip_prefix("${env:").and_then(|s| s.strip_suffix('}')) {
             return std::env::var(env_var).ok();
         }
+
+        // ${file:path:field}
+        if let Some(inner) = ref_str.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
+            let mut parts = inner.splitn(2, ':');
+            let path_part = parts.next()?;
+            let field = parts.next()?;
+            let path = if path_part.starts_with("~/") {
+                dirs::home_dir()
+                    .map(|h| h.join(&path_part[2..]))
+                    .unwrap_or_else(|| std::path::PathBuf::from(path_part))
+            } else {
+                std::path::PathBuf::from(path_part)
+            };
+            let content = std::fs::read_to_string(&path).ok()?;
+            let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+            return json.get(field).and_then(|v| v.as_str()).map(|s| s.to_string());
+        }
+
         Some(ref_str.to_string())
     }
 
     /// Full display name: falls back to `id` if `display_name` is empty.
     pub fn display(&self) -> &str {
         if self.display_name.is_empty() { &self.id } else { &self.display_name }
+    }
+}
+
+impl From<&ProviderDefinition> for clarity_core::llm::ProviderConfig {
+    fn from(def: &ProviderDefinition) -> Self {
+        let protocol = match def.api_format {
+            ApiFormat::OpenaiCompletions => clarity_core::llm::ProtocolType::OpenAiChat,
+            ApiFormat::AnthropicMessages => clarity_core::llm::ProtocolType::AnthropicMessages,
+            ApiFormat::Kimi => clarity_core::llm::ProtocolType::OpenAiChat,
+        };
+
+        let auth_type = match def.auth_type {
+            AuthType::ApiKey => clarity_core::llm::AuthType::ApiKey,
+            AuthType::OAuth => clarity_core::llm::AuthType::OAuth,
+            AuthType::None => clarity_core::llm::AuthType::None,
+        };
+
+        let oauth = if def.auth_type == AuthType::OAuth {
+            Some(clarity_core::llm::OAuthProviderConfig {
+                client_id: "17e5f671-d194-4dfb-9706-5516cb48c098".into(),
+                host: "https://auth.kimi.com".into(),
+                device_auth_path: "/api/oauth/device_authorization".into(),
+                token_path: "/api/oauth/token".into(),
+            })
+        } else {
+            None
+        };
+
+        Self {
+            protocol,
+            base_url: Some(def.base_url.clone()).filter(|s| !s.is_empty()),
+            api_key_env: Some(def.api_key_ref.clone()).filter(|s| !s.is_empty()),
+            auth_type,
+            auth_token_key: Some(def.auth_token_key.clone()).filter(|s| !s.is_empty()),
+            oauth,
+            extra: HashMap::new(),
+        }
     }
 }
 
@@ -153,7 +274,9 @@ impl ProviderRegistry {
                 display_name: "OpenAI".into(),
                 base_url: "https://api.openai.com/v1".into(),
                 api_format: ApiFormat::OpenaiCompletions,
+                auth_type: AuthType::ApiKey,
                 api_key_ref: "${env:OPENAI_API_KEY}".into(),
+                auth_token_key: String::new(),
                 models: vec!["gpt-4o".into(), "gpt-4o-mini".into(), "gpt-4".into()],
                 builtin: true,
             },
@@ -162,7 +285,9 @@ impl ProviderRegistry {
                 display_name: "Anthropic".into(),
                 base_url: "https://api.anthropic.com/v1".into(),
                 api_format: ApiFormat::AnthropicMessages,
+                auth_type: AuthType::ApiKey,
                 api_key_ref: "${env:ANTHROPIC_AUTH_TOKEN}".into(),
+                auth_token_key: String::new(),
                 models: vec!["claude-sonnet-4-20250514".into(), "claude-haiku-3-5".into()],
                 builtin: true,
             },
@@ -171,7 +296,9 @@ impl ProviderRegistry {
                 display_name: "DeepSeek".into(),
                 base_url: "https://api.deepseek.com/v1".into(),
                 api_format: ApiFormat::OpenaiCompletions,
+                auth_type: AuthType::ApiKey,
                 api_key_ref: "${env:DEEPSEEK_API_KEY}".into(),
+                auth_token_key: String::new(),
                 models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
                 builtin: true,
             },
@@ -180,8 +307,21 @@ impl ProviderRegistry {
                 display_name: "Kimi".into(),
                 base_url: "https://api.kimi.com/v1".into(),
                 api_format: ApiFormat::Kimi,
+                auth_type: AuthType::ApiKey,
                 api_key_ref: "${env:KIMI_API_KEY}".into(),
+                auth_token_key: String::new(),
                 models: vec!["kimi-k2-07132k".into()],
+                builtin: true,
+            },
+            ProviderDefinition {
+                id: "kimi_code".into(),
+                display_name: "Kimi Code (OAuth)".into(),
+                base_url: "https://api.kimi.com/coding/v1".into(),
+                api_format: ApiFormat::Kimi,
+                auth_type: AuthType::OAuth,
+                api_key_ref: String::new(),
+                auth_token_key: "kimi-code".into(),
+                models: vec!["kimi-k2.6".into()],
                 builtin: true,
             },
             ProviderDefinition {
@@ -189,7 +329,9 @@ impl ProviderRegistry {
                 display_name: "Local (GGUF)".into(),
                 base_url: String::new(),
                 api_format: ApiFormat::OpenaiCompletions,
+                auth_type: AuthType::None,
                 api_key_ref: String::new(),
+                auth_token_key: String::new(),
                 models: vec![],
                 builtin: true,
             },
@@ -323,7 +465,9 @@ mod tests {
             display_name: String::new(),
             base_url: "https://test.com".into(),
             api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
             api_key_ref: "${env:TEST_FAKE_KEY}".into(),
+            auth_token_key: String::new(),
             models: vec![],
             builtin: false,
         };
@@ -338,7 +482,9 @@ mod tests {
             display_name: String::new(),
             base_url: "https://test.com".into(),
             api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
             api_key_ref: "sk-mykey".into(),
+            auth_token_key: String::new(),
             models: vec![],
             builtin: false,
         };
@@ -352,7 +498,9 @@ mod tests {
             display_name: "".into(),
             base_url: "https://test.com".into(),
             api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
             api_key_ref: "".into(),
+            auth_token_key: String::new(),
             models: vec![],
             builtin: false,
         };
@@ -373,5 +521,23 @@ models = ["model-a", "model-b"]
         let def = file.provider.get("test").unwrap();
         assert_eq!(def.display_name, "Test Provider");
         assert_eq!(def.models.len(), 2);
+    }
+
+    #[test]
+    fn test_provider_definition_to_core_config() {
+        let def = ProviderDefinition {
+            id: "kimi_code".into(),
+            display_name: "Kimi Code".into(),
+            base_url: "https://api.kimi.com/coding/v1".into(),
+            api_format: ApiFormat::Kimi,
+            auth_type: AuthType::OAuth,
+            api_key_ref: String::new(),
+            auth_token_key: "kimi-code".into(),
+            models: vec!["kimi-k2.6".into()],
+            builtin: true,
+        };
+        let cfg: clarity_core::llm::ProviderConfig = (&def).into();
+        assert_eq!(cfg.auth_type, clarity_core::llm::AuthType::OAuth);
+        assert!(cfg.oauth.is_some());
     }
 }

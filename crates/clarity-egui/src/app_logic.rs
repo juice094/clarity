@@ -36,6 +36,24 @@ impl App {
                 *guard = Some(e.to_string());
             }
 
+            // MCP auto-connect: load mcp.json and register discovered tools
+            match clarity_core::mcp::config::McpConfig::load_default() {
+                Ok(config) => {
+                    let manager = clarity_core::mcp::McpManager::from_config(&config).await;
+                    let server_count = manager.list_servers().len();
+                    let tool_count = manager.tools().len();
+                    manager.register_all(state_for_monitor.agent.registry());
+                    tracing::info!(
+                        "MCP auto-connect: {} server(s), {} tool(s) registered",
+                        server_count,
+                        tool_count
+                    );
+                }
+                Err(e) => {
+                    tracing::debug!("MCP config not loaded ({}), skipping auto-connect", e);
+                }
+            }
+
             let mut consecutive_failures: u32 = 0;
             let mut consecutive_successes: u32 = 0;
             const THRESHOLD: u32 = 2;
@@ -85,6 +103,35 @@ impl App {
                             tracing::warn!("Failed to send Fallback: {}", e);
                         }
                     }
+                }
+            }
+        });
+
+        // OAuth token pre-refresh: refresh before expiry so the user never
+        // has to wait during a chat turn. Applies to any provider with
+        // auth_type == OAuth (currently only Kimi Code).
+        let state_for_refresh = state.clone();
+        runtime.spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let provider = {
+                    let guard = state_for_refresh.cached_settings.lock();
+                    guard.provider.clone()
+                };
+                let is_oauth = crate::provider::ProviderRegistry::load()
+                    .get(&provider)
+                    .map(|p| p.auth_type == crate::provider::AuthType::OAuth)
+                    .unwrap_or(false);
+                if !is_oauth {
+                    continue;
+                }
+                let manager = clarity_core::auth::KimiCodeTokenManager::new();
+                match manager.try_fresh().await {
+                    Ok(Some(_)) => tracing::debug!("OAuth token pre-refreshed successfully"),
+                    Ok(None) => tracing::debug!("OAuth token pre-refresh: no token on disk"),
+                    Err(e) => tracing::warn!("OAuth token pre-refresh failed: {}", e),
                 }
             }
         });
@@ -165,6 +212,8 @@ impl App {
                 provider_registry: crate::provider::ProviderRegistry::load(),
                 testing_provider: None,
                 refreshing_provider: None,
+                kimi_code_login_open: false,
+                kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
             },
             task_store: crate::stores::TaskStore {
                 task_panel_open: false,
@@ -208,6 +257,7 @@ impl App {
                 mcp_panel_open: false,
                 mcp_config: crate::ui::mcp_panel::load_mcp_config(),
                 mcp_changed: false,
+                connected_tools: vec![],
             },
             onboarding_store: crate::stores::OnboardingStore {
                 onboarding_state: if crate::onboarding::should_show_onboarding() {

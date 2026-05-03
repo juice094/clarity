@@ -48,8 +48,8 @@ impl ToolRegistry {
         use crate::tools::{
             AskUserTool, BashTool, CancelCronTool, ComputerUseTool, FileEditTool, FileReadTool,
             FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool, PowerShellTool,
-            ScheduleCronTool, TaskListTool, TaskOutputTool, TaskStopTool, ThinkTool, TodoTool,
-            WebBrowserTool, WebFetchTool, WebSearchTool,
+            ReadMediaFileTool, ScheduleCronTool, TaskListTool, TaskOutputTool, TaskStopTool,
+            ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
         };
 
         let registry = Self::new();
@@ -99,6 +99,9 @@ impl ToolRegistry {
 
         // Register computer use tool
         let _ = registry.register(ComputerUseTool::new());
+
+        // Register media reading tool
+        let _ = registry.register(ReadMediaFileTool::new());
 
         registry
     }

@@ -14,18 +14,17 @@ crates/
 │   └── Rule: NO dependencies on any frontend or network crate.
 ├── clarity-memory    # BM25 + vector hybrid search, chunking, four-level compilation
 ├── clarity-gateway   # Axum HTTP server, Web UI, session store, channel integrations
-├── clarity-tauri     # Tauri 2 Desktop GUI (React + Vite + i18n)
-│   └── frontend/     # React app; communicates with Rust via Tauri invoke/commands
+├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack, pure Rust
 ├── clarity-tui       # ratatui terminal interface
 ├── clarity-claw      # System-tray background monitor (tao + tray-icon)
 ├── clarity-wire      # UI↔Agent event bus (SPMC, cross-module pub/sub)
 └── clarity-headless  # Headless CLI for scripts/CI
 ```
 
-**Dependency direction**: `clarity-core` ← `clarity-memory` / `clarity-wire` ← all frontends (`gateway`, `tauri`, `tui`, `claw`, `headless`).
+**Dependency direction**: `clarity-core` ← `clarity-memory` / `clarity-wire` ← all frontends (`gateway`, `egui`, `tui`, `claw`, `headless`).
 
 **Forbidden patterns**:
-- `clarity-core` importing `tauri-apps/api` or `axum` — **never**.
+- `clarity-core` importing `eframe`/`egui` or `axum` — **never**.
 - Frontend crates importing each other — use `clarity-wire` for cross-frontend communication.
 - Blocking I/O in async contexts — use `tokio::task::spawn_blocking`.
 
@@ -38,7 +37,6 @@ crates/
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Rust | 1.85+ | Core language |
-| Node.js | 18+ | Tauri frontend build |
 | Git | any | Version control |
 
 ### One-Time Setup
@@ -51,12 +49,7 @@ cd clarity
 # 2. Verify Rust toolchain
 rustc --version  # should be 1.85+
 
-# 3. Install frontend dependencies (only needed for Tauri GUI)
-cd crates/clarity-tauri/frontend
-npm install
-cd ../../..
-
-# 4. Verify everything compiles
+# 3. Verify everything compiles
 cargo check --workspace
 ```
 
@@ -68,7 +61,7 @@ For NVIDIA GPU acceleration of local GGUF inference:
 # Windows
 $env:NVCC_CCBIN="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.40.33807\bin\Hostx64\x64"
 cargo check -p clarity-core --features local-llm-cuda
-cargo run -p clarity-tauri --features cuda
+cargo run -p clarity-egui --features cuda
 ```
 
 See [`AGENTS.md`](AGENTS.md) for full CUDA setup instructions.
@@ -88,7 +81,7 @@ git pull origin main
 git checkout -b feat/your-feature-name
 
 # 3. Make your changes, commit with conventional commits
-git commit -m "feat(tauri): add model download progress bar"
+git commit -m "feat(egui): add model download progress bar"
 
 # 4. Push and open PR
 git push origin feat/your-feature-name
@@ -114,7 +107,7 @@ Closes #123
 | `chore` | Maintenance (deps, CI, formatting) |
 | `perf` | Performance improvement |
 
-**Scopes**: `core`, `memory`, `gateway`, `tauri`, `tui`, `claw`, `wire`, `headless`, `ci`, `docs`.
+**Scopes**: `core`, `memory`, `gateway`, `egui`, `tui`, `claw`, `wire`, `headless`, `ci`, `docs`.
 
 ---
 
@@ -136,17 +129,19 @@ cargo test --workspace --lib
 - All `pub` items must have doc comments (`///`).
 - `unsafe` blocks are prohibited without explicit maintainer approval.
 
-### Frontend (React/TypeScript)
+### Frontend (egui)
 
 ```bash
-cd crates/clarity-tauri/frontend
-npm run build        # must pass without TypeScript errors
+cargo check -p clarity-egui
+cargo clippy -p clarity-egui -- -D warnings
 ```
 
 **Rules**:
-- Use `useTranslation()` for all user-facing strings. No hardcoded English or Chinese in JSX.
-- Prefer functional components with hooks.
-- Keep components under 300 lines; extract sub-components when exceeding.
+- All user-facing strings must go through `i18n` (`t!("key")`). No hardcoded English or Chinese.
+- Use `Frame::new()` instead of `Frame::group(ui.style())` for consistent theming.
+- Keep panel render functions under 300 lines; extract sub-components when exceeding.
+- Prefer `ScrollArea` with `AlwaysHidden` scrollbar for clean glassmorphism look.
+- Modal dialogs must use `Frame::window` + `radius_lg` + dimmer overlay + Escape/click-outside to close.
 
 ---
 
@@ -155,18 +150,20 @@ npm run build        # must pass without TypeScript errors
 | Change Type | Required Tests |
 |-------------|----------------|
 | New Rust module | Unit tests in `#[cfg(test)]` blocks |
-| New Tauri command | Mock integration test or manual QA checklist |
+| New egui panel/component | Manual QA checklist or visual regression check |
 | New frontend component | Visual inspection + interaction check |
 | Bug fix | Regression test that fails before the fix |
 | Performance change | Benchmark or latency measurement |
 
 ### Manual QA Checklist (for UI changes)
 
-- [ ] Tauri window opens without console errors
-- [ ] Settings Panel opens, saves, and persists across restart
+- [ ] egui window opens without panic or layout overflow
+- [ ] Settings popup opens, saves, and persists across restart
 - [ ] Language switch (中文/English) works and persists
 - [ ] Offline banner appears when network is disabled
 - [ ] Local model selection scans `~/models/` correctly
+- [ ] Tab bar renders full-width with correct active state
+- [ ] Sidebar global toolbar buttons (Online/Token/Lang/Skills/MCP/Settings) all functional
 
 ---
 
@@ -176,7 +173,7 @@ npm run build        # must pass without TypeScript errors
 |-------|-------------------|--------|
 | Rust + AI/LLM | Local model provider improvements, memory optimization | High |
 | Rust + Systems | MCP protocol extensions, sandbox research | High |
-| React/TS | UI polish, onboarding flow, i18n completion | Medium |
+| egui/Rust UI | UI polish, glassmorphism refinements, i18n completion | Medium |
 | DevOps/CI | Release workflow, cross-platform builds | Medium |
 | Documentation | Translation, tutorial writing, architecture docs | Low barrier |
 
@@ -193,6 +190,14 @@ Check the [GitHub Issues](https://github.com/juice094/clarity/issues) for items 
 
 ---
 
-## 8. License
+## 8. Contributor License Agreement (CLA)
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By submitting a pull request or otherwise contributing code, documentation, or other materials to Clarity, you agree to the following:
+
+1. **You grant juice094** a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, display, perform, sublicense, and distribute your contributions as part of the Clarity project under the [GNU Affero General Public License v3.0](LICENSE) (or any later version).
+2. **You represent that** each of your contributions is your original creation and that you have the right to grant the above license. If your employer has rights to intellectual property that you create, you represent that you have received permission to make contributions on behalf of that employer, or that your employer has waived such rights.
+3. **You understand** that this CLA does not change your rights to use your own contributions for any other purpose.
+
+## 9. License
+
+By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE) (or any later version).

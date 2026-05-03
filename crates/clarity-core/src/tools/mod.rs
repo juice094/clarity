@@ -6,17 +6,15 @@
 //! - `shell`: Shell execution (bash, powershell)
 //! - `search`: Search operations (glob, grep)
 
-use async_trait::async_trait;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 pub mod ask_user;
 pub mod channel;
 pub mod computer;
 pub mod cron;
 pub mod file;
+pub mod media;
 pub mod notify;
 pub mod plan;
 pub mod search;
@@ -33,6 +31,7 @@ pub use channel::ChannelSendTool;
 pub use computer::ComputerUseTool;
 pub use cron::{CancelCronTool, ListCronTool, ScheduleCronTool};
 pub use file::{FileEditTool, FileReadTool, FileWriteTool};
+pub use media::ReadMediaFileTool;
 pub use notify::{NotifyTool, PushNotificationTool};
 pub use plan::PlanTool;
 pub use search::{GlobTool, GrepTool};
@@ -44,197 +43,10 @@ pub use todo::TodoTool;
 pub use web::{WebFetchTool, WebSearchTool};
 pub use web_browser::WebBrowserTool;
 
-use crate::approval::ApprovalMode;
-use crate::error::ToolError;
-use crate::subagents::token::CapabilityToken;
-
-/// Result type for tool execution
-pub type ToolResult<T> = Result<T, ToolError>;
-
-/// Context passed to tools during execution
-///
-/// Contains information about the current execution environment,
-/// working directory, and shared resources.
-#[derive(Debug, Clone)]
-pub struct ToolContext {
-    /// Current working directory for the operation
-    pub working_dir: PathBuf,
-
-    /// Environment variables
-    pub env: HashMap<String, String>,
-
-    /// Request timeout in seconds
-    pub timeout_secs: u64,
-
-    /// Maximum output size (bytes)
-    pub max_output_size: usize,
-
-    /// Whether the operation is read-only
-    pub read_only: bool,
-
-    /// Current approval mode
-    pub approval_mode: ApprovalMode,
-
-    /// Optional capability token for permission isolation
-    pub capability_token: Option<CapabilityToken>,
-}
-
-impl ToolContext {
-    /// Create a new tool context with default settings
-    pub fn new() -> Self {
-        Self {
-            working_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            env: std::env::vars().collect(),
-            timeout_secs: 30,
-            max_output_size: 1024 * 1024, // 1MB
-            read_only: false,
-            approval_mode: ApprovalMode::Interactive,
-            capability_token: None,
-        }
-    }
-
-    /// Set the working directory
-    pub fn with_working_dir(mut self, path: impl Into<PathBuf>) -> Self {
-        self.working_dir = path.into();
-        self
-    }
-
-    /// Set the timeout
-    pub fn with_timeout(mut self, secs: u64) -> Self {
-        self.timeout_secs = secs;
-        self
-    }
-
-    /// Set read-only mode
-    pub fn with_read_only(mut self, read_only: bool) -> Self {
-        self.read_only = read_only;
-        self
-    }
-
-    /// Add an environment variable
-    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.env.insert(key.into(), value.into());
-        self
-    }
-
-    /// Set approval mode
-    pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
-        self.approval_mode = mode;
-        self
-    }
-
-    /// Set capability token for permission isolation
-    pub fn with_capability_token(mut self, token: Option<CapabilityToken>) -> Self {
-        self.capability_token = token;
-        self
-    }
-}
-
-impl Default for ToolContext {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Core trait for all tools in the Clarity system
-///
-/// Implement this trait to create new tools that can be registered
-/// with the `ToolRegistry` and used by the `Agent`.
-///
-/// # Example
-///
-/// ```rust
-/// use async_trait::async_trait;
-/// use clarity_core::tools::{Tool, ToolContext, ToolResult};
-/// use clarity_core::ToolError;
-/// use serde_json::{json, Value};
-///
-/// pub struct EchoTool;
-///
-/// #[async_trait]
-/// impl Tool for EchoTool {
-///     fn name(&self) -> &str {
-///         "echo"
-///     }
-///     
-///     fn description(&self) -> &str {
-///         "Echoes back the input message"
-///     }
-///     
-///     fn parameters(&self) -> Value {
-///         json!({
-///             "type": "object",
-///             "properties": {
-///                 "message": {
-///                     "type": "string",
-///                     "description": "The message to echo"
-///                 }
-///             },
-///             "required": ["message"]
-///         })
-///     }
-///     
-///     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
-///         let message = args.get("message")
-///             .and_then(|v| v.as_str())
-///             .ok_or_else(|| ToolError::invalid_params("missing 'message'"))?;
-///         
-///         Ok(json!({ "echo": message }))
-///     }
-/// }
-/// ```
-#[async_trait]
-pub trait Tool: Send + Sync {
-    /// Tool name - must be unique within a registry
-    fn name(&self) -> &str;
-
-    /// Human-readable description for LLM
-    fn description(&self) -> &str;
-
-    /// JSON Schema for tool parameters
-    ///
-    /// This should follow the JSON Schema specification and describe
-    /// all parameters the tool accepts.
-    fn parameters(&self) -> Value;
-
-    /// Execute the tool with the given arguments
-    ///
-    /// # Arguments
-    ///
-    /// * `args` - JSON Value containing the tool parameters
-    /// * `ctx` - Execution context (working dir, env vars, etc.)
-    ///
-    /// # Returns
-    ///
-    /// The result of the execution as a JSON Value
-    async fn execute(&self, args: Value, ctx: ToolContext) -> ToolResult<Value>;
-
-    /// Whether this tool requires explicit user approval regardless of global approval mode.
-    ///
-    /// Tools that directly interact with the OS GUI (e.g. `computer_use`) should return `true`.
-    /// The default is `false`.
-    fn requires_approval(&self) -> bool {
-        false
-    }
-}
-
-/// Type-erased tool wrapper for storage in collections
-pub type BoxedTool = Box<dyn Tool>;
-
-/// Shared tool reference (for concurrency)
-pub type SharedTool = Arc<dyn Tool>;
-
-/// Helper trait to convert tools to shared references
-pub trait IntoSharedTool: Tool + Sized
-where
-    Self: 'static,
-{
-    fn into_shared(self) -> SharedTool {
-        Arc::new(self)
-    }
-}
-
-impl<T: Tool + Sized + 'static> IntoSharedTool for T {}
+// Re-export contract types so existing imports continue to work.
+pub use clarity_contract::{
+    ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext, ToolError, ToolResult,
+};
 
 /// Common parameter extraction helpers
 pub mod helpers {

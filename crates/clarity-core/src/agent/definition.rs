@@ -11,8 +11,18 @@ use tracing::{debug, warn};
 pub struct AgentDefinition {
     pub version: u32,
     pub name: Option<String>,
+    /// Human-readable description of the agent's purpose.
+    /// Used by the LLM when selecting which agent/tool to use.
+    pub description: Option<String>,
     pub system_prompt_path: Option<PathBuf>,
     pub system_prompt_args: HashMap<String, String>,
+    /// Default model alias (e.g. "gpt-4", "claude-3-opus").
+    /// Resolved via ModelRegistry at runtime.
+    pub model: Option<String>,
+    /// Default approval mode: "interactive", "yolo", or "plan".
+    pub approval_mode: Option<String>,
+    /// Whether to enable automatic memory extraction after each turn.
+    pub memory_enabled: Option<bool>,
     pub tools: Vec<String>,
     pub subagents: HashMap<String, SubagentRef>,
 }
@@ -37,9 +47,13 @@ struct RawAgentYaml {
 #[derive(Debug, Deserialize)]
 struct RawAgent {
     name: Option<String>,
+    description: Option<String>,
     system_prompt_path: Option<String>,
     #[serde(default)]
     system_prompt_args: HashMap<String, String>,
+    model: Option<String>,
+    approval_mode: Option<String>,
+    memory_enabled: Option<bool>,
     #[serde(default)]
     tools: Vec<String>,
     #[serde(default)]
@@ -96,8 +110,12 @@ pub fn load_agent_definition(dir: &Path) -> Result<AgentDefinition, crate::error
     Ok(AgentDefinition {
         version: raw.version,
         name: agent.name.filter(|n| !n.is_empty()),
+        description: agent.description.filter(|d| !d.is_empty()),
         system_prompt_path,
         system_prompt_args: agent.system_prompt_args,
+        model: agent.model.filter(|m| !m.is_empty()),
+        approval_mode: agent.approval_mode.filter(|a| !a.is_empty()),
+        memory_enabled: agent.memory_enabled,
         tools: agent.tools,
         subagents,
     })
@@ -137,12 +155,34 @@ pub fn apply_to_config(
         }
     }
 
-    // 3. Template variables
+    // 3. Description (injected into entry_context for LLM visibility)
+    if let Some(ref desc) = def.description {
+        if !desc.is_empty() {
+            config.entry_context = format!("{}", desc);
+        }
+    }
+
+    // 4. Model override
+    if let Some(ref model) = def.model {
+        config.model_alias = Some(model.clone());
+    }
+
+    // 5. Approval mode
+    if let Some(ref mode) = def.approval_mode {
+        config.approval_mode = Some(mode.clone());
+    }
+
+    // 6. Memory enabled
+    if let Some(enabled) = def.memory_enabled {
+        config.extract_memories = enabled;
+    }
+
+    // 7. Template variables
     if !def.system_prompt_args.is_empty() {
         config.template_variables = def.system_prompt_args.clone();
     }
 
-    // 4. Prompts directory (directory containing agent.yaml)
+    // 8. Prompts directory (directory containing agent.yaml)
     if let Some(ref prompt_path) = def.system_prompt_path {
         if let Some(parent) = prompt_path.parent() {
             config.prompts_dir = Some(parent.to_path_buf());
@@ -225,12 +265,16 @@ agent:
         let def = AgentDefinition {
             version: 1,
             name: Some("my-agent".to_string()),
+            description: None,
             system_prompt_path: Some(prompt_path.clone()),
             system_prompt_args: {
                 let mut m = std::collections::HashMap::new();
                 m.insert("name".to_string(), "world".to_string());
                 m
             },
+            model: None,
+            approval_mode: None,
+            memory_enabled: None,
             tools: vec![],
             subagents: std::collections::HashMap::new(),
         };
@@ -260,8 +304,12 @@ agent:
         let def = AgentDefinition {
             version: 1,
             name: Some("my-agent".to_string()),
+            description: None,
             system_prompt_path: Some(prompt_path),
             system_prompt_args: std::collections::HashMap::new(),
+            model: None,
+            approval_mode: None,
+            memory_enabled: None,
             tools: vec![],
             subagents: std::collections::HashMap::new(),
         };

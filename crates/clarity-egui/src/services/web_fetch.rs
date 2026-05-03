@@ -54,7 +54,11 @@ fn html_to_text(html: &str) -> String {
     text = lines.join("\n\n");
 
     if text.len() > 50000 {
-        text = text[..50000].to_string();
+        let mut end = 50000;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
         text.push_str("\n\n[Content truncated due to length]");
     }
 
