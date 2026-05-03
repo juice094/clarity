@@ -8,18 +8,39 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
     let skills = app.state.agent.list_skills();
     let active_ids = app.state.agent.skill_active_ids();
 
-    egui::Window::new("🛠 Skills")
+    let mut open = app.ui_store.skill_panel_open;
+    let mut close_requested = false;
+    let screen = ctx.screen_rect();
+
+    // Dimmer + outside-click-to-close
+    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+    ctx.layer_painter(egui::LayerId::background()).rect_filled(
+        screen,
+        egui::CornerRadius::same(0),
+        scrim,
+    );
+    egui::Area::new("skill_scrim".into())
+        .interactable(true)
+        .order(egui::Order::Background)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked()
+                || ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            {
+                close_requested = true;
+            }
+        });
+
+    egui::Window::new(app.t("Skills"))
+        .open(&mut open)
         .collapsible(false)
-        .resizable(true)
-        .min_width(360.0)
-        .max_width(480.0)
-        .default_height(400.0)
-        .anchor(egui::Align2::RIGHT_CENTER, egui::vec2(-20.0, 0.0))
+        .resizable(false)
+        .fixed_size(egui::vec2(400.0, 480.0))
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .frame(
-            egui::Frame::group(&ctx.style())
+            egui::Frame::window(&ctx.style())
                 .fill(app.ui_store.theme.surface)
-                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
-                .stroke(egui::Stroke::NONE)
+                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
                 .inner_margin(egui::Margin::same(16)),
         )
         .show(ctx, |ui| {
@@ -160,4 +181,6 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                     });
             }
         });
+
+    app.ui_store.skill_panel_open = open && !close_requested;
 }

@@ -13,8 +13,29 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     let mut cancel_clicked = false;
     let mut create_clicked = false;
     let mut open = app.mcp_store.mcp_panel_open;
+    let mut close_requested = false;
+    let screen = ctx.screen_rect();
 
-    egui::Window::new("MCP Servers")
+    // Dimmer + outside-click-to-close
+    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+    ctx.layer_painter(egui::LayerId::background()).rect_filled(
+        screen,
+        egui::CornerRadius::same(0),
+        scrim,
+    );
+    egui::Area::new("mcp_scrim".into())
+        .interactable(true)
+        .order(egui::Order::Background)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked()
+                || ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            {
+                close_requested = true;
+            }
+        });
+
+    egui::Window::new(app.t("MCP Servers"))
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -95,7 +116,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
             }
         });
 
-    app.mcp_store.mcp_panel_open = open;
+    app.mcp_store.mcp_panel_open = open && !close_requested;
 
     if save_clicked {
         if let Some(ref mut config) = config_opt {

@@ -91,6 +91,7 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     // ── Chat ──
     m.insert("Type a message...", "输入消息…");
     m.insert("Type a message (files attached)...", "输入消息（已附加文件）…");
+    m.insert("Message queued, will send after current response...", "消息已排队，将在当前回复结束后发送…");
     m.insert("Local-first AI agent runtime", "本地优先的 AI 代理运行环境");
     m.insert("Preview", "预览");
     m.insert("Configure Settings", "配置设置");
@@ -139,6 +140,7 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Approve for Session", "本次会话批准");
     m.insert("Enabled", "已启用");
     m.insert("Environment:", "环境变量：");
+    m.insert("MCP Servers", "MCP 服务器");
     m.insert("Compacting conversation history…", "正在压缩对话历史…");
     // ── Settings ──
     m.insert("General", "通用");

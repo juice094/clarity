@@ -10,7 +10,7 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
 
     // Input bar card — full width, safe margin, no overflow
     ui.add_space(4.0);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .fill(app.ui_store.theme.input_bg)
         .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
         .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
@@ -26,11 +26,11 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         let hint = if app.chat_store.pending_send.is_some() {
-                            "消息已排队，将在当前回复结束后发送..."
+                            app.t("Message queued, will send after current response...")
                         } else if !app.chat_store.attachments.is_empty() {
-                            "输入消息（已附加文件）..."
+                            app.t("Type a message (files attached)...")
                         } else {
-                            "输入消息..."
+                            app.t("Type a message...")
                         };
                         let prev_input = app.chat_store.input.clone();
                         let line_count = app.chat_store.input.matches('\n').count() + 1;
