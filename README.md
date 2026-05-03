@@ -62,8 +62,13 @@ cargo run -p clarity-egui
 - ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway/Headless）
 - ✅ egui 归一化 UI：全宽 tab bar、顶部全局工具栏、统一弹窗风格（Settings/MCP/Skill）、归一化 Frame 系统
 - ✅ KimiCLI 兼容层：`agent.yaml` 声明式配置、工具名映射、子代理定义
+- ✅ 可靠性：LoopDetector（重复调用检测）、USD/turn 预算上限、凭证脱敏、上下文溢出自动恢复
+- ✅ Memory：时间衰减权重（6 个月半衰期）、BM25 + vector 混合搜索
+- ✅ Provider 自适应：自声明能力（native tool / vision / prompt caching）、prompt-guided fallback（Anthropic）
+- ✅ Streaming：DraftEvent 三态流（Clear/Progress/Content）
 - 🔄 进行中：跨会话 Agent 状态快照、子 Agent 上下文持久化（后端就绪，前端待接入）
-- ⏸️ 未实现：多窗口进程隔离、层级信息注入总线、可视化工作流（D2/Mermaid）
+- 🔄 进行中：Claw 联邦运行时集成（Gateway 完整，runtime 空壳待填充）
+- ⏸️ 未实现：多窗口进程隔离、层级信息注入总线、可视化工作流（D2/Mermaid）、架构解耦（`run.rs` 拆分、`TurnContext` 提取）
 
 > 详细路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
@@ -83,6 +88,13 @@ cargo run -p clarity-egui
 | **Dynamic Prompts** | `SystemPromptBuilder` assembles context-aware prompts (approval notices, offline status, template variables). |
 | **Agent Config (YAML)** | Drop an `agent.yaml` in your working directory to declare system prompts, tool whitelists, and subagent refs — KimiCLI-style declarative config, no code changes. |
 | **Model Hot-Swap** | Change provider / model in Settings without restart. API keys stored locally, never leave the machine. |
+| **Loop Detector** | Output-hash based detection of repetitive tool calls. Upgrades to fatal after 3 identical outputs within a single turn. |
+| **Budget Guard** | Per-turn and per-day USD cost estimation with configurable limits. Provider self-reports pricing; blocks over-budget calls before they hit the API. |
+| **Credential Scrubbing** | Automatic redaction of API keys, tokens, and passwords from tool results before they enter the message history. |
+| **Context Overflow Recovery** | Detects LLM context-length errors, fast-trims oldest tool results, and retries once — no user intervention. |
+| **Memory Time Decay** | `search_fulltext` results weighted by age: 6-month-old memories score ≤ 50%. Configurable half-life. |
+| **Multi-Format Tool Parser** | Fallback parsing for JSON, XML, MiniMax, and Perl-style tool calls when the provider does not support native `tools` parameter. |
+| **Lifecycle Hooks** | `before_tool_call` / `after_tool_call` / `on_llm_input` hooks for inspection, modification, or cancellation. |
 | **i18n** | Chinese / English language switching with persistent preference. |
 
 **Supported providers**: `openai`, `anthropic`, `kimi`, `kimi-code`, `deepseek`, `ollama`, `local` (Candle GGUF). Custom providers via `~/.config/clarity/models.toml` — no code changes required.
@@ -113,7 +125,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 590 tests, 0 failed, 6 ignored
+cargo test --workspace --lib                          # 709 tests, 0 failed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

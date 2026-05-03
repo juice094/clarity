@@ -36,8 +36,9 @@ crates/
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Rust | 1.85+ | Core language |
+| Rust | 1.94+ | Core language |
 | Git | any | Version control |
+| Node.js | 20+ | Gateway Web UI build (optional) |
 
 ### One-Time Setup
 
@@ -190,7 +191,31 @@ Check the [GitHub Issues](https://github.com/juice094/clarity/issues) for items 
 
 ---
 
-## 8. Contributor License Agreement (CLA)
+## 8. Sprint Discipline & Agent Collaboration
+
+This project uses AI agents for rapid iteration. If you are an agent contributor, follow these rules:
+
+### Commit Hygiene
+- **One concern per commit**. Do not mix feature code, test fixes, and documentation in a single commit.
+- **Commit message format**: `<type>(<scope>): <imperative summary>` — e.g. `feat(agent): add LoopDetector`.
+- **Verify before commit**: `cargo test --workspace --lib -- --test-threads=1` must pass.
+
+### Sub-Agent Isolation
+- Each sub-agent task must `git status` before committing to ensure only its own files are staged.
+- If a sub-agent finds uncommitted changes from another task, it must `git stash` them, complete its work, commit, then `git stash pop`.
+- Never force-push to `main` without human approval.
+
+### Architecture Health Check (Before Every Major Refactor)
+1. Can this module be extracted as an independent crate in half a day?
+2. Can you write a 50-word README explaining why an external project would use it?
+3. Can you name 2 existing alternatives?
+4. Do unit tests pass without depending on other modules' side effects?
+
+If any answer is "no", the module is too coupled. Refactor first, feature second.
+
+---
+
+## 9. Contributor License Agreement (CLA)
 
 By submitting a pull request or otherwise contributing code, documentation, or other materials to Clarity, you agree to the following:
 
@@ -198,6 +223,6 @@ By submitting a pull request or otherwise contributing code, documentation, or o
 2. **You represent that** each of your contributions is your original creation and that you have the right to grant the above license. If your employer has rights to intellectual property that you create, you represent that you have received permission to make contributions on behalf of that employer, or that your employer has waived such rights.
 3. **You understand** that this CLA does not change your rights to use your own contributions for any other purpose.
 
-## 9. License
+## 10. License
 
 By contributing, you agree that your contributions will be licensed under the [GNU Affero General Public License v3.0](LICENSE) (or any later version).
