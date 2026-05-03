@@ -51,6 +51,7 @@ impl App {
             let mut msg = Message {
                 role: Role::User,
                 content: full_message.clone(),
+                blocks: vec![],
                 timestamp: Instant::now(),
                 parsed: vec![],
                 cached_height: None,

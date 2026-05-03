@@ -68,7 +68,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                 // Active tab bg = content bg for "connected" look;
                                 // inactive tabs float above with elevated bg.
                                 let bg = if *is_active {
-                                    app.ui_store.theme.bg
+                                    app.ui_store.theme.bg_hover
                                 } else {
                                     app.ui_store.theme.bg_elevated
                                 };

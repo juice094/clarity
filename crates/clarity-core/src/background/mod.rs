@@ -90,6 +90,7 @@ pub(crate) struct TaskScheduler {
     sequence: RwLock<u64>,
 }
 
+#[allow(dead_code)]
 impl TaskScheduler {
     /// 创建新的任务调度器
     pub fn new(store: TaskStore) -> Self {
@@ -216,6 +217,7 @@ pub struct BackgroundTaskManager {
     cron_scheduler: Option<Arc<tokio::sync::Mutex<CronScheduler>>>,
 }
 
+#[allow(dead_code)]
 impl BackgroundTaskManager {
     /// 创建新的后台任务管理器
     pub fn new(
@@ -252,7 +254,7 @@ impl BackgroundTaskManager {
     }
 
     /// 设置调度器
-    pub fn with_scheduler(mut self, scheduler: Arc<TaskScheduler>) -> Self {
+    pub(crate) fn with_scheduler(mut self, scheduler: Arc<TaskScheduler>) -> Self {
         self.scheduler = Some(scheduler);
         self
     }
@@ -278,7 +280,7 @@ impl BackgroundTaskManager {
     }
 
     /// 获取调度器
-    pub fn scheduler(&self) -> Option<Arc<TaskScheduler>> {
+    pub(crate) fn scheduler(&self) -> Option<Arc<TaskScheduler>> {
         self.scheduler.clone()
     }
 

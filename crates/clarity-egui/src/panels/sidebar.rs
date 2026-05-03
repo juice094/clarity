@@ -17,6 +17,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
     if app.ui_store.sidebar_collapsed {
         return;
     }
+    let frame_fill = app.ui_store.theme.bg;
+    let frame_stroke = egui::Stroke::new(1.0, app.ui_store.theme.border);
     egui::SidePanel::left("sidebar")
         .default_width(SIDEBAR_WIDTH)
         .min_width(220.0)
@@ -24,7 +26,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .frame(
             egui::Frame::new()
-                .fill(app.ui_store.theme.bg)
+                .fill(frame_fill)
+                .stroke(frame_stroke)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -32,6 +35,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             egui::ScrollArea::vertical()
                 .id_salt("sidebar_scroll")
                 .show(ui, |ui| {
+                    let theme = app.ui_store.theme.clone();
                     // ── Top toolbar: collapse + global controls ──
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
@@ -186,33 +190,93 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     ui.add_space(app.ui_store.theme.space_12);
 
                     // ── Category navigation ──
-                    let categories = [("emotion", app.t("Emotion")), ("knowledge", app.t("Knowledge")), ("engineering", app.t("Engineering"))];
-                    for (cat, label) in categories {
+                    let categories = [
+                        ("emotion", app.t("Emotion"), "💭"),
+                        ("knowledge", app.t("Knowledge"), "📚"),
+                        ("engineering", app.t("Engineering"), "🔧"),
+                    ];
+                    for (cat, label, icon) in categories {
                         let is_active = app.session_store.active_category == cat;
-                        let stroke = if is_active {
-                            egui::Stroke::new(1.5, app.ui_store.theme.accent)
+                        let count = app
+                            .session_store
+                            .sessions
+                            .iter()
+                            .filter(|s| s.category == cat)
+                            .count();
+                        let latest = app
+                            .session_store
+                            .sessions
+                            .iter()
+                            .filter(|s| s.category == cat)
+                            .max_by_key(|s| s.updated_at);
+                        let fill = if is_active {
+                            theme.bg_hover
                         } else {
-                            egui::Stroke::NONE
+                            egui::Color32::TRANSPARENT
                         };
                         let btn_resp = ui.add(
                             egui::Button::new("")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
-                                .stroke(stroke)
-                                .min_size(egui::vec2(ui.available_width(), 32.0)),
+                                .fill(fill)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+                                .stroke(egui::Stroke::NONE)
+                                .min_size(egui::vec2(ui.available_width(), 56.0)),
                         );
+                        // Hover fill when not active
+                        if !is_active && btn_resp.hovered() {
+                            ui.painter().rect_filled(
+                                btn_resp.rect,
+                                egui::CornerRadius::same(theme.radius_md as u8),
+                                theme.bg_hover.linear_multiply(0.5),
+                            );
+                        }
+
                         let text_color = if is_active || btn_resp.hovered() {
-                            app.ui_store.theme.text
+                            theme.text
                         } else {
-                            app.ui_store.theme.text_dim
+                            theme.text_dim
                         };
-                        ui.painter().text(
-                            btn_resp.rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            label,
-                            app.ui_store.theme.font(app.ui_store.theme.text_base),
+                        let painter = ui.painter_at(btn_resp.rect);
+                        let content_left = btn_resp.rect.min.x + 12.0;
+                        let line_y = btn_resp.rect.min.y + 10.0;
+
+                        // Icon + Name
+                        painter.text(
+                            egui::pos2(content_left, line_y),
+                            egui::Align2::LEFT_TOP,
+                            format!("{} {}", icon, label),
+                            theme.font(theme.text_base),
                             text_color,
                         );
+
+                        // Status dot + active count
+                        let dot_y = line_y + theme.text_base + 4.0;
+                        let dot_center = egui::pos2(content_left + 4.0, dot_y + 5.0);
+                        painter.circle_filled(dot_center, 3.0, theme.status_online);
+                        painter.text(
+                            egui::pos2(content_left + 14.0, dot_y),
+                            egui::Align2::LEFT_TOP,
+                            format!("{} active", count),
+                            theme.font(theme.text_xs),
+                            theme.text_dim,
+                        );
+
+                        // Latest instance name (truncated)
+                        if let Some(s) = latest {
+                            let name_y = dot_y + theme.text_xs + 4.0;
+                            let display = if s.title.len() > 18 {
+                                format!("└─ {}...", &s.title[..15])
+                            } else {
+                                format!("└─ {}", s.title)
+                            };
+                            painter.text(
+                                egui::pos2(content_left, name_y),
+                                egui::Align2::LEFT_TOP,
+                                display,
+                                theme.font(theme.text_xs),
+                                theme.text_dim,
+                            );
+                        }
+
                         if btn_resp.clicked() {
                             app.switch_category(cat);
                         }

@@ -1,6 +1,6 @@
 //! Session persistence — load/save chat history to JSON files.
 
-use crate::ui::types::{Message, Role, Session};
+use crate::ui::types::{ContentBlock, Message, Role, Session};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -40,6 +40,7 @@ pub fn load_sessions() -> Vec<Session> {
                                         Role::Agent
                                     },
                                     content: m.content,
+                                    blocks: vec![],
                                     timestamp: Instant::now(),
                                     parsed: vec![],
                                     cached_height: None,
@@ -98,6 +99,11 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
                     Role::Agent => "agent".into(),
                 },
                 content: m.content.clone(),
+                blocks: if m.blocks.is_empty() {
+                    None
+                } else {
+                    Some(m.blocks.clone())
+                },
             })
             .collect(),
     };
@@ -148,4 +154,6 @@ struct SessionData {
 struct MessageData {
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    blocks: Option<Vec<ContentBlock>>,
 }

@@ -111,6 +111,7 @@ impl App {
             .min_height(TITLEBAR_HEIGHT)
             .frame(egui::Frame::new()
                 .fill(theme.bg)
+                .stroke(egui::Stroke::new(1.0, theme.border))
                 .inner_margin(egui::Margin::symmetric(8, 0)))
             .show(ctx, |ui| {
                 ui.set_min_height(TITLEBAR_HEIGHT);

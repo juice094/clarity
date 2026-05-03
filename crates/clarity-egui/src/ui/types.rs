@@ -152,10 +152,32 @@ pub struct Session {
     pub updated_at: u64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum ContentBlock {
+    Text { text: String },
+    Code { language: String, code: String },
+    ToolResult {
+        name: String,
+        args: Option<String>,
+        output: String,
+        truncated: bool,
+    },
+    ToolCall {
+        name: String,
+        args: String,
+    },
+    Think { steps: Vec<String> },
+    Plan { title: String, steps: Vec<String> },
+    FilePreview { path: String, content: String },
+}
+
 #[derive(Clone)]
 pub struct Message {
     pub role: Role,
     pub content: String,
+    /// Pretext structured content blocks.
+    pub blocks: Vec<ContentBlock>,
     #[allow(dead_code)]
     pub timestamp: Instant,
     /// Pretext-style prepared blocks — parsed once when content changes.
@@ -167,11 +189,48 @@ pub struct Message {
 }
 
 impl Message {
-    /// Cold path: parse markdown into cached blocks.
+    /// Cold path: sync content from blocks (if any), then parse markdown into cached blocks.
     pub fn prepare(&mut self) {
+        if !self.blocks.is_empty() {
+            self.content = Self::blocks_to_markdown(&self.blocks);
+        }
         self.parsed = crate::ui::markdown::parse_markdown(&self.content);
         // Invalidate height cache when content changes.
         self.cached_height = None;
+    }
+
+    /// Serialize structured blocks back into markdown for fallback / height estimation.
+    fn blocks_to_markdown(blocks: &[ContentBlock]) -> String {
+        let mut out = String::new();
+        for block in blocks {
+            match block {
+                ContentBlock::Text { text } => {
+                    out.push_str(text);
+                }
+                ContentBlock::Code { language, code } => {
+                    out.push_str(&format!("\n```{language}\n{code}\n```\n"));
+                }
+                ContentBlock::ToolResult { name, output, .. } => {
+                    out.push_str(&format!("\n🔧 **{name}**\n```json\n{output}\n```\n"));
+                }
+                ContentBlock::ToolCall { .. } => {
+                    // Intentionally not rendered in markdown fallback.
+                }
+                ContentBlock::Think { steps } => {
+                    out.push_str(&format!("\n💭 Thinking ({} steps)\n", steps.len()));
+                }
+                ContentBlock::Plan { title, steps } => {
+                    out.push_str(&format!("\n📋 **{title}**\n"));
+                    for step in steps {
+                        out.push_str(&format!("- {step}\n"));
+                    }
+                }
+                ContentBlock::FilePreview { path, content } => {
+                    out.push_str(&format!("\n📄 **{path}**\n```\n{content}\n```\n"));
+                }
+            }
+        }
+        out
     }
 }
 

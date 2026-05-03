@@ -12,7 +12,7 @@ pub fn process_events(app: &mut App) {
         match event {
             UiEvent::Chunk(text) => chat::on_chunk(&mut app.session_store, text),
             UiEvent::ToolStart { id, name, arguments } => {
-                chat::on_tool_start(&mut app.chat_store, id, name, arguments);
+                chat::on_tool_start(&mut app.session_store, &mut app.chat_store, id, name, arguments);
             }
             UiEvent::ToolResult { id, result } => {
                 let name = app.chat_store.tool_calls.iter()

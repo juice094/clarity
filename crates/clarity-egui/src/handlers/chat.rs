@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::stores::{ChatStore, SessionStore};
-use crate::ui::types::{AgentStatus, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus};
+use crate::ui::types::{AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus};
 
 // TODO: decompose App dependency
 pub fn on_done(app: &mut crate::App) {
@@ -36,6 +36,7 @@ pub fn on_error(app: &mut crate::App, msg: String) {
         let mut m = Message {
             role: Role::Agent,
             content: msg.clone(),
+            blocks: vec![ContentBlock::Text { text: msg.clone() }],
             timestamp: Instant::now(),
             parsed: vec![],
             cached_height: None,
@@ -51,13 +52,19 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
         if let Some(last) = session.messages.last_mut() {
             if last.role == Role::Agent {
                 last.content.push_str(&text);
+                if let Some(ContentBlock::Text { text: ref mut t }) = last.blocks.last_mut() {
+                    t.push_str(&text);
+                } else {
+                    last.blocks.push(ContentBlock::Text { text: text.clone() });
+                }
                 last.prepare();
                 return;
             }
         }
         let mut msg = Message {
             role: Role::Agent,
-            content: text,
+            content: text.clone(),
+            blocks: vec![ContentBlock::Text { text }],
             timestamp: Instant::now(),
             parsed: vec![],
             cached_height: None,
@@ -69,6 +76,7 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
 }
 
 pub fn on_tool_start(
+    session_store: &mut SessionStore,
     chat_store: &mut ChatStore,
     id: String,
     name: String,
@@ -76,10 +84,36 @@ pub fn on_tool_start(
 ) {
     chat_store.tool_calls.push(ToolCallInfo {
         id,
-        name,
+        name: name.clone(),
         status: ToolCallStatus::Running,
         result: Some(arguments.to_string()),
     });
+    if let Some(session) = session_store.active_session_mut() {
+        if let Some(last) = session.messages.last_mut() {
+            if last.role == Role::Agent {
+                last.blocks.push(ContentBlock::ToolCall {
+                    name,
+                    args: arguments.to_string(),
+                });
+                last.prepare();
+                return;
+            }
+        }
+        let mut msg = Message {
+            role: Role::Agent,
+            content: String::new(),
+            blocks: vec![ContentBlock::ToolCall {
+                name,
+                args: arguments.to_string(),
+            }],
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+        };
+        msg.prepare();
+        session.messages.push(msg);
+    }
 }
 
 pub fn on_tool_result(
@@ -94,15 +128,22 @@ pub fn on_tool_result(
         tc.result = Some(result.clone());
     }
     if let Some(session) = session_store.active_session_mut() {
-        let display_result = if result.chars().count() > 2000 {
-            let truncated: String = result.chars().take(2000).collect();
-            format!("{}\n... (truncated, {} chars total)", truncated, result.chars().count())
+        let truncated = result.chars().count() > 2000;
+        let display_result = if truncated {
+            let t: String = result.chars().take(2000).collect();
+            format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
         } else {
-            result
+            result.clone()
         };
         let mut msg = Message {
             role: Role::Agent,
             content: format!("🔧 **{}**\n```json\n{}\n```", name, display_result),
+            blocks: vec![ContentBlock::ToolResult {
+                name,
+                args: None,
+                output: display_result,
+                truncated,
+            }],
             timestamp: Instant::now(),
             parsed: vec![],
             cached_height: None,

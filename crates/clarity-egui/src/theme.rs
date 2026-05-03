@@ -156,32 +156,33 @@ impl Theme {
     /// - Larger corner radii (12/20 px) reinforce the modern glass feel.
     pub fn dark() -> Self {
         Self {
-            // Backgrounds: deep black base + translucent glass layers
-            bg: hex("#050507"),
-            bg_accent: rgba(20, 20, 28, 0.35),
-            bg_elevated: rgba(35, 35, 48, 0.80),
-            bg_hover: rgba(45, 45, 62, 0.65),
-            surface: rgba(32, 32, 45, 0.45),
-            surface_strong: rgba(38, 38, 52, 0.60),
-            glass: rgba(255, 255, 255, 0.04),
-            glass_strong: rgba(255, 255, 255, 0.10),
+            // Backgrounds: midnight slate (not pure black) + translucent glass layers
+            // #12121a provides "ambient light" for depth perception while staying OLED-friendly
+            bg: hex("#12121a"),
+            bg_accent: rgba(28, 28, 38, 0.55),
+            bg_elevated: rgba(42, 42, 56, 0.85),
+            bg_hover: rgba(55, 55, 72, 0.75),
+            surface: rgba(38, 38, 52, 0.60),
+            surface_strong: rgba(48, 48, 64, 0.72),
+            glass: rgba(255, 255, 255, 0.06),
+            glass_strong: rgba(255, 255, 255, 0.12),
 
             // Text: high contrast on dark glass
             text: hex("#E8EAEF"),
             text_strong: hex("#FFFFFF"),
-            text_muted: rgba(200, 205, 220, 0.70),
-            text_dim: rgba(200, 205, 220, 0.55),
+            text_muted: rgba(200, 205, 220, 0.72),
+            text_dim: rgba(200, 205, 220, 0.50),
 
             // Accent: ice blue
             accent: hex("#5B8DEF"),
             accent_hover: hex("#7DA8F2"),
-            accent_subtle: rgba(91, 141, 239, 0.12),
+            accent_subtle: rgba(91, 141, 239, 0.14),
 
             // Chat bubbles: translucent glass
-            user_bubble: rgba(45, 80, 160, 0.30),
-            ai_bubble: rgba(255, 255, 255, 0.04),
+            user_bubble: rgba(45, 80, 160, 0.32),
+            ai_bubble: rgba(255, 255, 255, 0.06),
             chat_text: hex("#E8EAEF"),
-            error_bubble: rgba(239, 91, 91, 0.28),
+            error_bubble: rgba(239, 91, 91, 0.30),
             error_text: hex("#EF8A8A"),
 
             // Status: semantic palette
@@ -192,11 +193,11 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
-            // Borders: semi-transparent white (glass reflection edge)
-            border: rgba(255, 255, 255, 0.04),
-            border_strong: rgba(255, 255, 255, 0.08),
-            border_hover: rgba(255, 255, 255, 0.14),
-            input_bg: rgba(18, 18, 26, 0.60),
+            // Borders: semi-transparent white — increased opacity for boundary visibility
+            border: rgba(255, 255, 255, 0.08),
+            border_strong: rgba(255, 255, 255, 0.14),
+            border_hover: rgba(255, 255, 255, 0.22),
+            input_bg: rgba(24, 24, 34, 0.65),
 
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
@@ -288,6 +289,8 @@ impl Theme {
     pub fn oled_black() -> Self {
         Self {
             // Backgrounds: OLED pure black with glass elevations
+            // NOTE: this is the "true black" variant for OLED pixel-off;
+            // the default dark() theme now uses midnight slate for better depth.
             bg: hex("#000000"),
             bg_accent: rgba(20, 20, 28, 0.35),
             bg_elevated: rgba(35, 35, 48, 0.80),
@@ -413,21 +416,21 @@ impl Theme {
     /// Light theme — cool off-white with copper accent.
     pub fn light() -> Self {
         Self {
-            // Backgrounds: cool off-white
+            // Backgrounds: cool off-white with warm-tinted mid-tones
             bg: hex("#f0f1f6"),
-            bg_accent: hex("#e8eaf0"),
-            bg_elevated: hex("#e0e2ea"),
-            bg_hover: hex("#d6d8e0"),
-            surface: hex("#e8eaf0"),
-            surface_strong: hex("#e0e2ea"),
+            bg_accent: hex("#e6e8f0"),
+            bg_elevated: hex("#dde0ea"),
+            bg_hover: hex("#d0d4e0"),
+            surface: hex("#e6e8f0"),
+            surface_strong: hex("#dde0ea"),
             glass: rgba(0, 0, 0, 0.04),
             glass_strong: rgba(0, 0, 0, 0.10),
 
-            // Text: cool dark
-            text: hex("#1e1d24"),
-            text_strong: hex("#121118"),
-            text_muted: hex("#6c6a76"),
-            text_dim: hex("#9a98a4"),
+            // Text: near-black for WCAG AA contrast
+            text: hex("#18181b"),
+            text_strong: hex("#09090b"),
+            text_muted: hex("#52525b"),
+            text_dim: hex("#71717a"),
 
             // Accent: same warm copper as dark theme
             accent: hex("#c98a5e"),
@@ -449,11 +452,11 @@ impl Theme {
             warn: hex("#d4a050"),
             danger: hex("#c97060"),
 
-            // Borders: warm-tinted
-            border: hex("#d0d2da"),
-            border_strong: hex("#b8bac6"),
-            border_hover: hex("#a0a3b2"),
-            input_bg: hex("#e8eaf0"),
+            // Borders: warm-tinted — strengthened for boundary visibility
+            border: hex("#c8cad4"),
+            border_strong: hex("#a1a3b0"),
+            border_hover: hex("#8a8c9a"),
+            input_bg: hex("#e6e8f0"),
 
             // Focus: accent-matched
             focus_ring: hex_alpha("#c98a5e", 0.20),
@@ -540,20 +543,20 @@ impl Theme {
         style.visuals.extreme_bg_color = self.bg_accent;
         style.visuals.widgets.inactive.weak_bg_fill = self.surface;
         style.visuals.widgets.inactive.bg_fill = self.surface;
-        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, self.border);
         style.visuals.widgets.hovered.weak_bg_fill = self.bg_hover;
         style.visuals.widgets.hovered.bg_fill = self.bg_hover;
-        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::NONE;
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
         style.visuals.widgets.active.bg_fill = self.bg_hover;
-        style.visuals.widgets.active.bg_stroke = egui::Stroke::NONE;
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, self.border_strong);
         style.visuals.widgets.noninteractive.bg_fill = self.surface;
-        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, self.border);
         style.visuals.selection.bg_fill = self.selection;
         style.visuals.selection.stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);
         style.visuals.window_shadow = self.shadow_panel;
         style.visuals.popup_shadow = self.shadow_panel;
-        style.visuals.window_stroke = egui::Stroke::NONE;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, self.border);
         style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
         style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
         style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_strong);

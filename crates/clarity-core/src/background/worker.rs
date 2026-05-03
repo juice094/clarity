@@ -1,6 +1,7 @@
 //! Worker Pool - 工作线程池
 //!
 //! 提供可扩展的工作线程池，用于执行后台任务
+#![allow(dead_code)]
 
 use super::{AgentTaskExecutor, TaskId, TaskResult, TaskSpec, TaskStatus, TaskStore};
 use crate::notifications::{task_status_notification, NotificationManager};
@@ -22,6 +23,7 @@ struct WorkItem {
 
 /// 工作线程统计信息
 #[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
 pub struct WorkerStats {
     /// 工作线程 ID
     pub worker_id: usize,
@@ -62,6 +64,7 @@ impl WorkerStats {
 
 /// 工作线程池
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WorkerPool {
     /// 工作发送通道
     work_tx: mpsc::Sender<WorkItem>,
@@ -396,6 +399,7 @@ impl WorkerPool {
 
 /// 可扩展工作线程池
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ScalableWorkerPool {
     /// 基础工作线程池
     pool: Arc<WorkerPool>,
@@ -447,6 +451,7 @@ impl ScalableWorkerPool {
 }
 
 /// Worker 结构体（兼容层）
+#[allow(dead_code)]
 pub struct Worker;
 
 #[cfg(test)]

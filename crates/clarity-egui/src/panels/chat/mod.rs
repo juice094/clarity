@@ -20,6 +20,7 @@ pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::new()
                 .fill(theme.bg)
+                .stroke(egui::Stroke::new(1.0, theme.border))
                 .inner_margin(egui::Margin::symmetric(theme.space_20 as i8, theme.space_12 as i8)),
         )
         .show(ctx, |ui| {

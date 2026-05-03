@@ -235,8 +235,21 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 **Phase 3: 基础设施（部分完成）**
 - commit `16f92445` — 用户级 skill 目录 `~/.config/clarity/skills/` 自动扫描
+- commit `53f6fb05` — MCP 配置热重载：每 5 秒轮询 mcp.json mtime，后台 async 重新加载 + UI toast
 
-**验证**: `cargo test -p clarity-core --lib` = 469 passed / 0 failed / 6 ignored
+**Phase 1 续: UX 补齐（新增完成）**
+- commit `53f6fb05` — 子 Agent 快捷入口 `/coder` `/explore`：输入框前缀检测 → `SubagentRunner` 异步执行 → 结果回显聊天区
+- commit `53f6fb05` — Gateway 路径上下文刷新：将 `refresh_context()` 从 `run()`/`run_streaming()` 移入 `run_streaming_turn()`，Gateway/ChatDriver 路径现在也能感知最新 Git 状态
+
+**健康检查（Sprint 15.5）**
+- commit `08e0e678` — Workspace 健康检查：
+  - 全部 9 crates 独立编译通过
+  - `cargo clippy --workspace --lib --bins` = 0 warnings（修复 24 个）
+  - `cargo test -p clarity-contract` 新增 41 个契约层测试
+  - `background/` 模块可见性收紧：`cron`/`worker` → `pub(crate) mod`，`TaskScheduler`/`TaskHandle` → `pub(crate)`
+  - cron tools 绑定到 `BackgroundTaskManager`（gateway）
+
+**验证**: `cargo test --workspace --lib --test-threads=1` = 665 passed / 0 failed / 6 ignored
 
 **Phase 3 — v0.3.0 每日使用体验硬化（已完成）**
 

@@ -14,6 +14,7 @@ pub fn render_file_tree(
     path: &Path,
     theme: &Theme,
     depth: usize,
+    selected_path: Option<&str>,
     on_file_click: &mut dyn FnMut(&Path),
 ) {
     if depth > MAX_DEPTH {
@@ -51,7 +52,7 @@ pub fn render_file_tree(
             .id_salt(full_path.to_string_lossy().to_string())
             .default_open(depth < 1);
             header.show(ui, |ui| {
-                render_file_tree(ui, &full_path, theme, depth + 1, on_file_click);
+                render_file_tree(ui, &full_path, theme, depth + 1, selected_path, on_file_click);
             });
         } else {
             let full_width = ui.available_width();
@@ -60,19 +61,31 @@ pub fn render_file_tree(
             let row_rect =
                 egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
+            let is_selected = selected_path.map_or(false, |sp| {
+                std::path::Path::new(sp) == full_path
+            });
             if ui.is_rect_visible(row_rect) {
                 let painter = ui.painter_at(row_rect);
-                let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 4.0, 3.0);
+                if is_selected {
+                    // Selected: background fill + 3px accent indicator on left edge
+                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover);
+                    let accent_bar = egui::Rect::from_min_max(
+                        egui::pos2(row_rect.min.x, row_rect.min.y + 2.0),
+                        egui::pos2(row_rect.min.x + 3.0, row_rect.max.y - 2.0),
+                    );
+                    painter.rect_filled(accent_bar, egui::CornerRadius::same(2), theme.accent);
+                } else if response.hovered() {
+                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover.linear_multiply(0.5));
+                }
+                let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 8.0, 3.0);
+                let text_color = if is_selected { theme.text } else { theme.text_dim };
                 painter.text(
                     text_pos,
                     egui::Align2::LEFT_TOP,
                     format!("📄 {}", name),
                     egui::FontId::new(theme.text_sm, egui::FontFamily::Proportional),
-                    theme.text_dim,
+                    text_color,
                 );
-                if response.hovered() {
-                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover);
-                }
             }
             if response.clicked() {
                 on_file_click(&full_path);

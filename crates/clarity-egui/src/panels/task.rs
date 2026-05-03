@@ -9,6 +9,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(app.ui_store.theme.bg)
+                .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -31,11 +32,18 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                 .max_height(tree_max_h)
                 .show(ui, |ui| {
                     if let Ok(cwd) = std::env::current_dir() {
+                        let selected_path = app.ui_store.preview_item.as_ref().and_then(|p| {
+                            match p {
+                                crate::ui::types::PreviewItem::File { path, .. } => Some(path.as_str()),
+                                _ => None,
+                            }
+                        });
                         crate::ui::file_browser::render_file_tree(
                             ui,
                             &cwd,
                             &app.ui_store.theme,
                             0,
+                            selected_path,
                             &mut |path| {
                                 clicked_file = Some(path.to_path_buf());
                             },
