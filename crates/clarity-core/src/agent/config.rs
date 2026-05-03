@@ -30,6 +30,8 @@ pub struct AgentConfig {
     pub capability_token: Option<crate::subagents::token::CapabilityToken>,
     /// Whether to enable automatic memory extraction after each turn.
     pub extract_memories: bool,
+    /// Agent display name (from agent.yaml)
+    pub name: Option<String>,
 }
 
 impl Default for AgentConfig {
@@ -46,6 +48,7 @@ impl Default for AgentConfig {
             prompts_dir: None,
             capability_token: None,
             extract_memories: false,
+            name: None,
         }
     }
 }
@@ -119,6 +122,12 @@ impl AgentConfig {
     /// Enable or disable automatic memory extraction after each turn.
     pub fn with_extract_memories(mut self, enabled: bool) -> Self {
         self.extract_memories = enabled;
+        self
+    }
+
+    /// Set agent display name.
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
         self
     }
 }

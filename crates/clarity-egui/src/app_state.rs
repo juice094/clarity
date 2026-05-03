@@ -47,9 +47,59 @@ impl Default for AppState {
             approval_rt.clone(),
             mode,
         ));
-        let agent = clarity_core::Agent::new(registry)
+        let mut agent = clarity_core::Agent::new(registry)
             .with_approval_runtime(mode_aware_rt.clone())
             .with_approval_mode(mode);
+
+        // Sprint X: Load KimiCLI-style agent.yaml if present in working directory
+        if let Ok(working_dir) = std::env::current_dir() {
+            match clarity_core::agent::definition::load_agent_definition(&working_dir) {
+                Ok(def) => {
+                    let mut config = agent.config().clone();
+                    match clarity_core::agent::definition::apply_to_config(&def, &mut config) {
+                        Ok(()) => {
+                            agent = if def.tools.is_empty() {
+                                clarity_core::Agent::with_config(agent.registry().clone(), config)
+                                    .with_approval_runtime(mode_aware_rt.clone())
+                                    .with_approval_mode(mode)
+                            } else {
+                                match clarity_core::agent::tool_map::filter_registry(
+                                    agent.registry(),
+                                    &def.tools,
+                                ) {
+                                    Ok(filtered_registry) => {
+                                        clarity_core::Agent::with_config(filtered_registry, config)
+                                            .with_approval_runtime(mode_aware_rt.clone())
+                                            .with_approval_mode(mode)
+                                    }
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "Failed to filter registry for agent definition: {}",
+                                            e
+                                        );
+                                        clarity_core::Agent::with_config(
+                                            agent.registry().clone(),
+                                            config,
+                                        )
+                                        .with_approval_runtime(mode_aware_rt.clone())
+                                        .with_approval_mode(mode)
+                                    }
+                                }
+                            };
+                        }
+                        Err(e) => {
+                            tracing::debug!("Failed to apply agent definition to config: {}", e);
+                        }
+                    }
+                }
+                Err(_) => {
+                    tracing::debug!(
+                        "No agent.yaml found in working directory, using default agent configuration"
+                    );
+                }
+            }
+        }
+
         let task_dir = dirs::data_dir()
             .map(|d| d.join("clarity").join("bg_tasks"))
             .unwrap_or_else(|| PathBuf::from("."));

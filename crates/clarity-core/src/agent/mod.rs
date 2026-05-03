@@ -14,9 +14,11 @@
 pub mod compaction_service;
 pub mod config;
 pub mod controller;
+pub mod definition;
 pub mod driver;
 pub mod enhanced;
 pub mod ops;
+pub mod tool_map;
 
 mod construct;
 mod execution;
