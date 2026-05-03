@@ -87,7 +87,7 @@ fn agent_structured_card(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
 
     // Glass card container — subtract padding to avoid parent overflow
     let max_width = (ui.available_width() - 32.0).max(120.0);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .fill(theme.surface)
         .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
         .stroke(egui::Stroke::NONE)
@@ -116,7 +116,7 @@ fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 
     ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
         ui.set_max_width(max_width);
-        egui::Frame::group(ui.style())
+        egui::Frame::new()
             .fill(theme.user_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::NONE)
@@ -141,7 +141,7 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
-        egui::Frame::group(ui.style())
+        egui::Frame::new()
             .fill(theme.error_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::new(1.0, theme.error_text))
@@ -184,7 +184,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(ui.available_width() * 0.85);
-        egui::Frame::group(ui.style())
+        egui::Frame::new()
             .fill(bg)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::new(1.0, theme.border))
@@ -222,7 +222,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
 pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(ui.available_width() * 0.78);
-        egui::Frame::group(ui.style())
+        egui::Frame::new()
             .fill(theme.ai_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
             .stroke(egui::Stroke::NONE)
