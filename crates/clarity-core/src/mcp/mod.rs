@@ -355,6 +355,48 @@ fn map_mcp_error(err: McpError) -> ToolError {
     }
 }
 
+/// Process an MCP tool call result, extracting text content and detecting
+/// application-level errors in JSON payloads.
+///
+/// This logic was extracted from [`McpToolAdapter::execute`] so it can be
+/// unit-tested without spinning up a real MCP server.
+pub fn process_mcp_tool_result(result: ToolCallResult) -> ToolResult<Value> {
+    let mut texts = Vec::new();
+    for content in result.content {
+        match content {
+            ToolContent::Text { text } => texts.push(text),
+            ToolContent::Image { data: _, mime_type } => {
+                texts.push(format!("[Image: {}]", mime_type));
+            }
+            ToolContent::Resource { resource } => {
+                if let Some(text) = resource.text {
+                    texts.push(text);
+                } else {
+                    texts.push(format!("[Resource: {}]", resource.uri));
+                }
+            }
+        }
+    }
+
+    let joined = texts.join("\n");
+
+    if result.is_error {
+        return Err(ToolError::execution_failed(joined));
+    }
+
+    // Detect application-level errors in JSON payloads
+    // (e.g. devbase returning {"success":false,"error":"..."})
+    if let Ok(parsed) = serde_json::from_str::<Value>(&joined) {
+        let has_error_field = parsed.get("error").is_some();
+        let success_false = parsed.get("success").and_then(|v| v.as_bool()) == Some(false);
+        if has_error_field || success_false {
+            return Err(ToolError::execution_failed(joined));
+        }
+    }
+
+    Ok(Value::String(joined))
+}
+
 /// Adapter to use MCP tools as Clarity tools
 #[derive(Clone)]
 pub struct McpToolAdapter {
@@ -403,40 +445,7 @@ impl Tool for McpToolAdapter {
             .await
             .map_err(map_mcp_error)?;
 
-        let mut texts = Vec::new();
-        for content in result.content {
-            match content {
-                ToolContent::Text { text } => texts.push(text),
-                ToolContent::Image { data: _, mime_type } => {
-                    texts.push(format!("[Image: {}]", mime_type));
-                }
-                ToolContent::Resource { resource } => {
-                    if let Some(text) = resource.text {
-                        texts.push(text);
-                    } else {
-                        texts.push(format!("[Resource: {}]", resource.uri));
-                    }
-                }
-            }
-        }
-
-        let joined = texts.join("\n");
-
-        if result.is_error {
-            return Err(ToolError::execution_failed(joined));
-        }
-
-        // Detect application-level errors in JSON payloads
-        // (e.g. devbase returning {"success":false,"error":"..."})
-        if let Ok(parsed) = serde_json::from_str::<Value>(&joined) {
-            let has_error_field = parsed.get("error").is_some();
-            let success_false = parsed.get("success").and_then(|v| v.as_bool()) == Some(false);
-            if has_error_field || success_false {
-                return Err(ToolError::execution_failed(joined));
-            }
-        }
-
-        Ok(Value::String(joined))
+        process_mcp_tool_result(result)
     }
 }
 
