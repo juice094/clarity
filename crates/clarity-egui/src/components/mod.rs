@@ -6,3 +6,4 @@ pub mod settings;
 pub mod tools_section;
 pub mod web_tabs;
 pub mod thinking_log;
+pub mod agent_turn;

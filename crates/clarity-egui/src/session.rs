@@ -62,6 +62,7 @@ pub fn load_sessions() -> Vec<Session> {
                             category: data.category.unwrap_or_else(|| "engineering".to_string()),
                             messages,
                             updated_at: data.updated_at,
+                            turn_heights: vec![],
                         });
                     }
                 }
@@ -130,6 +131,7 @@ pub fn new_session(category: &str, index: usize) -> Session {
         category: category.into(),
         messages: vec![],
         updated_at: now_millis(),
+        turn_heights: vec![],
     }
 }
 

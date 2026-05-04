@@ -152,6 +152,10 @@ pub struct UiStore {
     pub editing_session_id: Option<String>,
     /// Buffer for the in-progress rename.
     pub editing_title: String,
+    /// Toggle between legacy per-message bubbles and AgentTurn aggregation.
+    pub agent_turn_style: bool,
+    /// When agent_turn_style is true, use glass card variant instead of CLI style.
+    pub agent_turn_glass: bool,
 }
 
 // ============================================================================

@@ -150,6 +150,8 @@ pub struct Session {
     pub category: String,
     pub messages: Vec<Message>,
     pub updated_at: u64,
+    /// Cached heights for aggregated agent turns (used when agent_turn_style is enabled).
+    pub turn_heights: Vec<Option<f32>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

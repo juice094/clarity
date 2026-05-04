@@ -29,6 +29,7 @@ mod widgets;
 mod components;
 mod stores;
 mod services;
+mod render;
 mod handlers;
 mod platform;
 
