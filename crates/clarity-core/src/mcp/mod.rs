@@ -420,11 +420,23 @@ impl Tool for McpToolAdapter {
             }
         }
 
+        let joined = texts.join("\n");
+
         if result.is_error {
-            return Err(ToolError::execution_failed(texts.join("\n")));
+            return Err(ToolError::execution_failed(joined));
         }
 
-        Ok(Value::String(texts.join("\n")))
+        // Detect application-level errors in JSON payloads
+        // (e.g. devbase returning {"success":false,"error":"..."})
+        if let Ok(parsed) = serde_json::from_str::<Value>(&joined) {
+            let has_error_field = parsed.get("error").is_some();
+            let success_false = parsed.get("success").and_then(|v| v.as_bool()) == Some(false);
+            if has_error_field || success_false {
+                return Err(ToolError::execution_failed(joined));
+            }
+        }
+
+        Ok(Value::String(joined))
     }
 }
 
