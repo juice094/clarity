@@ -710,6 +710,78 @@ Codex + ZeroClaw 架构探索的脚手架设计已归档于：
 - **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
 - **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁（非代码缺陷）/ 3 ignored**
 
+## 12. Sprint 25 — ReliableProvider + Event 模型 + 子代理共享迭代预算
+
+> 日期：2026-05-05
+> 状态：已完成
+> 参考：`vault/clarity/architecture/references/codex-zeroclaw-synthesis.md`
+
+### 12.1 目标
+
+从 Codex + ZeroClaw 架构探索中提取 3 项可直接落地的工程韧性模式：
+1. Provider 回退链（ZeroClaw `ReliableProvider` 模式）
+2. 事件驱动输出模型（Codex `Event { id, msg }` 模式）
+3. 父子代理共享迭代预算（防止子代理耗尽父代理资源）
+
+### 12.2 启动前现状审计
+
+| 能力 | 状态 |
+|------|------|
+| Provider 指数退避重试 | ✅ Sprint 24 |
+| Cancellation Token 穿透 | ✅ Sprint 24 |
+| Loop Detector 增强 | ✅ Sprint 24 |
+| **Provider 回退链** | ❌ 缺失 |
+| **事件驱动输出协议** | ❌ 缺失 |
+| **子代理迭代预算隔离** | ❌ 缺失 |
+
+### 12.3 关键决策
+
+#### D13 — ReliableProvider 回退链包装器
+
+**决策**：创建 `ReliableProvider` 持有多 provider `Vec<Arc<dyn LlmProvider>>`，按顺序 fallback。
+
+- 主 provider `complete()`/`stream()` 失败且 `is_recoverable()` 为 true 时，依次尝试 fallback providers
+- 自带指数退避重试（复用 Sprint 24 逻辑），每个 provider 最多重试 3 次
+- `AgentConfig::fallback_providers: Vec<String>` 配置别名列表
+- `Agent::with_fallback_llms()` builder 方法
+- **Commit**：`59c886cd`
+
+#### D14 — 事件驱动输出模型（clarity-wire）
+
+**决策**：在 `clarity-wire` 中新增 `Event` / `EventMsg` 类型，为未来 GUI/web 前端解耦铺路。
+
+- `Event { id: String, msg: EventMsg }` — 全局原子计数器自动生成 ID
+- `EventMsg` 枚举映射 `WireMessage` 全部 13 个变体（TurnBegin/StepBegin/ContentPart/ToolCall/ToolResult/TurnEnd/Usage/StatusUpdate/CompactionBegin/CompactionEnd/PlanStepBegin/PlanStepEnd/DraftEvent）
+- `From<WireMessage>` 实现，零新增外部依赖
+- 为后续 WebSocket / SSE 输出层预留接口
+- **Commit**：`18f3abfa`
+
+#### D15 — 子代理共享迭代预算计数器
+
+**决策**：父子代理通过 `Arc<AtomicUsize>` 共享全局迭代预算，防止子代理无限循环耗尽父代理资源。
+
+- `AgentConfig::iteration_budget: Option<Arc<AtomicUsize>>`
+- `run_loop_iterations()` 每次迭代前 `fetch_sub(1)`，耗尽时硬终止
+- `SubagentBuilder::with_iteration_budget()` → `AgentConfig::with_iteration_budget()`
+- `SubagentRunner::with_iteration_budget()` → `build_agent()` 传递给 builder
+- `SubagentManager::with_iteration_budget()` 暴露给外部调用者
+- **Commit**：`02982d24`（core 计数器 + loop 检查）+ `38424772`（subagents 链路贯通）
+
+### 12.4 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| clarity → LLM | `ReliableProvider` | 新增 wrapper，透明 fallback | ✅ 外部无感知 |
+| clarity-wire | `Event` / `EventMsg` | 新增类型，未来协议层 | ✅ 新增，无 breaking |
+| clarity internal | `AgentConfig::iteration_budget` | 新增可选字段 | ⚠️ 默认值 `None`，安全 |
+| clarity internal | `SubagentRunner` / `SubagentBuilder` | 新增 budget builder | ✅ 新增，无 breaking |
+
+### 12.5 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **755 passed / 0 failed / 6 ignored**
+- **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
+
 ---
 
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*
