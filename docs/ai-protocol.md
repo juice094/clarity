@@ -430,4 +430,74 @@ clarity-wire
 
 ---
 
+---
+
+## 九、Sprint 22 — Clarity-Devbase 集成韧性加固（2026-05-04）
+
+**触发**：Sprint 21 交付后发现 devbase MCP 工具链异常（`devkit_status` revspec not found、`devkit_code_metrics` No metrics found）+ Agent 循环迭代超限（`max iterations (10) exceeded`）。
+
+### 9.1 根因分析
+
+| 根因 | 责任侧 | 本质 |
+|------|--------|------|
+| repo 注册使用相对路径 `"."` | devbase | `git_diff` 在不同 cwd 下指向不同目录 |
+| 索引状态陈旧不自愈 | devbase | stale hash 不会自动清除，每次都走 error path |
+| MCP 客户端未区分协议成功 vs 业务错误 | clarity | 软失败 JSON 被当作成功结果交给 LLM |
+| Agent 循环无熔断，`max_iter=10` | clarity | kimi-cli 为 1000，clarity 仅 10，且无跳过机制 |
+
+### 9.2 架构决策
+
+#### D1 — MCP 客户端错误检测模式（参考 kimi-cli）
+
+**来源**：kimi-cli `fastmcp.Client.call_tool(raise_on_error=False)` + `result.is_error` 检查。
+
+**clarity 实现**：
+- `McpToolAdapter::execute()` 在 MCP 协议层 `result.is_error` 检查之后，新增应用层检测：
+  - 解析返回文本为 JSON，若顶层含 `"error"` 或 `"success": false`，包装为 `ToolError::ExecutionFailed`
+  - 正常成功路径行为不变
+- **Commit**：`d8082b10`
+
+#### D2 — Agent 循环失败熔断
+
+**决策**：在 `run_loop_iterations` 中增加 `ToolFailureTracker`。
+
+- `HashMap<String, u8>` 记录本轮每个工具的连续失败次数
+- 连续失败 ≥2 次时，将该工具从 `working_tools` schema 中过滤（不再提供给 LLM）
+- 若全部工具被过滤，`Break` 并返回错误摘要
+- `max_iterations` 默认值 10 → 30
+- 系统提示追加："If a tool returns an error, do not retry the same tool in the same turn."
+- **Commit**：`26ca242d`
+
+#### D3 — Devbase 路径绝对化与索引自愈
+
+**决策**（devbase 侧，Clarity 作为需求方驱动）：
+
+- `scan.rs`: `canonicalize_repo_path()` 确保所有新注册 repo 的 `local_path` 为绝对路径
+- `health.rs`: 自动修正已有相对路径注册
+- `index_state.rs`: `diff_since` 因 stale hash（`revspec` / `not found`）失败时，自动 `DELETE` 旧 hash 并返回 `Missing`，触发全量重索引
+- **Commit**：`c22e37e`
+
+#### D4 — Devbase metrics 实时 fallback
+
+**决策**（devbase 侧）：
+
+- `scan.rs`: 注册时无条件调用 `compute_code_metrics` + `save_code_metrics`
+- `code_analysis.rs`: `devkit_code_metrics` 若表无数据，实时调用 tokei 计算并持久化，彻底消除 `{"error":"No metrics found"}`
+- **Commit**：`e0fde4b`
+
+### 9.3 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| devbase → clarity | `devkit_status` | stale hash 时返回 `Missing` 而非 `Unknown { error }` | ✅ 向前兼容（clarity 新逻辑处理两种） |
+| devbase → clarity | `devkit_code_metrics` | 无数据时实时计算，不再返回 `success:false` | ✅ 向前兼容 |
+| clarity → LLM | MCP 错误检测 | 软失败 JSON 转为 `ToolError` | ✅ 仅影响 clarity 内部处理 |
+
+### 9.4 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **722 passed / 0 failed / 6 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 0 failed / 3 ignored**
+
+---
+
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*
