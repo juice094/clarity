@@ -7,17 +7,34 @@ use serde_json::{json, Value};
 
 /// Tool for GUI automation: screenshot, click, type, scroll.
 #[derive(Clone)]
-pub struct ComputerUseTool;
+pub struct ComputerUseTool {
+    python_cmd: String,
+}
 
 impl ComputerUseTool {
     /// Create a new ComputerUseTool instance
     pub fn new() -> Self {
-        Self
+        let python_cmd = Self::detect_python().unwrap_or_else(|| "python3".to_string());
+        Self { python_cmd }
+    }
+
+    fn detect_python() -> Option<String> {
+        for cmd in &["python3", "python", "py"] {
+            if std::process::Command::new(cmd)
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                return Some(cmd.to_string());
+            }
+        }
+        None
     }
 
     fn call_python_bridge(&self, action: &str, args: Value) -> ToolResult<String> {
         let payload = json!({"action": action, "args": args});
-        let output = std::process::Command::new("python3")
+        let output = std::process::Command::new(&self.python_cmd)
             .arg("scripts/computer_bridge.py")
             .arg(payload.to_string())
             .output()
@@ -48,6 +65,14 @@ impl Default for ComputerUseTool {
 impl Tool for ComputerUseTool {
     fn name(&self) -> &str {
         "computer_use"
+    }
+
+    fn check_readiness(&self) -> Option<String> {
+        if self.python_cmd == "python3" && Self::detect_python().is_none() {
+            Some("No Python interpreter found (tried python3, python, py).".to_string())
+        } else {
+            None
+        }
     }
 
     fn description(&self) -> &str {
