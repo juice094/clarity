@@ -24,7 +24,9 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
         .order(egui::Order::Background)
         .show(ctx, |ui| {
             ui.set_min_size(screen.size());
-            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked()
+            if ui
+                .allocate_response(screen.size(), egui::Sense::click())
+                .clicked()
                 || ctx.input(|i| i.key_pressed(egui::Key::Escape))
             {
                 close_requested = true;
@@ -105,7 +107,9 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
 
                             egui::Frame::new()
                                 .fill(app.ui_store.theme.bg_accent)
-                                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
+                                .corner_radius(egui::CornerRadius::same(
+                                    app.ui_store.theme.radius_sm as u8,
+                                ))
                                 .inner_margin(egui::Margin::same(10))
                                 .show(ui, |ui| {
                                     ui.set_min_width(ui.available_width());

@@ -151,11 +151,13 @@ impl OAuthDeviceFlowClient {
         Self::new()
     }
 
-
     /// Step 1: Request a device code from the authorization server.
     pub async fn request_device_authorization(&self) -> Result<DeviceAuthorization, AuthError> {
         let host = &self.config.oauth_host;
-        let url = format!("{}/api/oauth/device_authorization", host.trim_end_matches('/'));
+        let url = format!(
+            "{}/api/oauth/device_authorization",
+            host.trim_end_matches('/')
+        );
         let mut params = HashMap::new();
         params.insert("client_id", self.config.client_id.as_str());
 
@@ -183,7 +185,11 @@ impl OAuthDeviceFlowClient {
         Ok(DeviceAuthorization {
             user_code: data["user_code"].as_str().unwrap_or("").to_string(),
             device_code: data["device_code"].as_str().unwrap_or("").to_string(),
-            verification_uri: data.get("verification_uri").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            verification_uri: data
+                .get("verification_uri")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             verification_uri_complete: data["verification_uri_complete"]
                 .as_str()
                 .unwrap_or("")
@@ -233,7 +239,10 @@ impl OAuthDeviceFlowClient {
                 .map_err(|e| AuthError::Other(e.to_string()));
         }
 
-        let error = data.get("error").and_then(|v| v.as_str()).unwrap_or("unknown_error");
+        let error = data
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown_error");
         if error == "expired_token" {
             return Err(AuthError::Expired);
         }
@@ -245,10 +254,7 @@ impl OAuthDeviceFlowClient {
     }
 
     /// Refresh an access token using its associated refresh token.
-    pub async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<super::OAuthToken, AuthError> {
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<super::OAuthToken, AuthError> {
         let host = &self.config.oauth_host;
         let url = format!("{}/api/oauth/token", host.trim_end_matches('/'));
         let mut params = HashMap::new();
@@ -287,8 +293,7 @@ impl OAuthDeviceFlowClient {
             return Err(AuthError::Request(desc.to_string()));
         }
 
-        super::OAuthToken::from_response(data)
-            .map_err(|e| AuthError::Other(e.to_string()))
+        super::OAuthToken::from_response(data).map_err(|e| AuthError::Other(e.to_string()))
     }
 }
 
@@ -332,7 +337,6 @@ impl OAuthTokenManager {
     pub fn kimi_code() -> Self {
         Self::new()
     }
-
 
     /// Ensure a fresh access token is available.
     ///
@@ -389,7 +393,9 @@ impl OAuthTokenManager {
                 // If the token is not *fully* expired yet, allow one more request
                 // with the existing access token so the user isn't immediately blocked.
                 if !token.is_fully_expired() {
-                    tracing::info!("Returning existing token despite refresh failure (not yet fully expired)");
+                    tracing::info!(
+                        "Returning existing token despite refresh failure (not yet fully expired)"
+                    );
                     Ok(Some(token.access_token))
                 } else {
                     Err(AgentError::Llm(format!("Token refresh failed: {}", e)))

@@ -28,7 +28,10 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                     .color(app.ui_store.theme.text)
                     .strong(),
             );
-            ui.add(egui::TextEdit::singleline(&mut app.task_store.task_create_name).hint_text("Task name"));
+            ui.add(
+                egui::TextEdit::singleline(&mut app.task_store.task_create_name)
+                    .hint_text("Task name"),
+            );
             ui.add_space(app.ui_store.theme.space_8);
             ui.label(
                 egui::RichText::new("Description")
@@ -49,7 +52,8 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
             );
             ui.add_sized(
                 egui::vec2(ui.available_width(), 80.0),
-                egui::TextEdit::multiline(&mut app.task_store.task_create_prompt).hint_text("Agent prompt..."),
+                egui::TextEdit::multiline(&mut app.task_store.task_create_prompt)
+                    .hint_text("Agent prompt..."),
             );
             ui.add_space(app.ui_store.theme.space_8);
             ui.label(
@@ -120,7 +124,9 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
             prompt: app.task_store.task_create_prompt.trim().to_string(),
             max_iterations: Some(10),
             timeout_seconds: Some(300),
-            priority: clarity_core::background::TaskPriority::from_value(app.task_store.task_create_priority),
+            priority: clarity_core::background::TaskPriority::from_value(
+                app.task_store.task_create_priority,
+            ),
             model_alias: None,
         };
         let task_id = format!("task-{}", uuid::Uuid::new_v4());

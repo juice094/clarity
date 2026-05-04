@@ -28,7 +28,9 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
         .order(egui::Order::Background)
         .show(ctx, |ui| {
             ui.set_min_size(screen.size());
-            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked()
+            if ui
+                .allocate_response(screen.size(), egui::Sense::click())
+                .clicked()
                 || ctx.input(|i| i.key_pressed(egui::Key::Escape))
             {
                 close_requested = true;
@@ -50,7 +52,12 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
             ui.set_min_width(360.0);
             if let Some(ref mut config) = config_opt {
                 let mut changed = false;
-                crate::ui::mcp_panel::render_mcp_panel(ui, config, &app.ui_store.theme, &mut changed);
+                crate::ui::mcp_panel::render_mcp_panel(
+                    ui,
+                    config,
+                    &app.ui_store.theme,
+                    &mut changed,
+                );
                 if changed {
                     app.mcp_store.mcp_changed = true;
                 }

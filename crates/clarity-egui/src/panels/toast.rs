@@ -8,13 +8,20 @@ fn ease_out_cubic(t: f32) -> f32 {
 
 pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
     let now = Instant::now();
-    app.ui_store.toasts
+    app.ui_store
+        .toasts
         .retain(|t| now.duration_since(t.created_at) < Duration::from_secs(5));
     for (i, toast) in app.ui_store.toasts.iter().enumerate() {
         let (bg, text_color) = match toast.level {
-            crate::ui::types::ToastLevel::Info => (app.ui_store.theme.accent, app.ui_store.theme.text),
-            crate::ui::types::ToastLevel::Warn => (app.ui_store.theme.status_busy, app.ui_store.theme.text),
-            crate::ui::types::ToastLevel::Error => (app.ui_store.theme.danger, app.ui_store.theme.text),
+            crate::ui::types::ToastLevel::Info => {
+                (app.ui_store.theme.accent, app.ui_store.theme.text)
+            }
+            crate::ui::types::ToastLevel::Warn => {
+                (app.ui_store.theme.status_busy, app.ui_store.theme.text)
+            }
+            crate::ui::types::ToastLevel::Error => {
+                (app.ui_store.theme.danger, app.ui_store.theme.text)
+            }
         };
 
         // Fade-in: 0 → 1 over duration_normal with cubic ease-out.

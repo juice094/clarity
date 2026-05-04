@@ -34,15 +34,9 @@ impl App {
         let mut full_message = text.clone();
         for att in &self.chat_store.attachments {
             if let Ok(content) = std::fs::read_to_string(&att.path) {
-                full_message.push_str(&format!(
-                    "\n\n[File: {}]\n```\n{}\n```",
-                    att.name, content
-                ));
+                full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
             } else {
-                full_message.push_str(&format!(
-                    "\n\n[File: {} (binary or unreadable)]",
-                    att.name
-                ));
+                full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
             }
         }
         self.chat_store.attachments.clear();
@@ -152,12 +146,15 @@ impl App {
                 )
                 .with_llm(llm);
                 let mut store = clarity_core::subagents::SubagentStore::new(&context_dir);
-                let spec = clarity_core::subagents::RunSpec::new(&subagent_prompt, &subagent_prompt)
-                    .with_type(agent_type);
+                let spec =
+                    clarity_core::subagents::RunSpec::new(&subagent_prompt, &subagent_prompt)
+                        .with_type(agent_type);
                 match runner.run(spec, &mut store, None).await {
                     Ok(result) => {
-                        let content =
-                            format!("🤖 **{}** subagent result\n\n{}", agent_type, result.summary);
+                        let content = format!(
+                            "🤖 **{}** subagent result\n\n{}",
+                            agent_type, result.summary
+                        );
                         if let Err(e) = tx.send(UiEvent::Chunk(content)) {
                             tracing::warn!("Failed to send Chunk: {}", e);
                         }
@@ -166,9 +163,10 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        if let Err(err) =
-                            tx.send(UiEvent::Error(format!("Subagent /{} failed: {}", agent_type, e)))
-                        {
+                        if let Err(err) = tx.send(UiEvent::Error(format!(
+                            "Subagent /{} failed: {}",
+                            agent_type, e
+                        ))) {
                             tracing::warn!("Failed to send Error: {}", err);
                         }
                     }
@@ -215,7 +213,12 @@ impl App {
                 let q = enriched_query.clone();
                 tokio::spawn(async move {
                     if let Err(e) = store
-                        .save_fact(&q, &["session".to_string(), "user_query".to_string()], None, None)
+                        .save_fact(
+                            &q,
+                            &["session".to_string(), "user_query".to_string()],
+                            None,
+                            None,
+                        )
                         .await
                     {
                         tracing::debug!("Failed to save memory fact: {}", e);
@@ -295,7 +298,12 @@ impl App {
                         );
                         tokio::spawn(async move {
                             if let Err(e) = store
-                                .save_fact(&summary, &["session".to_string(), "turn".to_string()], None, None)
+                                .save_fact(
+                                    &summary,
+                                    &["session".to_string(), "turn".to_string()],
+                                    None,
+                                    None,
+                                )
                                 .await
                             {
                                 tracing::debug!("Failed to save turn memory: {}", e);

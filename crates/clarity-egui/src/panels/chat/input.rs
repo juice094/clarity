@@ -1,5 +1,5 @@
-use crate::App;
 use crate::components::input;
+use crate::App;
 
 pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
     // Attachment chips above input bar
@@ -18,7 +18,11 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let available_width = ui.available_width();
-                let btn_area_width = if app.chat_store.is_loading { 100.0 } else { 52.0 };
+                let btn_area_width = if app.chat_store.is_loading {
+                    100.0
+                } else {
+                    52.0
+                };
                 let input_width = (available_width - btn_area_width - 8.0).max(80.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(input_width, 44.0),
@@ -33,8 +37,7 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                         };
                         let prev_input = app.chat_store.input.clone();
                         let line_count = app.chat_store.input.matches('\n').count() + 1;
-                        let input_height =
-                            (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
+                        let input_height = (line_count as f32 * 20.0 + 24.0).clamp(44.0, 120.0);
                         let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
                             .desired_rows(line_count.max(1))
                             .hint_text(hint)
@@ -48,7 +51,9 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
 
                         let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
                         let ime_commit = ui.input(|i| {
-                            i.events.iter().any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Commit(_))))
+                            i.events
+                                .iter()
+                                .any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Commit(_))))
                         });
                         if enter_pressed && !ui.input(|i| i.modifiers.shift) && !ime_commit {
                             while app.chat_store.input.ends_with('\n') {
@@ -65,9 +70,11 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if app.chat_store.is_loading {
-                        let can_queue =
-                            !app.chat_store.input.trim().is_empty() || !app.chat_store.attachments.is_empty();
-                        if input::queue_button(ui, can_queue, &app.ui_store.theme).clicked() && can_queue {
+                        let can_queue = !app.chat_store.input.trim().is_empty()
+                            || !app.chat_store.attachments.is_empty();
+                        if input::queue_button(ui, can_queue, &app.ui_store.theme).clicked()
+                            && can_queue
+                        {
                             app.chat_store.stick_to_bottom = true;
                             app.send();
                         }

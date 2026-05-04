@@ -90,8 +90,14 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
 
     // ── Chat ──
     m.insert("Type a message...", "输入消息…");
-    m.insert("Type a message (files attached)...", "输入消息（已附加文件）…");
-    m.insert("Message queued, will send after current response...", "消息已排队，将在当前回复结束后发送…");
+    m.insert(
+        "Type a message (files attached)...",
+        "输入消息（已附加文件）…",
+    );
+    m.insert(
+        "Message queued, will send after current response...",
+        "消息已排队，将在当前回复结束后发送…",
+    );
     m.insert("Local-first AI agent runtime", "本地优先的 AI 代理运行环境");
     m.insert("Preview", "预览");
     m.insert("Configure Settings", "配置设置");
@@ -111,7 +117,10 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
 
     // ── Onboarding ──
     m.insert("Welcome to Clarity", "欢迎使用 Clarity");
-    m.insert("Enter API Key (Cloud Provider)", "输入 API Key（云端服务商）");
+    m.insert(
+        "Enter API Key (Cloud Provider)",
+        "输入 API Key（云端服务商）",
+    );
     m.insert("Download Local Model (~1 GB)", "下载本地模型（约 1 GB）");
     m.insert("Skip for Now", "暂时跳过");
     m.insert("Downloading Local Model", "正在下载本地模型");
@@ -122,7 +131,10 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Enter API Key Instead", "改用 API Key");
     m.insert("Tools", "工具");
     m.insert("No skills found.", "未找到技能。");
-    m.insert("Place .md files in .clarity/skills/ to add skills.", "将 .md 文件放入 .clarity/skills/ 目录以添加技能。");
+    m.insert(
+        "Place .md files in .clarity/skills/ to add skills.",
+        "将 .md 文件放入 .clarity/skills/ 目录以添加技能。",
+    );
     m.insert("skill(s) loaded", "个技能已加载");
     m.insert("Skill(s)", "技能");
     m.insert("Active tasks:", "活跃任务：");

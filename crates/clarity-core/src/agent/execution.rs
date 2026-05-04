@@ -161,9 +161,12 @@ impl Agent {
         if let Some(ref runtime) = self.approval_runtime {
             // O3: sensitive_path is sanitized before display in approval UI to
             // prevent leaking absolute paths (e.g. C:\Users\name\secret.txt).
-            let mut description = sensitive_path
-                .as_ref()
-                .map(|p| format!("Sensitive file access: {}", crate::error::sanitize_path_str(p)));
+            let mut description = sensitive_path.as_ref().map(|p| {
+                format!(
+                    "Sensitive file access: {}",
+                    crate::error::sanitize_path_str(p)
+                )
+            });
 
             if tool_requires_approval {
                 description = Some(description.unwrap_or_else(|| {

@@ -83,8 +83,9 @@ impl SkillLoader {
         let flow = if meta.skill_type == "flow" {
             if let Some(block) = extract_mermaid_block(body) {
                 Some(
-                    crate::agent::flow::mermaid::parse_mermaid_flowchart(&block)
-                        .map_err(|e| SkillError::InvalidFrontmatter(format!("Invalid flow: {}", e)))?,
+                    crate::agent::flow::mermaid::parse_mermaid_flowchart(&block).map_err(|e| {
+                        SkillError::InvalidFrontmatter(format!("Invalid flow: {}", e))
+                    })?,
                 )
             } else {
                 None

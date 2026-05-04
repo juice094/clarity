@@ -4,9 +4,8 @@ use serde_json::Value;
 use std::sync::LazyLock;
 
 // Module-level lazy regexes (avoid regex_creation_in_loops false positives)
-static RE_TOOL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#).unwrap()
-});
+static RE_TOOL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#).unwrap());
 static RE_ARG: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?s)<(?:arg|parameter)\s+(?:key|name)=["']([^"']+)["'][^>]*>(.*?)</(?:arg|parameter)>"#,
@@ -19,9 +18,8 @@ static RE_INVOKE: LazyLock<Regex> = LazyLock::new(|| {
 static RE_PARAM: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?s)<parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</parameter>"#).unwrap()
 });
-static RE_MINIMAX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").unwrap()
-});
+static RE_MINIMAX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").unwrap());
 
 /// Supported tool call formats.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -106,10 +104,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
 
         for arg_caps in RE_ARG.captures_iter(inner) {
             let key = arg_caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let value = arg_caps
-                .get(2)
-                .map(|m| m.as_str().trim())
-                .unwrap_or("");
+            let value = arg_caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
             if let Ok(v) = serde_json::from_str::<Value>(value) {
                 args.insert(key.to_string(), v);
             } else {
@@ -146,10 +141,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
 
         for param_caps in RE_PARAM.captures_iter(inner) {
             let key = param_caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let value = param_caps
-                .get(2)
-                .map(|m| m.as_str().trim())
-                .unwrap_or("");
+            let value = param_caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
             if let Ok(v) = serde_json::from_str::<Value>(value) {
                 args.insert(key.to_string(), v);
             } else {

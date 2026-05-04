@@ -90,8 +90,8 @@ impl FileSystemErrorMemoryStore {
 
     /// Create a store using the default user-local path.
     pub fn with_default_dir() -> anyhow::Result<Self> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get home directory"))?;
+        let home =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to get home directory"))?;
         Ok(Self::new(home.join(".clarity").join("error-memory")))
     }
 
@@ -180,9 +180,7 @@ impl ErrorMemoryStore for FileSystemErrorMemoryStore {
                     continue;
                 }
                 let mem: ToolExecutionMemory = serde_json::from_str(line)?;
-                let entry = stats_by_tool
-                    .entry(mem.tool_name.clone())
-                    .or_insert((0, 0));
+                let entry = stats_by_tool.entry(mem.tool_name.clone()).or_insert((0, 0));
                 entry.1 += 1;
                 match &mem.outcome {
                     Outcome::Success => entry.0 += 1,

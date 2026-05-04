@@ -453,10 +453,12 @@ pub fn resolve_key_ref(raw: &str) -> Option<String> {
     }
 
     // ${file:path:field}
-    if let Some(inner) = raw.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
+    if let Some(inner) = raw
+        .strip_prefix("${file:")
+        .and_then(|s| s.strip_suffix('}'))
+    {
         let (path_part, field) = inner.split_once(':')?;
-        
-        
+
         let path = if path_part.starts_with("~/") {
             dirs::home_dir()
                 .map(|h| h.join(&path_part[2..]))
@@ -466,7 +468,10 @@ pub fn resolve_key_ref(raw: &str) -> Option<String> {
         };
         let content = std::fs::read_to_string(&path).ok()?;
         let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-        return json.get(field).and_then(|v| v.as_str()).map(|s| s.to_string());
+        return json
+            .get(field)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
     }
 
     // ${env:VAR}

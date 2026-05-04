@@ -158,7 +158,10 @@ fn message_roundtrip_with_tool_calls() {
     let deserialized: Message = serde_json::from_str(&json).unwrap();
     assert_eq!(original.role, deserialized.role);
     assert_eq!(original.content, deserialized.content);
-    assert_eq!(original.tool_calls.as_ref().unwrap()[0].id, deserialized.tool_calls.as_ref().unwrap()[0].id);
+    assert_eq!(
+        original.tool_calls.as_ref().unwrap()[0].id,
+        deserialized.tool_calls.as_ref().unwrap()[0].id
+    );
 }
 
 #[test]
@@ -243,8 +246,14 @@ fn tool_error_display() {
 
 #[test]
 fn tool_error_constructors() {
-    assert!(matches!(ToolError::invalid_params("x"), ToolError::InvalidParameters(_)));
-    assert!(matches!(ToolError::execution_failed("x"), ToolError::ExecutionFailed(_)));
+    assert!(matches!(
+        ToolError::invalid_params("x"),
+        ToolError::InvalidParameters(_)
+    ));
+    assert!(matches!(
+        ToolError::execution_failed("x"),
+        ToolError::ExecutionFailed(_)
+    ));
     assert!(matches!(ToolError::not_found("x"), ToolError::NotFound(_)));
 }
 
@@ -280,7 +289,10 @@ fn agent_error_display() {
         "Duplicate tool: dup"
     );
     assert_eq!(
-        format!("{}", AgentError::ToolExecutionFailed("t".to_string(), "e".to_string())),
+        format!(
+            "{}",
+            AgentError::ToolExecutionFailed("t".to_string(), "e".to_string())
+        ),
         "Tool 't' execution failed: e"
     );
     assert_eq!(
@@ -303,10 +315,7 @@ fn agent_error_display() {
         format!("{}", AgentError::InvalidResponse("bad json".to_string())),
         "Invalid LLM response: bad json"
     );
-    assert_eq!(
-        format!("{}", AgentError::Cancelled),
-        "Operation cancelled"
-    );
+    assert_eq!(format!("{}", AgentError::Cancelled), "Operation cancelled");
     assert_eq!(
         format!("{}", AgentError::Unconfigured),
         "Agent is not configured with an LLM provider"
@@ -470,7 +479,9 @@ fn federation_message_llm_request_contains_messages() {
     let json = serde_json::to_string(&msg).unwrap();
     let deserialized: FederationMessage = serde_json::from_str(&json).unwrap();
     match deserialized {
-        FederationMessage::LlmRequest { messages, sender, .. } => {
+        FederationMessage::LlmRequest {
+            messages, sender, ..
+        } => {
             assert_eq!(sender, "egui");
             assert_eq!(messages.len(), 1);
             assert_eq!(messages[0].role, MessageRole::User);
@@ -481,30 +492,45 @@ fn federation_message_llm_request_contains_messages() {
 
 #[test]
 fn federation_response_into_json() {
-    assert_eq!(FederationResponse::Ack.into_json().unwrap(), serde_json::Value::Null);
     assert_eq!(
-        FederationResponse::Json(serde_json::json!({"a": 1})).into_json().unwrap(),
+        FederationResponse::Ack.into_json().unwrap(),
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        FederationResponse::Json(serde_json::json!({"a": 1}))
+            .into_json()
+            .unwrap(),
         serde_json::json!({"a": 1})
     );
     assert_eq!(
-        FederationResponse::Text("123".to_string()).into_json().unwrap(),
+        FederationResponse::Text("123".to_string())
+            .into_json()
+            .unwrap(),
         serde_json::json!(123)
     );
-    assert!(FederationResponse::Error(AgentError::Cancelled).into_json().is_err());
+    assert!(FederationResponse::Error(AgentError::Cancelled)
+        .into_json()
+        .is_err());
 }
 
 #[test]
 fn federation_response_into_text() {
     assert_eq!(FederationResponse::Ack.into_text().unwrap(), "");
     assert_eq!(
-        FederationResponse::Text("hello".to_string()).into_text().unwrap(),
+        FederationResponse::Text("hello".to_string())
+            .into_text()
+            .unwrap(),
         "hello"
     );
     assert_eq!(
-        FederationResponse::Json(serde_json::json!({"a": 1})).into_text().unwrap(),
+        FederationResponse::Json(serde_json::json!({"a": 1}))
+            .into_text()
+            .unwrap(),
         r#"{"a":1}"#
     );
-    assert!(FederationResponse::Error(AgentError::Cancelled).into_text().is_err());
+    assert!(FederationResponse::Error(AgentError::Cancelled)
+        .into_text()
+        .is_err());
 }
 
 // ============================================================================
@@ -593,7 +619,9 @@ fn capability_token_read_only() {
 fn capability_token_verify_whitelist() {
     let token = CapabilityToken::new(vec!["bash".to_string()]);
     assert!(token.verify("bash", std::path::Path::new("/")).is_ok());
-    assert!(token.verify("file_read", std::path::Path::new("/")).is_err());
+    assert!(token
+        .verify("file_read", std::path::Path::new("/"))
+        .is_err());
 }
 
 #[test]

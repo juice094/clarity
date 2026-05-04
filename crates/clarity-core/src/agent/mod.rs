@@ -27,8 +27,8 @@ pub mod tool_parser;
 mod construct;
 mod execution;
 mod executor;
-pub mod loop_detector;
 pub mod jumpy;
+pub mod loop_detector;
 pub mod plan;
 // B3: Re-export Plan types from `types.rs` to maintain backwards compatibility.
 // New code should prefer `use clarity_core::types::{Plan, PlanResult, PlanStep}`.

@@ -182,7 +182,8 @@ fn render_downloading(
                 Ok(ModelDownloadProgress::Complete) => {
                     let dest = clarity_core::model_download::default_model_dir()
                         .join(clarity_core::model_download::PRECONFIGURED_MODELS[0].filename);
-                    app.onboarding_store.onboarding_state = OnboardingState::DownloadComplete { model_path: dest };
+                    app.onboarding_store.onboarding_state =
+                        OnboardingState::DownloadComplete { model_path: dest };
                     break;
                 }
                 Ok(ModelDownloadProgress::Failed(err)) => {
@@ -199,8 +200,14 @@ fn render_downloading(
     }
 
     // Fallback: if channel disconnected without explicit Complete/Failed, treat as interrupted.
-    if channel_disconnected && matches!(app.onboarding_store.onboarding_state, OnboardingState::Downloading { .. }) {
-        app.onboarding_store.onboarding_state = OnboardingState::DownloadFailed("Download interrupted".into());
+    if channel_disconnected
+        && matches!(
+            app.onboarding_store.onboarding_state,
+            OnboardingState::Downloading { .. }
+        )
+    {
+        app.onboarding_store.onboarding_state =
+            OnboardingState::DownloadFailed("Download interrupted".into());
     }
 
     egui::Window::new("Downloading Model")
@@ -280,7 +287,8 @@ fn render_download_complete(app: &mut App, ctx: &egui::Context, model_path: &std
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| "local".to_string());
-                    app.settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
+                    app.settings_store.settings_edit.local_model_path =
+                        Some(model_path.display().to_string());
                     let _ = app.settings_store.settings_edit.save();
 
                     // Sync to AppState and reload LLM

@@ -100,15 +100,9 @@ pub enum FederationMessage {
         capabilities: Vec<Capability>,
     },
     /// Dispatch a task to a specific node.
-    DispatchTask {
-        task: TaskSpec,
-        target_node: String,
-    },
+    DispatchTask { task: TaskSpec, target_node: String },
     /// Heartbeat from a node.
-    Heartbeat {
-        node_id: String,
-        status: NodeStatus,
-    },
+    Heartbeat { node_id: String, status: NodeStatus },
     /// Query the memory system.
     MemoryQuery {
         query: String,
@@ -127,10 +121,7 @@ pub enum FederationMessage {
         sender: String,
     },
     /// Response from tool execution.
-    ToolResponse {
-        result: Value,
-        request_id: String,
-    },
+    ToolResponse { result: Value, request_id: String },
     /// LLM inference request.
     LlmRequest {
         messages: Vec<crate::Message>,
@@ -144,10 +135,7 @@ pub enum FederationMessage {
         request_id: String,
     },
     /// Execute a full agent turn with a natural-language query.
-    AgentTurn {
-        query: String,
-        sender: String,
-    },
+    AgentTurn { query: String, sender: String },
 }
 
 /// Responses from federal node handlers.
@@ -168,8 +156,9 @@ impl FederationResponse {
     pub fn into_json(self) -> Result<Value, ContractError> {
         match self {
             Self::Json(v) => Ok(v),
-            Self::Text(s) => serde_json::from_str(&s)
-                .map_err(|e| AgentError::InvalidResponse(e.to_string())),
+            Self::Text(s) => {
+                serde_json::from_str(&s).map_err(|e| AgentError::InvalidResponse(e.to_string()))
+            }
             Self::Error(e) => Err(e),
             Self::Ack => Ok(Value::Null),
         }

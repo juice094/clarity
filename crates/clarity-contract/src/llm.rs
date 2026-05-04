@@ -4,7 +4,7 @@
 //! They are designed to be implementation-agnostic and shared across all
 //! crates in the workspace.
 
-use crate::{AgentError, StreamDelta, Message, ToolCall};
+use crate::{AgentError, Message, StreamDelta, ToolCall};
 use async_trait::async_trait;
 use serde_json::Value;
 

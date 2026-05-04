@@ -1,6 +1,6 @@
-use crate::App;
 use crate::ui;
 use crate::ui::types::Role;
+use crate::App;
 
 pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height() - 70.0;
@@ -14,7 +14,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
 
     // Pre-calculate content height to avoid stick-to-bottom when messages are short
     // (prevents large top-padding and content clipping in windowed mode).
-    let total_estimated: f32 = if let Some(session) = app.session_store.sessions.iter().find(|s| s.id == active_id) {
+    let total_estimated: f32 = if let Some(session) = app
+        .session_store
+        .sessions
+        .iter()
+        .find(|s| s.id == active_id)
+    {
         if session.messages.is_empty() && !is_loading {
             0.0
         } else {
@@ -28,23 +33,36 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             };
             if agent_turn_style {
                 let units = aggregate_turns(&session.messages);
-                let estimates: Vec<f32> = units.iter().enumerate().map(|(i, u)| {
-                    match u {
-                        RenderUnit::User(msg) => msg.cached_height.unwrap_or_else(|| ui::render::estimate_height(msg)),
-                        RenderUnit::AgentTurn(msgs) => {
-                            session.turn_heights.get(i).copied().flatten()
-                                .unwrap_or_else(|| {
-                                    let turn = crate::components::agent_turn::AgentTurn::from_messages(msgs);
-                                    turn.estimate_height(&theme)
-                                })
-                        }
-                    }
-                }).collect();
+                let estimates: Vec<f32> = units
+                    .iter()
+                    .enumerate()
+                    .map(|(i, u)| match u {
+                        RenderUnit::User(msg) => msg
+                            .cached_height
+                            .unwrap_or_else(|| ui::render::estimate_height(msg)),
+                        RenderUnit::AgentTurn(msgs) => session
+                            .turn_heights
+                            .get(i)
+                            .copied()
+                            .flatten()
+                            .unwrap_or_else(|| {
+                                let turn =
+                                    crate::components::agent_turn::AgentTurn::from_messages(msgs);
+                                turn.estimate_height(&theme)
+                            }),
+                    })
+                    .collect();
                 estimates.iter().sum::<f32>() + typing_h
             } else {
-                session.messages.iter()
-                    .map(|m| m.cached_height.unwrap_or_else(|| crate::ui::render::estimate_height(m)))
-                    .sum::<f32>() + typing_h
+                session
+                    .messages
+                    .iter()
+                    .map(|m| {
+                        m.cached_height
+                            .unwrap_or_else(|| crate::ui::render::estimate_height(m))
+                    })
+                    .sum::<f32>()
+                    + typing_h
             }
         }
     } else {
@@ -60,7 +78,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         .auto_shrink([false; 2])
         .max_height(available_height)
         .show(ui, |ui| {
-            if let Some(session) = app.session_store.sessions.iter_mut().find(|s| s.id == active_id) {
+            if let Some(session) = app
+                .session_store
+                .sessions
+                .iter_mut()
+                .find(|s| s.id == active_id)
+            {
                 if session.messages.is_empty() && !is_loading {
                     ui.vertical_centered(|ui| {
                         ui.add_space(120.0);
@@ -85,9 +108,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                         .color(theme.text),
                                 )
                                 .fill(theme.surface)
-                                .corner_radius(egui::CornerRadius::same(
-                                    theme.radius_sm as u8,
-                                ))
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                                 .min_size(egui::vec2(180.0, 40.0)),
                             )
                             .clicked()
@@ -102,18 +123,27 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         session.turn_heights.resize(units.len(), None);
                     }
 
-                    let estimates: Vec<f32> = units.iter().enumerate().map(|(i, u)| {
-                        match u {
-                            RenderUnit::User(msg) => msg.cached_height.unwrap_or_else(|| ui::render::estimate_height(msg)),
-                            RenderUnit::AgentTurn(msgs) => {
-                                session.turn_heights.get(i).copied().flatten()
-                                    .unwrap_or_else(|| {
-                                        let turn = crate::components::agent_turn::AgentTurn::from_messages(msgs);
-                                        turn.estimate_height(&theme)
-                                    })
-                            }
-                        }
-                    }).collect();
+                    let estimates: Vec<f32> = units
+                        .iter()
+                        .enumerate()
+                        .map(|(i, u)| match u {
+                            RenderUnit::User(msg) => msg
+                                .cached_height
+                                .unwrap_or_else(|| ui::render::estimate_height(msg)),
+                            RenderUnit::AgentTurn(msgs) => session
+                                .turn_heights
+                                .get(i)
+                                .copied()
+                                .flatten()
+                                .unwrap_or_else(|| {
+                                    let turn =
+                                        crate::components::agent_turn::AgentTurn::from_messages(
+                                            msgs,
+                                        );
+                                    turn.estimate_height(&theme)
+                                }),
+                        })
+                        .collect();
 
                     let mut cumulative = 0.0;
                     let mut start_idx = 0;
@@ -124,9 +154,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             start_idx = i.saturating_sub(3);
                         }
                         cumulative += h;
-                        if cumulative >= scroll_y + available_height
-                            && end_idx == units.len()
-                        {
+                        if cumulative >= scroll_y + available_height && end_idx == units.len() {
                             end_idx = (i + 3).min(units.len());
                             break;
                         }
@@ -234,8 +262,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         } else {
                             true
                         };
-                        let actual =
-                            ui::render::message_bubble(ui, &session.messages[i], &theme, show_header);
+                        let actual = ui::render::message_bubble(
+                            ui,
+                            &session.messages[i],
+                            &theme,
+                            show_header,
+                        );
                         session.messages[i].cached_height = Some(actual);
                     }
 

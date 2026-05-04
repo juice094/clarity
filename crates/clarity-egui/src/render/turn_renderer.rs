@@ -121,7 +121,11 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
 
             // Thinking
             if let Some(ref thinking) = turn.thinking {
-                let label = format!("Thinking ({}) · {} tokens", thinking.steps.len(), thinking.token_hint);
+                let label = format!(
+                    "Thinking ({}) · {} tokens",
+                    thinking.steps.len(),
+                    thinking.token_hint
+                );
                 egui::CollapsingHeader::new(
                     egui::RichText::new(label)
                         .size(theme.text_sm)
@@ -196,13 +200,11 @@ fn render_tool_call_row_cli(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme) 
                 stripe_rect.left_top() + egui::vec2(10.0, 4.0),
                 stripe_rect.left_bottom() + egui::vec2(12.0, -4.0),
             );
-            ui.painter().rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
+            ui.painter()
+                .rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
         }
 
-        ui.label(
-            egui::RichText::new(icon)
-                .font(theme.font_icon(theme.text_sm)),
-        );
+        ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
         ui.label(
             egui::RichText::new(&tc.name)
                 .size(theme.text_sm)
@@ -237,13 +239,11 @@ fn render_tool_call_row_glass(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme
                 stripe_rect.left_top() + egui::vec2(10.0, 4.0),
                 stripe_rect.left_bottom() + egui::vec2(12.0, -4.0),
             );
-            ui.painter().rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
+            ui.painter()
+                .rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
         }
 
-        ui.label(
-            egui::RichText::new(icon)
-                .font(theme.font_icon(theme.text_sm)),
-        );
+        ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
         ui.label(
             egui::RichText::new(&tc.name)
                 .size(theme.text_sm)

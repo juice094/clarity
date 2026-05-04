@@ -157,8 +157,13 @@ pub struct Session {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ContentBlock {
-    Text { text: String },
-    Code { language: String, code: String },
+    Text {
+        text: String,
+    },
+    Code {
+        language: String,
+        code: String,
+    },
     ToolResult {
         name: String,
         args: Option<String>,
@@ -172,9 +177,17 @@ pub enum ContentBlock {
         args: String,
     },
     #[allow(dead_code)]
-    Think { steps: Vec<String> },
-    Plan { title: String, steps: Vec<String> },
-    FilePreview { path: String, content: String },
+    Think {
+        steps: Vec<String>,
+    },
+    Plan {
+        title: String,
+        steps: Vec<String>,
+    },
+    FilePreview {
+        path: String,
+        content: String,
+    },
 }
 
 #[derive(Clone)]
@@ -350,8 +363,16 @@ pub enum RenderBlock {
 
 #[derive(Clone, Debug)]
 pub enum PreviewItem {
-    File { name: String, content: String, path: String },
-    WebPage { title: String, url: String, content: String },
+    File {
+        name: String,
+        content: String,
+        path: String,
+    },
+    WebPage {
+        title: String,
+        url: String,
+        content: String,
+    },
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -16,8 +16,8 @@
 //!   a separate `AgentBuilder` trait if `subagents` ever needs to construct
 //!   agents generically.
 
-use crate::error::AgentError;
 use crate::agent::Agent;
+use crate::error::AgentError;
 
 /// Minimal trait for anything that can execute an agent turn.
 #[async_trait::async_trait]

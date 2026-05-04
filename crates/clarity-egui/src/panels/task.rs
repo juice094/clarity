@@ -32,12 +32,13 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                 .max_height(tree_max_h)
                 .show(ui, |ui| {
                     if let Ok(cwd) = std::env::current_dir() {
-                        let selected_path = app.ui_store.preview_item.as_ref().and_then(|p| {
-                            match p {
-                                crate::ui::types::PreviewItem::File { path, .. } => Some(path.as_str()),
+                        let selected_path =
+                            app.ui_store.preview_item.as_ref().and_then(|p| match p {
+                                crate::ui::types::PreviewItem::File { path, .. } => {
+                                    Some(path.as_str())
+                                }
                                 _ => None,
-                            }
-                        });
+                            });
                         crate::ui::file_browser::render_file_tree(
                             ui,
                             &cwd,

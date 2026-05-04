@@ -41,13 +41,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         if ui
                             .add(
                                 egui::Button::new(
-                                    egui::RichText::new(crate::theme::ICON_ARROW_LEFT)
-                                        .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_base)),
+                                    egui::RichText::new(crate::theme::ICON_ARROW_LEFT).font(
+                                        app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
+                                    ),
                                 )
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(
-                                    app.ui_store.theme.radius_md as u8,
-                                )),
+                                .corner_radius(
+                                    egui::CornerRadius::same(app.ui_store.theme.radius_md as u8),
+                                ),
                             )
                             .clicked()
                         {
@@ -55,135 +56,130 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         }
 
                         // Global controls (right-aligned)
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                ui.spacing_mut().item_spacing.x = 4.0;
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing.x = 4.0;
 
-                                // Settings
-                                if crate::widgets::icon_button_toolbar(
-                                    ui,
-                                    crate::theme::ICON_SETTINGS,
-                                    app.ui_store.theme.text_base,
-                                    &app.ui_store.theme,
+                            // Settings
+                            if crate::widgets::icon_button_toolbar(
+                                ui,
+                                crate::theme::ICON_SETTINGS,
+                                app.ui_store.theme.text_base,
+                                &app.ui_store.theme,
+                            )
+                            .clicked()
+                            {
+                                app.settings_store.settings_open = true;
+                                app.settings_store.settings_edit = {
+                                    let guard = app.state.cached_settings.lock();
+                                    guard.clone()
+                                };
+                            }
+
+                            // MCP
+                            let mcp_count = app
+                                .mcp_store
+                                .mcp_config
+                                .as_ref()
+                                .map_or(0, |c| c.servers.len());
+                            let mcp_icon = if mcp_count > 0 {
+                                format!("🔌{}", mcp_count)
+                            } else {
+                                "🔌".to_string()
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(&mcp_icon)
+                                            .size(app.ui_store.theme.text_sm),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
                                 )
                                 .clicked()
-                                {
-                                    app.settings_store.settings_open = true;
-                                    app.settings_store.settings_edit = {
-                                        let guard = app.state.cached_settings.lock();
-                                        guard.clone()
-                                    };
-                                }
+                            {
+                                app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
+                            }
 
-                                // MCP
-                                let mcp_count = app
-                                    .mcp_store
-                                    .mcp_config
-                                    .as_ref()
-                                    .map_or(0, |c| c.servers.len());
-                                let mcp_icon = if mcp_count > 0 {
-                                    format!("🔌{}", mcp_count)
-                                } else {
-                                    "🔌".to_string()
-                                };
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(&mcp_icon)
-                                                .size(app.ui_store.theme.text_sm),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        )),
+                            // Skills
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new("🛠").size(app.ui_store.theme.text_sm),
                                     )
-                                    .clicked()
-                                {
-                                    app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
-                                }
-
-                                // Skills
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new("🛠")
-                                                .size(app.ui_store.theme.text_sm),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
                                             app.ui_store.theme.radius_sm as u8,
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    app.ui_store.skill_panel_open = true;
-                                }
+                                        ),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                app.ui_store.skill_panel_open = true;
+                            }
 
-                                // Locale toggle
-                                let locale_label = match app.ui_store.locale {
-                                    crate::i18n::Locale::EnUS => "EN",
-                                    crate::i18n::Locale::ZhCN => "中",
-                                };
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(locale_label)
-                                                .size(app.ui_store.theme.text_xs)
-                                                .color(app.ui_store.theme.text_dim)
-                                                .monospace(),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    app.ui_store.locale = match app.ui_store.locale {
-                                        crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
-                                        crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
-                                    };
-                                }
-
-                                // Token usage (compact)
-                                if let Some((_, _, t)) = app.chat_store.last_usage {
-                                    ui.label(
-                                        egui::RichText::new(format!("{}∑", format_thousands(t)))
+                            // Locale toggle
+                            let locale_label = match app.ui_store.locale {
+                                crate::i18n::Locale::EnUS => "EN",
+                                crate::i18n::Locale::ZhCN => "中",
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(locale_label)
                                             .size(app.ui_store.theme.text_xs)
                                             .color(app.ui_store.theme.text_dim)
                                             .monospace(),
-                                    );
-                                }
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                app.ui_store.locale = match app.ui_store.locale {
+                                    crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
+                                    crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
+                                };
+                            }
 
-                                // Online status
-                                let (status_color, status_label) =
-                                    match app.chat_store.agent_status {
-                                        AgentStatus::Online => {
-                                            (app.ui_store.theme.status_online, "Online")
-                                        }
-                                        AgentStatus::Busy => {
-                                            (app.ui_store.theme.status_busy, "Busy")
-                                        }
-                                        AgentStatus::Unconfigured => {
-                                            (app.ui_store.theme.status_offline, "Unconfigured")
-                                        }
-                                        AgentStatus::Offline => {
-                                            (app.ui_store.theme.status_offline, "Offline")
-                                        }
-                                    };
-                                let (rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(8.0, 8.0),
-                                    egui::Sense::hover(),
-                                );
-                                ui.painter().circle_filled(rect.center(), 4.0, status_color);
+                            // Token usage (compact)
+                            if let Some((_, _, t)) = app.chat_store.last_usage {
                                 ui.label(
-                                    egui::RichText::new(status_label)
+                                    egui::RichText::new(format!("{}∑", format_thousands(t)))
                                         .size(app.ui_store.theme.text_xs)
-                                        .color(app.ui_store.theme.text_dim),
+                                        .color(app.ui_store.theme.text_dim)
+                                        .monospace(),
                                 );
-                            },
-                        );
+                            }
+
+                            // Online status
+                            let (status_color, status_label) = match app.chat_store.agent_status {
+                                AgentStatus::Online => (app.ui_store.theme.status_online, "Online"),
+                                AgentStatus::Busy => (app.ui_store.theme.status_busy, "Busy"),
+                                AgentStatus::Unconfigured => {
+                                    (app.ui_store.theme.status_offline, "Unconfigured")
+                                }
+                                AgentStatus::Offline => {
+                                    (app.ui_store.theme.status_offline, "Offline")
+                                }
+                            };
+                            let (rect, _) =
+                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                            ui.painter().circle_filled(rect.center(), 4.0, status_color);
+                            ui.label(
+                                egui::RichText::new(status_label)
+                                    .size(app.ui_store.theme.text_xs)
+                                    .color(app.ui_store.theme.text_dim),
+                            );
+                        });
                     });
                     ui.add_space(app.ui_store.theme.space_12);
 
@@ -293,8 +289,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     // ── Thinking Log ──
                     crate::components::thinking_log::render_thinking_log(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
-
-
                 });
         });
 }

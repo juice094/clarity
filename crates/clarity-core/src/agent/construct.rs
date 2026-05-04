@@ -28,7 +28,12 @@ impl Agent {
         // Runtime self-check: log any tools pending configuration
         if let Ok((ready, pending)) = registry.self_check() {
             if !pending.is_empty() {
-                warn!("ToolRegistry self-check: {} ready, {} pending — {:?}", ready, pending.len(), pending);
+                warn!(
+                    "ToolRegistry self-check: {} ready, {} pending — {:?}",
+                    ready,
+                    pending.len(),
+                    pending
+                );
             } else {
                 info!("ToolRegistry self-check: all {} tools ready", ready);
             }

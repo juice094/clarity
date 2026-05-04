@@ -42,7 +42,9 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     }
     if let Some(response) = keyboard_approval {
         let req_id = request.id.clone();
-        let _ = app.ui_tx.send(crate::UiEvent::ResolveApproval { req_id, response });
+        let _ = app
+            .ui_tx
+            .send(crate::UiEvent::ResolveApproval { req_id, response });
         return;
     }
 
@@ -67,9 +69,14 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
             // Tool name
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Tool:").strong().color(app.ui_store.theme.text));
                 ui.label(
-                    egui::RichText::new(&request.tool_call.function.name).color(app.ui_store.theme.accent),
+                    egui::RichText::new("Tool:")
+                        .strong()
+                        .color(app.ui_store.theme.text),
+                );
+                ui.label(
+                    egui::RichText::new(&request.tool_call.function.name)
+                        .color(app.ui_store.theme.accent),
                 );
             });
 
@@ -82,14 +89,15 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     .color(app.ui_store.theme.text),
             );
             // Filter out internal underscore-prefixed keys (_risk_level, _sensitive_file_warning, etc.)
-            let display_args = serde_json::from_str::<serde_json::Value>(&request.tool_call.function.arguments)
-                .map(|mut v| {
-                    if let serde_json::Value::Object(ref mut map) = v {
-                        map.retain(|k, _| !k.starts_with('_'));
-                    }
-                    v.to_string()
-                })
-                .unwrap_or_else(|_| request.tool_call.function.arguments.clone());
+            let display_args =
+                serde_json::from_str::<serde_json::Value>(&request.tool_call.function.arguments)
+                    .map(|mut v| {
+                        if let serde_json::Value::Object(ref mut map) = v {
+                            map.retain(|k, _| !k.starts_with('_'));
+                        }
+                        v.to_string()
+                    })
+                    .unwrap_or_else(|_| request.tool_call.function.arguments.clone());
             egui::Frame::new()
                 .fill(app.ui_store.theme.code_block_bg)
                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
@@ -139,8 +147,15 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             if let Some(ref desc) = request.description {
                 ui.add_space(app.ui_store.theme.space_8);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(crate::theme::ICON_WARNING).font(app.ui_store.theme.font_icon(14.0)));
-                    ui.label(egui::RichText::new(desc).color(app.ui_store.theme.danger).size(13.0));
+                    ui.label(
+                        egui::RichText::new(crate::theme::ICON_WARNING)
+                            .font(app.ui_store.theme.font_icon(14.0)),
+                    );
+                    ui.label(
+                        egui::RichText::new(desc)
+                            .color(app.ui_store.theme.danger)
+                            .size(13.0),
+                    );
                 });
             }
 
@@ -151,7 +166,11 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Reject
                     if ui
-                        .button(egui::RichText::new(format!("{} Reject (Esc)", crate::theme::ICON_X)).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)).color(app.ui_store.theme.danger))
+                        .button(
+                            egui::RichText::new(format!("{} Reject (Esc)", crate::theme::ICON_X))
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
+                                .color(app.ui_store.theme.danger),
+                        )
                         .clicked()
                     {
                         let req_id = request.id.clone();
@@ -164,9 +183,12 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     // Approve for Session
                     if ui
                         .button(
-                            egui::RichText::new(format!("{} Approve for Session (Shift+Enter)", crate::theme::ICON_CHECK))
-                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
-                                .color(app.ui_store.theme.accent),
+                            egui::RichText::new(format!(
+                                "{} Approve for Session (Shift+Enter)",
+                                crate::theme::ICON_CHECK
+                            ))
+                            .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
+                            .color(app.ui_store.theme.accent),
                         )
                         .clicked()
                     {
@@ -179,7 +201,14 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
 
                     // Approve
                     if ui
-                        .button(egui::RichText::new(format!("{} Approve (Enter)", crate::theme::ICON_CHECK)).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)).color(app.ui_store.theme.ok))
+                        .button(
+                            egui::RichText::new(format!(
+                                "{} Approve (Enter)",
+                                crate::theme::ICON_CHECK
+                            ))
+                            .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
+                            .color(app.ui_store.theme.ok),
+                        )
                         .clicked()
                     {
                         let req_id = request.id.clone();

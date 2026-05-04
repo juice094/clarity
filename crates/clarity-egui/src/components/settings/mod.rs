@@ -36,7 +36,9 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
         .order(egui::Order::Background)
         .show(ctx, |ui| {
             ui.set_min_size(screen.size());
-            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked()
+            if ui
+                .allocate_response(screen.size(), egui::Sense::click())
+                .clicked()
                 || ctx.input(|i| i.key_pressed(egui::Key::Escape))
             {
                 close_requested = true;

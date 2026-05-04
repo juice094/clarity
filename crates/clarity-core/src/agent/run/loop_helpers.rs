@@ -123,7 +123,11 @@ impl Agent {
         if let Some(ref store) = self.memory_store() {
             if let Ok(memories) = store.search(query, 5).await {
                 if !memories.is_empty() {
-                    let text = memories.iter().map(|m| format!("- {}", m.content)).collect::<Vec<_>>().join("\n");
+                    let text = memories
+                        .iter()
+                        .map(|m| format!("- {}", m.content))
+                        .collect::<Vec<_>>()
+                        .join("\n");
                     prompt.push_str(&format!("\n\n# Relevant Memories\n{}\n", text));
                 }
             }
@@ -157,7 +161,10 @@ impl Agent {
         let content = if completed {
             format!("User: {}\nAssistant: {}", query, response)
         } else {
-            format!("User: {}\nAssistant: [max iterations reached] {}", query, response)
+            format!(
+                "User: {}\nAssistant: [max iterations reached] {}",
+                query, response
+            )
         };
         self.store_conversation_memory(content.clone()).await;
         self.maybe_extract_memories(content);

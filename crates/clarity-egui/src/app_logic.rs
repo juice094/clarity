@@ -348,10 +348,7 @@ impl App {
             Ok(c) => c,
             Err(e) => {
                 tracing::warn!("MCP config reload failed: {}", e);
-                self.push_toast(
-                    format!("MCP 配置加载失败: {}", e),
-                    ToastLevel::Error,
-                );
+                self.push_toast(format!("MCP 配置加载失败: {}", e), ToastLevel::Error);
                 return;
             }
         };
@@ -417,7 +414,9 @@ impl App {
         } else {
             self.save_current_session();
             if !self.chat_store.input.trim().is_empty() {
-                self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+                self.session_store
+                    .drafts
+                    .insert(old_id, self.chat_store.input.clone());
             } else {
                 self.session_store.drafts.remove(&old_id);
             }
@@ -425,12 +424,22 @@ impl App {
 
         self.session_store.active_category = category.to_string();
         // Find an existing session of this category, or create one.
-        if let Some(s) = self.session_store.sessions.iter().find(|s| s.category == category) {
+        if let Some(s) = self
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.category == category)
+        {
             self.session_store.active_session_id = s.id.clone();
             self.chat_store.input = self.session_store.drafts.remove(&s.id).unwrap_or_default();
             self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         } else {
-            let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
+            let count = self
+                .session_store
+                .sessions
+                .iter()
+                .filter(|s| s.category == category)
+                .count();
             let s = new_session(category, count);
             let id = s.id.clone();
             self.session_store.sessions.push(s);
@@ -482,20 +491,36 @@ impl App {
         let old_id = self.session_store.active_session_id.clone();
         self.save_current_session();
         if !self.chat_store.input.trim().is_empty() {
-            self.session_store.drafts.insert(old_id, self.chat_store.input.clone());
+            self.session_store
+                .drafts
+                .insert(old_id, self.chat_store.input.clone());
         } else {
             self.session_store.drafts.remove(&old_id);
         }
 
         // Emotion is singleton: refuse to create multiple emotion sessions.
         if category == "emotion" {
-            if let Some(existing) = self.session_store.sessions.iter().find(|s| s.category == "emotion") {
+            if let Some(existing) = self
+                .session_store
+                .sessions
+                .iter()
+                .find(|s| s.category == "emotion")
+            {
                 self.session_store.active_session_id = existing.id.clone();
-                self.chat_store.input = self.session_store.drafts.remove(&existing.id).unwrap_or_default();
+                self.chat_store.input = self
+                    .session_store
+                    .drafts
+                    .remove(&existing.id)
+                    .unwrap_or_default();
                 return;
             }
         }
-        let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
+        let count = self
+            .session_store
+            .sessions
+            .iter()
+            .filter(|s| s.category == category)
+            .count();
         let s = new_session(&category, count);
         let id = s.id.clone();
         self.session_store.sessions.push(s);
@@ -580,7 +605,11 @@ impl App {
         } else if self.session_store.active_session_id == id {
             let new_id = self.session_store.sessions[0].id.clone();
             self.session_store.active_session_id = new_id.clone();
-            self.chat_store.input = self.session_store.drafts.remove(&new_id).unwrap_or_default();
+            self.chat_store.input = self
+                .session_store
+                .drafts
+                .remove(&new_id)
+                .unwrap_or_default();
         }
     }
 }

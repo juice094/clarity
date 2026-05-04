@@ -92,7 +92,9 @@ impl CompactionService {
     /// messages are removed whole (not truncated) when their role category
     /// exceeds its quota.
     fn budget_compact(&self, messages: &mut Vec<Message>) {
-        let Some(budget) = self.config.budget else { return };
+        let Some(budget) = self.config.budget else {
+            return;
+        };
 
         let system_quota = (self.config.token_limit as f64 * budget.system) as usize;
         let user_quota = (self.config.token_limit as f64 * budget.user) as usize;
@@ -817,7 +819,10 @@ mod tests {
         let after = messages.len();
 
         // Budget compaction should have dropped at least one message.
-        assert!(after < before, "budget_compact should drop messages when over budget");
+        assert!(
+            after < before,
+            "budget_compact should drop messages when over budget"
+        );
         // The most recent user message should be preserved.
         assert!(messages.iter().any(|m| m.content == "extra4"));
         // The system prompt should be preserved (it fits within system_quota=1).

@@ -19,7 +19,10 @@ pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::new()
                 .fill(theme.bg)
-                .inner_margin(egui::Margin::symmetric(theme.space_20 as i8, theme.space_12 as i8)),
+                .inner_margin(egui::Margin::symmetric(
+                    theme.space_20 as i8,
+                    theme.space_12 as i8,
+                )),
         )
         .show(ctx, |ui| {
             let available = ui.available_width();
@@ -47,7 +50,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::central_panel(&ctx.style())
                 .fill(app.ui_store.theme.bg)
-                .inner_margin(egui::Margin::symmetric(app.ui_store.theme.space_20 as i8, app.ui_store.theme.space_16 as i8)),
+                .inner_margin(egui::Margin::symmetric(
+                    app.ui_store.theme.space_20 as i8,
+                    app.ui_store.theme.space_16 as i8,
+                )),
         )
         .show(ctx, |ui| {
             // Header uses the full CentralPanel width (not constrained by content_max_width).
@@ -70,7 +76,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 |ui| {
                     // Scrollable content area (messages + plan)
                     egui::ScrollArea::vertical()
-                        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                        .scroll_bar_visibility(
+                            egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden,
+                        )
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             render_message_list(app, ui);

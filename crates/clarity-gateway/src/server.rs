@@ -109,7 +109,10 @@ pub async fn run(
             });
             let removed = before - batches.len();
             if removed > 0 {
-                info!("Cleaned up {} stale parallel batch progress records", removed);
+                info!(
+                    "Cleaned up {} stale parallel batch progress records",
+                    removed
+                );
             }
         }
     });
@@ -236,7 +239,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
                 .post(handlers::update_mcp_server)
                 .delete(handlers::delete_mcp_server),
         )
-        .route("/api/cron/tasks", get(handlers::list_cron_tasks).post(handlers::create_cron_task))
+        .route(
+            "/api/cron/tasks",
+            get(handlers::list_cron_tasks).post(handlers::create_cron_task),
+        )
         .route("/api/cron/tasks/:id", delete(handlers::delete_cron_task))
         .route("/api/search", post(handlers::search_memory))
         .route("/ws", get(crate::ws::ws_handler))

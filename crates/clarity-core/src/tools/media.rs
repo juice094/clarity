@@ -86,10 +86,7 @@ impl Tool for ReadMediaFileTool {
 
         // Security check: reject sensitive files
         if is_sensitive_file(&path) {
-            warn!(
-                "Blocked read_media on sensitive file: {}",
-                path.display()
-            );
+            warn!("Blocked read_media on sensitive file: {}", path.display());
             return Err(ToolError::invalid_params(format!(
                 "Cannot read sensitive file: '{}'",
                 path.display()
@@ -131,14 +128,11 @@ impl Tool for ReadMediaFileTool {
 
         // Read and base64-encode
         let bytes = fs::read(&path).await.map_err(|e| {
-            ToolError::execution_failed(format!(
-                "Failed to read file '{}': {}",
-                path.display(),
-                e
-            ))
+            ToolError::execution_failed(format!("Failed to read file '{}': {}", path.display(), e))
         })?;
 
-        let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+        let base64_data =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
         let size_kb = size as f64 / 1024.0;
 
         debug!(
@@ -180,7 +174,12 @@ fn mime_from_sniff_description(desc: &str) -> &'static str {
 
 /// Guess MIME type from file extension as a fallback.
 fn guess_mime_from_extension(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .as_deref()
+    {
         Some("png") => "image/png",
         Some("jpg") | Some("jpeg") => "image/jpeg",
         Some("gif") => "image/gif",

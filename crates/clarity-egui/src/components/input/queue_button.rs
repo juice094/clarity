@@ -2,8 +2,16 @@ use crate::theme::Theme;
 use crate::widgets;
 
 pub fn queue_button(ui: &mut egui::Ui, can_queue: bool, theme: &Theme) -> egui::Response {
-    let fill = if can_queue { theme.accent } else { theme.bg_elevated };
-    let _text_color = if can_queue { theme.text } else { theme.text_dim };
+    let fill = if can_queue {
+        theme.accent
+    } else {
+        theme.bg_elevated
+    };
+    let _text_color = if can_queue {
+        theme.text
+    } else {
+        theme.text_dim
+    };
     let btn = widgets::icon_button(
         ui,
         crate::theme::ICON_PLAY,

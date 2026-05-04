@@ -76,19 +76,11 @@ pub fn load_agent_definition(dir: &Path) -> Result<AgentDefinition, crate::error
     debug!("Loading agent definition from: {}", path.display());
 
     let contents = std::fs::read_to_string(&path).map_err(|e| {
-        crate::error::AgentError::Registry(format!(
-            "Failed to read {}: {}",
-            path.display(),
-            e
-        ))
+        crate::error::AgentError::Registry(format!("Failed to read {}: {}", path.display(), e))
     })?;
 
     let raw: RawAgentYaml = serde_yaml::from_str(&contents).map_err(|e| {
-        crate::error::AgentError::Registry(format!(
-            "Failed to parse {}: {}",
-            path.display(),
-            e
-        ))
+        crate::error::AgentError::Registry(format!("Failed to parse {}: {}", path.display(), e))
     })?;
 
     let agent = raw.agent;

@@ -1,5 +1,5 @@
-use crate::App;
 use crate::ui::types::{AgentStatus, UiEvent};
+use crate::App;
 
 pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
     // Plan review card above input bar
@@ -54,39 +54,36 @@ pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.add_space(app.ui_store.theme.space_8);
                 ui.horizontal(|ui| {
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            if ui
-                                .add_sized(
-                                    egui::vec2(80.0, 32.0),
-                                    egui::Button::new(
-                                        egui::RichText::new("Cancel")
-                                            .size(app.ui_store.theme.text_sm)
-                                            .color(app.ui_store.theme.text),
-                                    )
-                                    .fill(app.ui_store.theme.border),
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_sized(
+                                egui::vec2(80.0, 32.0),
+                                egui::Button::new(
+                                    egui::RichText::new("Cancel")
+                                        .size(app.ui_store.theme.text_sm)
+                                        .color(app.ui_store.theme.text),
                                 )
-                                .clicked()
-                            {
-                                cancel = true;
-                            }
-                            if ui
-                                .add_sized(
-                                    egui::vec2(80.0, 32.0),
-                                    egui::Button::new(
-                                        egui::RichText::new("Execute")
-                                            .size(app.ui_store.theme.text_sm)
-                                            .color(app.ui_store.theme.text),
-                                    )
-                                    .fill(app.ui_store.theme.accent),
+                                .fill(app.ui_store.theme.border),
+                            )
+                            .clicked()
+                        {
+                            cancel = true;
+                        }
+                        if ui
+                            .add_sized(
+                                egui::vec2(80.0, 32.0),
+                                egui::Button::new(
+                                    egui::RichText::new("Execute")
+                                        .size(app.ui_store.theme.text_sm)
+                                        .color(app.ui_store.theme.text),
                                 )
-                                .clicked()
-                            {
-                                execute = true;
-                            }
-                        },
-                    );
+                                .fill(app.ui_store.theme.accent),
+                            )
+                            .clicked()
+                        {
+                            execute = true;
+                        }
+                    });
                 });
             });
         if execute {
@@ -117,7 +114,11 @@ pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
                             text.push_str(&format!(
                                 "**Step {}**: {}\n```\n{}\n```\n\n",
                                 r.step_id,
-                                if r.success { crate::theme::ICON_CHECK } else { crate::theme::ICON_X },
+                                if r.success {
+                                    crate::theme::ICON_CHECK
+                                } else {
+                                    crate::theme::ICON_X
+                                },
                                 r.output
                             ));
                         }
@@ -180,13 +181,18 @@ pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
                         crate::ui::types::PlanStepStatus::Running => {
                             (crate::theme::ICON_PLAY, app.ui_store.theme.accent)
                         }
-                        crate::ui::types::PlanStepStatus::Success => (crate::theme::ICON_CHECK, app.ui_store.theme.ok),
+                        crate::ui::types::PlanStepStatus::Success => {
+                            (crate::theme::ICON_CHECK, app.ui_store.theme.ok)
+                        }
                         crate::ui::types::PlanStepStatus::Failed => {
                             (crate::theme::ICON_X, app.ui_store.theme.danger)
                         }
                     };
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)));
+                        ui.label(
+                            egui::RichText::new(icon)
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)),
+                        );
                         ui.label(
                             egui::RichText::new(format!("{}.", step.id))
                                 .size(app.ui_store.theme.text_sm)

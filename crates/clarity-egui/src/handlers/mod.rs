@@ -4,22 +4,41 @@ pub mod subagent;
 pub mod system;
 pub mod task;
 
-use crate::App;
 use crate::ui::types::UiEvent;
+use crate::App;
 
 pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
         match event {
             UiEvent::Chunk(text) => chat::on_chunk(&mut app.session_store, text),
-            UiEvent::ToolStart { id, name, arguments } => {
-                chat::on_tool_start(&mut app.session_store, &mut app.chat_store, id, name, arguments);
+            UiEvent::ToolStart {
+                id,
+                name,
+                arguments,
+            } => {
+                chat::on_tool_start(
+                    &mut app.session_store,
+                    &mut app.chat_store,
+                    id,
+                    name,
+                    arguments,
+                );
             }
             UiEvent::ToolResult { id, result } => {
-                let name = app.chat_store.tool_calls.iter()
+                let name = app
+                    .chat_store
+                    .tool_calls
+                    .iter()
                     .find(|t| t.id == id)
                     .map(|t| t.name.clone())
                     .unwrap_or_else(|| "tool".to_string());
-                chat::on_tool_result(&mut app.session_store, &mut app.chat_store, id, name, result);
+                chat::on_tool_result(
+                    &mut app.session_store,
+                    &mut app.chat_store,
+                    id,
+                    name,
+                    result,
+                );
             }
             UiEvent::StepBegin { tool_name } => {
                 system::on_step_begin(tool_name);
@@ -39,7 +58,12 @@ pub fn process_events(app: &mut App) {
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
-            } => chat::on_usage(&mut app.chat_store, prompt_tokens, completion_tokens, total_tokens),
+            } => chat::on_usage(
+                &mut app.chat_store,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            ),
             UiEvent::PlanReady(plan) => chat::on_plan_ready(&mut app.chat_store, plan),
             UiEvent::PlanStepBegin { step_id, tool_name } => {
                 chat::on_plan_step_begin(&mut app.chat_store, step_id, tool_name);
@@ -67,7 +91,11 @@ pub fn process_events(app: &mut App) {
                 provider_id,
                 models,
             ),
-            UiEvent::WebPageFetched { title, url, content } => {
+            UiEvent::WebPageFetched {
+                title,
+                url,
+                content,
+            } => {
                 chat::on_web_page_fetched(&mut app.ui_store, title, url, content);
             }
             UiEvent::ResolveApproval { req_id, response } => {
@@ -78,7 +106,11 @@ pub fn process_events(app: &mut App) {
                     response,
                 );
             }
-            UiEvent::McpReloaded { success, tools, message } => {
+            UiEvent::McpReloaded {
+                success,
+                tools,
+                message,
+            } => {
                 app.mcp_store.connected_tools = tools;
                 if !message.is_empty() {
                     let level = if success {
@@ -89,7 +121,12 @@ pub fn process_events(app: &mut App) {
                     app.push_toast(message, level);
                 }
             }
-            UiEvent::KimiCodeLoginStateUpdate { state, user_code, url, error } => {
+            UiEvent::KimiCodeLoginStateUpdate {
+                state,
+                user_code,
+                url,
+                error,
+            } => {
                 app.settings_store.kimi_code_login_state = match state.as_str() {
                     "waiting" => crate::stores::KimiCodeLoginState::Waiting {
                         user_code: user_code.unwrap_or_default(),
@@ -102,7 +139,11 @@ pub fn process_events(app: &mut App) {
                     _ => crate::stores::KimiCodeLoginState::Idle,
                 };
             }
-            UiEvent::KimiCodeLoginResult { success, message, provider_id } => {
+            UiEvent::KimiCodeLoginResult {
+                success,
+                message,
+                provider_id,
+            } => {
                 app.settings_store.kimi_code_login_state = if success {
                     crate::stores::KimiCodeLoginState::Success
                 } else {

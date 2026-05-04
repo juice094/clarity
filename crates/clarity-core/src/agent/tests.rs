@@ -458,7 +458,12 @@ async fn test_agent_run_streaming_with_wire() {
         .expect("timeout waiting for DraftEvent::Progress")
         .expect("channel closed");
     assert!(
-        matches!(msg, WireMessage::DraftEvent { event: DraftEvent::Progress { .. } }),
+        matches!(
+            msg,
+            WireMessage::DraftEvent {
+                event: DraftEvent::Progress { .. }
+            }
+        ),
         "Expected DraftEvent::Progress, got {:?}",
         msg
     );
@@ -469,7 +474,12 @@ async fn test_agent_run_streaming_with_wire() {
         .expect("timeout waiting for DraftEvent::Clear")
         .expect("channel closed");
     assert!(
-        matches!(msg, WireMessage::DraftEvent { event: DraftEvent::Clear }),
+        matches!(
+            msg,
+            WireMessage::DraftEvent {
+                event: DraftEvent::Clear
+            }
+        ),
         "Expected DraftEvent::Clear, got {:?}",
         msg
     );
@@ -479,7 +489,9 @@ async fn test_agent_run_streaming_with_wire() {
     loop {
         match timeout(Duration::from_millis(500), ui_side.recv()).await {
             Ok(Some(msg)) => match msg {
-                WireMessage::DraftEvent { event: DraftEvent::Content { text } } => {
+                WireMessage::DraftEvent {
+                    event: DraftEvent::Content { text },
+                } => {
                     if !text.is_empty() {
                         content_received = true;
                     }
@@ -491,7 +503,10 @@ async fn test_agent_run_streaming_with_wire() {
             Err(_) => break, // Timeout
         }
     }
-    assert!(content_received, "Should have received DraftEvent::Content parts");
+    assert!(
+        content_received,
+        "Should have received DraftEvent::Content parts"
+    );
 
     // Wait for agent to complete
     let result = timeout(Duration::from_millis(1000), handle)
@@ -611,7 +626,11 @@ fn test_build_active_files_external_path_redacted() {
         ctx
     );
     assert!(
-        !ctx.contains(if cfg!(windows) { "C:\\Windows" } else { "/etc/passwd" }),
+        !ctx.contains(if cfg!(windows) {
+            "C:\\Windows"
+        } else {
+            "/etc/passwd"
+        }),
         "absolute path must NOT leak: {}",
         ctx
     );
@@ -1113,7 +1132,14 @@ async fn test_budget_day_limit() {
     // Second call that pushes accumulated cost over daily limit should fail.
     let result = agent.check_budget(0.6);
     assert!(
-        matches!(result, Err(AgentError::BudgetExceeded { limit: 1.0, current: 0.5, requested: 0.6 })),
+        matches!(
+            result,
+            Err(AgentError::BudgetExceeded {
+                limit: 1.0,
+                current: 0.5,
+                requested: 0.6
+            })
+        ),
         "Expected BudgetExceeded on second call, got: {:?}",
         result
     );
@@ -1138,10 +1164,7 @@ fn test_tool_error_sanitize_paths() {
     let home = dirs::home_dir();
     if let Some(ref h) = home {
         let home_str = h.to_string_lossy().to_string();
-        let err = crate::error::ToolError::ExecutionFailed(format!(
-            "Failed to read {}",
-            home_str
-        ));
+        let err = crate::error::ToolError::ExecutionFailed(format!("Failed to read {}", home_str));
         let sanitized = err.sanitize_paths();
         let msg = sanitized.to_string();
         assert!(
@@ -1182,7 +1205,8 @@ impl LlmProvider for VisionTrackingMockLlm {
         _messages: &[Message],
         _tools: &serde_json::Value,
     ) -> Result<LlmResponse, AgentError> {
-        self.call_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.call_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(LlmResponse {
             content: format!("response from {}", self.name),
             tool_calls: vec![],
@@ -1288,4 +1312,3 @@ async fn test_no_vision_no_switch() {
     assert_eq!(default_llm.call_count.load(Ordering::SeqCst), 1);
     assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 0);
 }
-

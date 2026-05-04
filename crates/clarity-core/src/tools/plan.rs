@@ -246,7 +246,11 @@ impl Tool for PlanTool {
                 } else {
                     step_id.to_string()
                 };
-                if let Some(step) = plan.steps.iter_mut().find(|s| s.id == step_id || s.id == normalized) {
+                if let Some(step) = plan
+                    .steps
+                    .iter_mut()
+                    .find(|s| s.id == step_id || s.id == normalized)
+                {
                     step.status = status.to_string();
                     if let Some(r) = result {
                         step.result = Some(r.to_string());

@@ -223,7 +223,11 @@ pub fn render_blocks(
             }
             RenderBlock::ListItem(spans) => {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("•").size(theme.text_base).color(text_color));
+                    ui.label(
+                        egui::RichText::new("•")
+                            .size(theme.text_base)
+                            .color(text_color),
+                    );
                     render_spans(ui, spans, theme, text_color, theme.text_base, false);
                 });
             }

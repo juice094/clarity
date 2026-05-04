@@ -43,7 +43,10 @@ pub fn is_sensitive_file(path: &Path) -> bool {
     }
 
     // Package registry credentials
-    if matches!(name, ".npmrc" | ".pypirc" | ".netrc" | ".dockercfg" | "credentials") {
+    if matches!(
+        name,
+        ".npmrc" | ".pypirc" | ".netrc" | ".dockercfg" | "credentials"
+    ) {
         return true;
     }
 
@@ -209,7 +212,10 @@ pub async fn sniff_media_file(path: &Path) -> Option<&'static str> {
 /// Known text file extensions that bypass magic sniffing.
 fn is_text_file(path: &Path) -> bool {
     matches!(
-        path.extension().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).as_deref(),
+        path.extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+            .as_deref(),
         Some("txt")
             | Some("md")
             | Some("rs")
@@ -250,7 +256,10 @@ fn is_text_file(path: &Path) -> bool {
 /// This is a lightweight filter used before attempting to sniff MIME types.
 pub fn is_media_file(path: &Path) -> bool {
     matches!(
-        path.extension().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).as_deref(),
+        path.extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+            .as_deref(),
         Some("png")
             | Some("jpg")
             | Some("jpeg")

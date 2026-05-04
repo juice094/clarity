@@ -37,7 +37,12 @@ impl OAuthToken {
         let expires_in = payload
             .get("expires_in")
             .and_then(|v| v.as_f64())
-            .or_else(|| payload.get("expires_in").and_then(|v| v.as_i64()).map(|v| v as f64))
+            .or_else(|| {
+                payload
+                    .get("expires_in")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as f64)
+            })
             .unwrap_or(0.0);
         Ok(Self {
             access_token: payload

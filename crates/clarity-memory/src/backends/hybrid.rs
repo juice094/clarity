@@ -232,10 +232,18 @@ impl StorageBackend for HybridStore {
         Ok(merged)
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
+    async fn search_fulltext(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<Fact>> {
         let query_lower = query.to_lowercase();
         let cached = self.cached_facts(|f| f.fact.to_lowercase().contains(&query_lower));
-        let cold = self.cold_storage.search_fulltext(query, limit * 5, decay).await?;
+        let cold = self
+            .cold_storage
+            .search_fulltext(query, limit * 5, decay)
+            .await?;
         let merged = self.merge_facts(cached, cold);
 
         let now = Utc::now();

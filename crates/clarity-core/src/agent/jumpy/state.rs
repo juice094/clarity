@@ -48,8 +48,11 @@ impl JumpyState {
         } else {
             let union: std::collections::HashSet<_> =
                 self.tags.iter().chain(other.tags.iter()).collect();
-            let intersection: std::collections::HashSet<_> =
-                self.tags.iter().filter(|t| other.tags.contains(t)).collect();
+            let intersection: std::collections::HashSet<_> = self
+                .tags
+                .iter()
+                .filter(|t| other.tags.contains(t))
+                .collect();
             intersection.len() as f32 / union.len().max(1) as f32
         };
 

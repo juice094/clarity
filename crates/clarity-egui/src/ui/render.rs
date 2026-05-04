@@ -60,7 +60,11 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
         }
     } else {
         // Phase 1: render blocks with type-aware strategy
-        let visible_blocks: Vec<&ContentBlock> = msg.blocks.iter().filter(|b| should_show_in_chat(b)).collect();
+        let visible_blocks: Vec<&ContentBlock> = msg
+            .blocks
+            .iter()
+            .filter(|b| should_show_in_chat(b))
+            .collect();
         if !visible_blocks.is_empty() {
             let max_width = (ui.available_width() - 32.0).max(120.0);
             egui::Frame::new()
@@ -171,7 +175,12 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme, 
                 });
             ui.add_space(theme.space_8);
         }
-        ContentBlock::ToolResult { name, output, truncated, .. } => {
+        ContentBlock::ToolResult {
+            name,
+            output,
+            truncated,
+            ..
+        } => {
             let header = format!("🔧 {}", name);
             egui::CollapsingHeader::new(
                 egui::RichText::new(header)
@@ -343,9 +352,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(icon).font(theme.font_icon(theme.text_base)),
-                    );
+                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_base)));
                     ui.label(
                         egui::RichText::new(&tc.name)
                             .size(theme.text_sm)

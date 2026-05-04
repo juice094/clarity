@@ -135,7 +135,9 @@ impl MemoryStore {
 
     /// Full-text search using FTS5
     pub async fn search_fulltext(&self, query: &str, limit: usize) -> Result<Vec<Fact>> {
-        self.inner.search_fulltext(query, limit, &self.decay_config).await
+        self.inner
+            .search_fulltext(query, limit, &self.decay_config)
+            .await
     }
 
     /// Hybrid search: FTS5 recall + BM25 reranking
@@ -143,7 +145,9 @@ impl MemoryStore {
     /// Uses FTS5 for fast candidate retrieval, then reranks using BM25 scoring
     /// for better relevance on short-text documents (facts).
     pub async fn search_hybrid(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
-        self.inner.search_similar(query, limit, &self.decay_config).await
+        self.inner
+            .search_similar(query, limit, &self.decay_config)
+            .await
     }
 
     /// Get facts by session ID

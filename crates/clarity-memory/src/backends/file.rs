@@ -293,7 +293,12 @@ impl StorageBackend for FileStore {
         Ok(facts)
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
+    async fn search_fulltext(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<Fact>> {
         let query_lower = query.to_lowercase();
         let mut scored = Vec::new();
         let now = Utc::now();

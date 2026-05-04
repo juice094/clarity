@@ -1,7 +1,9 @@
 use std::time::Instant;
 
 use crate::stores::{ChatStore, SessionStore};
-use crate::ui::types::{AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus};
+use crate::ui::types::{
+    AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
+};
 
 // TODO: decompose App dependency
 pub fn on_done(app: &mut crate::App) {
@@ -130,7 +132,11 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
             let truncated = result.chars().count() > 2000;
             let out = if truncated {
                 let t: String = result.chars().take(2000).collect();
-                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+                format!(
+                    "{}\n... (truncated, {} chars total)",
+                    t,
+                    result.chars().count()
+                )
             } else {
                 result.to_string()
             };
@@ -158,7 +164,11 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
             let truncated = result.chars().count() > 2000;
             let out = if truncated {
                 let t: String = result.chars().take(2000).collect();
-                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+                format!(
+                    "{}\n... (truncated, {} chars total)",
+                    t,
+                    result.chars().count()
+                )
             } else {
                 result.to_string()
             };
@@ -168,7 +178,11 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
             let truncated = result.chars().count() > 2000;
             let out = if truncated {
                 let t: String = result.chars().take(2000).collect();
-                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+                format!(
+                    "{}\n... (truncated, {} chars total)",
+                    t,
+                    result.chars().count()
+                )
             } else {
                 result.to_string()
             };
@@ -264,5 +278,9 @@ pub fn on_web_page_fetched(
     url: String,
     content: String,
 ) {
-    ui_store.preview_item = Some(crate::ui::types::PreviewItem::WebPage { title, url, content });
+    ui_store.preview_item = Some(crate::ui::types::PreviewItem::WebPage {
+        title,
+        url,
+        content,
+    });
 }

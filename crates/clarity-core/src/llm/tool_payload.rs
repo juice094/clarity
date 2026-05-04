@@ -63,8 +63,14 @@ fn format_tools_for_prompt(tools: &Value) -> String {
     if let Some(arr) = tools.as_array() {
         for tool in arr {
             if let Some(func) = tool.get("function") {
-                let name = func.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
-                let desc = func.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                let name = func
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let desc = func
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 text.push_str(&format!("- {}: {}\n", name, desc));
             }
         }

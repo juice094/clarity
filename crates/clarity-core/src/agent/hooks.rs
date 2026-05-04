@@ -142,7 +142,10 @@ mod tests {
 
         let result = registry.before_tool_call(&mut tc).await;
         assert!(
-            matches!(result, HookResult::Cancel(AgentError::ToolExecutionFailed(_, _))),
+            matches!(
+                result,
+                HookResult::Cancel(AgentError::ToolExecutionFailed(_, _))
+            ),
             "expected Cancel result"
         );
     }
@@ -162,7 +165,10 @@ mod tests {
         };
 
         let result = registry.before_tool_call(&mut tc).await;
-        assert!(matches!(result, HookResult::Continue), "expected Continue result");
+        assert!(
+            matches!(result, HookResult::Continue),
+            "expected Continue result"
+        );
         assert_eq!(tc.function.arguments, r#"{"replaced":true}"#);
     }
 
@@ -185,6 +191,9 @@ mod tests {
 
         let mut result = serde_json::json!({"ok": true});
         registry.after_tool_call(&tc, &mut result).await;
-        assert!(inspected.load(Ordering::SeqCst), "hook should have inspected the result");
+        assert!(
+            inspected.load(Ordering::SeqCst),
+            "hook should have inspected the result"
+        );
     }
 }

@@ -26,16 +26,14 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    build_provider_from_registry, build_provider_from_registry_with_key, AuthType,
-    ModelConfigFile, ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
+    build_provider_from_registry, build_provider_from_registry_with_key, AuthType, ModelConfigFile,
+    ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
 };
 pub use ollama::OllamaProvider;
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta};
+pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};
 pub use tool_payload::{NativeToolAdapter, PromptGuidedAdapter, ToolPayloadAdapter};
-pub use policy::{
-    DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy,
-};
 
 use crate::error::AgentError;
 use async_trait::async_trait;
@@ -64,7 +62,10 @@ pub fn resolve_local_model_path() -> Option<PathBuf> {
                     return Some(p);
                 }
             }
-            tracing::warn!("CLARITY_LOCAL_MODEL_PATH points to a non-.gguf file: {}. Ignoring.", p.display());
+            tracing::warn!(
+                "CLARITY_LOCAL_MODEL_PATH points to a non-.gguf file: {}. Ignoring.",
+                p.display()
+            );
         }
     }
 
@@ -307,7 +308,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
         let response = self
             .client
             .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key.read().unwrap().clone()))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.api_key.read().unwrap().clone()),
+            )
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/0.1.0 (Claude Code)")
             .json(&request_body)
@@ -589,11 +593,7 @@ impl OAuthLlm {
     /// Create with the default Kimi Code configuration (convenience alias).
     pub fn kimi_code() -> Self {
         Self {
-            inner: OpenAiCompatibleLlm::new(
-                "",
-                "https://api.kimi.com/coding/v1",
-                "kimi-k2.6",
-            ),
+            inner: OpenAiCompatibleLlm::new("", "https://api.kimi.com/coding/v1", "kimi-k2.6"),
             token_manager: crate::auth::OAuthTokenManager::new(),
         }
     }
@@ -605,7 +605,12 @@ impl OAuthLlm {
         let base_url = env::var("KIMI_CODE_BASE_URL")
             .unwrap_or_else(|_| "https://api.kimi.com/coding/v1".into());
         let model = env::var("KIMI_CODE_MODEL").unwrap_or_else(|_| "kimi-k2.6".into());
-        Ok(Self::new(api_key, base_url, model, crate::auth::OAuthTokenManager::new()))
+        Ok(Self::new(
+            api_key,
+            base_url,
+            model,
+            crate::auth::OAuthTokenManager::new(),
+        ))
     }
 
     pub fn set_prompt_cache_key(&mut self, key: &str) {

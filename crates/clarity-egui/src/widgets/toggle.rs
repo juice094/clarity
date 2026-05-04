@@ -16,11 +16,7 @@ pub fn toggle(ui: &mut egui::Ui, value: &mut bool, theme: &Theme) -> egui::Respo
     let track_radius = rect.height() / 2.0;
 
     // Track fill
-    let track_color = if *value {
-        theme.accent
-    } else {
-        theme.surface
-    };
+    let track_color = if *value { theme.accent } else { theme.surface };
     ui.painter().rect_filled(
         rect,
         egui::CornerRadius::same(track_radius as u8),
@@ -49,7 +45,8 @@ pub fn toggle(ui: &mut egui::Ui, value: &mut bool, theme: &Theme) -> egui::Respo
     } else {
         theme.text_dim
     };
-    ui.painter().circle_filled(thumb_center, thumb_radius, thumb_color);
+    ui.painter()
+        .circle_filled(thumb_center, thumb_radius, thumb_color);
 
     // Focus ring on hover/active
     if response.hovered() || response.has_focus() {

@@ -25,7 +25,10 @@ async fn main() -> anyhow::Result<()> {
     // ------------------------------------------------------------------
     let core_node = Arc::new(CoreNode::new());
     coordinator.register_node(core_node);
-    tracing::info!("CoreNode registered — {} node(s) active", coordinator.node_count());
+    tracing::info!(
+        "CoreNode registered — {} node(s) active",
+        coordinator.node_count()
+    );
 
     // ------------------------------------------------------------------
     // 3. Start the system tray (blocks until user selects Quit)

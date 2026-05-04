@@ -23,11 +23,15 @@ pub struct SessionStore {
 impl SessionStore {
     #[allow(dead_code)]
     pub fn active_session(&self) -> Option<&Session> {
-        self.sessions.iter().find(|s| s.id == self.active_session_id)
+        self.sessions
+            .iter()
+            .find(|s| s.id == self.active_session_id)
     }
 
     pub fn active_session_mut(&mut self) -> Option<&mut Session> {
-        self.sessions.iter_mut().find(|s| s.id == self.active_session_id)
+        self.sessions
+            .iter_mut()
+            .find(|s| s.id == self.active_session_id)
     }
 }
 
@@ -200,10 +204,7 @@ pub struct OnboardingStore {
 /// Heuristic: infer terminal status from result text.
 pub fn infer_tool_status(output: &str) -> ToolCallStatus {
     let lower = output.to_lowercase();
-    if lower.contains("panic")
-        || lower.contains("unreachable")
-        || lower.contains("fatal")
-    {
+    if lower.contains("panic") || lower.contains("unreachable") || lower.contains("fatal") {
         return ToolCallStatus::Error;
     }
     if lower.contains("error")

@@ -44,10 +44,7 @@ impl Coordinator {
     /// Uses the router to select a target, then calls the node's
     /// `handle()` method. If no suitable node is found, returns
     /// an error.
-    pub async fn dispatch(
-        &self,
-        msg: FederationMessage,
-    ) -> Result<FederationResponse, AgentError> {
+    pub async fn dispatch(&self, msg: FederationMessage) -> Result<FederationResponse, AgentError> {
         let target = self
             .router
             .route(&self.registry, &msg)
@@ -103,10 +100,7 @@ mod tests {
         fn capabilities(&self) -> Vec<Capability> {
             vec![]
         }
-        async fn handle(
-            &self,
-            msg: FederationMessage,
-        ) -> Result<FederationResponse, AgentError> {
+        async fn handle(&self, msg: FederationMessage) -> Result<FederationResponse, AgentError> {
             match msg {
                 FederationMessage::Heartbeat { .. } => Ok(FederationResponse::Ack),
                 _ => Ok(FederationResponse::Text(format!("echo from {}", self.id))),
@@ -117,9 +111,7 @@ mod tests {
     #[tokio::test]
     async fn test_coordinator_register_and_dispatch() {
         let mut coord = Coordinator::new();
-        let node = Arc::new(EchoNode {
-            id: "echo".into(),
-        });
+        let node = Arc::new(EchoNode { id: "echo".into() });
         coord.register_node(node);
 
         assert_eq!(coord.node_count(), 1);

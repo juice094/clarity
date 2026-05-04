@@ -7,8 +7,8 @@ use crate::types::ToolCall;
 use clarity_wire::WireMessage;
 use std::pin::Pin;
 
-use tracing::{info, warn};
 use super::loop_helpers::scrub_credentials;
+use tracing::{info, warn};
 
 /// Output of dispatching a batch of tool calls.
 pub(crate) struct DispatchOutput {
@@ -19,7 +19,11 @@ pub(crate) struct DispatchOutput {
 
 impl Agent {
     /// Run proactive compaction and threshold-based compaction if needed.
-    pub(crate) async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
+    pub(crate) async fn maybe_compact_turn(
+        &self,
+        messages: &mut Vec<Message>,
+        llm: &dyn LlmProvider,
+    ) {
         let mut did_compact = false;
         if let Some(ref service) = self.compaction_service {
             if service.needs_compaction(messages) {
@@ -218,6 +222,9 @@ impl Agent {
             return Err(AgentError::ToolExecutionFailed(tool_name, error));
         }
 
-        Ok(DispatchOutput { tool_names, ask_user_question })
+        Ok(DispatchOutput {
+            tool_names,
+            ask_user_question,
+        })
     }
 }

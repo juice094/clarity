@@ -119,7 +119,11 @@ impl<P: OutcomePredictor> HierarchicalPlanner<P> {
             Some(seed) => rand::rngs::StdRng::seed_from_u64(seed),
             None => rand::rngs::StdRng::from_rng(&mut rand::rng()),
         };
-        Self { predictor, config, rng }
+        Self {
+            predictor,
+            config,
+            rng,
+        }
     }
 
     /// Predict the outcome of executing a skill from a given state.
@@ -131,7 +135,9 @@ impl<P: OutcomePredictor> HierarchicalPlanner<P> {
         current: &JumpyState,
         commitment: f32,
     ) -> Result<JumpyState, String> {
-        self.predictor.predict(skill_id, params, current, commitment).await
+        self.predictor
+            .predict(skill_id, params, current, commitment)
+            .await
     }
 
     /// Plan a skill sequence to reach `goal` from `initial_state`.

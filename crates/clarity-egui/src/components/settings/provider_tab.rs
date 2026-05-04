@@ -65,17 +65,11 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
                 let id = p.id.clone();
                 let h = 36.0;
 
-                let (rect, resp) = ui.allocate_exact_size(
-                    egui::vec2(ui.available_width(), h),
-                    egui::Sense::click(),
-                );
+                let (rect, resp) = ui
+                    .allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::click());
 
                 let has_key = !p.api_key_ref.is_empty() && p.resolve_api_key().is_some();
-                let text_color = if is_active {
-                    theme.accent
-                } else {
-                    theme.text
-                };
+                let text_color = if is_active { theme.accent } else { theme.text };
 
                 let bg = if is_active || resp.hovered() {
                     theme.surface_strong
@@ -195,8 +189,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         if !prov.builtin {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let btn = egui::Button::new(
-                    egui::RichText::new(crate::theme::ICON_X)
-                        .font(theme.font_icon(theme.text_sm)),
+                    egui::RichText::new(crate::theme::ICON_X).font(theme.font_icon(theme.text_sm)),
                 )
                 .fill(egui::Color32::TRANSPARENT)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
@@ -243,8 +236,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.horizontal(|ui| {
             if ui.add(theme.primary_button(&login_label)).clicked() {
                 app.settings_store.kimi_code_login_open = true;
-                app.settings_store.kimi_code_login_state =
-                    crate::stores::KimiCodeLoginState::Idle;
+                app.settings_store.kimi_code_login_state = crate::stores::KimiCodeLoginState::Idle;
             }
             if has_token {
                 let logout_btn = egui::Button::new(
@@ -257,16 +249,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                 if ui.add(logout_btn).clicked() {
                     match clarity_core::auth::TokenStore::for_provider(token_key).delete() {
                         Ok(()) => {
-                            app.push_toast(
-                                format!("{} logged out", display),
-                                ToastLevel::Info,
-                            );
+                            app.push_toast(format!("{} logged out", display), ToastLevel::Info);
                         }
                         Err(e) => {
-                            app.push_toast(
-                                format!("Logout failed: {}", e),
-                                ToastLevel::Error,
-                            );
+                            app.push_toast(format!("Logout failed: {}", e), ToastLevel::Error);
                         }
                     }
                 }
@@ -318,7 +304,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             ui.data_mut(|d| d.insert_temp(key_edit_id, key_buffer.clone()));
             let mut updated = prov.clone();
             updated.api_key_ref = key_buffer;
-            let _ = app.settings_store.provider_registry.update_provider(&updated);
+            let _ = app
+                .settings_store
+                .provider_registry
+                .update_provider(&updated);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let eye_text = if show_key { "Hide" } else { "Show" };
@@ -354,7 +343,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.data_mut(|d| d.insert_temp(url_edit_id, url_buffer.clone()));
         let mut updated = prov.clone();
         updated.base_url = url_buffer;
-        let _ = app.settings_store.provider_registry.update_provider(&updated);
+        let _ = app
+            .settings_store
+            .provider_registry
+            .update_provider(&updated);
     }
 
     ui.add_space(theme.space_12);
@@ -428,12 +420,14 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         let is_refreshing = app.settings_store.refreshing_provider.as_deref() == Some(&current);
 
         // Test Connection
-        let test_label = if is_testing { "Testing..." } else { "Test Connection" };
-        let test_btn = egui::Button::new(
-            egui::RichText::new(test_label).size(theme.text_sm),
-        )
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+        let test_label = if is_testing {
+            "Testing..."
+        } else {
+            "Test Connection"
+        };
+        let test_btn = egui::Button::new(egui::RichText::new(test_label).size(theme.text_sm))
+            .fill(theme.surface)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
             let (display_name, base_url, api_fmt) = app
                 .settings_store
@@ -491,12 +485,13 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         } else {
             "Refresh Models"
         };
-        let refresh_btn = egui::Button::new(
-            egui::RichText::new(refresh_label).size(theme.text_sm),
-        )
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-        if ui.add_enabled(!is_local && !is_refreshing, refresh_btn).clicked() {
+        let refresh_btn = egui::Button::new(egui::RichText::new(refresh_label).size(theme.text_sm))
+            .fill(theme.surface)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+        if ui
+            .add_enabled(!is_local && !is_refreshing, refresh_btn)
+            .clicked()
+        {
             let (_, base_url, api_fmt) = app
                 .settings_store
                 .provider_registry
@@ -700,7 +695,8 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                                 app.settings_store.add_provider_key.clear();
                                 app.settings_store.show_add_provider = false;
                                 app.settings_store.settings_edit.provider = name.clone();
-                                if let Some(prov) = app.settings_store.provider_registry.get(&name) {
+                                if let Some(prov) = app.settings_store.provider_registry.get(&name)
+                                {
                                     if !prov.models.is_empty() {
                                         app.settings_store.settings_edit.model =
                                             prov.models[0].clone();

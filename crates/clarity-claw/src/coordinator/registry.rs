@@ -119,9 +119,7 @@ mod tests {
     #[test]
     fn test_capabilities_of() {
         let mut reg = CapabilityRegistry::new();
-        let node = Arc::new(DummyNode {
-            id: "core".into(),
-        });
+        let node = Arc::new(DummyNode { id: "core".into() });
         reg.register(node);
 
         let caps = reg.capabilities_of("core");
@@ -131,9 +129,7 @@ mod tests {
     #[test]
     fn test_nodes_with_capability() {
         let mut reg = CapabilityRegistry::new();
-        let node = Arc::new(DummyNode {
-            id: "core".into(),
-        });
+        let node = Arc::new(DummyNode { id: "core".into() });
         reg.register(node);
 
         let llm_nodes = reg.nodes_with_capability("llm_inference");

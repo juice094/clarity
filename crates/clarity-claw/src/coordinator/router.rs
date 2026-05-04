@@ -35,10 +35,16 @@ impl FederationRouter {
             FederationMessage::MemoryResponse { request_id: _, .. } => {
                 // In a real implementation, track request_id → node mapping.
                 // Phase 1: broadcast to all memory-capable nodes.
-                return registry.nodes_with_capability("memory_storage").into_iter().next();
+                return registry
+                    .nodes_with_capability("memory_storage")
+                    .into_iter()
+                    .next();
             }
             FederationMessage::ToolRequest { .. } => {
-                return registry.nodes_with_capability("tool_execution").into_iter().next();
+                return registry
+                    .nodes_with_capability("tool_execution")
+                    .into_iter()
+                    .next();
             }
             FederationMessage::ToolResponse { .. } => {
                 // Responses are routed back to the original requester.
@@ -46,7 +52,10 @@ impl FederationRouter {
                 return None;
             }
             FederationMessage::LlmRequest { .. } => {
-                return registry.nodes_with_capability("llm_inference").into_iter().next();
+                return registry
+                    .nodes_with_capability("llm_inference")
+                    .into_iter()
+                    .next();
             }
             FederationMessage::LlmResponse { .. } => {
                 // Responses are routed back to the original requester.

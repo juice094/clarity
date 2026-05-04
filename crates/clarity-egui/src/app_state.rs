@@ -33,8 +33,11 @@ pub struct AppState {
     pub prewarm_error: Mutex<Option<String>>,
     pub task_store: clarity_core::background::TaskStore,
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
-    pub mode_aware_approval_runtime:
-        Arc<clarity_core::approval::ModeAwareApprovalRuntime<clarity_core::approval::InMemoryApprovalRuntime>>,
+    pub mode_aware_approval_runtime: Arc<
+        clarity_core::approval::ModeAwareApprovalRuntime<
+            clarity_core::approval::InMemoryApprovalRuntime,
+        >,
+    >,
     /// Long-term memory store for cross-session fact retrieval.
     pub memory_store: Option<clarity_memory::MemoryStore>,
 }
@@ -182,9 +185,12 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         let desc = format!("runtime:{}:{}", cfg.provider_id, cfg.model);
         let llm = clarity_core::llm::runtime::build_from_active_config()
             .await
-            .map_err(|e| crate::error::EguiError::LlmLoad(format!(
-                "Failed to build provider from runtime config: {}", e
-            )))?;
+            .map_err(|e| {
+                crate::error::EguiError::LlmLoad(format!(
+                    "Failed to build provider from runtime config: {}",
+                    e
+                ))
+            })?;
         bind_llm(&state.agent, llm.into(), &desc);
         let mut guard = state.llm_binding.lock();
         *guard = Some(LlmBinding {

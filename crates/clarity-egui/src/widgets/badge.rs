@@ -11,7 +11,10 @@ pub fn badge(ui: &mut egui::Ui, text: &str, theme: &Theme) -> egui::Response {
         .show(ui, |ui| {
             ui.label(
                 egui::RichText::new(text)
-                    .font(egui::FontId::new(theme.text_xs, egui::FontFamily::Monospace))
+                    .font(egui::FontId::new(
+                        theme.text_xs,
+                        egui::FontFamily::Monospace,
+                    ))
                     .color(theme.text_dim),
             );
         })

@@ -526,11 +526,8 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
         // Wait for the response with a hard timeout so that stale requests
         // do not keep the runtime state out of sync with the Agent.
         const APPROVAL_TIMEOUT_SECS: u64 = 300;
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS),
-            rx,
-        )
-        .await
+        match tokio::time::timeout(tokio::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS), rx)
+            .await
         {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(_)) => Err(AgentError::ToolExecutionFailed(
@@ -565,10 +562,7 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
                 waiters.remove(request_id);
                 Err(AgentError::ToolExecutionFailed(
                     "wait_for_response".to_string(),
-                    format!(
-                        "Approval timeout after {} seconds",
-                        APPROVAL_TIMEOUT_SECS
-                    ),
+                    format!("Approval timeout after {} seconds", APPROVAL_TIMEOUT_SECS),
                 ))
             }
         }
@@ -694,11 +688,10 @@ impl<R: ApprovalRuntime> ApprovalRuntime for PersistingApprovalRuntime<R> {
                 ),
                 timestamp: chrono::Utc::now(),
             };
-            let memory = crate::memory::Memory::new(
-                serde_json::to_string(&record).unwrap_or_default(),
-            )
-            .with_tags(vec!["approval".to_string(), "record".to_string()])
-            .with_importance(0.8);
+            let memory =
+                crate::memory::Memory::new(serde_json::to_string(&record).unwrap_or_default())
+                    .with_tags(vec!["approval".to_string(), "record".to_string()])
+                    .with_importance(0.8);
             if let Err(e) = store.store(memory).await {
                 warn!("Failed to persist approval record: {}", e);
             }
@@ -1117,10 +1110,7 @@ mod tests {
         let ok_count = results.iter().filter(|r| r.is_ok()).count();
         let err_count = results.iter().filter(|r| r.is_err()).count();
 
-        assert_eq!(
-            ok_count, 1,
-            "Exactly one concurrent resolve should succeed"
-        );
+        assert_eq!(ok_count, 1, "Exactly one concurrent resolve should succeed");
         assert_eq!(
             err_count, 1,
             "Exactly one concurrent resolve should fail with 'not pending'"
@@ -1130,9 +1120,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_nonexistent_request() {
         let runtime = InMemoryApprovalRuntime::new();
-        let result = runtime
-            .resolve("fake-id", ApprovalResponse::Approve)
-            .await;
+        let result = runtime.resolve("fake-id", ApprovalResponse::Approve).await;
         assert!(result.is_err(), "Resolving nonexistent request must fail");
         let err_msg = result.unwrap_err().to_string();
         assert!(

@@ -48,113 +48,113 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                         "Failed" => crate::theme::ICON_X,
                         _ => crate::theme::ICON_QUESTION,
                     };
-                        ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)));
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "Batch {}",
-                                &batch.batch_id[..8.min(batch.batch_id.len())]
-                            ))
-                            .size(app.ui_store.theme.text_sm)
-                            .strong()
-                            .color(app.ui_store.theme.text),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(&batch.status)
-                                    .size(app.ui_store.theme.text_xs)
-                                    .color(match batch.status.as_str() {
-                                        "Running" => app.ui_store.theme.status_online,
-                                        "Completed" => app.ui_store.theme.status_online,
-                                        "Failed" => app.ui_store.theme.danger,
-                                        _ => app.ui_store.theme.text_dim,
-                                    }),
-                            );
-                        });
-                    });
-
-                    // Progress bar
-                    ui.add_space(app.ui_store.theme.space_4);
-                    let progress = if batch.total > 0 {
-                        (batch.completed + batch.failed) as f32 / batch.total as f32
-                    } else {
-                        0.0
-                    };
-                    let pb_width = ui.available_width();
-                    let pb_height = 6.0;
-                    let (_pb_id, pb_resp) = ui.allocate_exact_size(
-                        egui::vec2(pb_width, pb_height),
-                        egui::Sense::hover(),
+                    ui.label(
+                        egui::RichText::new(icon)
+                            .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)),
                     );
-                    let pb_rect = pb_resp.rect;
-                    ui.painter().rect_filled(
-                        pb_rect,
-                        egui::CornerRadius::same(3),
-                        app.ui_store.theme.bg_elevated,
-                    );
-                    if progress > 0.0 {
-                        let fill_w = pb_rect.width() * progress;
-                        ui.painter().rect_filled(
-                            egui::Rect::from_min_size(
-                                pb_rect.min,
-                                egui::vec2(fill_w, pb_height),
-                            ),
-                            egui::CornerRadius::same(3),
-                            if batch.status == "Failed" {
-                                app.ui_store.theme.danger
-                            } else {
-                                app.ui_store.theme.accent
-                            },
-                        );
-                    }
-
-                    ui.add_space(app.ui_store.theme.space_4);
                     ui.label(
                         egui::RichText::new(format!(
-                            "{}/{} completed · {} failed · {}ms",
-                            batch.completed, batch.total, batch.failed, batch.elapsed_ms
+                            "Batch {}",
+                            &batch.batch_id[..8.min(batch.batch_id.len())]
                         ))
-                        .size(app.ui_store.theme.text_xs)
-                        .color(app.ui_store.theme.text_dim),
+                        .size(app.ui_store.theme.text_sm)
+                        .strong()
+                        .color(app.ui_store.theme.text),
                     );
-
-                    // Agent status list
-                    ui.add_space(app.ui_store.theme.space_4);
-                    for agent in &batch.agent_statuses {
-                        let (icon, color) = match agent.status.as_str() {
-                            "Running" => (crate::theme::ICON_PLAY, app.ui_store.theme.status_online),
-                            "Completed" => (crate::theme::ICON_CHECK, app.ui_store.theme.status_online),
-                            "Failed" => (crate::theme::ICON_X, app.ui_store.theme.danger),
-                            _ => (crate::theme::ICON_HOURGLASS, app.ui_store.theme.text_dim),
-                        };
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(icon).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_xs)));
-                            ui.label(
-                                egui::RichText::new(&agent.agent_id)
-                                    .size(app.ui_store.theme.text_xs)
-                                    .color(color),
-                            );
-                            if let Some(ref summary) = agent.summary {
-                                let truncated: String = summary.chars().take(40).collect();
-                                ui.label(
-                                    egui::RichText::new(truncated)
-                                        .size(app.ui_store.theme.text_xs)
-                                        .color(app.ui_store.theme.text_dim),
-                                );
-                            }
-                        });
-                    }
-
-                    // Remove completed/failed batches after showing them
-                    if is_finished && batch.last_poll.elapsed() > std::time::Duration::from_secs(30)
-                    {
-                        to_remove.push(idx);
-                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(&batch.status)
+                                .size(app.ui_store.theme.text_xs)
+                                .color(match batch.status.as_str() {
+                                    "Running" => app.ui_store.theme.status_online,
+                                    "Completed" => app.ui_store.theme.status_online,
+                                    "Failed" => app.ui_store.theme.danger,
+                                    _ => app.ui_store.theme.text_dim,
+                                }),
+                        );
+                    });
                 });
-            ui.add_space(app.ui_store.theme.space_4);
-        }
 
-        // Remove stale entries (reverse order to preserve indices)
-        for idx in to_remove.into_iter().rev() {
-            app.subagent_store.parallel_batches.remove(idx);
-        }
+                // Progress bar
+                ui.add_space(app.ui_store.theme.space_4);
+                let progress = if batch.total > 0 {
+                    (batch.completed + batch.failed) as f32 / batch.total as f32
+                } else {
+                    0.0
+                };
+                let pb_width = ui.available_width();
+                let pb_height = 6.0;
+                let (_pb_id, pb_resp) =
+                    ui.allocate_exact_size(egui::vec2(pb_width, pb_height), egui::Sense::hover());
+                let pb_rect = pb_resp.rect;
+                ui.painter().rect_filled(
+                    pb_rect,
+                    egui::CornerRadius::same(3),
+                    app.ui_store.theme.bg_elevated,
+                );
+                if progress > 0.0 {
+                    let fill_w = pb_rect.width() * progress;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(pb_rect.min, egui::vec2(fill_w, pb_height)),
+                        egui::CornerRadius::same(3),
+                        if batch.status == "Failed" {
+                            app.ui_store.theme.danger
+                        } else {
+                            app.ui_store.theme.accent
+                        },
+                    );
+                }
+
+                ui.add_space(app.ui_store.theme.space_4);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{}/{} completed · {} failed · {}ms",
+                        batch.completed, batch.total, batch.failed, batch.elapsed_ms
+                    ))
+                    .size(app.ui_store.theme.text_xs)
+                    .color(app.ui_store.theme.text_dim),
+                );
+
+                // Agent status list
+                ui.add_space(app.ui_store.theme.space_4);
+                for agent in &batch.agent_statuses {
+                    let (icon, color) = match agent.status.as_str() {
+                        "Running" => (crate::theme::ICON_PLAY, app.ui_store.theme.status_online),
+                        "Completed" => (crate::theme::ICON_CHECK, app.ui_store.theme.status_online),
+                        "Failed" => (crate::theme::ICON_X, app.ui_store.theme.danger),
+                        _ => (crate::theme::ICON_HOURGLASS, app.ui_store.theme.text_dim),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(icon)
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_xs)),
+                        );
+                        ui.label(
+                            egui::RichText::new(&agent.agent_id)
+                                .size(app.ui_store.theme.text_xs)
+                                .color(color),
+                        );
+                        if let Some(ref summary) = agent.summary {
+                            let truncated: String = summary.chars().take(40).collect();
+                            ui.label(
+                                egui::RichText::new(truncated)
+                                    .size(app.ui_store.theme.text_xs)
+                                    .color(app.ui_store.theme.text_dim),
+                            );
+                        }
+                    });
+                }
+
+                // Remove completed/failed batches after showing them
+                if is_finished && batch.last_poll.elapsed() > std::time::Duration::from_secs(30) {
+                    to_remove.push(idx);
+                }
+            });
+        ui.add_space(app.ui_store.theme.space_4);
+    }
+
+    // Remove stale entries (reverse order to preserve indices)
+    for idx in to_remove.into_iter().rev() {
+        app.subagent_store.parallel_batches.remove(idx);
+    }
 }

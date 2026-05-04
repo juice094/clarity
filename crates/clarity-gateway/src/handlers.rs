@@ -190,7 +190,9 @@ pub(crate) async fn chat_completions(
     let prompt_tokens = messages.iter().map(|m| m.content.len()).sum::<usize>() as u32 / 4;
 
     let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ControllerEvent>();
-    let driver = Arc::new(ConversationChatDriver { history: messages.clone() });
+    let driver = Arc::new(ConversationChatDriver {
+        history: messages.clone(),
+    });
     let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, Some(driver));
     tokio::spawn(controller.run());
 
@@ -765,7 +767,10 @@ pub(crate) async fn run_parallel(
 
     let agent = (*state.agent).clone();
 
-    match agent.run_parallel(specs, config, Some(progress.clone())).await {
+    match agent
+        .run_parallel(specs, config, Some(progress.clone()))
+        .await
+    {
         Ok(result) => {
             let success_rate = result.success_rate();
             let total_elapsed_ms = result.total_elapsed_ms;
@@ -933,7 +938,9 @@ pub(crate) async fn admin_set_approval_mode(
     (StatusCode::OK, Json(resp)).into_response()
 }
 
-pub(crate) async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub(crate) async fn admin_get_approval_mode(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
     let mode = state.agent.approval_mode();
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
@@ -1805,7 +1812,14 @@ pub(crate) async fn list_mcp_servers() -> Response {
             let config_path = mcp_path
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
-            (StatusCode::OK, Json(McpServersResponse { servers, config_path })).into_response()
+            (
+                StatusCode::OK,
+                Json(McpServersResponse {
+                    servers,
+                    config_path,
+                }),
+            )
+                .into_response()
         }
         Err(e) => {
             warn!("Failed to load MCP config: {}", e);
@@ -1845,13 +1859,11 @@ pub(crate) async fn get_mcp_server(
             )
                 .into_response(),
         },
-        Err(e) => {
-            (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": format!("Failed to load MCP config: {}", e)})),
-            )
-                .into_response()
-        }
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": format!("Failed to load MCP config: {}", e)})),
+        )
+            .into_response(),
     }
 }
 
@@ -1917,13 +1929,11 @@ pub(crate) async fn update_mcp_server(
 
     match config.save(&path) {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"saved": true}))).into_response(),
-        Err(e) => {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -1948,19 +1958,15 @@ pub(crate) async fn delete_mcp_server(
 
     match config.save(&path) {
         Ok(()) => (StatusCode::OK, Json(serde_json::json!({"deleted": true}))).into_response(),
-        Err(e) => {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": e.to_string()})),
-            )
-                .into_response()
-        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
 // ==================== Cron 任务管理 API ====================
-
-
 
 #[derive(Serialize)]
 pub(crate) struct CronTaskOverview {
@@ -1990,10 +1996,12 @@ pub(crate) struct CreateCronResponse {
     pub task_id: String,
 }
 
-pub(crate) async fn list_cron_tasks(
-    State(state): State<Arc<AppState>>,
-) -> Json<CronTasksResponse> {
-    let tasks = state.task_manager.list_cron_tasks().await.unwrap_or_default();
+pub(crate) async fn list_cron_tasks(State(state): State<Arc<AppState>>) -> Json<CronTasksResponse> {
+    let tasks = state
+        .task_manager
+        .list_cron_tasks()
+        .await
+        .unwrap_or_default();
     let overviews: Vec<CronTaskOverview> = tasks
         .into_iter()
         .map(|t| CronTaskOverview {
@@ -2078,9 +2086,7 @@ pub(crate) struct SearchResponse {
     pub total: usize,
 }
 
-pub(crate) async fn search_memory(
-    Json(req): Json<SearchRequest>,
-) -> Response {
+pub(crate) async fn search_memory(Json(req): Json<SearchRequest>) -> Response {
     // Try to open the persistent memory store from the default location
     let clarity_dir = std::env::current_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -2113,11 +2119,7 @@ pub(crate) async fn search_memory(
                         })
                         .collect();
                     let total = results.len();
-                    (
-                        StatusCode::OK,
-                        Json(SearchResponse { results, total }),
-                    )
-                        .into_response()
+                    (StatusCode::OK, Json(SearchResponse { results, total })).into_response()
                 }
                 Err(e) => {
                     error!("Memory search failed: {}", e);

@@ -15,7 +15,8 @@ use std::sync::Arc;
 pub async fn load_llm(
     selection: ProviderSelection,
     settings: &GuiSettings,
-) -> Result<(Arc<dyn clarity_core::llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError> {
+) -> Result<(Arc<dyn clarity_core::llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError>
+{
     match selection {
         ProviderSelection::Preferred { provider }
         | ProviderSelection::Fallback {
@@ -46,8 +47,7 @@ async fn try_load_local(
         .clone()
         .filter(|s| !s.trim().is_empty())
         .or_else(|| {
-            clarity_core::llm::resolve_local_model_path()
-                .map(|p| p.to_string_lossy().into_owned())
+            clarity_core::llm::resolve_local_model_path().map(|p| p.to_string_lossy().into_owned())
         })
         .unwrap_or_default();
 
@@ -80,7 +80,9 @@ async fn try_load_local(
 
     let provider = clarity_core::llm::LocalGgufProvider::new(config)
         .await
-        .map_err(|e| crate::error::EguiError::LlmLoad(format!("Failed to load local model: {}", e)))?;
+        .map_err(|e| {
+            crate::error::EguiError::LlmLoad(format!("Failed to load local model: {}", e))
+        })?;
 
     let binding = LlmBinding {
         provider: "local".to_string(),
@@ -112,7 +114,11 @@ async fn try_load_cloud(
         clarity_core::llm::build_provider_from_registry_with_key(
             provider_cfg,
             &model_id,
-            if api_key.is_empty() { None } else { Some(api_key) },
+            if api_key.is_empty() {
+                None
+            } else {
+                Some(api_key)
+            },
         )
         .await
         .map(Arc::from)

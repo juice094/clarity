@@ -3,9 +3,11 @@
 //! Implements `FederationNode` so that federation messages can trigger
 //! full ReAct agent turns via `AgentExecutor::run_turn`.
 
-use std::sync::Arc;
-use clarity_contract::{AgentError, Capability, FederationMessage, FederationNode, FederationResponse};
+use clarity_contract::{
+    AgentError, Capability, FederationMessage, FederationNode, FederationResponse,
+};
 use clarity_core::agent::AgentExecutor;
+use std::sync::Arc;
 
 /// Federal node wrapping an `AgentExecutor`.
 pub struct CoreNode {
@@ -31,21 +33,17 @@ impl FederationNode for CoreNode {
         }]
     }
 
-    async fn handle(
-        &self,
-        msg: FederationMessage,
-    ) -> Result<FederationResponse, AgentError> {
+    async fn handle(&self, msg: FederationMessage) -> Result<FederationResponse, AgentError> {
         match msg {
-            FederationMessage::AgentTurn { query, .. } => {
-                match self.agent.run_turn(&query).await {
-                    Ok(content) => Ok(FederationResponse::Text(content)),
-                    Err(e) => Ok(FederationResponse::Error(e)),
-                }
-            }
+            FederationMessage::AgentTurn { query, .. } => match self.agent.run_turn(&query).await {
+                Ok(content) => Ok(FederationResponse::Text(content)),
+                Err(e) => Ok(FederationResponse::Error(e)),
+            },
             FederationMessage::Heartbeat { .. } => Ok(FederationResponse::Ack),
-            _ => Ok(FederationResponse::Error(AgentError::registry(
-                format!("CoreNode does not handle {:?}", msg),
-            ))),
+            _ => Ok(FederationResponse::Error(AgentError::registry(format!(
+                "CoreNode does not handle {:?}",
+                msg
+            )))),
         }
     }
 }
@@ -98,6 +96,8 @@ mod tests {
         let node = CoreNode::new(agent);
 
         let caps = node.capabilities();
-        assert!(caps.iter().any(|c| matches!(c, Capability::Channel { name } if name == "agent_executor")));
+        assert!(caps
+            .iter()
+            .any(|c| matches!(c, Capability::Channel { name } if name == "agent_executor")));
     }
 }

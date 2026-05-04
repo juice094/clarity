@@ -19,8 +19,8 @@ pub mod token;
 
 pub use builder::SubagentBuilder;
 pub use parallel::{
-    run_parallel, BatchProgress, BatchProgressHandle, BatchStatus, ParallelConfig, ParallelExecutor,
-    ParallelResult, SubagentBatch,
+    run_parallel, BatchProgress, BatchProgressHandle, BatchStatus, ParallelConfig,
+    ParallelExecutor, ParallelResult, SubagentBatch,
 };
 pub use registry::{AgentTypeDefinition, LaborMarket};
 pub use runner::{

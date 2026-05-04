@@ -7,7 +7,8 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
         // ── Logo placeholder ──
         let theme = &app.ui_store.theme;
         let logo_size = 64.0;
-        let (logo_rect, _resp) = ui.allocate_exact_size(egui::vec2(logo_size, logo_size), egui::Sense::hover());
+        let (logo_rect, _resp) =
+            ui.allocate_exact_size(egui::vec2(logo_size, logo_size), egui::Sense::hover());
         ui.painter().rect_filled(
             logo_rect,
             egui::CornerRadius::same(theme.radius_md as u8),
@@ -24,7 +25,12 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(16.0);
 
         // ── Name & tagline ──
-        ui.label(egui::RichText::new("Clarity").size(theme.text_2xl).strong().color(theme.text));
+        ui.label(
+            egui::RichText::new("Clarity")
+                .size(theme.text_2xl)
+                .strong()
+                .color(theme.text),
+        );
         ui.label(
             egui::RichText::new("Local-first AI agent runtime")
                 .size(theme.text_base)
@@ -51,31 +57,69 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
         let row_h = 36.0;
         let max_w = 420.0;
 
-        ui.allocate_ui_with_layout(egui::vec2(max_w, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("License").size(theme.text_sm).color(theme.text_dim).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new(env!("CARGO_PKG_LICENSE")).size(theme.text_sm).color(theme.text));
-            });
-        });
+        ui.allocate_ui_with_layout(
+            egui::vec2(max_w, row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.label(
+                    egui::RichText::new("License")
+                        .size(theme.text_sm)
+                        .color(theme.text_dim)
+                        .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(env!("CARGO_PKG_LICENSE"))
+                            .size(theme.text_sm)
+                            .color(theme.text),
+                    );
+                });
+            },
+        );
 
-        ui.allocate_ui_with_layout(egui::vec2(max_w, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("Copyright").size(theme.text_sm).color(theme.text_dim).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new(format!("© 2026 {}", env!("CARGO_PKG_AUTHORS"))).size(theme.text_sm).color(theme.text));
-            });
-        });
+        ui.allocate_ui_with_layout(
+            egui::vec2(max_w, row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.label(
+                    egui::RichText::new("Copyright")
+                        .size(theme.text_sm)
+                        .color(theme.text_dim)
+                        .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("© 2026 {}", env!("CARGO_PKG_AUTHORS")))
+                            .size(theme.text_sm)
+                            .color(theme.text),
+                    );
+                });
+            },
+        );
 
-        ui.allocate_ui_with_layout(egui::vec2(max_w, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("GitHub").size(theme.text_sm).color(theme.text_dim).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.hyperlink_to(
-                    egui::RichText::new(format!("{} ↗", env!("CARGO_PKG_REPOSITORY").trim_start_matches("https://")))
+        ui.allocate_ui_with_layout(
+            egui::vec2(max_w, row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.label(
+                    egui::RichText::new("GitHub")
+                        .size(theme.text_sm)
+                        .color(theme.text_dim)
+                        .strong(),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.hyperlink_to(
+                        egui::RichText::new(format!(
+                            "{} ↗",
+                            env!("CARGO_PKG_REPOSITORY").trim_start_matches("https://")
+                        ))
                         .size(theme.text_sm)
                         .color(theme.accent),
-                    env!("CARGO_PKG_REPOSITORY"),
-                );
-            });
-        });
+                        env!("CARGO_PKG_REPOSITORY"),
+                    );
+                });
+            },
+        );
 
         ui.add_space(24.0);
 

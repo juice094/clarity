@@ -52,7 +52,14 @@ pub fn render_file_tree(
             .id_salt(full_path.to_string_lossy().to_string())
             .default_open(depth < 1);
             header.show(ui, |ui| {
-                render_file_tree(ui, &full_path, theme, depth + 1, selected_path, on_file_click);
+                render_file_tree(
+                    ui,
+                    &full_path,
+                    theme,
+                    depth + 1,
+                    selected_path,
+                    on_file_click,
+                );
             });
         } else {
             let full_width = ui.available_width();
@@ -61,9 +68,7 @@ pub fn render_file_tree(
             let row_rect =
                 egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
-            let is_selected = selected_path.is_some_and(|sp| {
-                std::path::Path::new(sp) == full_path
-            });
+            let is_selected = selected_path.is_some_and(|sp| std::path::Path::new(sp) == full_path);
             if ui.is_rect_visible(row_rect) {
                 let painter = ui.painter_at(row_rect);
                 if is_selected {
@@ -75,10 +80,18 @@ pub fn render_file_tree(
                     );
                     painter.rect_filled(accent_bar, egui::CornerRadius::same(2), theme.accent);
                 } else if response.hovered() {
-                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover.linear_multiply(0.5));
+                    painter.rect_filled(
+                        row_rect,
+                        egui::CornerRadius::same(4),
+                        theme.bg_hover.linear_multiply(0.5),
+                    );
                 }
                 let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 8.0, 3.0);
-                let text_color = if is_selected { theme.text } else { theme.text_dim };
+                let text_color = if is_selected {
+                    theme.text
+                } else {
+                    theme.text_dim
+                };
                 painter.text(
                     text_pos,
                     egui::Align2::LEFT_TOP,

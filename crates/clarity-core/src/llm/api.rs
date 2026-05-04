@@ -11,7 +11,5 @@
 //! `clarity_contract`.
 
 // Re-export all contract types so existing imports continue to work.
-pub use clarity_contract::{
-    LlmProvider, LlmResponse, Message, MessageRole, StreamDelta, ToolCall,
-};
 pub use clarity_contract::llm::{Pricing, ProviderCapabilities};
+pub use clarity_contract::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta, ToolCall};

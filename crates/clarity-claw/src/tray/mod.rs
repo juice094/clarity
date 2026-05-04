@@ -3,9 +3,9 @@
 //! Provides the tao event loop, tray icon, menu, OS notifications,
 //! Gateway task polling, and wire message listening.
 
-use crate::{TaskListPayload, POLL_INTERVAL_SECS, TaskSummary};
-use notify::Watcher;
+use crate::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
 use clarity_wire::{Wire, WireMessage};
+use notify::Watcher;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tao::{
@@ -286,10 +286,7 @@ pub fn run() -> anyhow::Result<()> {
                                             Err(e) => {
                                                 let _ = notify_rust::Notification::new()
                                                     .summary("Clarity Error")
-                                                    .body(&format!(
-                                                        "Failed to create task: {}",
-                                                        e
-                                                    ))
+                                                    .body(&format!("Failed to create task: {}", e))
                                                     .urgency(notify_rust::Urgency::Critical)
                                                     .show();
                                             }
@@ -363,9 +360,7 @@ pub fn run() -> anyhow::Result<()> {
             } else if id == create_task_item.id() {
                 let _ = proxy.send_event(UserEvent::CreateTask);
             } else if id == refresh_tasks_item.id() {
-                let _ = proxy.send_event(UserEvent::TaskUpdate(
-                    task_cache.lock().unwrap().clone(),
-                ));
+                let _ = proxy.send_event(UserEvent::TaskUpdate(task_cache.lock().unwrap().clone()));
             } else if id == view_tasks_item.id() {
                 let url = format!("{}/chat.html", gateway_url);
                 let _ = open_url(&url);

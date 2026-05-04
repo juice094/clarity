@@ -251,10 +251,16 @@ impl LocalGgufConfig {
         if let Some(ext) = path.extension() {
             let ext = ext.to_string_lossy().to_lowercase();
             if ext != "gguf" {
-                panic!("LocalGgufConfig: model file must have .gguf extension, got: {}", path.display());
+                panic!(
+                    "LocalGgufConfig: model file must have .gguf extension, got: {}",
+                    path.display()
+                );
             }
         } else {
-            panic!("LocalGgufConfig: model file must have .gguf extension, got: {}", path.display());
+            panic!(
+                "LocalGgufConfig: model file must have .gguf extension, got: {}",
+                path.display()
+            );
         }
         let template =
             ChatTemplate::detect(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));

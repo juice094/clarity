@@ -562,11 +562,26 @@ impl Theme {
         style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
         // Scale default text styles so markdown/chat content follows the theme font scale.
         let scale = self.font_scale;
-        style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::new(self.text_xl * scale, egui::FontFamily::Proportional));
-        style.text_styles.insert(egui::TextStyle::Body, egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional));
-        style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::new(self.text_sm * scale, egui::FontFamily::Monospace));
-        style.text_styles.insert(egui::TextStyle::Button, egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional));
-        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::new(self.text_xs * scale, egui::FontFamily::Proportional));
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(self.text_xl * scale, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Body,
+            egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::new(self.text_sm * scale, egui::FontFamily::Monospace),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(self.text_base * scale, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::new(self.text_xs * scale, egui::FontFamily::Proportional),
+        );
     }
 
     /// Create a frame for chat bubbles.
@@ -736,16 +751,21 @@ pub fn setup_fonts(ctx: &egui::Context) {
         (r"C:\Windows\Fonts\segoeuib.ttf", "segoeuib"),
         (r"C:\Windows\Fonts\msyhbd.ttc", "msyhbd"),
         ("/System/Library/Fonts/Helvetica.ttc", "helvetica"),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "dejavu-sans-bold"),
-        ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "liberation-sans-bold"),
+        (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "dejavu-sans-bold",
+        ),
+        (
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "liberation-sans-bold",
+        ),
     ];
 
     for (path, key) in bold_candidates {
         if let Ok(bytes) = std::fs::read(path) {
-            fonts.font_data.insert(
-                (*key).into(),
-                egui::FontData::from_owned(bytes).into(),
-            );
+            fonts
+                .font_data
+                .insert((*key).into(), egui::FontData::from_owned(bytes).into());
             fonts
                 .families
                 .entry(egui::FontFamily::Name("bold".into()))
@@ -759,16 +779,21 @@ pub fn setup_fonts(ctx: &egui::Context) {
     let italic_candidates: &[(&str, &str)] = &[
         (r"C:\Windows\Fonts\segoeuii.ttf", "segoeuii"),
         ("/System/Library/Fonts/Helvetica.ttc", "helvetica-italic"),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf", "dejavu-sans-oblique"),
-        ("/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf", "liberation-sans-italic"),
+        (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
+            "dejavu-sans-oblique",
+        ),
+        (
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
+            "liberation-sans-italic",
+        ),
     ];
 
     for (path, key) in italic_candidates {
         if let Ok(bytes) = std::fs::read(path) {
-            fonts.font_data.insert(
-                (*key).into(),
-                egui::FontData::from_owned(bytes).into(),
-            );
+            fonts
+                .font_data
+                .insert((*key).into(), egui::FontData::from_owned(bytes).into());
             fonts
                 .families
                 .entry(egui::FontFamily::Name("italic".into()))

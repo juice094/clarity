@@ -20,7 +20,6 @@ pub fn attachment_chips(
             egui::Frame::group(ui.style())
                 .fill(theme.surface)
                 .corner_radius(egui::CornerRadius::same(theme.radius_full as u8))
-
                 .inner_margin(egui::Margin::symmetric(8, 4))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {

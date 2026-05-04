@@ -45,14 +45,15 @@ impl ToolRegistry {
 
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
-        use crate::tools::{
-            AskUserTool, CancelCronTool, ChannelSendTool, ComputerUseTool, FileEditTool, FileReadTool,
-            FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool, PowerShellTool,
-            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool,
-            TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
-        };
         #[cfg(not(target_os = "windows"))]
         use crate::tools::BashTool;
+        use crate::tools::{
+            AskUserTool, CancelCronTool, ChannelSendTool, ComputerUseTool, FileEditTool,
+            FileReadTool, FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool,
+            PowerShellTool, ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool,
+            TaskOutputTool, TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool,
+            TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
+        };
 
         let registry = Self::new();
 

@@ -129,7 +129,10 @@ pub async fn test_connection(cfg: &RuntimeProviderConfig) -> Result<(), String> 
     match cfg.api_format.as_str() {
         "openai_chat" | "ollama" | "llama_server" => test_openai_connection(cfg).await,
         "anthropic_messages" => test_anthropic_connection(cfg).await,
-        other => Err(format!("Unsupported api_format for connection test: {}", other)),
+        other => Err(format!(
+            "Unsupported api_format for connection test: {}",
+            other
+        )),
     }
 }
 
@@ -202,12 +205,13 @@ pub async fn list_models(cfg: &RuntimeProviderConfig) -> Result<Vec<String>, Str
     match cfg.api_format.as_str() {
         "openai_chat" | "ollama" | "llama_server" => fetch_openai_models(cfg).await,
         "anthropic_messages" => {
-            tracing::warn!(
-                "list_models: Anthropic does not expose a public model listing API"
-            );
+            tracing::warn!("list_models: Anthropic does not expose a public model listing API");
             Ok(Vec::new())
         }
-        other => Err(format!("Unsupported api_format for model listing: {}", other)),
+        other => Err(format!(
+            "Unsupported api_format for model listing: {}",
+            other
+        )),
     }
 }
 
@@ -274,8 +278,14 @@ mod tests {
 
     #[test]
     fn test_normalise_base_url_already_v1() {
-        assert_eq!(normalise_base_url("https://api.openai.com/v1"), "https://api.openai.com/v1");
-        assert_eq!(normalise_base_url("https://api.openai.com/v1/"), "https://api.openai.com/v1");
+        assert_eq!(
+            normalise_base_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            normalise_base_url("https://api.openai.com/v1/"),
+            "https://api.openai.com/v1"
+        );
     }
 
     #[test]

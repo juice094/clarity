@@ -27,7 +27,10 @@ pub(crate) struct LoopOutcome {
 /// Outcome of dispatching tool calls.
 pub(crate) enum DispatchOutcome {
     Success(Vec<String>),
-    Break { final_response: String, is_error: bool },
+    Break {
+        final_response: String,
+        is_error: bool,
+    },
     Fatal(AgentError),
 }
 
@@ -53,12 +56,7 @@ pub(crate) trait AgentLoop: Send {
     ) -> Result<IterationResult, AgentError>;
 
     /// Called when the iteration produces no tool calls (final response).
-    async fn handle_final_response(
-        &mut self,
-        agent: &Agent,
-        response: &str,
-        iteration: usize,
-    );
+    async fn handle_final_response(&mut self, agent: &Agent, response: &str, iteration: usize);
 
     /// Called when the iteration produces tool calls.
     async fn dispatch_tool_calls(
@@ -94,7 +92,9 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
             return Err(AgentError::Cancelled);
         }
 
-        loop_impl.before_iteration(agent, messages, llm.clone()).await;
+        loop_impl
+            .before_iteration(agent, messages, llm.clone())
+            .await;
 
         let result = loop_impl
             .run_iteration(agent, messages, &working_tools, llm.clone())
@@ -135,13 +135,18 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
                 }
                 tool_names.extend(names.iter().cloned());
             }
-            DispatchOutcome::Break { is_error: false, final_response: fr } => {
+            DispatchOutcome::Break {
+                is_error: false,
+                final_response: fr,
+            } => {
                 final_response = fr.clone();
                 break;
             }
             DispatchOutcome::Break { is_error: true, .. } | DispatchOutcome::Fatal(_) => {
                 for tc in &result.tool_calls {
-                    let count = tool_failure_counts.entry(tc.function.name.clone()).or_insert(0);
+                    let count = tool_failure_counts
+                        .entry(tc.function.name.clone())
+                        .or_insert(0);
                     *count = count.saturating_add(1);
                     if *count >= 2 {
                         filter_tool_from_schema(&mut working_tools, &tc.function.name);
@@ -161,7 +166,9 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
                 }
 
                 match outcome {
-                    DispatchOutcome::Break { final_response: fr, .. } => {
+                    DispatchOutcome::Break {
+                        final_response: fr, ..
+                    } => {
                         final_response = fr;
                         break;
                     }
@@ -195,16 +202,15 @@ fn all_tools_filtered(tools: &serde_json::Value) -> bool {
     tools.as_array().map(|arr| arr.is_empty()).unwrap_or(true)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::agent::{Agent, AgentConfig};
     use crate::llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
-    use crate::types::{FunctionCall, ToolCall};
     use crate::registry::ToolRegistry;
-    use std::sync::Arc;
+    use crate::types::{FunctionCall, ToolCall};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     struct MockLlmCircuit;
 
@@ -222,7 +228,8 @@ mod tests {
             &self,
             _messages: &[Message],
             _tools: &serde_json::Value,
-        ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+        ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>
+        {
             unreachable!()
         }
 
@@ -331,7 +338,9 @@ mod tests {
         .unwrap();
 
         assert!(
-            outcome.final_response.contains("disabled due to repeated failures"),
+            outcome
+                .final_response
+                .contains("disabled due to repeated failures"),
             "Expected circuit-breaker summary, got: {}",
             outcome.final_response
         );

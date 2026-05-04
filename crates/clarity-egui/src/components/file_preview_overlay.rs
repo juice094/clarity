@@ -3,8 +3,8 @@
 //! Triggered by `ui_store.preview_item` (set from workspace panel clicks).
 //! Uses `egui::Area` with `Order::Foreground` to escape CentralPanel width limits.
 
-use crate::App;
 use crate::ui::types::PreviewItem;
+use crate::App;
 
 pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
     if app.ui_store.preview_item.is_none() {
@@ -28,7 +28,10 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             ui.set_min_size(screen.size());
-            if ui.allocate_response(screen.size(), egui::Sense::click()).clicked() {
+            if ui
+                .allocate_response(screen.size(), egui::Sense::click())
+                .clicked()
+            {
                 close_requested = true;
             }
         });
@@ -50,12 +53,12 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
 
     // ── Extract preview data ──
     let (title, content, is_web, url) = match app.ui_store.preview_item.as_ref().unwrap() {
-        PreviewItem::File { name, content, .. } => {
-            (name.clone(), content.clone(), false, None)
-        }
-        PreviewItem::WebPage { title, url, content } => {
-            (title.clone(), content.clone(), true, Some(url.clone()))
-        }
+        PreviewItem::File { name, content, .. } => (name.clone(), content.clone(), false, None),
+        PreviewItem::WebPage {
+            title,
+            url,
+            content,
+        } => (title.clone(), content.clone(), true, Some(url.clone())),
     };
 
     // ── Floating card (centered) ──
@@ -173,8 +176,7 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                 egui::ScrollArea::vertical()
                                     .id_salt("preview_scroll_overlay")
                                     .show(ui, |ui| {
-                                        let parsed =
-                                            crate::ui::markdown::parse_markdown(&content);
+                                        let parsed = crate::ui::markdown::parse_markdown(&content);
                                         crate::ui::markdown::render_blocks(
                                             ui,
                                             &parsed,

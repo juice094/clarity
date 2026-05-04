@@ -236,7 +236,9 @@ impl<P: OutcomePredictor> OutcomePredictor for ConsistentPredictor<P> {
                 .predict(skill_id, params, &short, commitment)
                 .await
         } else {
-            self.inner.predict(skill_id, params, current, commitment).await
+            self.inner
+                .predict(skill_id, params, current, commitment)
+                .await
         }
     }
 }

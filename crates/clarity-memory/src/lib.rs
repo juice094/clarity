@@ -232,7 +232,10 @@ mod integration_tests {
         assert_eq!(fact.fact, "File store test");
 
         // Test search
-        let results = store.search_fulltext("File", 10, &DecayConfig::default()).await.unwrap();
+        let results = store
+            .search_fulltext("File", 10, &DecayConfig::default())
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
     }
 

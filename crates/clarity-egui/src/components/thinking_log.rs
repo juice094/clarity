@@ -59,7 +59,11 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
 
     let total = app.chat_store.tool_calls.len();
     let show_all = app.ui_store.thinking_log_show_all;
-    let visible_count = if show_all { total.min(20) } else { 3.min(total) };
+    let visible_count = if show_all {
+        total.min(20)
+    } else {
+        3.min(total)
+    };
     let hidden_count = total.saturating_sub(visible_count);
 
     egui::Frame::new()
@@ -67,7 +71,14 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
         .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
-            for (idx, tc) in app.chat_store.tool_calls.iter().rev().take(visible_count).enumerate() {
+            for (idx, tc) in app
+                .chat_store
+                .tool_calls
+                .iter()
+                .rev()
+                .take(visible_count)
+                .enumerate()
+            {
                 let inferred = tc.inferred_status();
 
                 // ── Row 1: status icon + tool name ──
@@ -76,13 +87,21 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                         ui.add(egui::Spinner::new().size(theme.text_sm));
                     } else {
                         let (icon, color) = match inferred {
-                            crate::ui::types::ToolCallStatus::Success => (crate::theme::ICON_CHECK, theme.ok),
-                            crate::ui::types::ToolCallStatus::Error => (crate::theme::ICON_X, theme.danger),
-                            crate::ui::types::ToolCallStatus::Warning => (crate::theme::ICON_WARNING, theme.warn),
+                            crate::ui::types::ToolCallStatus::Success => {
+                                (crate::theme::ICON_CHECK, theme.ok)
+                            }
+                            crate::ui::types::ToolCallStatus::Error => {
+                                (crate::theme::ICON_X, theme.danger)
+                            }
+                            crate::ui::types::ToolCallStatus::Warning => {
+                                (crate::theme::ICON_WARNING, theme.warn)
+                            }
                             _ => ("", theme.text),
                         };
                         ui.label(
-                            egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)).color(color),
+                            egui::RichText::new(icon)
+                                .font(theme.font_icon(theme.text_sm))
+                                .color(color),
                         );
                     }
                     ui.label(
@@ -109,11 +128,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                                 crate::ui::types::ToolCallStatus::Warning => theme.warn,
                                 _ => theme.status_busy,
                             };
-                            ui.label(
-                                egui::RichText::new("●")
-                                    .size(8.0)
-                                    .color(dot_color),
-                            );
+                            ui.label(egui::RichText::new("●").size(8.0).color(dot_color));
                         });
                     });
 

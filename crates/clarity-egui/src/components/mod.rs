@@ -1,9 +1,9 @@
+pub mod agent_turn;
 pub mod chat;
 pub mod file_preview_overlay;
 pub mod input;
 pub mod login_modal;
 pub mod settings;
+pub mod thinking_log;
 pub mod tools_section;
 pub mod web_tabs;
-pub mod thinking_log;
-pub mod agent_turn;

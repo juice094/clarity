@@ -150,10 +150,12 @@ impl StreamDelta {
 // ============================================================================
 
 pub use capability::{CapabilityToken, TokenError};
-pub use error::{AgentError, ContractError, ContractResult, ToolError, ToolResult, sanitize_path_str};
+pub use error::{
+    sanitize_path_str, AgentError, ContractError, ContractResult, ToolError, ToolResult,
+};
 pub use federation::{
-    Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus,
-    TaskSpec, ToolSpec,
+    Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus, TaskSpec,
+    ToolSpec,
 };
 pub use llm::{LlmProvider, LlmResponse};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};

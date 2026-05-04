@@ -104,7 +104,11 @@ pub fn render_mcp_panel(
                 // URL (for HTTP/SSE transport)
                 if let Some(ref url) = entry.url {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("URL:").size(theme.text_sm).color(theme.text_dim));
+                        ui.label(
+                            egui::RichText::new("URL:")
+                                .size(theme.text_sm)
+                                .color(theme.text_dim),
+                        );
                         ui.label(
                             egui::RichText::new(url)
                                 .size(theme.text_sm)

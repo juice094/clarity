@@ -48,7 +48,10 @@ impl Agent {
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
         let system_prompt = self.build_system_prompt_with_memory(query.as_ref()).await;
-        let mut messages = vec![Message::system(system_prompt), Message::user(query.as_ref())];
+        let mut messages = vec![
+            Message::system(system_prompt),
+            Message::user(query.as_ref()),
+        ];
 
         info!("Starting agent loop for query: {}", query.as_ref());
         self.send_wire_message(WireMessage::TurnBegin {
@@ -59,8 +62,11 @@ impl Agent {
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
         let usage = self.get_session_usage();
-        let final_response = self.finish_and_deliver(final_response, &tool_names, usage).await?;
-        self.persist_turn_memory(query.as_ref(), &final_response, completed).await;
+        let final_response = self
+            .finish_and_deliver(final_response, &tool_names, usage)
+            .await?;
+        self.persist_turn_memory(query.as_ref(), &final_response, completed)
+            .await;
 
         if completed {
             let transcript = serde_json::to_string(&messages).unwrap_or_default();
@@ -76,7 +82,9 @@ impl Agent {
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+            Err(AgentError::MaxIterationsExceeded(
+                self.config.max_iterations,
+            ))
         }
     }
 
@@ -100,12 +108,16 @@ impl Agent {
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
         let usage = self.get_session_usage();
-        let final_response = self.finish_and_deliver(final_response, &tool_names, usage).await?;
+        let final_response = self
+            .finish_and_deliver(final_response, &tool_names, usage)
+            .await?;
         if completed {
             Ok(final_response)
         } else {
             warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(self.config.max_iterations))
+            Err(AgentError::MaxIterationsExceeded(
+                self.config.max_iterations,
+            ))
         }
     }
 
@@ -120,8 +132,12 @@ impl Agent {
     {
         self.ensure_initialized().await?;
         let system_prompt = self.build_system_prompt_with_memory(query.as_ref()).await;
-        let messages = vec![Message::system(system_prompt), Message::user(query.as_ref())];
-        self.run_streaming_turn(messages, query.as_ref(), on_chunk).await
+        let messages = vec![
+            Message::system(system_prompt),
+            Message::user(query.as_ref()),
+        ];
+        self.run_streaming_turn(messages, query.as_ref(), on_chunk)
+            .await
     }
 
     /// Run the streaming agent loop with a pre-built message list.
@@ -139,6 +155,7 @@ impl Agent {
             .find(|m| m.role == MessageRole::User)
             .map(|m| m.content.clone())
             .unwrap_or_default();
-        self.run_streaming_turn(messages, &query_hint, on_chunk).await
+        self.run_streaming_turn(messages, &query_hint, on_chunk)
+            .await
     }
 }

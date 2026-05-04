@@ -41,7 +41,6 @@ pub enum ApiFormat {
     Kimi,
 }
 
-
 impl ApiFormat {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -174,15 +173,20 @@ impl ProviderDefinition {
     /// Resolve a key reference string (env var, file field, or literal).
     fn resolve_key_ref(ref_str: &str) -> Option<String> {
         // ${env:VAR}
-        if let Some(env_var) = ref_str.strip_prefix("${env:").and_then(|s| s.strip_suffix('}')) {
+        if let Some(env_var) = ref_str
+            .strip_prefix("${env:")
+            .and_then(|s| s.strip_suffix('}'))
+        {
             return std::env::var(env_var).ok();
         }
 
         // ${file:path:field}
-        if let Some(inner) = ref_str.strip_prefix("${file:").and_then(|s| s.strip_suffix('}')) {
+        if let Some(inner) = ref_str
+            .strip_prefix("${file:")
+            .and_then(|s| s.strip_suffix('}'))
+        {
             let (path_part, field) = inner.split_once(':')?;
-            
-            
+
             let path = if path_part.starts_with("~/") {
                 dirs::home_dir()
                     .map(|h| h.join(&path_part[2..]))
@@ -192,7 +196,10 @@ impl ProviderDefinition {
             };
             let content = std::fs::read_to_string(&path).ok()?;
             let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-            return json.get(field).and_then(|v| v.as_str()).map(|s| s.to_string());
+            return json
+                .get(field)
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
         }
 
         Some(ref_str.to_string())
@@ -200,7 +207,11 @@ impl ProviderDefinition {
 
     /// Full display name: falls back to `id` if `display_name` is empty.
     pub fn display(&self) -> &str {
-        if self.display_name.is_empty() { &self.id } else { &self.display_name }
+        if self.display_name.is_empty() {
+            &self.id
+        } else {
+            &self.display_name
+        }
     }
 }
 
@@ -450,7 +461,10 @@ mod tests {
     fn test_builtin_providers_loaded() {
         let registry = ProviderRegistry::load();
         let providers = registry.list();
-        assert!(providers.len() >= 5, "expected at least 5 built-in providers");
+        assert!(
+            providers.len() >= 5,
+            "expected at least 5 built-in providers"
+        );
         assert!(registry.get("openai").is_some());
         assert!(registry.get("local").is_some());
     }

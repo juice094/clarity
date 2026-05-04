@@ -30,7 +30,13 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
                         .color(app.ui_store.theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(egui::RichText::new(crate::theme::ICON_X).font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))).clicked() {
+                    if ui
+                        .button(
+                            egui::RichText::new(crate::theme::ICON_X)
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm)),
+                        )
+                        .clicked()
+                    {
                         app.ui_store.toolbar_open = false;
                     }
                 });
@@ -38,14 +44,23 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
             ui.add_space(app.ui_store.theme.space_8);
 
             // ── Status overview ──
-            let active_tasks = app.task_store.tasks.iter().filter(|t| !t.status.is_terminal()).count();
+            let active_tasks = app
+                .task_store
+                .tasks
+                .iter()
+                .filter(|t| !t.status.is_terminal())
+                .count();
             let status_color = if active_tasks > 0 {
                 app.ui_store.theme.status_busy
             } else {
                 app.ui_store.theme.status_online
             };
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("●").size(app.ui_store.theme.text_xs).color(status_color));
+                ui.label(
+                    egui::RichText::new("●")
+                        .size(app.ui_store.theme.text_xs)
+                        .color(status_color),
+                );
                 ui.label(
                     egui::RichText::new(format!("Active tasks: {}", active_tasks))
                         .size(app.ui_store.theme.text_sm)
@@ -54,7 +69,11 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(app.ui_store.theme.space_4);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("●").size(app.ui_store.theme.text_xs).color(app.ui_store.theme.status_online));
+                ui.label(
+                    egui::RichText::new("●")
+                        .size(app.ui_store.theme.text_xs)
+                        .color(app.ui_store.theme.status_online),
+                );
                 ui.label(
                     egui::RichText::new(format!("Category: {}", app.session_store.active_category))
                         .size(app.ui_store.theme.text_sm)
@@ -66,7 +85,11 @@ pub fn render_toolbar(app: &mut App, ctx: &egui::Context) {
             ui.add_space(app.ui_store.theme.space_8);
 
             // ── Task list (reuses existing task_panel renderer) ──
-            let action = crate::ui::task_panel::render_task_panel(ui, &app.task_store.tasks, &app.ui_store.theme);
+            let action = crate::ui::task_panel::render_task_panel(
+                ui,
+                &app.task_store.tasks,
+                &app.ui_store.theme,
+            );
             ui.add_space(app.ui_store.theme.space_8);
             if ui
                 .add(

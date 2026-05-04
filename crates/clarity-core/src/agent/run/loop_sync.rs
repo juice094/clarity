@@ -1,6 +1,5 @@
 //! Synchronous (non-streaming) agent execution loop.
 
-use crate::agent::Agent;
 use crate::agent::run::loop_helpers::{
     fast_trim_tool_results, is_context_overflow_error, messages_contain_vision,
 };
@@ -8,8 +7,9 @@ use crate::agent::run::loop_steps::{
     check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
 };
 use crate::agent::run::loop_trait::{
-    AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
+    run_loop_iterations, AgentLoop, DispatchOutcome, IterationResult, LoopOutcome,
 };
+use crate::agent::Agent;
 use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, Message};
 use std::sync::Arc;
@@ -41,51 +41,47 @@ impl AgentLoop for SyncLoop {
         let prompt_tokens = estimate_prompt_tokens(messages);
         check_budget(agent, llm.as_ref(), prompt_tokens)?;
 
-        let (response, actual_prompt_tokens, actual_completion_tokens) =
-            match tokio::time::timeout(
-                tokio::time::Duration::from_secs(45),
-                llm.complete(messages, tools),
-            )
-            .await
-            {
-                Ok(Ok(r)) => {
-                    let completion_tokens = r.content.len().div_ceil(4) as u32;
-                    (r, prompt_tokens, completion_tokens)
-                }
-                Ok(Err(e)) if is_context_overflow_error(&e) => {
-                    warn!(
-                        "Context overflow detected in sync loop, trimming tool results and retrying"
-                    );
-                    fast_trim_tool_results(messages);
-                    let retry_prompt_tokens = estimate_prompt_tokens(messages);
-                    check_budget(agent, llm.as_ref(), retry_prompt_tokens)?;
-                    match tokio::time::timeout(
-                        tokio::time::Duration::from_secs(45),
-                        llm.complete(messages, tools),
-                    )
-                    .await
-                    {
-                        Ok(Ok(r)) => {
-                            let completion_tokens = r.content.len().div_ceil(4) as u32;
-                            (r, retry_prompt_tokens, completion_tokens)
-                        }
-                        Ok(Err(e2)) => return Err(e2),
-                        Err(_) => {
-                            return Err(AgentError::Llm(
-                                "LLM request timed out after 45s".into(),
-                            ))
-                        }
+        let (response, actual_prompt_tokens, actual_completion_tokens) = match tokio::time::timeout(
+            tokio::time::Duration::from_secs(45),
+            llm.complete(messages, tools),
+        )
+        .await
+        {
+            Ok(Ok(r)) => {
+                let completion_tokens = r.content.len().div_ceil(4) as u32;
+                (r, prompt_tokens, completion_tokens)
+            }
+            Ok(Err(e)) if is_context_overflow_error(&e) => {
+                warn!("Context overflow detected in sync loop, trimming tool results and retrying");
+                fast_trim_tool_results(messages);
+                let retry_prompt_tokens = estimate_prompt_tokens(messages);
+                check_budget(agent, llm.as_ref(), retry_prompt_tokens)?;
+                match tokio::time::timeout(
+                    tokio::time::Duration::from_secs(45),
+                    llm.complete(messages, tools),
+                )
+                .await
+                {
+                    Ok(Ok(r)) => {
+                        let completion_tokens = r.content.len().div_ceil(4) as u32;
+                        (r, retry_prompt_tokens, completion_tokens)
+                    }
+                    Ok(Err(e2)) => return Err(e2),
+                    Err(_) => {
+                        return Err(AgentError::Llm("LLM request timed out after 45s".into()))
                     }
                 }
-                Ok(Err(e)) => return Err(e),
-                Err(_) => {
-                    return Err(AgentError::Llm(
-                        "LLM request timed out after 45s".into(),
-                    ))
-                }
-            };
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
+        };
 
-        record_cost(agent, llm.as_ref(), actual_prompt_tokens, actual_completion_tokens);
+        record_cost(
+            agent,
+            llm.as_ref(),
+            actual_prompt_tokens,
+            actual_completion_tokens,
+        );
         agent.accumulate_usage(actual_prompt_tokens, actual_completion_tokens);
 
         let tool_calls = parse_tool_calls(&response);
@@ -98,12 +94,7 @@ impl AgentLoop for SyncLoop {
         })
     }
 
-    async fn handle_final_response(
-        &mut self,
-        agent: &Agent,
-        response: &str,
-        _iteration: usize,
-    ) {
+    async fn handle_final_response(&mut self, agent: &Agent, response: &str, _iteration: usize) {
         agent.send_wire_message(clarity_wire::WireMessage::ContentPart {
             text: response.to_string(),
         });
@@ -118,7 +109,10 @@ impl AgentLoop for SyncLoop {
         match agent.dispatch_tool_calls(tool_calls, messages).await {
             Ok(output) => {
                 if let Some(question) = output.ask_user_question {
-                    DispatchOutcome::Break { final_response: question, is_error: false }
+                    DispatchOutcome::Break {
+                        final_response: question,
+                        is_error: false,
+                    }
                 } else {
                     DispatchOutcome::Success(output.tool_names)
                 }

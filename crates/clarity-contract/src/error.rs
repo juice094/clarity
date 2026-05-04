@@ -60,7 +60,10 @@ impl ToolError {
 
     /// Whether this error may resolve itself if retried
     pub fn is_recoverable(&self) -> bool {
-        matches!(self, Self::IoError(_) | Self::Timeout(_) | Self::Unavailable(_))
+        matches!(
+            self,
+            Self::IoError(_) | Self::Timeout(_) | Self::Unavailable(_)
+        )
     }
 
     /// Sanitize absolute paths from error messages.
@@ -145,7 +148,9 @@ pub enum AgentError {
     FlowExecution(String),
 
     /// Budget exceeded (per-turn or per-day)
-    #[error("Budget exceeded: limit=${limit:.4}, current=${current:.4}, requested=${requested:.4}")]
+    #[error(
+        "Budget exceeded: limit=${limit:.4}, current=${current:.4}, requested=${requested:.4}"
+    )]
     BudgetExceeded {
         /// The limit that was exceeded (USD)
         limit: f64,
@@ -190,10 +195,7 @@ pub fn sanitize_path_str(s: &str) -> String {
     // Heuristic: look for `C:\` or similar drive letters
     out.split_whitespace()
         .map(|word| {
-            if word.len() > 3
-                && word.as_bytes()[1] == b':'
-                && word.as_bytes()[2] == b'\\'
-            {
+            if word.len() > 3 && word.as_bytes()[1] == b':' && word.as_bytes()[2] == b'\\' {
                 "<absolute-path>".to_string()
             } else {
                 word.to_string()

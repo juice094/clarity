@@ -482,7 +482,11 @@ mod tests {
         // CJK text — each character typically 1-2 tokens in cl100k
         let cjk_text = "你好世界";
         let cjk_tokens = estimate_text_tokens(cjk_text);
-        assert!(cjk_tokens >= 4 && cjk_tokens <= 8, "CJK tokens = {}", cjk_tokens);
+        assert!(
+            cjk_tokens >= 4 && cjk_tokens <= 8,
+            "CJK tokens = {}",
+            cjk_tokens
+        );
 
         // Verify tiktoken is active: exact counts should be lower than old heuristic
         assert!(estimate_text_tokens("Hello") < 2); // heuristic would give 2

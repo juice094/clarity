@@ -1,13 +1,13 @@
 //! Streaming agent execution loop.
 
-use crate::agent::Agent;
 use crate::agent::run::loop_helpers::{fast_trim_tool_results, is_context_overflow_error};
 use crate::agent::run::loop_steps::{
     check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
 };
 use crate::agent::run::loop_trait::{
-    AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
+    run_loop_iterations, AgentLoop, DispatchOutcome, IterationResult, LoopOutcome,
 };
+use crate::agent::Agent;
 use crate::error::AgentError;
 use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use crate::types::ToolCall;
@@ -173,12 +173,7 @@ where
         })
     }
 
-    async fn handle_final_response(
-        &mut self,
-        agent: &Agent,
-        response: &str,
-        _iteration: usize,
-    ) {
+    async fn handle_final_response(&mut self, agent: &Agent, response: &str, _iteration: usize) {
         if !self.was_streamed && !response.is_empty() {
             for c in response.chars() {
                 let chunk = c.to_string();
@@ -199,7 +194,10 @@ where
         match agent.dispatch_tool_calls(tool_calls, messages).await {
             Ok(output) => {
                 if let Some(question) = output.ask_user_question {
-                    DispatchOutcome::Break { final_response: question, is_error: false }
+                    DispatchOutcome::Break {
+                        final_response: question,
+                        is_error: false,
+                    }
                 } else {
                     DispatchOutcome::Success(output.tool_names)
                 }

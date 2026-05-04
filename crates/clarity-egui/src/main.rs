@@ -14,27 +14,26 @@ use std::sync::Arc;
 use std::time::Duration;
 
 mod app_state;
+mod components;
 mod error;
+mod handlers;
 mod i18n;
 mod llm_binder;
 mod llm_loader;
 mod llm_policy;
 mod panels;
+mod platform;
 mod provider;
+mod render;
+mod services;
 mod session;
 mod settings;
+mod stores;
 mod theme;
 mod ui;
 mod widgets;
-mod components;
-mod stores;
-mod services;
-mod render;
-mod handlers;
-mod platform;
 
 use app_state::AppState;
-
 
 use ui::types::*;
 
@@ -89,8 +88,7 @@ impl App {
     where
         F: FnMut(&mut Self, &egui::Context),
     {
-        if let Err(e) =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(self, ctx)))
+        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render(self, ctx)))
         {
             let payload = if let Some(s) = e.downcast_ref::<&str>() {
                 s.to_string()
@@ -110,10 +108,12 @@ impl App {
 
         egui::TopBottomPanel::top("titlebar")
             .min_height(TITLEBAR_HEIGHT)
-            .frame(egui::Frame::new()
-                .fill(theme.bg)
-                .stroke(egui::Stroke::new(1.0, theme.border))
-                .inner_margin(egui::Margin::symmetric(8, 0)))
+            .frame(
+                egui::Frame::new()
+                    .fill(theme.bg)
+                    .stroke(egui::Stroke::new(1.0, theme.border))
+                    .inner_margin(egui::Margin::symmetric(8, 0)),
+            )
             .show(ctx, |ui| {
                 ui.set_min_height(TITLEBAR_HEIGHT);
 
@@ -125,9 +125,12 @@ impl App {
                     if self.ui_store.sidebar_collapsed {
                         if ui
                             .add(
-                                egui::Button::new(egui::RichText::new(crate::theme::ICON_LIST).font(theme.font_icon(theme.text_base)))
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                                egui::Button::new(
+                                    egui::RichText::new(crate::theme::ICON_LIST)
+                                        .font(theme.font_icon(theme.text_base)),
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                             )
                             .clicked()
                         {
@@ -158,10 +161,11 @@ impl App {
                     // Window control buttons (right-aligned)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
-                        let close_resp = ui.add_sized(btn_size,
+                        let close_resp = ui.add_sized(
+                            btn_size,
                             egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                         );
                         if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -171,54 +175,117 @@ impl App {
                         } else {
                             egui::Color32::TRANSPARENT
                         };
-                        let close_text = if close_resp.hovered() { egui::Color32::WHITE } else { theme.text_dim };
-                        ui.painter().rect_filled(close_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), close_fill);
-                        ui.painter().text(close_resp.rect.center(), egui::Align2::CENTER_CENTER,
-                            crate::theme::ICON_X, theme.font_icon(14.0), close_text);
+                        let close_text = if close_resp.hovered() {
+                            egui::Color32::WHITE
+                        } else {
+                            theme.text_dim
+                        };
+                        ui.painter().rect_filled(
+                            close_resp.rect,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            close_fill,
+                        );
+                        ui.painter().text(
+                            close_resp.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            crate::theme::ICON_X,
+                            theme.font_icon(14.0),
+                            close_text,
+                        );
 
                         // Maximize / Restore
                         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        let max_resp = ui.add_sized(btn_size,
+                        let max_resp = ui.add_sized(
+                            btn_size,
                             egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                         );
                         if max_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                         }
-                        let max_fill = if max_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
-                        ui.painter().rect_filled(max_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), max_fill);
-                        let max_color = if max_resp.hovered() { theme.text } else { theme.text_dim };
+                        let max_fill = if max_resp.hovered() {
+                            theme.overlay_medium
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        ui.painter().rect_filled(
+                            max_resp.rect,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            max_fill,
+                        );
+                        let max_color = if max_resp.hovered() {
+                            theme.text
+                        } else {
+                            theme.text_dim
+                        };
                         let max_c = max_resp.rect.center();
                         let max_stroke = egui::Stroke::new(1.2, max_color);
                         if is_maximized {
                             // Restore: two overlapping rectangles
                             let s = 4.5;
-                            let back = egui::Rect::from_center_size(egui::pos2(max_c.x - 1.0, max_c.y - 1.0), egui::vec2(s * 2.0, s * 2.0));
-                            let front = egui::Rect::from_center_size(egui::pos2(max_c.x + 1.0, max_c.y + 1.0), egui::vec2(s * 2.0, s * 2.0));
-                            ui.painter().rect_stroke(back, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
-                            ui.painter().rect_stroke(front, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
+                            let back = egui::Rect::from_center_size(
+                                egui::pos2(max_c.x - 1.0, max_c.y - 1.0),
+                                egui::vec2(s * 2.0, s * 2.0),
+                            );
+                            let front = egui::Rect::from_center_size(
+                                egui::pos2(max_c.x + 1.0, max_c.y + 1.0),
+                                egui::vec2(s * 2.0, s * 2.0),
+                            );
+                            ui.painter().rect_stroke(
+                                back,
+                                egui::CornerRadius::same(1),
+                                max_stroke,
+                                egui::StrokeKind::Inside,
+                            );
+                            ui.painter().rect_stroke(
+                                front,
+                                egui::CornerRadius::same(1),
+                                max_stroke,
+                                egui::StrokeKind::Inside,
+                            );
                         } else {
                             // Maximize: single rectangle
                             let rect = egui::Rect::from_center_size(max_c, egui::vec2(10.0, 10.0));
-                            ui.painter().rect_stroke(rect, egui::CornerRadius::same(1), max_stroke, egui::StrokeKind::Inside);
+                            ui.painter().rect_stroke(
+                                rect,
+                                egui::CornerRadius::same(1),
+                                max_stroke,
+                                egui::StrokeKind::Inside,
+                            );
                         }
 
                         // Minimize
-                        let min_resp = ui.add_sized(btn_size,
+                        let min_resp = ui.add_sized(
+                            btn_size,
                             egui::Button::new("")
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                         );
                         if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                         }
-                        let min_fill = if min_resp.hovered() { theme.overlay_medium } else { egui::Color32::TRANSPARENT };
-                        ui.painter().rect_filled(min_resp.rect, egui::CornerRadius::same(theme.radius_sm as u8), min_fill);
-                        let min_color = if min_resp.hovered() { theme.text } else { theme.text_dim };
+                        let min_fill = if min_resp.hovered() {
+                            theme.overlay_medium
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        ui.painter().rect_filled(
+                            min_resp.rect,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            min_fill,
+                        );
+                        let min_color = if min_resp.hovered() {
+                            theme.text
+                        } else {
+                            theme.text_dim
+                        };
                         let min_c = min_resp.rect.center();
                         ui.painter().line_segment(
-                            [egui::pos2(min_c.x - 5.0, min_c.y), egui::pos2(min_c.x + 5.0, min_c.y)],
+                            [
+                                egui::pos2(min_c.x - 5.0, min_c.y),
+                                egui::pos2(min_c.x + 5.0, min_c.y),
+                            ],
                             egui::Stroke::new(1.2, min_color),
                         );
                     });
@@ -248,21 +315,45 @@ impl App {
             let on_bottom = pos.y > screen_rect.max.y - edge;
 
             let (direction, cursor) = if on_top && on_left {
-                (Some(egui::ResizeDirection::NorthWest), egui::CursorIcon::ResizeNorthWest)
+                (
+                    Some(egui::ResizeDirection::NorthWest),
+                    egui::CursorIcon::ResizeNorthWest,
+                )
             } else if on_top && on_right {
-                (Some(egui::ResizeDirection::NorthEast), egui::CursorIcon::ResizeNorthEast)
+                (
+                    Some(egui::ResizeDirection::NorthEast),
+                    egui::CursorIcon::ResizeNorthEast,
+                )
             } else if on_bottom && on_left {
-                (Some(egui::ResizeDirection::SouthWest), egui::CursorIcon::ResizeSouthWest)
+                (
+                    Some(egui::ResizeDirection::SouthWest),
+                    egui::CursorIcon::ResizeSouthWest,
+                )
             } else if on_bottom && on_right {
-                (Some(egui::ResizeDirection::SouthEast), egui::CursorIcon::ResizeSouthEast)
+                (
+                    Some(egui::ResizeDirection::SouthEast),
+                    egui::CursorIcon::ResizeSouthEast,
+                )
             } else if on_left {
-                (Some(egui::ResizeDirection::West), egui::CursorIcon::ResizeHorizontal)
+                (
+                    Some(egui::ResizeDirection::West),
+                    egui::CursorIcon::ResizeHorizontal,
+                )
             } else if on_right {
-                (Some(egui::ResizeDirection::East), egui::CursorIcon::ResizeHorizontal)
+                (
+                    Some(egui::ResizeDirection::East),
+                    egui::CursorIcon::ResizeHorizontal,
+                )
             } else if on_top {
-                (Some(egui::ResizeDirection::North), egui::CursorIcon::ResizeVertical)
+                (
+                    Some(egui::ResizeDirection::North),
+                    egui::CursorIcon::ResizeVertical,
+                )
             } else if on_bottom {
-                (Some(egui::ResizeDirection::South), egui::CursorIcon::ResizeVertical)
+                (
+                    Some(egui::ResizeDirection::South),
+                    egui::CursorIcon::ResizeVertical,
+                )
             } else {
                 (None, egui::CursorIcon::Default)
             };
@@ -327,7 +418,8 @@ impl eframe::App for App {
         let now = ctx.input(|i| i.time);
         self.ui_store.frame_count += 1;
         if now - self.ui_store.last_fps_time >= 1.0 {
-            self.ui_store.fps = self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
+            self.ui_store.fps =
+                self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
             self.ui_store.frame_count = 0;
             self.ui_store.last_fps_time = now;
         }
@@ -338,7 +430,11 @@ impl eframe::App for App {
         self.check_mcp_config_reload();
 
         // Drain batch-grant auto-approval notifications and show toasts.
-        for msg in self.state.mode_aware_approval_runtime.drain_auto_approval_notifications() {
+        for msg in self
+            .state
+            .mode_aware_approval_runtime
+            .drain_auto_approval_notifications()
+        {
             self.push_toast(msg, ToastLevel::Info);
         }
 
@@ -388,7 +484,9 @@ impl eframe::App for App {
         }
 
         // Refresh task list periodically when panel is open
-        if self.task_store.task_panel_open && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3) {
+        if self.task_store.task_panel_open
+            && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3)
+        {
             self.refresh_tasks();
         }
 
@@ -428,7 +526,9 @@ impl eframe::App for App {
         self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
-        self.render_safe(ctx, "task_create", |app, ctx| app.render_task_create_modal(ctx));
+        self.render_safe(ctx, "task_create", |app, ctx| {
+            app.render_task_create_modal(ctx)
+        });
         self.render_safe(ctx, "kimi_login", |app, ctx| {
             crate::components::login_modal::render_oauth_login_modal(
                 app,

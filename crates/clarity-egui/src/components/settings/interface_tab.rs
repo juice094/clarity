@@ -1,5 +1,5 @@
-use crate::App;
 use crate::theme::Theme;
+use crate::App;
 
 pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
@@ -32,7 +32,17 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         // Dark card
         let dark_bg = Theme::dark().bg;
         let dark_text = Theme::dark().text;
-        if theme_card(ui, card_w, card_h, dark_bg, dark_text, "Dark", "Deep black canvas", is_dark, &theme) {
+        if theme_card(
+            ui,
+            card_w,
+            card_h,
+            dark_bg,
+            dark_text,
+            "Dark",
+            "Deep black canvas",
+            is_dark,
+            &theme,
+        ) {
             set_theme(app, "dark");
         }
         ui.add_space(theme.space_8);
@@ -40,7 +50,17 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         // Light card
         let light_bg = Theme::light().bg;
         let light_text = Theme::light().text;
-        if theme_card(ui, card_w, card_h, light_bg, light_text, "Light", "Cool off-white", is_light, &theme) {
+        if theme_card(
+            ui,
+            card_w,
+            card_h,
+            light_bg,
+            light_text,
+            "Light",
+            "Cool off-white",
+            is_light,
+            &theme,
+        ) {
             set_theme(app, "light");
         }
     });
@@ -63,7 +83,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                 .add(
                     egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
                         .fill(if active { theme.accent } else { theme.surface })
-                        .stroke(if active { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
+                        .stroke(if active {
+                            egui::Stroke::NONE
+                        } else {
+                            egui::Stroke::new(1.0, theme.border)
+                        })
                         .corner_radius(theme.radius_sm as u8),
                 )
                 .clicked()
@@ -90,7 +114,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
     );
     ui.add_space(theme.space_4);
     let widths = [(600.0, "Narrow"), (720.0, "Medium"), (900.0, "Wide")];
-    let current_width = app.settings_store.settings_edit.content_width.unwrap_or(720.0);
+    let current_width = app
+        .settings_store
+        .settings_edit
+        .content_width
+        .unwrap_or(720.0);
     ui.horizontal(|ui| {
         for (val, label) in &widths {
             let active = (current_width - val).abs() < 1.0;
@@ -98,7 +126,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                 .add(
                     egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
                         .fill(if active { theme.accent } else { theme.surface })
-                        .stroke(if active { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
+                        .stroke(if active {
+                            egui::Stroke::NONE
+                        } else {
+                            egui::Stroke::new(1.0, theme.border)
+                        })
                         .corner_radius(theme.radius_sm as u8),
                 )
                 .clicked()
@@ -126,7 +158,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .add(
                 egui::Button::new(egui::RichText::new("English").size(theme.text_sm))
                     .fill(if en { theme.accent } else { theme.surface })
-                    .stroke(if en { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
+                    .stroke(if en {
+                        egui::Stroke::NONE
+                    } else {
+                        egui::Stroke::new(1.0, theme.border)
+                    })
                     .corner_radius(theme.radius_sm as u8),
             )
             .clicked()
@@ -137,7 +173,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .add(
                 egui::Button::new(egui::RichText::new("Simplified Chinese").size(theme.text_sm))
                     .fill(if zh { theme.accent } else { theme.surface })
-                    .stroke(if zh { egui::Stroke::NONE } else { egui::Stroke::new(1.0, theme.border) })
+                    .stroke(if zh {
+                        egui::Stroke::NONE
+                    } else {
+                        egui::Stroke::new(1.0, theme.border)
+                    })
                     .corner_radius(theme.radius_sm as u8),
             )
             .clicked()
@@ -195,25 +235,22 @@ fn theme_card(
     }
 
     // Content
-    ui.allocate_new_ui(
-        egui::UiBuilder::new().max_rect(rect.shrink(10.0)),
-        |ui| {
-            ui.vertical_centered(|ui| {
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new(name)
-                        .font(theme.font(theme.text_base))
-                        .color(card_text)
-                        .strong(),
-                );
-                ui.label(
-                    egui::RichText::new(desc)
-                        .font(theme.font(theme.text_xs))
-                        .color(card_text.gamma_multiply(0.6)),
-                );
-            });
-        },
-    );
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect.shrink(10.0)), |ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(name)
+                    .font(theme.font(theme.text_base))
+                    .color(card_text)
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new(desc)
+                    .font(theme.font(theme.text_xs))
+                    .color(card_text.gamma_multiply(0.6)),
+            );
+        });
+    });
 
     resp.clicked()
 }

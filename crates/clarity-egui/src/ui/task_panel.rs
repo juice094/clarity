@@ -52,11 +52,13 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                             if !task.status.is_terminal() {
                                 if ui
                                     .add(
-                                        egui::Button::new(egui::RichText::new("Cancel").size(theme.text_xs))
-                                            .fill(theme.danger)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            )),
+                                        egui::Button::new(
+                                            egui::RichText::new("Cancel").size(theme.text_xs),
+                                        )
+                                        .fill(theme.danger)
+                                        .corner_radius(
+                                            egui::CornerRadius::same(theme.radius_sm as u8),
+                                        ),
                                     )
                                     .clicked()
                                 {

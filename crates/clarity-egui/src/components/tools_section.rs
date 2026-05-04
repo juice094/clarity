@@ -7,7 +7,12 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     let expanded = app.ui_store.tools_expanded;
 
     // ── Header bar (always visible) ──
-    let active_tasks = app.task_store.tasks.iter().filter(|t| !t.status.is_terminal()).count();
+    let active_tasks = app
+        .task_store
+        .tasks
+        .iter()
+        .filter(|t| !t.status.is_terminal())
+        .count();
     let status_color = if active_tasks > 0 {
         theme.status_busy
     } else {
@@ -21,7 +26,11 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
                 .strong()
                 .color(theme.text),
         );
-        ui.label(egui::RichText::new("●").size(theme.text_xs).color(status_color));
+        ui.label(
+            egui::RichText::new("●")
+                .size(theme.text_xs)
+                .color(status_color),
+        );
         ui.label(
             egui::RichText::new(format!("{}", active_tasks))
                 .size(theme.text_sm)
@@ -50,14 +59,22 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
 
     // ── Status overview ──
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("●").size(theme.text_xs).color(status_color));
+        ui.label(
+            egui::RichText::new("●")
+                .size(theme.text_xs)
+                .color(status_color),
+        );
         ui.label(
             egui::RichText::new(format!("Active: {}", active_tasks))
                 .size(theme.text_xs)
                 .color(theme.text_muted),
         );
         ui.add_space(8.0);
-        ui.label(egui::RichText::new("●").size(theme.text_xs).color(theme.status_online));
+        ui.label(
+            egui::RichText::new("●")
+                .size(theme.text_xs)
+                .color(theme.status_online),
+        );
         ui.label(
             egui::RichText::new(app.session_store.active_category.to_string())
                 .size(theme.text_xs)

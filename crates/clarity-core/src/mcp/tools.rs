@@ -56,24 +56,19 @@ impl Tool for McpToolWrapper {
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
         let client = self.client.read().await;
-        let result = client
-            .call_tool(&self.mcp_name, args)
-            .await
-            .map_err(|e| {
-                let msg = format!("MCP tool error: {}", e);
-                // Provide a helpful hint for Git ownership errors from MCP servers.
-                if msg.contains("not owned by current user")
-                    || msg.contains("safe.directory")
-                {
-                    ToolError::ExecutionFailed(format!(
-                        "{}\n\nHint: This is a Git ownership issue. \
+        let result = client.call_tool(&self.mcp_name, args).await.map_err(|e| {
+            let msg = format!("MCP tool error: {}", e);
+            // Provide a helpful hint for Git ownership errors from MCP servers.
+            if msg.contains("not owned by current user") || msg.contains("safe.directory") {
+                ToolError::ExecutionFailed(format!(
+                    "{}\n\nHint: This is a Git ownership issue. \
                          Run: git config --global --add safe.directory <repo-path>",
-                        msg
-                    ))
-                } else {
-                    ToolError::ExecutionFailed(msg)
-                }
-            })?;
+                    msg
+                ))
+            } else {
+                ToolError::ExecutionFailed(msg)
+            }
+        })?;
 
         // Flatten text content into a single JSON string value.
         let mut texts = Vec::new();

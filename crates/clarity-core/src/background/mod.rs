@@ -16,7 +16,6 @@ pub(crate) mod worker;
 pub(crate) use cron::CronScheduler;
 pub use store::{TaskId, TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore};
 
-
 use async_trait::async_trait;
 
 /// Executor trait for running real Agent tasks in the background.

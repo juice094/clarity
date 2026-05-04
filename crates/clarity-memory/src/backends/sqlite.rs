@@ -309,7 +309,12 @@ impl StorageBackend for SqliteStore {
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
-    async fn search_fulltext(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<Fact>> {
+    async fn search_fulltext(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<Fact>> {
         let query = query.to_string();
         let conn = self.conn.clone();
         let decay = *decay;
@@ -426,7 +431,12 @@ impl StorageBackend for SqliteStore {
         .map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 
-    async fn search_similar(&self, query: &str, limit: usize, decay: &DecayConfig) -> Result<Vec<(Fact, f32)>> {
+    async fn search_similar(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<(Fact, f32)>> {
         let query = query.to_string();
         let decay = *decay;
 
@@ -553,7 +563,6 @@ impl StorageBackend for SqliteStore {
         }).await.map_err(|e| MemoryError::InvalidInput(e.to_string()))?
     }
 }
-
 
 #[cfg(test)]
 mod tests {

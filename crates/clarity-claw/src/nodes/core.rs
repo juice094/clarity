@@ -45,10 +45,7 @@ impl FederationNode for CoreNode {
         ]
     }
 
-    async fn handle(
-        &self,
-        msg: FederationMessage,
-    ) -> Result<FederationResponse, AgentError> {
+    async fn handle(&self, msg: FederationMessage) -> Result<FederationResponse, AgentError> {
         match msg {
             FederationMessage::Heartbeat { node_id, status } => {
                 tracing::debug!(%node_id, ?status, "CoreNode received heartbeat");
