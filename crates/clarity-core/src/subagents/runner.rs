@@ -650,6 +650,8 @@ pub struct SubagentRunner {
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
     /// 审批模式
     approval_mode: ApprovalMode,
+    /// 共享迭代预算（父子代理共用）
+    iteration_budget: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 impl Clone for SubagentRunner {
@@ -663,6 +665,7 @@ impl Clone for SubagentRunner {
             registry: self.registry.clone(),
             approval_runtime: self.approval_runtime.clone(),
             approval_mode: self.approval_mode,
+            iteration_budget: self.iteration_budget.clone(),
         }
     }
 }
@@ -683,6 +686,7 @@ impl SubagentRunner {
             registry: None,
             approval_runtime: None,
             approval_mode: ApprovalMode::Interactive,
+            iteration_budget: None,
         }
     }
 
@@ -707,6 +711,15 @@ impl SubagentRunner {
     /// 设置审批模式
     pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
         self.approval_mode = mode;
+        self
+    }
+
+    /// 设置共享迭代预算
+    pub fn with_iteration_budget(
+        mut self,
+        budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) -> Self {
+        self.iteration_budget = Some(budget);
         self
     }
 
@@ -941,6 +954,10 @@ impl SubagentRunner {
 
         if let Some(token) = capability_token {
             builder = builder.with_capability_token(token);
+        }
+
+        if let Some(ref budget) = self.iteration_budget {
+            builder = builder.with_iteration_budget(budget.clone());
         }
 
         let mut store_for_build = SubagentStore::new(&self.context_dir);

@@ -16,6 +16,7 @@ pub struct SubagentBuilder {
     parent_working_dir: std::path::PathBuf,
     git_context: Option<String>,
     capability_token: Option<CapabilityToken>,
+    iteration_budget: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 impl SubagentBuilder {
@@ -30,6 +31,7 @@ impl SubagentBuilder {
             parent_working_dir: parent_working_dir.into(),
             git_context: None,
             capability_token: None,
+            iteration_budget: None,
         }
     }
 
@@ -42,6 +44,15 @@ impl SubagentBuilder {
     /// Attach a capability token for permission isolation
     pub fn with_capability_token(mut self, token: CapabilityToken) -> Self {
         self.capability_token = Some(token);
+        self
+    }
+
+    /// Attach an iteration budget to share with the subagent.
+    pub fn with_iteration_budget(
+        mut self,
+        budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) -> Self {
+        self.iteration_budget = Some(budget);
         self
     }
 
@@ -87,11 +98,15 @@ impl SubagentBuilder {
             type_def.max_iterations
         };
 
-        let config = AgentConfig::new()
+        let mut config = AgentConfig::new()
             .with_max_iterations(max_iterations)
             .with_working_dir(&working_dir)
             .with_system_prompt(&system_prompt)
             .with_capability_token(self.capability_token.clone());
+
+        if let Some(ref budget) = self.iteration_budget {
+            config = config.with_iteration_budget(budget.clone());
+        }
 
         let agent = Agent::with_config(filtered_registry, config);
 

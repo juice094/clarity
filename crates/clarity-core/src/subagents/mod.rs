@@ -73,6 +73,15 @@ impl SubagentManager {
         self
     }
 
+    /// 设置共享迭代预算（父子代理共用）
+    pub fn with_iteration_budget(
+        mut self,
+        budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) -> Self {
+        self.runner = self.runner.with_iteration_budget(budget);
+        self
+    }
+
     /// 运行子代理
     pub async fn run(&mut self, spec: RunSpec) -> Result<SubagentResult, SubagentError> {
         self.runner.run(spec, &mut self.store, None).await
