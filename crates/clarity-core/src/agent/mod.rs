@@ -221,6 +221,8 @@ pub struct Agent {
     memory_ticker: Option<SharedMemoryTicker>,
     /// Optional wire for UI communication
     wire: Option<Arc<Wire>>,
+    /// Optional event bus for structured event output (future protocol layer)
+    event_bus: Option<clarity_wire::EventBus>,
     /// Approval runtime for tool execution control
     approval_runtime: Option<Arc<dyn ApprovalRuntime>>,
     /// Compaction configuration for context management

@@ -1291,4 +1291,64 @@ mod tests {
         assert!(agent.config().system_prompt.contains("Git Context"));
         assert!(agent.config().system_prompt.contains("main"));
     }
+
+    #[tokio::test]
+    async fn test_runner_budget_zero_exhaustion() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        let budget = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let runner = SubagentRunner::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(std::sync::Arc::new(crate::agent::MockLlm))
+            .with_iteration_budget(budget.clone());
+
+        let mut store = SubagentStore::new(context_dir.path());
+        let spec = RunSpec::new("Test budget exhaustion", "Do something")
+            .with_type("coder")
+            .without_git_context();
+
+        let result = runner.run(spec, &mut store, None).await;
+
+        assert!(
+            matches!(result, Err(SubagentError::MaxStepsReached { .. })),
+            "Expected MaxStepsReached when budget=0, got: {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_runner_shared_budget_sequential_runs() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        // Budget = 2: first run consumes 2 iterations (main + continuation),
+        // second run fails immediately because budget is 0.
+        let budget = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(2));
+        let runner = SubagentRunner::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(std::sync::Arc::new(crate::agent::MockLlm))
+            .with_iteration_budget(budget.clone());
+
+        let mut store = SubagentStore::new(context_dir.path());
+
+        // First run: MockLlm returns is_complete=true.
+        // execute_agent() calls run_turn (consumes 1) then continuation run_turn (consumes 1).
+        let spec1 = RunSpec::new("First", "Do A")
+            .with_type("coder")
+            .without_git_context();
+        let result1 = runner.run(spec1, &mut store, None).await;
+        assert!(result1.is_ok(), "First run should succeed: {:?}", result1);
+
+        // Second run: budget is now 0 → immediate MaxStepsReached
+        let spec2 = RunSpec::new("Second", "Do B")
+            .with_type("coder")
+            .without_git_context();
+        let result2 = runner.run(spec2, &mut store, None).await;
+        assert!(
+            matches!(result2, Err(SubagentError::MaxStepsReached { .. })),
+            "Second run should fail after budget exhausted: {:?}",
+            result2
+        );
+    }
 }

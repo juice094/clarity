@@ -782,6 +782,59 @@ Codex + ZeroClaw 架构探索的脚手架设计已归档于：
 - **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
 - **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
 
+## 13. Sprint 26 — Event 模型接线 + 迭代预算集成测试
+
+> 日期：2026-05-05
+> 状态：已完成
+
+### 13.1 目标
+
+完成 Sprint 25 的闭环：将 dead code 转化为生产功能，将未验证链路转化为可信行为。
+
+### 13.2 启动前现状审计
+
+| 能力 | 状态 |
+|------|------|
+| `Event` / `EventMsg` 类型定义 | ✅ Sprint 25（34 单元测试通过） |
+| `Event` 生产代码引用 | ❌ 零引用（dead code） |
+| `iteration_budget` loop 检查 | ✅ Sprint 25（loop_trait.rs 单元测试） |
+| `iteration_budget` 端到端验证 | ❌ 无（未通过 SubagentRunner 测试） |
+
+### 13.3 关键决策
+
+#### D16 — EventBus 单点桥接
+
+**决策**：在 `Agent::send_wire_message()` 中同时 `Event::from(msg.clone())` emit 到 `EventBus`。零调用点修改，100% 覆盖。
+
+- `EventBus` 基于 `tokio::sync::broadcast::Sender<Event>`，fire-and-forget
+- `Agent::with_event_bus(bus)` builder 方法
+- `send_wire_message` 中先 emit Event，再 send Wire（Event 是未来主协议）
+- `clarity-wire` 中 `EventBus` + 2 个测试（单接收、多接收）
+- 子代理 EventBus 透传：本次 Sprint 不实现（事件隔离更清晰）
+
+#### D17 — 迭代预算端到端验证
+
+**决策**：通过 `SubagentRunner` + `MockLlm` 的集成测试验证 budget 从 runner → builder → config → agent → loop 的全链路。
+
+- **Test A**：budget=0 → 首次迭代前 break → `MaxStepsReached`
+- **Test B**：budget=2 → 第一次 run 消耗 2 次（main + continuation），第二次 run 预算耗尽失败
+  - 验证了 `execute_agent()` 的 continuation heuristic 也会消耗预算
+  - 验证了父子代理共享同一 `Arc<AtomicUsize>` 的递减语义
+
+### 13.4 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| clarity-wire | `EventBus` | 新增 broadcast wrapper | ✅ 新增，无 breaking |
+| clarity internal | `Agent::event_bus` | 新增可选字段 | ⚠️ 默认值 `None`，安全 |
+| clarity internal | `Agent::send_wire_message` | 新增 Event 桥接 | ✅ 内部方法，无外部影响 |
+
+### 13.5 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **759 passed / 0 failed / 6 ignored**
+- **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
+
 ---
 
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*

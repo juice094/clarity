@@ -125,6 +125,30 @@ impl From<crate::WireMessage> for EventMsg {
     }
 }
 
+use tokio::sync::broadcast;
+
+/// Broadcast channel wrapper for emitting Events.
+///
+/// Soul-side producer. UI/front-end subscribes via the paired [`broadcast::Receiver`].
+#[derive(Clone, Debug)]
+pub struct EventBus {
+    tx: broadcast::Sender<Event>,
+}
+
+impl EventBus {
+    /// Create a new bus with the given buffer capacity.
+    /// Returns `(bus, receiver)` — receiver can be cloned for multiple consumers.
+    pub fn new(capacity: usize) -> (Self, broadcast::Receiver<Event>) {
+        let (tx, rx) = broadcast::channel(capacity);
+        (Self { tx }, rx)
+    }
+
+    /// Emit an event. Fire-and-forget: channel full → oldest dropped.
+    pub fn emit(&self, event: Event) {
+        let _ = self.tx.send(event);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,5 +401,30 @@ mod tests {
             let decoded: EventMsg = serde_json::from_str(&json).unwrap();
             assert_eq!(msg, decoded);
         }
+    }
+
+    #[tokio::test]
+    async fn test_event_bus_emit_and_receive() {
+        let (bus, mut rx) = EventBus::new(16);
+        let event = Event::new(EventMsg::TurnBegin {
+            user_input: "hello".to_string(),
+        });
+        bus.emit(event.clone());
+        let received = rx.recv().await.unwrap();
+        assert_eq!(received, event);
+    }
+
+    #[tokio::test]
+    async fn test_event_bus_multiple_receivers() {
+        let (bus, mut rx1) = EventBus::new(16);
+        let mut rx2 = bus.tx.subscribe();
+
+        let event = Event::new(EventMsg::TurnEnd);
+        bus.emit(event.clone());
+
+        let received1 = rx1.recv().await.unwrap();
+        let received2 = rx2.recv().await.unwrap();
+        assert_eq!(received1, event);
+        assert_eq!(received2, event);
     }
 }

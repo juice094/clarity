@@ -117,7 +117,7 @@ pub enum WireMessage {
 }
 
 pub mod event;
-pub use event::{Event, EventMsg};
+pub use event::{Event, EventBus, EventMsg};
 
 impl WireMessage {
     /// Returns true if this message type is mergeable with subsequent messages.

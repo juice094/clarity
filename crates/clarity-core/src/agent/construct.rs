@@ -44,6 +44,7 @@ impl Agent {
             config: config.clone(),
             memory_ticker: None,
             wire: None,
+            event_bus: None,
             approval_runtime: None,
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
@@ -255,8 +256,18 @@ impl Agent {
         self
     }
 
-    /// Send a wire message if wire is configured
+    /// Set the event bus for structured event output (builder pattern)
+    pub fn with_event_bus(mut self, bus: clarity_wire::EventBus) -> Self {
+        self.event_bus = Some(bus);
+        self
+    }
+
+    /// Send a wire message if wire is configured.
+    /// Also bridges to the event bus if configured.
     pub(crate) fn send_wire_message(&self, msg: WireMessage) {
+        if let Some(ref bus) = self.event_bus {
+            bus.emit(clarity_wire::Event::from(msg.clone()));
+        }
         if let Some(ref wire) = self.wire {
             wire.soul_side().send(msg);
         }
