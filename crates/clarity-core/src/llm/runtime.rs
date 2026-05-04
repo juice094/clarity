@@ -37,7 +37,7 @@ use crate::llm::{AnthropicLlm, LlamaServerProvider, OllamaProvider, OpenAiCompat
 pub struct RuntimeProviderConfig {
     /// Human-readable identifier (e.g. "my-custom-openai").
     pub provider_id: String,
-    /// API base URL (e.g. "https://api.openai.com/v1").
+    /// API base URL (e.g. <https://api.openai.com/v1>).
     pub base_url: String,
     /// Protocol format identifier.
     ///

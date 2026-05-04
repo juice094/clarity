@@ -166,7 +166,7 @@ impl ToolRegistry {
     /// Replace a cron tool manager for all cron scheduling tools.
     ///
     /// This unregisters the existing cron tools (if any) and re-registers
-    /// them bound to the provided [`BackgroundTaskManager`].
+    /// them bound to the provided [`BackgroundTaskManager`](crate::background::BackgroundTaskManager).
     pub fn with_cron_manager(&self, manager: Arc<crate::background::BackgroundTaskManager>) {
         use crate::tools::{CancelCronTool, ListCronTool, ScheduleCronTool};
 

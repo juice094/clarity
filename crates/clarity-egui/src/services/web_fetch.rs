@@ -65,7 +65,7 @@ fn html_to_text(html: &str) -> String {
     text.trim().to_string()
 }
 
-/// Extract the <title> tag contents from HTML.
+/// Extract the `<title>` tag contents from HTML.
 fn extract_title(html: &str) -> String {
     let re = Regex::new(r"<title[^>]*>(.*?)</title>")
         .unwrap()

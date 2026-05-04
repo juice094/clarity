@@ -2,7 +2,7 @@ use crate::theme::Theme;
 
 /// Standard settings row: label (left) + control (right), optional hint below label.
 ///
-/// ```
+/// ```text
 /// ┌─────────────────────────────────────────────┐
 /// │  Label                    [     control     ]│
 /// │  hint text                                    │

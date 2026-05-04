@@ -447,7 +447,7 @@ impl Agent {
         &self.registry
     }
 
-    /// Bind a [`BackgroundTaskManager`] to the cron tools in the registry.
+    /// Bind a [`BackgroundTaskManager`](crate::background::BackgroundTaskManager) to the cron tools in the registry.
     ///
     /// Must be called after the task manager is created and before the agent
     /// starts processing requests that may invoke cron tools.
