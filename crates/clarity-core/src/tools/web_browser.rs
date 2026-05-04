@@ -303,8 +303,8 @@ impl Tool for WebBrowserTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["navigate", "click", "type", "screenshot", "get_text", "get_html"],
-                    "description": "The browser action to perform"
+                    "enum": ["navigate", "get_text", "get_html"],
+                    "description": "The browser action to perform. This is a lightweight implementation: navigate fetches a page, get_text/get_html extract content. Interactive actions (click, type, screenshot) are not supported."
                 },
                 "url": {
                     "type": "string",
@@ -312,11 +312,7 @@ impl Tool for WebBrowserTool {
                 },
                 "selector": {
                     "type": "string",
-                    "description": "CSS selector for targeting an element (used by 'click', 'type', 'get_text', 'get_html')"
-                },
-                "text": {
-                    "type": "string",
-                    "description": "Text to type into the element (required for 'type')"
+                    "description": "CSS selector for targeting an element (used by 'get_text', 'get_html')"
                 }
             },
             "required": ["action"]
@@ -352,7 +348,7 @@ impl Tool for WebBrowserTool {
                 self.get_html(selector).await
             }
             _ => Err(ToolError::invalid_params(format!(
-                "Unknown action '{}'. Supported actions: navigate, click, type, screenshot, get_text, get_html",
+                "Unknown action '{}'. Supported actions: navigate, get_text, get_html",
                 action
             ))),
         }
@@ -393,7 +389,6 @@ mod tests {
         assert!(params.get("properties").unwrap().get("action").is_some());
         assert!(params.get("properties").unwrap().get("url").is_some());
         assert!(params.get("properties").unwrap().get("selector").is_some());
-        assert!(params.get("properties").unwrap().get("text").is_some());
 
         let required = params.get("required").unwrap().as_array().unwrap();
         assert!(required.contains(&json!("action")));
