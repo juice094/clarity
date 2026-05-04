@@ -105,8 +105,12 @@ impl AgentLoop for SyncLoop {
         agent: &Agent,
         tool_calls: &[crate::types::ToolCall],
         messages: &mut Vec<Message>,
+        cancel_token: &CancellationToken,
     ) -> DispatchOutcome {
-        match agent.dispatch_tool_calls(tool_calls, messages).await {
+        match agent
+            .dispatch_tool_calls(tool_calls, messages, cancel_token)
+            .await
+        {
             Ok(output) => {
                 if let Some(question) = output.ask_user_question {
                     DispatchOutcome::Break {

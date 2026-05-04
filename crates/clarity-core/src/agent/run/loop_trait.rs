@@ -64,6 +64,7 @@ pub(crate) trait AgentLoop: Send {
         agent: &Agent,
         tool_calls: &[ToolCall],
         messages: &mut Vec<Message>,
+        cancel_token: &CancellationToken,
     ) -> DispatchOutcome;
 }
 
@@ -125,7 +126,7 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
         });
 
         let outcome = loop_impl
-            .dispatch_tool_calls(agent, &result.tool_calls, messages)
+            .dispatch_tool_calls(agent, &result.tool_calls, messages, cancel_token)
             .await;
 
         match &outcome {
@@ -295,6 +296,7 @@ mod tests {
             _agent: &Agent,
             _tool_calls: &[ToolCall],
             _messages: &mut Vec<Message>,
+            _cancel_token: &CancellationToken,
         ) -> DispatchOutcome {
             let count = self.dispatch_count.fetch_add(1, Ordering::SeqCst);
             if count == 0 {

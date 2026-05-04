@@ -6,8 +6,10 @@ use crate::llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
 use clarity_wire::WireMessage;
 use std::pin::Pin;
+use tokio_util::sync::CancellationToken;
 
 use super::loop_helpers::scrub_credentials;
+use crate::agent::loop_detector::LoopDetection;
 use tracing::{info, warn};
 
 /// Output of dispatching a batch of tool calls.
@@ -73,7 +75,12 @@ impl Agent {
         &self,
         tool_calls: &[ToolCall],
         messages: &mut Vec<Message>,
+        cancel_token: &CancellationToken,
     ) -> Result<DispatchOutput, AgentError> {
+        if cancel_token.is_cancelled() {
+            tracing::warn!("dispatch_tool_calls cancelled before starting");
+            return Err(AgentError::Cancelled);
+        }
         let mut tool_names = Vec::new();
         let mut ask_user_question: Option<String> = None;
         let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
@@ -133,6 +140,10 @@ impl Agent {
         // Phase 2: await all results sequentially to avoid concurrent approval deadlock.
         let mut results = Vec::new();
         for future in futures {
+            if cancel_token.is_cancelled() {
+                tracing::warn!("dispatch_tool_calls cancelled while awaiting results");
+                return Err(AgentError::Cancelled);
+            }
             results.push(future.await);
         }
 
@@ -203,17 +214,21 @@ impl Agent {
                     .turn_context
                     .as_mut()
                     .expect("turn_context must be set during dispatch_tool_calls");
-                if ctx
-                    .loop_detector
-                    .record(&tool_call.function.name, &result_content)
-                {
-                    fatal = Some((
-                        tool_call.function.name.clone(),
-                        format!(
-                            "Loop detected: tool produced identical output {} times",
-                            ctx.loop_detector.max_repetitions()
-                        ),
-                    ));
+                match ctx.loop_detector.record(
+                    &tool_call.function.name,
+                    &tool_call.function.arguments,
+                    &result_content,
+                ) {
+                    LoopDetection::Warning {
+                        tool_name: _,
+                        message,
+                    } => {
+                        messages.push(Message::system(message));
+                    }
+                    LoopDetection::Break { tool_name, message } => {
+                        fatal = Some((tool_name, message));
+                    }
+                    LoopDetection::Ok => {}
                 }
             }
         }
