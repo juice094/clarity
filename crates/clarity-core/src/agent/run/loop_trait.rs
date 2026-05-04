@@ -86,6 +86,15 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
     let mut working_tools = tools.clone();
 
     for iteration in 0..max_iterations {
+        // Check global iteration budget before each iteration
+        if let Some(ref budget) = agent.config.iteration_budget {
+            let remaining = budget.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            if remaining == 0 {
+                final_response = "Global iteration budget exhausted".to_string();
+                break;
+            }
+        }
+
         tracing::debug!("Iteration {}/{}", iteration + 1, max_iterations);
 
         if cancel_token.is_cancelled() {
@@ -310,6 +319,55 @@ mod tests {
         }
     }
 
+    struct MockLoopBudget {
+        iteration_count: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentLoop for MockLoopBudget {
+        async fn before_iteration(
+            &mut self,
+            _agent: &Agent,
+            _messages: &mut Vec<Message>,
+            _llm: Arc<dyn LlmProvider>,
+        ) {
+        }
+
+        async fn run_iteration(
+            &mut self,
+            _agent: &Agent,
+            _messages: &mut Vec<Message>,
+            _tools: &serde_json::Value,
+            _llm: Arc<dyn LlmProvider>,
+        ) -> Result<IterationResult, AgentError> {
+            self.iteration_count.fetch_add(1, Ordering::SeqCst);
+            Ok(IterationResult {
+                response_content: "test".to_string(),
+                tool_calls: vec![],
+                prompt_tokens: 0,
+                completion_tokens: 0,
+            })
+        }
+
+        async fn handle_final_response(
+            &mut self,
+            _agent: &Agent,
+            _response: &str,
+            _iteration: usize,
+        ) {
+        }
+
+        async fn dispatch_tool_calls(
+            &mut self,
+            _agent: &Agent,
+            _tool_calls: &[ToolCall],
+            _messages: &mut Vec<Message>,
+            _cancel_token: &CancellationToken,
+        ) -> DispatchOutcome {
+            unreachable!()
+        }
+    }
+
     #[tokio::test]
     async fn agent_tool_failure_circuit_breaker() {
         let registry = ToolRegistry::new();
@@ -352,5 +410,44 @@ mod tests {
             outcome.final_response
         );
         assert!(!outcome.completed);
+    }
+
+    #[tokio::test]
+    async fn agent_iteration_budget_exhausted() {
+        let registry = ToolRegistry::new();
+        let budget = Arc::new(AtomicUsize::new(0));
+        let config = AgentConfig::new()
+            .with_max_iterations(5)
+            .with_iteration_budget(budget.clone());
+        let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlmCircuit));
+
+        let tools = serde_json::json!([]);
+        let mut messages = vec![Message::system("test")];
+        let cancel = tokio_util::sync::CancellationToken::new();
+
+        let mut loop_impl = MockLoopBudget {
+            iteration_count: AtomicUsize::new(0),
+        };
+        let outcome = run_loop_iterations(
+            &agent,
+            &mut loop_impl,
+            &mut messages,
+            &tools,
+            Arc::new(MockLlmCircuit),
+            &cancel,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            outcome.final_response, "Global iteration budget exhausted",
+            "Expected budget-exhausted message"
+        );
+        assert!(!outcome.completed);
+        assert_eq!(
+            loop_impl.iteration_count.load(Ordering::SeqCst),
+            0,
+            "No iterations should run when budget is zero"
+        );
     }
 }

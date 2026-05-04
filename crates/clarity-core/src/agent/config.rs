@@ -1,6 +1,8 @@
 //! Agent configuration and prompt loading utilities.
 
 use crate::agent::compaction_service::CompactionServiceConfig;
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 
 /// Default max context size in tokens (approximate)
 pub(crate) const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;
@@ -47,6 +49,8 @@ pub struct AgentConfig {
     /// Fallback provider IDs (e.g. ["ollama", "openai"]) used to construct a
     /// ReliableProvider when the primary provider fails.
     pub fallback_providers: Vec<String>,
+    /// Optional global iteration budget shared across parent and subagents.
+    pub iteration_budget: Option<Arc<AtomicUsize>>,
 }
 
 impl Default for AgentConfig {
@@ -70,6 +74,7 @@ impl Default for AgentConfig {
             max_cost_per_day_usd: Some(5.0),
             vision_model_alias: None,
             fallback_providers: Vec::new(),
+            iteration_budget: None,
         }
     }
 }
@@ -185,6 +190,12 @@ impl AgentConfig {
     /// Set fallback provider IDs for ReliableProvider.
     pub fn with_fallback_providers(mut self, providers: Vec<String>) -> Self {
         self.fallback_providers = providers;
+        self
+    }
+
+    /// Set a global iteration budget shared across parent and subagents.
+    pub fn with_iteration_budget(mut self, budget: Arc<AtomicUsize>) -> Self {
+        self.iteration_budget = Some(budget);
         self
     }
 }
