@@ -118,7 +118,7 @@ impl AgentLoop for SyncLoop {
         match agent.dispatch_tool_calls(tool_calls, messages).await {
             Ok(output) => {
                 if let Some(question) = output.ask_user_question {
-                    DispatchOutcome::Break { final_response: question }
+                    DispatchOutcome::Break { final_response: question, is_error: false }
                 } else {
                     DispatchOutcome::Success(output.tool_names)
                 }

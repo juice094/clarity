@@ -49,7 +49,7 @@ pub struct AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
-            max_iterations: 10,
+            max_iterations: 30,
             tool_timeout_secs: 60,
             working_dir: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             read_only: false,
@@ -222,4 +222,6 @@ When you need to use a tool, respond with a tool call in the appropriate format.
 After receiving the tool result, provide a helpful response to the user.
 
 Available tools will be provided at the start of each conversation.
+
+If a tool returns an error, do not retry the same tool in the same turn. Summarize the error and ask the user for guidance.
 "#;

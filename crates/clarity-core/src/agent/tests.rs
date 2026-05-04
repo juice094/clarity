@@ -1288,3 +1288,4 @@ async fn test_no_vision_no_switch() {
     assert_eq!(default_llm.call_count.load(Ordering::SeqCst), 1);
     assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 0);
 }
+
