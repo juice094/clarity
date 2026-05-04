@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright (C) 2026 juice094 and contributors
+
 //! Skill Outcome Predictor — The "Jumpy World Model" for workflow orchestration.
 //!
 //! Predicts the distribution (or point estimate) of `JumpyState` after executing

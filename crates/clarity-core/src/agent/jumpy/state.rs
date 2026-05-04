@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright (C) 2026 juice094 and contributors
+
 //! Jumpy State — Workflow execution state snapshot.
 //!
 //! Analogous to the RL "state" in Jumpy World Models.

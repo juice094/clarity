@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright (C) 2026 juice094 and contributors
+
 //! Hierarchical Planner — Compositional planning over skills.
 //!
 //! Translates the CompPlan algorithm from the Jumpy World Models paper

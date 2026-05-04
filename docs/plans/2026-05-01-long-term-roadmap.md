@@ -233,6 +233,27 @@ Strangler 桥接：
 | LogPanel | Gateway 日志实时流 |
 | TerminalPanel | 内置 Shell（参考 cc-haha `TerminalSettings.tsx`） |
 
+#### Track B-2x：Jumpy Workflow Orchestration（实验性能力落地）
+
+> **来源**：`crates/clarity-core/src/agent/jumpy/`（MVP 已完成，需接入系统避免孤岛）  
+> **论文**：arXiv:2602.19634 — 将 Skill 视为可组合的"短跑专家"，通过离线世界模型实现时间抽象
+
+**目标**：将跳跃世界模型从实验模块转化为生产级编排能力。
+
+| 工作项 | 优先级 | 依赖 | 说明 |
+|--------|--------|------|------|
+| Session Store → SkillObservation pipeline | P1 | Phase B Session Schema | 从历史会话自动提取 (skill_id, before, after) 观测 |
+| LLM-Augmented Predictor | P2 | Local LLM 或 API Provider | 无历史时零样本预测状态转移 |
+| Flow 节点：`InvokeSkill` + `PredictCheckpoint` | P2 | — | 现有 Flow 系统零侵入扩展 |
+| Subagent 委托绑定 | P2 | Phase C AgentPool | `SkillComposer` 回调接入 `AgentPool::spawn()` |
+| headless `jumpy` CLI 子命令 | P2 | — | JSON 输出供外部工具（Kimi CLI 等）消费 |
+| A/B 验证（≥20 条轨迹） | P3 | 以上全部 | 对比 Jumpy 规划 vs 传统 Plan 的成功率与 token 消耗 |
+
+**架构约束**：
+- 不修改现有 `Agent::run()` / `FlowRunner` / `Plan` 的公共接口
+- 通过回调解耦（`execute_skill_fn`），可独立测试
+- 预测器纯离线学习，不依赖环境交互
+
 ---
 
 ### Phase 3 —— 平台化（3-4 周）

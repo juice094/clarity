@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright (C) 2026 juice094 and contributors
+
 //! Skill Composer — Executes a planned skill sequence with replanning.
 //!
 //! This is the runtime counterpart to the planner.

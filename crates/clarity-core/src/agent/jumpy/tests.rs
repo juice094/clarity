@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0
+// Copyright (C) 2026 juice094 and contributors
+
 //! Integration tests for Jumpy Workflow Orchestration.
 //!
 //! These tests simulate the full pipeline:
