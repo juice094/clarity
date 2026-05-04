@@ -1,0 +1,206 @@
+//! Tool call dispatch and compaction orchestration.
+
+use crate::agent::Agent;
+use crate::error::AgentError;
+use crate::llm::api::{LlmProvider, Message};
+use crate::types::ToolCall;
+use clarity_wire::WireMessage;
+use std::pin::Pin;
+
+use tracing::{info, warn};
+use super::loop_helpers::scrub_credentials;
+
+impl Agent {
+    /// Run proactive compaction and threshold-based compaction if needed.
+    pub(crate) async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
+        let mut did_compact = false;
+        if let Some(ref service) = self.compaction_service {
+            if service.needs_compaction(messages) {
+                self.send_wire_message(WireMessage::CompactionBegin);
+                did_compact = true;
+            }
+            if let Err(e) = service.maybe_compact(messages, llm).await {
+                warn!("Compaction failed: {}", e);
+            }
+        }
+        if self.should_compact(messages).await {
+            if !did_compact {
+                self.send_wire_message(WireMessage::CompactionBegin);
+                did_compact = true;
+            }
+            match self.compact_messages(messages).await {
+                Ok(compacted) => {
+                    info!(
+                        "Context compacted: {} messages -> {} messages",
+                        messages.len(),
+                        compacted.len()
+                    );
+                    *messages = compacted;
+                }
+                Err(e) => {
+                    warn!("Failed to compact messages: {}", e);
+                }
+            }
+        }
+        if did_compact {
+            self.send_wire_message(WireMessage::CompactionEnd);
+        }
+    }
+
+    /// Execute a batch of tool calls, sending wire lifecycle events and appending
+    /// results to `messages`. Returns the ordered list of tool names for telemetry.
+    ///
+    /// If any tool fails with a **non-recoverable** error, the function returns
+    /// `AgentError::ToolExecutionFailed` immediately after all concurrent calls
+    /// complete, preventing the LLM from entering an infinite retry loop.
+    ///
+    /// R1: Recoverable errors (IoError/Timeout/Unavailable) are intentionally NOT
+    /// fatal on first failure — the LLM may retry with a different strategy.
+    /// To prevent infinite loops, a per-turn circuit breaker upgrades to fatal
+    /// after the SAME tool fails recoverably 3 times in a single turn.
+    pub(crate) async fn dispatch_tool_calls(
+        &self,
+        tool_calls: &[ToolCall],
+        messages: &mut Vec<Message>,
+    ) -> Result<Vec<String>, AgentError> {
+        let mut tool_names = Vec::new();
+        let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
+        let mut execute_flags: Vec<bool> = Vec::new();
+        let mut futures: Vec<
+            Pin<
+                Box<
+                    dyn std::future::Future<
+                            Output = Result<serde_json::Value, crate::error::ToolError>,
+                        > + Send,
+                >,
+            >,
+        > = Vec::new();
+
+        // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
+        for tool_call in tool_calls {
+            let mut tc = tool_call.clone();
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            let should_execute = if let Some(hooks) = hooks_opt {
+                match hooks.before_tool_call(&mut tc).await {
+                    crate::agent::hooks::HookResult::Cancel(e) => {
+                        let err = crate::error::ToolError::execution_failed(e.to_string());
+                        futures.push(Box::pin(async move { Err(err) }));
+                        false
+                    }
+                    crate::agent::hooks::HookResult::Replace(_) => true,
+                    crate::agent::hooks::HookResult::Continue => true,
+                }
+            } else {
+                true
+            };
+
+            tool_names.push(tc.function.name.clone());
+            self.send_wire_message(WireMessage::StepBegin {
+                tool_name: tc.function.name.clone(),
+            });
+
+            let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
+                .unwrap_or_else(|_| serde_json::json!({}));
+            self.send_wire_message(WireMessage::ToolCall {
+                id: tc.id.clone(),
+                name: tc.function.name.clone(),
+                arguments: args,
+            });
+
+            modified_tool_calls.push(tc);
+            execute_flags.push(should_execute);
+        }
+
+        for (tc, flag) in modified_tool_calls.iter().zip(execute_flags.iter()) {
+            if *flag {
+                futures.push(Box::pin(self.execute_tool_call(tc)));
+            }
+        }
+
+        // Phase 2: await all results sequentially to avoid concurrent approval deadlock.
+        let mut results = Vec::new();
+        for future in futures {
+            results.push(future.await);
+        }
+
+        // Phase 3: emit results in original order, append to messages, and
+        // detect non-recoverable failures.
+        let mut fatal: Option<(String, String)> = None;
+
+        for (tool_call, result) in modified_tool_calls.iter().zip(results.into_iter()) {
+            let sanitized = result.map_err(|e| e.sanitize_paths());
+            let mut result_value = match &sanitized {
+                Ok(v) => v.clone(),
+                Err(e) => serde_json::json!({"error": e.to_string()}),
+            };
+
+            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            if let Some(hooks) = hooks_opt {
+                hooks.after_tool_call(tool_call, &mut result_value).await;
+            }
+
+            let result_content = result_value.to_string();
+
+            self.send_wire_message(WireMessage::ToolResult {
+                id: tool_call.id.clone(),
+                result: result_content.clone(),
+            });
+
+            let scrubbed = scrub_credentials(&result_content);
+            messages.push(Message::tool(&tool_call.id, scrubbed));
+
+            if let Err(ref e) = sanitized {
+                if !e.is_recoverable() {
+                    fatal = Some((tool_call.function.name.clone(), e.to_string()));
+                } else {
+                    let mut inner = self.inner.write().unwrap();
+                    let ctx = inner
+                        .turn_context
+                        .as_mut()
+                        .expect("turn_context must be set during dispatch_tool_calls");
+                    let count = ctx
+                        .recoverable_failure_counts
+                        .entry(tool_call.function.name.clone())
+                        .or_insert(0);
+                    *count += 1;
+                    if *count >= 3 {
+                        fatal = Some((
+                            tool_call.function.name.clone(),
+                            format!(
+                                "Tool '{}' failed {} times (recoverable errors exhausted)",
+                                tool_call.function.name, *count
+                            ),
+                        ));
+                    }
+                }
+            }
+
+            // Check for repetitive output loops (only if no fatal error already).
+            if fatal.is_none() {
+                let mut inner = self.inner.write().unwrap();
+                let ctx = inner
+                    .turn_context
+                    .as_mut()
+                    .expect("turn_context must be set during dispatch_tool_calls");
+                if ctx
+                    .loop_detector
+                    .record(&tool_call.function.name, &result_content)
+                {
+                    fatal = Some((
+                        tool_call.function.name.clone(),
+                        format!(
+                            "Loop detected: tool produced identical output {} times",
+                            ctx.loop_detector.max_repetitions()
+                        ),
+                    ));
+                }
+            }
+        }
+
+        if let Some((tool_name, error)) = fatal {
+            return Err(AgentError::ToolExecutionFailed(tool_name, error));
+        }
+
+        Ok(tool_names)
+    }
+}
