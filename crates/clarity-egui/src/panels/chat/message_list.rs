@@ -138,8 +138,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
 
                     let mut msg_idx = 0;
-                    for i in start_idx..end_idx {
-                        match &units[i] {
+                    for (i, unit) in units
+                        .iter()
+                        .enumerate()
+                        .skip(start_idx)
+                        .take(end_idx - start_idx)
+                    {
+                        match unit {
                             RenderUnit::User(_) => {
                                 while msg_idx < session.messages.len()
                                     && session.messages[msg_idx].role != Role::User

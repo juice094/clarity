@@ -148,17 +148,17 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                 {
                     app.ui_store.thinking_log_show_all = true;
                 }
-            } else if show_all && total > 3 {
-                if ui
+            } else if show_all
+                && total > 3
+                && ui
                     .button(
                         egui::RichText::new("收起 ▲")
                             .size(theme.text_xs)
                             .color(theme.text_dim),
                     )
                     .clicked()
-                {
-                    app.ui_store.thinking_log_show_all = false;
-                }
+            {
+                app.ui_store.thinking_log_show_all = false;
             }
         });
 }

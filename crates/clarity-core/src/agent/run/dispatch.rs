@@ -74,6 +74,7 @@ impl Agent {
         let mut ask_user_question: Option<String> = None;
         let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
         let mut execute_flags: Vec<bool> = Vec::new();
+        #[allow(clippy::type_complexity)]
         let mut futures: Vec<
             Pin<
                 Box<

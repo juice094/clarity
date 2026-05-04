@@ -26,13 +26,13 @@ use crate::server::AppState;
 // ==================== 健康检查 ====================
 
 #[derive(Serialize)]
-pub struct HealthResponse {
+pub(crate) struct HealthResponse {
     pub status: String,
     pub version: String,
     pub timestamp: String,
 }
 
-pub async fn health_check() -> impl IntoResponse {
+pub(crate) async fn health_check() -> impl IntoResponse {
     debug!("Health check requested");
     let response = HealthResponse {
         status: "healthy".to_string(),
@@ -46,7 +46,7 @@ pub async fn health_check() -> impl IntoResponse {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-pub struct ChatCompletionRequest {
+pub(crate) struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
     #[serde(default)]
@@ -62,13 +62,13 @@ pub struct ChatCompletionRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Message {
+pub(crate) struct Message {
     pub role: String,
     pub content: String,
 }
 
 #[derive(Serialize)]
-pub struct ChatCompletionResponse {
+pub(crate) struct ChatCompletionResponse {
     pub id: String,
     pub object: String,
     pub created: i64,
@@ -80,20 +80,20 @@ pub struct ChatCompletionResponse {
 }
 
 #[derive(Serialize)]
-pub struct Choice {
+pub(crate) struct Choice {
     pub index: u32,
     pub message: Message,
     pub finish_reason: String,
 }
 
 #[derive(Serialize)]
-pub struct Usage {
+pub(crate) struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-pub async fn chat_completions(
+pub(crate) async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Response {
@@ -430,13 +430,13 @@ pub async fn chat_completions(
 // ==================== Admin API ====================
 
 #[derive(Serialize)]
-pub struct StatsResponse {
+pub(crate) struct StatsResponse {
     pub active_sessions: usize,
     pub total_requests: u64,
     pub uptime_seconds: u64,
 }
 
-pub async fn admin_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub(crate) async fn admin_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let active_sessions = state.session_store.session_count().await.unwrap_or(0);
     let total_requests = state.session_store.total_requests().await.unwrap_or(0);
     let uptime_seconds = (Utc::now() - state.started_at).num_seconds() as u64;
@@ -449,18 +449,18 @@ pub async fn admin_stats(State(state): State<Arc<AppState>>) -> impl IntoRespons
 }
 
 #[derive(Serialize)]
-pub struct ToolsResponse {
+pub(crate) struct ToolsResponse {
     pub tools: Vec<ToolInfo>,
 }
 
 #[derive(Serialize)]
-pub struct ToolInfo {
+pub(crate) struct ToolInfo {
     pub name: String,
     pub description: String,
     pub enabled: bool,
 }
 
-pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub(crate) async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let tools = match state.agent.registry().get_tool_schemas() {
         Ok(schemas) => {
             if let Some(functions) = schemas.as_array() {
@@ -493,19 +493,19 @@ pub async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoRespons
 // ==================== Admin: List Available Models ====================
 
 #[derive(Serialize)]
-pub struct ModelsResponse {
+pub(crate) struct ModelsResponse {
     pub models: Vec<ModelInfo>,
 }
 
 #[derive(Serialize)]
-pub struct ModelInfo {
+pub(crate) struct ModelInfo {
     pub alias: String,
     pub provider: String,
     pub model_id: String,
     pub protocol: String,
 }
 
-pub async fn admin_models() -> impl IntoResponse {
+pub(crate) async fn admin_models() -> impl IntoResponse {
     let registry = match clarity_core::llm::ModelRegistry::load_async().await {
         Ok(r) => r,
         Err(e) => {
@@ -540,7 +540,7 @@ use clarity_core::background::TaskId;
 use clarity_core::background::{TaskResult, TaskSpec, TaskStatus};
 
 #[derive(Debug, Deserialize)]
-pub struct CreateTaskRequest {
+pub(crate) struct CreateTaskRequest {
     pub name: String,
     pub prompt: String,
     #[serde(default)]
@@ -548,13 +548,13 @@ pub struct CreateTaskRequest {
 }
 
 #[derive(Serialize)]
-pub struct TaskCreateResponse {
+pub(crate) struct TaskCreateResponse {
     pub task_id: TaskId,
     pub status: TaskStatus,
 }
 
 #[derive(Serialize)]
-pub struct TaskDetailResponse {
+pub(crate) struct TaskDetailResponse {
     pub task_id: TaskId,
     pub name: String,
     pub status: TaskStatus,
@@ -564,7 +564,7 @@ pub struct TaskDetailResponse {
     pub result: Option<TaskResult>,
 }
 
-pub async fn create_task(
+pub(crate) async fn create_task(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateTaskRequest>,
 ) -> Response {
@@ -592,7 +592,7 @@ pub async fn create_task(
     }
 }
 
-pub async fn get_task(
+pub(crate) async fn get_task(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(task_id): axum::extract::Path<TaskId>,
 ) -> Response {
@@ -627,7 +627,7 @@ pub async fn get_task(
     }
 }
 
-pub async fn cancel_task(
+pub(crate) async fn cancel_task(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(task_id): axum::extract::Path<TaskId>,
 ) -> impl IntoResponse {
@@ -645,11 +645,11 @@ pub async fn cancel_task(
 }
 
 #[derive(Serialize)]
-pub struct TaskListResponse {
+pub(crate) struct TaskListResponse {
     pub tasks: Vec<TaskDetailResponse>,
 }
 
-pub async fn list_tasks(State(state): State<Arc<AppState>>) -> Response {
+pub(crate) async fn list_tasks(State(state): State<Arc<AppState>>) -> Response {
     info!("list_tasks called");
     match state.task_manager.list().await {
         Ok(tasks) => {
@@ -683,20 +683,20 @@ pub async fn list_tasks(State(state): State<Arc<AppState>>) -> Response {
 // ==================== Parallel Subagent Execution API ====================
 
 #[derive(Debug, Deserialize)]
-pub struct ParallelTaskSpec {
+pub(crate) struct ParallelTaskSpec {
     pub agent_type: String,
     pub prompt: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RunParallelRequest {
+pub(crate) struct RunParallelRequest {
     pub tasks: Vec<ParallelTaskSpec>,
     #[serde(default)]
     pub max_concurrency: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ParallelTaskResult {
+pub(crate) struct ParallelTaskResult {
     pub agent_id: String,
     pub agent_type: String,
     pub status: String,
@@ -704,13 +704,13 @@ pub struct ParallelTaskResult {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ParallelFailure {
+pub(crate) struct ParallelFailure {
     pub task_id: String,
     pub error: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct RunParallelResponse {
+pub(crate) struct RunParallelResponse {
     pub success_rate: f64,
     pub total_elapsed_ms: u64,
     pub results: Vec<ParallelTaskResult>,
@@ -719,7 +719,7 @@ pub struct RunParallelResponse {
     pub batch_id: Option<String>,
 }
 
-pub async fn run_parallel(
+pub(crate) async fn run_parallel(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RunParallelRequest>,
 ) -> Response {
@@ -816,7 +816,7 @@ pub async fn run_parallel(
 
 /// Query the current progress of a parallel batch.
 #[derive(Serialize)]
-pub struct ParallelStatusResponse {
+pub(crate) struct ParallelStatusResponse {
     pub batch_id: String,
     pub total: usize,
     pub completed: usize,
@@ -827,13 +827,13 @@ pub struct ParallelStatusResponse {
 }
 
 #[derive(Serialize)]
-pub struct AgentStatusSummary {
+pub(crate) struct AgentStatusSummary {
     pub agent_id: String,
     pub status: String,
     pub summary: Option<String>,
 }
 
-pub async fn get_parallel_status(
+pub(crate) async fn get_parallel_status(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(batch_id): axum::extract::Path<String>,
 ) -> Response {
@@ -898,16 +898,16 @@ pub async fn get_parallel_status(
 // ==================== Admin: Approval Mode ====================
 
 #[derive(Deserialize)]
-pub struct SetApprovalModeRequest {
+pub(crate) struct SetApprovalModeRequest {
     pub mode: String,
 }
 
 #[derive(Serialize)]
-pub struct ApprovalModeResponse {
+pub(crate) struct ApprovalModeResponse {
     pub mode: String,
 }
 
-pub async fn admin_set_approval_mode(
+pub(crate) async fn admin_set_approval_mode(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SetApprovalModeRequest>,
 ) -> Response {
@@ -933,7 +933,7 @@ pub async fn admin_set_approval_mode(
     (StatusCode::OK, Json(resp)).into_response()
 }
 
-pub async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub(crate) async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mode = state.agent.approval_mode();
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
@@ -944,17 +944,17 @@ pub async fn admin_get_approval_mode(State(state): State<Arc<AppState>>) -> impl
 // ==================== Admin: Switch Provider ====================
 
 #[derive(Deserialize)]
-pub struct SwitchProviderRequest {
+pub(crate) struct SwitchProviderRequest {
     pub provider: String,
 }
 
 #[derive(Serialize)]
-pub struct SwitchProviderResponse {
+pub(crate) struct SwitchProviderResponse {
     pub provider: String,
     pub message: String,
 }
 
-pub async fn admin_switch_provider(
+pub(crate) async fn admin_switch_provider(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SwitchProviderRequest>,
 ) -> impl IntoResponse {
@@ -995,7 +995,7 @@ pub struct SetConfigRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ConfigResponse {
+pub(crate) struct ConfigResponse {
     pub provider: String,
     pub api_key_masked: String,
     pub base_url: Option<String>,
@@ -1003,7 +1003,7 @@ pub struct ConfigResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ConfigStatusResponse {
+pub(crate) struct ConfigStatusResponse {
     pub configured: bool,
     pub config: Option<ConfigResponse>,
 }
@@ -1117,7 +1117,7 @@ pub async fn build_provider_from_config(
     }
 }
 
-pub async fn admin_get_config() -> impl IntoResponse {
+pub(crate) async fn admin_get_config() -> impl IntoResponse {
     match load_persisted_config().await {
         Some(cfg) => {
             let resp = ConfigResponse {
@@ -1144,7 +1144,7 @@ pub async fn admin_get_config() -> impl IntoResponse {
     }
 }
 
-pub async fn admin_set_config(
+pub(crate) async fn admin_set_config(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SetConfigRequest>,
 ) -> impl IntoResponse {
@@ -1192,25 +1192,25 @@ pub async fn admin_set_config(
 // ==================== File System API ====================
 
 #[derive(Debug, Deserialize)]
-pub struct FileTreeParams {
+pub(crate) struct FileTreeParams {
     pub path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FileReadParams {
+pub(crate) struct FileReadParams {
     pub path: String,
     pub offset: Option<u64>,
     pub limit: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FileWriteBody {
+pub(crate) struct FileWriteBody {
     pub path: String,
     pub content: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FileGlobParams {
+pub(crate) struct FileGlobParams {
     pub pattern: String,
 }
 
@@ -1329,7 +1329,7 @@ fn build_tree<'a>(
     })
 }
 
-pub async fn file_tree(
+pub(crate) async fn file_tree(
     Query(params): Query<FileTreeParams>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
@@ -1364,7 +1364,7 @@ pub async fn file_tree(
     }
 }
 
-pub async fn file_read(
+pub(crate) async fn file_read(
     Query(params): Query<FileReadParams>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
@@ -1416,7 +1416,7 @@ pub async fn file_read(
     }
 }
 
-pub async fn file_write(
+pub(crate) async fn file_write(
     State(state): State<Arc<AppState>>,
     Json(body): Json<FileWriteBody>,
 ) -> impl IntoResponse {
@@ -1458,7 +1458,7 @@ pub async fn file_write(
     }
 }
 
-pub async fn file_glob(
+pub(crate) async fn file_glob(
     Query(params): Query<FileGlobParams>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
@@ -1486,7 +1486,7 @@ pub async fn file_glob(
 
 // ==================== Admin: Session Management ====================
 
-pub async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub(crate) async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.session_store.list_sessions().await {
         Ok(sessions) => (StatusCode::OK, Json(json!({ "sessions": sessions }))),
         Err(e) => (
@@ -1496,7 +1496,7 @@ pub async fn list_sessions(State(state): State<Arc<AppState>>) -> impl IntoRespo
     }
 }
 
-pub async fn get_session(
+pub(crate) async fn get_session(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(session_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -1526,7 +1526,7 @@ pub async fn get_session(
     }
 }
 
-pub async fn delete_session(
+pub(crate) async fn delete_session(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(session_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -1770,7 +1770,7 @@ use clarity_core::memory::{MemoryStore, PersistentMemoryStore};
 
 /// Overview of a single MCP server entry (from `mcp.json`).
 #[derive(Serialize)]
-pub struct McpServerOverview {
+pub(crate) struct McpServerOverview {
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
@@ -1781,12 +1781,12 @@ pub struct McpServerOverview {
 
 /// Response for listing MCP servers.
 #[derive(Serialize)]
-pub struct McpServersResponse {
+pub(crate) struct McpServersResponse {
     pub servers: Vec<McpServerOverview>,
     pub config_path: String,
 }
 
-pub async fn list_mcp_servers() -> Response {
+pub(crate) async fn list_mcp_servers() -> Response {
     let mcp_path = clarity_core::mcp::config::default_config_path().ok();
     match clarity_core::mcp::config::McpConfig::load_default() {
         Ok(config) => {
@@ -1822,7 +1822,7 @@ pub async fn list_mcp_servers() -> Response {
 }
 
 /// Get a single MCP server by name.
-pub async fn get_mcp_server(
+pub(crate) async fn get_mcp_server(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Response {
     match clarity_core::mcp::config::McpConfig::load_default() {
@@ -1856,7 +1856,7 @@ pub async fn get_mcp_server(
 }
 
 #[derive(Deserialize)]
-pub struct McpServerUpdate {
+pub(crate) struct McpServerUpdate {
     pub command: Option<String>,
     pub args: Option<Vec<String>>,
     pub disabled: Option<bool>,
@@ -1867,7 +1867,7 @@ pub struct McpServerUpdate {
 }
 
 /// Create or update an MCP server.
-pub async fn update_mcp_server(
+pub(crate) async fn update_mcp_server(
     axum::extract::Path(name): axum::extract::Path<String>,
     Json(req): Json<McpServerUpdate>,
 ) -> Response {
@@ -1928,7 +1928,7 @@ pub async fn update_mcp_server(
 }
 
 /// Delete an MCP server.
-pub async fn delete_mcp_server(
+pub(crate) async fn delete_mcp_server(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Response {
     let default_path = clarity_core::mcp::config::default_config_path();
@@ -1963,7 +1963,7 @@ pub async fn delete_mcp_server(
 
 
 #[derive(Serialize)]
-pub struct CronTaskOverview {
+pub(crate) struct CronTaskOverview {
     pub task_id: String,
     pub name: String,
     pub cron_expr: String,
@@ -1972,12 +1972,12 @@ pub struct CronTaskOverview {
 }
 
 #[derive(Serialize)]
-pub struct CronTasksResponse {
+pub(crate) struct CronTasksResponse {
     pub tasks: Vec<CronTaskOverview>,
 }
 
 #[derive(Deserialize)]
-pub struct CreateCronRequest {
+pub(crate) struct CreateCronRequest {
     pub name: String,
     pub prompt: String,
     pub cron_expr: String,
@@ -1986,11 +1986,11 @@ pub struct CreateCronRequest {
 }
 
 #[derive(Serialize)]
-pub struct CreateCronResponse {
+pub(crate) struct CreateCronResponse {
     pub task_id: String,
 }
 
-pub async fn list_cron_tasks(
+pub(crate) async fn list_cron_tasks(
     State(state): State<Arc<AppState>>,
 ) -> Json<CronTasksResponse> {
     let tasks = state.task_manager.list_cron_tasks().await.unwrap_or_default();
@@ -2007,7 +2007,7 @@ pub async fn list_cron_tasks(
     Json(CronTasksResponse { tasks: overviews })
 }
 
-pub async fn create_cron_task(
+pub(crate) async fn create_cron_task(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateCronRequest>,
 ) -> Response {
@@ -2031,7 +2031,7 @@ pub async fn create_cron_task(
     }
 }
 
-pub async fn delete_cron_task(
+pub(crate) async fn delete_cron_task(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(task_id): axum::extract::Path<String>,
 ) -> Response {
@@ -2054,7 +2054,7 @@ pub async fn delete_cron_task(
 // ==================== 跨会话全文检索 API ====================
 
 #[derive(Deserialize)]
-pub struct SearchRequest {
+pub(crate) struct SearchRequest {
     pub query: String,
     #[serde(default = "default_search_limit")]
     pub limit: usize,
@@ -2065,7 +2065,7 @@ fn default_search_limit() -> usize {
 }
 
 #[derive(Serialize)]
-pub struct SearchResult {
+pub(crate) struct SearchResult {
     pub fact_id: String,
     pub content: String,
     pub tags: Vec<String>,
@@ -2073,12 +2073,12 @@ pub struct SearchResult {
 }
 
 #[derive(Serialize)]
-pub struct SearchResponse {
+pub(crate) struct SearchResponse {
     pub results: Vec<SearchResult>,
     pub total: usize,
 }
 
-pub async fn search_memory(
+pub(crate) async fn search_memory(
     Json(req): Json<SearchRequest>,
 ) -> Response {
     // Try to open the persistent memory store from the default location

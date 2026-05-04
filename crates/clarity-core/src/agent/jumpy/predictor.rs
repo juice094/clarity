@@ -49,6 +49,12 @@ pub struct HistoricalPredictor {
     similarity_threshold: f32,
 }
 
+impl Default for HistoricalPredictor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HistoricalPredictor {
     pub fn new() -> Self {
         Self {

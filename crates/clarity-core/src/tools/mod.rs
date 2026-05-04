@@ -122,7 +122,7 @@ pub mod helpers {
         let input = if path.starts_with('~') {
             dirs::home_dir()
                 .map(|home| {
-                    let rest = path[1..].trim_start_matches(|c| c == '/' || c == '\\');
+                    let rest = path[1..].trim_start_matches(['/', '\\']);
                     home.join(rest)
                 })
                 .unwrap_or_else(|| PathBuf::from(path))

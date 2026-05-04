@@ -1,7 +1,27 @@
 use crate::types::ToolCall;
 use regex::Regex;
 use serde_json::Value;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
+
+// Module-level lazy regexes (avoid regex_creation_in_loops false positives)
+static RE_TOOL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#).unwrap()
+});
+static RE_ARG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?s)<(?:arg|parameter)\s+(?:key|name)=["']([^"']+)["'][^>]*>(.*?)</(?:arg|parameter)>"#,
+    )
+    .unwrap()
+});
+static RE_INVOKE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<invoke\s+name=["']([^"']+)["'][^>]*>(.*?)</invoke>"#).unwrap()
+});
+static RE_PARAM: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</parameter>"#).unwrap()
+});
+static RE_MINIMAX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").unwrap()
+});
 
 /// Supported tool call formats.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -78,26 +98,13 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
     let mut calls = Vec::new();
 
     // Pattern 1: <tool name="...">...</tool>
-    static RE_TOOL: OnceLock<Regex> = OnceLock::new();
-    let re_tool = RE_TOOL.get_or_init(|| {
-        Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#).unwrap()
-    });
-
-    for caps in re_tool.captures_iter(content) {
+    for caps in RE_TOOL.captures_iter(content) {
         let name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
         let inner = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
         let mut args = serde_json::Map::new();
 
-        static RE_ARG: OnceLock<Regex> = OnceLock::new();
-        let re_arg = RE_ARG.get_or_init(|| {
-            Regex::new(
-                r#"(?s)<(?:arg|parameter)\s+(?:key|name)=["']([^"']+)["'][^>]*>(.*?)</(?:arg|parameter)>"#,
-            )
-            .unwrap()
-        });
-
-        for arg_caps in re_arg.captures_iter(inner) {
+        for arg_caps in RE_ARG.captures_iter(inner) {
             let key = arg_caps.get(1).map(|m| m.as_str()).unwrap_or("");
             let value = arg_caps
                 .get(2)
@@ -123,12 +130,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
     }
 
     // Pattern 2: <function_calls><invoke name="...">...</invoke></function_calls>
-    static RE_INVOKE: OnceLock<Regex> = OnceLock::new();
-    let re_invoke = RE_INVOKE.get_or_init(|| {
-        Regex::new(r#"(?s)<invoke\s+name=["']([^"']+)["'][^>]*>(.*?)</invoke>"#).unwrap()
-    });
-
-    for caps in re_invoke.captures_iter(content) {
+    for caps in RE_INVOKE.captures_iter(content) {
         let name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
         let inner = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
@@ -142,12 +144,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
 
         let mut args = serde_json::Map::new();
 
-        static RE_PARAM: OnceLock<Regex> = OnceLock::new();
-        let re_param = RE_PARAM.get_or_init(|| {
-            Regex::new(r#"(?s)<parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</parameter>"#).unwrap()
-        });
-
-        for param_caps in re_param.captures_iter(inner) {
+        for param_caps in RE_PARAM.captures_iter(inner) {
             let key = param_caps.get(1).map(|m| m.as_str()).unwrap_or("");
             let value = param_caps
                 .get(2)
@@ -178,10 +175,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
 fn parse_minimax_tool_calls(content: &str) -> Vec<ToolCall> {
     let mut calls = Vec::new();
 
-    static RE_MINIMAX: OnceLock<Regex> = OnceLock::new();
-    let re = RE_MINIMAX.get_or_init(|| Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").unwrap());
-
-    for caps in re.captures_iter(content) {
+    for caps in RE_MINIMAX.captures_iter(content) {
         let name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
         let args_str = caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
 
