@@ -21,33 +21,35 @@ use crate::ui::types::{ContentBlock, Message, RenderBlock, Role, ToolCallInfo, T
 /// - `user_bubble()` for user messages (right-aligned glass card)
 /// - `agent_message()` for agent messages (Swiss plain text OR glass card)
 /// - `error_bubble()` for error messages (left-aligned glass card)
-pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
     if msg.is_error {
         error_bubble(ui, msg, theme)
     } else {
         match msg.role {
             Role::User => user_bubble(ui, msg, theme),
-            Role::Agent => agent_message(ui, msg, theme),
+            Role::Agent => agent_message(ui, msg, theme, show_header),
         }
     }
 }
 
 // ── Agent ──
 
-fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
     let start_y = ui.cursor().min.y;
 
-    // Header: avatar + label (outside the card)
-    ui.horizontal(|ui| {
-        crate::components::chat::avatar::avatar(ui, "A", theme);
-        ui.add_space(8.0);
-        ui.label(
-            egui::RichText::new("Agent")
-                .size(theme.text_xs)
-                .color(theme.text_dim),
-        );
-    });
-    ui.add_space(theme.space_4);
+    if show_header {
+        // Header: avatar + label (outside the card)
+        ui.horizontal(|ui| {
+            crate::components::chat::avatar::avatar(ui, "A", theme);
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new("Agent")
+                    .size(theme.text_xs)
+                    .color(theme.text_dim),
+            );
+        });
+        ui.add_space(theme.space_4);
+    }
 
     if msg.blocks.is_empty() {
         // Fallback: render from parsed content (legacy sessions)

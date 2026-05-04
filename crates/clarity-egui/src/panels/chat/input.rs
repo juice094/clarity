@@ -13,7 +13,6 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
     egui::Frame::new()
         .fill(app.ui_store.theme.input_bg)
         .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
-        .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
         .inner_margin(egui::Margin::same(14))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -39,7 +38,8 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                         let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
                             .desired_rows(line_count.max(1))
                             .hint_text(hint)
-                            .margin(egui::vec2(8.0, 8.0));
+                            .margin(egui::vec2(8.0, 8.0))
+                            .frame(false);
                         ui.add_sized(egui::vec2(input_width, input_height), text_edit);
 
                         if app.chat_store.input != prev_input {

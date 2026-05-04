@@ -110,8 +110,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
 
                     for i in start_idx..end_idx {
+                        let show_header = if session.messages[i].role == Role::Agent {
+                            i == 0 || session.messages[i - 1].role != Role::Agent
+                        } else {
+                            true
+                        };
                         let actual =
-                            ui::render::message_bubble(ui, &session.messages[i], &theme);
+                            ui::render::message_bubble(ui, &session.messages[i], &theme, show_header);
                         session.messages[i].cached_height = Some(actual);
                     }
 
