@@ -51,16 +51,29 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-**Sprint 19 — 设计原则封装与 UI 工程硬化（进行中 🔄）**
+**Sprint 20 — 工具可用性止血与 UI 零边框清理（已完成 ✅）**
+
+- P0.1 ✅: `plan` 工具 `step_id` 柔性匹配 (`"1"` → `"step_1"`)
+- P0.2 ✅: `devkit_status` Git 所有权错误处理 + 环境修复
+- P0.3 ✅: `list_cron` BackgroundTaskManager 绑定（tui + egui）
+- P0.4 ✅: `task_create` / `ChannelSendTool` / `TeamCreate/Delete/List` 补注册
+- P1.1 ✅: Thinking Log 持久化（`session.rs` 恢复 `blocks` + `rebuild_tool_calls`）
+- P1.2 ✅: 双框清理（settings Window、sidebar、provider_tab、markdown、task_panel、subagent_progress）
+- P1.3 ✅: `ContentBlock::ToolCall` 增加 `id` 字段用于重建对应关系
+- P2.1 ⏸️: `ask_user` Agent loop 暂停（移至 Sprint 21）
+- P2.2 ⏸️: `computer_use` Windows `python3` 适配（移至 Sprint 21）
+- P2.3 ⏸️: `web_browser` schema 精简（移至 Sprint 21）
+
+**Sprint 19 — 设计原则封装与 UI 工程硬化（已完成 ✅）**
 
 - P0.1 ✅: CLI→GUI 设计原则文档化 (`docs/design-principles.md`)
 - P0.2 ✅: 错误记忆系统架构 (`ToolExecutionMemory` + `ErrorMemoryStore`)
+- P0.3 ✅: AgentTurn 聚合层原型 (`agent_turn.rs` + `turn_renderer.rs`)
 - P1.1 ✅: 输入框扁平化（消除三级边框）+ Agent 头像去重
 - P1.2 ✅: Thinking Log 增强（Spinner/情绪点/错误展开/二次折叠）
 - P1.3 ✅: 文件预览覆盖层 (`Area` + `Order::Foreground`)
 - P1.4 ✅: 工具调用状态语义（`ToolCallStatus::Running/Success/Error/Warning`）
 - P2.1 ✅: flaky test 修复 (`test_full_pipeline_with_replanning` 确定性 RNG)
-- P0.3 🔄: AgentTurn 聚合层设计（待完成）
 
 **Sprint 18 — 架构解耦与 Claw 运行时集成（已完成 ✅）**
 
