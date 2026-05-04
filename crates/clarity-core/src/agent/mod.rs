@@ -122,6 +122,9 @@ struct AgentInner {
     last_cost_date: chrono::NaiveDate,
     /// Optional vision-capable LLM provider. Created lazily when needed.
     vision_llm: Option<Arc<dyn LlmProvider>>,
+    /// Fallback LLM providers. When non-empty, the primary LLM is wrapped in a
+    /// ReliableProvider so failures automatically fall back through this chain.
+    fallback_llms: Vec<Arc<dyn LlmProvider>>,
 }
 
 /// Simple mock LLM for testing

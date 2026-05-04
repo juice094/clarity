@@ -70,6 +70,7 @@ impl Agent {
                 last_cost_date: chrono::Utc::now().date_naive(),
                 vision_llm: None,
                 turn_context: None,
+                fallback_llms: Vec::new(),
             })),
         }
     }
@@ -89,10 +90,36 @@ impl Agent {
         inner.vision_llm.clone().or_else(|| inner.llm.clone())
     }
 
+    /// Set fallback LLM providers.
+    ///
+    /// When non-empty, the primary LLM set via `with_llm` / `set_llm` is
+    /// automatically wrapped in a [`ReliableProvider`](crate::llm::ReliableProvider)
+    /// so failures fall back through this chain.
+    pub fn with_fallback_llms(self, fallbacks: Vec<Arc<dyn LlmProvider>>) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.fallback_llms = fallbacks;
+            // Re-wrap existing LLM if any
+            if let Some(ref existing) = inner.llm {
+                let mut providers = vec![existing.clone()];
+                providers.extend(inner.fallback_llms.clone());
+                inner.llm = Some(Arc::new(crate::llm::ReliableProvider::new(providers)));
+            }
+        }
+        self
+    }
+
     /// Set the LLM provider (builder pattern, for construction only)
     pub fn with_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
         {
             let mut inner = self.inner.write().unwrap();
+            let llm = if inner.fallback_llms.is_empty() {
+                llm
+            } else {
+                let mut providers = vec![llm];
+                providers.extend(inner.fallback_llms.clone());
+                Arc::new(crate::llm::ReliableProvider::new(providers))
+            };
             inner.llm = Some(llm);
             inner.state = AgentState::Idle;
         }
@@ -103,6 +130,13 @@ impl Agent {
     /// All clones of this Agent will see the new provider immediately.
     pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
         let mut inner = self.inner.write().unwrap();
+        let llm = if inner.fallback_llms.is_empty() {
+            llm
+        } else {
+            let mut providers = vec![llm];
+            providers.extend(inner.fallback_llms.clone());
+            Arc::new(crate::llm::ReliableProvider::new(providers))
+        };
         inner.llm = Some(llm);
         if matches!(inner.state, AgentState::Unconfigured) {
             inner.state = AgentState::Idle;

@@ -15,6 +15,7 @@ pub mod local_gguf;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
+pub mod reliable;
 pub mod runtime;
 pub mod sse;
 pub mod tool_payload;
@@ -30,6 +31,7 @@ pub use model_registry::{
     ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
 };
 pub use ollama::OllamaProvider;
+pub use reliable::ReliableProvider;
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta};
 pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};

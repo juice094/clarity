@@ -44,6 +44,9 @@ pub struct AgentConfig {
     /// Optional vision model alias override. When set and the default provider
     /// does not support vision, the agent will create a vision_provider instance.
     pub vision_model_alias: Option<String>,
+    /// Fallback provider IDs (e.g. ["ollama", "openai"]) used to construct a
+    /// ReliableProvider when the primary provider fails.
+    pub fallback_providers: Vec<String>,
 }
 
 impl Default for AgentConfig {
@@ -66,6 +69,7 @@ impl Default for AgentConfig {
             max_cost_per_turn_usd: None,
             max_cost_per_day_usd: Some(5.0),
             vision_model_alias: None,
+            fallback_providers: Vec::new(),
         }
     }
 }
@@ -175,6 +179,12 @@ impl AgentConfig {
     /// Set vision model alias override.
     pub fn with_vision_model_alias(mut self, alias: impl Into<String>) -> Self {
         self.vision_model_alias = Some(alias.into());
+        self
+    }
+
+    /// Set fallback provider IDs for ReliableProvider.
+    pub fn with_fallback_providers(mut self, providers: Vec<String>) -> Self {
+        self.fallback_providers = providers;
         self
     }
 }
