@@ -1,15 +1,126 @@
 //! Synchronous (non-streaming) agent execution loop.
 
 use crate::agent::Agent;
-use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, Message, MessageRole};
-use clarity_wire::WireMessage;
-use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
-use super::loop_helpers::{
+use crate::agent::run::loop_helpers::{
     fast_trim_tool_results, is_context_overflow_error, messages_contain_vision,
 };
+use crate::agent::run::loop_steps::{
+    check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
+};
+use crate::agent::run::loop_trait::{
+    AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
+};
+use crate::error::AgentError;
+use crate::llm::api::{LlmProvider, Message};
+use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
+use tracing::{info, warn};
+
+struct SyncLoop;
+
+#[async_trait::async_trait]
+impl AgentLoop for SyncLoop {
+    async fn before_iteration(
+        &mut self,
+        agent: &Agent,
+        messages: &mut Vec<Message>,
+        llm: Arc<dyn LlmProvider>,
+    ) {
+        agent.maybe_compact_turn(messages, llm.as_ref()).await;
+    }
+
+    async fn run_iteration(
+        &mut self,
+        agent: &Agent,
+        messages: &mut Vec<Message>,
+        tools: &serde_json::Value,
+        llm: Arc<dyn LlmProvider>,
+    ) -> Result<IterationResult, AgentError> {
+        run_hooks(agent, messages).await;
+
+        let prompt_tokens = estimate_prompt_tokens(messages);
+        check_budget(agent, llm.as_ref(), prompt_tokens)?;
+
+        let (response, actual_prompt_tokens, actual_completion_tokens) =
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(45),
+                llm.complete(messages, tools),
+            )
+            .await
+            {
+                Ok(Ok(r)) => {
+                    let completion_tokens = r.content.len().div_ceil(4) as u32;
+                    (r, prompt_tokens, completion_tokens)
+                }
+                Ok(Err(e)) if is_context_overflow_error(&e) => {
+                    warn!(
+                        "Context overflow detected in sync loop, trimming tool results and retrying"
+                    );
+                    fast_trim_tool_results(messages);
+                    let retry_prompt_tokens = estimate_prompt_tokens(messages);
+                    check_budget(agent, llm.as_ref(), retry_prompt_tokens)?;
+                    match tokio::time::timeout(
+                        tokio::time::Duration::from_secs(45),
+                        llm.complete(messages, tools),
+                    )
+                    .await
+                    {
+                        Ok(Ok(r)) => {
+                            let completion_tokens = r.content.len().div_ceil(4) as u32;
+                            (r, retry_prompt_tokens, completion_tokens)
+                        }
+                        Ok(Err(e2)) => return Err(e2),
+                        Err(_) => {
+                            return Err(AgentError::Llm(
+                                "LLM request timed out after 45s".into(),
+                            ))
+                        }
+                    }
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(AgentError::Llm(
+                        "LLM request timed out after 45s".into(),
+                    ))
+                }
+            };
+
+        record_cost(agent, llm.as_ref(), actual_prompt_tokens, actual_completion_tokens);
+        agent.accumulate_usage(actual_prompt_tokens, actual_completion_tokens);
+
+        let tool_calls = parse_tool_calls(&response);
+
+        Ok(IterationResult {
+            response_content: response.content,
+            tool_calls,
+            prompt_tokens: actual_prompt_tokens,
+            completion_tokens: actual_completion_tokens,
+        })
+    }
+
+    async fn handle_final_response(
+        &mut self,
+        agent: &Agent,
+        response: &str,
+        _iteration: usize,
+    ) {
+        agent.send_wire_message(clarity_wire::WireMessage::ContentPart {
+            text: response.to_string(),
+        });
+    }
+
+    async fn dispatch_tool_calls(
+        &mut self,
+        agent: &Agent,
+        tool_calls: &[crate::types::ToolCall],
+        messages: &mut Vec<Message>,
+    ) -> DispatchOutcome {
+        match agent.dispatch_tool_calls(tool_calls, messages).await {
+            Ok(names) => DispatchOutcome::Success(names),
+            Err(e) => DispatchOutcome::Fatal(e),
+        }
+    }
+}
 
 impl Agent {
     /// Shared core of the non-streaming agent loop.
@@ -41,137 +152,11 @@ impl Agent {
             llm
         };
 
-        let mut final_response = String::new();
-        let mut completed = false;
-        let mut tool_names = Vec::new();
-
-        for iteration in 0..self.config.max_iterations {
-            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
-
-            if cancel_token.is_cancelled() {
-                warn!("Agent run cancelled");
-                return Err(AgentError::Cancelled);
-            }
-
-            self.maybe_compact_turn(messages, llm.as_ref()).await;
-
-            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
-            if let Some(hooks) = hooks_opt {
-                hooks.on_llm_input(messages).await;
-            }
-
-            let prompt_tokens =
-                crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
-                    as u32;
-
-            // Budget check before LLM call
-            if let Some(pricing) = llm.capabilities().pricing {
-                let estimated_completion = prompt_tokens / 2;
-                let estimated_cost = pricing.estimate_cost(prompt_tokens, estimated_completion);
-                self.check_budget(estimated_cost)?;
-            }
-
-            let (response, actual_prompt_tokens, actual_completion_tokens) =
-                match tokio::time::timeout(
-                    tokio::time::Duration::from_secs(45),
-                    llm.complete(messages, tools),
-                )
-                .await
-                {
-                    Ok(Ok(r)) => {
-                        let completion_tokens = r.content.len().div_ceil(4) as u32;
-                        (r, prompt_tokens, completion_tokens)
-                    }
-                    Ok(Err(e)) if is_context_overflow_error(&e) => {
-                        warn!("Context overflow detected in sync loop, trimming tool results and retrying");
-                        fast_trim_tool_results(messages);
-                        let retry_prompt_tokens =
-                            crate::agent::compaction_service::CompactionService::estimate_tokens(
-                                messages,
-                            ) as u32;
-                        if let Some(pricing) = llm.capabilities().pricing {
-                            let estimated_completion = retry_prompt_tokens / 2;
-                            let estimated_cost =
-                                pricing.estimate_cost(retry_prompt_tokens, estimated_completion);
-                            self.check_budget(estimated_cost)?;
-                        }
-                        // Retry once after trimming.
-                        match tokio::time::timeout(
-                            tokio::time::Duration::from_secs(45),
-                            llm.complete(messages, tools),
-                        )
-                        .await
-                        {
-                            Ok(Ok(r)) => {
-                                let completion_tokens = r.content.len().div_ceil(4) as u32;
-                                (r, retry_prompt_tokens, completion_tokens)
-                            }
-                            Ok(Err(e2)) => return Err(e2),
-                            Err(_) => {
-                                return Err(AgentError::Llm(
-                                    "LLM request timed out after 45s".into(),
-                                ))
-                            }
-                        }
-                    }
-                    Ok(Err(e)) => return Err(e),
-                    Err(_) => {
-                        return Err(AgentError::Llm("LLM request timed out after 45s".into()))
-                    }
-                };
-
-            // Record actual cost
-            if let Some(pricing) = llm.capabilities().pricing {
-                let actual_cost =
-                    pricing.estimate_cost(actual_prompt_tokens, actual_completion_tokens);
-                self.record_cost(actual_cost);
-            }
-
-            // O4: Character-count/4 is a rough heuristic; replace with real tokenizer
-            // count when clarity-core gains a tokenizer abstraction.
-            self.accumulate_usage(actual_prompt_tokens, actual_completion_tokens);
-            final_response = response.content.clone();
-
-            // Fallback: parse tool calls from content if native tool_calls are empty
-            let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
-                if let Some(format) = crate::agent::tool_parser::detect_tool_format(&response.content) {
-                    info!(
-                        "Detected tool format {:?}, parsing tool calls from content",
-                        format
-                    );
-                    crate::agent::tool_parser::parse_tool_calls(&response.content, format)
-                } else {
-                    Vec::new()
-                }
-            } else {
-                response.tool_calls.clone()
-            };
-
-            if tool_calls.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-                info!("Agent loop completed after {} iterations", iteration + 1);
-                completed = true;
-                break;
-            }
-
-            if !response.content.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
-                });
-            }
-
-            messages.push(Message {
-                role: MessageRole::Assistant,
-                content: response.content,
-                tool_calls: Some(tool_calls.clone()),
-                tool_call_id: None,
-            });
-
-            tool_names.extend(self.dispatch_tool_calls(&tool_calls, messages).await?);
-        }
-
+        let LoopOutcome {
+            final_response,
+            completed,
+            tool_names,
+        } = run_loop_iterations(self, &mut SyncLoop, messages, tools, llm, cancel_token).await?;
         Ok((final_response, completed, tool_names))
     }
 }

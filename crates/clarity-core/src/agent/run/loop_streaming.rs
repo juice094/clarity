@@ -1,14 +1,217 @@
 //! Streaming agent execution loop.
 
 use crate::agent::Agent;
+use crate::agent::run::loop_helpers::{fast_trim_tool_results, is_context_overflow_error};
+use crate::agent::run::loop_steps::{
+    check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
+};
+use crate::agent::run::loop_trait::{
+    AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
+};
 use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole};
+use crate::llm::api::{LlmProvider, LlmResponse, Message};
 use crate::types::ToolCall;
 use clarity_wire::{DraftEvent, WireMessage};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
-use super::loop_helpers::{fast_trim_tool_results, is_context_overflow_error};
+
+struct StreamingLoop<'a, F> {
+    on_chunk: &'a mut F,
+    was_streamed: bool,
+}
+
+#[async_trait::async_trait]
+impl<F> AgentLoop for StreamingLoop<'_, F>
+where
+    F: FnMut(&str) + Send + 'static,
+{
+    async fn before_iteration(
+        &mut self,
+        agent: &Agent,
+        messages: &mut Vec<Message>,
+        llm: Arc<dyn LlmProvider>,
+    ) {
+        if let Some(ref service) = agent.compaction_service {
+            let needs = service.needs_compaction(messages);
+            if needs {
+                agent.send_wire_message(WireMessage::CompactionBegin);
+            }
+            if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
+                warn!("Compaction failed: {}", e);
+            }
+            if needs {
+                agent.send_wire_message(WireMessage::CompactionEnd);
+            }
+        }
+    }
+
+    async fn run_iteration(
+        &mut self,
+        agent: &Agent,
+        messages: &mut Vec<Message>,
+        tools: &serde_json::Value,
+        llm: Arc<dyn LlmProvider>,
+    ) -> Result<IterationResult, AgentError> {
+        run_hooks(agent, messages).await;
+
+        let mut turn_response: Option<LlmResponse> = None;
+        let mut prompt_tokens = 0u32;
+        let mut completion_tokens = 0u32;
+
+        let pre_stream_prompt_tokens = estimate_prompt_tokens(messages);
+        check_budget(agent, llm.as_ref(), pre_stream_prompt_tokens)?;
+
+        match llm.stream(messages, tools) {
+            Ok(mut stream_rx) => {
+                prompt_tokens = pre_stream_prompt_tokens;
+                agent.send_wire_message(WireMessage::DraftEvent {
+                    event: DraftEvent::Progress {
+                        text: "thinking...".to_string(),
+                    },
+                });
+                let mut accumulated = String::new();
+                let mut tool_calls: Vec<ToolCall> = Vec::new();
+                let mut stream_ok = true;
+                let mut draft_cleared = false;
+                while let Some(chunk_result) = stream_rx.recv().await {
+                    match chunk_result {
+                        Ok(delta) => {
+                            if let Some(content) = delta.content {
+                                accumulated.push_str(&content);
+                                (self.on_chunk)(&content);
+                                if !draft_cleared {
+                                    agent.send_wire_message(WireMessage::DraftEvent {
+                                        event: DraftEvent::Clear,
+                                    });
+                                    draft_cleared = true;
+                                }
+                                agent.send_wire_message(WireMessage::DraftEvent {
+                                    event: DraftEvent::Content { text: content },
+                                });
+                            }
+                            for call in delta.tool_calls {
+                                tool_calls.push(call);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Stream error: {}, falling back to complete()", e);
+                            stream_ok = false;
+                            break;
+                        }
+                    }
+                }
+                if !draft_cleared && !tool_calls.is_empty() {
+                    agent.send_wire_message(WireMessage::DraftEvent {
+                        event: DraftEvent::Clear,
+                    });
+                }
+                if stream_ok {
+                    completion_tokens = accumulated.len().div_ceil(4) as u32;
+                    turn_response = Some(LlmResponse {
+                        content: accumulated,
+                        tool_calls,
+                        is_complete: true,
+                    });
+                    record_cost(agent, llm.as_ref(), prompt_tokens, completion_tokens);
+                }
+            }
+            Err(e) => {
+                debug!(
+                    "Streaming not supported or failed: {}, falling back to complete()",
+                    e
+                );
+            }
+        }
+
+        self.was_streamed = turn_response.is_some();
+        let response = match turn_response {
+            Some(r) => {
+                debug!(
+                    "Using streamed response (len={}, tool_calls={})",
+                    r.content.len(),
+                    r.tool_calls.len()
+                );
+                r
+            }
+            None => {
+                let mut fallback_prompt_tokens = estimate_prompt_tokens(messages);
+                check_budget(agent, llm.as_ref(), fallback_prompt_tokens)?;
+                let r = match llm.complete(messages, tools).await {
+                    Ok(r) => r,
+                    Err(e) if is_context_overflow_error(&e) => {
+                        warn!(
+                            "Context overflow detected in streaming loop, trimming tool results and retrying"
+                        );
+                        fast_trim_tool_results(messages);
+                        fallback_prompt_tokens = estimate_prompt_tokens(messages);
+                        check_budget(agent, llm.as_ref(), fallback_prompt_tokens)?;
+                        llm.complete(messages, tools).await?
+                    }
+                    Err(e) => return Err(e),
+                };
+                debug!(
+                    "Using complete() response (len={}, tool_calls={})",
+                    r.content.len(),
+                    r.tool_calls.len()
+                );
+                prompt_tokens = fallback_prompt_tokens;
+                completion_tokens = r.content.len().div_ceil(4) as u32;
+                record_cost(agent, llm.as_ref(), prompt_tokens, completion_tokens);
+                r
+            }
+        };
+
+        agent.accumulate_usage(prompt_tokens, completion_tokens);
+        let tool_calls = parse_tool_calls(&response);
+
+        Ok(IterationResult {
+            response_content: response.content,
+            tool_calls,
+            prompt_tokens,
+            completion_tokens,
+        })
+    }
+
+    async fn handle_final_response(
+        &mut self,
+        agent: &Agent,
+        response: &str,
+        _iteration: usize,
+    ) {
+        if !self.was_streamed && !response.is_empty() {
+            for c in response.chars() {
+                let chunk = c.to_string();
+                (self.on_chunk)(&chunk);
+                agent.send_wire_message(WireMessage::ContentPart {
+                    text: chunk.clone(),
+                });
+            }
+        }
+    }
+
+    async fn dispatch_tool_calls(
+        &mut self,
+        agent: &Agent,
+        tool_calls: &[ToolCall],
+        messages: &mut Vec<Message>,
+    ) -> DispatchOutcome {
+        match agent.dispatch_tool_calls(tool_calls, messages).await {
+            Ok(names) => DispatchOutcome::Success(names),
+            Err(e) => {
+                warn!("Tool execution failed in stream: {}", e);
+                let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
+                (self.on_chunk)(&error_text);
+                agent.send_wire_message(WireMessage::ContentPart {
+                    text: error_text.clone(),
+                });
+                DispatchOutcome::Break {
+                    final_response: error_text,
+                }
+            }
+        }
+    }
+}
 
 impl Agent {
     async fn run_streaming_loop<F>(
@@ -22,246 +225,25 @@ impl Agent {
     where
         F: FnMut(&str) + Send + 'static,
     {
-        let mut final_response = String::new();
-        let mut completed = false;
+        let mut loop_impl = StreamingLoop {
+            on_chunk,
+            was_streamed: false,
+        };
+        let LoopOutcome {
+            final_response,
+            completed,
+            ..
+        } = run_loop_iterations(self, &mut loop_impl, messages, tools, llm, cancel_token).await?;
 
-        for iteration in 0..self.config.max_iterations {
-            debug!("Iteration {}/{}", iteration + 1, self.config.max_iterations);
-
-            if cancel_token.is_cancelled() {
-                warn!("Agent run streaming cancelled");
-                return Err(AgentError::Cancelled);
-            }
-
-            // Proactive compaction via CompactionService
-            if let Some(ref service) = self.compaction_service {
-                let needs = service.needs_compaction(messages);
-                if needs {
-                    self.send_wire_message(WireMessage::CompactionBegin);
-                }
-                if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
-                    warn!("Compaction failed: {}", e);
-                }
-                if needs {
-                    self.send_wire_message(WireMessage::CompactionEnd);
-                }
-            }
-
-            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
-            if let Some(hooks) = hooks_opt {
-                hooks.on_llm_input(messages).await;
-            }
-
-            // Stream-first: try streaming, fall back to complete() if unsupported or errors.
-            let mut turn_response: Option<LlmResponse> = None;
-            let mut prompt_tokens = 0u32;
-            let mut completion_tokens = 0u32;
-
-            // Pre-stream budget check
-            let pre_stream_prompt_tokens =
-                crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
-                    as u32;
-            if let Some(pricing) = llm.capabilities().pricing {
-                let estimated_completion = pre_stream_prompt_tokens / 2;
-                let estimated_cost =
-                    pricing.estimate_cost(pre_stream_prompt_tokens, estimated_completion);
-                self.check_budget(estimated_cost)?;
-            }
-
-            match llm.stream(messages, tools) {
-                Ok(mut stream_rx) => {
-                    prompt_tokens = pre_stream_prompt_tokens;
-                    // Send progress indicator before first chunk arrives
-                    self.send_wire_message(WireMessage::DraftEvent {
-                        event: DraftEvent::Progress {
-                            text: "thinking...".to_string(),
-                        },
-                    });
-                    let mut accumulated = String::new();
-                    let mut tool_calls: Vec<ToolCall> = Vec::new();
-                    let mut stream_ok = true;
-                    let mut draft_cleared = false;
-                    while let Some(chunk_result) = stream_rx.recv().await {
-                        match chunk_result {
-                            Ok(delta) => {
-                                if let Some(content) = delta.content {
-                                    accumulated.push_str(&content);
-                                    on_chunk(&content);
-                                    if !draft_cleared {
-                                        self.send_wire_message(WireMessage::DraftEvent {
-                                            event: DraftEvent::Clear,
-                                        });
-                                        draft_cleared = true;
-                                    }
-                                    self.send_wire_message(WireMessage::DraftEvent {
-                                        event: DraftEvent::Content { text: content },
-                                    });
-                                }
-                                for call in delta.tool_calls {
-                                    tool_calls.push(call);
-                                }
-                            }
-                            Err(e) => {
-                                warn!("Stream error: {}, falling back to complete()", e);
-                                stream_ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    // If no content was received but we have tool_calls, clear the progress indicator
-                    if !draft_cleared && !tool_calls.is_empty() {
-                        self.send_wire_message(WireMessage::DraftEvent {
-                            event: DraftEvent::Clear,
-                        });
-                    }
-                    if stream_ok {
-                        completion_tokens = accumulated.len().div_ceil(4) as u32;
-                        turn_response = Some(LlmResponse {
-                            content: accumulated,
-                            tool_calls,
-                            is_complete: true,
-                        });
-                        // Record actual cost for successful stream
-                        if let Some(pricing) = llm.capabilities().pricing {
-                            let actual_cost =
-                                pricing.estimate_cost(prompt_tokens, completion_tokens);
-                            self.record_cost(actual_cost);
-                        }
-                    }
-                }
-                Err(e) => {
-                    debug!(
-                        "Streaming not supported or failed: {}, falling back to complete()",
-                        e
-                    );
-                }
-            }
-
-            let was_streamed = turn_response.is_some();
-            let response = match turn_response {
-                Some(r) => {
-                    debug!(
-                        "Using streamed response (len={}, tool_calls={})",
-                        r.content.len(),
-                        r.tool_calls.len()
-                    );
-                    r
-                }
-                None => {
-                    let mut fallback_prompt_tokens =
-                        crate::agent::compaction_service::CompactionService::estimate_tokens(
-                            messages,
-                        ) as u32;
-                    if let Some(pricing) = llm.capabilities().pricing {
-                        let estimated_completion = fallback_prompt_tokens / 2;
-                        let estimated_cost =
-                            pricing.estimate_cost(fallback_prompt_tokens, estimated_completion);
-                        self.check_budget(estimated_cost)?;
-                    }
-                    let r = match llm.complete(messages, tools).await {
-                        Ok(r) => r,
-                        Err(e) if is_context_overflow_error(&e) => {
-                            warn!("Context overflow detected in streaming loop, trimming tool results and retrying");
-                            fast_trim_tool_results(messages);
-                            fallback_prompt_tokens =
-                                crate::agent::compaction_service::CompactionService::estimate_tokens(
-                                    messages,
-                                ) as u32;
-                            if let Some(pricing) = llm.capabilities().pricing {
-                                let estimated_completion = fallback_prompt_tokens / 2;
-                                let estimated_cost = pricing
-                                    .estimate_cost(fallback_prompt_tokens, estimated_completion);
-                                self.check_budget(estimated_cost)?;
-                            }
-                            llm.complete(messages, tools).await?
-                        }
-                        Err(e) => return Err(e),
-                    };
-                    debug!(
-                        "Using complete() response (len={}, tool_calls={})",
-                        r.content.len(),
-                        r.tool_calls.len()
-                    );
-                    prompt_tokens = fallback_prompt_tokens;
-                    completion_tokens = r.content.len().div_ceil(4) as u32;
-                    // Record actual cost for fallback complete
-                    if let Some(pricing) = llm.capabilities().pricing {
-                        let actual_cost = pricing.estimate_cost(prompt_tokens, completion_tokens);
-                        self.record_cost(actual_cost);
-                    }
-                    r
-                }
-            };
-
-            self.accumulate_usage(prompt_tokens, completion_tokens);
-
-            // Fallback: parse tool calls from content if native tool_calls are empty
-            let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
-                if let Some(format) = crate::agent::tool_parser::detect_tool_format(&response.content) {
-                    info!(
-                        "Detected tool format {:?}, parsing tool calls from content",
-                        format
-                    );
-                    crate::agent::tool_parser::parse_tool_calls(&response.content, format)
-                } else {
-                    Vec::new()
-                }
-            } else {
-                response.tool_calls.clone()
-            };
-
-            if tool_calls.is_empty() {
-                // No tool calls: final answer.
-                // If we arrived here via fallback (turn_response was None), simulate
-                // streaming from the complete() response for smooth UI.
-                if !was_streamed && !response.content.is_empty() {
-                    for c in response.content.chars() {
-                        let chunk = c.to_string();
-                        on_chunk(&chunk);
-                        self.send_wire_message(WireMessage::ContentPart {
-                            text: chunk.clone(),
-                        });
-                    }
-                }
-
-                final_response = response.content.clone();
-                if final_response.is_empty() {
-                    warn!(
-                        "Empty final response on iteration {} (was_streamed={})",
-                        iteration + 1,
-                        was_streamed
-                    );
-                }
-                info!("Agent loop completed after {} iterations", iteration + 1);
-                completed = true;
-                break;
-            }
-
-            // Tool-calling round: send assistant content (if any)
-            if !response.content.is_empty() {
+        // If the final response came from fallback (not streamed), simulate
+        // streaming from the complete() response for smooth UI.
+        if completed && !loop_impl.was_streamed && !final_response.is_empty() {
+            for c in final_response.chars() {
+                let chunk = c.to_string();
+                (loop_impl.on_chunk)(&chunk);
                 self.send_wire_message(WireMessage::ContentPart {
-                    text: response.content.clone(),
+                    text: chunk.clone(),
                 });
-            }
-
-            messages.push(Message {
-                role: MessageRole::Assistant,
-                content: response.content,
-                tool_calls: Some(tool_calls.clone()),
-                tool_call_id: None,
-            });
-
-            if let Err(e) = self.dispatch_tool_calls(&tool_calls, messages).await {
-                warn!("Tool execution failed in stream: {}", e);
-                // Emit the error as content so the user sees what happened,
-                // then break the loop to prevent infinite retries.
-                let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
-                on_chunk(&error_text);
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: error_text.clone(),
-                });
-                final_response = error_text;
-                break;
             }
         }
 

@@ -2,8 +2,10 @@
 
 mod dispatch;
 mod loop_helpers;
+mod loop_steps;
 mod loop_streaming;
 mod loop_sync;
+mod loop_trait;
 
 use crate::agent::Agent;
 use crate::error::AgentError;
