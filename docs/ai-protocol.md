@@ -498,6 +498,116 @@ clarity-wire
 - **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **722 passed / 0 failed / 6 ignored**
 - **devbase**: `cargo test --lib` = **378 passed / 0 failed / 3 ignored**
 
+## 10. Sprint 23 — MCP 契约硬化 + clarity-core 解耦 Phase 1
+
+> 日期：2026-05-04  
+> 状态：已完成  
+> 计划：`~/.kimi/plans/sprint-23-mcp-contract-hardening-and-core-decoupling.md`
+
+### 10.1 目标
+
+1. 根治 Sprint 22 暴露的 MCP 契约漂移问题
+2. 启动 clarity-core God Object 拆解（提取 `clarity-mcp`）
+3. 补齐 egui 后台任务创建/取消 UI
+4. 引入 API Key 前缀校验 + 凭证脱敏（安全加固）
+
+### 10.2 关键决策
+
+#### D5 — Devbase 工具返回格式统一
+
+**决策**：所有 MCP 工具返回 JSON 必须显式包含 `"success": bool`。
+
+- 审计全部 14 个工具模块，仅 `status.rs` 的 `DevkitStatusTool::invoke` 缺失 `"success"`
+- 追加 `"success": true` 到返回 JSON
+- MCP Server 层 `unwrap_or(true)` 继续作为兜底
+- **Commit（devbase）**：`27aad1e`
+
+#### D6 — MCP E2E 契约测试
+
+**决策**：在 `clarity-core` 中建立 MCP 契约回归测试。
+
+- 提取 `process_mcp_tool_result(result: ToolCallResult) -> ToolResult<Value>` 为可测试纯函数
+- 覆盖 4 种场景：`success:true` → Ok、`success:false` → Err、无 `success` → Ok、含 `error` → Err
+- **Commit**：`36c65559`
+
+#### D7 — 提取 `clarity-mcp` 独立 crate
+
+**决策**：将纯 MCP 协议层从 `clarity-core` 提取到独立 crate，打破 God Object 耦合。
+
+**迁移内容**：
+- `clarity-mcp/src/enhanced.rs` — `McpClient`, `McpClientBuilder`, `McpRegistry`, `McpTransport`, `McpError` 等
+- `clarity-mcp/src/config.rs` — `McpConfig`, `McpServerEntry`
+- `clarity-mcp/src/devkit.rs` — devkit 集成
+- `clarity-mcp/src/lib.rs` — legacy types, `process_mcp_tool_result`, `map_mcp_error`
+
+**保留在 clarity-core**：
+- `McpToolAdapter`（实现 `Tool` trait）
+- `McpToolWrapper`（实现 `Tool` trait，在 `tools.rs`）
+- `register_mcp_tools`（注册到 `ToolRegistry`）
+- `McpManager`（多 server 管理）
+
+**依赖**：`clarity-mcp` → `clarity-contract`（获取 `ToolError`），`clarity-core` → `clarity-mcp`
+
+**Commit**：`84f48ba1`
+
+#### D8 — egui 后台任务面板完善
+
+**决策**：将 `panels/task.rs` 右侧边栏从文件树替换为任务列表。
+
+- 调用 `ui/task_panel::render_task_panel` 渲染任务列表（含状态图标、优先级、时间戳、Cancel 按钮）
+- 添加 "+ New" 按钮打开 `task_create_modal`
+- 处理 `TaskPanelAction::Cancel`：异步更新 `TaskStatus::Cancelled` 并刷新列表
+- 应用启动时调用 `refresh_tasks()` 自动加载列表
+- **Commit**：`84f48ba1`（与 D7 合并提交）
+
+#### D9 — API Key 前缀校验 + 凭证脱敏
+
+**决策**：引入两层安全加固。
+
+**API Key 前缀校验**（`clarity-egui/src/provider.rs`）：
+- `openai` → 必须以 `sk-` 开头，拒绝 `sk-ant-`（Anthropic 误配）
+- `anthropic` → 必须以 `sk-ant-` 开头
+- `gemini` → 必须以 `AIza` 开头
+- 校验失败时阻止 Test Connection / Apply 操作，弹出 Warn Toast
+
+**凭证脱敏**（`clarity-mcp/src/lib.rs`）：
+- `scrub_credentials(text: &str) -> String` 辅助函数
+- Regex 覆盖：`api_key=`、`token=`、`password=`、`sk-xxx`、`AIzaxxx`
+- 在 `process_mcp_tool_result` 的 Ok/Err 返回路径均调用
+- **Commit**：`99ecde2d`
+
+### 10.3 架构探索产出（codex + zeroclaw）
+
+基于 `codex-main` + `zeroclaw-master` 架构探索，已过滤 Hard Veto 后归档于：
+`vault/clarity/architecture/references/codex-zeroclaw-synthesis.md`
+
+关键借鉴项（按 Sprint 规划）：
+
+| 借鉴项 | 来源 | 建议 Sprint |
+|-------|------|------------|
+| Tool Orchestrator 模式 | Codex | Sprint 23 P1.1（已融入 clarity-mcp 提取设计） |
+| API Key 前缀校验 + 凭证脱敏 | ZeroClaw | Sprint 23 P2（已完成） |
+| 结构化 Error Enum + `is_retryable()` | Codex | Sprint 24 |
+| 并行工具执行 (`Arc<RwLock<()>>`) | Codex | Sprint 24 |
+| Loop Detector (pattern + hash) | ZeroClaw | Sprint 24 |
+| ReliableProvider 回退包装器 | ZeroClaw | Sprint 24 |
+| Cancellation Token 标准化 | Codex + ZeroClaw | Sprint 24 |
+| 事件驱动输出模型 | Codex | Sprint 25+ |
+
+### 10.4 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| devbase → clarity | 所有工具返回 | 统一包含 `"success": bool` | ✅ 向前兼容（clarity 已兜底） |
+| clarity MCP client | `process_mcp_tool_result` | 新增凭证脱敏层 | ✅ 纯增强，不改变接口签名 |
+| clarity-egui → user | Provider 配置 | 新增 API key 前缀校验 | ✅ 仅在 UI 层拦截，不破坏 core |
+
+### 10.5 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **728 passed / 0 failed / 6 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁失败（非代码缺陷）/ 3 ignored**
+- **clarity-mcp**（新增 crate）: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
+
 ---
 
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*
