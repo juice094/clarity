@@ -1,55 +1,67 @@
 # Clarity 未完成计划总览
 
-> 生成时间：2026-04-27  
-> 基线分支：`phase2/protocol-pilot` @ `d9976fe3`  
+> 生成时间：2026-05-05  
+> 基线分支：`main` @ `8b6158f8`  
 > 整合来源：ROADMAP / PROJECT_STATUS / FUTURE_DIRECTION / Sprint Plans / 解耦计划
 
 ---
 
 ## 一、已完成 Sprint
 
-### Sprint 13 — 稳定性硬化（2026-04-27 ~ 2026-05-03）
+### Sprint 22 — MCP 错误检测 + Agent 熔断 + devbase 路径修复（2026-05-04）
 
-来源：`docs/plans/2026-04-30-sprint13-stability-hardening.md`
+| ID | 事项 | 状态 |
+|----|------|------|
+| S22-A1 | MCP 工具错误分类（用户错误/内部错误） | ✅ |
+| S22-A2 | Agent 熔断（recoverable 3次 → fatal） | ✅ |
+| S22-B1 | devbase 路径/Metrics 修复 | ✅ |
 
-| ID | 事项 | 优先级 | 状态 |
-|----|------|--------|------|
-| S13-A1 | Agent 工具失败断路器（失败即停，不无限重试） | P0 | ✅ 已完成 |
-| S13-A2 | 错误消息路径脱敏（`C:\Users\...` → `~`） | P0 | ✅ 已完成 |
-| S13-A3 | System Prompt 边界硬化（防内部信息泄露） | P0 | ✅ 已完成 |
-| S13-B1 | Approval 状态持久化（InMemory → SQLite） | P0 | ✅ 已完成 |
-| S13-B2 | Approval Request ID 一致性校验 | P0 | ✅ 已完成 |
-| S13-B3 | Agent 身份统一（去除底层模型名引用） | P1 | ✅ 已完成 |
-| S13-C1 | `LLMProviderSelectionPolicy` 策略抽象 | P1 | ✅ 已完成 |
-| S13-C2 | 网络探测层重构（probe 只驱动 UI，不决定 provider） | P1 | ✅ 已完成 |
-| S13-C3 | `ensure_llm` God Function 拆分 | P1 | ⏸️ 冻结 |
+### Sprint 23 — MCP 契约硬化 + clarity-core 解耦 Phase 1（2026-05-04）
 
-### Sprint 14.5 — 架构解耦与代码健康（2026-05-02）
+| ID | 事项 | 状态 |
+|----|------|------|
+| S23-A1 | devbase 14 工具 `"success"` 统一 | ✅ `27aad1e` |
+| S23-A2 | MCP E2E 4 场景契约测试 | ✅ `36c65559` |
+| S23-A3 | `clarity-mcp` 独立 crate 提取 + egui 任务面板 | ✅ `84f48ba1` |
+| S23-A4 | API Key 前缀校验 + 凭证脱敏 regex | ✅ `99ecde2d` |
 
-来源：`docs/plans/nightcrawler-drax-atom.md`
+### Sprint 24 — Provider 韧性 + Cancellation Token + Loop Detector 增强（2026-05-04）
 
-| 事项 | 状态 | 说明 |
-|------|------|------|
-| Phase A：统一 Agent Streaming Loop | ✅ | 提取 `run_streaming_turn()`，消除 `run_streaming()` / `run_streaming_with_messages()` 重复编排 |
-| Phase B：复活 ChatDriver + 解耦 Op 枚举 | ✅ | `ConversationChatDriver` 接入 Gateway；`Op` 恢复 5 个纯生命周期变体 |
-| Phase C：清理 AppState 死字段 | ✅ | 移除 `initialized`、`active_connections`、外层 `RwLock<Agent>`、重复 `approval_runtime` |
-| **P0 Bug — Agent 空响应** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行 |
+| ID | 事项 | 状态 |
+|----|------|------|
+| S24-A1 | Provider 指数退避重试 (`retry_with_backoff`) | ✅ `aa43645c` |
+| S24-A2 | CancellationToken 穿透工具执行层 | ✅ `0561b8ca` |
+| S24-A3 | LoopDetector 增强（Warning/Break + args 模式检测） | ✅ `5e51cfa6` |
 
-**遗留问题（纳入 Sprint 15）**：
-- `run_streaming_with_messages()` 不调用 `refresh_context()` → Context Convergence Phase 1
-- `task_store` 孤儿问题 → 待决策
+### Sprint 25 — ReliableProvider + Event 模型 + 子代理共享迭代预算（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S25-A1 | `ReliableProvider` 回退链包装器 | ✅ `59c886cd` |
+| S25-A2 | `clarity-wire` Event 驱动输出模型 (`Event`/`EventMsg`) | ✅ `18f3abfa` |
+| S25-A3 | 共享迭代预算计数器 (`Arc<AtomicUsize>`) | ✅ `02982d24` + `38424772` |
+
+### Sprint 26 — Event 模型接线 + 迭代预算集成测试（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S26-A1 | EventBus 单点桥接（`send_wire_message` → Event） | ✅ `8b6158f8` |
+| S26-A2 | 迭代预算端到端集成测试（budget=0 / 共享语义） | ✅ `8b6158f8` |
 
 ---
 
-## 二、当前 Sprint（Sprint 15 — Context Convergence Phase 1）
+## 二、当前 Sprint（Sprint 27 — Prompt Reorder + KV Cache 策略层）
+
+> 来源：`vault/clarity/optimization-backlog/kimi-share-19df31da-insights.md`
 
 | ID | 事项 | 优先级 | 状态 | 说明 |
 |----|------|--------|------|------|
-| S15-C1 | `refresh_context()` 统一移入 `run_streaming_turn()` | P0 | 未启动 | 确保 Gateway/egui/TUI 所有路径获取最新 Git/项目上下文 |
-| S15-C2 | `SystemPromptBuilder` 消耗 `GitContext` + `ProjectMetadata` | P0 | 未启动 | 主 Agent Prompt 自动包含 Git 分支、未提交变更、项目依赖 |
-| S15-C3 | Memory 检索迁移进 `SystemPromptBuilder` | P1 | 未启动 | 将 `memory_store.search()` 从 `run_streaming()` 移入 builder，统一上下文注入 |
-| S15-C4 | `filter_tools_value()` 端到端验证 | P1 | 未启动 | skill 激活时 tool schema 白名单验证 |
-| S15-C5 | 空响应防御机制评估 | P2 | 未启动 | 收集 1–2 周日志，决定是否添加自动重试/默认回退消息 |
+| S27-A1 | **Prompt Reorder：静态前缀 + 动态尾部** | P0 | 未启动 | `SystemPromptBuilder` 将静态组件（base/tools/skills/security）与动态组件（git/active_files/metadata/memory）分离为独立消息，避免 prefix cache miss |
+| S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 未启动 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching |
+| S27-A3 | **LocalGgufProvider KV cache 跨 turn 持久化** | P1 | 未启动 | 保持模型状态跨 turns，不从 `index_pos=0` 重置 |
+| S27-A4 | **System Prompt KV Snapshot（跨会话）** | P1 | 未启动 | `~/.clarity/cache/kv/{model_id}/{hash}.kvcache` 序列化/反序列化 |
+| S27-B1 | `refresh_context()` 统一移入 `run_streaming_turn()` | P2 | 未启动 | Sprint 15 遗留（Gateway/egui/TUI 所有路径获取最新上下文） |
+| S27-B2 | `SystemPromptBuilder` 消耗 `GitContext` + `ProjectMetadata` | P2 | 未启动 | Sprint 15 遗留 |
 
 ---
 
@@ -139,15 +151,59 @@
 
 ---
 
+## 五.x、实验性能力 — Jumpy Workflow Orchestration（MVP 已完成）
+
+> **来源**：`crates/clarity-core/src/agent/jumpy/` + `docs/plans/nightcrawler-drax-atom.md` Sprint 14.5 实验窗口  
+> **论文**：Farebrother et al., *Compositional Planning with Jumpy World Models*, arXiv:2602.19634  
+> **核心思想**：将预训练 Skill 视为可组合的"短跑专家"，通过离线预测模型（世界模型）实现时间抽象，允许 Agent 直接预判宏观状态而非逐消息模拟。
+
+### 已完成 ✅
+
+| ID | 事项 | 状态 | 说明 |
+|----|------|------|------|
+| J1 | 核心四组件实现 | ✅ | `JumpyState` + `HistoricalPredictor` + `ConsistentPredictor` + `HierarchicalPlanner` + `SkillComposer` |
+| J2 | 单元/集成测试 | ✅ | 507 tests passed（含 3 个 jumpy 专用测试） |
+| J3 | 模块导出与编译集成 | ✅ | `pub mod jumpy` in `agent/mod.rs`，`cargo check --workspace --lib` 0 warnings |
+| J4 | Kimi CLI Skill 封装 | ✅ | `~/.config/kimi/skills/jumpy-orchestrator/SKILL.md` |
+
+### 待连接（避免能力孤岛）
+
+| ID | 事项 | 优先级 | 阻塞/说明 |
+|----|------|--------|----------|
+| J5 | **从 `clarity-memory::session_store` 自动提取历史观测** | P1 | 将聊天记录转化为 `SkillObservation`，喂给 `HistoricalPredictor::observe_batch()` |
+| J6 | **LLM-Augmented Predictor** | P2 | 无历史记录时，调用 LLM 做零样本状态转移预测。需设计 prompt template 和结果解析 |
+| J7 | **Flow 节点扩展：`InvokeSkill` / `PredictCheckpoint`** | P2 | `flow/mod.rs` 新增节点类型，`runner.rs` 接入 `SkillRegistry::run_flow()`。保持现有 Flow 零侵入 |
+| J8 | **与 `SubagentManager` 打通** | P2 | `SkillComposer::compose()` 的回调绑定到 `SubagentManager::spawn()`，实现层级 Agent 委托 |
+| J9 | **`clarity-headless` CLI 入口** | P2 | `jumpy` 子命令暴露编排能力，JSON 输出供外部工具（如 Kimi CLI）消费 |
+| J10 | **A/B 验证：Jumpy 规划 vs 传统 Plan** | P3 | 真实任务上的成功率、token 消耗、重规划次数对比。需要 ≥20 条任务轨迹 |
+
+### 设计约束（硬）
+
+- **零侵入现有系统**：Flow / Skill / Plan / AgentLoop 不修改接口，仅新增可选节点类型
+- **回调解耦**：`SkillComposer::compose()` 通过 `execute_skill_fn` 回调连接实际执行层，不直接依赖 `Agent` 或 `Subagent`
+- **离线优先**：预测模型训练不依赖环境交互，仅从 `session_store` 历史数据学习
+- **Rust 核心不外包**：`agent::jumpy` 的所有演进必须在当前窗口内由主 Agent 完成，不可委托子 Agent
+
+### 验收命令
+
+```bash
+cd dev/third_party/clarity
+cargo test -p clarity-core --lib agent::jumpy   # 3 jumpy tests
+cargo test -p clarity-core --lib                # 507 tests
+cargo check --workspace --lib                   # 0 warnings
+```
+
+---
+
 ## 六、技术债务
 
 | 债务项 | 严重度 | 说明 | 计划 |
 |--------|--------|------|------|
-| egui 零测试 | 🔴 重大 | 当前 0 tests，违反 `test_governance.md` | Sprint 13+ 注入 ≥20 纯逻辑测试 |
-| Agent 空响应防御 | 🟡 中 | stream 空内容/LLM 返回空无自动回退 | 收集日志后决策（S15-C5） |
-| `unwrap()` 密度 | 🟡 中 | 171 总量 / ~39 真实风险 | 冻结新增，渐进清理（目标 ≤150） |
-| cargo audit 上游漏洞 | 🟡 低 | 3 处 Tauri 间接依赖（已归档） | 等上游更新，不主动投入 |
-| 文档过时 | 🟢 低 | 持续维护 | 每次重大重构后同步 |
+| egui 零测试 | 🔴 重大 | 当前 0 tests，违反 `test_governance.md` | Sprint 13+ 遗留，待排期 |
+| Agent 空响应防御 | 🟡 中 | stream 空内容/LLM 返回空无自动回退 | 收集日志后决策 |
+| `unwrap()` 密度 | 🟡 中 | ~170 总量 / ~39 真实风险 | 冻结新增，渐进清理（目标 ≤150） |
+| cargo audit 上游漏洞 | 🟡 低 | Tauri 间接依赖（已归档） | 等上游更新 |
+| 文档过时 | 🟢 低 | BACKLOG 已更新至 Sprint 26 | 每次重大重构后同步 |
 
 ---
 
@@ -166,13 +222,13 @@
 ## 八、验收命令（任何变更后必执行）
 
 ```bash
-cargo test --workspace --lib          # 438 passed, 0 failed, 6 ignored
-cargo clippy --workspace -- -D warnings  # 0 warnings
-cargo fmt --all -- --check            # 0 diff
-cargo doc --workspace --no-deps       # 0 doc warnings
-cargo audit                           # 0 RUSTSEC
+cargo test --workspace --lib -- --test-threads=1   # 759 passed, 0 failed, 6 ignored
+cargo clippy --workspace -- -D warnings           # 0 warnings
+cargo fmt --all -- --check                         # 0 diff
+cargo doc --workspace --no-deps                    # 0 doc warnings
+cargo audit                                        # 0 RUSTSEC (unmaintained ignored)
 ```
 
 ---
 
-*本文件随开发进度持续更新。下次审视：Sprint 15 结束时。*
+*本文件随开发进度持续更新。下次审视：Sprint 27 结束时。*
