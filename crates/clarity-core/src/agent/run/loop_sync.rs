@@ -1,7 +1,7 @@
 //! Synchronous (non-streaming) agent execution loop.
 
 use crate::agent::run::loop_helpers::{
-    fast_trim_tool_results, is_context_overflow_error, messages_contain_vision,
+    fast_trim_tool_results, is_context_overflow_error, messages_contain_vision, retry_with_backoff,
 };
 use crate::agent::run::loop_steps::{
     check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
@@ -43,7 +43,7 @@ impl AgentLoop for SyncLoop {
 
         let (response, actual_prompt_tokens, actual_completion_tokens) = match tokio::time::timeout(
             tokio::time::Duration::from_secs(45),
-            llm.complete(messages, tools),
+            retry_with_backoff(|| llm.complete(messages, tools), 3),
         )
         .await
         {
@@ -58,7 +58,7 @@ impl AgentLoop for SyncLoop {
                 check_budget(agent, llm.as_ref(), retry_prompt_tokens)?;
                 match tokio::time::timeout(
                     tokio::time::Duration::from_secs(45),
-                    llm.complete(messages, tools),
+                    retry_with_backoff(|| llm.complete(messages, tools), 3),
                 )
                 .await
                 {

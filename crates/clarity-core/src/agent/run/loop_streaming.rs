@@ -1,6 +1,8 @@
 //! Streaming agent execution loop.
 
-use crate::agent::run::loop_helpers::{fast_trim_tool_results, is_context_overflow_error};
+use crate::agent::run::loop_helpers::{
+    fast_trim_tool_results, is_context_overflow_error, retry_with_backoff,
+};
 use crate::agent::run::loop_steps::{
     check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
 };
@@ -62,7 +64,7 @@ where
         let pre_stream_prompt_tokens = estimate_prompt_tokens(messages);
         check_budget(agent, llm.as_ref(), pre_stream_prompt_tokens)?;
 
-        match llm.stream(messages, tools) {
+        match retry_with_backoff(|| async { llm.stream(messages, tools) }, 3).await {
             Ok(mut stream_rx) => {
                 prompt_tokens = pre_stream_prompt_tokens;
                 agent.send_wire_message(WireMessage::DraftEvent {
@@ -137,7 +139,7 @@ where
             None => {
                 let mut fallback_prompt_tokens = estimate_prompt_tokens(messages);
                 check_budget(agent, llm.as_ref(), fallback_prompt_tokens)?;
-                let r = match llm.complete(messages, tools).await {
+                let r = match retry_with_backoff(|| llm.complete(messages, tools), 3).await {
                     Ok(r) => r,
                     Err(e) if is_context_overflow_error(&e) => {
                         warn!(
@@ -146,7 +148,7 @@ where
                         fast_trim_tool_results(messages);
                         fallback_prompt_tokens = estimate_prompt_tokens(messages);
                         check_budget(agent, llm.as_ref(), fallback_prompt_tokens)?;
-                        llm.complete(messages, tools).await?
+                        retry_with_backoff(|| llm.complete(messages, tools), 3).await?
                     }
                     Err(e) => return Err(e),
                 };

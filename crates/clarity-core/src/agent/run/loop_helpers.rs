@@ -3,6 +3,41 @@
 use crate::error::AgentError;
 use crate::llm::api::{Message, MessageRole};
 
+/// Retry an async operation with exponential backoff.
+///
+/// Only retries when the error is recoverable (`is_recoverable() == true`).
+/// Max retries = `max_retries`, with delays 1s, 2s, 4s, ...
+pub(crate) async fn retry_with_backoff<F, Fut, T>(
+    mut f: F,
+    max_retries: u32,
+) -> Result<T, AgentError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, AgentError>>,
+{
+    let mut retries = 0;
+    loop {
+        match f().await {
+            Ok(output) => return Ok(output),
+            Err(err) if !err.is_recoverable() => return Err(err),
+            Err(err) => {
+                if retries >= max_retries {
+                    return Err(err);
+                }
+                retries += 1;
+                let delay = std::time::Duration::from_secs(2_u64.pow(retries - 1));
+                tracing::warn!(
+                    "LLM call failed with recoverable error, retrying in {:?} (attempt {}/{})",
+                    delay,
+                    retries,
+                    max_retries
+                );
+                tokio::time::sleep(delay).await;
+            }
+        }
+    }
+}
+
 /// Check if any message in the conversation contains image/vision content.
 pub(crate) fn messages_contain_vision(messages: &[Message]) -> bool {
     messages
@@ -180,7 +215,8 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-    use super::scrub_credentials;
+    use super::{retry_with_backoff, scrub_credentials};
+    use crate::error::AgentError;
 
     #[test]
     fn test_scrub_api_key_colon() {
@@ -239,5 +275,39 @@ mod tests {
         assert!(!out.contains("abc123"));
         assert!(!out.contains("xyz789"));
         assert!(!out.contains("hunter2"));
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_backoff_succeeds_on_third_attempt() {
+        let mut attempts = 0u32;
+        let result = retry_with_backoff(
+            || {
+                attempts += 1;
+                std::future::ready(if attempts <= 2 {
+                    Err(AgentError::Llm("temp".into()))
+                } else {
+                    Ok("success")
+                })
+            },
+            3,
+        )
+        .await;
+        assert_eq!(result.unwrap(), "success");
+        assert_eq!(attempts, 3);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_backoff_non_recoverable_fails_immediately() {
+        let mut attempts = 0u32;
+        let result: Result<(), _> = retry_with_backoff(
+            || {
+                attempts += 1;
+                std::future::ready(Err(AgentError::Unconfigured))
+            },
+            3,
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(attempts, 1);
     }
 }
