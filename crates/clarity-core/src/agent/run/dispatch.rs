@@ -10,6 +10,13 @@ use std::pin::Pin;
 use tracing::{info, warn};
 use super::loop_helpers::scrub_credentials;
 
+/// Output of dispatching a batch of tool calls.
+pub(crate) struct DispatchOutput {
+    pub tool_names: Vec<String>,
+    /// If `ask_user` was invoked successfully, the question text to display.
+    pub ask_user_question: Option<String>,
+}
+
 impl Agent {
     /// Run proactive compaction and threshold-based compaction if needed.
     pub(crate) async fn maybe_compact_turn(&self, messages: &mut Vec<Message>, llm: &dyn LlmProvider) {
@@ -62,8 +69,9 @@ impl Agent {
         &self,
         tool_calls: &[ToolCall],
         messages: &mut Vec<Message>,
-    ) -> Result<Vec<String>, AgentError> {
+    ) -> Result<DispatchOutput, AgentError> {
         let mut tool_names = Vec::new();
+        let mut ask_user_question: Option<String> = None;
         let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
         let mut execute_flags: Vec<bool> = Vec::new();
         let mut futures: Vec<
@@ -173,6 +181,14 @@ impl Agent {
                         ));
                     }
                 }
+            } else if tool_call.function.name == "ask_user" {
+                // Detect successful ask_user invocation — pause the loop to wait for user reply.
+                if result_value.get("asked").and_then(|v| v.as_bool()) == Some(true) {
+                    ask_user_question = result_value
+                        .get("question")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                }
             }
 
             // Check for repetitive output loops (only if no fatal error already).
@@ -201,6 +217,6 @@ impl Agent {
             return Err(AgentError::ToolExecutionFailed(tool_name, error));
         }
 
-        Ok(tool_names)
+        Ok(DispatchOutput { tool_names, ask_user_question })
     }
 }

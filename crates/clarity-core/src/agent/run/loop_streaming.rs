@@ -197,7 +197,13 @@ where
         messages: &mut Vec<Message>,
     ) -> DispatchOutcome {
         match agent.dispatch_tool_calls(tool_calls, messages).await {
-            Ok(names) => DispatchOutcome::Success(names),
+            Ok(output) => {
+                if let Some(question) = output.ask_user_question {
+                    DispatchOutcome::Break { final_response: question }
+                } else {
+                    DispatchOutcome::Success(output.tool_names)
+                }
+            }
             Err(e) => {
                 warn!("Tool execution failed in stream: {}", e);
                 let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
