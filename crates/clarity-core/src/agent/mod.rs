@@ -17,6 +17,7 @@ pub mod controller;
 pub mod definition;
 pub mod driver;
 pub mod enhanced;
+pub mod error_memory;
 pub mod flow;
 pub mod hooks;
 pub mod ops;
@@ -69,6 +70,7 @@ pub use crate::types::{FunctionCall, ToolCall};
 
 // Re-export config
 pub use config::AgentConfig;
+pub use error_memory::*;
 
 /// Lifecycle state of an Agent instance.
 #[derive(Debug, Clone)]
