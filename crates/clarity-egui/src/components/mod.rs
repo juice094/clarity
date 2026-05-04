@@ -1,4 +1,5 @@
 pub mod chat;
+pub mod file_preview_overlay;
 pub mod input;
 pub mod login_modal;
 pub mod settings;

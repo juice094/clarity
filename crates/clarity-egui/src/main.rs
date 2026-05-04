@@ -436,6 +436,7 @@ impl eframe::App for App {
             );
         });
         onboarding::render_onboarding(self, ctx);
+        components::file_preview_overlay::render_file_preview_overlay(self, ctx);
         self.handle_window_resize(ctx);
     }
 
