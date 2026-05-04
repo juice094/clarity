@@ -143,6 +143,11 @@ pub enum FederationMessage {
         tool_calls: Vec<crate::ToolCall>,
         request_id: String,
     },
+    /// Execute a full agent turn with a natural-language query.
+    AgentTurn {
+        query: String,
+        sender: String,
+    },
 }
 
 /// Responses from federal node handlers.

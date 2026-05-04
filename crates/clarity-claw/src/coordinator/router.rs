@@ -52,6 +52,7 @@ impl FederationRouter {
                 // Responses are routed back to the original requester.
                 return None;
             }
+            FederationMessage::AgentTurn { .. } => Some("core"),
         };
 
         target_id.and_then(|id| registry.get(id))

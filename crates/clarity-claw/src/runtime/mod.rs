@@ -6,6 +6,7 @@
 //! cron scheduling, and multi-agent orchestration.
 
 use crate::coordinator::Coordinator;
+use clarity_core::agent::AgentExecutor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -42,6 +43,13 @@ impl Runtime {
     /// Get a clone of the coordinator Arc.
     pub fn coordinator_arc(&self) -> Arc<RwLock<Coordinator>> {
         self.coordinator.clone()
+    }
+
+    /// Register an agent executor as a federal CoreNode.
+    pub async fn register_agent(&self, agent: Arc<dyn AgentExecutor>) {
+        let node = Arc::new(crate::nodes::core_node::CoreNode::new(agent));
+        let mut coordinator = self.coordinator.write().await;
+        coordinator.register_node(node);
     }
 }
 
