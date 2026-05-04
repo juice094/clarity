@@ -93,6 +93,29 @@ pub(crate) fn fast_trim_tool_results(messages: &mut Vec<Message>) {
     }
 }
 
+/// Build the system prompt split into static and dynamic parts, with memories appended to dynamic.
+pub(crate) async fn build_system_prompt_split(
+    agent: &crate::agent::Agent,
+    query: &str,
+) -> (String, String) {
+    let (mut static_prompt, mut dynamic_prompt) = agent.build_system_prompt_split_raw();
+
+    if let Some(ref store) = agent.memory_store() {
+        if let Ok(memories) = store.search(query, 5).await {
+            if !memories.is_empty() {
+                let text = memories
+                    .iter()
+                    .map(|m| format!("- {}", m.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                dynamic_prompt.push_str(&format!("\n\n# Relevant Memories\n{}\n", text));
+            }
+        }
+    }
+
+    (static_prompt, dynamic_prompt)
+}
+
 /// Scrub sensitive credentials from tool output before injecting into LLM context.
 /// Prevents accidental leakage of API keys, tokens, passwords, and Bearer headers.
 pub(crate) fn scrub_credentials(input: &str) -> String {
@@ -153,21 +176,17 @@ use tracing::{debug, info, warn};
 
 impl Agent {
     /// Build system prompt and append relevant memories if available.
+    ///
+    /// **Deprecated in favor of `build_system_prompt_split`:** this method
+    /// flattens static and dynamic content into a single string, which
+    /// prevents prefix caching. Use `build_system_prompt_split` for new code.
     pub(crate) async fn build_system_prompt_with_memory(&self, query: &str) -> String {
-        let mut prompt = self.build_system_prompt();
-        if let Some(ref store) = self.memory_store() {
-            if let Ok(memories) = store.search(query, 5).await {
-                if !memories.is_empty() {
-                    let text = memories
-                        .iter()
-                        .map(|m| format!("- {}", m.content))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    prompt.push_str(&format!("\n\n# Relevant Memories\n{}\n", text));
-                }
-            }
+        let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
+        if dynamic_prompt.is_empty() {
+            static_prompt
+        } else {
+            format!("{}\n\n{}", static_prompt, dynamic_prompt)
         }
-        prompt
     }
 
     /// Finish turn, run delivery hooks, and emit usage wire message.

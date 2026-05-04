@@ -191,8 +191,8 @@ impl AgentController {
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
                             let handle = if let Some(ref driver) = self.chat_driver {
-                                let system_prompt = self.agent.build_system_prompt();
-                                let messages = driver.build_messages(&prompt, &system_prompt);
+                                let (static_prompt, dynamic_prompt) = self.agent.build_system_prompt_split_raw();
+                                let messages = driver.build_messages_split(&prompt, &static_prompt, &dynamic_prompt);
                                 tokio::spawn(async move {
                                     let result = agent.run_streaming_with_messages(messages, move |chunk| {
                                         if let Some(ref tx) = event_tx {

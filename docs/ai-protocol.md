@@ -835,6 +835,50 @@ Codex + ZeroClaw 架构探索的脚手架设计已归档于：
 - **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
 - **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
 
+## 14. Sprint 27 — Prompt Reorder: Static/Dynamic System Prompt Separation
+
+> 日期：2026-05-05
+> 状态：已完成
+
+### 14.1 目标
+
+将 monolithic system prompt 拆分为 static（跨 turn 不变 → 可缓存）和 dynamic（每 turn 变化）两部分，为 API provider prefix caching 和本地 KV cache 持久化打下基础。
+
+### 14.2 关键决策
+
+#### D18 — SystemPromptBuilder 拆分
+
+**决策**：`SystemPromptBuilder` 新增 `build_split() -> (String, String)`，static 组件（base/tools/skills/approval/security）与 dynamic 组件（git/active_files/project_metadata/memories）分离。
+
+**实现**：
+- `Agent::build_system_prompt()` 改为调用 `build_system_prompt_split_raw()` 后拼接（向后兼容）
+- `Agent::run()` / `run_streaming()` 构造 `messages = [system(static), system(dynamic), user(query)]`
+- `ChatDriver` trait 新增 `build_messages_split()` 默认方法；`DefaultChatDriver` / `ConversationChatDriver` 均 override
+- `build_system_prompt_with_memory()` 保留但标记 deprecated，内部委托 `build_system_prompt_split()`
+
+**组件分类**：
+
+| 组件 | 分类 | 理由 |
+|------|------|------|
+| Text (base), Tools, EntryContext, Skills, ApprovalNotice, OfflineNotice, Security Notice | **静态** | 跨 turn 不变 |
+| GitContext, ActiveFiles, ProjectMetadata, Relevant Memories | **动态** | 每 turn 重新采集/检索 |
+| template_variables | **两者** | 替换应用于 static + dynamic |
+
+### 14.3 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| clarity internal | `SystemPromptBuilder::build_split()` | 新增方法 | ✅ 新增 |
+| clarity internal | `Agent::build_system_prompt()` | 改为委托 split + 拼接 | ✅ 输出不变 |
+| clarity internal | `ChatDriver::build_messages_split()` | 新增 trait 方法（默认实现） | ✅ 新增，默认回退到 `build_messages` |
+| clarity internal | `Agent::run()` / `run_streaming()` | 消息构造改为两条 system | ⚠️ 内部变更 |
+
+### 14.4 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **763 passed / 0 failed / 6 ignored**
+- **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
+
 ---
 
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*

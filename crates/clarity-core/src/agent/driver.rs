@@ -15,6 +15,25 @@ pub trait ChatDriver: Send + Sync {
     /// or conversation history in whatever format the target LLM expects.
     fn build_messages(&self, query: &str, system_prompt: &str) -> Vec<Message>;
 
+    /// Build messages with split static/dynamic system prompts.
+    ///
+    /// Default implementation merges them and delegates to `build_messages`.
+    /// Override this to emit separate system messages for static and dynamic
+    /// content, enabling prefix caching on providers that support it.
+    fn build_messages_split(
+        &self,
+        query: &str,
+        static_prompt: &str,
+        dynamic_prompt: &str,
+    ) -> Vec<Message> {
+        let combined = if dynamic_prompt.is_empty() {
+            static_prompt.to_string()
+        } else {
+            format!("{}\n\n{}", static_prompt, dynamic_prompt)
+        };
+        self.build_messages(query, &combined)
+    }
+
     /// Post-process the final response before returning to the caller.
     ///
     /// Default implementation is a no-op pass-through.
@@ -30,6 +49,23 @@ pub struct DefaultChatDriver;
 impl ChatDriver for DefaultChatDriver {
     fn build_messages(&self, query: &str, system_prompt: &str) -> Vec<Message> {
         vec![Message::system(system_prompt), Message::user(query)]
+    }
+
+    fn build_messages_split(
+        &self,
+        query: &str,
+        static_prompt: &str,
+        dynamic_prompt: &str,
+    ) -> Vec<Message> {
+        if dynamic_prompt.is_empty() {
+            vec![Message::system(static_prompt.to_string()), Message::user(query)]
+        } else {
+            vec![
+                Message::system(static_prompt.to_string()),
+                Message::system(dynamic_prompt.to_string()),
+                Message::user(query),
+            ]
+        }
     }
 }
 
@@ -53,6 +89,36 @@ impl ChatDriver for ConversationChatDriver {
         } else {
             messages.push(Message::system(system_prompt));
         }
+        messages
+    }
+
+    fn build_messages_split(
+        &self,
+        _query: &str,
+        static_prompt: &str,
+        dynamic_prompt: &str,
+    ) -> Vec<Message> {
+        let mut messages = self.history.clone();
+
+        // Handle system messages at the front.
+        if messages.is_empty() {
+            messages.push(Message::system(static_prompt.to_string()));
+            if !dynamic_prompt.is_empty() {
+                messages.push(Message::system(dynamic_prompt.to_string()));
+            }
+        } else if messages[0].role == crate::llm::api::MessageRole::System {
+            // Replace first system with static, insert dynamic after.
+            messages[0].content = static_prompt.to_string();
+            if !dynamic_prompt.is_empty() {
+                messages.insert(1, Message::system(dynamic_prompt.to_string()));
+            }
+        } else {
+            messages.insert(0, Message::system(static_prompt.to_string()));
+            if !dynamic_prompt.is_empty() {
+                messages.insert(1, Message::system(dynamic_prompt.to_string()));
+            }
+        }
+
         messages
     }
 }

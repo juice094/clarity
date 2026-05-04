@@ -56,7 +56,7 @@
 
 | ID | 事项 | 优先级 | 状态 | 说明 |
 |----|------|--------|------|------|
-| S27-A1 | **Prompt Reorder：静态前缀 + 动态尾部** | P0 | 未启动 | `SystemPromptBuilder` 将静态组件（base/tools/skills/security）与动态组件（git/active_files/metadata/memory）分离为独立消息，避免 prefix cache miss |
+| S27-A1 | **Prompt Reorder：静态前缀 + 动态尾部** | P0 | ✅ 已完成 | `SystemPromptBuilder` 将静态组件（base/tools/skills/security）与动态组件（git/active_files/metadata/memory）分离为独立消息，避免 prefix cache miss |
 | S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 未启动 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching |
 | S27-A3 | **LocalGgufProvider KV cache 跨 turn 持久化** | P1 | 未启动 | 保持模型状态跨 turns，不从 `index_pos=0` 重置 |
 | S27-A4 | **System Prompt KV Snapshot（跨会话）** | P1 | 未启动 | `~/.clarity/cache/kv/{model_id}/{hash}.kvcache` 序列化/反序列化 |

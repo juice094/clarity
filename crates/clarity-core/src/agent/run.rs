@@ -47,11 +47,20 @@ impl Agent {
         }
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
-        let system_prompt = self.build_system_prompt_with_memory(query.as_ref()).await;
-        let mut messages = vec![
-            Message::system(system_prompt),
-            Message::user(query.as_ref()),
-        ];
+        let (static_prompt, dynamic_prompt) =
+            build_system_prompt_split(self, query.as_ref()).await;
+        let mut messages = if dynamic_prompt.is_empty() {
+            vec![
+                Message::system(static_prompt),
+                Message::user(query.as_ref()),
+            ]
+        } else {
+            vec![
+                Message::system(static_prompt),
+                Message::system(dynamic_prompt),
+                Message::user(query.as_ref()),
+            ]
+        };
 
         info!("Starting agent loop for query: {}", query.as_ref());
         self.send_wire_message(WireMessage::TurnBegin {
@@ -131,11 +140,20 @@ impl Agent {
         F: FnMut(&str) + Send + 'static,
     {
         self.ensure_initialized().await?;
-        let system_prompt = self.build_system_prompt_with_memory(query.as_ref()).await;
-        let messages = vec![
-            Message::system(system_prompt),
-            Message::user(query.as_ref()),
-        ];
+        let (static_prompt, dynamic_prompt) =
+            build_system_prompt_split(self, query.as_ref()).await;
+        let messages = if dynamic_prompt.is_empty() {
+            vec![
+                Message::system(static_prompt),
+                Message::user(query.as_ref()),
+            ]
+        } else {
+            vec![
+                Message::system(static_prompt),
+                Message::system(dynamic_prompt),
+                Message::user(query.as_ref()),
+            ]
+        };
         self.run_streaming_turn(messages, query.as_ref(), on_chunk)
             .await
     }
