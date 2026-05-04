@@ -91,7 +91,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                 })
                 .unwrap_or_else(|_| request.tool_call.function.arguments.clone());
             egui::Frame::new()
-                .fill(app.ui_store.theme.bg_accent)
+                .fill(app.ui_store.theme.code_block_bg)
                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                 .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
@@ -112,7 +112,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         .color(app.ui_store.theme.text),
                 );
                 egui::Frame::new()
-                    .fill(app.ui_store.theme.bg_accent)
+                    .fill(app.ui_store.theme.code_block_bg)
                     .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {

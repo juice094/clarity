@@ -76,13 +76,13 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                         ui.add(egui::Spinner::new().size(theme.text_sm));
                     } else {
                         let (icon, color) = match inferred {
-                            crate::ui::types::ToolCallStatus::Success => ("•", theme.status_online),
-                            crate::ui::types::ToolCallStatus::Error => ("✗", theme.danger),
-                            crate::ui::types::ToolCallStatus::Warning => ("⚠", theme.warn),
+                            crate::ui::types::ToolCallStatus::Success => (crate::theme::ICON_CHECK, theme.ok),
+                            crate::ui::types::ToolCallStatus::Error => (crate::theme::ICON_X, theme.danger),
+                            crate::ui::types::ToolCallStatus::Warning => (crate::theme::ICON_WARNING, theme.warn),
                             _ => ("", theme.text),
                         };
                         ui.label(
-                            egui::RichText::new(icon).size(theme.text_sm).color(color),
+                            egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)).color(color),
                         );
                     }
                     ui.label(

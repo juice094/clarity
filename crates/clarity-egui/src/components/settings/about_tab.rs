@@ -40,7 +40,7 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text_dim),
         );
         ui.label(
-            egui::RichText::new("egui 0.31 · glow · Rust")
+            egui::RichText::new(env!("CARGO_PKG_DESCRIPTION"))
                 .size(theme.text_sm)
                 .color(theme.text_dim),
         );
@@ -54,14 +54,14 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
         ui.allocate_ui_with_layout(egui::vec2(max_w, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new("License").size(theme.text_sm).color(theme.text_dim).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("MIT").size(theme.text_sm).color(theme.text));
+                ui.label(egui::RichText::new(env!("CARGO_PKG_LICENSE")).size(theme.text_sm).color(theme.text));
             });
         });
 
         ui.allocate_ui_with_layout(egui::vec2(max_w, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new("Copyright").size(theme.text_sm).color(theme.text_dim).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("© 2026 juice094 and contributors").size(theme.text_sm).color(theme.text));
+                ui.label(egui::RichText::new(format!("© 2026 {}", env!("CARGO_PKG_AUTHORS"))).size(theme.text_sm).color(theme.text));
             });
         });
 
@@ -69,10 +69,10 @@ pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
             ui.label(egui::RichText::new("GitHub").size(theme.text_sm).color(theme.text_dim).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.hyperlink_to(
-                    egui::RichText::new("github.com/juice094/clarity ↗")
+                    egui::RichText::new(format!("{} ↗", env!("CARGO_PKG_REPOSITORY").trim_start_matches("https://")))
                         .size(theme.text_sm)
                         .color(theme.accent),
-                    "https://github.com/juice094/clarity",
+                    env!("CARGO_PKG_REPOSITORY"),
                 );
             });
         });

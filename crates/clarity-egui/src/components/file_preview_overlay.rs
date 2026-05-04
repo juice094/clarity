@@ -166,11 +166,10 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                         }
 
                         // ── Content area ──
-                        egui::Frame::new()
-                            .fill(theme.surface)
-                            .stroke(egui::Stroke::NONE)
-                            .inner_margin(egui::Margin::symmetric(16, 12))
-                            .show(ui, |ui| {
+                        ui.add_space(theme.space_12);
+                        ui.horizontal(|ui| {
+                            ui.add_space(theme.space_16);
+                            ui.vertical(|ui| {
                                 egui::ScrollArea::vertical()
                                     .id_salt("preview_scroll_overlay")
                                     .show(ui, |ui| {
@@ -184,6 +183,8 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                         );
                                     });
                             });
+                        });
+                        ui.add_space(theme.space_12);
                     });
                 });
         });

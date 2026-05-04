@@ -39,6 +39,7 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme)
                 .size(theme.text_sm)
                 .color(theme.text_muted),
         )
+        .id_salt("agent_turn_thinking_cli")
         .default_open(false)
         .show(ui, |ui| {
             for step in &thinking.steps {
@@ -52,9 +53,22 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme)
         ui.add_space(theme.space_4);
     }
 
-    // ── Tool calls (indented with status stripe) ──
-    for tc in &turn.tool_calls {
-        render_tool_call_row_cli(ui, tc, theme);
+    // ── Tool calls (folded into single summary line) ──
+    if !turn.tool_calls.is_empty() {
+        let summary = format!("{} tools", turn.tool_calls.len());
+        egui::CollapsingHeader::new(
+            egui::RichText::new(summary)
+                .size(theme.text_sm)
+                .color(theme.text_dim),
+        )
+        .id_salt("agent_turn_tools_cli")
+        .default_open(false)
+        .show(ui, |ui| {
+            for tc in &turn.tool_calls {
+                render_tool_call_row_cli(ui, tc, theme);
+            }
+        });
+        ui.add_space(theme.space_4);
     }
 
     // ── Final response (plain, no card wrapper) ──
@@ -114,6 +128,7 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
                         .strong()
                         .color(theme.text_muted),
                 )
+                .id_salt("agent_turn_thinking_glass")
                 .default_open(false)
                 .show(ui, |ui| {
                     for step in &thinking.steps {
@@ -127,9 +142,22 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
                 ui.add_space(theme.space_4);
             }
 
-            // Tool calls (simple list inside card)
-            for tc in &turn.tool_calls {
-                render_tool_call_row_glass(ui, tc, theme);
+            // Tool calls (folded into single summary line)
+            if !turn.tool_calls.is_empty() {
+                let summary = format!("{} tools", turn.tool_calls.len());
+                egui::CollapsingHeader::new(
+                    egui::RichText::new(summary)
+                        .size(theme.text_sm)
+                        .color(theme.text_dim),
+                )
+                .id_salt("agent_turn_tools_glass")
+                .default_open(false)
+                .show(ui, |ui| {
+                    for tc in &turn.tool_calls {
+                        render_tool_call_row_glass(ui, tc, theme);
+                    }
+                });
+                ui.add_space(theme.space_4);
             }
 
             // Final response
@@ -191,6 +219,7 @@ fn render_tool_call_row_cli(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme) 
 }
 
 fn render_tool_call_row_glass(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme) {
+    let stripe_color = status_color(tc.status, theme);
     let icon = match tc.status {
         ToolCallStatus::Running => crate::theme::ICON_HOURGLASS,
         ToolCallStatus::Success => crate::theme::ICON_CHECK,
@@ -199,6 +228,18 @@ fn render_tool_call_row_glass(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme
     };
 
     ui.horizontal(|ui| {
+        // Left indent + status stripe (24px to match CLI mode)
+        let stripe_rect = ui
+            .allocate_exact_size(egui::vec2(24.0, 28.0), egui::Sense::hover())
+            .0;
+        if ui.is_rect_visible(stripe_rect) {
+            let line_rect = egui::Rect::from_min_max(
+                stripe_rect.left_top() + egui::vec2(10.0, 4.0),
+                stripe_rect.left_bottom() + egui::vec2(12.0, -4.0),
+            );
+            ui.painter().rect_filled(line_rect, egui::CornerRadius::same(1), stripe_color);
+        }
+
         ui.label(
             egui::RichText::new(icon)
                 .font(theme.font_icon(theme.text_sm)),

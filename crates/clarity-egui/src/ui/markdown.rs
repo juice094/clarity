@@ -307,7 +307,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
     egui::Frame::new()
         .fill(theme.code_block_bg)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());

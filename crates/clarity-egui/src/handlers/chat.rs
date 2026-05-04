@@ -118,6 +118,65 @@ pub fn on_tool_start(
     }
 }
 
+/// Format tool result for display: extract structured data for known tools.
+fn format_tool_output(name: &str, result: &str) -> (String, bool) {
+    match name {
+        "think" => {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
+                if let Some(summary) = v.get("summary").and_then(|s| s.as_str()) {
+                    return (summary.to_string(), false);
+                }
+            }
+            let truncated = result.chars().count() > 2000;
+            let out = if truncated {
+                let t: String = result.chars().take(2000).collect();
+                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+            } else {
+                result.to_string()
+            };
+            (out, truncated)
+        }
+        "glob" | "grep" => {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
+                if let Some(arr) = v.as_array() {
+                    if arr.len() > 20 {
+                        let preview: Vec<String> = arr
+                            .iter()
+                            .take(5)
+                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                            .collect();
+                        let out = format!(
+                            "Found {} results\n```\n{}\n... ({} more)\n```",
+                            arr.len(),
+                            preview.join("\n"),
+                            arr.len() - 5
+                        );
+                        return (out, false);
+                    }
+                }
+            }
+            let truncated = result.chars().count() > 2000;
+            let out = if truncated {
+                let t: String = result.chars().take(2000).collect();
+                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+            } else {
+                result.to_string()
+            };
+            (out, truncated)
+        }
+        _ => {
+            let truncated = result.chars().count() > 2000;
+            let out = if truncated {
+                let t: String = result.chars().take(2000).collect();
+                format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
+            } else {
+                result.to_string()
+            };
+            (out, truncated)
+        }
+    }
+}
+
 pub fn on_tool_result(
     session_store: &mut SessionStore,
     chat_store: &mut ChatStore,
@@ -130,13 +189,7 @@ pub fn on_tool_result(
         tc.result = Some(result.clone());
     }
     if let Some(session) = session_store.active_session_mut() {
-        let truncated = result.chars().count() > 2000;
-        let display_result = if truncated {
-            let t: String = result.chars().take(2000).collect();
-            format!("{}\n... (truncated, {} chars total)", t, result.chars().count())
-        } else {
-            result.clone()
-        };
+        let (display_result, truncated) = format_tool_output(&name, &result);
         let mut msg = Message {
             role: Role::Agent,
             content: format!("🔧 **{}**\n```json\n{}\n```", name, display_result),

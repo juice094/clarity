@@ -286,7 +286,7 @@ impl App {
                 tools_expanded: false,
                 editing_session_id: None,
                 editing_title: String::new(),
-                agent_turn_style: false,
+                agent_turn_style: true,
                 agent_turn_glass: false,
             },
             subagent_store: crate::stores::SubAgentStore {

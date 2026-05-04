@@ -171,6 +171,7 @@ pub enum ContentBlock {
         name: String,
         args: String,
     },
+    #[allow(dead_code)]
     Think { steps: Vec<String> },
     Plan { title: String, steps: Vec<String> },
     FilePreview { path: String, content: String },

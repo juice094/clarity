@@ -171,24 +171,29 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme) 
                 });
             ui.add_space(theme.space_8);
         }
-        ContentBlock::ToolResult { name, output, .. } => {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("🔧")
-                        .size(theme.text_sm)
-                        .color(theme.text_muted),
-                );
-                ui.label(
-                    egui::RichText::new(name)
-                        .size(theme.text_sm)
-                        .strong()
-                        .color(theme.text_muted),
-                );
+        ContentBlock::ToolResult { name, output, truncated, .. } => {
+            let header = format!("🔧 {}", name);
+            egui::CollapsingHeader::new(
+                egui::RichText::new(header)
+                    .size(theme.text_sm)
+                    .strong()
+                    .color(theme.text_muted),
+            )
+            .id_salt(format!("tool_result_{}", name))
+            .default_open(false)
+            .show(ui, |ui| {
+                let parsed = crate::ui::markdown::parse_markdown(output);
+                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                if *truncated {
+                    ui.label(
+                        egui::RichText::new("(truncated)")
+                            .size(theme.text_xs)
+                            .color(theme.text_dim)
+                            .italics(),
+                    );
+                }
             });
-            ui.add_space(2.0);
-            let parsed = crate::ui::markdown::parse_markdown(output);
-            crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
-            ui.add_space(theme.space_8);
+            ui.add_space(theme.space_4);
         }
         ContentBlock::ToolCall { .. } => {
             // Intentionally not rendered in the main chat area.
