@@ -183,6 +183,13 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                                 .drafts
                                                 .remove(id)
                                                 .unwrap_or_default();
+                                            app.chat_store.tool_calls = app
+                                                .session_store
+                                                .sessions
+                                                .iter()
+                                                .find(|s| s.id == *id)
+                                                .map(|s| crate::stores::rebuild_tool_calls(&s.messages))
+                                                .unwrap_or_default();
                                         }
                                     }
                                 }

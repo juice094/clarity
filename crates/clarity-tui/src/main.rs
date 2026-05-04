@@ -70,6 +70,11 @@ async fn main() -> Result<()> {
                 ))
             };
 
+            // Bind cron tools to the background task manager
+            if let Some(ref tm) = task_manager {
+                agent.with_cron_manager(tm.clone());
+            }
+
             let mut app = App::new(agent, model_name, task_manager);
             app.skill_registry = skill_registry;
             run_app(&mut terminal, &mut app).await

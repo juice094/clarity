@@ -101,7 +101,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
 
     // ── SubAgent parallel progress ──
     ui.add_space(theme.space_12);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .fill(theme.bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::same(8))

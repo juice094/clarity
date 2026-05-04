@@ -51,6 +51,27 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 19 — 设计原则封装与 UI 工程硬化（进行中 🔄）**
+
+- P0.1 ✅: CLI→GUI 设计原则文档化 (`docs/design-principles.md`)
+- P0.2 ✅: 错误记忆系统架构 (`ToolExecutionMemory` + `ErrorMemoryStore`)
+- P1.1 ✅: 输入框扁平化（消除三级边框）+ Agent 头像去重
+- P1.2 ✅: Thinking Log 增强（Spinner/情绪点/错误展开/二次折叠）
+- P1.3 ✅: 文件预览覆盖层 (`Area` + `Order::Foreground`)
+- P1.4 ✅: 工具调用状态语义（`ToolCallStatus::Running/Success/Error/Warning`）
+- P2.1 ✅: flaky test 修复 (`test_full_pipeline_with_replanning` 确定性 RNG)
+- P0.3 🔄: AgentTurn 聚合层设计（待完成）
+
+**Sprint 18 — 架构解耦与 Claw 运行时集成（已完成 ✅）**
+
+- P0.1 ✅: `TurnContext` 提取 — `AgentInner` 18 字段 → 14 字段
+- P0.2 ✅: `run.rs` 拆分 — 1178 行 → 130 行 + 4 个子模块
+- P0.3 ✅: `AgentLoop` trait + 管道模式 — `SyncLoop`/`StreamingLoop`
+- P0.4 ✅: `ToolPayloadAdapter` 提取 — AnthropicLlm 解耦
+- P1.1 ✅: `FederalAgentSession` 委托 `AgentExecutor`
+- P1.2 ✅: `CoreNode` 桥接 Coordinator → Agent
+- P1.3 ⏸️: Gateway → Claw 联邦化（推迟至后续 Sprint）
+
 **Phase 2b — 跨前端 Settings 协议化（已完成 ✅）**
 
 - `SettingsViewModel` 下沉至 `clarity-core`，provider→model 联动统一 ✅

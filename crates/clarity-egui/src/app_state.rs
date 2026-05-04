@@ -111,6 +111,15 @@ impl Default for AppState {
         let task_dir = dirs::data_dir()
             .map(|d| d.join("clarity").join("bg_tasks"))
             .unwrap_or_else(|| PathBuf::from("."));
+        let work_dir = dirs::data_dir()
+            .map(|d| d.join("clarity").join("bg_work"))
+            .unwrap_or_else(|| PathBuf::from("."));
+        let _ = std::fs::create_dir_all(&task_dir);
+        let _ = std::fs::create_dir_all(&work_dir);
+        let bg_manager = Arc::new(clarity_core::background::BackgroundTaskManager::new(
+            &task_dir, &work_dir, &work_dir,
+        ));
+        agent.with_cron_manager(bg_manager);
         Self {
             agent,
             llm_binding: Mutex::new(None),

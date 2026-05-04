@@ -40,7 +40,7 @@ pub fn load_sessions() -> Vec<Session> {
                                         Role::Agent
                                     },
                                     content: m.content,
-                                    blocks: vec![],
+                                    blocks: m.blocks.unwrap_or_default(),
                                     timestamp: Instant::now(),
                                     parsed: vec![],
                                     cached_height: None,

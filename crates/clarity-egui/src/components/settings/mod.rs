@@ -59,7 +59,8 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
             egui::Frame::window(&ctx.style())
                 .fill(app.ui_store.theme.bg)
                 .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_lg as u8))
-                .inner_margin(egui::Margin::same(0)),
+                .inner_margin(egui::Margin::same(0))
+                .stroke(egui::Stroke::NONE),
         )
         .show(ctx, |ui| {
             // ── Tab bar ──

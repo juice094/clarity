@@ -305,10 +305,9 @@ fn render_span(
 
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());

@@ -33,10 +33,9 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
     for (idx, batch) in app.subagent_store.parallel_batches.iter().enumerate() {
         let is_finished = batch.status != "Running";
 
-        egui::Frame::group(ui.style())
+        egui::Frame::new()
             .fill(app.ui_store.theme.surface)
             .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
-            .stroke(egui::Stroke::new(1.0, app.ui_store.theme.border))
             .inner_margin(egui::Margin::same(8))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());

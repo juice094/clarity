@@ -240,7 +240,13 @@ impl Tool for PlanTool {
                 let result = helpers::optional_str(&args, "step_result");
 
                 let mut plan = load_plan(&dir, plan_id).await?;
-                if let Some(step) = plan.steps.iter_mut().find(|s| s.id == step_id) {
+                // Flexible step-id matching: accept both "1" and "step_1" forms.
+                let normalized = if step_id.parse::<usize>().is_ok() {
+                    format!("step_{}", step_id)
+                } else {
+                    step_id.to_string()
+                };
+                if let Some(step) = plan.steps.iter_mut().find(|s| s.id == step_id || s.id == normalized) {
                     step.status = status.to_string();
                     if let Some(r) = result {
                         step.result = Some(r.to_string());

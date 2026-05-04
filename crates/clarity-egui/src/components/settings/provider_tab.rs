@@ -253,7 +253,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                         .color(theme.danger),
                 )
                 .fill(theme.surface)
-                .stroke(egui::Stroke::new(1.0, theme.border))
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
                 if ui.add(logout_btn).clicked() {
                     match clarity_core::auth::TokenStore::for_provider(token_key).delete() {
@@ -308,7 +307,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -352,7 +350,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
     egui::Frame::new()
         .fill(theme.input_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             let mut te = egui::TextEdit::singleline(&mut url_buffer)
@@ -446,7 +443,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             egui::RichText::new(test_label).size(theme.text_sm),
         )
         .fill(theme.surface)
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
             let (display_name, base_url, api_fmt) = app
@@ -509,7 +505,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             egui::RichText::new(refresh_label).size(theme.text_sm),
         )
         .fill(theme.surface)
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_refreshing, refresh_btn).clicked() {
             let (_, base_url, api_fmt) = app
@@ -616,7 +611,6 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
     egui::Frame::new()
         .fill(theme.bg_accent)
         .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .stroke(egui::Stroke::new(1.0, theme.border))
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
             ui.label(

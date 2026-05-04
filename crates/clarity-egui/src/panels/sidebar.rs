@@ -18,7 +18,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let frame_fill = app.ui_store.theme.bg;
-    let frame_stroke = egui::Stroke::new(1.0, app.ui_store.theme.border);
     egui::SidePanel::left("sidebar")
         .default_width(SIDEBAR_WIDTH)
         .min_width(220.0)
@@ -27,7 +26,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::new()
                 .fill(frame_fill)
-                .stroke(frame_stroke)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {

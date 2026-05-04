@@ -46,10 +46,10 @@ impl ToolRegistry {
     /// Create a registry with all built-in tools pre-registered
     pub fn with_builtin_tools() -> Self {
         use crate::tools::{
-            AskUserTool, CancelCronTool, ComputerUseTool, FileEditTool, FileReadTool,
+            AskUserTool, CancelCronTool, ChannelSendTool, ComputerUseTool, FileEditTool, FileReadTool,
             FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool, PowerShellTool,
-            ReadMediaFileTool, ScheduleCronTool, TaskListTool, TaskOutputTool, TaskStopTool,
-            ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
+            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool,
+            TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
         };
         #[cfg(not(target_os = "windows"))]
         use crate::tools::BashTool;
@@ -80,6 +80,7 @@ impl ToolRegistry {
         let _ = registry.register(ThinkTool::new());
 
         // Register task tools
+        let _ = registry.register(TaskCreateTool::new());
         let _ = registry.register(TaskListTool::new());
         let _ = registry.register(TaskOutputTool::new());
         let _ = registry.register(TaskStopTool::new());
@@ -100,6 +101,14 @@ impl ToolRegistry {
         let _ = registry.register(ScheduleCronTool::new());
         let _ = registry.register(ListCronTool::new());
         let _ = registry.register(CancelCronTool::new());
+
+        // Register channel tool
+        let _ = registry.register(ChannelSendTool::new());
+
+        // Register team tools
+        let _ = registry.register(TeamCreateTool::new());
+        let _ = registry.register(TeamDeleteTool::new());
+        let _ = registry.register(TeamListTool::new());
 
         // Register computer use tool
         let _ = registry.register(ComputerUseTool::new());

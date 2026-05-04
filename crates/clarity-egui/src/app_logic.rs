@@ -167,6 +167,10 @@ impl App {
 
         let now = Instant::now();
         let loaded = load_sessions();
+        let first_session_tool_calls = loaded
+            .first()
+            .map(|s| crate::stores::rebuild_tool_calls(&s.messages))
+            .unwrap_or_default();
         let (sessions, active_id) = if loaded.is_empty() {
             let s = new_session("engineering", 0);
             let id = s.id.clone();
@@ -224,7 +228,7 @@ impl App {
                 attachments: vec![],
                 is_loading: false,
                 agent_status: AgentStatus::Unconfigured,
-                tool_calls: vec![],
+                tool_calls: first_session_tool_calls,
                 compacting: false,
                 pending_send: None,
                 last_usage: None,
@@ -424,6 +428,7 @@ impl App {
         if let Some(s) = self.session_store.sessions.iter().find(|s| s.category == category) {
             self.session_store.active_session_id = s.id.clone();
             self.chat_store.input = self.session_store.drafts.remove(&s.id).unwrap_or_default();
+            self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         } else {
             let count = self.session_store.sessions.iter().filter(|s| s.category == category).count();
             let s = new_session(category, count);

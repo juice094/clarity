@@ -34,10 +34,9 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                 TaskStatus::Cancelled => (crate::theme::ICON_PROHIBIT, theme.text_dim),
             };
 
-            egui::Frame::group(ui.style())
+            egui::Frame::new()
                 .fill(theme.surface)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .stroke(egui::Stroke::new(1.0, theme.border))
                 .inner_margin(egui::Margin::same(8))
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());

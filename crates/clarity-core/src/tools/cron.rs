@@ -17,7 +17,10 @@ fn require_manager(
 ) -> ToolResult<Arc<BackgroundTaskManager>> {
     manager.clone().ok_or_else(|| {
         ToolError::execution_failed(
-            "BackgroundTaskManager not configured for cron tool.".to_string(),
+            "BackgroundTaskManager not configured for cron tool. \
+             Please ensure the application initialized a BackgroundTaskManager \
+             and called agent.with_cron_manager() before invoking cron tools."
+                .to_string(),
         )
     })
 }

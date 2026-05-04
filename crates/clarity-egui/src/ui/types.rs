@@ -166,6 +166,8 @@ pub enum ContentBlock {
         truncated: bool,
     },
     ToolCall {
+        #[serde(default)]
+        id: String,
         name: String,
         args: String,
     },

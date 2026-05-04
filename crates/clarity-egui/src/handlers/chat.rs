@@ -83,7 +83,7 @@ pub fn on_tool_start(
     arguments: serde_json::Value,
 ) {
     chat_store.tool_calls.push(ToolCallInfo {
-        id,
+        id: id.clone(),
         name: name.clone(),
         status: ToolCallStatus::Running,
         result: Some(arguments.to_string()),
@@ -92,6 +92,7 @@ pub fn on_tool_start(
         if let Some(last) = session.messages.last_mut() {
             if last.role == Role::Agent {
                 last.blocks.push(ContentBlock::ToolCall {
+                    id: id.clone(),
                     name,
                     args: arguments.to_string(),
                 });
@@ -103,6 +104,7 @@ pub fn on_tool_start(
             role: Role::Agent,
             content: String::new(),
             blocks: vec![ContentBlock::ToolCall {
+                id: id.clone(),
                 name,
                 args: arguments.to_string(),
             }],
