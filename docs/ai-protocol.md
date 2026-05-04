@@ -610,4 +610,106 @@ clarity-wire
 
 ---
 
+## 11. Sprint 24 — Provider 韧性 + Cancellation Token + Loop Detector 增强
+
+> 日期：2026-05-04  
+> 状态：已完成  
+> 计划：`~/.kimi/plans/sprint-24-loop-detector-parallel-execution-and-resilience.md`
+
+### 11.1 目标
+
+补齐 clarity 与 Codex/ZeroClaw 参考架构的差距：
+1. Provider 层自动重试（Codex 模式）
+2. Cancellation Token 扩展至工具执行层（ZeroClaw 模式）
+3. Loop Detector 增强：Warning 级别 + 模式检测（ZeroClaw 三层检测模型）
+
+### 11.2 启动前现状审计
+
+| 能力 | 状态 |
+|------|------|
+| 基础 Loop Detector（输出哈希检测） | ✅ 已实现 |
+| 工具并发启动 | ✅ 已实现 |
+| `is_recoverable()` | ✅ 已实现 |
+| 凭证脱敏 | ✅ 已实现 |
+| 熔断器（recoverable 3次 fatal） | ✅ 已实现 |
+| Cancellation Token（agent loop） | ✅ 已实现 |
+| **Provider 层自动重试** | ❌ 缺失 |
+| **Cancellation Token（工具执行）** | ❌ 缺失 |
+| **Loop Detector Warning 级别** | ❌ 缺失 |
+
+### 11.3 关键决策
+
+#### D10 — Provider 层自动重试（指数退避）
+
+**决策**：在 `loop_sync.rs` 和 `loop_streaming.rs` 的 LLM 调用中包装重试逻辑。
+
+- 新增 `agent/run/loop_helpers::retry_with_backoff<F, Fut, T>()`：
+  - 仅对 `is_recoverable() == true` 的错误重试
+  - 最大重试 3 次，指数退避 1s → 2s → 4s
+  - 每次重试前 `tracing::warn!` 记录日志
+- `loop_sync.rs`：`llm.complete()` 调用包装重试
+- `loop_streaming.rs`：`llm.stream()` 和 fallback `complete()` 调用包装重试
+- **Commit**：`aa43645c`
+
+#### D11 — Cancellation Token 扩展至工具执行层
+
+**决策**：将 `tokio_util::sync::CancellationToken` 穿透到 `dispatch_tool_calls` 和 `execute_tool_call`。
+
+- `AgentLoop::dispatch_tool_calls` trait 方法新增 `cancel_token: &CancellationToken` 参数
+- `Agent::dispatch_tool_calls`（`dispatch.rs`）中：
+  - Phase 1（并发启动 futures）前检查 `is_cancelled()`
+  - Phase 2（await 结果）循环中逐 future 检查 token
+- `loop_streaming.rs` / `loop_sync.rs` 的 trait 实现及调用点同步更新
+- `loop_trait.rs` 测试中的 `MockLoopCircuit` 同步更新
+- **Commit**：`0561b8ca`
+
+#### D12 — Loop Detector 增强（Warning + 模式检测）
+
+**决策**：升级 `LoopDetector` 从 `bool` 返回升级为 `LoopDetection` 枚举，增加 Warning 级别和 args 模式检测。
+
+**设计**：
+```rust
+pub enum LoopDetection {
+    Ok,
+    Warning { tool_name: String, message: String },
+    Break { tool_name: String, message: String },
+}
+```
+
+**检测规则**：
+| 条件 | 结果 | 动作 |
+|------|------|------|
+| 相同输出哈希 == 2 | Warning | 注入 system 提示："注意：工具 X 连续返回相同结果，请尝试不同策略" |
+| 相同输出哈希 >= 3 | Break | 硬终止（当前行为） |
+| 相同 tool + 相同 args >= 2 | Warning | 注入 system 提示 |
+
+**实现**：
+- `loop_detector.rs`：`LoopDetector` 新增 `tool_patterns: HashMap<String, Vec<u64>>`，`record()` 接受 `args` 参数
+- `dispatch.rs`：`LoopDetection::Warning` 时将干预消息作为 system message 加入 `messages`；`Break` 时 fatal
+- 新增 5 个单元测试：Warning 级别、Break 级别、模式检测、reset、不同工具互不干扰
+- **Commit**：`0561b8ca`（与 D11 合并提交）
+
+### 11.4 脚手架文档
+
+Codex + ZeroClaw 架构探索的脚手架设计已归档于：
+- `vault/clarity/architecture/scaffolds/provider-retry-scaffold.md`
+- `vault/clarity/architecture/scaffolds/cancellation-token-scaffold.md`
+- `vault/clarity/architecture/scaffolds/loop-detector-scaffold.md`
+
+### 11.5 跨项目接口契约更新
+
+| 方向 | 接口 | 变更 | 兼容性 |
+|------|------|------|--------|
+| clarity internal | `AgentLoop::dispatch_tool_calls` | 新增 `cancel_token` 参数 | ⚠️ 内部 trait 变更，无外部影响 |
+| clarity internal | `LoopDetector::record` | 新增 `args` 参数，返回 `LoopDetection` | ⚠️ 内部 API 变更 |
+| clarity → LLM | `complete` / `stream` | 包装重试层 | ✅ 透明增强 |
+
+### 11.6 测试基线
+
+- **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **734 passed / 0 failed / 6 ignored**
+- **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
+- **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁（非代码缺陷）/ 3 ignored**
+
+---
+
 *本文件由 AI 会话维护，人类开发者可直接编辑。重大架构变更需同步更新。*
