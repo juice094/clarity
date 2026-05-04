@@ -66,11 +66,12 @@ pub use devkit::{DevkitAsset, DevkitProjectContextResult, DevkitRepo, DevkitVaul
 // =============================================================================
 
 use clarity_contract::{AgentError, ToolError, ToolResult};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{oneshot, RwLock};
@@ -343,6 +344,27 @@ pub fn map_mcp_error(err: McpError) -> ToolError {
     }
 }
 
+/// Pre-compiled regex patterns for credential scrubbing.
+static CREDENTIAL_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    let patterns = [
+        r#"(?i)api[_-]?key\s*[:=]\s*["']?[a-zA-Z0-9_\-]{16,}["']?"#,
+        r#"(?i)token\s*[:=]\s*["']?[a-zA-Z0-9_\-]{16,}["']?"#,
+        r#"(?i)password\s*[:=]\s*["']?[^"'\s]{8,}["']?"#,
+        r"sk-[a-zA-Z0-9]{20,}",
+        r"AIza[a-zA-Z0-9_\-]{30,}",
+    ];
+    patterns.iter().filter_map(|p| Regex::new(p).ok()).collect()
+});
+
+/// Scrub sensitive credentials from text before sending to LLM context.
+fn scrub_credentials(text: &str) -> String {
+    let mut result = text.to_string();
+    for re in CREDENTIAL_PATTERNS.iter() {
+        result = re.replace_all(&result, "[REDACTED]").to_string();
+    }
+    result
+}
+
 /// Process an MCP tool call result, extracting text content and detecting
 /// application-level errors in JSON payloads.
 ///
@@ -369,7 +391,7 @@ pub fn process_mcp_tool_result(result: ToolCallResult) -> ToolResult<Value> {
     let joined = texts.join("\n");
 
     if result.is_error {
-        return Err(ToolError::execution_failed(joined));
+        return Err(ToolError::execution_failed(scrub_credentials(&joined)));
     }
 
     // Detect application-level errors in JSON payloads
@@ -378,11 +400,11 @@ pub fn process_mcp_tool_result(result: ToolCallResult) -> ToolResult<Value> {
         let has_error_field = parsed.get("error").is_some();
         let success_false = parsed.get("success").and_then(|v| v.as_bool()) == Some(false);
         if has_error_field || success_false {
-            return Err(ToolError::execution_failed(joined));
+            return Err(ToolError::execution_failed(scrub_credentials(&joined)));
         }
     }
 
-    Ok(Value::String(joined))
+    Ok(Value::String(scrub_credentials(&joined)))
 }
 
 // =============================================================================
@@ -415,5 +437,25 @@ mod tests {
     fn test_mcp_client_instance() {
         let instance = McpClientBuilder::stdio("test", "echo").build();
         assert!(matches!(instance, McpClientInstance::Stdio(_)));
+    }
+
+    #[test]
+    fn test_scrub_credentials_sk_pattern() {
+        let input = "Error: token sk-abc12345678901234567890 is invalid";
+        let expected = "Error: token [REDACTED] is invalid";
+        assert_eq!(scrub_credentials(input), expected);
+    }
+
+    #[test]
+    fn test_scrub_credentials_api_key_pattern() {
+        let input = "config: api_key=supersecret1234567890abcdef";
+        let expected = "config: [REDACTED]";
+        assert_eq!(scrub_credentials(input), expected);
+    }
+
+    #[test]
+    fn test_scrub_credentials_no_match() {
+        let input = "Hello world, nothing sensitive here.";
+        assert_eq!(scrub_credentials(input), input);
     }
 }

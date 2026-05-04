@@ -429,10 +429,9 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
-            let (display_name, base_url, api_fmt) = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let prov = app.settings_store.provider_registry.get(&current);
+            let (display_name, base_url, api_fmt) = prov
+                .as_ref()
                 .map(|p| {
                     (
                         p.display().to_string(),
@@ -441,10 +440,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     )
                 })
                 .unwrap_or_default();
-            let key = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let key = prov
+                .as_ref()
                 .and_then(|p| p.resolve_api_key())
                 .unwrap_or_default();
             let model = app.settings_store.settings_edit.model.clone();
@@ -453,6 +450,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     format!("{}: No API key configured", display_name),
                     ToastLevel::Warn,
                 );
+            } else if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
+                app.push_toast(e, ToastLevel::Warn);
             } else {
                 let cfg = RuntimeProviderConfig {
                     provider_id: current.clone(),
@@ -492,10 +491,9 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .add_enabled(!is_local && !is_refreshing, refresh_btn)
             .clicked()
         {
-            let (_, base_url, api_fmt) = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let prov = app.settings_store.provider_registry.get(&current);
+            let (_, base_url, api_fmt) = prov
+                .as_ref()
                 .map(|p| {
                     (
                         p.display().to_string(),
@@ -504,16 +502,12 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     )
                 })
                 .unwrap_or_default();
-            let display_name = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let display_name = prov
+                .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
-            let key = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let key = prov
+                .as_ref()
                 .and_then(|p| p.resolve_api_key())
                 .unwrap_or_default();
             let model = app.settings_store.settings_edit.model.clone();
@@ -522,6 +516,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     format!("{}: No API key configured", display_name),
                     ToastLevel::Warn,
                 );
+            } else if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
+                app.push_toast(e, ToastLevel::Warn);
             } else {
                 let cfg = RuntimeProviderConfig {
                     provider_id: current.clone(),
@@ -552,10 +548,9 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         .fill(theme.accent)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local, apply_btn).clicked() {
-            let (display_name, base_url, api_fmt) = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let prov = app.settings_store.provider_registry.get(&current);
+            let (display_name, base_url, api_fmt) = prov
+                .as_ref()
                 .map(|p| {
                     (
                         p.display().to_string(),
@@ -564,26 +559,28 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     )
                 })
                 .unwrap_or_default();
-            let key = app
-                .settings_store
-                .provider_registry
-                .get(&current)
+            let key = prov
+                .as_ref()
                 .and_then(|p| p.resolve_api_key())
                 .unwrap_or_default();
             let model = app.settings_store.settings_edit.model.clone();
-            let cfg = RuntimeProviderConfig {
-                provider_id: current.clone(),
-                base_url,
-                api_format: api_fmt,
-                api_key: key,
-                model: model.clone(),
-            };
-            set_provider_config(cfg);
-            app.auto_save_settings();
-            app.push_toast(
-                format!("Applied: {} / {}", display_name, model),
-                ToastLevel::Info,
-            );
+            if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
+                app.push_toast(e, ToastLevel::Warn);
+            } else {
+                let cfg = RuntimeProviderConfig {
+                    provider_id: current.clone(),
+                    base_url,
+                    api_format: api_fmt,
+                    api_key: key,
+                    model: model.clone(),
+                };
+                set_provider_config(cfg);
+                app.auto_save_settings();
+                app.push_toast(
+                    format!("Applied: {} / {}", display_name, model),
+                    ToastLevel::Info,
+                );
+            }
         }
     });
 }
@@ -686,24 +683,34 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                             models: vec![],
                             builtin: false,
                         };
-                        match app.settings_store.provider_registry.save_custom(&def) {
+                        match def.validate_api_key_prefix() {
+                            Err(e) => app.push_toast(e, ToastLevel::Warn),
                             Ok(()) => {
-                                app.settings_store.provider_registry = ProviderRegistry::load();
-                                app.push_toast(format!("Added: {}", name), ToastLevel::Info);
-                                app.settings_store.add_provider_name.clear();
-                                app.settings_store.add_provider_url.clear();
-                                app.settings_store.add_provider_key.clear();
-                                app.settings_store.show_add_provider = false;
-                                app.settings_store.settings_edit.provider = name.clone();
-                                if let Some(prov) = app.settings_store.provider_registry.get(&name)
-                                {
-                                    if !prov.models.is_empty() {
-                                        app.settings_store.settings_edit.model =
-                                            prov.models[0].clone();
+                                match app.settings_store.provider_registry.save_custom(&def) {
+                                    Ok(()) => {
+                                        app.settings_store.provider_registry =
+                                            ProviderRegistry::load();
+                                        app.push_toast(
+                                            format!("Added: {}", name),
+                                            ToastLevel::Info,
+                                        );
+                                        app.settings_store.add_provider_name.clear();
+                                        app.settings_store.add_provider_url.clear();
+                                        app.settings_store.add_provider_key.clear();
+                                        app.settings_store.show_add_provider = false;
+                                        app.settings_store.settings_edit.provider = name.clone();
+                                        if let Some(prov) =
+                                            app.settings_store.provider_registry.get(&name)
+                                        {
+                                            if !prov.models.is_empty() {
+                                                app.settings_store.settings_edit.model =
+                                                    prov.models[0].clone();
+                                            }
+                                        }
                                     }
+                                    Err(e) => app.push_toast(e.to_string(), ToastLevel::Error),
                                 }
                             }
-                            Err(e) => app.push_toast(e.to_string(), ToastLevel::Error),
                         }
                     }
                 }

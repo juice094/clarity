@@ -213,6 +213,87 @@ impl ProviderDefinition {
             &self.display_name
         }
     }
+
+    /// Validate that the resolved API key matches the expected prefix for this provider.
+    ///
+    /// Returns `Ok(())` if the key is valid, missing, or the provider does not require one.
+    /// Returns `Err` with a descriptive message if the key prefix is clearly wrong.
+    pub fn validate_api_key_prefix(&self) -> Result<(), String> {
+        let key = match self.resolve_api_key() {
+            Some(k) if !k.is_empty() => k,
+            _ => return Ok(()),
+        };
+
+        // Skip validation for providers that don't need keys.
+        if self.auth_type == AuthType::None {
+            return Ok(());
+        }
+
+        match self.id.as_str() {
+            "openai" => {
+                if !key.starts_with("sk-") {
+                    return Err(format!(
+                        "OpenAI API key must start with 'sk-'. Did you configure the wrong key for provider '{}'?",
+                        self.display()
+                    ));
+                }
+                if key.starts_with("sk-ant-") {
+                    return Err(format!(
+                        "OpenAI API key looks like an Anthropic key (starts with 'sk-ant-'). Did you configure the wrong key for provider '{}'?",
+                        self.display()
+                    ));
+                }
+            }
+            "anthropic" => {
+                if !key.starts_with("sk-ant-") {
+                    return Err(format!(
+                        "Anthropic API key must start with 'sk-ant-'. Did you configure the wrong key for provider '{}'?",
+                        self.display()
+                    ));
+                }
+            }
+            "gemini" => {
+                if !key.starts_with("AIza") {
+                    return Err(format!(
+                        "Gemini API key must start with 'AIza'. Did you configure the wrong key for provider '{}'?",
+                        self.display()
+                    ));
+                }
+            }
+            "local" => {
+                // No key expected.
+            }
+            _ => {
+                // For custom providers, detect cross-provider mismatches based on api_format.
+                match self.api_format {
+                    ApiFormat::AnthropicMessages => {
+                        if key.starts_with("sk-") && !key.starts_with("sk-ant-") {
+                            return Err(format!(
+                                "Provider '{}' uses Anthropic format, but the key looks like an OpenAI key (starts with 'sk-'). Did you configure the wrong key?",
+                                self.display()
+                            ));
+                        }
+                    }
+                    ApiFormat::OpenaiCompletions | ApiFormat::Kimi => {
+                        if key.starts_with("sk-ant-") {
+                            return Err(format!(
+                                "Provider '{}' uses OpenAI-compatible format, but the key looks like an Anthropic key (starts with 'sk-ant-'). Did you configure the wrong key?",
+                                self.display()
+                            ));
+                        }
+                        if key.starts_with("AIza") {
+                            return Err(format!(
+                                "Provider '{}' uses OpenAI-compatible format, but the key looks like a Gemini key (starts with 'AIza'). Did you configure the wrong key?",
+                                self.display()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl From<&ProviderDefinition> for clarity_core::llm::ProviderConfig {
@@ -550,5 +631,87 @@ models = ["model-a", "model-b"]
         let cfg: clarity_core::llm::ProviderConfig = (&def).into();
         assert_eq!(cfg.auth_type, clarity_core::llm::AuthType::OAuth);
         assert!(cfg.oauth.is_some());
+    }
+
+    #[test]
+    fn test_validate_api_key_prefix_openai_ok() {
+        let def = ProviderDefinition {
+            id: "openai".into(),
+            display_name: "OpenAI".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: "sk-test12345678901234567890".into(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: true,
+        };
+        assert!(def.validate_api_key_prefix().is_ok());
+    }
+
+    #[test]
+    fn test_validate_api_key_prefix_openai_anthropic_mismatch() {
+        let def = ProviderDefinition {
+            id: "openai".into(),
+            display_name: "OpenAI".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: "sk-ant-api03-xxxx".into(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: true,
+        };
+        let err = def.validate_api_key_prefix().unwrap_err();
+        assert!(err.contains("Anthropic"));
+    }
+
+    #[test]
+    fn test_validate_api_key_prefix_anthropic_ok() {
+        let def = ProviderDefinition {
+            id: "anthropic".into(),
+            display_name: "Anthropic".into(),
+            base_url: "https://api.anthropic.com".into(),
+            api_format: ApiFormat::AnthropicMessages,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: "sk-ant-api03-xxxx".into(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: true,
+        };
+        assert!(def.validate_api_key_prefix().is_ok());
+    }
+
+    #[test]
+    fn test_validate_api_key_prefix_anthropic_openai_mismatch() {
+        let def = ProviderDefinition {
+            id: "anthropic".into(),
+            display_name: "Anthropic".into(),
+            base_url: "https://api.anthropic.com".into(),
+            api_format: ApiFormat::AnthropicMessages,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: "sk-test12345678901234567890".into(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: true,
+        };
+        let err = def.validate_api_key_prefix().unwrap_err();
+        assert!(err.contains("sk-ant-"));
+    }
+
+    #[test]
+    fn test_validate_api_key_prefix_missing_key_skips() {
+        let def = ProviderDefinition {
+            id: "openai".into(),
+            display_name: "OpenAI".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: "".into(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: true,
+        };
+        assert!(def.validate_api_key_prefix().is_ok());
     }
 }
