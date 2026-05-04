@@ -55,6 +55,14 @@ impl Default for ScheduleCronTool {
 
 #[async_trait]
 impl Tool for ScheduleCronTool {
+    fn check_readiness(&self) -> Option<String> {
+        if self.manager.is_none() {
+            Some("BackgroundTaskManager not configured. Call agent.with_cron_manager() first.".to_string())
+        } else {
+            None
+        }
+    }
+
     fn name(&self) -> &str {
         "schedule_cron"
     }
@@ -134,6 +142,14 @@ impl Default for ListCronTool {
 
 #[async_trait]
 impl Tool for ListCronTool {
+    fn check_readiness(&self) -> Option<String> {
+        if self.manager.is_none() {
+            Some("BackgroundTaskManager not configured. Call agent.with_cron_manager() first.".to_string())
+        } else {
+            None
+        }
+    }
+
     fn name(&self) -> &str {
         "list_cron"
     }
@@ -201,6 +217,14 @@ impl Default for CancelCronTool {
 
 #[async_trait]
 impl Tool for CancelCronTool {
+    fn check_readiness(&self) -> Option<String> {
+        if self.manager.is_none() {
+            Some("BackgroundTaskManager not configured. Call agent.with_cron_manager() first.".to_string())
+        } else {
+            None
+        }
+    }
+
     fn name(&self) -> &str {
         "cancel_cron"
     }

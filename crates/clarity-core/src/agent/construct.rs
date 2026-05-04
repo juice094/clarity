@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 impl Agent {
     /// Create a new Agent with the given registry and default config
@@ -25,6 +25,15 @@ impl Agent {
 
     /// Create a new Agent with custom configuration
     pub fn with_config(registry: ToolRegistry, config: AgentConfig) -> Self {
+        // Runtime self-check: log any tools pending configuration
+        if let Ok((ready, pending)) = registry.self_check() {
+            if !pending.is_empty() {
+                warn!("ToolRegistry self-check: {} ready, {} pending — {:?}", ready, pending.len(), pending);
+            } else {
+                info!("ToolRegistry self-check: all {} tools ready", ready);
+            }
+        }
+
         Self {
             registry,
             config: config.clone(),

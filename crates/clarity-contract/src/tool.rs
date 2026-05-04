@@ -141,6 +141,15 @@ pub trait Tool: Send + Sync {
     fn requires_approval(&self) -> bool {
         false
     }
+
+    /// Runtime readiness check — returns `None` if the tool is ready to execute,
+    /// or `Some(reason)` if a required dependency is missing.
+    ///
+    /// Called by `ToolRegistry::self_check()` after registration.
+    /// The default implementation always returns `None` (always ready).
+    fn check_readiness(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Type-erased tool wrapper for storage in collections.

@@ -337,6 +337,43 @@ impl ToolRegistry {
         Ok(tools.len())
     }
 
+    /// Run a readiness check on all registered tools.
+    ///
+    /// Returns `(ready_count, pending)` where `pending` is a list of
+    /// `(tool_name, reason)` for tools that report themselves as not ready.
+    /// Logs a summary at `info` level.
+    pub fn self_check(&self) -> Result<(usize, Vec<(String, String)>), AgentError> {
+        let tools = self
+            .tools
+            .read()
+            .map_err(|_| AgentError::Registry("Registry lock poisoned".to_string()))?;
+
+        let mut ready = 0;
+        let mut pending = Vec::new();
+        for tool in tools.values() {
+            if let Some(reason) = tool.check_readiness() {
+                pending.push((tool.name().to_string(), reason));
+            } else {
+                ready += 1;
+            }
+        }
+
+        if pending.is_empty() {
+            info!("ToolRegistry self-check: all {} tools ready", ready);
+        } else {
+            info!(
+                "ToolRegistry self-check: {} tools ready, {} tools pending configuration",
+                ready,
+                pending.len()
+            );
+            for (name, reason) in &pending {
+                info!("  - {}: {}", name, reason);
+            }
+        }
+
+        Ok((ready, pending))
+    }
+
     /// Check if the registry is empty
     pub fn is_empty(&self) -> Result<bool, AgentError> {
         Ok(self.len()? == 0)
