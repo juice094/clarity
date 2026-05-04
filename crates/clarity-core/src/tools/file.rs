@@ -544,40 +544,54 @@ impl Tool for FileEditTool {
                 "path": {
                     "type": "string",
                     "description": "Absolute or relative path to the file"
-                },
-                "old_string": {
-                    "type": "string",
-                    "description": "The text to search for and replace (legacy single-replacement mode)"
-                },
-                "new_string": {
-                    "type": "string",
-                    "description": "The replacement text (legacy single-replacement mode)"
-                },
-                "replace_all": {
-                    "type": "boolean",
-                    "description": "Replace all occurrences in legacy mode (default: false)",
-                    "default": false
-                },
-                "replacements": {
-                    "type": "array",
-                    "description": "Batch replacements: array of {old_string, new_string} objects. Takes precedence over legacy single-replacement fields.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "old_string": {
-                                "type": "string",
-                                "description": "The text to search for and replace"
-                            },
-                            "new_string": {
-                                "type": "string",
-                                "description": "The replacement text"
-                            }
-                        },
-                        "required": ["old_string", "new_string"]
-                    }
                 }
             },
-            "required": ["path"]
+            "required": ["path"],
+            "oneOf": [
+                {
+                    "description": "Legacy single-replacement mode",
+                    "properties": {
+                        "old_string": {
+                            "type": "string",
+                            "description": "The text to search for and replace"
+                        },
+                        "new_string": {
+                            "type": "string",
+                            "description": "The replacement text"
+                        },
+                        "replace_all": {
+                            "type": "boolean",
+                            "description": "Replace all occurrences (default: false)",
+                            "default": false
+                        }
+                    },
+                    "required": ["old_string", "new_string"]
+                },
+                {
+                    "description": "Batch replacement mode",
+                    "properties": {
+                        "replacements": {
+                            "type": "array",
+                            "description": "Array of {old_string, new_string} objects",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "old_string": {
+                                        "type": "string",
+                                        "description": "The text to search for and replace"
+                                    },
+                                    "new_string": {
+                                        "type": "string",
+                                        "description": "The replacement text"
+                                    }
+                                },
+                                "required": ["old_string", "new_string"]
+                            }
+                        }
+                    },
+                    "required": ["replacements"]
+                }
+            ]
         })
     }
 
