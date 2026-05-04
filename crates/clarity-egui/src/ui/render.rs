@@ -71,8 +71,8 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
                 .inner_margin(egui::Margin::symmetric(16, 12))
                 .show(ui, |ui| {
                     ui.set_max_width(max_width);
-                    for block in visible_blocks {
-                        render_content_block(ui, block, theme);
+                    for (idx, block) in visible_blocks.iter().enumerate() {
+                        render_content_block(ui, block, theme, idx);
                     }
                 });
             ui.add_space(theme.space_16);
@@ -139,7 +139,7 @@ fn should_show_tool_in_chat(name: &str) -> bool {
     matches!(name, "file_read" | "file_write" | "plan" | "grep")
 }
 
-fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme) {
+fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme, block_idx: usize) {
     match block {
         ContentBlock::Text { text } => {
             let parsed = crate::ui::markdown::parse_markdown(text);
@@ -179,7 +179,7 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme) 
                     .strong()
                     .color(theme.text_muted),
             )
-            .id_salt(format!("tool_result_{}", name))
+            .id_salt(format!("tool_result_{}_{}", name, block_idx))
             .default_open(false)
             .show(ui, |ui| {
                 let parsed = crate::ui::markdown::parse_markdown(output);
@@ -205,6 +205,7 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme) 
                     .strong()
                     .color(theme.text_muted),
             )
+            .id_salt(format!("think_{}", block_idx))
             .default_open(false)
             .show(ui, |ui| {
                 for step in steps {

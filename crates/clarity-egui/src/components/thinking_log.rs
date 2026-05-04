@@ -67,7 +67,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
         .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
         .inner_margin(egui::Margin::same(12))
         .show(ui, |ui| {
-            for tc in app.chat_store.tool_calls.iter().rev().take(visible_count) {
+            for (idx, tc) in app.chat_store.tool_calls.iter().rev().take(visible_count).enumerate() {
                 let inferred = tc.inferred_status();
 
                 // ── Row 1: status icon + tool name ──
@@ -124,6 +124,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                                 .size(theme.text_xs)
                                 .color(theme.danger),
                         )
+                        .id_salt(format!("error_detail_{}", idx))
                         .show(ui, |ui| {
                             ui.label(
                                 egui::RichText::new(result)
