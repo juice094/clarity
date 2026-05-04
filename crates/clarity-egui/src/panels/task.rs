@@ -1,4 +1,5 @@
 use crate::App;
+use clarity_core::background::TaskStatus;
 
 pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::right("task_panel")
@@ -16,51 +17,47 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
             ui.add_space(app.ui_store.theme.space_12);
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new("Workspace")
+                    egui::RichText::new("Tasks")
                         .size(app.ui_store.theme.text_lg)
                         .strong()
                         .color(app.ui_store.theme.text),
                 );
-            });
-
-            // ---- Files tree (full height, preview moves to main chat area) ----
-            ui.add_space(app.ui_store.theme.space_12);
-            let mut clicked_file: Option<std::path::PathBuf> = None;
-            let tree_max_h = (ui.available_height() - 40.0).max(120.0);
-            egui::ScrollArea::vertical()
-                .id_salt("file_tree_scroll_right")
-                .max_height(tree_max_h)
-                .show(ui, |ui| {
-                    if let Ok(cwd) = std::env::current_dir() {
-                        let selected_path =
-                            app.ui_store.preview_item.as_ref().and_then(|p| match p {
-                                crate::ui::types::PreviewItem::File { path, .. } => {
-                                    Some(path.as_str())
-                                }
-                                _ => None,
-                            });
-                        crate::ui::file_browser::render_file_tree(
-                            ui,
-                            &cwd,
-                            &app.ui_store.theme,
-                            0,
-                            selected_path,
-                            &mut |path| {
-                                clicked_file = Some(path.to_path_buf());
-                            },
-                        );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .button(
+                            egui::RichText::new("+ New")
+                                .size(app.ui_store.theme.text_sm)
+                                .color(app.ui_store.theme.text),
+                        )
+                        .clicked()
+                    {
+                        app.task_store.task_create_modal_open = true;
                     }
                 });
-            if let Some(path) = clicked_file {
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                let content = std::fs::read_to_string(&path).ok();
-                app.ui_store.preview_item = content.map(|c| crate::ui::types::PreviewItem::File {
-                    name: name.clone(),
-                    content: c,
-                    path: path.to_string_lossy().to_string(),
+            });
+
+            ui.add_space(app.ui_store.theme.space_12);
+            let action = crate::ui::task_panel::render_task_panel(
+                ui,
+                &app.task_store.tasks,
+                &app.ui_store.theme,
+            );
+            if let crate::ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
+                let store = app.state.task_store.clone();
+                let tx = app.ui_tx.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = store.update_status(&task_id, TaskStatus::Cancelled).await {
+                        tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+                    } else {
+                        match store.list_all().await {
+                            Ok(tasks) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskList(tasks));
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to list tasks after cancel: {}", e);
+                            }
+                        }
+                    }
                 });
             }
         });

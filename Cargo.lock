@@ -917,6 +917,7 @@ dependencies = [
  "candle-transformers",
  "chrono",
  "clarity-contract",
+ "clarity-mcp",
  "clarity-memory",
  "clarity-wire",
  "criterion",
@@ -1046,6 +1047,28 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
+]
+
+[[package]]
+name = "clarity-mcp"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clarity-contract",
+ "clarity-wire",
+ "dirs 5.0.1",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

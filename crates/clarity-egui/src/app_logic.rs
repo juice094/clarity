@@ -212,7 +212,7 @@ impl App {
             .ok()
             .and_then(|p| std::fs::metadata(&p).ok())
             .and_then(|m| m.modified().ok());
-        Self {
+        let app = Self {
             state,
             runtime,
             ui_tx,
@@ -253,7 +253,7 @@ impl App {
                 kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
             },
             task_store: crate::stores::TaskStore {
-                task_panel_open: false,
+                task_panel_open: true,
                 tasks: vec![],
                 last_task_refresh: now,
                 task_create_modal_open: false,
@@ -309,7 +309,9 @@ impl App {
                 },
                 onboarding_progress_rx: None,
             },
-        }
+        };
+        app.refresh_tasks();
+        app
     }
 
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, level: ToastLevel) {

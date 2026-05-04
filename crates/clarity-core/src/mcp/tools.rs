@@ -6,9 +6,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::ToolError;
-use crate::mcp::enhanced::{McpClient, McpClientInstance, McpError, McpRegistry, McpTool};
 use crate::registry::ToolRegistry;
 use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_mcp::{McpClient, McpClientInstance, McpError, McpRegistry, McpTool};
 
 /// A Clarity `Tool` backed by an MCP server.
 pub struct McpToolWrapper {
@@ -74,8 +74,8 @@ impl Tool for McpToolWrapper {
         let mut texts = Vec::new();
         for content in result.content {
             match content {
-                crate::mcp::enhanced::ToolContent::Text { text } => texts.push(text),
-                crate::mcp::enhanced::ToolContent::Resource { resource } => {
+                clarity_mcp::ToolContent::Text { text } => texts.push(text),
+                clarity_mcp::ToolContent::Resource { resource } => {
                     if let Some(text) = resource.text {
                         texts.push(text);
                     }
@@ -95,8 +95,6 @@ pub async fn register_mcp_tools(
     mcp_registry: &McpRegistry,
     tool_registry: &ToolRegistry,
 ) -> Result<(), McpError> {
-    use crate::mcp::enhanced::McpClient;
-
     for (server_name, client) in mcp_registry.iter() {
         let tools = client.read().await.list_tools().await?;
         for tool in tools {
@@ -145,7 +143,7 @@ mod tests {
         }
 
         let server_path = tmp.path().to_str().unwrap();
-        let mut client = crate::mcp::enhanced::McpClientBuilder::stdio("filesystem", "npx")
+        let mut client = clarity_mcp::McpClientBuilder::stdio("filesystem", "npx")
             .arg("-y")
             .arg("@modelcontextprotocol/server-filesystem")
             .arg(server_path)
@@ -178,7 +176,7 @@ mod tests {
             .content
             .into_iter()
             .filter_map(|c| match c {
-                crate::mcp::enhanced::ToolContent::Text { text } => Some(text),
+                clarity_mcp::ToolContent::Text { text } => Some(text),
                 _ => None,
             })
             .collect();

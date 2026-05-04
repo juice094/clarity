@@ -1,0 +1,38 @@
+[package]
+name = "clarity-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MCP (Model Context Protocol) client library for Project Clarity"
+
+[lib]
+name = "clarity_mcp"
+path = "src/lib.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+
+# External dependencies
+reqwest = { version = "0.12", features = ["json", "stream"] }
+url = "2.5"
+dirs = "5.0"
+
+# Internal crates
+clarity-contract = { path = "../clarity-contract" }
+clarity-wire = { path = "../clarity-wire" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.9"
+tracing-subscriber = { workspace = true }

@@ -46,6 +46,7 @@ tokenizers = { version = "0.21", optional = true }
 
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }
+clarity-mcp = { path = "../clarity-mcp" }
 clarity-wire = { path = "../clarity-wire" }
 
 [dev-dependencies]
