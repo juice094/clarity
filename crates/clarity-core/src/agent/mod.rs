@@ -17,11 +17,11 @@ pub mod controller;
 pub mod definition;
 pub mod driver;
 pub mod enhanced;
+pub mod flow;
+pub mod hooks;
 pub mod ops;
 pub mod tool_map;
 pub mod tool_parser;
-pub mod flow;
-pub mod hooks;
 
 mod construct;
 mod execution;
@@ -33,6 +33,7 @@ pub mod plan;
 pub use crate::types::{Plan, PlanResult, PlanStep};
 mod prompt;
 mod run;
+mod turn_context;
 pub use executor::AgentExecutor;
 
 #[cfg(test)]
@@ -92,11 +93,7 @@ struct AgentInner {
     llm: Option<Arc<dyn LlmProvider>>,
     memory_store: Option<Arc<dyn MemoryStore>>,
     skill_registry: Option<SkillRegistry>,
-    session_usage: TokenUsage,
     active_skill: Option<String>,
-    /// Snapshotted at turn start so that mid-turn set_active_skill() calls
-    /// do not affect the in-flight turn.
-    snapshotted_skill: Option<String>,
     file_prompt_cache: Option<String>,
     /// File paths representing the user's current operation.
     /// Used to dynamically activate skills whose `paths` patterns match.
@@ -112,13 +109,10 @@ struct AgentInner {
     /// Provider label for internal logging (e.g. "deepseek-chat", "claude-3-7-sonnet").
     /// NOT injected into the system prompt; used only for tracing/audit.
     provider_label: Option<String>,
-    /// Track recoverable tool failures per turn (tool_name -> count).
-    /// Reset at the start of each turn via `begin_turn()`.
-    recoverable_failure_counts: std::collections::HashMap<String, u32>,
-    /// Detects repeated identical tool outputs within a single turn.
-    loop_detector: loop_detector::LoopDetector,
     /// Optional lifecycle hook registry for intercepting tool calls and LLM input.
     hook_registry: Option<std::sync::Arc<hooks::HookRegistry>>,
+    /// Turn-level mutable state. Created by `begin_turn()` and cleared by `finish_turn()`.
+    turn_context: Option<turn_context::TurnContext>,
     /// Accumulated estimated cost today (USD). Reset daily or per session.
     daily_cost_usd: f64,
     /// Date of the last cost record (to detect day boundary).
@@ -467,11 +461,7 @@ impl Agent {
     ///
     /// Each node in the flow becomes one agent turn. Decision nodes branch
     /// based on the LLM's `<choice>...</choice>` output.
-    pub async fn run_flow(
-        &self,
-        flow: &flow::Flow,
-        args: &str,
-    ) -> Result<String, AgentError> {
+    pub async fn run_flow(&self, flow: &flow::Flow, args: &str) -> Result<String, AgentError> {
         let runner = flow::FlowRunner::new(flow);
         runner
             .run(self, args)

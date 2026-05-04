@@ -43,13 +43,7 @@ impl Agent {
                 llm: None,
                 memory_store: None,
                 skill_registry: None,
-                session_usage: TokenUsage {
-                    prompt_tokens: 0,
-                    completion_tokens: 0,
-                    total_tokens: 0,
-                },
                 active_skill: None,
-                snapshotted_skill: None,
                 file_prompt_cache: None,
                 active_file_paths: Vec::new(),
                 approval_mode: ApprovalMode::default(),
@@ -57,12 +51,11 @@ impl Agent {
                 active_files: None,
                 project_metadata: None,
                 provider_label: None,
-                recoverable_failure_counts: std::collections::HashMap::new(),
-                loop_detector: crate::agent::loop_detector::LoopDetector::new(3),
                 hook_registry: None,
                 daily_cost_usd: 0.0,
                 last_cost_date: chrono::Utc::now().date_naive(),
                 vision_llm: None,
+                turn_context: None,
             })),
         }
     }
@@ -390,10 +383,12 @@ impl Agent {
     /// Accumulate token usage into the session counter.
     pub(crate) fn accumulate_usage(&self, prompt_tokens: u32, completion_tokens: u32) {
         let mut inner = self.inner.write().unwrap();
-        inner.session_usage.prompt_tokens += prompt_tokens;
-        inner.session_usage.completion_tokens += completion_tokens;
-        inner.session_usage.total_tokens =
-            inner.session_usage.prompt_tokens + inner.session_usage.completion_tokens;
+        if let Some(ref mut ctx) = inner.turn_context {
+            ctx.session_usage.prompt_tokens += prompt_tokens;
+            ctx.session_usage.completion_tokens += completion_tokens;
+            ctx.session_usage.total_tokens =
+                ctx.session_usage.prompt_tokens + ctx.session_usage.completion_tokens;
+        }
     }
 
     /// Store a conversation memory, optionally chunking long content for better retrieval.
@@ -425,7 +420,17 @@ impl Agent {
 
     /// Get accumulated session token usage.
     pub fn get_session_usage(&self) -> TokenUsage {
-        self.inner.read().unwrap().session_usage.clone()
+        self.inner
+            .read()
+            .unwrap()
+            .turn_context
+            .as_ref()
+            .map(|c| c.session_usage.clone())
+            .unwrap_or(TokenUsage {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+            })
     }
 
     /// Get the tool registry
@@ -484,14 +489,10 @@ impl Agent {
                 inner.state = AgentState::Running {
                     cancel_token: token.clone(),
                 };
-                inner.session_usage = TokenUsage {
-                    prompt_tokens: 0,
-                    completion_tokens: 0,
-                    total_tokens: 0,
-                };
-                inner.snapshotted_skill = inner.active_skill.clone();
-                inner.recoverable_failure_counts.clear();
-                inner.loop_detector.reset();
+                inner.turn_context = Some(super::turn_context::TurnContext::new(
+                    inner.active_skill.clone(),
+                    3,
+                ));
                 Ok(token)
             }
         }
@@ -503,12 +504,17 @@ impl Agent {
         if matches!(inner.state, AgentState::Running { .. }) {
             inner.state = AgentState::Idle;
         }
-        inner.snapshotted_skill = None;
+        inner.turn_context = None;
     }
 
     /// Internal: access the snapshotted active skill for the current turn.
     pub(crate) fn snapshotted_active_skill(&self) -> Option<String> {
-        self.inner.read().unwrap().snapshotted_skill.clone()
+        self.inner
+            .read()
+            .unwrap()
+            .turn_context
+            .as_ref()
+            .and_then(|c| c.snapshotted_skill.clone())
     }
 
     /// Internal: access the file prompt cache.

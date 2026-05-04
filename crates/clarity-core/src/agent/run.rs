@@ -13,9 +13,9 @@ use tracing::{debug, info, warn};
 /// Check if an LLM error is caused by context window overflow.
 /// Check if any message in the conversation contains image/vision content.
 fn messages_contain_vision(messages: &[Message]) -> bool {
-    messages.iter().any(|m| {
-        m.content.contains("<image>") || m.content.contains("![")
-    })
+    messages
+        .iter()
+        .any(|m| m.content.contains("<image>") || m.content.contains("!["))
 }
 
 fn is_context_overflow_error(err: &AgentError) -> bool {
@@ -76,15 +76,13 @@ fn scrub_credentials(input: &str) -> String {
     static RE_SK: OnceLock<Regex> = OnceLock::new();
 
     let re_keyval = RE_KEYVAL.get_or_init(|| {
-        Regex::new(r#"(?i)(api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?[^\s"']+["']?"#)
-            .unwrap()
+        Regex::new(
+            r#"(?i)(api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?[^\s"']+["']?"#,
+        )
+        .unwrap()
     });
-    let re_bearer = RE_BEARER.get_or_init(|| {
-        Regex::new(r"Bearer\s+[\w\-]+").unwrap()
-    });
-    let re_sk = RE_SK.get_or_init(|| {
-        Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap()
-    });
+    let re_bearer = RE_BEARER.get_or_init(|| Regex::new(r"Bearer\s+[\w\-]+").unwrap());
+    let re_sk = RE_SK.get_or_init(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
 
     let mut result = input.to_string();
     result = re_keyval
@@ -99,7 +97,9 @@ fn scrub_credentials(input: &str) -> String {
             }
         })
         .to_string();
-    result = re_bearer.replace_all(&result, "Bearer [REDACTED]").to_string();
+    result = re_bearer
+        .replace_all(&result, "Bearer [REDACTED]")
+        .to_string();
     result = re_sk.replace_all(&result, "[REDACTED]").to_string();
 
     result
@@ -161,7 +161,15 @@ impl Agent {
         let mut tool_names = Vec::new();
         let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
         let mut execute_flags: Vec<bool> = Vec::new();
-        let mut futures: Vec<Pin<Box<dyn std::future::Future<Output = Result<serde_json::Value, crate::error::ToolError>> + Send>>> = Vec::new();
+        let mut futures: Vec<
+            Pin<
+                Box<
+                    dyn std::future::Future<
+                            Output = Result<serde_json::Value, crate::error::ToolError>,
+                        > + Send,
+                >,
+            >,
+        > = Vec::new();
 
         // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
         for tool_call in tool_calls {
@@ -241,7 +249,11 @@ impl Agent {
                     fatal = Some((tool_call.function.name.clone(), e.to_string()));
                 } else {
                     let mut inner = self.inner.write().unwrap();
-                    let count = inner
+                    let ctx = inner
+                        .turn_context
+                        .as_mut()
+                        .expect("turn_context must be set during dispatch_tool_calls");
+                    let count = ctx
                         .recoverable_failure_counts
                         .entry(tool_call.function.name.clone())
                         .or_insert(0);
@@ -261,12 +273,19 @@ impl Agent {
             // Check for repetitive output loops (only if no fatal error already).
             if fatal.is_none() {
                 let mut inner = self.inner.write().unwrap();
-                if inner.loop_detector.record(&tool_call.function.name, &result_content) {
+                let ctx = inner
+                    .turn_context
+                    .as_mut()
+                    .expect("turn_context must be set during dispatch_tool_calls");
+                if ctx
+                    .loop_detector
+                    .record(&tool_call.function.name, &result_content)
+                {
                     fatal = Some((
                         tool_call.function.name.clone(),
                         format!(
                             "Loop detected: tool produced identical output {} times",
-                            inner.loop_detector.max_repetitions()
+                            ctx.loop_detector.max_repetitions()
                         ),
                     ));
                 }
@@ -339,49 +358,59 @@ impl Agent {
                 self.check_budget(estimated_cost)?;
             }
 
-            let (response, actual_prompt_tokens, actual_completion_tokens) = match tokio::time::timeout(
-                tokio::time::Duration::from_secs(45),
-                llm.complete(messages, tools),
-            )
-            .await
-            {
-                Ok(Ok(r)) => {
-                    let completion_tokens = r.content.len().div_ceil(4) as u32;
-                    (r, prompt_tokens, completion_tokens)
-                }
-                Ok(Err(e)) if is_context_overflow_error(&e) => {
-                    warn!("Context overflow detected in sync loop, trimming tool results and retrying");
-                    fast_trim_tool_results(messages);
-                    let retry_prompt_tokens =
-                        crate::agent::compaction_service::CompactionService::estimate_tokens(messages)
-                            as u32;
-                    if let Some(pricing) = llm.capabilities().pricing {
-                        let estimated_completion = retry_prompt_tokens / 2;
-                        let estimated_cost = pricing.estimate_cost(retry_prompt_tokens, estimated_completion);
-                        self.check_budget(estimated_cost)?;
+            let (response, actual_prompt_tokens, actual_completion_tokens) =
+                match tokio::time::timeout(
+                    tokio::time::Duration::from_secs(45),
+                    llm.complete(messages, tools),
+                )
+                .await
+                {
+                    Ok(Ok(r)) => {
+                        let completion_tokens = r.content.len().div_ceil(4) as u32;
+                        (r, prompt_tokens, completion_tokens)
                     }
-                    // Retry once after trimming.
-                    match tokio::time::timeout(
-                        tokio::time::Duration::from_secs(45),
-                        llm.complete(messages, tools),
-                    )
-                    .await
-                    {
-                        Ok(Ok(r)) => {
-                            let completion_tokens = r.content.len().div_ceil(4) as u32;
-                            (r, retry_prompt_tokens, completion_tokens)
+                    Ok(Err(e)) if is_context_overflow_error(&e) => {
+                        warn!("Context overflow detected in sync loop, trimming tool results and retrying");
+                        fast_trim_tool_results(messages);
+                        let retry_prompt_tokens =
+                            crate::agent::compaction_service::CompactionService::estimate_tokens(
+                                messages,
+                            ) as u32;
+                        if let Some(pricing) = llm.capabilities().pricing {
+                            let estimated_completion = retry_prompt_tokens / 2;
+                            let estimated_cost =
+                                pricing.estimate_cost(retry_prompt_tokens, estimated_completion);
+                            self.check_budget(estimated_cost)?;
                         }
-                        Ok(Err(e2)) => return Err(e2),
-                        Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
+                        // Retry once after trimming.
+                        match tokio::time::timeout(
+                            tokio::time::Duration::from_secs(45),
+                            llm.complete(messages, tools),
+                        )
+                        .await
+                        {
+                            Ok(Ok(r)) => {
+                                let completion_tokens = r.content.len().div_ceil(4) as u32;
+                                (r, retry_prompt_tokens, completion_tokens)
+                            }
+                            Ok(Err(e2)) => return Err(e2),
+                            Err(_) => {
+                                return Err(AgentError::Llm(
+                                    "LLM request timed out after 45s".into(),
+                                ))
+                            }
+                        }
                     }
-                }
-                Ok(Err(e)) => return Err(e),
-                Err(_) => return Err(AgentError::Llm("LLM request timed out after 45s".into())),
-            };
+                    Ok(Err(e)) => return Err(e),
+                    Err(_) => {
+                        return Err(AgentError::Llm("LLM request timed out after 45s".into()))
+                    }
+                };
 
             // Record actual cost
             if let Some(pricing) = llm.capabilities().pricing {
-                let actual_cost = pricing.estimate_cost(actual_prompt_tokens, actual_completion_tokens);
+                let actual_cost =
+                    pricing.estimate_cost(actual_prompt_tokens, actual_completion_tokens);
                 self.record_cost(actual_cost);
             }
 
@@ -393,7 +422,10 @@ impl Agent {
             // Fallback: parse tool calls from content if native tool_calls are empty
             let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
                 if let Some(format) = super::tool_parser::detect_tool_format(&response.content) {
-                    info!("Detected tool format {:?}, parsing tool calls from content", format);
+                    info!(
+                        "Detected tool format {:?}, parsing tool calls from content",
+                        format
+                    );
                     super::tool_parser::parse_tool_calls(&response.content, format)
                 } else {
                     Vec::new()
@@ -424,10 +456,7 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            tool_names.extend(
-                self.dispatch_tool_calls(&tool_calls, messages)
-                    .await?,
-            );
+            tool_names.extend(self.dispatch_tool_calls(&tool_calls, messages).await?);
         }
 
         Ok((final_response, completed, tool_names))
@@ -522,6 +551,10 @@ impl Agent {
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
+
+        // Capture usage before finish_turn clears turn_context.
+        let usage = self.get_session_usage();
+
         self.finish_turn();
 
         // Auto-classify delivery tier based on tools used this turn
@@ -535,8 +568,6 @@ impl Agent {
         };
 
         self.send_wire_message(WireMessage::TurnEnd);
-
-        let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
@@ -621,6 +652,10 @@ impl Agent {
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
+
+        // Capture usage before finish_turn clears turn_context.
+        let usage = self.get_session_usage();
+
         self.finish_turn();
 
         // Auto-classify delivery tier based on tools used this turn
@@ -634,8 +669,6 @@ impl Agent {
         };
 
         self.send_wire_message(WireMessage::TurnEnd);
-
-        let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
@@ -694,7 +727,8 @@ impl Agent {
             Message::user(query.as_ref()),
         ];
 
-        self.run_streaming_turn(messages, query.as_ref(), on_chunk).await
+        self.run_streaming_turn(messages, query.as_ref(), on_chunk)
+            .await
     }
 
     /// Run the streaming agent loop with a pre-built message list.
@@ -713,7 +747,8 @@ impl Agent {
             .map(|m| m.content.clone())
             .unwrap_or_default();
 
-        self.run_streaming_turn(messages, &query_hint, on_chunk).await
+        self.run_streaming_turn(messages, &query_hint, on_chunk)
+            .await
     }
 
     async fn run_streaming_loop<F>(
@@ -845,7 +880,11 @@ impl Agent {
             let was_streamed = turn_response.is_some();
             let response = match turn_response {
                 Some(r) => {
-                    debug!("Using streamed response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
+                    debug!(
+                        "Using streamed response (len={}, tool_calls={})",
+                        r.content.len(),
+                        r.tool_calls.len()
+                    );
                     r
                 }
                 None => {
@@ -870,23 +909,24 @@ impl Agent {
                                 ) as u32;
                             if let Some(pricing) = llm.capabilities().pricing {
                                 let estimated_completion = fallback_prompt_tokens / 2;
-                                let estimated_cost = pricing.estimate_cost(
-                                    fallback_prompt_tokens,
-                                    estimated_completion,
-                                );
+                                let estimated_cost = pricing
+                                    .estimate_cost(fallback_prompt_tokens, estimated_completion);
                                 self.check_budget(estimated_cost)?;
                             }
                             llm.complete(messages, tools).await?
                         }
                         Err(e) => return Err(e),
                     };
-                    debug!("Using complete() response (len={}, tool_calls={})", r.content.len(), r.tool_calls.len());
+                    debug!(
+                        "Using complete() response (len={}, tool_calls={})",
+                        r.content.len(),
+                        r.tool_calls.len()
+                    );
                     prompt_tokens = fallback_prompt_tokens;
                     completion_tokens = r.content.len().div_ceil(4) as u32;
                     // Record actual cost for fallback complete
                     if let Some(pricing) = llm.capabilities().pricing {
-                        let actual_cost =
-                            pricing.estimate_cost(prompt_tokens, completion_tokens);
+                        let actual_cost = pricing.estimate_cost(prompt_tokens, completion_tokens);
                         self.record_cost(actual_cost);
                     }
                     r
@@ -898,7 +938,10 @@ impl Agent {
             // Fallback: parse tool calls from content if native tool_calls are empty
             let tool_calls = if response.tool_calls.is_empty() && !response.content.is_empty() {
                 if let Some(format) = super::tool_parser::detect_tool_format(&response.content) {
-                    info!("Detected tool format {:?}, parsing tool calls from content", format);
+                    info!(
+                        "Detected tool format {:?}, parsing tool calls from content",
+                        format
+                    );
                     super::tool_parser::parse_tool_calls(&response.content, format)
                 } else {
                     Vec::new()
@@ -923,7 +966,11 @@ impl Agent {
 
                 final_response = response.content.clone();
                 if final_response.is_empty() {
-                    warn!("Empty final response on iteration {} (was_streamed={})", iteration + 1, was_streamed);
+                    warn!(
+                        "Empty final response on iteration {} (was_streamed={})",
+                        iteration + 1,
+                        was_streamed
+                    );
                 }
                 info!("Agent loop completed after {} iterations", iteration + 1);
                 completed = true;
@@ -944,10 +991,7 @@ impl Agent {
                 tool_call_id: None,
             });
 
-            if let Err(e) = self
-                .dispatch_tool_calls(&tool_calls, messages)
-                .await
-            {
+            if let Err(e) = self.dispatch_tool_calls(&tool_calls, messages).await {
                 warn!("Tool execution failed in stream: {}", e);
                 // Emit the error as content so the user sees what happened,
                 // then break the loop to prevent infinite retries.
@@ -990,10 +1034,7 @@ impl Agent {
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
 
-        info!(
-            "Starting streaming agent turn for query: {}",
-            query_hint
-        );
+        info!("Starting streaming agent turn for query: {}", query_hint);
 
         self.send_wire_message(WireMessage::TurnBegin {
             user_input: query_hint.to_string(),
@@ -1002,22 +1043,18 @@ impl Agent {
         let mut messages = messages;
         let mut on_chunk = on_chunk;
         let loop_result = self
-            .run_streaming_loop(
-                &mut messages,
-                &tools,
-                llm,
-                &mut on_chunk,
-                &cancel_token,
-            )
+            .run_streaming_loop(&mut messages, &tools, llm, &mut on_chunk, &cancel_token)
             .await;
+
+        // Capture usage before finish_turn clears turn_context.
+        let usage = self.get_session_usage();
+
         self.finish_turn();
 
         let (final_response, completed) = loop_result?;
 
         // Teardown
         self.send_wire_message(WireMessage::TurnEnd);
-
-        let usage = self.get_session_usage();
         self.send_wire_message(WireMessage::Usage {
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
