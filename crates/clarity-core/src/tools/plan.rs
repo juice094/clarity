@@ -142,7 +142,7 @@ impl Tool for PlanTool {
                 },
                 "step_id": {
                     "type": "string",
-                    "description": "Step ID to update (required for update_step)"
+                    "description": "Step ID to update (required for update_step). Examples: 'step_1', 'step_2'. Numeric strings like '1' are also accepted and mapped to 'step_1'."
                 },
                 "step_status": {
                     "type": "string",

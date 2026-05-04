@@ -258,7 +258,7 @@ impl Tool for GrepTool {
                 "paths": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "File or directory paths to search in"
+                    "description": "File paths to search in. Only files are searched; directories are silently skipped."
                 },
                 "regex": {
                     "type": "boolean",
