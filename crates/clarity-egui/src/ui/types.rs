@@ -256,10 +256,43 @@ pub struct ToolCallInfo {
     pub result: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolCallStatus {
     Running,
-    Done,
+    Success,
+    Error,
+    Warning,
+}
+
+impl ToolCallInfo {
+    /// UI-layer heuristic: infer status from result text when the raw status
+    /// is already terminal (non-Running).
+    pub fn inferred_status(&self) -> ToolCallStatus {
+        match self.status {
+            ToolCallStatus::Running => ToolCallStatus::Running,
+            _ => {
+                if let Some(ref result) = self.result {
+                    let lower = result.to_lowercase();
+                    if lower.contains("panic")
+                        || lower.contains("unreachable")
+                        || lower.contains("fatal")
+                    {
+                        return ToolCallStatus::Error;
+                    }
+                    if lower.contains("error")
+                        || lower.contains("failed")
+                        || lower.contains("fail")
+                        || lower.contains("exception")
+                    {
+                        return ToolCallStatus::Warning;
+                    }
+                    ToolCallStatus::Success
+                } else {
+                    self.status
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -320,4 +353,67 @@ pub enum PreviewItem {
 pub struct WebTab {
     pub title: String,
     pub url: String,
+}
+
+// ============================================================================
+// Unit tests for ToolCallStatus inference
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tool_status_inference_success() {
+        let tc = ToolCallInfo {
+            id: "1".into(),
+            name: "read_file".into(),
+            status: ToolCallStatus::Success,
+            result: Some("file content".into()),
+        };
+        assert_eq!(tc.inferred_status(), ToolCallStatus::Success);
+    }
+
+    #[test]
+    fn test_tool_status_inference_error_panic() {
+        let tc = ToolCallInfo {
+            id: "2".into(),
+            name: "exec".into(),
+            status: ToolCallStatus::Success,
+            result: Some("thread panicked at src/main.rs:42".into()),
+        };
+        assert_eq!(tc.inferred_status(), ToolCallStatus::Error);
+    }
+
+    #[test]
+    fn test_tool_status_inference_warning_error() {
+        let tc = ToolCallInfo {
+            id: "3".into(),
+            name: "search".into(),
+            status: ToolCallStatus::Success,
+            result: Some("Command failed with exit code 1".into()),
+        };
+        assert_eq!(tc.inferred_status(), ToolCallStatus::Warning);
+    }
+
+    #[test]
+    fn test_tool_status_inference_running_passthrough() {
+        let tc = ToolCallInfo {
+            id: "4".into(),
+            name: "run".into(),
+            status: ToolCallStatus::Running,
+            result: Some("panic in progress".into()),
+        };
+        assert_eq!(tc.inferred_status(), ToolCallStatus::Running);
+    }
+
+    #[test]
+    fn test_tool_status_inference_no_result() {
+        let tc = ToolCallInfo {
+            id: "5".into(),
+            name: "noop".into(),
+            status: ToolCallStatus::Warning,
+            result: None,
+        };
+        assert_eq!(tc.inferred_status(), ToolCallStatus::Warning);
+    }
 }

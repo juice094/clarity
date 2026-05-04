@@ -274,6 +274,7 @@ impl App {
                 web_tabs,
                 web_tabs_expanded: true,
                 thinking_log_expanded: false,
+                thinking_log_show_all: false,
                 pending_approvals: Vec::new(),
                 toasts: vec![],
                 skill_panel_open: false,

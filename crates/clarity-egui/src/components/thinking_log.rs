@@ -54,36 +54,111 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                 .size(theme.text_xs)
                 .color(theme.text_dim),
         );
-    } else {
-        egui::Frame::new()
-            .fill(theme.surface)
-            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                for tc in app.chat_store.tool_calls.iter().rev().take(20) {
-                    let (icon, color) = match tc.status {
-                        crate::ui::types::ToolCallStatus::Running => ("⏳", theme.status_busy),
-                        crate::ui::types::ToolCallStatus::Done => ("✓", theme.status_online),
-                    };
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(icon).size(theme.text_sm).color(color));
+        return;
+    }
+
+    let total = app.chat_store.tool_calls.len();
+    let show_all = app.ui_store.thinking_log_show_all;
+    let visible_count = if show_all { total.min(20) } else { 3.min(total) };
+    let hidden_count = total.saturating_sub(visible_count);
+
+    egui::Frame::new()
+        .fill(theme.surface)
+        .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+        .inner_margin(egui::Margin::same(12))
+        .show(ui, |ui| {
+            for tc in app.chat_store.tool_calls.iter().rev().take(visible_count) {
+                let inferred = tc.inferred_status();
+
+                // ── Row 1: status icon + tool name ──
+                ui.horizontal(|ui| {
+                    if matches!(inferred, crate::ui::types::ToolCallStatus::Running) {
+                        ui.add(egui::Spinner::new().size(theme.text_sm));
+                    } else {
+                        let (icon, color) = match inferred {
+                            crate::ui::types::ToolCallStatus::Success => ("•", theme.status_online),
+                            crate::ui::types::ToolCallStatus::Error => ("✗", theme.danger),
+                            crate::ui::types::ToolCallStatus::Warning => ("⚠", theme.warn),
+                            _ => ("", theme.text),
+                        };
                         ui.label(
-                            egui::RichText::new(&tc.name)
-                                .size(theme.text_sm)
-                                .color(theme.text)
-                                .strong(),
+                            egui::RichText::new(icon).size(theme.text_sm).color(color),
                         );
-                    });
-                    if let Some(ref args) = tc.result {
-                        let args_trimmed = crate::ui::render::truncate(args, 60);
+                    }
+                    ui.label(
+                        egui::RichText::new(&tc.name)
+                            .size(theme.text_sm)
+                            .color(theme.text)
+                            .strong(),
+                    );
+                });
+
+                // ── Row 2: result preview + emotion dot ──
+                if let Some(ref result) = tc.result {
+                    let preview = crate::ui::render::truncate(result, 60);
+                    ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new(args_trimmed)
+                            egui::RichText::new(preview)
                                 .size(theme.text_xs)
                                 .color(theme.text_dim),
                         );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let dot_color = match inferred {
+                                crate::ui::types::ToolCallStatus::Success => theme.status_online,
+                                crate::ui::types::ToolCallStatus::Error => theme.danger,
+                                crate::ui::types::ToolCallStatus::Warning => theme.warn,
+                                _ => theme.status_busy,
+                            };
+                            ui.label(
+                                egui::RichText::new("●")
+                                    .size(8.0)
+                                    .color(dot_color),
+                            );
+                        });
+                    });
+
+                    // ── Expandable error details ──
+                    if matches!(inferred, crate::ui::types::ToolCallStatus::Error) {
+                        egui::CollapsingHeader::new(
+                            egui::RichText::new("Error details")
+                                .size(theme.text_xs)
+                                .color(theme.danger),
+                        )
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(result)
+                                    .size(theme.text_xs)
+                                    .color(theme.danger),
+                            );
+                        });
                     }
-                    ui.add_space(2.0);
                 }
-            });
-    }
+                ui.add_space(2.0);
+            }
+
+            // ── Show-more toggle ──
+            if hidden_count > 0 && !show_all {
+                if ui
+                    .button(
+                        egui::RichText::new(format!("还有 {} 个 ▼", hidden_count))
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    )
+                    .clicked()
+                {
+                    app.ui_store.thinking_log_show_all = true;
+                }
+            } else if show_all && total > 3 {
+                if ui
+                    .button(
+                        egui::RichText::new("收起 ▲")
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    )
+                    .clicked()
+                {
+                    app.ui_store.thinking_log_show_all = false;
+                }
+            }
+        });
 }

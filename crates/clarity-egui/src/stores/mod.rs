@@ -136,6 +136,8 @@ pub struct UiStore {
     pub web_tabs_expanded: bool,
     /// Whether the thinking log section is expanded in the sidebar.
     pub thinking_log_expanded: bool,
+    /// Whether the thinking log shows all tool calls or only the latest 3.
+    pub thinking_log_show_all: bool,
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,

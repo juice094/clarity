@@ -320,9 +320,11 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 #[allow(dead_code)]
 pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
     let bg = theme.tool_call_bg;
-    let icon = match tc.status {
+    let icon = match tc.inferred_status() {
         ToolCallStatus::Running => crate::theme::ICON_HOURGLASS,
-        ToolCallStatus::Done => crate::theme::ICON_CHECK,
+        ToolCallStatus::Success => crate::theme::ICON_CHECK,
+        ToolCallStatus::Warning => crate::theme::ICON_WARNING,
+        ToolCallStatus::Error => crate::theme::ICON_X,
     };
 
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {

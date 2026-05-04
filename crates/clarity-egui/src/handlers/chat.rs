@@ -124,7 +124,7 @@ pub fn on_tool_result(
     result: String,
 ) {
     if let Some(tc) = chat_store.tool_calls.iter_mut().find(|t| t.id == id) {
-        tc.status = ToolCallStatus::Done;
+        tc.status = ToolCallStatus::Success;
         tc.result = Some(result.clone());
     }
     if let Some(session) = session_store.active_session_mut() {
