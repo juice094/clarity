@@ -73,14 +73,16 @@ cargo run -p clarity-egui
 - ✅ **Provider 自适应**：自声明能力（native tool / vision / prompt caching）、ReliableProvider 回退链
 - ✅ **Streaming**：DraftEvent 三态流（Clear/Progress/Content）
 - ✅ **Local KV Cache**：Sprint 28 交付 `LocalGgufProvider` LCP-based KV 缓存跨 turn 持久化
+- ✅ **Jumpy World Model (J6)**：HistoricalPredictor + LlmAugmentedPredictor + HybridPredictor，k-NN 历史预测 + LLM 零样本回退
 
 ### 进行中 / 未实现
 
+- 🔄 J7/J8：Flow 节点扩展（InvokeSkill / PredictCheckpoint）+ SubagentManager 集成（设计完成，编码待开始）
+- 🔄 J10：A/B 验证数据集收集（Phase 1 baseline，≥20 条轨迹）
 - 🔄 跨会话 Agent 状态快照、子 Agent 上下文持久化（后端就绪，前端待接入）
 - 🔄 Claw 联邦运行时集成（Gateway 完整，runtime 空壳待填充）
 - ⏸️ 多窗口进程隔离、IPC 传输层（TCP/UDS/Named Pipe）
 - ⏸️ 层级信息注入总线、可视化工作流（D2/Mermaid）
-- ⏸️ 架构解耦（`run.rs` 拆分、`TurnContext` 提取）
 
 > 详细路线图与中间协议层状态见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
