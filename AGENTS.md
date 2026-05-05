@@ -51,6 +51,15 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 35 — 子代理预算条可视化与质量硬化（已完成 ✅，2026-05-05）**
+
+- A ✅: 跨会话快照导出/导入（`session.rs` JSON serde + `rfd` 对话框 + sidebar 工具栏按钮）
+- B ✅: Gateway 状态指示器（`gateway_poller.rs` 轮询 `/health` + sidebar 状态圆点）
+- C ✅: 子代理进度预算条可视化
+  - Core: 修复 `SubagentStore::progress()` 依赖空 `history.len()` 的根因；新增 `AgentInner.last_turn_message_count` + `AgentExecutor` trait 扩展；`SubagentProgressEvent::Progress` 事件；`SubagentStore.steps_taken` 字段
+  - UI: `SingleSubagentProgress.steps/max_steps` + `subagent_progress.rs` 迷你 `ProgressBar` 渲染
+- D ✅: 质量硬化 — `onboarding::render_onboarding` 与 `handle_window_resize` 接入 `render_safe` panic 隔离
+
 **Sprint 20 — 工具可用性止血与 UI 零边框清理（已完成 ✅）**
 
 - P0.1 ✅: `plan` 工具 `step_id` 柔性匹配 (`"1"` → `"step_1"`)
