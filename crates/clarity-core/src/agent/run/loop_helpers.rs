@@ -98,7 +98,7 @@ pub(crate) async fn build_system_prompt_split(
     agent: &crate::agent::Agent,
     query: &str,
 ) -> (String, String) {
-    let (mut static_prompt, mut dynamic_prompt) = agent.build_system_prompt_split_raw();
+    let (static_prompt, mut dynamic_prompt) = agent.build_system_prompt_split_raw();
 
     if let Some(ref store) = agent.memory_store() {
         if let Ok(memories) = store.search(query, 5).await {
@@ -180,6 +180,7 @@ impl Agent {
     /// **Deprecated in favor of `build_system_prompt_split`:** this method
     /// flattens static and dynamic content into a single string, which
     /// prevents prefix caching. Use `build_system_prompt_split` for new code.
+    #[allow(dead_code)]
     pub(crate) async fn build_system_prompt_with_memory(&self, query: &str) -> String {
         let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
         if dynamic_prompt.is_empty() {

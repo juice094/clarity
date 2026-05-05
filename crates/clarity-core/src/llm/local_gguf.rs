@@ -704,6 +704,7 @@ fn longest_common_prefix(a: &[u32], b: &[u32]) -> usize {
 }
 
 /// Generate text using provided (cloned) state. Used by both `complete` and `stream`.
+#[allow(clippy::too_many_arguments)]
 async fn generate_with_state(
     model: Arc<tokio::sync::Mutex<Qwen2Model>>,
     tokenizer: tokenizers::Tokenizer,

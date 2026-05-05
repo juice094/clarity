@@ -112,6 +112,7 @@ impl SystemPromptBuilder {
     }
 
     /// Assemble the final prompt string.
+    #[allow(dead_code)]
     pub fn build(&self) -> String {
         let mut sections: Vec<String> = Vec::new();
 
