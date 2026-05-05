@@ -123,6 +123,17 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 跨会话状态快照 | 🔄 后端就绪，前端待接入 | Agent 思考过程、计划、未完成子任务的完整持久化 |
 | 角色方向性文件系统 | ⏸️ 未启动 | 情感/知识/工程的课题声明与权限矩阵落地 |
 
+### Jumpy World Model (J 系列)
+
+| 工作项 | 状态 | 说明 |
+|--------|------|------|
+| J5 SessionStore 适配器 | ✅ 完成 | `session_store_adapter.rs` — SessionRecord → SkillObservation |
+| J6 LLM-Augmented Predictor | ✅ 完成 | `predictor.rs` — HistoricalPredictor + LlmAugmentedPredictor + HybridPredictor |
+| J7 Flow 节点扩展 | ✅ 完成 | `flow/mod.rs` + `flow/runner.rs` — InvokeSkill + PredictCheckpoint |
+| J8 SubagentManager 集成 | ✅ 完成 | `subagents/mod.rs` — predictor 注入 + 路由策略 |
+| J9 clarity-headless jumpy 子命令 | ⏸️ 未启动 | headless CLI 集成 Jumpy 预测 |
+| J10 A/B 验证数据集 | 🔄 Phase 1 | `training-data/baseline/` — 19 sessions + 15 memory facts 已导出 |
+
 ### Phase 4：生态扩展（6 周）
 
 Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plugin SDK (Rust dylib / WASM)、Voice 集成、Canvas 支持。
