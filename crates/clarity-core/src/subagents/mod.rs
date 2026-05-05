@@ -33,6 +33,8 @@ pub use team::{
 };
 pub use token::{CapabilityToken, TokenError};
 
+use crate::agent::jumpy::predictor::OutcomePredictor;
+use crate::agent::jumpy::state::JumpyState;
 use crate::llm::ModelRegistry;
 use crate::registry::ToolRegistry;
 use std::path::Path;
@@ -46,6 +48,8 @@ pub struct SubagentManager {
     store: SubagentStore,
     /// 执行器
     runner: SubagentRunner,
+    /// Jumpy Predictor（可选）
+    predictor: Option<Arc<dyn OutcomePredictor>>,
 }
 
 impl SubagentManager {
@@ -58,7 +62,11 @@ impl SubagentManager {
         let store = SubagentStore::new(&context_dir);
         let runner = SubagentRunner::new(tool_registry, working_dir, context_dir);
 
-        Self { store, runner }
+        Self {
+            store,
+            runner,
+            predictor: None,
+        }
     }
 
     /// 设置默认 LLM（builder 模式）
@@ -70,6 +78,12 @@ impl SubagentManager {
     /// 设置模型注册表（支持 model_override 动态选择）
     pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
         self.runner = self.runner.with_registry(registry);
+        self
+    }
+
+    /// 设置 Jumpy Outcome Predictor（builder 模式）
+    pub fn with_predictor(mut self, predictor: Arc<dyn OutcomePredictor>) -> Self {
+        self.predictor = Some(predictor);
         self
     }
 
@@ -175,6 +189,62 @@ impl SubagentManager {
     pub fn list_agent_types(&self) -> Vec<&AgentTypeDefinition> {
         self.runner.labor_market().list()
     }
+
+    // ------------------------------------------------------------------
+    // J8: Prediction-driven routing
+    // ------------------------------------------------------------------
+
+    /// 捕获当前状态为 JumpyState
+    fn capture_current_state(&self) -> JumpyState {
+        JumpyState {
+            tags: self.store.current_tags(),
+            memory: self.store.working_memory(),
+            active_files: self.store.active_files(),
+            context_summary: self.store.context_summary(),
+            progress: self.store.progress(),
+        }
+    }
+
+    /// 预测驱动路由执行
+    pub async fn run_with_prediction(
+        &mut self,
+        spec: RunSpec,
+        progress_tx: Option<tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>>,
+    ) -> Result<SubagentResult, SubagentError> {
+        match &self.predictor {
+            Some(predictor) => {
+                let current = self.capture_current_state();
+                match predictor
+                    .predict(&spec.requested_type, &spec.prompt, &current, 0.9)
+                    .await
+                {
+                    Ok(predicted) => {
+                        let runner = if let Some(tx) = progress_tx {
+                            self.runner.clone().with_progress_tx(tx)
+                        } else {
+                            self.runner.clone()
+                        };
+                        if predicted.satisfies(&spec.goal_tags) {
+                            runner.run(spec, &mut self.store, None).await
+                        } else {
+                            runner
+                                .run_with_monitoring(spec, &mut self.store, None)
+                                .await
+                        }
+                    }
+                    Err(_) => {
+                        let runner = if let Some(tx) = progress_tx {
+                            self.runner.clone().with_progress_tx(tx)
+                        } else {
+                            self.runner.clone()
+                        };
+                        runner.run(spec, &mut self.store, None).await
+                    }
+                }
+            }
+            None => self.run(spec, progress_tx).await,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -241,5 +311,98 @@ mod tests {
 
         assert_eq!(batch.len(), 2);
         assert!(!batch.is_empty());
+    }
+
+    // ------------------------------------------------------------------
+    // J8: Mock Predictor & prediction routing tests
+    // ------------------------------------------------------------------
+
+    struct MockPredictor {
+        result: Result<JumpyState, String>,
+    }
+
+    #[async_trait::async_trait]
+    impl OutcomePredictor for MockPredictor {
+        async fn predict(
+            &self,
+            _skill_id: &str,
+            _params: &str,
+            _current: &JumpyState,
+            _commitment: f32,
+        ) -> Result<JumpyState, String> {
+            self.result.clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_with_prediction_success() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(Arc::new(crate::agent::MockLlm));
+
+        let predictor = Arc::new(MockPredictor {
+            result: Ok(JumpyState {
+                tags: vec!["done".to_string()],
+                ..Default::default()
+            }),
+        });
+        manager = manager.with_predictor(predictor);
+
+        let spec = RunSpec::new("Test", "Do something")
+            .with_type("coder")
+            .without_git_context()
+            .with_goal_tags(vec!["done".to_string()]);
+
+        let result = manager.run_with_prediction(spec, None).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap().monitoring_enabled);
+    }
+
+    #[tokio::test]
+    async fn test_run_with_prediction_uncertain() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(Arc::new(crate::agent::MockLlm));
+
+        let predictor = Arc::new(MockPredictor {
+            result: Ok(JumpyState {
+                tags: vec!["incomplete".to_string()],
+                ..Default::default()
+            }),
+        });
+        manager = manager.with_predictor(predictor);
+
+        let spec = RunSpec::new("Test", "Do something")
+            .with_type("coder")
+            .without_git_context()
+            .with_goal_tags(vec!["done".to_string()]);
+
+        let result = manager.run_with_prediction(spec, None).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().monitoring_enabled);
+    }
+
+    #[tokio::test]
+    async fn test_run_without_predictor() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
+
+        let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(Arc::new(crate::agent::MockLlm));
+
+        let spec = RunSpec::new("Test", "Do something")
+            .with_type("coder")
+            .without_git_context();
+
+        let result = manager.run_with_prediction(spec, None).await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap().monitoring_enabled);
     }
 }

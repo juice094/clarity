@@ -5,18 +5,48 @@
 
 use super::{parse_choice, Flow, FlowError, FlowNodeKind};
 use clarity_contract::AgentError;
+use std::sync::Arc;
+
+use crate::agent::jumpy::predictor::OutcomePredictor;
+use crate::agent::jumpy::state::JumpyState;
+
+#[derive(Debug, serde::Deserialize)]
+struct CheckpointExpected {
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    min_progress: f32,
+}
+
+fn parse_skill_invocation(label: &str) -> (&str, &str) {
+    if let Some(start) = label.find('(') {
+        if let Some(end) = label.rfind(')') {
+            if end > start {
+                return (label[..start].trim(), label[start + 1..end].trim());
+            }
+        }
+    }
+    (label.trim(), "")
+}
 
 /// Trait for executing a single flow node prompt.
 #[async_trait::async_trait]
 pub trait FlowExecutor: Send + Sync {
     /// Execute one turn with the given prompt.
     async fn execute(&self, prompt: &str) -> Result<String, AgentError>;
+    /// Execute an external skill with the given id and parameters.
+    async fn execute_skill(&self, _skill_id: &str, _params: &str) -> Result<String, AgentError> {
+        Err(AgentError::FlowExecution(
+            "execute_skill not implemented".to_string(),
+        ))
+    }
 }
 
 /// Runner that walks a flow from Begin to End.
 pub struct FlowRunner<'a> {
     flow: &'a Flow,
     max_steps: usize,
+    predictor: Option<Arc<dyn OutcomePredictor>>,
 }
 
 impl<'a> FlowRunner<'a> {
@@ -25,7 +55,14 @@ impl<'a> FlowRunner<'a> {
         Self {
             flow,
             max_steps: 1000,
+            predictor: None,
         }
+    }
+
+    /// Attach an outcome predictor for PredictCheckpoint nodes.
+    pub fn with_predictor(mut self, predictor: Arc<dyn OutcomePredictor>) -> Self {
+        self.predictor = Some(predictor);
+        self
     }
 
     /// Set max steps (default 1000).
@@ -43,6 +80,9 @@ impl<'a> FlowRunner<'a> {
         let mut current_id = self.flow.begin_id.clone();
         let mut step_count = 0;
         let mut final_response = String::new();
+        let mut last_skill_id: Option<String> = None;
+        let mut last_skill_params: Option<String> = None;
+        let mut current_state = JumpyState::default();
 
         while step_count < self.max_steps {
             let node = self
@@ -62,6 +102,7 @@ impl<'a> FlowRunner<'a> {
                         .await
                         .map_err(|e| FlowError::Execution(e.to_string()))?;
                     final_response = response.clone();
+                    current_state.context_summary = response.chars().take(200).collect();
                     current_id = self.follow_edge(node, None)?;
                 }
                 FlowNodeKind::Decision => {
@@ -89,12 +130,66 @@ impl<'a> FlowRunner<'a> {
                         .await
                         .map_err(|e| FlowError::Execution(e.to_string()))?;
                     final_response = response.clone();
+                    current_state.context_summary = response.chars().take(200).collect();
 
                     let choice = parse_choice(&response)
                         .or_else(|| choices.first().cloned())
                         .unwrap_or_default();
 
                     current_id = self.follow_edge(node, Some(&choice))?;
+                }
+                FlowNodeKind::InvokeSkill => {
+                    let (skill_id, params) = parse_skill_invocation(&node.label);
+                    let response = executor
+                        .execute_skill(skill_id, params)
+                        .await
+                        .map_err(|e| FlowError::Execution(e.to_string()))?;
+                    last_skill_id = Some(skill_id.to_string());
+                    last_skill_params = Some(params.to_string());
+                    final_response = response.clone();
+                    current_state.memory.insert("last_result".to_string(), response);
+                    current_id = self.follow_edge(node, None)?;
+                }
+                FlowNodeKind::PredictCheckpoint => {
+                    let expected: CheckpointExpected = serde_json::from_str(&node.label)
+                        .map_err(|e| FlowError::Parse(format!("invalid checkpoint JSON: {}", e)))?;
+
+                    let skill_id = last_skill_id.as_deref().ok_or_else(|| {
+                        FlowError::Execution(
+                            "PredictCheckpoint requires a preceding InvokeSkill node".to_string(),
+                        )
+                    })?;
+                    let params = last_skill_params.as_deref().ok_or_else(|| {
+                        FlowError::Execution(
+                            "PredictCheckpoint requires a preceding InvokeSkill node".to_string(),
+                        )
+                    })?;
+
+                    let predictor = self.predictor.as_ref().ok_or_else(|| {
+                        FlowError::Execution(
+                            "PredictCheckpoint requires a predictor to be configured".to_string(),
+                        )
+                    })?;
+
+                    let predicted = predictor
+                        .predict(skill_id, params, &current_state, 0.9)
+                        .await
+                        .map_err(|e| FlowError::Execution(format!("prediction failed: {}", e)))?;
+
+                    if !predicted.satisfies(&expected.tags) {
+                        return Err(FlowError::Execution(format!(
+                            "predicted state mismatch: missing tags {:?} in {:?}",
+                            expected.tags, predicted.tags
+                        )));
+                    }
+                    if predicted.progress < expected.min_progress {
+                        return Err(FlowError::Execution(format!(
+                            "predicted state mismatch: progress {} < {}",
+                            predicted.progress, expected.min_progress
+                        )));
+                    }
+
+                    current_id = self.follow_edge(node, None)?;
                 }
             }
 

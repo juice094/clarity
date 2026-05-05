@@ -120,6 +120,35 @@ impl SubagentStore {
         tokio::fs::create_dir_all(&self.root_dir).await?;
         Ok(())
     }
+
+    // ------------------------------------------------------------------
+    // J8: SubagentManager ↔ Jumpy Predictor integration stubs
+    // ------------------------------------------------------------------
+
+    /// Current semantic tags (stub — returns empty until tagging is implemented).
+    pub fn current_tags(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Working memory key-value store (stub — returns empty).
+    pub fn working_memory(&self) -> HashMap<String, String> {
+        HashMap::new()
+    }
+
+    /// Currently active / modified files (stub — returns empty).
+    pub fn active_files(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// High-level context summary (stub — returns empty).
+    pub fn context_summary(&self) -> String {
+        String::new()
+    }
+
+    /// Estimated progress toward goal [0.0, 1.0] (stub — returns 0.0).
+    pub fn progress(&self) -> f32 {
+        0.0
+    }
 }
 
 fn now_timestamp() -> u64 {

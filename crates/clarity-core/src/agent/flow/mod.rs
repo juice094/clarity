@@ -15,6 +15,8 @@ pub enum FlowNodeKind {
     End,
     Task,
     Decision,
+    InvokeSkill,
+    PredictCheckpoint,
 }
 
 /// A single node in a flowchart.
@@ -169,6 +171,241 @@ pub use runner::{FlowExecutor, FlowRunner};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::jumpy::predictor::OutcomePredictor;
+    use crate::agent::jumpy::state::JumpyState;
+    use std::sync::Arc;
+
+    struct MockFlowExecutor;
+
+    #[async_trait::async_trait]
+    impl FlowExecutor for MockFlowExecutor {
+        async fn execute(&self, _prompt: &str) -> Result<String, clarity_contract::AgentError> {
+            Ok("mock".to_string())
+        }
+        async fn execute_skill(
+            &self,
+            skill_id: &str,
+            params: &str,
+        ) -> Result<String, clarity_contract::AgentError> {
+            Ok(format!("skill {} with {} executed", skill_id, params))
+        }
+    }
+
+    struct MockPredictor {
+        state: JumpyState,
+    }
+
+    #[async_trait::async_trait]
+    impl OutcomePredictor for MockPredictor {
+        async fn predict(
+            &self,
+            _skill_id: &str,
+            _params: &str,
+            _current: &JumpyState,
+            _commitment: f32,
+        ) -> Result<JumpyState, String> {
+            Ok(self.state.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_flow_invoke_skill() {
+        let mut flow = Flow::default();
+        flow.nodes.insert(
+            "start".to_string(),
+            FlowNode {
+                id: "start".to_string(),
+                label: "Start".to_string(),
+                kind: FlowNodeKind::Begin,
+            },
+        );
+        flow.nodes.insert(
+            "skill".to_string(),
+            FlowNode {
+                id: "skill".to_string(),
+                label: "my_skill({\"key\":\"val\"})".to_string(),
+                kind: FlowNodeKind::InvokeSkill,
+            },
+        );
+        flow.nodes.insert(
+            "end".to_string(),
+            FlowNode {
+                id: "end".to_string(),
+                label: "End".to_string(),
+                kind: FlowNodeKind::End,
+            },
+        );
+        flow.begin_id = "start".to_string();
+        flow.end_id = "end".to_string();
+        flow.outgoing.insert(
+            "start".to_string(),
+            vec![FlowEdge {
+                src: "start".to_string(),
+                dst: "skill".to_string(),
+                label: None,
+            }],
+        );
+        flow.outgoing.insert(
+            "skill".to_string(),
+            vec![FlowEdge {
+                src: "skill".to_string(),
+                dst: "end".to_string(),
+                label: None,
+            }],
+        );
+
+        let runner = FlowRunner::new(&flow);
+        let result = runner.run(&MockFlowExecutor, "").await.unwrap();
+        assert_eq!(result, "skill my_skill with {\"key\":\"val\"} executed");
+    }
+
+    #[tokio::test]
+    async fn test_flow_predict_checkpoint_pass() {
+        let mut flow = Flow::default();
+        flow.nodes.insert(
+            "start".to_string(),
+            FlowNode {
+                id: "start".to_string(),
+                label: "Start".to_string(),
+                kind: FlowNodeKind::Begin,
+            },
+        );
+        flow.nodes.insert(
+            "skill".to_string(),
+            FlowNode {
+                id: "skill".to_string(),
+                label: "my_skill()".to_string(),
+                kind: FlowNodeKind::InvokeSkill,
+            },
+        );
+        flow.nodes.insert(
+            "check".to_string(),
+            FlowNode {
+                id: "check".to_string(),
+                label: r#"{"tags":["done"],"min_progress":0.5}"#.to_string(),
+                kind: FlowNodeKind::PredictCheckpoint,
+            },
+        );
+        flow.nodes.insert(
+            "end".to_string(),
+            FlowNode {
+                id: "end".to_string(),
+                label: "End".to_string(),
+                kind: FlowNodeKind::End,
+            },
+        );
+        flow.begin_id = "start".to_string();
+        flow.end_id = "end".to_string();
+        flow.outgoing.insert(
+            "start".to_string(),
+            vec![FlowEdge {
+                src: "start".to_string(),
+                dst: "skill".to_string(),
+                label: None,
+            }],
+        );
+        flow.outgoing.insert(
+            "skill".to_string(),
+            vec![FlowEdge {
+                src: "skill".to_string(),
+                dst: "check".to_string(),
+                label: None,
+            }],
+        );
+        flow.outgoing.insert(
+            "check".to_string(),
+            vec![FlowEdge {
+                src: "check".to_string(),
+                dst: "end".to_string(),
+                label: None,
+            }],
+        );
+
+        let predictor = Arc::new(MockPredictor {
+            state: JumpyState {
+                tags: vec!["done".to_string()],
+                progress: 0.8,
+                ..Default::default()
+            },
+        });
+        let runner = FlowRunner::new(&flow).with_predictor(predictor);
+        let result = runner.run(&MockFlowExecutor, "").await.unwrap();
+        assert_eq!(result, "skill my_skill with  executed");
+    }
+
+    #[tokio::test]
+    async fn test_flow_predict_checkpoint_fail() {
+        let mut flow = Flow::default();
+        flow.nodes.insert(
+            "start".to_string(),
+            FlowNode {
+                id: "start".to_string(),
+                label: "Start".to_string(),
+                kind: FlowNodeKind::Begin,
+            },
+        );
+        flow.nodes.insert(
+            "skill".to_string(),
+            FlowNode {
+                id: "skill".to_string(),
+                label: "my_skill()".to_string(),
+                kind: FlowNodeKind::InvokeSkill,
+            },
+        );
+        flow.nodes.insert(
+            "check".to_string(),
+            FlowNode {
+                id: "check".to_string(),
+                label: r#"{"tags":["done"],"min_progress":0.9}"#.to_string(),
+                kind: FlowNodeKind::PredictCheckpoint,
+            },
+        );
+        flow.nodes.insert(
+            "end".to_string(),
+            FlowNode {
+                id: "end".to_string(),
+                label: "End".to_string(),
+                kind: FlowNodeKind::End,
+            },
+        );
+        flow.begin_id = "start".to_string();
+        flow.end_id = "end".to_string();
+        flow.outgoing.insert(
+            "start".to_string(),
+            vec![FlowEdge {
+                src: "start".to_string(),
+                dst: "skill".to_string(),
+                label: None,
+            }],
+        );
+        flow.outgoing.insert(
+            "skill".to_string(),
+            vec![FlowEdge {
+                src: "skill".to_string(),
+                dst: "check".to_string(),
+                label: None,
+            }],
+        );
+        flow.outgoing.insert(
+            "check".to_string(),
+            vec![FlowEdge {
+                src: "check".to_string(),
+                dst: "end".to_string(),
+                label: None,
+            }],
+        );
+
+        let predictor = Arc::new(MockPredictor {
+            state: JumpyState {
+                tags: vec![],
+                progress: 0.3,
+                ..Default::default()
+            },
+        });
+        let runner = FlowRunner::new(&flow).with_predictor(predictor);
+        let result = runner.run(&MockFlowExecutor, "").await;
+        assert!(matches!(result, Err(FlowError::Execution(_))));
+    }
 
     #[test]
     fn test_parse_choice_basic() {

@@ -37,20 +37,22 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                 let estimates: Vec<f32> = units
                     .iter()
                     .enumerate()
-                    .map(|(i, u)| match u {
-                        RenderUnit::User(msg) => msg
+                    .map(|(i, u)| if u.is_user {
+                        session.messages[u.start]
                             .cached_height
-                            .unwrap_or_else(|| ui::render::estimate_height(msg)),
-                        RenderUnit::AgentTurn(msgs) => session
+                            .unwrap_or_else(|| ui::render::estimate_height(&session.messages[u.start]))
+                    } else {
+                        session
                             .turn_heights
                             .get(i)
                             .copied()
                             .flatten()
                             .unwrap_or_else(|| {
-                                let turn =
-                                    crate::components::agent_turn::AgentTurn::from_messages(msgs);
+                                let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                                    &session.messages[u.start..u.end],
+                                );
                                 turn.estimate_height(&theme)
-                            }),
+                            })
                     })
                     .collect();
                 estimates.iter().sum::<f32>() + typing_h
@@ -127,22 +129,22 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     let estimates: Vec<f32> = units
                         .iter()
                         .enumerate()
-                        .map(|(i, u)| match u {
-                            RenderUnit::User(msg) => msg
+                        .map(|(i, u)| if u.is_user {
+                            session.messages[u.start]
                                 .cached_height
-                                .unwrap_or_else(|| ui::render::estimate_height(msg)),
-                            RenderUnit::AgentTurn(msgs) => session
+                                .unwrap_or_else(|| ui::render::estimate_height(&session.messages[u.start]))
+                        } else {
+                            session
                                 .turn_heights
                                 .get(i)
                                 .copied()
                                 .flatten()
                                 .unwrap_or_else(|| {
-                                    let turn =
-                                        crate::components::agent_turn::AgentTurn::from_messages(
-                                            msgs,
-                                        );
+                                    let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                                        &session.messages[u.start..u.end],
+                                    );
                                     turn.estimate_height(&theme)
-                                }),
+                                })
                         })
                         .collect();
 
@@ -166,56 +168,34 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         ui.allocate_space(egui::vec2(ui.available_width(), top));
                     }
 
-                    let mut msg_idx = 0;
-                    for unit in units.iter().take(start_idx) {
-                        match unit {
-                            RenderUnit::User(_) => msg_idx += 1,
-                            RenderUnit::AgentTurn(msgs) => msg_idx += msgs.len(),
-                        }
-                    }
                     for (i, unit) in units
                         .iter()
                         .enumerate()
                         .skip(start_idx)
                         .take(end_idx - start_idx)
                     {
-                        match unit {
-                            RenderUnit::User(_) => {
-                                while msg_idx < session.messages.len()
-                                    && session.messages[msg_idx].role != Role::User
-                                {
-                                    msg_idx += 1;
-                                }
-                                if msg_idx < session.messages.len() {
-                                    let actual = ui::render::message_bubble(
-                                        ui,
-                                        &session.messages[msg_idx],
-                                        &theme,
-                                        true,
-                                    );
-                                    session.messages[msg_idx].cached_height = Some(actual);
-                                    msg_idx += 1;
-                                }
-                            }
-                            RenderUnit::AgentTurn(msgs) => {
-                                let mut turn =
-                                    crate::components::agent_turn::AgentTurn::from_messages(msgs);
-                                let actual = if agent_turn_glass {
-                                    crate::render::turn_renderer::render_agent_turn_glass(
-                                        ui, &mut turn, &theme,
-                                    )
-                                } else {
-                                    crate::render::turn_renderer::render_agent_turn(
-                                        ui, &mut turn, &theme,
-                                    )
-                                };
-                                session.turn_heights[i] = Some(actual);
-                                while msg_idx < session.messages.len()
-                                    && session.messages[msg_idx].role == Role::Agent
-                                {
-                                    msg_idx += 1;
-                                }
-                            }
+                        if unit.is_user {
+                            let actual = ui::render::message_bubble(
+                                ui,
+                                &session.messages[unit.start],
+                                &theme,
+                                true,
+                            );
+                            session.messages[unit.start].cached_height = Some(actual);
+                        } else {
+                            let mut turn = crate::components::agent_turn::AgentTurn::from_messages(
+                                &session.messages[unit.start..unit.end],
+                            );
+                            let actual = if agent_turn_glass {
+                                crate::render::turn_renderer::render_agent_turn_glass(
+                                    ui, &mut turn, &theme,
+                                )
+                            } else {
+                                crate::render::turn_renderer::render_agent_turn(
+                                    ui, &mut turn, &theme,
+                                )
+                            };
+                            session.turn_heights[i] = Some(actual);
                         }
                     }
 
@@ -322,25 +302,27 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
 // Turn aggregation
 // ============================================================================
 
-enum RenderUnit {
-    User(ui::types::Message),
-    AgentTurn(Vec<ui::types::Message>),
+/// Lightweight index-based turn descriptor — avoids cloning every Message per frame.
+struct RenderUnit {
+    start: usize,
+    end: usize,
+    is_user: bool,
 }
 
 fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
     let mut units = Vec::new();
     let mut i = 0;
-    while i < messages.len() {
+    let n = messages.len();
+    while i < n {
         if messages[i].role == Role::User {
-            units.push(RenderUnit::User(messages[i].clone()));
+            units.push(RenderUnit { start: i, end: i + 1, is_user: true });
             i += 1;
         } else {
-            let mut turn = Vec::new();
-            while i < messages.len() && messages[i].role == Role::Agent {
-                turn.push(messages[i].clone());
+            let start = i;
+            while i < n && messages[i].role == Role::Agent {
                 i += 1;
             }
-            units.push(RenderUnit::AgentTurn(turn));
+            units.push(RenderUnit { start, end: i, is_user: false });
         }
     }
     units

@@ -562,6 +562,7 @@ mod tests {
                     elapsed_ms: 1000,
                     started_at: 0,
                     completed_at: 0,
+                    monitoring_enabled: false,
                 },
                 SubagentResult {
                     agent_id: "a2".to_string(),
@@ -574,6 +575,7 @@ mod tests {
                     elapsed_ms: 800,
                     started_at: 0,
                     completed_at: 0,
+                    monitoring_enabled: false,
                 },
             ],
             failures: vec![],

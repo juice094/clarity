@@ -1,0 +1,24 @@
+{
+  "session_id": "http-77859f0f491c421da9e4b1d6142d4068",
+  "created_at": "2026-04-23T11:06:30.498577400+00:00",
+  "updated_at": "2026-04-23T11:06:30.502681400+00:00",
+  "messages": [
+    {
+      "id": 15,
+      "role": "user",
+      "content": "Hello",
+      "tool_calls": null,
+      "tool_call_id": null,
+      "created_at": "2026-04-23T11:06:30.498569400+00:00"
+    },
+    {
+      "id": 16,
+      "role": "assistant",
+      "content": "This is a mock response",
+      "tool_calls": null,
+      "tool_call_id": null,
+      "created_at": "2026-04-23T11:06:30.502676900+00:00"
+    }
+  ],
+  "_quality_tag": "short_mock"
+}

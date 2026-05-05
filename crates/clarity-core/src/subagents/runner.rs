@@ -153,6 +153,9 @@ pub struct SubagentResult {
     pub started_at: u64,
     /// 结束时间
     pub completed_at: u64,
+    /// 是否通过 monitoring 模式执行
+    #[serde(default)]
+    pub monitoring_enabled: bool,
 }
 
 /// 执行状态
@@ -198,6 +201,8 @@ pub struct RunSpec {
     pub git_context: bool,
     /// 能力令牌（可选）
     pub capability_token: Option<CapabilityToken>,
+    /// 目标标签（用于 Jumpy Predictor 路由决策）
+    pub goal_tags: Vec<String>,
 }
 
 impl RunSpec {
@@ -212,6 +217,7 @@ impl RunSpec {
             max_iterations: None,
             git_context: true,
             capability_token: None,
+            goal_tags: Vec::new(),
         }
     }
 
@@ -248,6 +254,12 @@ impl RunSpec {
     /// 设置能力令牌
     pub fn with_capability_token(mut self, token: CapabilityToken) -> Self {
         self.capability_token = Some(token);
+        self
+    }
+
+    /// 设置目标标签（Jumpy Predictor 路由决策用）
+    pub fn with_goal_tags(mut self, tags: Vec<String>) -> Self {
+        self.goal_tags = tags;
         self
     }
 }
@@ -939,6 +951,7 @@ impl SubagentRunner {
                     elapsed_ms: elapsed.as_millis() as u64,
                     started_at,
                     completed_at,
+                    monitoring_enabled: false,
                 })
             }
             Err(SubagentError::Cancelled) => {
@@ -1157,6 +1170,18 @@ Your previous response was too brief. Please provide a more comprehensive summar
         }
     }
 
+    /// 在 monitoring 模式下执行子代理（先简单委托给 run，后续迭代增强）
+    pub async fn run_with_monitoring(
+        &self,
+        spec: RunSpec,
+        store: &mut SubagentStore,
+        parent_wire: Option<&Wire>,
+    ) -> Result<SubagentResult, SubagentError> {
+        let mut result = self.run(spec, store, parent_wire).await?;
+        result.monitoring_enabled = true;
+        Ok(result)
+    }
+
     /// 列出可用的代理类型
     pub fn list_agent_types(&self) -> Vec<&AgentTypeDefinition> {
         self.labor_market.list()
@@ -1272,6 +1297,7 @@ mod tests {
             elapsed_ms: 1000,
             started_at: 1234567890,
             completed_at: 1234568890,
+            monitoring_enabled: false,
         };
 
         let json = serde_json::to_string(&result).unwrap();
