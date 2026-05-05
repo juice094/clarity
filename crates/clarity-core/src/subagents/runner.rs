@@ -911,6 +911,7 @@ impl SubagentRunner {
 
         // 7. 更新状态为运行中
         store.update_status(&agent_id, SubagentStatus::Running);
+        let _ = store.save(&agent_id).await;
         if let Some(ref tx) = self.progress_tx {
             let _ = tx.try_send(SubagentProgressEvent::StatusChange {
                 agent_id: agent_id.clone(),
@@ -947,6 +948,7 @@ impl SubagentRunner {
                 collector.stage("execution_succeeded");
                 collector.save_summary(&summary).await?;
                 store.update_status(&agent_id, SubagentStatus::Completed);
+                let _ = store.save(&agent_id).await;
                 if let Some(ref tx) = self.progress_tx {
                     let _ = tx.try_send(SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
@@ -977,6 +979,7 @@ impl SubagentRunner {
             Err(SubagentError::Cancelled) => {
                 collector.stage("execution_cancelled");
                 store.update_status(&agent_id, SubagentStatus::Failed);
+                let _ = store.save(&agent_id).await;
                 if let Some(ref tx) = self.progress_tx {
                     let _ = tx.try_send(SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
@@ -995,6 +998,7 @@ impl SubagentRunner {
             Err(e) => {
                 collector.stage(format!("execution_failed: {}", e));
                 store.update_status(&agent_id, SubagentStatus::Failed);
+                let _ = store.save(&agent_id).await;
                 if let Some(ref tx) = self.progress_tx {
                     let _ = tx.try_send(SubagentProgressEvent::StatusChange {
                         agent_id: agent_id.clone(),
@@ -1020,7 +1024,10 @@ impl SubagentRunner {
         store: &mut SubagentStore,
     ) -> Result<(String, String, bool), SubagentError> {
         if let Some(resume_id) = &spec.resume {
-            // 恢复现有实例
+            // 恢复现有实例 — 先查内存，再查磁盘
+            if store.get(resume_id).is_none() {
+                let _ = store.load(resume_id).await;
+            }
             let state = store.get(resume_id).ok_or_else(|| {
                 SubagentError::ResumeFailed(format!("Agent instance {} not found", resume_id))
             })?;
