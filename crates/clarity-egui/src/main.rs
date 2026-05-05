@@ -542,8 +542,12 @@ impl eframe::App for App {
                 &clarity_core::auth::OAuthDeviceFlowConfig::default(),
             );
         });
-        onboarding::render_onboarding(self, ctx);
-        self.handle_window_resize(ctx);
+        self.render_safe(ctx, "onboarding", |app, ctx| {
+            onboarding::render_onboarding(app, ctx);
+        });
+        self.render_safe(ctx, "resize", |app, ctx| {
+            app.handle_window_resize(ctx);
+        });
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
