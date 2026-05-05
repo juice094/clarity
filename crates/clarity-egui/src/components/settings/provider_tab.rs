@@ -380,6 +380,47 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.add_space(theme.space_8);
     }
 
+    // ── Local model path (only for local provider) ──
+    if current == "local" {
+        ui.label(
+            egui::RichText::new("Local Model Path")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text)
+                .strong(),
+        );
+        let path_edit_id = ui.id().with(&prov.id).with("local_model_path");
+        let mut path_buffer = ui.data(|d| {
+            d.get_temp::<String>(path_edit_id)
+                .unwrap_or_else(|| app.settings_store.settings_edit.local_model_path.clone().unwrap_or_default())
+        });
+        ui.horizontal(|ui| {
+            let is_empty = path_buffer.is_empty();
+            let mut te = egui::TextEdit::singleline(&mut path_buffer)
+                .desired_width(ui.available_width() - 80.0)
+                .font(theme.font(theme.text_base))
+                .frame(false);
+            if is_empty {
+                te = te.hint_text("Path to .gguf file...");
+            }
+            let resp = ui.add(te);
+            if resp.changed() {
+                ui.data_mut(|d| d.insert_temp(path_edit_id, path_buffer.clone()));
+                app.settings_store.settings_edit.local_model_path = Some(path_buffer.clone());
+            }
+            if ui.add(theme.secondary_button("Browse")).clicked() {
+                if let Some(file) = rfd::FileDialog::new()
+                    .add_filter("GGUF", &["gguf"])
+                    .pick_file()
+                {
+                    let picked = file.display().to_string();
+                    ui.data_mut(|d| d.insert_temp(path_edit_id, picked.clone()));
+                    app.settings_store.settings_edit.local_model_path = Some(picked);
+                }
+            }
+        });
+        ui.add_space(theme.space_8);
+    }
+
     // ── Approval mode ──
     ui.label(
         egui::RichText::new(app.t("Approval Mode"))
