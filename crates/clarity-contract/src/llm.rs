@@ -90,6 +90,10 @@ pub trait LlmProvider: Send + Sync {
     /// Set a prompt cache key for provider-side cache routing.
     fn set_prompt_cache_key(&mut self, key: &str);
 
+    /// Clear any provider-side cache (e.g., local KV cache).
+    /// Default is a no-op; providers with local state should override.
+    fn clear_cache(&self) {}
+
     /// Provider self-reported capabilities.
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {

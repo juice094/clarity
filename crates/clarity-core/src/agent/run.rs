@@ -49,6 +49,25 @@ impl Agent {
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
         let (static_prompt, dynamic_prompt) =
             build_system_prompt_split(self, query.as_ref()).await;
+
+        // Compute hash of static prompt and invalidate provider cache if changed.
+        let static_hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            static_prompt.hash(&mut hasher);
+            hasher.finish().to_string()
+        };
+        {
+            let inner = self.inner.read().unwrap();
+            if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
+                if let Some(ref llm) = inner.llm {
+                    llm.clear_cache();
+                }
+            }
+        }
+        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
+
         let mut messages = if dynamic_prompt.is_empty() {
             vec![
                 Message::system(static_prompt),
@@ -142,6 +161,25 @@ impl Agent {
         self.ensure_initialized().await?;
         let (static_prompt, dynamic_prompt) =
             build_system_prompt_split(self, query.as_ref()).await;
+
+        // Compute hash of static prompt and invalidate provider cache if changed.
+        let static_hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            static_prompt.hash(&mut hasher);
+            hasher.finish().to_string()
+        };
+        {
+            let inner = self.inner.read().unwrap();
+            if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
+                if let Some(ref llm) = inner.llm {
+                    llm.clear_cache();
+                }
+            }
+        }
+        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
+
         let messages = if dynamic_prompt.is_empty() {
             vec![
                 Message::system(static_prompt),

@@ -125,6 +125,9 @@ struct AgentInner {
     /// Fallback LLM providers. When non-empty, the primary LLM is wrapped in a
     /// ReliableProvider so failures automatically fall back through this chain.
     fallback_llms: Vec<Arc<dyn LlmProvider>>,
+    /// Blake3 hash of the static system prompt from the last turn.
+    /// Used to detect when static content changed and local KV cache should be invalidated.
+    static_prompt_hash: Option<String>,
 }
 
 /// Simple mock LLM for testing

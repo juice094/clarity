@@ -358,6 +358,10 @@ pub struct LocalGgufProvider {
     device: Device,
     config: LocalGgufConfig,
     cache_key: Option<String>,
+    /// Token cache for KV persistence across turns.
+    /// Stores the token IDs of the last processed prompt + generated tokens.
+    /// Used to compute LCP and avoid re-encoding the full prefix on each turn.
+    token_cache: Arc<std::sync::Mutex<Vec<u32>>>,
 }
 
 impl LocalGgufProvider {
@@ -390,6 +394,7 @@ impl LocalGgufProvider {
             device,
             config,
             cache_key: None,
+            token_cache: Arc::new(std::sync::Mutex::new(Vec::new())),
         })
     }
 
@@ -404,19 +409,32 @@ impl LocalGgufProvider {
         let tokenizer = self.tokenizer.clone();
         let device = self.device.clone();
         let config = self.config.clone();
-        // Note: KV cache is automatically reset on the first forward call
-        // with index_pos=0, so no explicit clearing is needed.
 
         // Encode prompt
         let tokens = tokenizer
             .encode(prompt.to_string(), true)
             .map_err(|e| AgentError::Llm(format!("Tokenizer encode error: {}", e)))?;
         let prompt_tokens = tokens.get_ids().to_vec();
-        let prompt_len = prompt_tokens.len();
 
         if prompt_tokens.is_empty() {
             return Err(AgentError::Llm("Empty prompt after tokenization".into()));
         }
+
+        // Compute LCP with cached tokens to decide whether to reuse KV cache.
+        let (input_ids, index_pos, prompt_len) = {
+            let cached = self.token_cache.lock().unwrap();
+            let lcp_len = longest_common_prefix(&cached, &prompt_tokens);
+            let threshold = (prompt_tokens.len() * 8).saturating_div(10);
+            if lcp_len > 0 && lcp_len >= threshold {
+                // Reuse KV cache: forward only the suffix.
+                let suffix = prompt_tokens[lcp_len..].to_vec();
+                let suffix_len = suffix.len();
+                (suffix, lcp_len, suffix_len)
+            } else {
+                // Full prompt, reset KV cache.
+                (prompt_tokens.clone(), 0, prompt_tokens.len())
+            }
+        };
 
         // Build logits processor
         let sampling = if config.temperature <= 0.0 {
@@ -444,12 +462,12 @@ impl LocalGgufProvider {
         let mut logits_processor = LogitsProcessor::from_sampling(config.seed, sampling);
 
         // Forward pass for prompt tokens
-        let input = Tensor::new(prompt_tokens.as_slice(), &device)
+        let input = Tensor::new(input_ids.as_slice(), &device)
             .map_err(|e| AgentError::Llm(format!("Tensor creation error: {}", e)))?
             .unsqueeze(0)
             .map_err(|e| AgentError::Llm(format!("Tensor unsqueeze error: {}", e)))?;
         let logits = model
-            .forward(&input, 0)
+            .forward(&input, index_pos)
             .map_err(|e| AgentError::Llm(format!("Model forward error: {}", e)))?;
         let logits = logits
             .squeeze(0)
@@ -487,7 +505,7 @@ impl LocalGgufProvider {
                 .unsqueeze(0)
                 .map_err(|e| AgentError::Llm(format!("Tensor unsqueeze error: {}", e)))?;
             let logits = model
-                .forward(&input, prompt_len + index)
+                .forward(&input, index_pos + prompt_len + index)
                 .map_err(|e| AgentError::Llm(format!("Model forward error: {}", e)))?;
             let logits = logits
                 .squeeze(0)
@@ -539,6 +557,13 @@ impl LocalGgufProvider {
             }
             generated_text.push_str(&rest);
         }
+
+        // Update token cache: prompt tokens + generated tokens.
+        // This allows the next turn to compute LCP and reuse KV cache.
+        let mut cache = self.token_cache.lock().unwrap();
+        cache.clear();
+        cache.extend_from_slice(&prompt_tokens);
+        cache.extend_from_slice(&all_tokens);
 
         Ok(generated_text)
     }
@@ -629,6 +654,7 @@ impl LlmProvider for LocalGgufProvider {
         let tokenizer = self.tokenizer.clone();
         let device = self.device.clone();
         let config = self.config.clone();
+        let token_cache = self.token_cache.clone();
 
         let (tx, rx) = tokio::sync::mpsc::channel(64);
 
@@ -639,6 +665,7 @@ impl LlmProvider for LocalGgufProvider {
                 tokenizer,
                 device,
                 config,
+                token_cache,
                 &prompt,
                 max_tokens,
                 Some(tx.clone()),
@@ -657,12 +684,23 @@ impl LlmProvider for LocalGgufProvider {
         self.cache_key = Some(key.to_string());
     }
 
+    fn clear_cache(&self) {
+        let mut cache = self.token_cache.lock().unwrap();
+        cache.clear();
+    }
+
     fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
         crate::llm::api::ProviderCapabilities {
             native_tool_calling: true,
+            prompt_caching: true,
             ..Default::default()
         }
     }
+}
+
+/// Compute the length of the longest common prefix between two token ID slices.
+fn longest_common_prefix(a: &[u32], b: &[u32]) -> usize {
+    a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count()
 }
 
 /// Generate text using provided (cloned) state. Used by both `complete` and `stream`.
@@ -671,6 +709,7 @@ async fn generate_with_state(
     tokenizer: tokenizers::Tokenizer,
     device: Device,
     config: LocalGgufConfig,
+    token_cache: Arc<std::sync::Mutex<Vec<u32>>>,
     prompt: &str,
     max_tokens: usize,
     tx: Option<tokio::sync::mpsc::Sender<Result<StreamDelta, AgentError>>>,
@@ -681,11 +720,24 @@ async fn generate_with_state(
         .encode(prompt.to_string(), true)
         .map_err(|e| AgentError::Llm(format!("Tokenizer encode error: {}", e)))?;
     let prompt_tokens = tokens.get_ids().to_vec();
-    let prompt_len = prompt_tokens.len();
 
     if prompt_tokens.is_empty() {
         return Err(AgentError::Llm("Empty prompt after tokenization".into()));
     }
+
+    // Compute LCP with cached tokens to decide whether to reuse KV cache.
+    let (input_ids, index_pos, prompt_len) = {
+        let cached = token_cache.lock().unwrap();
+        let lcp_len = longest_common_prefix(&cached, &prompt_tokens);
+        let threshold = (prompt_tokens.len() * 8).saturating_div(10);
+        if lcp_len > 0 && lcp_len >= threshold {
+            let suffix = prompt_tokens[lcp_len..].to_vec();
+            let suffix_len = suffix.len();
+            (suffix, lcp_len, suffix_len)
+        } else {
+            (prompt_tokens.clone(), 0, prompt_tokens.len())
+        }
+    };
 
     let sampling = if config.temperature <= 0.0 {
         Sampling::ArgMax
@@ -711,12 +763,12 @@ async fn generate_with_state(
     };
     let mut logits_processor = LogitsProcessor::from_sampling(config.seed, sampling);
 
-    let input = Tensor::new(prompt_tokens.as_slice(), &device)
+    let input = Tensor::new(input_ids.as_slice(), &device)
         .map_err(|e| AgentError::Llm(format!("Tensor creation error: {}", e)))?
         .unsqueeze(0)
         .map_err(|e| AgentError::Llm(format!("Tensor unsqueeze error: {}", e)))?;
     let logits = model
-        .forward(&input, 0)
+        .forward(&input, index_pos)
         .map_err(|e| AgentError::Llm(format!("Model forward error: {}", e)))?;
     let logits = logits
         .squeeze(0)
@@ -752,7 +804,7 @@ async fn generate_with_state(
             .unsqueeze(0)
             .map_err(|e| AgentError::Llm(format!("Tensor unsqueeze error: {}", e)))?;
         let logits = model
-            .forward(&input, prompt_len + index)
+            .forward(&input, index_pos + prompt_len + index)
             .map_err(|e| AgentError::Llm(format!("Model forward error: {}", e)))?;
         let logits = logits
             .squeeze(0)
@@ -803,6 +855,12 @@ async fn generate_with_state(
         }
         generated_text.push_str(&rest);
     }
+
+    // Update token cache: prompt tokens + generated tokens.
+    let mut cache = token_cache.lock().unwrap();
+    cache.clear();
+    cache.extend_from_slice(&prompt_tokens);
+    cache.extend_from_slice(&all_tokens);
 
     Ok(generated_text)
 }

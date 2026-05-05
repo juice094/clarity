@@ -72,6 +72,7 @@ impl Agent {
                 vision_llm: None,
                 turn_context: None,
                 fallback_llms: Vec::new(),
+                static_prompt_hash: None,
             })),
         }
     }
@@ -432,6 +433,7 @@ impl Agent {
         } else {
             inner.state = AgentState::Unconfigured;
         }
+        inner.static_prompt_hash = None;
     }
 
     /// Access the configured approval runtime, if any.
