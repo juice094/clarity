@@ -51,14 +51,14 @@ impl Default for ComposerConfig {
 }
 
 /// The skill composer runtime.
-pub struct SkillComposer<P: OutcomePredictor> {
+pub struct SkillComposer<P: OutcomePredictor + ?Sized> {
     planner: HierarchicalPlanner<P>,
     config: ComposerConfig,
     /// Recorded observations for offline learning.
     observations: Vec<SkillObservation>,
 }
 
-impl<P: OutcomePredictor> SkillComposer<P> {
+impl<P: OutcomePredictor + ?Sized> SkillComposer<P> {
     pub fn new(planner: HierarchicalPlanner<P>, config: ComposerConfig) -> Self {
         Self {
             planner,
@@ -182,13 +182,13 @@ pub struct CompositionResult {
 }
 
 /// Convenience builder to construct a composer with common defaults.
-pub struct ComposerBuilder<P: OutcomePredictor> {
+pub struct ComposerBuilder<P: OutcomePredictor + ?Sized> {
     predictor: Option<Arc<P>>,
     planner_config: PlannerConfig,
     composer_config: ComposerConfig,
 }
 
-impl<P: OutcomePredictor> ComposerBuilder<P> {
+impl<P: OutcomePredictor + ?Sized> ComposerBuilder<P> {
     pub fn new() -> Self {
         Self {
             predictor: None,
@@ -229,7 +229,7 @@ impl<P: OutcomePredictor> ComposerBuilder<P> {
     }
 }
 
-impl<P: OutcomePredictor> Default for ComposerBuilder<P> {
+impl<P: OutcomePredictor + ?Sized> Default for ComposerBuilder<P> {
     fn default() -> Self {
         Self::new()
     }

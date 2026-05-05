@@ -73,6 +73,7 @@ impl Agent {
                 turn_context: None,
                 fallback_llms: Vec::new(),
                 static_prompt_hash: None,
+                jumpy_predictor: None,
             })),
         }
     }
@@ -124,6 +125,18 @@ impl Agent {
             };
             inner.llm = Some(llm);
             inner.state = AgentState::Idle;
+        }
+        self
+    }
+
+    /// Set the Jumpy World Model predictor (builder pattern).
+    pub fn with_jumpy_predictor(
+        self,
+        predictor: Arc<dyn crate::agent::jumpy::predictor::OutcomePredictor>,
+    ) -> Self {
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.jumpy_predictor = Some(predictor);
         }
         self
     }

@@ -13,6 +13,7 @@ use crate::agent::Agent;
 use crate::approval::ApprovalMode;
 use crate::error::AgentError;
 use crate::llm::api::{Message, MessageRole};
+use crate::registry::ToolRegistry;
 use clarity_wire::WireMessage;
 use serde_json::Value;
 use std::sync::Arc;
@@ -26,6 +27,9 @@ impl Agent {
         if self.is_plan_mode() {
             return self.execute_plan_mode(query.as_ref()).await;
         }
+        if self.config.enable_jumpy {
+            return self.execute_jumpy_mode(query.as_ref()).await;
+        }
         let (mut messages, tools, llm, cancel_token) =
             self.prepare_sync_turn(query.as_ref()).await?;
         info!("Starting agent loop for query: {}", query.as_ref());
@@ -37,6 +41,169 @@ impl Agent {
             .await?;
         self.finalize_sync_turn(query.as_ref(), final_response, completed, &tool_names, &messages)
             .await
+    }
+
+    /// Jumpy World Model execution path.
+    /// Uses SkillComposer to plan and execute skill sequences instead of the
+    /// standard turn-based LLM loop.
+    async fn execute_jumpy_mode(&self, query: &str) -> Result<String, AgentError> {
+        use crate::agent::jumpy::{
+            Goal, HierarchicalPlanner, JumpyState, PlannerConfig, SkillComposer,
+        };
+
+        // 1. Build predictor (user-provided or auto-wrapped via LlmAdapter)
+        let predictor: Arc<dyn crate::agent::jumpy::OutcomePredictor> = {
+            let inner = self.inner.read().unwrap();
+            if let Some(ref p) = inner.jumpy_predictor {
+                p.clone()
+            } else if let Some(ref llm) = inner.llm {
+                let adapted = crate::agent::jumpy::LlmAdapter::new(llm.clone());
+                Arc::new(crate::agent::jumpy::LlmAugmentedPredictor::new(Arc::new(adapted)))
+            } else {
+                return Err(AgentError::Llm(
+                    "No LLM provider configured for Jumpy mode".into(),
+                ));
+            }
+        };
+
+        // 2. Build SkillComposer with available tools from registry
+        let composer_config = self.config.jumpy_config.clone().unwrap_or_default();
+        let available_skills = self
+            .registry
+            .list_tools()
+            .map_err(|e| AgentError::Registry(format!("Failed to list tools: {}", e)))?
+            .into_iter()
+            .map(|name| (name, "{}".to_string()))
+            .collect();
+        let planner_config = PlannerConfig {
+            available_skills,
+            ..PlannerConfig::default()
+        };
+        let planner = HierarchicalPlanner::new(predictor, planner_config);
+        let mut composer = SkillComposer::new(planner, composer_config);
+
+        // 3. Goal & initial state
+        let goal = Goal::new(vec![query.to_string()]);
+        let initial_state = JumpyState::from_query(query);
+
+        // 4. Execute with tool-backed skill function
+        let registry = self.registry.clone();
+        let working_dir = self.config.working_dir.clone();
+        let read_only = self.config.read_only;
+        let result = composer
+            .compose(&goal, &initial_state, |skill_id, params| {
+                let skill_id = skill_id.to_string();
+                let params = params.to_string();
+                let registry = registry.clone();
+                let working_dir = working_dir.clone();
+                async move {
+                    Self::execute_skill_for_jumpy(
+                        &registry,
+                        &skill_id,
+                        &params,
+                        &working_dir,
+                        read_only,
+                    )
+                    .await
+                }
+            })
+            .await;
+
+        // 5. Format result
+        match result {
+            Ok(composition_result) => {
+                let summary = Self::format_jumpy_result(&composition_result);
+                Ok(summary)
+            }
+            Err(e) => Err(AgentError::Llm(e)),
+        }
+    }
+
+    /// Execute a single skill via ToolRegistry and convert the outcome to JumpyState.
+    async fn execute_skill_for_jumpy(
+        registry: &ToolRegistry,
+        skill_id: &str,
+        params: &str,
+        working_dir: &std::path::PathBuf,
+        read_only: bool,
+    ) -> Result<crate::agent::jumpy::JumpyState, String> {
+        use crate::agent::jumpy::JumpyState;
+        use crate::tools::ToolContext;
+
+        let tool = registry
+            .get(skill_id)
+            .map_err(|e| format!("Registry error: {}", e))?
+            .ok_or_else(|| format!("Tool '{}' not found in registry", skill_id))?;
+
+        let args: Value = serde_json::from_str(params)
+            .map_err(|e| format!("Invalid JSON params for {}: {}", skill_id, e))?;
+
+        let ctx = ToolContext {
+            working_dir: working_dir.clone(),
+            env: std::collections::HashMap::new(),
+            timeout_secs: 60,
+            max_output_size: 1024 * 1024,
+            read_only,
+            approval_mode: crate::approval::ApprovalMode::Interactive,
+            capability_token: None,
+        };
+
+        let result = tool.execute(args, ctx).await;
+
+        let mut state = JumpyState::default();
+        match result {
+            Ok(value) => {
+                state.tags.push("success".to_string());
+                state.memory.insert("result".to_string(), value.to_string());
+                state.progress = 0.5;
+                state.context_summary =
+                    format!("Executed {} successfully", skill_id);
+                // Heuristic: if result contains file paths, add to active_files
+                if let Some(paths) = value.get("paths").and_then(|v: &Value| v.as_array()) {
+                    for p in paths {
+                        if let Some(s) = p.as_str() {
+                            state.active_files.push(s.to_string());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                state.tags.push("error".to_string());
+                state.memory.insert("error".to_string(), e.to_string());
+                state.progress = 0.0;
+                state.context_summary = format!("{} failed: {}", skill_id, e);
+            }
+        }
+        Ok(state)
+    }
+
+    /// Format a CompositionResult into a human-readable summary.
+    fn format_jumpy_result(result: &crate::agent::jumpy::CompositionResult) -> String {
+        let mut lines = vec![];
+        lines.push(format!(
+            "Jumpy execution complete: {} step(s)",
+            result.total_steps
+        ));
+        for (i, step) in result.steps.iter().enumerate() {
+            lines.push(format!(
+                "  Step {}: {}({}) -> deviation={:.2}{}",
+                i + 1,
+                step.skill_id,
+                step.params,
+                step.deviation,
+                if step.replanned { " [replanned]" } else { "" }
+            ));
+        }
+        lines.push(format!(
+            "Final state tags: {:?}",
+            result.final_state.tags
+        ));
+        lines.push(format!(
+            "Final state progress: {:.2}",
+            result.final_state.progress
+        ));
+        lines.push(format!("Success: {}", result.success));
+        lines.join("\n")
     }
 
     /// Run a synchronous agent loop with pre-built messages.

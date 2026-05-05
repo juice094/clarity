@@ -128,6 +128,8 @@ struct AgentInner {
     /// Blake3 hash of the static system prompt from the last turn.
     /// Used to detect when static content changed and local KV cache should be invalidated.
     static_prompt_hash: Option<String>,
+    /// Optional Jumpy World Model predictor for skill-level planning.
+    jumpy_predictor: Option<Arc<dyn crate::agent::jumpy::predictor::OutcomePredictor>>,
 }
 
 /// Simple mock LLM for testing

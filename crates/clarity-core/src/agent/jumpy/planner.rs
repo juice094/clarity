@@ -110,13 +110,13 @@ impl Default for PlannerConfig {
 }
 
 /// The hierarchical planner.
-pub struct HierarchicalPlanner<P: OutcomePredictor> {
+pub struct HierarchicalPlanner<P: OutcomePredictor + ?Sized> {
     predictor: Arc<P>,
     config: PlannerConfig,
     rng: rand::rngs::StdRng,
 }
 
-impl<P: OutcomePredictor> HierarchicalPlanner<P> {
+impl<P: OutcomePredictor + ?Sized> HierarchicalPlanner<P> {
     pub fn new(predictor: Arc<P>, config: PlannerConfig) -> Self {
         let rng = match config.rng_seed {
             Some(seed) => rand::rngs::StdRng::seed_from_u64(seed),

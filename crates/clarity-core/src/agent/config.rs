@@ -1,6 +1,7 @@
 //! Agent configuration and prompt loading utilities.
 
 use crate::agent::compaction_service::CompactionServiceConfig;
+use crate::agent::jumpy::ComposerConfig;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -51,6 +52,12 @@ pub struct AgentConfig {
     pub fallback_providers: Vec<String>,
     /// Optional global iteration budget shared across parent and subagents.
     pub iteration_budget: Option<Arc<AtomicUsize>>,
+    /// Enable Jumpy World Model for skill-level planning and execution.
+    /// When true, the agent uses SkillComposer to plan and execute skill
+    /// sequences instead of the standard turn-based LLM loop.
+    pub enable_jumpy: bool,
+    /// Optional Jumpy composer configuration.
+    pub jumpy_config: Option<ComposerConfig>,
 }
 
 impl Default for AgentConfig {
@@ -75,6 +82,8 @@ impl Default for AgentConfig {
             vision_model_alias: None,
             fallback_providers: Vec::new(),
             iteration_budget: None,
+            enable_jumpy: false,
+            jumpy_config: None,
         }
     }
 }
@@ -196,6 +205,18 @@ impl AgentConfig {
     /// Set a global iteration budget shared across parent and subagents.
     pub fn with_iteration_budget(mut self, budget: Arc<AtomicUsize>) -> Self {
         self.iteration_budget = Some(budget);
+        self
+    }
+
+    /// Enable or disable Jumpy World Model mode.
+    pub fn with_enable_jumpy(mut self, enabled: bool) -> Self {
+        self.enable_jumpy = enabled;
+        self
+    }
+
+    /// Set Jumpy composer configuration.
+    pub fn with_jumpy_config(mut self, config: ComposerConfig) -> Self {
+        self.jumpy_config = Some(config);
         self
     }
 }

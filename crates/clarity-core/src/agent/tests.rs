@@ -1312,3 +1312,52 @@ async fn test_no_vision_no_switch() {
     assert_eq!(default_llm.call_count.load(Ordering::SeqCst), 1);
     assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 0);
 }
+
+
+#[tokio::test]
+async fn test_agent_jumpy_mode_execution() {
+    use crate::agent::jumpy::predictor::OutcomePredictor;
+    use crate::agent::jumpy::state::JumpyState;
+    use std::collections::HashMap;
+
+    struct MockJumpyPredictor;
+    #[async_trait::async_trait]
+    impl OutcomePredictor for MockJumpyPredictor {
+        async fn predict(
+            &self,
+            skill_id: &str,
+            _params: &str,
+            _current: &JumpyState,
+            _commitment: f32,
+        ) -> Result<JumpyState, String> {
+            Ok(JumpyState {
+                tags: vec![format!("executed-{}", skill_id)],
+                memory: HashMap::new(),
+                active_files: vec![],
+                context_summary: format!("Mock prediction for {}", skill_id),
+                progress: 0.5,
+            })
+        }
+    }
+
+    let registry = ToolRegistry::with_builtin_tools();
+    let config = AgentConfig::new()
+        .with_enable_jumpy(true)
+        .with_max_iterations(3);
+    let agent = Agent::with_config(registry, config)
+        .with_llm(Arc::new(MockLlm))
+        .with_jumpy_predictor(Arc::new(MockJumpyPredictor));
+
+    let result = agent.run("test query").await;
+    assert!(
+        result.is_ok(),
+        "Jumpy mode should return a result: {:?}",
+        result.err()
+    );
+    let text = result.unwrap();
+    assert!(
+        text.contains("Jumpy execution"),
+        "Expected Jumpy result, got: {}",
+        text
+    );
+}

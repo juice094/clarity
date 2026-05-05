@@ -68,7 +68,7 @@ pub mod state;
 #[cfg(test)]
 mod tests;
 
-pub use composer::{ComposerBuilder, CompositionResult, ExecutionStep, SkillComposer};
+pub use composer::{ComposerBuilder, ComposerConfig, CompositionResult, ExecutionStep, SkillComposer};
 pub use planner::{Goal, HierarchicalPlanner, PlannerConfig, SkillProposal, SkillSequence};
-pub use predictor::{ConsistentPredictor, HistoricalPredictor, HybridPredictor, LlmAugmentedPredictor, OutcomePredictor, SkillObservation};
+pub use predictor::{ConsistentPredictor, HistoricalPredictor, HybridPredictor, LlmAdapter, LlmAugmentedPredictor, OutcomePredictor, SkillObservation};
 pub use state::JumpyState;
