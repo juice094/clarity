@@ -4,11 +4,20 @@
 //! without TUI or GUI. Suitable for scripts, CI/CD, and automation.
 
 use anyhow::{Context, Result};
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 #[cfg(feature = "local-llm")]
 use clarity_core::llm::{LocalGgufConfig, LocalGgufProvider};
 use clarity_core::{
-    agent::{AgentConfig, TokenUsage},
+    agent::{
+        jumpy::{
+            predictor::{
+                HistoricalPredictor, HybridPredictor, LlmAdapter, LlmAugmentedPredictor,
+                OutcomePredictor, SkillObservation,
+            },
+            state::JumpyState,
+        },
+        AgentConfig, TokenUsage,
+    },
     approval::ApprovalMode,
     llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm},
     Agent, ToolRegistry,
@@ -26,6 +35,20 @@ use std::time::Instant;
     about = "Headless CLI for Clarity Agent"
 )]
 struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum Command {
+    /// Run the agent with a prompt
+    Run(RunArgs),
+    /// Jumpy World Model — predict outcome of a skill without executing it
+    Jumpy(JumpyArgs),
+}
+
+#[derive(Parser, Debug, Clone)]
+struct RunArgs {
     /// User prompt / instruction
     #[arg(short, long)]
     prompt: Option<String>,
@@ -67,6 +90,49 @@ struct Args {
     working_dir: Option<String>,
 }
 
+#[derive(Parser, Debug, Clone)]
+struct JumpyArgs {
+    /// Skill ID to predict outcome for
+    #[arg(short, long)]
+    skill: String,
+
+    /// Parameters as JSON string
+    #[arg(short, long, default_value = "{}")]
+    params: String,
+
+    /// Predictor type
+    #[arg(short = 't', long, value_enum, default_value = "llm")]
+    predictor: PredictorType,
+
+    /// Historical observations file (JSON array of SkillObservation)
+    #[arg(short = 'd', long)]
+    observations: Option<PathBuf>,
+
+    /// Commitment level ∈ [0.0, 1.0]
+    #[arg(short, long, default_value = "0.9")]
+    commitment: f32,
+
+    /// Current state description (or read from stdin)
+    #[arg(short = 'S', long)]
+    state: Option<String>,
+
+    /// LLM provider for LLM-augmented prediction
+    #[arg(short = 'P', long, value_enum, default_value = "openai")]
+    provider: ProviderType,
+
+    /// Model name (overrides env var default)
+    #[arg(short, long)]
+    model: Option<String>,
+
+    /// API key (or read from env var)
+    #[arg(long)]
+    api_key: Option<String>,
+
+    /// Output format
+    #[arg(short, long, value_enum, default_value = "json")]
+    output: OutputFormat,
+}
+
 #[derive(Debug, Clone, ValueEnum, PartialEq)]
 enum OutputFormat {
     Markdown,
@@ -91,6 +157,13 @@ enum ApprovalModeArg {
     Plan,
 }
 
+#[derive(Debug, Clone, ValueEnum, PartialEq)]
+enum PredictorType {
+    Llm,
+    Historical,
+    Hybrid,
+}
+
 fn main() -> Result<()> {
     let runtime = tokio::runtime::Runtime::new().context("Failed to create Tokio runtime")?;
     runtime.block_on(async_main())
@@ -103,9 +176,16 @@ async fn async_main() -> Result<()> {
 
     let args = Args::parse();
 
+    match args.command {
+        Command::Run(run_args) => run_command(run_args).await,
+        Command::Jumpy(jumpy_args) => jumpy_command(jumpy_args).await,
+    }
+}
+
+async fn run_command(args: RunArgs) -> Result<()> {
     let prompt = read_prompt(&args).context("Failed to read prompt")?;
 
-    let provider = build_provider(&args)
+    let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
         .await
         .context("Failed to build LLM provider")?;
 
@@ -156,7 +236,98 @@ async fn async_main() -> Result<()> {
     Ok(())
 }
 
-fn read_prompt(args: &Args) -> Result<String> {
+async fn jumpy_command(args: JumpyArgs) -> Result<()> {
+    // 1. Read current state
+    let current = if let Some(state_desc) = args.state {
+        JumpyState::from_query(&state_desc)
+    } else {
+        use std::io::IsTerminal;
+        let stdin = std::io::stdin();
+        if stdin.is_terminal() {
+            anyhow::bail!("Either --state must be provided, or pipe state description via stdin");
+        }
+        let buf = std::io::read_to_string(stdin.lock())
+            .context("Failed to read state from stdin")?;
+        if buf.trim().is_empty() {
+            anyhow::bail!("Stdin state input is empty");
+        }
+        JumpyState::from_query(&buf)
+    };
+
+    // 2. Build predictor
+    let predictor: Box<dyn OutcomePredictor> = match args.predictor {
+        PredictorType::Llm => {
+            let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
+                .await
+                .context("Failed to build LLM provider")?;
+            let adapted = LlmAdapter::new(provider);
+            Box::new(LlmAugmentedPredictor::new(Arc::new(adapted)))
+        }
+        PredictorType::Historical => {
+            let mut historical = HistoricalPredictor::new();
+            if let Some(path) = args.observations {
+                let data = std::fs::read_to_string(&path)
+                    .with_context(|| format!("Failed to read observations: {}", path.display()))?;
+                let observations: Vec<SkillObservation> = serde_json::from_str(&data)
+                    .context("Failed to parse observations as JSON")?;
+                historical.observe_batch(observations);
+            }
+            Box::new(historical)
+        }
+        PredictorType::Hybrid => {
+            let mut historical = HistoricalPredictor::new();
+            if let Some(path) = args.observations {
+                let data = std::fs::read_to_string(&path)
+                    .with_context(|| format!("Failed to read observations: {}", path.display()))?;
+                let observations: Vec<SkillObservation> = serde_json::from_str(&data)
+                    .context("Failed to parse observations as JSON")?;
+                historical.observe_batch(observations);
+            }
+            let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
+                .await
+                .context("Failed to build LLM provider")?;
+            let adapted = LlmAdapter::new(provider);
+            let llm = LlmAugmentedPredictor::new(Arc::new(adapted));
+            Box::new(HybridPredictor::new(historical, llm))
+        }
+    };
+
+    // 3. Predict
+    let predicted = predictor
+        .predict(&args.skill, &args.params, &current, args.commitment.clamp(0.0, 1.0))
+        .await
+        .map_err(|e| anyhow::anyhow!("Prediction failed: {}", e))?;
+
+    // 4. Output
+    match args.output {
+        OutputFormat::Markdown => {
+            println!("# Jumpy Prediction\n");
+            println!("**Skill**: `{}`", args.skill);
+            println!("**Parameters**: `{}`", args.params);
+            println!("**Commitment**: {:.2}", args.commitment);
+            println!("\n## Predicted State\n");
+            println!("- **Tags**: {:?}", predicted.tags);
+            println!("- **Progress**: {:.2}", predicted.progress);
+            println!("- **Context Summary**: {}", predicted.context_summary);
+            println!("- **Active Files**: {:?}", predicted.active_files);
+            println!("- **Memory**: {:?}", predicted.memory);
+        }
+        OutputFormat::Json => {
+            let json = json!({
+                "success": true,
+                "skill": args.skill,
+                "params": args.params,
+                "commitment": args.commitment,
+                "predicted_state": predicted,
+            });
+            println!("{}", serde_json::to_string_pretty(&json)?);
+        }
+    }
+
+    Ok(())
+}
+
+fn read_prompt(args: &RunArgs) -> Result<String> {
     match (&args.prompt, &args.file) {
         (Some(p), _) => Ok(p.clone()),
         (None, Some(path)) => std::fs::read_to_string(path)
@@ -181,67 +352,62 @@ fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
-async fn build_provider(args: &Args) -> Result<Arc<dyn clarity_core::agent::LlmProvider>> {
-    let provider: Arc<dyn clarity_core::agent::LlmProvider> = match args.provider {
+async fn build_provider(
+    provider_type: ProviderType,
+    model: Option<&str>,
+    api_key: Option<&str>,
+) -> Result<Arc<dyn clarity_core::agent::LlmProvider>> {
+    let provider: Arc<dyn clarity_core::agent::LlmProvider> = match provider_type {
         ProviderType::Openai => {
-            let api_key = args
-                .api_key
-                .clone()
+            let key = api_key
+                .map(|s| s.to_string())
                 .or_else(|| std::env::var("OPENAI_API_KEY").ok())
                 .context("OPENAI_API_KEY not set and --api-key not provided")?;
             let base_url = env_or("OPENAI_BASE_URL", "https://api.openai.com/v1");
-            let model = args
-                .model
-                .clone()
+            let m = model
+                .map(|s| s.to_string())
                 .unwrap_or_else(|| env_or("OPENAI_MODEL", "gpt-4o"));
-            Arc::new(OpenAiCompatibleLlm::new(api_key, base_url, model))
+            Arc::new(OpenAiCompatibleLlm::new(key, base_url, m))
         }
         ProviderType::Deepseek => {
-            let api_key = args
-                .api_key
-                .clone()
+            let key = api_key
+                .map(|s| s.to_string())
                 .or_else(|| std::env::var("DEEPSEEK_API_KEY").ok())
                 .context("DEEPSEEK_API_KEY not set and --api-key not provided")?;
             let base_url = env_or("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1");
-            let model = args
-                .model
-                .clone()
+            let m = model
+                .map(|s| s.to_string())
                 .unwrap_or_else(|| env_or("DEEPSEEK_MODEL", "deepseek-chat"));
-            Arc::new(DeepSeekProvider::new(api_key, base_url, model))
+            Arc::new(DeepSeekProvider::new(key, base_url, m))
         }
         ProviderType::Anthropic => {
-            let api_key = args
-                .api_key
-                .clone()
+            let key = api_key
+                .map(|s| s.to_string())
                 .or_else(|| std::env::var("ANTHROPIC_AUTH_TOKEN").ok())
                 .context("ANTHROPIC_AUTH_TOKEN not set and --api-key not provided")?;
             let base_url = env_or("ANTHROPIC_BASE_URL", "https://api.anthropic.com");
-            let model = args
-                .model
-                .clone()
+            let m = model
+                .map(|s| s.to_string())
                 .unwrap_or_else(|| env_or("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"));
-            Arc::new(AnthropicLlm::new(api_key, base_url, model))
+            Arc::new(AnthropicLlm::new(key, base_url, m))
         }
         ProviderType::Kimi => {
-            let api_key = args
-                .api_key
-                .clone()
+            let key = api_key
+                .map(|s| s.to_string())
                 .or_else(|| std::env::var("KIMI_API_KEY").ok())
                 .context("KIMI_API_KEY not set and --api-key not provided")?;
             let base_url = env_or("KIMI_BASE_URL", "https://api.moonshot.ai/v1");
-            let model = args
-                .model
-                .clone()
+            let m = model
+                .map(|s| s.to_string())
                 .unwrap_or_else(|| env_or("KIMI_MODEL", "kimi-k2-07132k"));
-            Arc::new(KimiLlm::new(api_key, base_url, model))
+            Arc::new(KimiLlm::new(key, base_url, m))
         }
         ProviderType::Ollama => {
             let base_url = env_or("OLLAMA_HOST", "http://localhost:11434");
-            let model = args
-                .model
-                .clone()
+            let m = model
+                .map(|s| s.to_string())
                 .unwrap_or_else(|| env_or("OLLAMA_MODEL", "llama3"));
-            Arc::new(OllamaProvider::new(base_url, model))
+            Arc::new(OllamaProvider::new(base_url, m))
         }
         #[cfg(feature = "local-llm")]
         ProviderType::Local => {
@@ -319,51 +485,114 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_args_parse_prompt() {
-        let args = Args::try_parse_from(["clarity-headless", "--prompt", "hello"]).unwrap();
-        assert_eq!(args.prompt, Some("hello".to_string()));
-        assert_eq!(args.output, OutputFormat::Markdown);
-        assert_eq!(args.provider, ProviderType::Openai);
+    fn test_args_parse_run_prompt() {
+        let args = Args::try_parse_from(["clarity-headless", "run", "--prompt", "hello"]).unwrap();
+        match args.command {
+            Command::Run(run_args) => {
+                assert_eq!(run_args.prompt, Some("hello".to_string()));
+                assert_eq!(run_args.output, OutputFormat::Markdown);
+                assert_eq!(run_args.provider, ProviderType::Openai);
+            }
+            _ => panic!("Expected Run command"),
+        }
     }
 
     #[test]
-    fn test_args_parse_file_json() {
+    fn test_args_parse_run_file_json() {
         let args =
-            Args::try_parse_from(["clarity-headless", "--file", "test.md", "--output", "json"])
+            Args::try_parse_from(["clarity-headless", "run", "--file", "test.md", "--output", "json"])
                 .unwrap();
-        assert_eq!(args.file, Some("test.md".to_string()));
-        assert_eq!(args.output, OutputFormat::Json);
+        match args.command {
+            Command::Run(run_args) => {
+                assert_eq!(run_args.file, Some("test.md".to_string()));
+                assert_eq!(run_args.output, OutputFormat::Json);
+            }
+            _ => panic!("Expected Run command"),
+        }
     }
 
     #[test]
-    fn test_args_parse_approval_yolo() {
+    fn test_args_parse_run_approval_yolo() {
         let args =
-            Args::try_parse_from(["clarity-headless", "--approval", "yolo", "--prompt", "hi"])
+            Args::try_parse_from(["clarity-headless", "run", "--approval", "yolo", "--prompt", "hi"])
                 .unwrap();
-        assert_eq!(args.approval, ApprovalModeArg::Yolo);
+        match args.command {
+            Command::Run(run_args) => assert_eq!(run_args.approval, ApprovalModeArg::Yolo),
+            _ => panic!("Expected Run command"),
+        }
     }
 
     #[test]
-    fn test_args_parse_provider_kimi() {
+    fn test_args_parse_run_provider_kimi() {
         let args =
-            Args::try_parse_from(["clarity-headless", "--provider", "kimi", "--prompt", "hi"])
+            Args::try_parse_from(["clarity-headless", "run", "--provider", "kimi", "--prompt", "hi"])
                 .unwrap();
-        assert_eq!(args.provider, ProviderType::Kimi);
+        match args.command {
+            Command::Run(run_args) => assert_eq!(run_args.provider, ProviderType::Kimi),
+            _ => panic!("Expected Run command"),
+        }
     }
 
     #[test]
     #[cfg(feature = "local-llm")]
-    fn test_args_parse_provider_local() {
+    fn test_args_parse_run_provider_local() {
         let args =
-            Args::try_parse_from(["clarity-headless", "--provider", "local", "--prompt", "hi"])
+            Args::try_parse_from(["clarity-headless", "run", "--provider", "local", "--prompt", "hi"])
                 .unwrap();
-        assert_eq!(args.provider, ProviderType::Local);
+        match args.command {
+            Command::Run(run_args) => assert_eq!(run_args.provider, ProviderType::Local),
+            _ => panic!("Expected Run command"),
+        }
     }
 
     #[test]
-    fn test_args_missing_prompt_and_file() {
-        let result = Args::try_parse_from(["clarity-headless"]);
-        assert!(result.is_ok()); // clap doesn't enforce this; we enforce at runtime
+    fn test_args_parse_jumpy_skill() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "jumpy",
+            "--skill",
+            "test-skill",
+            "--params",
+            "{\"key\":\"value\"}",
+            "--state",
+            "test state",
+        ])
+        .unwrap();
+        match args.command {
+            Command::Jumpy(jumpy_args) => {
+                assert_eq!(jumpy_args.skill, "test-skill");
+                assert_eq!(jumpy_args.params, "{\"key\":\"value\"}");
+                assert_eq!(jumpy_args.state, Some("test state".to_string()));
+                assert_eq!(jumpy_args.predictor, PredictorType::Llm);
+                assert_eq!(jumpy_args.commitment, 0.9);
+                assert_eq!(jumpy_args.output, OutputFormat::Json);
+            }
+            _ => panic!("Expected Jumpy command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_jumpy_hybrid() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "jumpy",
+            "--skill",
+            "test",
+            "--predictor",
+            "hybrid",
+            "--observations",
+            "obs.json",
+            "--state",
+            "input",
+        ])
+        .unwrap();
+        match args.command {
+            Command::Jumpy(jumpy_args) => {
+                assert_eq!(jumpy_args.predictor, PredictorType::Hybrid);
+                assert_eq!(jumpy_args.observations, Some(PathBuf::from("obs.json")));
+            }
+            _ => panic!("Expected Jumpy command"),
+        }
     }
 
     #[test]
