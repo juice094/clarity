@@ -57,20 +57,32 @@ cargo run -p clarity-egui
 
 ## Current Direction
 
-**阶段性目标**：将 Clarity 打造为能替代 Kimi CLI 的本地开发环境，实现 Claw 模式的持续化存储与多角色认知协同。
+**阶段性目标**：将 Clarity 打造为能替代 Kimi CLI / Codex CLI 的本地开发环境，实现 Claw 模式的持续化存储与多角色认知协同。
 
-- ✅ 已具备：Agent 运行时、Approval 工作流、MCP 工具集成、多前端（TUI/egui/Gateway/Headless）
-- ✅ egui 归一化 UI：全宽 tab bar、顶部全局工具栏、统一弹窗风格（Settings/MCP/Skill）、归一化 Frame 系统
-- ✅ KimiCLI 兼容层：`agent.yaml` 声明式配置、工具名映射、子代理定义
-- ✅ 可靠性：LoopDetector（重复调用检测）、USD/turn 预算上限、凭证脱敏、上下文溢出自动恢复
-- ✅ Memory：时间衰减权重（6 个月半衰期）、BM25 + vector 混合搜索
-- ✅ Provider 自适应：自声明能力（native tool / vision / prompt caching）、prompt-guided fallback（Anthropic）
-- ✅ Streaming：DraftEvent 三态流（Clear/Progress/Content）
-- 🔄 进行中：跨会话 Agent 状态快照、子 Agent 上下文持久化（后端就绪，前端待接入）
-- 🔄 进行中：Claw 联邦运行时集成（Gateway 完整，runtime 空壳待填充）
-- ⏸️ 未实现：多窗口进程隔离、层级信息注入总线、可视化工作流（D2/Mermaid）、架构解耦（`run.rs` 拆分、`TurnContext` 提取）
+> **定位边界**：Clarity 是「本地优先的 AI 开发运行时」，不是 OpenClaw 的全功能个人助手替代品。核心差异：Clarity 聚焦编码/工程工作流，无原生消息通道（WhatsApp/Telegram/Discord Bot）、无 Voice/Canvas、无移动端。如果你需要多通道 inbox 或语音交互，OpenClaw 更合适。
 
-> 详细路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
+### 功能就绪清单
+
+- ✅ **Agent 运行时**：ReAct/Plan 循环、Approval 三层（Interactive/Yolo/Plan）、MCP 工具集成
+- ✅ **多前端**：TUI（ratatui）、Desktop GUI（eframe/egui）、Web IDE（Axum Gateway）、Headless CLI
+- ✅ **本地 LLM**：Candle 原生 GGUF（Qwen2/DeepSeek-R1-Distill），零外部依赖
+- ✅ **归一化 UI**：全宽 tab bar、顶部全局工具栏、统一弹窗风格、Glassmorphism Frame 系统
+- ✅ **KimiCLI 兼容层**：`agent.yaml` 声明式配置、工具名映射、子代理定义
+- ✅ **可靠性**：LoopDetector、USD/turn 预算上限、凭证脱敏、上下文溢出自动恢复、指数退避重试
+- ✅ **Memory**：SQLite + BM25 + vector 混合搜索，6 个月时间衰减
+- ✅ **Provider 自适应**：自声明能力（native tool / vision / prompt caching）、ReliableProvider 回退链
+- ✅ **Streaming**：DraftEvent 三态流（Clear/Progress/Content）
+- ✅ **Local KV Cache**：Sprint 28 交付 `LocalGgufProvider` LCP-based KV 缓存跨 turn 持久化
+
+### 进行中 / 未实现
+
+- 🔄 跨会话 Agent 状态快照、子 Agent 上下文持久化（后端就绪，前端待接入）
+- 🔄 Claw 联邦运行时集成（Gateway 完整，runtime 空壳待填充）
+- ⏸️ 多窗口进程隔离、IPC 传输层（TCP/UDS/Named Pipe）
+- ⏸️ 层级信息注入总线、可视化工作流（D2/Mermaid）
+- ⏸️ 架构解耦（`run.rs` 拆分、`TurnContext` 提取）
+
+> 详细路线图与中间协议层状态见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
 ---
 

@@ -96,6 +96,21 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 
 详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C 与 [`docs/visions/AGENT_OS_VISION.md`](docs/visions/AGENT_OS_VISION.md)。
 
+#### 中间协议层状态
+
+| 协议层 | 状态 | 说明 |
+|--------|------|------|
+| `clarity-wire`（UI↔Agent EventBus） | ✅ 成熟 | SPMC 广播 + ViewCommand 协议通道，三前端统一消费 |
+| MCP 传输 | ✅ 成熟 | stdio / SSE / HTTP 三种，注册表管理，工具发现 |
+| Gateway HTTP API | ✅ 成熟 | Axum + session store + REST handlers |
+| Local LLM KV Cache | ✅ 已交付 | Sprint 28：`LocalGgufProvider` LCP-based 跨 turn KV 复用 + static prompt hash 失效机制 |
+| 跨会话状态快照 | 🔄 后端就绪 | `subagents::builder` + `AgentPool` 概念存在；缺 egui 独立面板与持久化格式 |
+| Claw 联邦运行时 | 🔄 空壳 | `clarity-claw` system-tray 占位；runtime 逻辑待填充 |
+| IPC 传输层 | ❌ 未启动 | TCP 回环 / UDS / Named Pipe，规划中 |
+| 多窗口 Agent 隔离 | ❌ 未启动 | `AppState.agent` → `AgentPool` 重构未开始 |
+
+#### Phase 3 工作项
+
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
 | WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
@@ -103,11 +118,9 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
 | 会话层统一（SQLite） | ⏸️ 未启动 | 替代 JSON+JSONL 双系统 |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
-| 多窗口 Agent 隔离 | ⏸️ 未启动 | `AppState.agent` → `AgentPool` |
-| IPC 传输层 | ⏸️ 未启动 | TCP 回环 / UDS / Named Pipe |
 | 子 Agent UI 接入（IS-1） | 🔄 后端就绪，前端待接入 | `subagents::builder` 已具备 spawn 能力，缺 egui 独立面板 |
 | Token 权限校验前端（IS-3） | 🔄 后端就绪，前端待接入 | `verify_sandbox_escape` 已存在，缺 UI 层的权限可视化 |
-| 跨会话状态快照 | ⏸️ 未启动 | Agent 思考过程、计划、未完成子任务的完整持久化 |
+| 跨会话状态快照 | 🔄 后端就绪，前端待接入 | Agent 思考过程、计划、未完成子任务的完整持久化 |
 | 角色方向性文件系统 | ⏸️ 未启动 | 情感/知识/工程的课题声明与权限矩阵落地 |
 
 ### Phase 4：生态扩展（6 周）
