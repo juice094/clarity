@@ -1,0 +1,14 @@
+{
+  "export_time": "2026-05-05T08:57:20.784320+00:00",
+  "count": 32,
+  "quality_tag": "synthetic_real_hybrid",
+  "description": "Hand-crafted trajectories based on real tool behaviours in the clarity/devbase workspace.  State transitions are logically consistent with actual tool side-effects.",
+  "skill_distribution": {
+    "file_read": 6,
+    "glob": 1,
+    "file_write": 1,
+    "file_edit": 3,
+    "grep": 3,
+    "bash": 18
+  }
+}

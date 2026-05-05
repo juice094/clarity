@@ -481,6 +481,34 @@ mod tests {
         assert_eq!(state.tags, vec!["historical_tag"]);
     }
 
+    #[test]
+    fn test_trajectories_json_parseable() {
+        // Verify J10 Phase 2 training data is valid SkillObservation JSON.
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let path = std::path::PathBuf::from(manifest_dir)
+            .join("..")
+            .join("..")
+            .join("training-data")
+            .join("trajectories")
+            .join("observations.json");
+        if !path.exists() {
+            // Trajectories not generated yet — skip gracefully.
+            return;
+        }
+        let data = std::fs::read_to_string(&path).expect("read trajectories");
+        let observations: Vec<SkillObservation> =
+            serde_json::from_str(&data).expect("parse trajectories as SkillObservation array");
+        assert!(
+            observations.len() >= 20,
+            "Expected at least 20 trajectories, got {}",
+            observations.len()
+        );
+
+        // Verify HistoricalPredictor can ingest them without panic.
+        let mut predictor = HistoricalPredictor::new();
+        predictor.observe_batch(observations);
+    }
+
     #[tokio::test]
     async fn test_hybrid_llm_fallback() {
         let historical = HistoricalPredictor::new();
