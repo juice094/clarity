@@ -79,7 +79,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             if let Some(session) = app.session_store.active_session() {
                                 if crate::widgets::icon_button_toolbar(
                                     ui,
-                                    "⬇",
+                                    crate::theme::ICON_EXPORT,
                                     app.ui_store.theme.text_sm,
                                     &app.ui_store.theme,
                                 )
@@ -113,7 +113,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             // Import session
                             if crate::widgets::icon_button_toolbar(
                                 ui,
-                                "⬆",
+                                crate::theme::ICON_IMPORT,
                                 app.ui_store.theme.text_sm,
                                 &app.ui_store.theme,
                             )

@@ -23,6 +23,8 @@ pub const ICON_CHEVRON_RIGHT: &str = "\u{E1A0}";
 pub const ICON_COPY: &str = "\u{E1CA}";
 pub const ICON_EDIT: &str = "\u{E3AE}";
 pub const ICON_REFRESH: &str = "\u{E19E}";
+pub const ICON_EXPORT: &str = "\u{E524}";
+pub const ICON_IMPORT: &str = "\u{E52A}";
 
 // ============================================================================
 // Design Token System — Phase A Foundation

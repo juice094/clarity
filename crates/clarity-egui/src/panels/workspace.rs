@@ -41,11 +41,13 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                 });
             let selected_path_ref = selected_path.as_deref();
 
-            // ── File tree (top half, scrollable) ──
-            egui::ScrollArea::vertical()
-                .id_salt("workspace_file_tree")
-                .max_height(ui.available_height() * 0.45)
-                .show(ui, |ui| {
+            // ── File tree (scrollable) ──
+            let has_preview = app.ui_store.preview_item.is_some();
+            let mut scroll = egui::ScrollArea::vertical().id_salt("workspace_file_tree");
+            if has_preview {
+                scroll = scroll.max_height(ui.available_height() * 0.45);
+            }
+            scroll.show(ui, |ui| {
                     crate::ui::file_browser::render_file_tree(
                         ui,
                         &work_dir,
