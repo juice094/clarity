@@ -9,11 +9,11 @@
 //! - 通知集成
 
 pub mod agent_executor;
-pub(crate) mod cron;
+pub mod cron;
 pub mod store;
 pub(crate) mod worker;
 
-pub(crate) use cron::CronScheduler;
+pub use cron::CronScheduler;
 pub use store::{TaskId, TaskInfo, TaskPriority, TaskResult, TaskSpec, TaskStatus, TaskStore};
 
 use async_trait::async_trait;

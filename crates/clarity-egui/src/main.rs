@@ -55,10 +55,12 @@ pub(crate) struct App {
     pub(crate) chat_store: stores::ChatStore,
     pub(crate) settings_store: stores::SettingsStore,
     pub(crate) task_store: stores::TaskStore,
+    pub(crate) cron_store: stores::CronStore,
     pub(crate) ui_store: stores::UiStore,
     pub(crate) subagent_store: stores::SubAgentStore,
     pub(crate) mcp_store: stores::McpStore,
     pub(crate) onboarding_store: stores::OnboardingStore,
+    pub(crate) team_store: stores::TeamStore,
 }
 
 mod app_logic;
@@ -395,6 +397,22 @@ impl App {
         panels::task_create::render_task_create_modal(self, ctx);
     }
 
+    fn render_team_panel(&mut self, ctx: &egui::Context) {
+        panels::team::render_team_panel(self, ctx);
+    }
+
+    fn render_team_create_modal(&mut self, ctx: &egui::Context) {
+        panels::team_create::render_team_create_modal(self, ctx);
+    }
+
+    fn render_cron_panel(&mut self, ctx: &egui::Context) {
+        panels::cron::render_cron_panel(self, ctx);
+    }
+
+    fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
+        panels::cron_create::render_cron_create_modal(self, ctx);
+    }
+
     fn render_skill_panel(&mut self, ctx: &egui::Context) {
         panels::skill::render_skill_panel(self, ctx);
     }
@@ -461,10 +479,20 @@ impl eframe::App for App {
 
         // ESC closes modals (but not when approval modal is open).
         if !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            if self.settings_store.settings_open {
+            if self.team_store.create_modal_open {
+                self.team_store.create_modal_open = false;
+            } else if self.settings_store.settings_open {
                 self.settings_store.settings_open = false;
             } else if self.ui_store.skill_panel_open {
                 self.ui_store.skill_panel_open = false;
+            } else if self.team_store.team_panel_open {
+                self.team_store.team_panel_open = false;
+            }
+            if self.cron_store.create_modal_open {
+                self.cron_store.create_modal_open = false;
+            }
+            if self.cron_store.cron_panel_open {
+                self.cron_store.cron_panel_open = false;
             }
         }
 
@@ -529,11 +557,17 @@ impl eframe::App for App {
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
+        self.render_safe(ctx, "cron", |app, ctx| app.render_cron_panel(ctx));
         self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
+        self.render_safe(ctx, "cron_create", |app, ctx| app.render_cron_create_modal(ctx));
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
         self.render_safe(ctx, "task_create", |app, ctx| {
             app.render_task_create_modal(ctx)
+        });
+        self.render_safe(ctx, "team", |app, ctx| app.render_team_panel(ctx));
+        self.render_safe(ctx, "team_create", |app, ctx| {
+            app.render_team_create_modal(ctx)
         });
         self.render_safe(ctx, "kimi_login", |app, ctx| {
             crate::components::login_modal::render_oauth_login_modal(

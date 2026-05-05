@@ -7,6 +7,7 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
+use crate::stores::Team;
 use clarity_core::agent::Plan;
 use clarity_core::background::TaskInfo;
 use std::time::Instant;
@@ -39,6 +40,8 @@ pub enum UiEvent {
         reason: String,
     },
     TaskList(Vec<TaskInfo>),
+    TeamList(Vec<Team>),
+    CronList(Vec<clarity_core::background::cron::CronTask>),
     Usage {
         prompt_tokens: u32,
         completion_tokens: u32,

@@ -265,6 +265,17 @@ impl App {
                 task_create_prompt: String::new(),
                 task_create_priority: 2,
             },
+            cron_store: crate::stores::CronStore {
+                cron_panel_open: false,
+                tasks: vec![],
+                last_refresh: now,
+                create_modal_open: false,
+                create_name: String::new(),
+                create_desc: String::new(),
+                create_prompt: String::new(),
+                create_expr: String::new(),
+                create_priority: 2,
+            },
             ui_store: crate::stores::UiStore {
                 sidebar_collapsed: false,
                 network_banner: None,
@@ -316,6 +327,16 @@ impl App {
                 onboarding_progress_rx: None,
                 downloading_auto: false,
                 cancel_token: None,
+            },
+            team_store: crate::stores::TeamStore {
+                team_panel_open: false,
+                teams: vec![],
+                create_modal_open: false,
+                create_name: String::new(),
+                create_goal: String::new(),
+                create_members: vec![],
+                create_max_concurrency: 4,
+                create_timeout_secs: 300,
             },
         };
         app.refresh_tasks();

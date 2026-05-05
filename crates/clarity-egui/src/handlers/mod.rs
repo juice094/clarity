@@ -1,8 +1,10 @@
 pub mod chat;
+pub mod cron;
 pub mod settings;
 pub mod subagent;
 pub mod system;
 pub mod task;
+pub mod team;
 
 use crate::ui::types::UiEvent;
 use crate::App;
@@ -51,6 +53,8 @@ pub fn process_events(app: &mut App) {
                 system::on_fallback(&mut app.ui_store, fallback, reason);
             }
             UiEvent::TaskList(tasks) => task::on_task_list(&mut app.task_store, tasks),
+            UiEvent::TeamList(teams) => team::on_team_list(&mut app.team_store, teams),
+            UiEvent::CronList(tasks) => cron::on_cron_list(&mut app.cron_store, tasks),
             UiEvent::SubAgentBatch(batch_id, status) => {
                 subagent::on_subagent_batch(&mut app.subagent_store, batch_id, status);
             }

@@ -118,6 +118,53 @@ pub struct TaskStore {
 }
 
 // ============================================================================
+// Team Store — team coordination list, creation modal
+// ============================================================================
+
+#[derive(Clone, Debug)]
+pub struct TeamMember {
+    pub name: String,
+    pub description: String,
+    pub agent_type: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Team {
+    pub name: String,
+    pub goal: String,
+    pub members: Vec<TeamMember>,
+    pub max_concurrency: usize,
+    pub timeout_secs: u64,
+}
+
+pub struct TeamStore {
+    pub team_panel_open: bool,
+    pub teams: Vec<Team>,
+    pub create_modal_open: bool,
+    pub create_name: String,
+    pub create_goal: String,
+    pub create_members: Vec<TeamMember>,
+    pub create_max_concurrency: usize,
+    pub create_timeout_secs: u64,
+}
+
+// ============================================================================
+// Cron Store — cron-scheduled task list, creation modal
+// ============================================================================
+
+pub struct CronStore {
+    pub cron_panel_open: bool,
+    pub tasks: Vec<clarity_core::background::cron::CronTask>,
+    pub last_refresh: Instant,
+    pub create_modal_open: bool,
+    pub create_name: String,
+    pub create_desc: String,
+    pub create_prompt: String,
+    pub create_expr: String,
+    pub create_priority: u8,
+}
+
+// ============================================================================
 // UI Store — toasts, sidebar, theme, scroll, preview, approvals
 // ============================================================================
 
