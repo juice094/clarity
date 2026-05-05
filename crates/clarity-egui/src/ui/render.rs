@@ -158,6 +158,18 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme, 
                         .color(theme.text_muted)
                         .monospace(),
                 );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let copy_btn = egui::Button::new(
+                        egui::RichText::new(crate::theme::ICON_COPY)
+                            .font(theme.font_icon(theme.text_xs))
+                            .color(theme.text_muted),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                    if ui.add(copy_btn).on_hover_text("Copy code").clicked() {
+                        ui.ctx().copy_text(code.clone());
+                    }
+                });
             });
             egui::Frame::new()
                 .fill(theme.code_block_bg)
