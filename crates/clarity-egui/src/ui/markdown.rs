@@ -21,8 +21,10 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
     let mut code_buffer = String::new();
     let mut code_lang = String::new();
     let mut paragraph_lines: Vec<&str> = Vec::new();
+    let mut i = 0;
 
-    for line in &lines {
+    while i < lines.len() {
+        let line = lines[i];
         let trimmed = line.trim_start();
 
         // Code block fence
@@ -42,35 +44,53 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
                 in_code_block = true;
                 code_lang = trimmed.strip_prefix("```").unwrap_or("").trim().to_string();
             }
+            i += 1;
             continue;
         }
 
         if in_code_block {
             code_buffer.push_str(line);
             code_buffer.push('\n');
+            i += 1;
             continue;
         }
 
         // Empty line → flush paragraph
         if trimmed.is_empty() {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
+            i += 1;
             continue;
+        }
+
+        // Table detection: consecutive lines starting with '|'
+        if trimmed.starts_with('|') {
+            flush_paragraph(&mut paragraph_lines, &mut blocks);
+            let table_end = scan_table(&lines, i);
+            if let Some((headers, rows, _end_idx)) = parse_table_lines(&lines[i..table_end]) {
+                blocks.push(RenderBlock::Table { headers, rows });
+                i = table_end;
+                continue;
+            }
+            // Not a valid table → fall through to paragraph
         }
 
         // Headings
         if let Some(rest) = trimmed.strip_prefix("### ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::Heading(3, parse_inline(rest)));
+            i += 1;
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("## ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::Heading(2, parse_inline(rest)));
+            i += 1;
             continue;
         }
         if let Some(rest) = trimmed.strip_prefix("# ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::Heading(1, parse_inline(rest)));
+            i += 1;
             continue;
         }
 
@@ -78,6 +98,7 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::ListItem(parse_inline(&trimmed[2..])));
+            i += 1;
             continue;
         }
 
@@ -88,6 +109,7 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
             blocks.push(RenderBlock::ListItem(parse_inline(
                 &trimmed[digits_end + 2..],
             )));
+            i += 1;
             continue;
         }
 
@@ -95,6 +117,7 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         if let Some(rest) = trimmed.strip_prefix("> ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::Blockquote(parse_inline(rest)));
+            i += 1;
             continue;
         }
 
@@ -102,11 +125,13 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
         if trimmed.chars().all(|c| c == '-' || c == '*' || c == '_') && trimmed.len() >= 3 {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::HorizontalRule);
+            i += 1;
             continue;
         }
 
         // Regular paragraph line
         paragraph_lines.push(line);
+        i += 1;
     }
 
     flush_paragraph(&mut paragraph_lines, &mut blocks);
@@ -122,6 +147,94 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
     }
 
     blocks
+}
+
+/// Scan forward to find the end of a potential table block.
+fn scan_table(lines: &[&str], start: usize) -> usize {
+    let mut end = start;
+    while end < lines.len() {
+        let trimmed = lines[end].trim_start();
+        if trimmed.starts_with('|') {
+            end += 1;
+        } else if trimmed.is_empty() {
+            end += 1;
+            // Allow a single empty line inside table? No, stop at empty line.
+            break;
+        } else {
+            break;
+        }
+    }
+    end
+}
+
+/// Parse table lines into headers and rows.
+/// Returns (headers, rows, consumed_count) if valid.
+fn parse_table_lines(lines: &[&str]) -> Option<(Vec<String>, Vec<Vec<String>>, usize)> {
+    if lines.len() < 2 {
+        return None;
+    }
+    let first = lines[0].trim();
+    let second = lines[1].trim();
+
+    // First line must be header row
+    let headers = parse_table_row(first);
+    if headers.is_empty() {
+        return None;
+    }
+
+    // Second line must be separator row (contains only |, -, :, spaces)
+    let is_separator = second.starts_with('|')
+        && second.ends_with('|')
+        && second
+            .chars()
+            .all(|c| c == '|' || c == '-' || c == ':' || c.is_whitespace());
+    if !is_separator {
+        return None;
+    }
+
+    let col_count = headers.len();
+    let mut rows = Vec::new();
+    let mut consumed = 2;
+
+    for line in &lines[2..] {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            break;
+        }
+        let cells = parse_table_row(trimmed);
+        if cells.is_empty() {
+            break;
+        }
+        // Pad or truncate to match header column count
+        let mut row = cells;
+        while row.len() < col_count {
+            row.push(String::new());
+        }
+        row.truncate(col_count);
+        rows.push(row);
+        consumed += 1;
+    }
+
+    Some((headers, rows, consumed))
+}
+
+fn parse_table_row(line: &str) -> Vec<String> {
+    let mut cells = Vec::new();
+    let trimmed = line.trim();
+    if !trimmed.starts_with('|') {
+        return cells;
+    }
+    let inner = &trimmed[1..];
+    // Split by '|' and trim each cell
+    for cell in inner.split('|') {
+        let c = cell.trim().to_string();
+        // Skip trailing empty cell after last '|'
+        if c.is_empty() && cell == inner.split('|').last().unwrap_or("") {
+            continue;
+        }
+        cells.push(c);
+    }
+    cells
 }
 
 fn flush_paragraph(lines: &mut Vec<&str>, blocks: &mut Vec<RenderBlock>) {
@@ -246,8 +359,69 @@ pub fn render_blocks(
                 ui.separator();
                 ui.add_space(theme.space_4);
             }
+            RenderBlock::Table { headers, rows } => {
+                render_table(ui, headers, rows, theme, text_color);
+            }
         }
     }
+}
+
+fn render_table(
+    ui: &mut egui::Ui,
+    headers: &[String],
+    rows: &[Vec<String>],
+    theme: &Theme,
+    text_color: egui::Color32,
+) {
+    if headers.is_empty() {
+        return;
+    }
+    ui.add_space(theme.space_4);
+    egui::Frame::new()
+        .fill(theme.surface)
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .inner_margin(egui::Margin::same(8))
+        .show(ui, |ui| {
+            egui::Grid::new("md_table")
+                .spacing([12.0, 6.0])
+                .show(ui, |ui| {
+                    // Header row
+                    for h in headers {
+                        ui.label(
+                            egui::RichText::new(h)
+                                .size(theme.text_sm)
+                                .strong()
+                                .color(text_color),
+                        );
+                    }
+                    ui.end_row();
+
+                    // Separator line
+                    let available = ui.available_width();
+                    let row_y = ui.cursor().min.y;
+                    ui.painter().line_segment(
+                        [
+                            egui::pos2(ui.cursor().min.x, row_y),
+                            egui::pos2(ui.cursor().min.x + available, row_y),
+                        ],
+                        egui::Stroke::new(1.0, theme.border),
+                    );
+                    ui.end_row();
+
+                    // Data rows
+                    for row in rows {
+                        for cell in row {
+                            ui.label(
+                                egui::RichText::new(cell)
+                                    .size(theme.text_sm)
+                                    .color(theme.text_muted),
+                            );
+                        }
+                        ui.end_row();
+                    }
+                });
+        });
+    ui.add_space(theme.space_4);
 }
 
 fn render_spans(

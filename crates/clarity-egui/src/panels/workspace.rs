@@ -5,6 +5,7 @@
 //! continues chatting in the central panel.
 
 use crate::App;
+use crate::ui::types::{AgentStatus, GatewayStatus};
 
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
@@ -22,12 +23,47 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.add_space(theme.space_12);
-            ui.label(
-                egui::RichText::new("Workspace")
-                    .size(theme.text_lg)
-                    .strong()
-                    .color(theme.text),
-            );
+
+            // ── Workspace title + status indicators (right-aligned) ──
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("Workspace")
+                        .size(theme.text_lg)
+                        .strong()
+                        .color(theme.text),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Gateway status
+                    let (gw_color, gw_label) = match app.chat_store.gateway_status {
+                        GatewayStatus::Online => (theme.status_online, "Gateway"),
+                        GatewayStatus::Offline => (theme.status_offline, "Gateway"),
+                        GatewayStatus::Checking => (theme.status_busy, "Gateway..."),
+                    };
+                    ui.label(
+                        egui::RichText::new(gw_label)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+                    let (gw_rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    ui.painter().circle_filled(gw_rect.center(), 4.0, gw_color);
+                    ui.add_space(4.0);
+
+                    // Agent status
+                    let (status_color, status_label) = match app.chat_store.agent_status {
+                        AgentStatus::Online => (theme.status_online, "Online"),
+                        AgentStatus::Busy => (theme.status_busy, "Busy"),
+                        AgentStatus::Unconfigured => (theme.status_offline, "Unconfigured"),
+                        AgentStatus::Offline => (theme.status_offline, "Offline"),
+                    };
+                    ui.label(
+                        egui::RichText::new(status_label)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 4.0, status_color);
+                });
+            });
             ui.add_space(theme.space_12);
 
             let work_dir = app.state.agent.config().working_dir.clone();

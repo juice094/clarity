@@ -48,6 +48,39 @@
 | S26-A1 | EventBus 单点桥接（`send_wire_message` → Event） | ✅ `8b6158f8` |
 | S26-A2 | 迭代预算端到端集成测试（budget=0 / 共享语义） | ✅ `8b6158f8` |
 
+### Sprint 35 — 子代理预算条可视化与质量硬化（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S35-A | 跨会话快照导出/导入（`session.rs` JSON serde + `rfd` 对话框） | ✅ |
+| S35-B | Gateway 状态指示器（`gateway_poller.rs` + sidebar 圆点） | ✅ |
+| S35-C | 子代理进度预算条可视化 | ✅ |
+| S35-D | 质量硬化 — `render_safe` panic 隔离覆盖 onboarding/resize | ✅ |
+
+### Sprint 36 — Cron/Team UI + 子代理状态持久化（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S36-A1 | Cron 调度 UI（`panels/cron.rs` + `cron_create.rs`） | ✅ |
+| S36-A2 | Team 协调 UI（`panels/team.rs` + `team_create.rs`） | ✅ |
+| S36-B | `SubagentStore` 磁盘状态持久化（JSON save/load） | ✅ |
+| S36-C | BACKLOG parity 矩阵同步 | ✅ |
+
+### Sprint 36.5 — UI 指示器迁移与死代码清理（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S36.5-A | Agent/Gateway 状态指示器从 sidebar 迁移至 Workspace 面板 | ✅ |
+| S36.5-B | Dead code 清理：5 个未使用图标常量 + `UiEvent` 死变体 + `SubAgentProgress` 死字段 | ✅ |
+| S36.5-C | FIXME-WEEK1-RISK 止血 — rapid-Enter debounce + `stopping...` 视觉状态 + session-delete draft race | ✅ |
+
+### Sprint 36.6 — Cron 迁移 + Markdown 表格渲染（2026-05-05）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S36.6-A | Cron Jobs 从右侧独立面板迁移至左侧 sidebar 可折叠 section | ✅ |
+| S36.6-B | Markdown 表格渲染 — `RenderBlock::Table` + `egui::Grid` 轻量解析器 | ✅ |
+
 ---
 
 ## 二、当前 Sprint（Sprint 27 — Prompt Reorder + KV Cache 策略层）
@@ -57,7 +90,7 @@
 | ID | 事项 | 优先级 | 状态 | 说明 |
 |----|------|--------|------|------|
 | S27-A1 | **Prompt Reorder：静态前缀 + 动态尾部** | P0 | ✅ 已完成 | `SystemPromptBuilder` 将静态组件（base/tools/skills/security）与动态组件（git/active_files/metadata/memory）分离为独立消息，避免 prefix cache miss |
-| S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 未启动 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching |
+| S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 📋 计划就绪 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching。详见 [`docs/plans/2026-05-05-sprint27-a2-prompt-cache-key.md`](./2026-05-05-sprint27-a2-prompt-cache-key.md) |
 | S27-A3 | **LocalGgufProvider KV cache 跨 turn 持久化** | P1 | 未启动 | 保持模型状态跨 turns，不从 `index_pos=0` 重置 |
 | S27-A4 | **System Prompt KV Snapshot（跨会话）** | P1 | 未启动 | `~/.clarity/cache/kv/{model_id}/{hash}.kvcache` 序列化/反序列化 |
 | S27-B1 | `refresh_context()` 统一移入 `run_streaming_turn()` | P2 | 未启动 | Sprint 15 遗留（Gateway/egui/TUI 所有路径获取最新上下文） |
@@ -199,11 +232,11 @@ cargo check --workspace --lib                   # 0 warnings
 
 | 债务项 | 严重度 | 说明 | 计划 |
 |--------|--------|------|------|
-| egui 零测试 | 🔴 重大 | 当前 0 tests，违反 `test_governance.md` | Sprint 13+ 遗留，待排期 |
-| Agent 空响应防御 | 🟡 中 | stream 空内容/LLM 返回空无自动回退 | 收集日志后决策 |
+| egui 零测试 | 🔴 重大 | 当前 0 tests，违反 `test_governance.md` | Sprint 38：测试基线（theme/parsing/store 纯函数优先） |
 | `unwrap()` 密度 | 🟡 中 | ~170 总量 / ~39 真实风险 | 冻结新增，渐进清理（目标 ≤150） |
+| Agent 空响应防御 | 🟡 中 | Sprint 14 已修复根因（`stream_ok` 标志 + `finish_turn` 顺序） | 持续监控 |
 | cargo audit 上游漏洞 | 🟡 低 | Tauri 间接依赖（已归档） | 等上游更新 |
-| 文档过时 | 🟢 低 | BACKLOG 已更新至 Sprint 26 | 每次重大重构后同步 |
+| 文档过时 | 🟢 低 | BACKLOG 已同步至 Sprint 36.6 | 每次重大重构后同步 |
 
 ---
 
@@ -219,10 +252,55 @@ cargo check --workspace --lib                   # 0 warnings
 
 ---
 
+## 九、后续规划（Next Steps）
+
+> 整理时间：2026-05-05  
+> 基础：Sprint 36.6 完成，working tree 含 20 文件变更（477+/283−），未提交
+
+### 近期（1–2 周）
+
+| Sprint | ID | 事项 | 优先级 | 预估 | 来源 |
+|--------|----|------|--------|------|------|
+| **Sprint 37** | S37-A | `prompt_cache_key` 策略层 | **P0** | 2–3d | DeepSeek-TUI #1 — Prompt Cache-Prefix 稳定性。计划已就绪（`docs/plans/2026-05-05-sprint27-a2-prompt-cache-key.md`） |
+| **Sprint 37** | S37-B | 当前 working tree 提交 | **P0** | 0.5d | 归档 Sprint 36.5/36.6 |
+| **Sprint 37** | S37-C | LSP 轻量级 stdio 客户端 + hook | **P0** | 3–4d | DeepSeek-TUI #2 — LSP 作为合成用户消息。新增 `LspManager`（~400 LOC，无 `tower-lsp`），`ToolResult` 后注入诊断 |
+| **Sprint 37** | S37-D | 进程级成本旁路通道 | **P0** | 1–2d | DeepSeek-TUI #3 — `static PENDING: OnceLock<Mutex<f64>>`，子代理/compaction/memory 完成后 report，主 Agent 每轮 `drain()` |
+
+### 中期（2–4 周）
+
+| Sprint | ID | 事项 | 优先级 | 预估 | 来源 |
+|--------|----|------|--------|------|------|
+| **Sprint 38** | S38-A | egui 测试基线 | **P1** | 3–5d | Critical 债务。theme/markdown/store 纯函数优先 |
+| **Sprint 38** | S38-B | J5 — Jumpy 历史观测提取 | **P1** | 2–3d | `clarity-memory::session_store` → `SkillObservation` → `HistoricalPredictor` |
+| **Sprint 38** | S38-C | Side-Git 工作区快照 MVP | **P1** | 5–7d | DeepSeek-TUI #4 — `~/.clarity/snapshots/<hash>/.git` side repo，turn 前后自动 snapshot，`/restore N` 安全 checkout |
+| **Sprint 38** | S38-D | 子代理 Mailbox + CancellationToken 级联 | **P1** | 3–4d | DeepSeek-TUI #5 — 扩展 `SubagentProgressEvent` 为 Mailbox 风格（Started/Progress/ToolCallStarted/Completed/Failed/Cancelled/TokenUsage），`CancellationToken` 树级联 |
+| **Sprint 39** | S39-A | Sprint 27 收尾 — KV cache 跨 turn/跨会话 | **P1** | 3–4d | S27-A3 `LocalGgufProvider` 跨 turn 持久化 + S27-A4 System Prompt KV Snapshot |
+| **Sprint 39** | S39-B | Sprint 27 收尾 — `refresh_context()` 统一 | **P2** | 2d | S27-B1 + S27-B2 |
+| **Sprint 39** | S39-C | RLM 简化版评估 | **P2** | 3–5d | DeepSeek-TUI #6 — 基于 `rune` 或 `mlua` 的 Rust 内嵌脚本，大输入永不进入根 LLM 上下文 |
+
+### 长期（1–3 个月）
+
+| 轨道 | 事项 | 优先级 | 说明 |
+|------|------|--------|------|
+| egui Parity | 记忆提取/搜索面板 | **P2** | `clarity-memory` 全文/BM25 搜索 UI |
+| Jumpy | J6–J9 连接项 | **P2** | LLM-Augmented Predictor、Flow 节点扩展、`SubagentManager` 打通、headless CLI 入口 |
+| 架构健康 | `clarity-contract` 提取 | **P1** | 为 MCP 独立发布铺路 |
+| 架构演进 | Phase A 基础设施联通 | **P2** | WebSocket MCP、Gateway ↔ BTM、Worker 池自动扩缩容 |
+| 架构演进 | Phase B 会话层统一 | **P2** | SQLite Session Schema、SessionManager、Session Handoff |
+
+### 决策记录
+
+1. **Sprint 27 被拆分**：A1 已完成，A2 升格为 Sprint 37-A（DeepSeek-TUI #1），A3/A4/B1/B2 降级为 Sprint 39 收尾项。
+2. **DeepSeek-TUI 6 模式全部纳入**：P0 吸收 3 个（#1 prompt cache、#2 LSP、#3 cost channel），P1 吸收 3 个（#4 side-git、#5 mailbox、#6 RLM）。原 Sprint 37-38 排期（`docs/research/deepseek-tui-comparison-2026-05-05.md` §四）作为参考，但因 Sprint 35/36 插队而顺延。
+3. **egui 测试基线排入 Sprint 38**：在 Sprint 37（core 变更）之后，避免测试与 feature 并行修改导致回归定位困难。
+4. **J5 与 Sprint 37 可并行**：J5 主要触及 `clarity-memory` 和 `agent::jumpy`，与 `llm` provider 层无交集，可作为独立轨道。
+
+---
+
 ## 八、验收命令（任何变更后必执行）
 
 ```bash
-cargo test --workspace --lib -- --test-threads=1   # 759 passed, 0 failed, 6 ignored
+cargo test --workspace --lib -- --test-threads=1   # 728 passed, 0 failed, 6 ignored (Sprint 36.6 基线)
 cargo clippy --workspace -- -D warnings           # 0 warnings
 cargo fmt --all -- --check                         # 0 diff
 cargo doc --workspace --no-deps                    # 0 doc warnings
@@ -231,4 +309,4 @@ cargo audit                                        # 0 RUSTSEC (unmaintained ign
 
 ---
 
-*本文件随开发进度持续更新。下次审视：Sprint 27 结束时。*
+*本文件随开发进度持续更新。下次审视：Sprint 37 结束时。*

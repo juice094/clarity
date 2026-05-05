@@ -232,6 +232,7 @@ impl App {
                 tool_calls: first_session_tool_calls,
                 compacting: false,
                 pending_send: None,
+                stopping: false,
                 last_usage: None,
                 pending_plan: None,
                 plan_tracker: None,
@@ -266,7 +267,7 @@ impl App {
                 task_create_priority: 2,
             },
             cron_store: crate::stores::CronStore {
-                cron_panel_open: false,
+                cron_expanded: false,
                 tasks: vec![],
                 last_refresh: now,
                 create_modal_open: false,
@@ -625,9 +626,6 @@ impl App {
     pub(crate) fn delete_session(&mut self, id: String) {
         self.session_store.sessions.retain(|s| s.id != id);
         self.session_store.drafts.remove(&id);
-        // FIXME-WEEK1-RISK: Switching to sessions[0] restores its draft, which may
-        //   overwrite user input if delete happens during typing. Acceptable for now
-        //   because delete is an explicit user action unlikely to coincide with typing.
         if let Err(e) = std::fs::remove_file(session_path(&id)) {
             tracing::warn!("Failed to remove session file: {}", e);
         }
@@ -636,11 +634,14 @@ impl App {
         } else if self.session_store.active_session_id == id {
             let new_id = self.session_store.sessions[0].id.clone();
             self.session_store.active_session_id = new_id.clone();
-            self.chat_store.input = self
-                .session_store
-                .drafts
-                .remove(&new_id)
-                .unwrap_or_default();
+            // Only restore draft if user is not actively typing (prevents race).
+            if self.chat_store.input.is_empty() {
+                self.chat_store.input = self
+                    .session_store
+                    .drafts
+                    .remove(&new_id)
+                    .unwrap_or_default();
+            }
         }
     }
 }

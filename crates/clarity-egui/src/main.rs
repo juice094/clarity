@@ -405,10 +405,6 @@ impl App {
         panels::team_create::render_team_create_modal(self, ctx);
     }
 
-    fn render_cron_panel(&mut self, ctx: &egui::Context) {
-        panels::cron::render_cron_panel(self, ctx);
-    }
-
     fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
         panels::cron_create::render_cron_create_modal(self, ctx);
     }
@@ -491,9 +487,6 @@ impl eframe::App for App {
             if self.cron_store.create_modal_open {
                 self.cron_store.create_modal_open = false;
             }
-            if self.cron_store.cron_panel_open {
-                self.cron_store.cron_panel_open = false;
-            }
         }
 
         if !self.settings_store.settings_open
@@ -557,7 +550,6 @@ impl eframe::App for App {
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
-        self.render_safe(ctx, "cron", |app, ctx| app.render_cron_panel(ctx));
         self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
         self.render_safe(ctx, "cron_create", |app, ctx| app.render_cron_create_modal(ctx));

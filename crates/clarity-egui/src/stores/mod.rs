@@ -49,6 +49,8 @@ pub struct ChatStore {
     pub compacting: bool,
     /// Queued message to auto-send when current streaming finishes.
     pub pending_send: Option<(String, Vec<Attachment>)>,
+    /// Visual flag: user pressed Enter while streaming; cancellation is in-flight.
+    pub stopping: bool,
     /// Latest token usage for the active session.
     pub last_usage: Option<(u32, u32, u32)>,
     /// Pending plan for user review (Plan mode).
@@ -153,8 +155,9 @@ pub struct TeamStore {
 // ============================================================================
 
 pub struct CronStore {
-    pub cron_panel_open: bool,
+    pub cron_expanded: bool,
     pub tasks: Vec<clarity_core::background::cron::CronTask>,
+    #[allow(dead_code)]
     pub last_refresh: Instant,
     pub create_modal_open: bool,
     pub create_name: String,

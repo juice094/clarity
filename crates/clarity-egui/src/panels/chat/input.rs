@@ -28,7 +28,9 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                     egui::vec2(input_width, 44.0),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
-                        let hint = if app.chat_store.pending_send.is_some() {
+                        let hint = if app.chat_store.stopping {
+                            app.t("Stopping current turn...")
+                        } else if app.chat_store.pending_send.is_some() {
                             app.t("Message queued, will send after current response...")
                         } else if !app.chat_store.attachments.is_empty() {
                             app.t("Type a message (files attached)...")

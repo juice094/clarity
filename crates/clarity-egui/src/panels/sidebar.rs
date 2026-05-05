@@ -1,4 +1,4 @@
-use crate::ui::types::{AgentStatus, GatewayStatus, ToastLevel};
+use crate::ui::types::ToastLevel;
 use crate::{App, SIDEBAR_WIDTH};
 
 fn format_thousands(n: u32) -> String {
@@ -239,48 +239,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                         .monospace(),
                                 );
                             }
-
-                            // Agent status
-                            let (status_color, status_label) = match app.chat_store.agent_status {
-                                AgentStatus::Online => (app.ui_store.theme.status_online, "Online"),
-                                AgentStatus::Busy => (app.ui_store.theme.status_busy, "Busy"),
-                                AgentStatus::Unconfigured => {
-                                    (app.ui_store.theme.status_offline, "Unconfigured")
-                                }
-                                AgentStatus::Offline => {
-                                    (app.ui_store.theme.status_offline, "Offline")
-                                }
-                            };
-                            let (rect, _) =
-                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                            ui.painter().circle_filled(rect.center(), 4.0, status_color);
-                            ui.label(
-                                egui::RichText::new(status_label)
-                                    .size(app.ui_store.theme.text_xs)
-                                    .color(app.ui_store.theme.text_dim),
-                            );
-                            ui.add_space(4.0);
-
-                            // Gateway status
-                            let (gw_color, gw_label) = match app.chat_store.gateway_status {
-                                GatewayStatus::Online => {
-                                    (app.ui_store.theme.status_online, "Gateway")
-                                }
-                                GatewayStatus::Offline => {
-                                    (app.ui_store.theme.status_offline, "Gateway")
-                                }
-                                GatewayStatus::Checking => {
-                                    (app.ui_store.theme.status_busy, "Gateway...")
-                                }
-                            };
-                            let (gw_rect, _) =
-                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                            ui.painter().circle_filled(gw_rect.center(), 4.0, gw_color);
-                            ui.label(
-                                egui::RichText::new(gw_label)
-                                    .size(app.ui_store.theme.text_xs)
-                                    .color(app.ui_store.theme.text_dim),
-                            );
                         });
                     });
                     ui.add_space(app.ui_store.theme.space_12);
@@ -482,6 +440,10 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         });
                     });
 
+                    ui.add_space(app.ui_store.theme.space_16);
+
+                    // ── Cron Jobs ──
+                    crate::panels::cron::render_cron_section(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).

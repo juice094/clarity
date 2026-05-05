@@ -7,7 +7,6 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
-use crate::stores::Team;
 use clarity_core::agent::Plan;
 use clarity_core::background::TaskInfo;
 use std::time::Instant;
@@ -40,8 +39,6 @@ pub enum UiEvent {
         reason: String,
     },
     TaskList(Vec<TaskInfo>),
-    TeamList(Vec<Team>),
-    CronList(Vec<clarity_core::background::cron::CronTask>),
     Usage {
         prompt_tokens: u32,
         completion_tokens: u32,
@@ -140,8 +137,6 @@ pub struct SubAgentProgress {
     pub completed: usize,
     pub failed: usize,
     pub status: String,
-    pub elapsed_ms: u64,
-    pub agent_statuses: Vec<AgentStatusEntry>,
     pub last_poll: std::time::Instant,
 }
 
@@ -158,13 +153,6 @@ pub struct SingleSubagentProgress {
     pub steps: usize,
     /// Budget progress: maximum allowed steps.
     pub max_steps: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct AgentStatusEntry {
-    pub agent_id: String,
-    pub status: String,
-    pub summary: Option<String>,
 }
 
 /// Live tracker for an executing plan.
@@ -409,6 +397,11 @@ pub enum RenderBlock {
     ListItem(Vec<InlineSpan>),
     Blockquote(Vec<InlineSpan>),
     HorizontalRule,
+    /// Markdown table: headers + rows of cells.
+    Table {
+        headers: Vec<String>,
+        rows: Vec<Vec<String>>,
+    },
 }
 
 // ============================================================================

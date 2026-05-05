@@ -9,6 +9,7 @@ use crate::ui::types::{
 pub fn on_done(app: &mut crate::App) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
+    app.chat_store.stopping = false;
     app.state.agent.reset();
     app.save_current_session();
     // Auto-send any queued message.
@@ -23,6 +24,7 @@ pub fn on_done(app: &mut crate::App) {
 pub fn on_error(app: &mut crate::App, msg: String) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
+    app.chat_store.stopping = false;
     crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
     // Release queued message back to input so user can retry.
     if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {

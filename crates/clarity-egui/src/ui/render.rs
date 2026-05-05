@@ -121,7 +121,7 @@ fn agent_structured_card_inner(ui: &mut egui::Ui, msg: &Message, theme: &Theme) 
 fn has_structure(msg: &Message) -> bool {
     msg.parsed
         .iter()
-        .any(|b| matches!(b, RenderBlock::CodeBlock { .. }))
+        .any(|b| matches!(b, RenderBlock::CodeBlock { .. } | RenderBlock::Table { .. }))
 }
 
 // ============================================================================
@@ -441,6 +441,11 @@ pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
             RenderBlock::ListItem(_) => height += 20.0,
             RenderBlock::Blockquote(_) => height += 20.0,
             RenderBlock::HorizontalRule => height += 20.0,
+            RenderBlock::Table { rows, .. } => {
+                height += 28.0; // header row
+                height += rows.len() as f32 * 22.0;
+                height += 8.0; // padding
+            }
         }
         height += 4.0; // inter-block spacing
     }

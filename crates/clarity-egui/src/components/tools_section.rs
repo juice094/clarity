@@ -116,31 +116,4 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
         app.task_store.task_create_modal_open = true;
     }
 
-    // ── Cron jobs button ──
-    {
-        ui.add_space(theme.space_4);
-        let cron_count = app.cron_store.tasks.len();
-        let cron_btn_text = if cron_count > 0 {
-            format!("+ Cron ({cron_count})")
-        } else {
-            "+ Cron".to_string()
-        };
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new(cron_btn_text)
-                        .size(theme.text_sm)
-                        .color(theme.accent),
-                )
-                .fill(egui::Color32::TRANSPARENT)
-                .stroke(egui::Stroke::new(1.0, theme.accent))
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .min_size(egui::vec2(0.0, 28.0)),
-            )
-            .clicked()
-        {
-            app.cron_store.cron_panel_open = !app.cron_store.cron_panel_open;
-        }
-    }
-
 }

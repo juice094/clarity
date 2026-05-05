@@ -51,6 +51,24 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 36.6 — Cron 迁移 + Markdown 表格渲染（已完成 ✅，2026-05-05）**
+
+- A ✅: Cron Jobs 从右侧独立 `SidePanel` 迁移至左侧 sidebar 可折叠 section（与 Subagents/Teams 并列）
+- B ✅: Markdown 表格渲染 — 自研轻量解析器：`RenderBlock::Table` + `scan_table()`/`parse_table_lines()` + `egui::Grid` 渲染；支持标准 `| header |` / `|---|---|` 语法
+
+**Sprint 36.5 — UI 指示器迁移与死代码清理（已完成 ✅，2026-05-05）**
+
+- A ✅: Agent/Gateway 状态指示器从 sidebar 迁移至 Workspace 面板标题栏右侧
+- B ✅: Dead code 清理 — 5 个未使用图标常量、`UiEvent::TeamList/CronList` 死变体、`SubAgentProgress`/`AgentStatusEntry` 死字段；`cargo check -p clarity-egui` 0 警告
+- C ✅: FIXME-WEEK1-RISK 止血 — rapid-Enter debounce、`stopping...` 视觉状态、session-delete draft race
+
+**Sprint 36 — Cron/Team UI + 子代理状态持久化（已完成 ✅，2026-05-05）**
+
+- A1 ✅: Cron 调度 UI（`panels/cron.rs` + `cron_create.rs`）本地 mock 状态
+- A2 ✅: Team 协调 UI（`panels/team.rs` + `team_create.rs`）本地 mock 状态
+- B ✅: `SubagentStore` 磁盘状态持久化（JSON save/load）
+- C ✅: BACKLOG parity 矩阵同步
+
 **Sprint 35 — 子代理预算条可视化与质量硬化（已完成 ✅，2026-05-05）**
 
 - A ✅: 跨会话快照导出/导入（`session.rs` JSON serde + `rfd` 对话框 + sidebar 工具栏按钮）

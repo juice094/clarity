@@ -17,13 +17,12 @@ impl App {
 
         // If currently streaming, steer: cancel the current turn and queue the
         // message for immediate send when the cancellation completes.
-        //
-        // FIXME-WEEK1-RISK: cancel() is cooperative; LLM API may block 1-3s before
-        //   noticing the cancellation token. If agent is mid-tool-call, side-effects
-        //   may already have occurred. Optimize: add visual "stopping..." state.
-        // FIXME-WEEK1-RISK: Rapid consecutive Enter presses overwrite pending_send.
-        //   Optimize: debounce (200ms) or append to pending_send instead of replace.
         if self.chat_store.is_loading {
+            // Debounce: ignore rapid consecutive Enter presses while stopping.
+            if self.chat_store.stopping {
+                return;
+            }
+            self.chat_store.stopping = true;
             self.stop();
             self.chat_store.pending_send =
                 Some((text, std::mem::take(&mut self.chat_store.attachments)));
