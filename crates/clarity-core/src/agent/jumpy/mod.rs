@@ -62,6 +62,7 @@
 pub mod composer;
 pub mod planner;
 pub mod predictor;
+pub mod session_store_adapter;
 pub mod state;
 
 #[cfg(test)]
