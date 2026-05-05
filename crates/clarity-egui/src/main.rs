@@ -413,11 +413,6 @@ impl App {
         panels::skill::render_skill_panel(self, ctx);
     }
 
-    #[allow(dead_code)]
-    fn render_toolbar(&mut self, ctx: &egui::Context) {
-        panels::toolbar::render_toolbar(self, ctx);
-    }
-
     fn render_toasts(&mut self, ctx: &egui::Context) {
         panels::toast::render_toasts(self, ctx);
     }

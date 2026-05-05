@@ -297,7 +297,6 @@ impl App {
                 pending_approvals: Vec::new(),
                 toasts: vec![],
                 skill_panel_open: false,
-                toolbar_open: false,
                 tools_expanded: false,
                 subagents_expanded: false,
                 editing_session_id: None,

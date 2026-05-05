@@ -11,5 +11,4 @@ pub mod task_create;
 pub mod team;
 pub mod team_create;
 pub mod toast;
-pub mod toolbar;
 pub mod workspace;
