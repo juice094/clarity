@@ -56,6 +56,10 @@ pub struct ChatStore {
     pub plan_tracker: Option<PlanExecutionTracker>,
     /// Whether the chat scroll should stick to bottom (auto-released on manual scroll-up).
     pub stick_to_bottom: bool,
+    /// Index of the message currently being edited inline (Sprint 33).
+    pub editing_message_idx: Option<usize>,
+    /// Temporary buffer for inline message editing.
+    pub edit_buffer: String,
 }
 
 // ============================================================================

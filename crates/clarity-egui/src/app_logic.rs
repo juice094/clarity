@@ -235,6 +235,8 @@ impl App {
                 pending_plan: None,
                 plan_tracker: None,
                 stick_to_bottom: true,
+                editing_message_idx: None,
+                edit_buffer: String::new(),
             },
             settings_store: crate::stores::SettingsStore {
                 settings_open: false,
