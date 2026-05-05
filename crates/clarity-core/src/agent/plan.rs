@@ -192,6 +192,23 @@ Rules:
         self.finish_turn();
         Ok(results)
     }
+
+    /// Run the agent in Plan approval mode.
+    pub async fn execute_plan_mode(&self, query: &str) -> Result<String, AgentError> {
+        let plan = self.plan(query).await?;
+        self.send_wire_message(clarity_wire::WireMessage::TurnBegin {
+            user_input: query.to_string(),
+        });
+        if !plan.is_empty() {
+            self.send_wire_message(clarity_wire::WireMessage::ContentPart {
+                text: format!("📋 Executing plan: {}\n{}", plan.title, plan.to_markdown()),
+            });
+        }
+        let results = self.execute_plan(&plan).await?;
+        let final_response = crate::agent::run::format_plan_results(&results);
+        self.send_wire_message(clarity_wire::WireMessage::TurnEnd);
+        Ok(final_response)
+    }
 }
 
 #[cfg(test)]

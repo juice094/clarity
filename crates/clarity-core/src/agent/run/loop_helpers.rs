@@ -93,29 +93,6 @@ pub(crate) fn fast_trim_tool_results(messages: &mut Vec<Message>) {
     }
 }
 
-/// Build the system prompt split into static and dynamic parts, with memories appended to dynamic.
-pub(crate) async fn build_system_prompt_split(
-    agent: &crate::agent::Agent,
-    query: &str,
-) -> (String, String) {
-    let (static_prompt, mut dynamic_prompt) = agent.build_system_prompt_split_raw();
-
-    if let Some(ref store) = agent.memory_store() {
-        if let Ok(memories) = store.search(query, 5).await {
-            if !memories.is_empty() {
-                let text = memories
-                    .iter()
-                    .map(|m| format!("- {}", m.content))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                dynamic_prompt.push_str(&format!("\n\n# Relevant Memories\n{}\n", text));
-            }
-        }
-    }
-
-    (static_prompt, dynamic_prompt)
-}
-
 /// Scrub sensitive credentials from tool output before injecting into LLM context.
 /// Prevents accidental leakage of API keys, tokens, passwords, and Bearer headers.
 pub(crate) fn scrub_credentials(input: &str) -> String {
@@ -175,21 +152,6 @@ use clarity_wire::WireMessage;
 use tracing::{debug, info, warn};
 
 impl Agent {
-    /// Build system prompt and append relevant memories if available.
-    ///
-    /// **Deprecated in favor of `build_system_prompt_split`:** this method
-    /// flattens static and dynamic content into a single string, which
-    /// prevents prefix caching. Use `build_system_prompt_split` for new code.
-    #[allow(dead_code)]
-    pub(crate) async fn build_system_prompt_with_memory(&self, query: &str) -> String {
-        let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
-        if dynamic_prompt.is_empty() {
-            static_prompt
-        } else {
-            format!("{}\n\n{}", static_prompt, dynamic_prompt)
-        }
-    }
-
     /// Finish turn, run delivery hooks, and emit usage wire message.
     pub(crate) async fn finish_and_deliver(
         &self,
@@ -230,6 +192,55 @@ impl Agent {
                 None => debug!("Memory ticker not triggered yet"),
             }
         }
+    }
+
+    /// Shared turn finish logic (deliver + max-iterations check).
+    pub(crate) async fn finish_sync_turn(
+        &self,
+        final_response: String,
+        completed: bool,
+        tool_names: &[String],
+    ) -> Result<String, AgentError> {
+        let usage = self.get_session_usage();
+        let final_response = self
+            .finish_and_deliver(final_response, tool_names, usage)
+            .await?;
+        if completed {
+            Ok(final_response)
+        } else {
+            warn!("Max iterations ({}) reached", self.config.max_iterations);
+            Err(AgentError::MaxIterationsExceeded(
+                self.config.max_iterations,
+            ))
+        }
+    }
+
+    /// Finish a sync turn: deliver, persist memory, extract memories, run hooks.
+    pub(crate) async fn finalize_sync_turn(
+        &self,
+        query: &str,
+        final_response: String,
+        completed: bool,
+        tool_names: &[String],
+        messages: &[crate::llm::api::Message],
+    ) -> Result<String, AgentError> {
+        let final_response = self.finish_sync_turn(final_response, completed, tool_names).await?;
+        self.persist_turn_memory(query, &final_response, completed)
+            .await;
+
+        if completed {
+            let transcript = serde_json::to_string(messages).unwrap_or_default();
+            self.maybe_extract_memories(transcript);
+            if let Some(ref hooks) = self.hook_registry {
+                let summary = serde_json::json!({
+                    "query": query,
+                    "response": &final_response,
+                    "completed": true,
+                });
+                hooks.run_session_termination(&summary.to_string()).await;
+            }
+        }
+        Ok(final_response)
     }
 }
 

@@ -7,113 +7,36 @@ mod loop_streaming;
 mod loop_sync;
 mod loop_trait;
 
+pub(crate) use loop_helpers::format_plan_results;
+
 use crate::agent::Agent;
+use crate::approval::ApprovalMode;
 use crate::error::AgentError;
 use crate::llm::api::{Message, MessageRole};
 use clarity_wire::WireMessage;
-use tracing::{info, warn};
-
-use loop_helpers::*;
+use serde_json::Value;
+use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 impl Agent {
     /// Main entry point: run the agent with a user query.
     pub async fn run(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
-
-        let mode = self.inner.read().unwrap().approval_mode;
-        if mode == crate::approval::ApprovalMode::Plan {
-            let plan = self.plan(query.as_ref()).await?;
-            self.send_wire_message(WireMessage::TurnBegin {
-                user_input: query.as_ref().to_string(),
-            });
-            if !plan.is_empty() {
-                self.send_wire_message(WireMessage::ContentPart {
-                    text: format!("📋 Executing plan: {}\n{}", plan.title, plan.to_markdown()),
-                });
-            }
-            let results = self.execute_plan(&plan).await?;
-            let final_response = format_plan_results(&results);
-            self.send_wire_message(WireMessage::TurnEnd);
-            return Ok(final_response);
+        if self.is_plan_mode() {
+            return self.execute_plan_mode(query.as_ref()).await;
         }
-
-        let cancel_token = self.begin_turn()?;
-        if let Some(ref registry) = self.skill_registry() {
-            registry.discover_for_path(&self.config.working_dir);
-            let paths = self.active_file_paths();
-            if !paths.is_empty() {
-                registry.activate_by_path(&paths);
-            }
-        }
-        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
-        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
-        let (static_prompt, dynamic_prompt) =
-            build_system_prompt_split(self, query.as_ref()).await;
-
-        // Compute hash of static prompt and invalidate provider cache if changed.
-        let static_hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            static_prompt.hash(&mut hasher);
-            hasher.finish().to_string()
-        };
-        {
-            let inner = self.inner.read().unwrap();
-            if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
-                if let Some(ref llm) = inner.llm {
-                    llm.clear_cache();
-                }
-            }
-        }
-        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
-
-        let mut messages = if dynamic_prompt.is_empty() {
-            vec![
-                Message::system(static_prompt),
-                Message::user(query.as_ref()),
-            ]
-        } else {
-            vec![
-                Message::system(static_prompt),
-                Message::system(dynamic_prompt),
-                Message::user(query.as_ref()),
-            ]
-        };
-
+        let (mut messages, tools, llm, cancel_token) =
+            self.prepare_sync_turn(query.as_ref()).await?;
         info!("Starting agent loop for query: {}", query.as_ref());
         self.send_wire_message(WireMessage::TurnBegin {
             user_input: query.as_ref().to_string(),
         });
-
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
-        let usage = self.get_session_usage();
-        let final_response = self
-            .finish_and_deliver(final_response, &tool_names, usage)
-            .await?;
-        self.persist_turn_memory(query.as_ref(), &final_response, completed)
-            .await;
-
-        if completed {
-            let transcript = serde_json::to_string(&messages).unwrap_or_default();
-            self.maybe_extract_memories(transcript);
-            if let Some(ref hooks) = self.hook_registry {
-                let summary = serde_json::json!({
-                    "query": query.as_ref(),
-                    "response": &final_response,
-                    "completed": true,
-                });
-                hooks.run_session_termination(&summary.to_string()).await;
-            }
-            Ok(final_response)
-        } else {
-            warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(
-                self.config.max_iterations,
-            ))
-        }
+        self.finalize_sync_turn(query.as_ref(), final_response, completed, &tool_names, &messages)
+            .await
     }
 
     /// Run a synchronous agent loop with pre-built messages.
@@ -122,31 +45,11 @@ impl Agent {
         mut messages: Vec<Message>,
     ) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
-        let cancel_token = self.begin_turn()?;
-        if let Some(ref registry) = self.skill_registry() {
-            registry.discover_for_path(&self.config.working_dir);
-            let paths = self.active_file_paths();
-            if !paths.is_empty() {
-                registry.activate_by_path(&paths);
-            }
-        }
-        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
-        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
+        let (tools, llm, cancel_token) = self.setup_turn().await?;
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
-        let usage = self.get_session_usage();
-        let final_response = self
-            .finish_and_deliver(final_response, &tool_names, usage)
-            .await?;
-        if completed {
-            Ok(final_response)
-        } else {
-            warn!("Max iterations ({}) reached", self.config.max_iterations);
-            Err(AgentError::MaxIterationsExceeded(
-                self.config.max_iterations,
-            ))
-        }
+        self.finish_sync_turn(final_response, completed, &tool_names).await
     }
 
     /// Run the agent with streaming response.
@@ -159,39 +62,7 @@ impl Agent {
         F: FnMut(&str) + Send + 'static,
     {
         self.ensure_initialized().await?;
-        let (static_prompt, dynamic_prompt) =
-            build_system_prompt_split(self, query.as_ref()).await;
-
-        // Compute hash of static prompt and invalidate provider cache if changed.
-        let static_hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            static_prompt.hash(&mut hasher);
-            hasher.finish().to_string()
-        };
-        {
-            let inner = self.inner.read().unwrap();
-            if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
-                if let Some(ref llm) = inner.llm {
-                    llm.clear_cache();
-                }
-            }
-        }
-        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
-
-        let messages = if dynamic_prompt.is_empty() {
-            vec![
-                Message::system(static_prompt),
-                Message::user(query.as_ref()),
-            ]
-        } else {
-            vec![
-                Message::system(static_prompt),
-                Message::system(dynamic_prompt),
-                Message::user(query.as_ref()),
-            ]
-        };
+        let messages = self.build_messages_with_cache(query.as_ref()).await?;
         self.run_streaming_turn(messages, query.as_ref(), on_chunk)
             .await
     }
@@ -213,5 +84,46 @@ impl Agent {
             .unwrap_or_default();
         self.run_streaming_turn(messages, &query_hint, on_chunk)
             .await
+    }
+
+    // ------------------------------------------------------------------
+    // Private turn lifecycle helpers
+    // ------------------------------------------------------------------
+
+    fn is_plan_mode(&self) -> bool {
+        self.inner.read().unwrap().approval_mode == ApprovalMode::Plan
+    }
+
+    async fn prepare_sync_turn(
+        &self,
+        query: &str,
+    ) -> Result<(Vec<Message>, Value, Arc<dyn crate::llm::api::LlmProvider>, CancellationToken), AgentError>
+    {
+        let cancel_token = self.begin_turn()?;
+        self.activate_skills();
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
+        let messages = self.build_messages_with_cache(query).await?;
+        Ok((messages, tools, llm, cancel_token))
+    }
+
+    async fn setup_turn(
+        &self,
+    ) -> Result<(Value, Arc<dyn crate::llm::api::LlmProvider>, CancellationToken), AgentError> {
+        let cancel_token = self.begin_turn()?;
+        self.activate_skills();
+        let llm = self.llm().ok_or(AgentError::Unconfigured)?;
+        let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
+        Ok((tools, llm, cancel_token))
+    }
+
+    fn activate_skills(&self) {
+        if let Some(ref registry) = self.skill_registry() {
+            registry.discover_for_path(&self.config.working_dir);
+            let paths = self.active_file_paths();
+            if !paths.is_empty() {
+                registry.activate_by_path(&paths);
+            }
+        }
     }
 }

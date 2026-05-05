@@ -3,6 +3,7 @@
 use super::config::load_prompt_from_file;
 use super::Agent;
 use crate::approval::ApprovalMode;
+use crate::error::AgentError;
 use serde_json::Value;
 use std::collections::HashMap;
 /// Component that can be conditionally injected into the system prompt.
@@ -264,7 +265,80 @@ impl SystemPromptBuilder {
     }
 }
 
+/// Build the system prompt split into static and dynamic parts, with memories appended to dynamic.
+pub(crate) async fn build_system_prompt_split(
+    agent: &crate::agent::Agent,
+    query: &str,
+) -> (String, String) {
+    let (static_prompt, mut dynamic_prompt) = agent.build_system_prompt_split_raw();
+
+    if let Some(ref store) = agent.memory_store() {
+        if let Ok(memories) = store.search(query, 5).await {
+            if !memories.is_empty() {
+                let text = memories
+                    .iter()
+                    .map(|m| format!("- {}", m.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                dynamic_prompt.push_str(&format!("\n\n# Relevant Memories\n{}\n", text));
+            }
+        }
+    }
+
+    (static_prompt, dynamic_prompt)
+}
+
 impl Agent {
+    /// Build the system prompt and append relevant memories if available.
+    ///
+    /// **Deprecated in favor of `build_system_prompt_split`:** this method
+    /// flattens static and dynamic content into a single string, which
+    /// prevents prefix caching. Use `build_system_prompt_split` for new code.
+    #[allow(dead_code)]
+    pub(crate) async fn build_system_prompt_with_memory(&self, query: &str) -> String {
+        let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
+        if dynamic_prompt.is_empty() {
+            static_prompt
+        } else {
+            format!("{}\n\n{}", static_prompt, dynamic_prompt)
+        }
+    }
+
+    /// Build message list from query, computing static-prompt hash and invalidating provider cache.
+    pub(crate) async fn build_messages_with_cache(&self, query: &str) -> Result<Vec<crate::llm::api::Message>, AgentError> {
+        let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
+
+        let static_hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            static_prompt.hash(&mut hasher);
+            hasher.finish().to_string()
+        };
+        {
+            let inner = self.inner.read().unwrap();
+            if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
+                if let Some(ref llm) = inner.llm {
+                    llm.clear_cache();
+                }
+            }
+        }
+        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
+
+        Ok(if dynamic_prompt.is_empty() {
+            vec![
+                crate::llm::api::Message::system(static_prompt),
+                crate::llm::api::Message::user(query),
+            ]
+        } else {
+            vec![
+                crate::llm::api::Message::system(static_prompt),
+                crate::llm::api::Message::system(dynamic_prompt),
+                crate::llm::api::Message::user(query),
+            ]
+        })
+    }
+
     /// Build the system prompt using the declarative builder.
     pub fn build_system_prompt(&self) -> String {
         let (static_prompt, dynamic_prompt) = self.build_system_prompt_split_raw();
