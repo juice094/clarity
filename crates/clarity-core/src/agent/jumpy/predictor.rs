@@ -228,8 +228,69 @@ impl HistoricalPredictor {
 
     /// Ingest a new observation (offline learning).
     pub fn observe(&mut self, obs: SkillObservation) {
-        let key = format!("{}:{}", obs.skill_id, obs.params);
+        let key = format!("{}:{}", obs.skill_id, Self::canonicalize_params(&obs.params));
         self.observations.entry(key).or_default().push(obs);
+    }
+
+    /// Normalize JSON params to a canonical compact form so that
+    /// `{ "path" : "x" }` and `{"path":"x"}` map to the same key.
+    fn canonicalize_params(params: &str) -> String {
+        serde_json::from_str::<serde_json::Value>(params)
+            .ok()
+            .map(|v| {
+                let mut buf = Vec::new();
+                Self::write_canonical(&v, &mut buf);
+                String::from_utf8(buf).unwrap_or_else(|_| params.to_string())
+            })
+            .unwrap_or_else(|| params.to_string())
+    }
+
+    fn write_canonical(v: &serde_json::Value, buf: &mut Vec<u8>) {
+        match v {
+            serde_json::Value::Null => buf.extend_from_slice(b"null"),
+            serde_json::Value::Bool(b) => buf.extend_from_slice(if *b { b"true" } else { b"false" }),
+            serde_json::Value::Number(n) => buf.extend_from_slice(n.to_string().as_bytes()),
+            serde_json::Value::String(s) => {
+                buf.push(b'"');
+                for ch in s.chars() {
+                    match ch {
+                        '"' => buf.extend_from_slice(b"\\\""),
+                        '\\' => buf.extend_from_slice(b"\\\\"),
+                        '\n' => buf.extend_from_slice(b"\\n"),
+                        '\r' => buf.extend_from_slice(b"\\r"),
+                        '\t' => buf.extend_from_slice(b"\\t"),
+                        c if c.is_control() => {
+                            buf.extend_from_slice(format!("\\u{:04x}", c as u32).as_bytes());
+                        }
+                        c => {
+                            let mut b = [0; 4];
+                            buf.extend_from_slice(c.encode_utf8(&mut b).as_bytes());
+                        }
+                    }
+                }
+                buf.push(b'"');
+            }
+            serde_json::Value::Array(arr) => {
+                buf.push(b'[');
+                for (i, item) in arr.iter().enumerate() {
+                    if i > 0 { buf.push(b','); }
+                    Self::write_canonical(item, buf);
+                }
+                buf.push(b']');
+            }
+            serde_json::Value::Object(map) => {
+                buf.push(b'{');
+                let mut items: Vec<_> = map.iter().collect();
+                items.sort_by(|a, b| a.0.cmp(b.0));
+                for (i, (k, v)) in items.iter().enumerate() {
+                    if i > 0 { buf.push(b','); }
+                    Self::write_canonical(&serde_json::Value::String(k.to_string()), buf);
+                    buf.push(b':');
+                    Self::write_canonical(v, buf);
+                }
+                buf.push(b'}');
+            }
+        }
     }
 
     /// Batch ingest from a session log.
@@ -247,7 +308,7 @@ impl HistoricalPredictor {
         current: &JumpyState,
         k: usize,
     ) -> Vec<(f32, &SkillObservation)> {
-        let key = format!("{}:{}", skill_id, params);
+        let key = format!("{}:{}", skill_id, Self::canonicalize_params(params));
         let candidates = match self.observations.get(&key) {
             Some(v) => v,
             None => return Vec::new(),
@@ -507,6 +568,54 @@ mod tests {
         // Verify HistoricalPredictor can ingest them without panic.
         let mut predictor = HistoricalPredictor::new();
         predictor.observe_batch(observations);
+    }
+
+    #[test]
+    fn test_canonicalize_params_json() {
+        // Whitespace differences should collapse to the same canonical form.
+        let a = HistoricalPredictor::canonicalize_params(r#"{"path":"x"}"#);
+        let b = HistoricalPredictor::canonicalize_params(r#"{ "path" : "x" }"#);
+        assert_eq!(a, b);
+        assert_eq!(a, r#"{"path":"x"}"#);
+
+        // Key order should be normalized (sorted).
+        let c = HistoricalPredictor::canonicalize_params(r#"{"b":1,"a":2}"#);
+        assert_eq!(c, r#"{"a":2,"b":1}"#);
+
+        // Nested objects.
+        let d = HistoricalPredictor::canonicalize_params(r#"{"outer":{"z":1,"a":2}}"#);
+        assert_eq!(d, r#"{"outer":{"a":2,"z":1}}"#);
+
+        // Non-JSON falls back to verbatim.
+        let e = HistoricalPredictor::canonicalize_params("not json");
+        assert_eq!(e, "not json");
+    }
+
+    #[test]
+    fn test_canonicalize_params_observation_key_match() {
+        let mut predictor = HistoricalPredictor::new();
+        let obs = SkillObservation {
+            skill_id: "file_read".to_string(),
+            params: r#"{ "path" : "src/main.rs" }"#.to_string(),
+            before: JumpyState::default(),
+            after: JumpyState {
+                tags: vec!["matched".to_string()],
+                memory: HashMap::new(),
+                active_files: vec![],
+                context_summary: "ok".to_string(),
+                progress: 1.0,
+            },
+        };
+        predictor.observe(obs);
+
+        // Query with different whitespace should find the observation.
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(
+                predictor.predict("file_read", r#"{"path":"src/main.rs"}"#, &JumpyState::default(), 0.5),
+            );
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().tags, vec!["matched"]);
     }
 
     #[tokio::test]
