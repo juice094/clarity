@@ -66,7 +66,7 @@ cargo run -p clarity-egui
 - ✅ **Agent 运行时**：ReAct/Plan 循环、Approval 三层（Interactive/Yolo/Plan）、MCP 工具集成
 - ✅ **多前端**：TUI（ratatui）、Desktop GUI（eframe/egui）、Web IDE（Axum Gateway）、Headless CLI
 - ✅ **本地 LLM**：Candle 原生 GGUF（Qwen2/DeepSeek-R1-Distill），零外部依赖
-- ✅ **归一化 UI**：全宽 tab bar、顶部全局工具栏、统一弹窗风格、Glassmorphism Frame 系统
+- ✅ **归一化 UI**：全宽 tab bar、左侧 sidebar（Category + Web Tabs + Tools + Thinking Log + Subagents + Teams + Cron）、统一弹窗风格、Glassmorphism Frame 系统
 - ✅ **KimiCLI 兼容层**：`agent.yaml` 声明式配置、工具名映射、子代理定义
 - ✅ **可靠性**：LoopDetector、USD/turn 预算上限、凭证脱敏、上下文溢出自动恢复、指数退避重试
 - ✅ **Memory**：SQLite + BM25 + vector 混合搜索，6 个月时间衰减
@@ -75,14 +75,16 @@ cargo run -p clarity-egui
 - ✅ **Local KV Cache**：Sprint 28 交付 `LocalGgufProvider` LCP-based KV 缓存跨 turn 持久化
 - ✅ **Jumpy World Model (J6)**：HistoricalPredictor + LlmAugmentedPredictor + HybridPredictor，k-NN 历史预测 + LLM 零样本回退
 - ✅ **会话持久化**：跨会话导出/导入（JSON + `rfd` 对话框）、子代理预算进度条（`ProgressBar` + `steps/max_steps`）
-- ✅ **运行时健康**：Gateway 状态指示器（实时轮询）、面板级 panic 隔离（`render_safe` + `catch_unwind`）
+- ✅ **后台任务 UI**：Cron Jobs 可折叠 sidebar section（创建/列表/删除/启用开关）、Team 协调面板
+- ✅ **Markdown 渲染**：代码块高亮 + 表格渲染（`RenderBlock::Table` + `egui::Grid`，零外部依赖）
+- ✅ **运行时健康**：Gateway 状态指示器（实时轮询）、面板级 panic 隔离（`render_safe` + `catch_unwind`）、rapid-Enter debounce + session-delete draft race 修复
 
 ### 进行中 / 未实现
 
+- 🔄 **Sprint 37**：`prompt_cache_key` 策略层（SHA-256 稳定 hash + provider 内部可变性）、LSP stdio 客户端、进程级成本旁路通道
 - 🔄 J7/J8：Flow 节点扩展（InvokeSkill / PredictCheckpoint）+ SubagentManager 集成（设计完成，编码待开始）
 - 🔄 J10：A/B 验证数据集收集（Phase 1 baseline，≥20 条轨迹）
-- 🔄 子 Agent 上下文持久化到磁盘（`SubagentStore` 当前内存态，`persist()` 仅创建目录）
-- 🔄 Claw 联邦运行时集成（Gateway 完整，runtime 空壳待填充）
+- 🔄 egui 后端 integration 桩（Cron/Team UI → `clarity-core` backend 接线，6 个 TODO）
 - ⏸️ 多窗口进程隔离、IPC 传输层（TCP/UDS/Named Pipe）
 - ⏸️ 层级信息注入总线、可视化工作流（D2/Mermaid）
 
@@ -141,7 +143,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 709 tests, 0 failed, 6 ignored
+cargo test --workspace --lib                          # 728 tests, 0 failed, 6 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

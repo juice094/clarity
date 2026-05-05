@@ -1,7 +1,7 @@
 # Clarity 未完成计划总览
 
 > 生成时间：2026-05-05  
-> 基线分支：`main` @ `8b6158f8`  
+> 基线分支：`main` @ `91d20d73`  
 > 整合来源：ROADMAP / PROJECT_STATUS / FUTURE_DIRECTION / Sprint Plans / 解耦计划
 
 ---
