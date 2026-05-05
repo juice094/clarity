@@ -383,8 +383,8 @@ impl App {
         panels::sidebar::render_sidebar(self, ctx);
     }
 
-    fn render_task_panel(&mut self, ctx: &egui::Context) {
-        panels::task::render_task_panel(self, ctx);
+    fn render_workspace_panel(&mut self, ctx: &egui::Context) {
+        panels::workspace::render_workspace_panel(self, ctx);
     }
 
     fn render_mcp_panel(&mut self, ctx: &egui::Context) {
@@ -518,7 +518,7 @@ impl eframe::App for App {
 
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
-        self.render_safe(ctx, "task", |app, ctx| app.render_task_panel(ctx));
+        self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
@@ -537,7 +537,6 @@ impl eframe::App for App {
             );
         });
         onboarding::render_onboarding(self, ctx);
-        components::file_preview_overlay::render_file_preview_overlay(self, ctx);
         self.handle_window_resize(ctx);
     }
 

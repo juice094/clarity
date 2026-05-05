@@ -1,6 +1,7 @@
 use crate::App;
 use clarity_core::background::TaskStatus;
 
+#[allow(dead_code)]
 pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::right("task_panel")
         .default_width(320.0)

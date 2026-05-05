@@ -102,7 +102,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let mut scroll_up = false;
     let output = egui::ScrollArea::vertical()
         .id_salt("chat_scroll")
-        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden)
+        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
         .stick_to_bottom(should_stick)
         .auto_shrink([false; 2])
         .max_height(available_height)

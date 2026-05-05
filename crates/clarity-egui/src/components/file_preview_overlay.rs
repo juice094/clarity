@@ -6,6 +6,7 @@
 use crate::ui::types::PreviewItem;
 use crate::App;
 
+#[allow(dead_code)]
 pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
     if app.ui_store.preview_item.is_none() {
         return;

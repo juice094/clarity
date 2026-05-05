@@ -290,49 +290,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     crate::components::thinking_log::render_thinking_log(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
-                    // ── File Browser ──
-                    // Shows the working directory tree; clicking a file opens the preview overlay.
-                    ui.label(
-                        egui::RichText::new("Workspace")
-                            .size(theme.text_sm)
-                            .strong()
-                            .color(theme.text),
-                    );
-                    ui.add_space(theme.space_4);
-                    let working_dir = app.state.agent.config().working_dir.clone();
-                    // Snapshot the currently selected file path so we don't hold a borrow
-                    // across the mutable closure that sets `preview_item` on click.
-                    let selected_path: Option<String> = app
-                        .ui_store
-                        .preview_item
-                        .as_ref()
-                        .and_then(|p| match p {
-                            crate::ui::types::PreviewItem::File { path, .. } => Some(path.clone()),
-                            _ => None,
-                        });
-                    let selected_path_ref = selected_path.as_deref();
-                    crate::ui::file_browser::render_file_tree(
-                        ui,
-                        &working_dir,
-                        &theme,
-                        0,
-                        selected_path_ref,
-                        &mut |path| {
-                            // Attempt to read file content; fall back to binary notice.
-                            let content = std::fs::read_to_string(path)
-                                .unwrap_or_else(|_| "[Binary or unreadable file]".to_string());
-                            app.ui_store.preview_item =
-                                Some(crate::ui::types::PreviewItem::File {
-                                    name: path
-                                        .file_name()
-                                        .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_else(|| "unknown".to_string()),
-                                    content,
-                                    path: path.display().to_string(),
-                                });
-                        },
-                    );
-                    ui.add_space(theme.space_16);
+                    // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });
         });
 }
