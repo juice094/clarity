@@ -100,6 +100,14 @@ struct JumpyArgs {
     #[arg(short, long, default_value = "{}")]
     params: String,
 
+    /// Read parameters from a JSON file (takes precedence over --params)
+    #[arg(short = 'f', long)]
+    params_file: Option<PathBuf>,
+
+    /// Similarity threshold for HistoricalPredictor [0.0, 1.0]
+    #[arg(short = 'T', long)]
+    threshold: Option<f32>,
+
     /// Predictor type
     #[arg(short = 't', long, value_enum, default_value = "llm")]
     predictor: PredictorType,
@@ -237,6 +245,14 @@ async fn run_command(args: RunArgs) -> Result<()> {
 }
 
 async fn jumpy_command(args: JumpyArgs) -> Result<()> {
+    // 0. Resolve params (file takes precedence)
+    let params = if let Some(path) = args.params_file {
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read params file: {}", path.display()))?
+    } else {
+        args.params
+    };
+
     // 1. Read current state
     let current = if let Some(state_desc) = args.state {
         JumpyState::from_query(&state_desc)
@@ -265,6 +281,9 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
         }
         PredictorType::Historical => {
             let mut historical = HistoricalPredictor::new();
+            if let Some(t) = args.threshold {
+                historical = historical.with_threshold(t);
+            }
             if let Some(path) = args.observations {
                 let data = std::fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read observations: {}", path.display()))?;
@@ -276,6 +295,9 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
         }
         PredictorType::Hybrid => {
             let mut historical = HistoricalPredictor::new();
+            if let Some(t) = args.threshold {
+                historical = historical.with_threshold(t);
+            }
             if let Some(path) = args.observations {
                 let data = std::fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read observations: {}", path.display()))?;
@@ -283,18 +305,23 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
                     .context("Failed to parse observations as JSON")?;
                 historical.observe_batch(observations);
             }
-            let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
-                .await
-                .context("Failed to build LLM provider")?;
-            let adapted = LlmAdapter::new(provider);
-            let llm = LlmAugmentedPredictor::new(Arc::new(adapted));
-            Box::new(HybridPredictor::new(historical, llm))
+            match build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref()).await {
+                Ok(provider) => {
+                    let adapted = LlmAdapter::new(provider);
+                    let llm = LlmAugmentedPredictor::new(Arc::new(adapted));
+                    Box::new(HybridPredictor::new(historical, llm))
+                }
+                Err(e) => {
+                    eprintln!("Warning: LLM provider unavailable ({}). Falling back to historical predictor.", e);
+                    Box::new(historical)
+                }
+            }
         }
     };
 
     // 3. Predict
     let predicted = predictor
-        .predict(&args.skill, &args.params, &current, args.commitment.clamp(0.0, 1.0))
+        .predict(&args.skill, &params, &current, args.commitment.clamp(0.0, 1.0))
         .await
         .map_err(|e| anyhow::anyhow!("Prediction failed: {}", e))?;
 
@@ -303,7 +330,7 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
         OutputFormat::Markdown => {
             println!("# Jumpy Prediction\n");
             println!("**Skill**: `{}`", args.skill);
-            println!("**Parameters**: `{}`", args.params);
+            println!("**Parameters**: `{}`", params);
             println!("**Commitment**: {:.2}", args.commitment);
             println!("\n## Predicted State\n");
             println!("- **Tags**: {:?}", predicted.tags);
@@ -316,7 +343,7 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
             let json = json!({
                 "success": true,
                 "skill": args.skill,
-                "params": args.params,
+                "params": params,
                 "commitment": args.commitment,
                 "predicted_state": predicted,
             });
@@ -590,6 +617,29 @@ mod tests {
             Command::Jumpy(jumpy_args) => {
                 assert_eq!(jumpy_args.predictor, PredictorType::Hybrid);
                 assert_eq!(jumpy_args.observations, Some(PathBuf::from("obs.json")));
+            }
+            _ => panic!("Expected Jumpy command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_jumpy_params_file() {
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "jumpy",
+            "--skill",
+            "test-skill",
+            "--params-file",
+            "params.json",
+            "--threshold",
+            "0.5",
+        ])
+        .unwrap();
+        match args.command {
+            Command::Jumpy(jumpy_args) => {
+                assert_eq!(jumpy_args.skill, "test-skill");
+                assert_eq!(jumpy_args.params_file, Some(PathBuf::from("params.json")));
+                assert_eq!(jumpy_args.threshold, Some(0.5));
             }
             _ => panic!("Expected Jumpy command"),
         }
