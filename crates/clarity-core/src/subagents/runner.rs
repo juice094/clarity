@@ -823,6 +823,10 @@ impl SubagentRunner {
             .ok_or_else(|| SubagentError::UnknownAgentType(agent_type.clone()))?
             .clone();
 
+        // 2.5 设置迭代预算（用于进度估计）
+        let max_iters = spec.max_iterations.unwrap_or(type_def.max_iterations);
+        store.set_budget(&agent_id, max_iters);
+
         // 3. 创建执行上下文
         let mut context = ExecutionContext::new(&self.context_dir, &agent_id);
         context.set_capability_token(spec.capability_token.clone());

@@ -25,6 +25,8 @@ pub struct SubagentState {
     pub history: Vec<Message>,
     pub created_at: u64,
     pub updated_at: u64,
+    /// Maximum iterations allowed for this subagent (used for progress estimation).
+    pub max_iterations: Option<usize>,
 }
 
 impl SubagentState {
@@ -37,6 +39,7 @@ impl SubagentState {
             history: Vec::new(),
             created_at: now,
             updated_at: now,
+            max_iterations: None,
         }
     }
 }
@@ -84,6 +87,13 @@ impl SubagentStore {
         if let Some(state) = self.in_memory.get_mut(agent_id) {
             state.status = status;
             state.updated_at = now_timestamp();
+        }
+    }
+
+    /// Set the iteration budget for a subagent.
+    pub fn set_budget(&mut self, agent_id: &str, max_iterations: usize) {
+        if let Some(state) = self.in_memory.get_mut(agent_id) {
+            state.max_iterations = Some(max_iterations);
         }
     }
 
@@ -145,9 +155,22 @@ impl SubagentStore {
         String::new()
     }
 
-    /// Estimated progress toward goal [0.0, 1.0] (stub — returns 0.0).
+    /// Estimated progress toward goal [0.0, 1.0].
+    ///
+    /// Computes the ratio of completed steps (history length) to the budget
+    /// for the most recently active subagent. Returns 0.0 if no budget is set.
     pub fn progress(&self) -> f32 {
-        0.0
+        self.in_memory
+            .values()
+            .filter(|s| s.status == SubagentStatus::Running)
+            .max_by_key(|s| s.updated_at)
+            .and_then(|s| {
+                s.max_iterations.map(|max| {
+                    let steps = s.history.len();
+                    (steps as f32 / max as f32).clamp(0.0, 1.0)
+                })
+            })
+            .unwrap_or(0.0)
     }
 }
 
