@@ -116,6 +116,8 @@ struct AgentInner {
     hook_registry: Option<std::sync::Arc<hooks::HookRegistry>>,
     /// Turn-level mutable state. Created by `begin_turn()` and cleared by `finish_turn()`.
     turn_context: Option<turn_context::TurnContext>,
+    /// Message count from the last completed turn (for subagent progress reporting).
+    last_turn_message_count: usize,
     /// Accumulated estimated cost today (USD). Reset daily or per session.
     daily_cost_usd: f64,
     /// Date of the last cost record (to detect day boundary).
@@ -266,6 +268,11 @@ impl Agent {
     /// Get the current approval mode.
     pub fn approval_mode(&self) -> ApprovalMode {
         self.inner.read().unwrap().approval_mode
+    }
+
+    /// Get the message count from the last completed turn.
+    pub fn last_turn_message_count(&self) -> usize {
+        self.inner.read().unwrap().last_turn_message_count
     }
 
     /// Spawn an async background task to extract structured notes from a turn transcript.

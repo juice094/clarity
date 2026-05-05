@@ -60,6 +60,10 @@ mod tests {
         async fn run_turn(&self, query: &str) -> Result<String, AgentError> {
             Ok(format!("mock: {}", query))
         }
+
+        fn last_turn_message_count(&self) -> usize {
+            0
+        }
     }
 
     #[tokio::test]

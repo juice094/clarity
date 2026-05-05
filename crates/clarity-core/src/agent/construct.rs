@@ -71,6 +71,7 @@ impl Agent {
                 last_cost_date: chrono::Utc::now().date_naive(),
                 vision_llm: None,
                 turn_context: None,
+                last_turn_message_count: 0,
                 fallback_llms: Vec::new(),
                 static_prompt_hash: None,
                 jumpy_predictor: None,

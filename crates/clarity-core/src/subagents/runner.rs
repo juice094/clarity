@@ -124,6 +124,8 @@ pub enum SubagentProgressEvent {
     Output { agent_id: String, text: String },
     /// The agent status changed.
     StatusChange { agent_id: String, agent_type: String, status: SubagentStatus },
+    /// Budget progress update (steps taken / max steps).
+    Progress { agent_id: String, steps: usize, max_steps: usize },
 }
 
 // =============================================================================
@@ -915,6 +917,11 @@ impl SubagentRunner {
                 agent_type: agent_type.clone(),
                 status: SubagentStatus::Running,
             });
+            let _ = tx.try_send(SubagentProgressEvent::Progress {
+                agent_id: agent_id.clone(),
+                steps: 0,
+                max_steps: max_iters,
+            });
         }
         collector.stage("status_updated_to_running");
 
@@ -922,6 +929,10 @@ impl SubagentRunner {
         let result = self
             .execute_agent(&agent, &prompt, &mut context, &mut collector, parent_wire)
             .await;
+
+        // 8.5 读取实际执行的步数
+        let steps_taken = agent.last_turn_message_count();
+        store.set_steps_taken(&agent_id, steps_taken);
 
         // 9. 处理结果
         let elapsed = SystemTime::now().duration_since(start_time).unwrap(); // SAFE: start_time set earlier in this function
@@ -942,6 +953,11 @@ impl SubagentRunner {
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Completed,
                     });
+                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                        agent_id: agent_id.clone(),
+                        steps: steps_taken,
+                        max_steps: max_iters,
+                    });
                 }
 
                 Ok(SubagentResult {
@@ -951,7 +967,7 @@ impl SubagentRunner {
                     summary: summary.clone(),
                     full_output: collector.full_output(),
                     resumed,
-                    steps_taken: context.history().len(),
+                    steps_taken,
                     elapsed_ms: elapsed.as_millis() as u64,
                     started_at,
                     completed_at,
@@ -967,6 +983,11 @@ impl SubagentRunner {
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Failed,
                     });
+                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                        agent_id: agent_id.clone(),
+                        steps: steps_taken,
+                        max_steps: max_iters,
+                    });
                 }
 
                 Err(SubagentError::Cancelled)
@@ -979,6 +1000,11 @@ impl SubagentRunner {
                         agent_id: agent_id.clone(),
                         agent_type: agent_type.clone(),
                         status: SubagentStatus::Failed,
+                    });
+                    let _ = tx.try_send(SubagentProgressEvent::Progress {
+                        agent_id: agent_id.clone(),
+                        steps: steps_taken,
+                        max_steps: max_iters,
                     });
                 }
 

@@ -175,6 +175,13 @@ impl App {
                                     });
                                 }
                             }
+                            SubagentProgressEvent::Progress { agent_id, steps, max_steps } => {
+                                let _ = ui_tx2.send(UiEvent::SubagentProgress {
+                                    agent_id,
+                                    steps,
+                                    max_steps,
+                                });
+                            }
                         }
                     }
                 });

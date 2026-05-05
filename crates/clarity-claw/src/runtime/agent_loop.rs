@@ -76,6 +76,10 @@ mod tests {
             *last = Some(query.to_string());
             self.result.lock().unwrap().clone()
         }
+
+        fn last_turn_message_count(&self) -> usize {
+            0
+        }
     }
 
     #[tokio::test]

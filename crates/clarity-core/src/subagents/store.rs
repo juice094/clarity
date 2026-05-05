@@ -27,6 +27,8 @@ pub struct SubagentState {
     pub updated_at: u64,
     /// Maximum iterations allowed for this subagent (used for progress estimation).
     pub max_iterations: Option<usize>,
+    /// Actual steps taken in the last run (for progress reporting).
+    pub steps_taken: usize,
 }
 
 impl SubagentState {
@@ -40,6 +42,7 @@ impl SubagentState {
             created_at: now,
             updated_at: now,
             max_iterations: None,
+            steps_taken: 0,
         }
     }
 }
@@ -94,6 +97,14 @@ impl SubagentStore {
     pub fn set_budget(&mut self, agent_id: &str, max_iterations: usize) {
         if let Some(state) = self.in_memory.get_mut(agent_id) {
             state.max_iterations = Some(max_iterations);
+        }
+    }
+
+    /// Set the actual steps taken for a subagent.
+    pub fn set_steps_taken(&mut self, agent_id: &str, steps: usize) {
+        if let Some(state) = self.in_memory.get_mut(agent_id) {
+            state.steps_taken = steps;
+            state.updated_at = now_timestamp();
         }
     }
 
@@ -166,8 +177,7 @@ impl SubagentStore {
             .max_by_key(|s| s.updated_at)
             .and_then(|s| {
                 s.max_iterations.map(|max| {
-                    let steps = s.history.len();
-                    (steps as f32 / max as f32).clamp(0.0, 1.0)
+                    (s.steps_taken as f32 / max as f32).clamp(0.0, 1.0)
                 })
             })
             .unwrap_or(0.0)

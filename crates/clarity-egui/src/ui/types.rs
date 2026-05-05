@@ -119,6 +119,12 @@ pub enum UiEvent {
         agent_id: String,
         success: bool,
     },
+    /// Single subagent budget progress update.
+    SubagentProgress {
+        agent_id: String,
+        steps: usize,
+        max_steps: usize,
+    },
     /// Gateway health check result.
     GatewayHealth(GatewayStatus),
 }
@@ -145,6 +151,10 @@ pub struct SingleSubagentProgress {
     pub output_lines: Vec<String>,
     pub started_at: std::time::Instant,
     pub completed_at: Option<std::time::Instant>,
+    /// Budget progress: steps taken.
+    pub steps: usize,
+    /// Budget progress: maximum allowed steps.
+    pub max_steps: usize,
 }
 
 #[derive(Clone, Debug)]

@@ -154,6 +154,23 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                 });
             });
 
+            // Budget progress bar
+            if agent.max_steps > 0 {
+                let progress = (agent.steps as f32 / agent.max_steps as f32).clamp(0.0, 1.0);
+                let pb_text = format!("{}/{}", agent.steps, agent.max_steps);
+                let mut pb = egui::ProgressBar::new(progress).text(pb_text);
+                pb = pb.fill(if is_finished {
+                    if agent.status == "Completed" {
+                        theme.status_online
+                    } else {
+                        theme.danger
+                    }
+                } else {
+                    theme.accent
+                });
+                ui.add(pb);
+            }
+
             ui.add_space(theme.space_4);
 
             // Mark for removal if finished and stale

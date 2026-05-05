@@ -24,11 +24,17 @@ use crate::error::AgentError;
 pub trait AgentExecutor: Send + Sync {
     /// Run a single turn with the given user query.
     async fn run_turn(&self, query: &str) -> Result<String, AgentError>;
+    /// Return the number of messages exchanged in the last turn.
+    fn last_turn_message_count(&self) -> usize;
 }
 
 #[async_trait::async_trait]
 impl AgentExecutor for Agent {
     async fn run_turn(&self, query: &str) -> Result<String, AgentError> {
         self.run(query).await
+    }
+
+    fn last_turn_message_count(&self) -> usize {
+        self.last_turn_message_count()
     }
 }

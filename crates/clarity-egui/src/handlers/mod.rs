@@ -180,6 +180,9 @@ pub fn process_events(app: &mut App) {
             UiEvent::SubagentComplete { agent_id, success } => {
                 subagent::on_subagent_complete(&mut app.subagent_store, agent_id, success);
             }
+            UiEvent::SubagentProgress { agent_id, steps, max_steps } => {
+                subagent::on_subagent_progress(&mut app.subagent_store, agent_id, steps, max_steps);
+            }
             UiEvent::GatewayHealth(status) => {
                 app.chat_store.gateway_status = status;
             }

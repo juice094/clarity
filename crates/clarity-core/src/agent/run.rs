@@ -39,6 +39,10 @@ impl Agent {
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
+        {
+            let mut inner = self.inner.write().unwrap();
+            inner.last_turn_message_count = messages.len();
+        }
         self.finalize_sync_turn(query.as_ref(), final_response, completed, &tool_names, &messages)
             .await
     }

@@ -59,6 +59,8 @@ fn ensure_agent(subagent_store: &mut SubAgentStore, agent_id: String) -> &mut Si
         output_lines: vec![],
         started_at: Instant::now(),
         completed_at: None,
+        steps: 0,
+        max_steps: 0,
     })
 }
 
@@ -84,6 +86,17 @@ pub fn on_subagent_status(
     let agent = ensure_agent(subagent_store, agent_id);
     agent.agent_type = agent_type;
     agent.status = status;
+}
+
+pub fn on_subagent_progress(
+    subagent_store: &mut SubAgentStore,
+    agent_id: String,
+    steps: usize,
+    max_steps: usize,
+) {
+    let agent = ensure_agent(subagent_store, agent_id);
+    agent.steps = steps;
+    agent.max_steps = max_steps;
 }
 
 pub fn on_subagent_complete(
