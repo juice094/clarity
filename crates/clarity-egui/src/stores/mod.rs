@@ -157,6 +157,8 @@ pub struct UiStore {
     pub toolbar_open: bool,
     /// Tools section expanded in left sidebar.
     pub tools_expanded: bool,
+    /// Subagents section expanded in left sidebar.
+    pub subagents_expanded: bool,
     /// Session tab currently being renamed (double-click).
     pub editing_session_id: Option<String>,
     /// Buffer for the in-progress rename.

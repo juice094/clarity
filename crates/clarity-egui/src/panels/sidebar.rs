@@ -392,6 +392,56 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     crate::components::thinking_log::render_thinking_log(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── Subagents ──
+                    let running_count = app.subagent_store.running_agents.len()
+                        + app
+                            .subagent_store
+                            .parallel_batches
+                            .iter()
+                            .filter(|b| b.status == "Running")
+                            .count();
+                    let subagents_expanded = app.ui_store.subagents_expanded;
+
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("Subagents")
+                                .size(app.ui_store.theme.text_sm)
+                                .strong()
+                                .color(app.ui_store.theme.text),
+                        );
+                        if running_count > 0 {
+                            ui.label(
+                                egui::RichText::new(format!("({})", running_count))
+                                    .size(app.ui_store.theme.text_sm)
+                                    .color(app.ui_store.theme.text_muted),
+                            );
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let arrow = if subagents_expanded { "▼" } else { "▶" };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(arrow).size(app.ui_store.theme.text_sm),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(egui::CornerRadius::same(
+                                        app.ui_store.theme.radius_sm as u8,
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                app.ui_store.subagents_expanded = !subagents_expanded;
+                            }
+                        });
+                    });
+
+                    if subagents_expanded {
+                        ui.add_space(app.ui_store.theme.space_8);
+                        crate::panels::subagent_progress::render_subagent_progress(app, ui);
+                    }
+
+                    ui.add_space(app.ui_store.theme.space_16);
+
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });
         });

@@ -287,6 +287,7 @@ impl App {
                 skill_panel_open: false,
                 toolbar_open: false,
                 tools_expanded: false,
+                subagents_expanded: false,
                 editing_session_id: None,
                 editing_title: String::new(),
                 agent_turn_style: true,
