@@ -96,15 +96,15 @@ struct Turn {
 fn flatten_records(records: &[SessionRecord]) -> Vec<Turn> {
     records
         .iter()
-        .filter_map(|r| match r {
-            SessionRecord::Message { message, .. } => Some(Turn {
+        .map(|r| match r {
+            SessionRecord::Message { message, .. } => Turn {
                 role: message.role.clone(),
                 content: message.content.clone(),
-            }),
-            SessionRecord::Summary { content, .. } => Some(Turn {
+            },
+            SessionRecord::Summary { content, .. } => Turn {
                 role: "summary".to_string(),
                 content: content.clone(),
-            }),
+            },
         })
         .collect()
 }
@@ -133,25 +133,17 @@ fn build_state(
     total: usize,
     summary_max_len: usize,
 ) -> JumpyState {
-    let mut state = JumpyState::default();
-
-    // Progress: linear heuristic [0, 1]
-    state.progress = if total > 0 {
-        (position as f32 / total as f32).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let mut tags = Vec::new();
+    let mut memory = std::collections::HashMap::new();
+    let mut active_files = Vec::new();
 
     for turn in turns {
-        // Tag from role
         let role_tag = format!("role:{}", turn.role);
-        if !state.tags.contains(&role_tag) {
-            state.tags.push(role_tag);
+        if !tags.contains(&role_tag) {
+            tags.push(role_tag);
         }
 
         let content_lower = turn.content.to_lowercase();
-
-        // Keyword tags
         let keywords = [
             ("error", "error"),
             ("fail", "failed"),
@@ -165,31 +157,39 @@ fn build_state(
         ];
         for (needle, tag) in keywords {
             let tag_str = tag.to_string();
-            if content_lower.contains(needle) && !state.tags.contains(&tag_str) {
-                state.tags.push(tag_str);
+            if content_lower.contains(needle) && !tags.contains(&tag_str) {
+                tags.push(tag_str);
             }
         }
 
-        // Memory extraction and active-file extraction line-by-line
         for line in turn.content.lines() {
             if let Some((key, value)) = parse_kv(line) {
-                state.memory.insert(key, value);
+                memory.insert(key, value);
             }
-
             for path in extract_file_paths(line) {
-                if !state.active_files.contains(&path) {
-                    state.active_files.push(path);
+                if !active_files.contains(&path) {
+                    active_files.push(path);
                 }
             }
         }
     }
 
-    // Context summary: most recent turn content truncated
-    if let Some(last) = turns.last() {
-        state.context_summary = last.content.chars().take(summary_max_len).collect();
-    }
+    let context_summary = turns
+        .last()
+        .map(|t| t.content.chars().take(summary_max_len).collect())
+        .unwrap_or_default();
 
-    state
+    JumpyState {
+        progress: if total > 0 {
+            (position as f32 / total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        },
+        tags,
+        memory,
+        active_files,
+        context_summary,
+    }
 }
 
 /// Try to extract a `key: value` or `key = value` pair from a line.
@@ -238,12 +238,11 @@ fn extract_file_paths(line: &str) -> Vec<String> {
             continue;
         }
         for ext in EXTENSIONS {
-            if token.ends_with(ext) {
-                if token.contains('/') || token.contains('\\') || !token.contains(' ') {
+            if token.ends_with(ext)
+                && (token.contains('/') || token.contains('\\') || !token.contains(' ')) {
                     paths.push(token.to_string());
                     break;
                 }
-            }
         }
     }
     paths
