@@ -228,6 +228,7 @@ impl App {
                 attachments: vec![],
                 is_loading: false,
                 agent_status: AgentStatus::Unconfigured,
+                gateway_status: crate::ui::types::GatewayStatus::Checking,
                 tool_calls: first_session_tool_calls,
                 compacting: false,
                 pending_send: None,
@@ -295,6 +296,7 @@ impl App {
                 parallel_batches: vec![],
                 last_parallel_poll: now,
                 running_agents: std::collections::HashMap::new(),
+                last_gateway_health_poll: now,
             },
             mcp_store: crate::stores::McpStore {
                 mcp_panel_open: false,

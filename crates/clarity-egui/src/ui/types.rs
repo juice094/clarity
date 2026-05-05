@@ -119,6 +119,8 @@ pub enum UiEvent {
         agent_id: String,
         success: bool,
     },
+    /// Gateway health check result.
+    GatewayHealth(GatewayStatus),
 }
 
 /// Progress summary for a parallel batch of subagents.
@@ -296,6 +298,13 @@ pub enum AgentStatus {
     Busy,
     Unconfigured,
     Offline,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum GatewayStatus {
+    Online,
+    Offline,
+    Checking,
 }
 
 #[derive(Clone)]

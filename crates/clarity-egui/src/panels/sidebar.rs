@@ -1,4 +1,4 @@
-use crate::ui::types::AgentStatus;
+use crate::ui::types::{AgentStatus, GatewayStatus, ToastLevel};
 use crate::{App, SIDEBAR_WIDTH};
 
 fn format_thousands(n: u32) -> String {
@@ -73,6 +73,86 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                     let guard = app.state.cached_settings.lock();
                                     guard.clone()
                                 };
+                            }
+
+                            // Export current session
+                            if let Some(session) = app.session_store.active_session() {
+                                if crate::widgets::icon_button_toolbar(
+                                    ui,
+                                    "⬇",
+                                    app.ui_store.theme.text_sm,
+                                    &app.ui_store.theme,
+                                )
+                                .on_hover_text("Export session")
+                                .clicked()
+                                {
+                                    let file_name =
+                                        format!("{}-session.json", session.title);
+                                    if let Some(path) = rfd::FileDialog::new()
+                                        .add_filter("JSON", &["json"])
+                                        .set_file_name(&file_name)
+                                        .save_file()
+                                    {
+                                        if let Err(e) =
+                                            crate::session::export_session(session, &path)
+                                        {
+                                            app.push_toast(
+                                                format!("Export failed: {}", e),
+                                                ToastLevel::Error,
+                                            );
+                                        } else {
+                                            app.push_toast(
+                                                "Session exported",
+                                                ToastLevel::Info,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Import session
+                            if crate::widgets::icon_button_toolbar(
+                                ui,
+                                "⬆",
+                                app.ui_store.theme.text_sm,
+                                &app.ui_store.theme,
+                            )
+                            .on_hover_text("Import session")
+                            .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .pick_file()
+                                {
+                                    match crate::session::import_session(&path) {
+                                        Ok(session) => {
+                                            let id = session.id.clone();
+                                            app.session_store.sessions.push(session);
+                                            app.session_store.active_session_id = id.clone();
+                                            app.chat_store.input = String::new();
+                                            app.chat_store.last_usage = None;
+                                            if let Some(s) = app
+                                                .session_store
+                                                .sessions
+                                                .iter()
+                                                .find(|s| s.id == id)
+                                            {
+                                                app.chat_store.tool_calls =
+                                                    crate::stores::rebuild_tool_calls(&s.messages);
+                                            }
+                                            app.push_toast(
+                                                "Session imported",
+                                                ToastLevel::Info,
+                                            );
+                                        }
+                                        Err(e) => {
+                                            app.push_toast(
+                                                format!("Import failed: {}", e),
+                                                ToastLevel::Error,
+                                            );
+                                        }
+                                    }
+                                }
                             }
 
                             // MCP
@@ -160,7 +240,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 );
                             }
 
-                            // Online status
+                            // Agent status
                             let (status_color, status_label) = match app.chat_store.agent_status {
                                 AgentStatus::Online => (app.ui_store.theme.status_online, "Online"),
                                 AgentStatus::Busy => (app.ui_store.theme.status_busy, "Busy"),
@@ -176,6 +256,28 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             ui.painter().circle_filled(rect.center(), 4.0, status_color);
                             ui.label(
                                 egui::RichText::new(status_label)
+                                    .size(app.ui_store.theme.text_xs)
+                                    .color(app.ui_store.theme.text_dim),
+                            );
+                            ui.add_space(4.0);
+
+                            // Gateway status
+                            let (gw_color, gw_label) = match app.chat_store.gateway_status {
+                                GatewayStatus::Online => {
+                                    (app.ui_store.theme.status_online, "Gateway")
+                                }
+                                GatewayStatus::Offline => {
+                                    (app.ui_store.theme.status_offline, "Gateway")
+                                }
+                                GatewayStatus::Checking => {
+                                    (app.ui_store.theme.status_busy, "Gateway...")
+                                }
+                            };
+                            let (gw_rect, _) =
+                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                            ui.painter().circle_filled(gw_rect.center(), 4.0, gw_color);
+                            ui.label(
+                                egui::RichText::new(gw_label)
                                     .size(app.ui_store.theme.text_xs)
                                     .color(app.ui_store.theme.text_dim),
                             );

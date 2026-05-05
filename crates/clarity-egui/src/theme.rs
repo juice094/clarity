@@ -20,9 +20,9 @@ pub const ICON_CODE: &str = "\u{E1B4}";
 pub const ICON_SEARCH: &str = "\u{E38C}";
 pub const ICON_ROBOT: &str = "\u{E3B8}";
 pub const ICON_CHEVRON_RIGHT: &str = "\u{E1A0}";
-pub const ICON_COPY: &str = "\u{E14D}";
-pub const ICON_EDIT: &str = "\u{E3C9}";
-pub const ICON_REFRESH: &str = "\u{E5D5}";
+pub const ICON_COPY: &str = "\u{E1CA}";
+pub const ICON_EDIT: &str = "\u{E3AE}";
+pub const ICON_REFRESH: &str = "\u{E19E}";
 
 // ============================================================================
 // Design Token System — Phase A Foundation

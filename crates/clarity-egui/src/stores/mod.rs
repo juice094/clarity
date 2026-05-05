@@ -44,6 +44,7 @@ pub struct ChatStore {
     pub attachments: Vec<Attachment>,
     pub is_loading: bool,
     pub agent_status: AgentStatus,
+    pub gateway_status: crate::ui::types::GatewayStatus,
     pub tool_calls: Vec<ToolCallInfo>,
     pub compacting: bool,
     /// Queued message to auto-send when current streaming finishes.
@@ -175,6 +176,8 @@ pub struct SubAgentStore {
     pub last_parallel_poll: Instant,
     /// Live single-agent progress tracked via channel (IS-1 Sprint 30).
     pub running_agents: std::collections::HashMap<String, SingleSubagentProgress>,
+    /// Last Gateway health check poll time.
+    pub last_gateway_health_poll: Instant,
 }
 
 // ============================================================================

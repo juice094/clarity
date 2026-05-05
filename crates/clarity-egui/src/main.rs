@@ -11,7 +11,7 @@
 use eframe::egui;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod app_state;
 mod components;
@@ -496,6 +496,12 @@ impl eframe::App for App {
             && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
         {
             self.poll_parallel_batches();
+        }
+
+        // Poll Gateway health every 5 seconds
+        if self.subagent_store.last_gateway_health_poll.elapsed() > Duration::from_secs(5) {
+            self.subagent_store.last_gateway_health_poll = Instant::now();
+            self.poll_gateway_health();
         }
 
         use clarity_core::agent::AgentState;

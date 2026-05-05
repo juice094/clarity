@@ -1,4 +1,4 @@
-use crate::ui::types::UiEvent;
+use crate::ui::types::{GatewayStatus, UiEvent};
 use crate::App;
 
 impl App {
@@ -33,6 +33,43 @@ impl App {
                     _ => {}
                 }
             }
+        });
+    }
+
+    /// Poll Gateway /health endpoint and update the UI status indicator.
+    pub(crate) fn poll_gateway_health(&mut self) {
+        let gateway = std::env::var("CLARITY_GATEWAY_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:18790".to_string());
+        let tx = self.ui_tx.clone();
+
+        // Set Checking while the request is in flight.
+        self.chat_store.gateway_status = GatewayStatus::Checking;
+        let _ = tx.send(UiEvent::GatewayHealth(GatewayStatus::Checking));
+
+        self.runtime.spawn(async move {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            let url = format!("{}/health", gateway);
+            let status = match client.get(&url).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            if body.get("status").and_then(|v| v.as_str()) == Some("healthy") {
+                                GatewayStatus::Online
+                            } else {
+                                GatewayStatus::Offline
+                            }
+                        }
+                        Err(_) => GatewayStatus::Offline,
+                    }
+                }
+                _ => GatewayStatus::Offline,
+            };
+
+            let _ = tx.send(UiEvent::GatewayHealth(status));
         });
     }
 }
