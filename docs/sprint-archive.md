@@ -1,0 +1,127 @@
+# Clarity Sprint 归档（Sprint 22–32）
+
+> 存档日期：2026-05-02
+> 当前基线提交：待 Sprint 32 结束前固化
+
+---
+
+## Sprint 22–27（已归档）
+
+| Sprint | 核心交付 |
+|--------|---------|
+| 22 | MCP 错误检测与优雅降级 |
+| 23 | Provider 重试机制 |
+| 24 | EventBus 重构 |
+| 25 | Prompt Reorder 优化 |
+| 26 | 子代理类型注册表（LaborMarket） |
+| 27 | 并行批处理执行（ParallelExecutor） |
+
+---
+
+## Sprint 28
+
+**交付：**
+- `LocalGgufProvider` LCP-based KV cache 跨 turn 持久化
+- static prompt hash 基础设施
+- Codex CLI / OpenClaw 功能对标分析
+- README + ROADMAP 更新推送 → `26be67c1`
+
+---
+
+## Sprint 29
+
+**交付：**
+- `run.rs` 从 217 行压缩到 117 行（零行为变化，纯重构）
+- 提取 `prepare_turn()` / `build_messages_with_cache()` / `finalize_turn()`
+- `build_system_prompt_split` 从 `loop_helpers.rs` 迁移至 `prompt.rs`
+- `execute_plan_mode` 从 `run.rs` 迁移至 `plan.rs`
+
+---
+
+## Sprint 30（IS-1：子代理 UI 接入）
+
+**后端改动（clarity-core）：**
+- `SubagentProgressEvent` enum：Stage / Output / StatusChange（含 agent_type）
+- `OutputCollector` 集成 `mpsc::Sender<SubagentProgressEvent>`
+- `SubagentRunner` 新增 `with_progress_tx()` builder
+- `SubagentManager::run()` 签名扩展为接收可选 `progress_tx`
+- `memory/extraction.rs` 适配新签名
+
+**前端改动（clarity-egui）：**
+- `UiEvent` 新增 4 个变体：`SubagentStage` / `SubagentOutput` / `SubagentStatus` / `SubagentComplete`
+- `SingleSubagentProgress` 类型 + `SubAgentStore.running_agents: HashMap`
+- `handlers/subagent.rs` 4 个新 handler + `ensure_agent()` 动态创建
+- `handlers/mod.rs` 路由新事件
+- `panels/subagent_progress.rs` 渲染单代理卡片（类型图标、状态徽章、阶段日志、输出预览、耗时）+ 保留并行批处理面板
+- `services/agent_runner.rs` `/coder` `/explore` 传入 progress channel
+- `theme.rs` 新增 4 个 Phosphor 图标常量
+
+**状态：** ✅ 完成
+
+---
+
+## Sprint 31（零配置首次启动）
+
+**后端改动（clarity-core）：**
+- `model_download.rs`：`download_model` → `download_model_files`
+- `PreconfiguredModel` 新增 `tokenizer_repo_id` / `tokenizer_filename`
+- `CancellationToken` 支持：每 chunk 检查 `is_cancelled()`，取消时删除部分文件
+- `ModelDownloadProgress::Cancelled` 新变体
+- 新增 `test_cancellation_token_early_exit`
+
+**前端改动（clarity-egui）：**
+- `onboarding.rs`：`ChooseProvider` 首次渲染自动触发下载
+- 下载完成自动配置 local provider + reload LLM + 隐藏 onboarding
+- "Cancel and Skip" 按钮真正终止 HTTP stream
+- `OnboardingStore` 新增 `downloading_auto` + `cancel_token`
+- `Cargo.toml` 新增 `tokio-util` 依赖
+
+**状态：** ✅ 完成
+
+---
+
+## Sprint 32 进行中（修复 + 审计 + 硬化）
+
+### 已修复
+
+| 问题 | 文件 | 修复方式 |
+|------|------|---------|
+| 滚动错位（msg_idx desync） | `panels/chat/message_list.rs` | 渲染循环前预推进 `msg_idx` 到 `start_idx` 对应的消息位置 |
+| 滚动跳变（嵌套 ScrollArea） | `panels/chat/mod.rs` + `message_list.rs` | 移除外层 ScrollArea，`render_plan` 移入内层 ScrollArea 底部 |
+| dead code warnings | 5 个文件 | 移除未使用代码 / 添加 `#[allow(dead_code)]` |
+
+### 功能完整性审计结果
+
+**完全工作：**
+- 消息流式渲染（legacy + AgentTurn 聚合）
+- 工具调用生命周期 + Thinking Log 侧边栏
+- 文件附件 / 拖拽 / 预览浮层
+- Web 获取 + Web Tabs
+- 会话 CRUD + 分类 + 持久化
+- Slash 命令（/plan /coder /explore）
+- 设置面板（provider / interface / about）+ 自定义 provider + 连接测试
+- Kimi Code OAuth 设备流
+- 首次启动自动下载 + 自动配置
+- 计划评审 + 步骤追踪
+- 审批弹窗（diff 预览 + 快捷键）
+- 记忆注入、压缩横幅、token 用量、toast 通知
+- 自定义标题栏 + 窗口缩放
+
+**部分工作 / 有缺口：**
+- 消息编辑 / 重新生成 / 复制 — 仅代码块复制，无消息级操作
+- 本地模型路径选择 — onboarding 自动设置，但设置面板无手动浏览按钮
+- 会话列表 — 分类在侧边栏，实例在聊天标签页（无扁平侧边栏列表）
+
+**Stubbed / 缺失：**
+- 文件浏览器 — `ui/file_browser.rs` 已 stub，未接入任何面板
+
+---
+
+## 测试基线
+
+```bash
+cargo test --workspace --lib -- --test-threads=1
+# 预期：~774 passed / 0 failed / 6 ignored
+cargo check -p clarity-egui
+# 预期：零 error，零 warning
+```

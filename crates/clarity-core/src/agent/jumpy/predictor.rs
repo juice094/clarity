@@ -14,7 +14,128 @@
 //! 2. **LLM-augmented** — when no history exists, ask the LLM to simulate the outcome.
 
 use super::state::JumpyState;
+use clarity_contract::AgentError;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Simplified LLM provider interface for outcome prediction.
+#[async_trait::async_trait]
+pub trait LlmProvider: Send + Sync {
+    /// Send a prompt to the LLM and get the response text.
+    async fn complete(&self, prompt: &str, model: &str) -> Result<String, AgentError>;
+}
+
+/// LLM-augmented predictor that asks an LLM to simulate the outcome of a skill.
+pub struct LlmAugmentedPredictor {
+    llm: Arc<dyn LlmProvider>,
+    system_prompt: String,
+}
+
+impl LlmAugmentedPredictor {
+    /// Create a new predictor with the given LLM provider.
+    pub fn new(llm: Arc<dyn LlmProvider>) -> Self {
+        Self {
+            llm,
+            system_prompt: "You are a world model for an AI agent. Predict the state changes caused by executing a skill.".to_string(),
+        }
+    }
+
+    /// Override the default system prompt.
+    pub fn with_system_prompt(mut self, prompt: String) -> Self {
+        self.system_prompt = prompt;
+        self
+    }
+
+    fn build_prompt(&self, skill_id: &str, params: &str, current: &JumpyState) -> String {
+        let memory_json = serde_json::to_string(&current.memory).unwrap_or_else(|_| "{}".to_string());
+        format!(
+            "{}\n\nCurrent State:\n- Tags: {:?}\n- Memory: {}\n- Active Files: {:?}\n- Progress: {}\n- Context: {}\n\nSkill to Execute: {}\nParameters: {}\n\nPredict the resulting state after execution. Output valid JSON with fields: tags, memory, active_files, context_summary, progress.",
+            self.system_prompt,
+            current.tags,
+            memory_json,
+            current.active_files,
+            current.progress,
+            current.context_summary,
+            skill_id,
+            params
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl OutcomePredictor for LlmAugmentedPredictor {
+    async fn predict(
+        &self,
+        skill_id: &str,
+        params: &str,
+        current: &JumpyState,
+        _commitment: f32,
+    ) -> Result<JumpyState, String> {
+        let prompt = self.build_prompt(skill_id, params, current);
+        let response = self
+            .llm
+            .complete(&prompt, "default")
+            .await
+            .map_err(|e| format!("LLM completion failed: {}", e))?;
+
+        let predicted: JumpyState = serde_json::from_str(&response)
+            .map_err(|e| format!("Failed to parse LLM response as JumpyState: {}", e))?;
+
+        Ok(predicted)
+    }
+}
+
+/// Hybrid predictor that tries historical first, then falls back to LLM.
+pub struct HybridPredictor {
+    historical: HistoricalPredictor,
+    llm: LlmAugmentedPredictor,
+    confidence_threshold: f32,
+    cache_synthetic: bool,
+}
+
+impl HybridPredictor {
+    /// Create a new hybrid predictor.
+    pub fn new(historical: HistoricalPredictor, llm: LlmAugmentedPredictor) -> Self {
+        Self {
+            historical,
+            llm,
+            confidence_threshold: 0.5,
+            cache_synthetic: false,
+        }
+    }
+
+    /// Set the confidence threshold for trusting historical predictions.
+    pub fn with_threshold(mut self, threshold: f32) -> Self {
+        self.confidence_threshold = threshold.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Enable or disable caching of synthetic (LLM-generated) predictions.
+    pub fn with_caching(mut self, enable: bool) -> Self {
+        self.cache_synthetic = enable;
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl OutcomePredictor for HybridPredictor {
+    async fn predict(
+        &self,
+        skill_id: &str,
+        params: &str,
+        current: &JumpyState,
+        commitment: f32,
+    ) -> Result<JumpyState, String> {
+        // 1. Try historical first
+        match self.historical.predict(skill_id, params, current, commitment).await {
+            Ok(state) => Ok(state),
+            Err(_) => {
+                // 2. If Err(_) → fallback to llm.predict()
+                self.llm.predict(skill_id, params, current, commitment).await
+            }
+        }
+    }
+}
 
 /// A single observed transition: (skill, params, before, after).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -243,5 +364,108 @@ impl<P: OutcomePredictor> OutcomePredictor for ConsistentPredictor<P> {
                 .predict(skill_id, params, current, commitment)
                 .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockLlmProvider {
+        response: String,
+    }
+
+    #[async_trait::async_trait]
+    impl LlmProvider for MockLlmProvider {
+        async fn complete(&self, _prompt: &str, _model: &str) -> Result<String, AgentError> {
+            Ok(self.response.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_llm_predictor_valid_json() {
+        let json_response = r#"{
+            "tags": ["done"],
+            "memory": {"key": "value"},
+            "active_files": ["src/main.rs"],
+            "context_summary": "summary",
+            "progress": 0.8
+        }"#;
+        let llm = Arc::new(MockLlmProvider {
+            response: json_response.to_string(),
+        });
+        let predictor = LlmAugmentedPredictor::new(llm);
+        let current = JumpyState::default();
+        let result = predictor.predict("test_skill", "{}", &current, 0.5).await;
+        assert!(result.is_ok());
+        let state = result.unwrap();
+        assert_eq!(state.tags, vec!["done"]);
+        assert_eq!(state.memory.get("key"), Some(&"value".to_string()));
+        assert_eq!(state.active_files, vec!["src/main.rs"]);
+        assert_eq!(state.context_summary, "summary");
+        assert!((state.progress - 0.8).abs() < f32::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn test_llm_predictor_invalid_json() {
+        let llm = Arc::new(MockLlmProvider {
+            response: "not valid json".to_string(),
+        });
+        let predictor = LlmAugmentedPredictor::new(llm);
+        let current = JumpyState::default();
+        let result = predictor.predict("test_skill", "{}", &current, 0.5).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to parse"));
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_historical_hit() {
+        let mut historical = HistoricalPredictor::new();
+        let obs = SkillObservation {
+            skill_id: "test_skill".to_string(),
+            params: "{}".to_string(),
+            before: JumpyState::default(),
+            after: JumpyState {
+                tags: vec!["historical_tag".to_string()],
+                memory: HashMap::new(),
+                active_files: vec![],
+                context_summary: "historical".to_string(),
+                progress: 0.5,
+            },
+        };
+        historical.observe(obs);
+
+        let llm = Arc::new(MockLlmProvider {
+            response: r#"{"tags":["llm_tag"],"memory":{},"active_files":[],"context_summary":"llm","progress":0.9}"#.to_string(),
+        });
+        let llm_predictor = LlmAugmentedPredictor::new(llm);
+        let hybrid = HybridPredictor::new(historical, llm_predictor);
+        let current = JumpyState::default();
+        let result = hybrid.predict("test_skill", "{}", &current, 0.5).await;
+        assert!(result.is_ok());
+        let state = result.unwrap();
+        assert_eq!(state.tags, vec!["historical_tag"]);
+    }
+
+    #[tokio::test]
+    async fn test_hybrid_llm_fallback() {
+        let historical = HistoricalPredictor::new();
+        let json_response = r#"{
+            "tags": ["llm_tag"],
+            "memory": {},
+            "active_files": [],
+            "context_summary": "llm",
+            "progress": 0.9
+        }"#;
+        let llm = Arc::new(MockLlmProvider {
+            response: json_response.to_string(),
+        });
+        let llm_predictor = LlmAugmentedPredictor::new(llm);
+        let hybrid = HybridPredictor::new(historical, llm_predictor);
+        let current = JumpyState::default();
+        let result = hybrid.predict("test_skill", "{}", &current, 0.5).await;
+        assert!(result.is_ok());
+        let state = result.unwrap();
+        assert_eq!(state.tags, vec!["llm_tag"]);
     }
 }

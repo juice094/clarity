@@ -2,6 +2,9 @@
 //!
 //! Detects unconfigured state on startup and guides the user to:
 //! 1. Enter a cloud API key, 2. Download a local GGUF model, or 3. Skip for now.
+//!
+//! IS-1 Sprint 31: auto-trigger download on first launch, auto-configure on complete,
+//! true cancellation via CancellationToken.
 
 use crate::settings::GuiSettings;
 use crate::App;
@@ -60,13 +63,25 @@ pub fn render_onboarding(app: &mut App, ctx: &egui::Context) {
     let state = app.onboarding_store.onboarding_state.clone();
     match state {
         OnboardingState::Hidden => (),
-        OnboardingState::ChooseProvider => render_choose_provider(app, ctx),
+        OnboardingState::ChooseProvider => {
+            // Sprint 31: auto-trigger download on first encounter
+            if !app.onboarding_store.downloading_auto {
+                app.onboarding_store.downloading_auto = true;
+                start_model_download(app);
+                app.onboarding_store.onboarding_state = OnboardingState::Downloading {
+                    bytes_downloaded: 0,
+                    total_bytes: None,
+                };
+            }
+            render_choose_provider(app, ctx);
+        }
         OnboardingState::Downloading {
             bytes_downloaded,
             total_bytes,
         } => render_downloading(app, ctx, bytes_downloaded, total_bytes),
         OnboardingState::DownloadComplete { model_path } => {
-            render_download_complete(app, ctx, &model_path);
+            // Sprint 31: auto-configure and hide without user click
+            auto_configure_and_hide(app, &model_path);
         }
         OnboardingState::DownloadFailed(ref err) => render_download_failed(app, ctx, err),
     }
@@ -186,6 +201,10 @@ fn render_downloading(
                         OnboardingState::DownloadComplete { model_path: dest };
                     break;
                 }
+                Ok(ModelDownloadProgress::Cancelled) => {
+                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
+                    break;
+                }
                 Ok(ModelDownloadProgress::Failed(err)) => {
                     app.onboarding_store.onboarding_state = OnboardingState::DownloadFailed(err);
                     break;
@@ -217,7 +236,7 @@ fn render_downloading(
         .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading("Downloading Local Model");
+                ui.heading("Preparing Local Model");
                 ui.add_space(app.ui_store.theme.space_8);
 
                 let (fraction, label) = if let Some(total) = total_bytes {
@@ -247,62 +266,15 @@ fn render_downloading(
                 ui.add_space(app.ui_store.theme.space_16);
 
                 if ui
-                    .add_sized([120.0, 28.0], egui::Button::new("Cancel"))
+                    .add_sized([140.0, 28.0], egui::Button::new("Cancel and Skip"))
                     .clicked()
                 {
-                    // Abort is best-effort; we just hide the onboarding.
-                    app.onboarding_store.onboarding_state = OnboardingState::Hidden;
-                }
-            });
-        });
-}
-
-fn render_download_complete(app: &mut App, ctx: &egui::Context, model_path: &std::path::Path) {
-    let screen = ctx.screen_rect();
-    ctx.layer_painter(egui::LayerId::new(
-        egui::Order::Background,
-        egui::Id::new("onboarding_bg"),
-    ))
-    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(180));
-
-    egui::Window::new("Download Complete")
-        .collapsible(false)
-        .resizable(false)
-        .title_bar(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(app.ui_store.theme.bg_elevated))
-        .show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.heading("Download Complete");
-                ui.add_space(app.ui_store.theme.space_8);
-                ui.label(format!("Model saved to: {}", model_path.display()));
-                ui.add_space(app.ui_store.theme.space_16);
-
-                if ui
-                    .add_sized([200.0, 36.0], egui::Button::new("Start Using Clarity"))
-                    .clicked()
-                {
-                    // Auto-configure settings to local provider
-                    app.settings_store.settings_edit.provider = "local".to_string();
-                    app.settings_store.settings_edit.model = model_path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "local".to_string());
-                    app.settings_store.settings_edit.local_model_path =
-                        Some(model_path.display().to_string());
-                    let _ = app.settings_store.settings_edit.save();
-
-                    // Sync to AppState and reload LLM
-                    {
-                        let mut guard = app.state.cached_settings.lock();
-                        *guard = app.settings_store.settings_edit.clone();
+                    // Sprint 31: true cancellation
+                    if let Some(ref token) = app.onboarding_store.cancel_token {
+                        token.cancel();
                     }
-                    let state = app.state.clone();
-                    app.runtime.spawn(async move {
-                        if let Err(e) = crate::app_state::reload_llm(&state).await {
-                            tracing::warn!("reload_llm after download failed: {}", e);
-                        }
-                    });
-
+                    app.onboarding_store.cancel_token = None;
+                    app.onboarding_store.onboarding_progress_rx = None;
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
             });
@@ -354,13 +326,44 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
         });
 }
 
+fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
+    // Auto-configure settings to local provider
+    app.settings_store.settings_edit.provider = "local".to_string();
+    app.settings_store.settings_edit.model = model_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "local".to_string());
+    app.settings_store.settings_edit.local_model_path =
+        Some(model_path.display().to_string());
+    let _ = app.settings_store.settings_edit.save();
+
+    // Sync to AppState and reload LLM
+    {
+        let mut guard = app.state.cached_settings.lock();
+        *guard = app.settings_store.settings_edit.clone();
+    }
+    let state = app.state.clone();
+    app.runtime.spawn(async move {
+        if let Err(e) = crate::app_state::reload_llm(&state).await {
+            tracing::warn!("reload_llm after auto-download failed: {}", e);
+        }
+    });
+
+    app.onboarding_store.onboarding_state = crate::onboarding::OnboardingState::Hidden;
+    app.onboarding_store.cancel_token = None;
+}
+
 fn start_model_download(app: &mut App) {
     use clarity_core::model_download::{
-        default_model_dir, download_model, ModelDownloadProgress, PRECONFIGURED_MODELS,
+        default_model_dir, download_model_files, ModelDownloadProgress, PRECONFIGURED_MODELS,
     };
+    use tokio_util::sync::CancellationToken;
 
     let model = &PRECONFIGURED_MODELS[0];
     let dest = default_model_dir();
+
+    let cancel_token = CancellationToken::new();
+    app.onboarding_store.cancel_token = Some(cancel_token.clone());
 
     let (tx, rx) = std::sync::mpsc::channel::<ModelDownloadProgress>();
     app.onboarding_store.onboarding_progress_rx = Some(rx);
@@ -375,8 +378,9 @@ fn start_model_download(app: &mut App) {
         let handle2 = handle.clone();
         // Bridge tokio mpsc -> std mpsc because App uses std::sync::mpsc for UI events
         let (tokio_tx, mut tokio_rx) = tokio::sync::mpsc::channel::<ModelDownloadProgress>(16);
-        let download_handle =
-            handle2.spawn(async move { download_model(&model_clone, dest, tokio_tx).await });
+        let download_handle = handle2.spawn(async move {
+            download_model_files(&model_clone, dest, tokio_tx, cancel_token).await
+        });
 
         // Forward progress from tokio channel to std channel
         let forward_handle = handle2.spawn(async move {
@@ -391,13 +395,6 @@ fn start_model_download(app: &mut App) {
             download_handle.await;
         let _ = forward_handle.await;
 
-        // Note: we cannot mutate App from here, so the final state transition
-        // is polled in render_downloading via onboarding_progress_rx.
-        // To signal completion, we send a sentinel progress with total == bytes.
-        // However, the receiver may have been dropped. We just let the user
-        // see the download finish via the progress bar reaching 100%.
-        // A cleaner approach would be a second channel for completion, but
-        // for MVP the 100% progress bar + manual "Start" click is sufficient.
         if let Ok(Ok(path)) = result {
             tracing::info!("Model download complete: {}", path.display());
         } else if let Ok(Err(e)) = result {

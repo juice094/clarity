@@ -137,7 +137,6 @@ pub struct SubAgentProgress {
 /// Live progress for a single subagent invoked via /coder or /explore.
 #[derive(Clone, Debug)]
 pub struct SingleSubagentProgress {
-    pub agent_id: String,
     pub agent_type: String,
     pub status: String,
     pub stages: Vec<String>,
@@ -395,6 +394,7 @@ pub enum RenderBlock {
 // ============================================================================
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum PreviewItem {
     File {
         name: String,

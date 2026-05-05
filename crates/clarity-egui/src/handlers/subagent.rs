@@ -52,8 +52,7 @@ pub fn on_subagent_batch(
 // ── Single subagent progress handlers (IS-1 Sprint 30) ──
 
 fn ensure_agent(subagent_store: &mut SubAgentStore, agent_id: String) -> &mut SingleSubagentProgress {
-    subagent_store.running_agents.entry(agent_id.clone()).or_insert_with(|| SingleSubagentProgress {
-        agent_id,
+    subagent_store.running_agents.entry(agent_id).or_insert_with(|| SingleSubagentProgress {
         agent_type: "unknown".to_string(),
         status: "Pending".to_string(),
         stages: vec![],

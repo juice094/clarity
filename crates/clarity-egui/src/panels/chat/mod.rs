@@ -8,7 +8,6 @@ pub mod plan;
 pub use self::header::render_header;
 pub use self::input::render_input;
 pub use self::message_list::render_message_list;
-pub use self::plan::render_plan;
 
 /// Render input bar fixed to bottom (TopBottomPanel).
 /// Must be called BEFORE CentralPanel so egui reserves space correctly.
@@ -74,16 +73,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     .max_rect(centered_rect)
                     .layout(egui::Layout::top_down(egui::Align::LEFT)),
                 |ui| {
-                    // Scrollable content area (messages + plan)
-                    egui::ScrollArea::vertical()
-                        .scroll_bar_visibility(
-                            egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden,
-                        )
-                        .auto_shrink([false; 2])
-                        .show(ui, |ui| {
-                            render_message_list(app, ui);
-                            render_plan(app, ui);
-                        });
+                    // Message list owns the single ScrollArea (plan is rendered inside it)
+                    render_message_list(app, ui);
                 },
             );
         });

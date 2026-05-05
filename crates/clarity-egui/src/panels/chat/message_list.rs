@@ -1,3 +1,4 @@
+use crate::panels::chat::plan::render_plan;
 use crate::ui;
 use crate::ui::types::Role;
 use crate::App;
@@ -166,6 +167,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
 
                     let mut msg_idx = 0;
+                    for unit in units.iter().take(start_idx) {
+                        match unit {
+                            RenderUnit::User(_) => msg_idx += 1,
+                            RenderUnit::AgentTurn(msgs) => msg_idx += msgs.len(),
+                        }
+                    }
                     for (i, unit) in units
                         .iter()
                         .enumerate()
@@ -284,6 +291,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
                 }
             }
+            // Plan review card (rendered inside the same scroll area as messages)
+            render_plan(app, ui);
             // Detect user scroll-up intent to release stick-to-bottom.
             ui.input(|i| {
                 for event in &i.events {
