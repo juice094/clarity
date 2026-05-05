@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
+use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 // =============================================================================
@@ -108,6 +109,21 @@ impl From<anyhow::Error> for SubagentError {
     fn from(err: anyhow::Error) -> Self {
         SubagentError::BuildFailed(err.to_string())
     }
+}
+
+// =============================================================================
+// 实时进度事件
+// =============================================================================
+
+/// Real-time progress events emitted by a single subagent run.
+#[derive(Debug, Clone)]
+pub enum SubagentProgressEvent {
+    /// A new execution stage was reached.
+    Stage { agent_id: String, name: String },
+    /// New output text was appended.
+    Output { agent_id: String, text: String },
+    /// The agent status changed.
+    StatusChange { agent_id: String, agent_type: String, status: SubagentStatus },
 }
 
 // =============================================================================
@@ -415,16 +431,26 @@ pub struct OutputCollector {
     output_path: PathBuf,
     stages: Vec<String>,
     content: Vec<String>,
+    progress_tx: Option<mpsc::Sender<SubagentProgressEvent>>,
+    agent_id: String,
 }
 
 impl OutputCollector {
     /// 创建新的输出收集器
-    pub fn new(output_path: impl AsRef<Path>) -> Self {
+    pub fn new(output_path: impl AsRef<Path>, agent_id: impl Into<String>) -> Self {
         Self {
             output_path: output_path.as_ref().to_path_buf(),
             stages: Vec::new(),
             content: Vec::new(),
+            progress_tx: None,
+            agent_id: agent_id.into(),
         }
+    }
+
+    /// Attach a progress channel for real-time UI updates.
+    pub fn with_progress_tx(mut self, tx: mpsc::Sender<SubagentProgressEvent>) -> Self {
+        self.progress_tx = Some(tx);
+        self
     }
 
     /// 记录阶段
@@ -437,11 +463,24 @@ impl OutputCollector {
             .as_millis();
         self.stages.push(format!("[{}] {}", timestamp, stage));
         debug!("Subagent stage: {}", stage);
+        if let Some(ref tx) = self.progress_tx {
+            let _ = tx.try_send(SubagentProgressEvent::Stage {
+                agent_id: self.agent_id.clone(),
+                name: stage,
+            });
+        }
     }
 
     /// 追加内容
     pub fn append(&mut self, text: impl Into<String>) {
-        self.content.push(text.into());
+        let text = text.into();
+        self.content.push(text.clone());
+        if let Some(ref tx) = self.progress_tx {
+            let _ = tx.try_send(SubagentProgressEvent::Output {
+                agent_id: self.agent_id.clone(),
+                text,
+            });
+        }
     }
 
     /// 写入 Wire 消息
@@ -652,6 +691,8 @@ pub struct SubagentRunner {
     approval_mode: ApprovalMode,
     /// 共享迭代预算（父子代理共用）
     iteration_budget: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    /// Real-time progress channel for UI monitoring.
+    progress_tx: Option<mpsc::Sender<SubagentProgressEvent>>,
 }
 
 impl Clone for SubagentRunner {
@@ -666,6 +707,7 @@ impl Clone for SubagentRunner {
             approval_runtime: self.approval_runtime.clone(),
             approval_mode: self.approval_mode,
             iteration_budget: self.iteration_budget.clone(),
+            progress_tx: self.progress_tx.clone(),
         }
     }
 }
@@ -687,6 +729,7 @@ impl SubagentRunner {
             approval_runtime: None,
             approval_mode: ApprovalMode::Interactive,
             iteration_budget: None,
+            progress_tx: None,
         }
     }
 
@@ -720,6 +763,12 @@ impl SubagentRunner {
         budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     ) -> Self {
         self.iteration_budget = Some(budget);
+        self
+    }
+
+    /// Attach a real-time progress channel for UI monitoring.
+    pub fn with_progress_tx(mut self, tx: mpsc::Sender<SubagentProgressEvent>) -> Self {
+        self.progress_tx = Some(tx);
         self
     }
 
@@ -768,7 +817,10 @@ impl SubagentRunner {
         context.restore().await?;
 
         // 4. 创建输出收集器
-        let mut collector = OutputCollector::new(context.output_path());
+        let mut collector = OutputCollector::new(context.output_path(), &agent_id);
+        if let Some(ref tx) = self.progress_tx {
+            collector = collector.with_progress_tx(tx.clone());
+        }
         collector.stage("runner_started");
 
         // 5. 构建代理
@@ -841,6 +893,13 @@ impl SubagentRunner {
 
         // 7. 更新状态为运行中
         store.update_status(&agent_id, SubagentStatus::Running);
+        if let Some(ref tx) = self.progress_tx {
+            let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                agent_id: agent_id.clone(),
+                agent_type: agent_type.clone(),
+                status: SubagentStatus::Running,
+            });
+        }
         collector.stage("status_updated_to_running");
 
         // 8. 执行代理循环
@@ -861,6 +920,13 @@ impl SubagentRunner {
                 collector.stage("execution_succeeded");
                 collector.save_summary(&summary).await?;
                 store.update_status(&agent_id, SubagentStatus::Completed);
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                        agent_id: agent_id.clone(),
+                        agent_type: agent_type.clone(),
+                        status: SubagentStatus::Completed,
+                    });
+                }
 
                 Ok(SubagentResult {
                     agent_id,
@@ -878,12 +944,26 @@ impl SubagentRunner {
             Err(SubagentError::Cancelled) => {
                 collector.stage("execution_cancelled");
                 store.update_status(&agent_id, SubagentStatus::Failed);
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                        agent_id: agent_id.clone(),
+                        agent_type: agent_type.clone(),
+                        status: SubagentStatus::Failed,
+                    });
+                }
 
                 Err(SubagentError::Cancelled)
             }
             Err(e) => {
                 collector.stage(format!("execution_failed: {}", e));
                 store.update_status(&agent_id, SubagentStatus::Failed);
+                if let Some(ref tx) = self.progress_tx {
+                    let _ = tx.try_send(SubagentProgressEvent::StatusChange {
+                        agent_id: agent_id.clone(),
+                        agent_type: agent_type.clone(),
+                        status: SubagentStatus::Failed,
+                    });
+                }
 
                 Err(e)
             }
@@ -1166,7 +1246,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("output.txt");
 
-        let mut collector = OutputCollector::new(&output_path);
+        let mut collector = OutputCollector::new(&output_path, "test-agent");
         collector.stage("stage1");
         collector.append("Some output");
         collector.stage("stage2");

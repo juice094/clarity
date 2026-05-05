@@ -169,6 +169,8 @@ pub struct UiStore {
 pub struct SubAgentStore {
     pub parallel_batches: Vec<SubAgentProgress>,
     pub last_parallel_poll: Instant,
+    /// Live single-agent progress tracked via channel (IS-1 Sprint 30).
+    pub running_agents: std::collections::HashMap<String, SingleSubagentProgress>,
 }
 
 // ============================================================================
@@ -195,6 +197,10 @@ pub struct OnboardingStore {
     pub onboarding_state: crate::onboarding::OnboardingState,
     pub onboarding_progress_rx:
         Option<std::sync::mpsc::Receiver<clarity_core::model_download::ModelDownloadProgress>>,
+    /// Set once when auto-download is triggered to prevent re-triggering every frame.
+    pub downloading_auto: bool,
+    /// Cancellation token for the active download task (IS-1 Sprint 31).
+    pub cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 // ============================================================================

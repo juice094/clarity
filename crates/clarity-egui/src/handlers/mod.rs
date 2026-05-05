@@ -168,6 +168,18 @@ pub fn process_events(app: &mut App) {
                     app.save_settings_and_reload();
                 }
             }
+            UiEvent::SubagentStage { agent_id, name } => {
+                subagent::on_subagent_stage(&mut app.subagent_store, agent_id, name);
+            }
+            UiEvent::SubagentOutput { agent_id, text } => {
+                subagent::on_subagent_output(&mut app.subagent_store, agent_id, text);
+            }
+            UiEvent::SubagentStatus { agent_id, agent_type, status } => {
+                subagent::on_subagent_status(&mut app.subagent_store, agent_id, agent_type, status);
+            }
+            UiEvent::SubagentComplete { agent_id, success } => {
+                subagent::on_subagent_complete(&mut app.subagent_store, agent_id, success);
+            }
         }
     }
 }

@@ -118,6 +118,7 @@ impl App {
 
         if let Some((agent_type, prefix)) = subagent_prefix {
             let subagent_prompt = query.strip_prefix(prefix).unwrap_or(&query).to_string();
+            let agent_type_string = agent_type.to_string();
             self.runtime.spawn(async move {
                 if let Err(e) = ensure_llm(&state).await {
                     if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {
@@ -139,21 +140,61 @@ impl App {
                 let context_dir = dirs::data_dir()
                     .map(|d| d.join("clarity").join("subagents"))
                     .unwrap_or_else(|| working_dir.join("subagents"));
+
+                // ── IS-1 Sprint 30: progress channel for live UI tracking ──
+                let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(128);
+                let ui_tx2 = tx.clone();
+                let _recv_handle = tokio::spawn(async move {
+                    use clarity_core::subagents::runner::SubagentProgressEvent;
+                    while let Some(event) = progress_rx.recv().await {
+                        match event {
+                            SubagentProgressEvent::Stage { agent_id, name } => {
+                                let _ = ui_tx2.send(UiEvent::SubagentStage { agent_id, name });
+                            }
+                            SubagentProgressEvent::Output { agent_id, text } => {
+                                let _ = ui_tx2.send(UiEvent::SubagentOutput { agent_id, text });
+                            }
+                            SubagentProgressEvent::StatusChange { agent_id, agent_type, status } => {
+                                let status_str = match status {
+                                    clarity_core::subagents::SubagentStatus::Idle => "Idle",
+                                    clarity_core::subagents::SubagentStatus::Running => "Running",
+                                    clarity_core::subagents::SubagentStatus::Completed => "Completed",
+                                    clarity_core::subagents::SubagentStatus::Failed => "Failed",
+                                }.to_string();
+                                let _ = ui_tx2.send(UiEvent::SubagentStatus {
+                                    agent_id: agent_id.clone(),
+                                    agent_type,
+                                    status: status_str.clone(),
+                                });
+                                if status == clarity_core::subagents::SubagentStatus::Completed
+                                    || status == clarity_core::subagents::SubagentStatus::Failed
+                                {
+                                    let _ = ui_tx2.send(UiEvent::SubagentComplete {
+                                        agent_id,
+                                        success: status == clarity_core::subagents::SubagentStatus::Completed,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                });
+
                 let runner = clarity_core::subagents::SubagentRunner::new(
                     registry,
                     &working_dir,
                     &context_dir,
                 )
-                .with_llm(llm);
+                .with_llm(llm)
+                .with_progress_tx(progress_tx);
                 let mut store = clarity_core::subagents::SubagentStore::new(&context_dir);
                 let spec =
                     clarity_core::subagents::RunSpec::new(&subagent_prompt, &subagent_prompt)
-                        .with_type(agent_type);
+                        .with_type(&agent_type_string);
                 match runner.run(spec, &mut store, None).await {
                     Ok(result) => {
                         let content = format!(
                             "🤖 **{}** subagent result\n\n{}",
-                            agent_type, result.summary
+                            agent_type_string, result.summary
                         );
                         if let Err(e) = tx.send(UiEvent::Chunk(content)) {
                             tracing::warn!("Failed to send Chunk: {}", e);
@@ -165,7 +206,7 @@ impl App {
                     Err(e) => {
                         if let Err(err) = tx.send(UiEvent::Error(format!(
                             "Subagent /{} failed: {}",
-                            agent_type, e
+                            agent_type_string, e
                         ))) {
                             tracing::warn!("Failed to send Error: {}", err);
                         }

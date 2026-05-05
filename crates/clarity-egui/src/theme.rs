@@ -16,6 +16,10 @@ pub const ICON_LIST: &str = "\u{E2F0}";
 pub const ICON_ARROW_LEFT: &str = "\u{E058}";
 pub const ICON_PROHIBIT: &str = "\u{E3DE}";
 pub const ICON_QUESTION: &str = "\u{E3E8}";
+pub const ICON_CODE: &str = "\u{E1B4}";
+pub const ICON_SEARCH: &str = "\u{E38C}";
+pub const ICON_ROBOT: &str = "\u{E3B8}";
+pub const ICON_CHEVRON_RIGHT: &str = "\u{E1A0}";
 
 // ============================================================================
 // Design Token System — Phase A Foundation

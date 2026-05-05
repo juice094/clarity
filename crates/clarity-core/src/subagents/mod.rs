@@ -83,8 +83,17 @@ impl SubagentManager {
     }
 
     /// 运行子代理
-    pub async fn run(&mut self, spec: RunSpec) -> Result<SubagentResult, SubagentError> {
-        self.runner.run(spec, &mut self.store, None).await
+    pub async fn run(
+        &mut self,
+        spec: RunSpec,
+        progress_tx: Option<tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>>,
+    ) -> Result<SubagentResult, SubagentError> {
+        let runner = if let Some(tx) = progress_tx {
+            self.runner.clone().with_progress_tx(tx)
+        } else {
+            self.runner.clone()
+        };
+        runner.run(spec, &mut self.store, None).await
     }
 
     /// 并行运行多个子代理

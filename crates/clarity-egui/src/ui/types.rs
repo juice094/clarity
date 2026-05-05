@@ -98,6 +98,27 @@ pub enum UiEvent {
         url: Option<String>,
         error: Option<String>,
     },
+    /// Single subagent stage update (e.g. "Planning", "Executing").
+    SubagentStage {
+        agent_id: String,
+        name: String,
+    },
+    /// Single subagent output chunk.
+    SubagentOutput {
+        agent_id: String,
+        text: String,
+    },
+    /// Single subagent status change (Pending → Running → Completed/Failed).
+    SubagentStatus {
+        agent_id: String,
+        agent_type: String,
+        status: String,
+    },
+    /// Single subagent finished (success or failure).
+    SubagentComplete {
+        agent_id: String,
+        success: bool,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.
@@ -111,6 +132,18 @@ pub struct SubAgentProgress {
     pub elapsed_ms: u64,
     pub agent_statuses: Vec<AgentStatusEntry>,
     pub last_poll: std::time::Instant,
+}
+
+/// Live progress for a single subagent invoked via /coder or /explore.
+#[derive(Clone, Debug)]
+pub struct SingleSubagentProgress {
+    pub agent_id: String,
+    pub agent_type: String,
+    pub status: String,
+    pub stages: Vec<String>,
+    pub output_lines: Vec<String>,
+    pub started_at: std::time::Instant,
+    pub completed_at: Option<std::time::Instant>,
 }
 
 #[derive(Clone, Debug)]

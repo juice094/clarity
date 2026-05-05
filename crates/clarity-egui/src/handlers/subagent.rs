@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::stores::SubAgentStore;
-use crate::ui::types::{AgentStatusEntry, SubAgentProgress};
+use crate::ui::types::{AgentStatusEntry, SingleSubagentProgress, SubAgentProgress};
 
 pub fn on_subagent_batch(
     subagent_store: &mut SubAgentStore,
@@ -47,4 +47,57 @@ pub fn on_subagent_batch(
         subagent_store.parallel_batches.push(entry);
     }
     subagent_store.last_parallel_poll = Instant::now();
+}
+
+// ── Single subagent progress handlers (IS-1 Sprint 30) ──
+
+fn ensure_agent(subagent_store: &mut SubAgentStore, agent_id: String) -> &mut SingleSubagentProgress {
+    subagent_store.running_agents.entry(agent_id.clone()).or_insert_with(|| SingleSubagentProgress {
+        agent_id,
+        agent_type: "unknown".to_string(),
+        status: "Pending".to_string(),
+        stages: vec![],
+        output_lines: vec![],
+        started_at: Instant::now(),
+        completed_at: None,
+    })
+}
+
+pub fn on_subagent_stage(subagent_store: &mut SubAgentStore, agent_id: String, name: String) {
+    ensure_agent(subagent_store, agent_id).stages.push(name);
+}
+
+pub fn on_subagent_output(subagent_store: &mut SubAgentStore, agent_id: String, text: String) {
+    let agent = ensure_agent(subagent_store, agent_id);
+    agent.output_lines.push(text);
+    // Cap output buffer to prevent unbounded growth in UI state
+    if agent.output_lines.len() > 200 {
+        agent.output_lines.drain(0..agent.output_lines.len() - 200);
+    }
+}
+
+pub fn on_subagent_status(
+    subagent_store: &mut SubAgentStore,
+    agent_id: String,
+    agent_type: String,
+    status: String,
+) {
+    let agent = ensure_agent(subagent_store, agent_id);
+    agent.agent_type = agent_type;
+    agent.status = status;
+}
+
+pub fn on_subagent_complete(
+    subagent_store: &mut SubAgentStore,
+    agent_id: String,
+    success: bool,
+) {
+    if let Some(agent) = subagent_store.running_agents.get_mut(&agent_id) {
+        agent.status = if success {
+            "Completed".to_string()
+        } else {
+            "Failed".to_string()
+        };
+        agent.completed_at = Some(Instant::now());
+    }
 }

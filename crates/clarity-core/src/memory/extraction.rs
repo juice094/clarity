@@ -48,7 +48,7 @@ impl TurnMemoryExtractor {
         )
         .with_llm(self.llm.clone());
 
-        let result = manager.run(spec).await?;
+        let result = manager.run(spec, None).await?;
 
         let notes: SessionNotes = serde_json::from_str(&result.summary)
             .unwrap_or_else(|_| SessionNotes::new("extracted"));

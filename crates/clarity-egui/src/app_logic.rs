@@ -292,6 +292,7 @@ impl App {
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
                 last_parallel_poll: now,
+                running_agents: std::collections::HashMap::new(),
             },
             mcp_store: crate::stores::McpStore {
                 mcp_panel_open: false,
@@ -308,6 +309,8 @@ impl App {
                     crate::onboarding::OnboardingState::Hidden
                 },
                 onboarding_progress_rx: None,
+                downloading_auto: false,
+                cancel_token: None,
             },
         };
         app.refresh_tasks();
