@@ -367,7 +367,7 @@ impl TaskStore {
         let pending = self.list_by_status(TaskStatus::Pending).await?;
         let mut tasks: Vec<_> = pending.into_iter().collect();
         // 按优先级降序排列
-        tasks.sort_by(|a, b| b.spec.priority.cmp(&a.spec.priority));
+        tasks.sort_by_key(|b| std::cmp::Reverse(b.spec.priority));
         Ok(tasks)
     }
 

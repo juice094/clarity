@@ -155,7 +155,7 @@ impl Agent {
         // detect non-recoverable failures.
         let mut fatal: Option<(String, String)> = None;
 
-        for (tool_call, result) in modified_tool_calls.iter().zip(results.into_iter()) {
+        for (tool_call, result) in modified_tool_calls.iter().zip(results) {
             let sanitized = result.map_err(|e| e.sanitize_paths());
             let mut result_value = match &sanitized {
                 Ok(v) => v.clone(),

@@ -212,7 +212,7 @@ impl ErrorMemoryStore for FileSystemErrorMemoryStore {
                 frequency: count,
             })
             .collect();
-        known_fragilities.sort_by(|a, b| b.frequency.cmp(&a.frequency));
+        known_fragilities.sort_by_key(|b| std::cmp::Reverse(b.frequency));
 
         Ok(EnvironmentCognition {
             known_fragilities,
