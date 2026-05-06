@@ -26,6 +26,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06
+      - run: cargo clean
       - run: cargo check --workspace
 
   test:
@@ -44,6 +45,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06
+      - run: cargo clean
       - run: cargo test --workspace --lib
 
   clippy:
@@ -64,6 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ci-fix-2026-05-06
+      - run: cargo clean
       - run: cargo clippy --workspace --lib --bins --tests -- -D warnings
 
   fmt:
