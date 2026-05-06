@@ -51,6 +51,16 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 38-C — CI Pipeline Hardening（已完成 ✅，2026-05-06）**
+
+- A ✅: 修复 `clarity-egui` Cargo.toml 跨平台依赖解析（TOML 节顺序敏感，内部 crate 依赖误落入 `[target.'cfg(windows)'.dependencies]`）
+- B ✅: 修复 Clippy `unnecessary_sort_by` / `useless_conversion` / `collapsible_match` / `manual_div_ceil` / `redundant_locals` / `field_reassign_with_default` 等 lint
+- C ✅: 修复 Ubuntu `libxdo` 链接失败（CI apt 添加 `libxdo-dev`）
+- D ✅: Coverage `pulp` const eval panic — 降级为 `cargo test --workspace --lib`
+- E ✅: `clarity-claw` 环境变量测试竞态移除
+- F ✅: Rust 1.95.0 跨平台 lint 差异修复（`float_literal_f32_fallback` 33 处、`unneeded_wildcard_pattern`、平台条件 `unused_imports`）
+- G ✅: CI 全绿（Check/Test/Clippy/Rustfmt/Coverage/Security Audit 三平台通过，run `25432254539`）
+
 **Sprint 36.6 — Cron 迁移 + Markdown 表格渲染（已完成 ✅，2026-05-05）**
 
 - A ✅: Cron Jobs 从右侧独立 `SidePanel` 迁移至左侧 sidebar 可折叠 section（与 Subagents/Teams 并列）
