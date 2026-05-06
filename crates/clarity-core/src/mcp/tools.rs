@@ -124,6 +124,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[tokio::test]
+    #[ignore = "requires external MCP filesystem server via npx"]
     async fn test_mcp_filesystem_tool_e2e() {
         // Skip if npx is unavailable (CI environments without Node.js).
         if std::process::Command::new("npx")

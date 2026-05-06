@@ -355,6 +355,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(target_os = "windows")]
     async fn test_powershell_echo() {
         let tool = PowerShellTool::new();
         let ctx = ToolContext::new();
@@ -368,6 +369,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(target_os = "windows")]
     async fn test_powershell_sensitive_file_yolo_warning() {
         let temp_dir = TempDir::new().unwrap();
         let tool = PowerShellTool::new();

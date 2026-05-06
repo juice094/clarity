@@ -180,7 +180,7 @@ pub fn run() -> anyhow::Result<()> {
                         for old_id in &last_running {
                             if !running_now.iter().any(|id| id == old_id) {
                                 if let Some(task) = tasks.iter().find(|t| &t.task_id == old_id) {
-                                    let (summary, _urgency) =
+                                    let (summary, urgency) =
                                         crate::classify_task_status(&task.status);
                                     let mut notif = notify_rust::Notification::new();
                                     notif
@@ -190,6 +190,8 @@ pub fn run() -> anyhow::Result<()> {
                                     if let Some(u) = urgency {
                                         notif.urgency(u);
                                     }
+                                    #[cfg(not(target_os = "linux"))]
+                                    let _ = urgency;
                                     let _ = notif.show();
                                 }
                             }

@@ -212,29 +212,24 @@ impl Config {
         if let Some(ref api_key) = profile.api_key {
             let provider = profile.provider.to_lowercase();
             match provider.as_str() {
-                "anthropic" | "claude" => {
-                    if env::var("ANTHROPIC_AUTH_TOKEN").is_err() {
-                        env::set_var("ANTHROPIC_AUTH_TOKEN", api_key);
-                        info!("Exported ANTHROPIC_AUTH_TOKEN from config profile");
-                    }
+                "anthropic" | "claude" if env::var("ANTHROPIC_AUTH_TOKEN").is_err() => {
+                    env::set_var("ANTHROPIC_AUTH_TOKEN", api_key);
+                    info!("Exported ANTHROPIC_AUTH_TOKEN from config profile");
                 }
-                "kimi" | "kimi-code" | "moonshot" => {
-                    if env::var("KIMI_API_KEY").is_err() && env::var("KIMI_CODE_API_KEY").is_err() {
-                        env::set_var("KIMI_API_KEY", api_key);
-                        info!("Exported KIMI_API_KEY from config profile");
-                    }
+                "kimi" | "kimi-code" | "moonshot"
+                    if env::var("KIMI_API_KEY").is_err()
+                        && env::var("KIMI_CODE_API_KEY").is_err() =>
+                {
+                    env::set_var("KIMI_API_KEY", api_key);
+                    info!("Exported KIMI_API_KEY from config profile");
                 }
-                "deepseek" => {
-                    if env::var("DEEPSEEK_API_KEY").is_err() {
-                        env::set_var("DEEPSEEK_API_KEY", api_key);
-                        info!("Exported DEEPSEEK_API_KEY from config profile");
-                    }
+                "deepseek" if env::var("DEEPSEEK_API_KEY").is_err() => {
+                    env::set_var("DEEPSEEK_API_KEY", api_key);
+                    info!("Exported DEEPSEEK_API_KEY from config profile");
                 }
-                "openai" => {
-                    if env::var("OPENAI_API_KEY").is_err() {
-                        env::set_var("OPENAI_API_KEY", api_key);
-                        info!("Exported OPENAI_API_KEY from config profile");
-                    }
+                "openai" if env::var("OPENAI_API_KEY").is_err() => {
+                    env::set_var("OPENAI_API_KEY", api_key);
+                    info!("Exported OPENAI_API_KEY from config profile");
                 }
                 _ => {}
             }

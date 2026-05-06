@@ -807,6 +807,7 @@ mod tests {
         assert!(is_sensitive_file(Path::new(".env.local")));
         assert!(is_sensitive_file(Path::new("/home/user/.ssh/id_rsa")));
         assert!(is_sensitive_file(Path::new("/home/user/.ssh/known_hosts")));
+        #[cfg(target_os = "windows")]
         assert!(is_sensitive_file(Path::new(
             "C:\\Users\\user\\.aws\\credentials"
         )));
