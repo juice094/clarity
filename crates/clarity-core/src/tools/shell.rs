@@ -323,9 +323,7 @@ impl Tool for PowerShellTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approval::ApprovalMode;
     use tempfile::TempDir;
-    use tokio::fs;
 
     #[tokio::test]
     #[cfg_attr(target_os = "windows", ignore = "bash not available on Windows")]
@@ -371,6 +369,7 @@ mod tests {
     #[tokio::test]
     #[cfg(target_os = "windows")]
     async fn test_powershell_sensitive_file_yolo_warning() {
+        use tokio::fs;
         let temp_dir = TempDir::new().unwrap();
         let tool = PowerShellTool::new();
         let ctx = ToolContext::new()
