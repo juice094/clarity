@@ -30,13 +30,13 @@ once_cell = "1"
 raw-window-handle = "0.6"
 rfd = "0.15"
 
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
-
 # Internal crates
 clarity-core = { path = "../clarity-core" }
 clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 
 [[bin]]
 name = "clarity-egui"
