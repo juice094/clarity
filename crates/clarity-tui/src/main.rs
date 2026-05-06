@@ -112,7 +112,7 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
         .with_read_only(false);
 
     // 从环境变量创建 LLM Provider (自动检测: ANTHROPIC > KIMI_CODE > KIMI > DEEPSEEK > OPENAI)
-    let mut llm = LlmFactory::auto()
+    let llm = LlmFactory::auto()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create LLM provider: {}", e))?;
     let session_id = uuid::Uuid::new_v4().to_string();

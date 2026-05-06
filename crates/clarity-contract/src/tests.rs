@@ -1,5 +1,4 @@
 use crate::*;
-use serde_json;
 
 // ============================================================================
 // ToolCall & FunctionCall
@@ -570,7 +569,7 @@ fn approval_mode_default_and_eq() {
 #[test]
 fn tool_context_default() {
     let ctx = ToolContext::default();
-    assert!(ctx.working_dir.as_os_str().len() > 0);
+    assert!(!ctx.working_dir.as_os_str().is_empty());
     assert!(ctx.timeout_secs > 0);
     assert_eq!(ctx.max_output_size, 1024 * 1024);
     assert!(!ctx.read_only);

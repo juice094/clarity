@@ -31,10 +31,7 @@ pub struct LspHook {
 impl LspHook {
     /// Attempt to create an `LspHook`. Returns `None` if the LSP server
     /// cannot be started or the config is disabled.
-    pub async fn try_new(
-        config: &LspClientConfig,
-        working_dir: &std::path::Path,
-    ) -> Option<Self> {
+    pub async fn try_new(config: &LspClientConfig, working_dir: &std::path::Path) -> Option<Self> {
         if !config.enabled {
             return None;
         }
@@ -61,7 +58,10 @@ impl LspHook {
                 })
             }
             Err(e) => {
-                warn!("LSP hook disabled — failed to start '{}': {}", config.command, e);
+                warn!(
+                    "LSP hook disabled — failed to start '{}': {}",
+                    config.command, e
+                );
                 None
             }
         }
@@ -140,85 +140,6 @@ pub(crate) fn matches_extension_impl(path: &std::path::Path, extensions: &[Strin
         return false;
     };
     extensions.iter().any(|e| e == ext)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_path_to_uri_unix_absolute() {
-        let wd = std::path::PathBuf::from("/home/user/project");
-        assert_eq!(
-            path_to_uri_impl(&wd, "/home/user/project/src/main.rs"),
-            Some("file:///home/user/project/src/main.rs".to_string())
-        );
-    }
-
-    #[test]
-    fn test_path_to_uri_relative() {
-        let wd = std::path::PathBuf::from("/home/user/project");
-        assert_eq!(
-            path_to_uri_impl(&wd, "src/main.rs"),
-            Some("file:///home/user/project/src/main.rs".to_string())
-        );
-    }
-
-    #[test]
-    fn test_path_to_uri_windows() {
-        let wd = std::path::PathBuf::from("C:\\project");
-        assert_eq!(
-            path_to_uri_impl(&wd, "src\\main.rs"),
-            Some("file:///C:/project/src/main.rs".to_string())
-        );
-    }
-
-    #[test]
-    fn test_uri_to_path_unix() {
-        assert_eq!(
-            uri_to_path_impl("file:///home/user/main.rs"),
-            Some(std::path::PathBuf::from("/home/user/main.rs"))
-        );
-    }
-
-    #[test]
-    fn test_uri_to_path_windows() {
-        assert_eq!(
-            uri_to_path_impl("file:///C:/project/main.rs"),
-            Some(std::path::PathBuf::from("C:/project/main.rs"))
-        );
-    }
-
-    #[test]
-    fn test_matches_extension_empty_list() {
-        assert!(matches_extension_impl(
-            std::path::Path::new("foo.rs"),
-            &[]
-        ));
-    }
-
-    #[test]
-    fn test_matches_extension_match() {
-        assert!(matches_extension_impl(
-            std::path::Path::new("foo.rs"),
-            &["rs".to_string(), "ts".to_string()]
-        ));
-        assert!(!matches_extension_impl(
-            std::path::Path::new("foo.py"),
-            &["rs".to_string(), "ts".to_string()]
-        ));
-    }
-
-    #[test]
-    fn test_language_id() {
-        assert_eq!(LspHook::language_id("rs"), "rust");
-        assert_eq!(LspHook::language_id("ts"), "typescript");
-        assert_eq!(LspHook::language_id("tsx"), "typescriptreact");
-        assert_eq!(LspHook::language_id("py"), "python");
-        assert_eq!(LspHook::language_id("go"), "go");
-        assert_eq!(LspHook::language_id("json"), "json");
-        assert_eq!(LspHook::language_id("unknown"), "unknown");
-    }
 }
 
 #[async_trait::async_trait]
@@ -322,7 +243,8 @@ impl AgentHook for LspHook {
         // 3. Drain buffered diagnostics and inject into messages
         let diagnostics = self.client.drain_diagnostics().await;
         if !diagnostics.is_empty() {
-            let mut lines = vec!["Language server diagnostics for recently edited files:".to_string()];
+            let mut lines =
+                vec!["Language server diagnostics for recently edited files:".to_string()];
             for params in &diagnostics {
                 let path = uri_to_path_impl(&params.uri)
                     .map(|p| p.to_string_lossy().to_string())
@@ -345,7 +267,86 @@ impl AgentHook for LspHook {
             }
             let text = lines.join("\n");
             messages.push(Message::system(text));
-            debug!("LSP hook injected diagnostics for {} file(s)", diagnostics.len());
+            debug!(
+                "LSP hook injected diagnostics for {} file(s)",
+                diagnostics.len()
+            );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_to_uri_unix_absolute() {
+        let wd = std::path::PathBuf::from("/home/user/project");
+        assert_eq!(
+            path_to_uri_impl(&wd, "/home/user/project/src/main.rs"),
+            Some("file:///home/user/project/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn test_path_to_uri_relative() {
+        let wd = std::path::PathBuf::from("/home/user/project");
+        assert_eq!(
+            path_to_uri_impl(&wd, "src/main.rs"),
+            Some("file:///home/user/project/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn test_path_to_uri_windows() {
+        let wd = std::path::PathBuf::from("C:\\project");
+        assert_eq!(
+            path_to_uri_impl(&wd, "src\\main.rs"),
+            Some("file:///C:/project/src/main.rs".to_string())
+        );
+    }
+
+    #[test]
+    fn test_uri_to_path_unix() {
+        assert_eq!(
+            uri_to_path_impl("file:///home/user/main.rs"),
+            Some(std::path::PathBuf::from("/home/user/main.rs"))
+        );
+    }
+
+    #[test]
+    fn test_uri_to_path_windows() {
+        assert_eq!(
+            uri_to_path_impl("file:///C:/project/main.rs"),
+            Some(std::path::PathBuf::from("C:/project/main.rs"))
+        );
+    }
+
+    #[test]
+    fn test_matches_extension_empty_list() {
+        assert!(matches_extension_impl(std::path::Path::new("foo.rs"), &[]));
+    }
+
+    #[test]
+    fn test_matches_extension_match() {
+        assert!(matches_extension_impl(
+            std::path::Path::new("foo.rs"),
+            &["rs".to_string(), "ts".to_string()]
+        ));
+        assert!(!matches_extension_impl(
+            std::path::Path::new("foo.py"),
+            &["rs".to_string(), "ts".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_language_id() {
+        assert_eq!(LspHook::language_id("rs"), "rust");
+        assert_eq!(LspHook::language_id("ts"), "typescript");
+        assert_eq!(LspHook::language_id("tsx"), "typescriptreact");
+        assert_eq!(LspHook::language_id("py"), "python");
+        assert_eq!(LspHook::language_id("go"), "go");
+        assert_eq!(LspHook::language_id("json"), "json");
+        assert_eq!(LspHook::language_id("unknown"), "unknown");
     }
 }

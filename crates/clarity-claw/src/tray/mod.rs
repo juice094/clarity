@@ -180,12 +180,13 @@ pub fn run() -> anyhow::Result<()> {
                         for old_id in &last_running {
                             if !running_now.iter().any(|id| id == old_id) {
                                 if let Some(task) = tasks.iter().find(|t| &t.task_id == old_id) {
-                                    let (summary, urgency) =
+                                    let (summary, _urgency) =
                                         crate::classify_task_status(&task.status);
                                     let mut notif = notify_rust::Notification::new();
                                     notif
                                         .summary(&format!("Clarity — {}", task.name))
                                         .body(summary);
+                                    #[cfg(target_os = "linux")]
                                     if let Some(u) = urgency {
                                         notif.urgency(u);
                                     }
@@ -248,11 +249,14 @@ pub fn run() -> anyhow::Result<()> {
                                             .show();
                                     }
                                     Err(e) => {
-                                        let _ = notify_rust::Notification::new()
-                                            .summary("Clarity Error")
-                                            .body(&format!("Failed: {}", e))
-                                            .urgency(notify_rust::Urgency::Critical)
-                                            .show();
+                                        let mut n = notify_rust::Notification::new();
+                                        n.summary("Clarity Error");
+                                        n.body(&format!("Failed: {}", e));
+                                        #[cfg(target_os = "linux")]
+                                        {
+                                            n.urgency(notify_rust::Urgency::Critical);
+                                        }
+                                        let _ = n.show();
                                     }
                                 }
                             }
@@ -284,11 +288,14 @@ pub fn run() -> anyhow::Result<()> {
                                                     .show();
                                             }
                                             Err(e) => {
-                                                let _ = notify_rust::Notification::new()
-                                                    .summary("Clarity Error")
-                                                    .body(&format!("Failed to create task: {}", e))
-                                                    .urgency(notify_rust::Urgency::Critical)
-                                                    .show();
+                                                let mut n = notify_rust::Notification::new();
+                                                n.summary("Clarity Error");
+                                                n.body(&format!("Failed to create task: {}", e));
+                                                #[cfg(target_os = "linux")]
+                                                {
+                                                    n.urgency(notify_rust::Urgency::Critical);
+                                                }
+                                                let _ = n.show();
                                             }
                                         }
                                     }

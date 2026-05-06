@@ -35,17 +35,23 @@ pub fn on_subagent_batch(
 
 // ── Single subagent progress handlers (IS-1 Sprint 30) ──
 
-fn ensure_agent(subagent_store: &mut SubAgentStore, agent_id: String) -> &mut SingleSubagentProgress {
-    subagent_store.running_agents.entry(agent_id).or_insert_with(|| SingleSubagentProgress {
-        agent_type: "unknown".to_string(),
-        status: "Pending".to_string(),
-        stages: vec![],
-        output_lines: vec![],
-        started_at: Instant::now(),
-        completed_at: None,
-        steps: 0,
-        max_steps: 0,
-    })
+fn ensure_agent(
+    subagent_store: &mut SubAgentStore,
+    agent_id: String,
+) -> &mut SingleSubagentProgress {
+    subagent_store
+        .running_agents
+        .entry(agent_id)
+        .or_insert_with(|| SingleSubagentProgress {
+            agent_type: "unknown".to_string(),
+            status: "Pending".to_string(),
+            stages: vec![],
+            output_lines: vec![],
+            started_at: Instant::now(),
+            completed_at: None,
+            steps: 0,
+            max_steps: 0,
+        })
 }
 
 pub fn on_subagent_stage(subagent_store: &mut SubAgentStore, agent_id: String, name: String) {
@@ -83,11 +89,7 @@ pub fn on_subagent_progress(
     agent.max_steps = max_steps;
 }
 
-pub fn on_subagent_complete(
-    subagent_store: &mut SubAgentStore,
-    agent_id: String,
-    success: bool,
-) {
+pub fn on_subagent_complete(subagent_store: &mut SubAgentStore, agent_id: String, success: bool) {
     if let Some(agent) = subagent_store.running_agents.get_mut(&agent_id) {
         agent.status = if success {
             "Completed".to_string()

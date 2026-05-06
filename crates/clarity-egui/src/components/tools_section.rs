@@ -115,5 +115,4 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     {
         app.task_store.task_create_modal_open = true;
     }
-
 }

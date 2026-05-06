@@ -333,8 +333,7 @@ fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "local".to_string());
-    app.settings_store.settings_edit.local_model_path =
-        Some(model_path.display().to_string());
+    app.settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
     let _ = app.settings_store.settings_edit.save();
 
     // Sync to AppState and reload LLM

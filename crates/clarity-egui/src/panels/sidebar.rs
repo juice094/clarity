@@ -86,8 +86,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .on_hover_text("Export session")
                                 .clicked()
                                 {
-                                    let file_name =
-                                        format!("{}-session.json", session.title);
+                                    let file_name = format!("{}-session.json", session.title);
                                     if let Some(path) = rfd::FileDialog::new()
                                         .add_filter("JSON", &["json"])
                                         .set_file_name(&file_name)
@@ -101,10 +100,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                                 ToastLevel::Error,
                                             );
                                         } else {
-                                            app.push_toast(
-                                                "Session exported",
-                                                ToastLevel::Info,
-                                            );
+                                            app.push_toast("Session exported", ToastLevel::Info);
                                         }
                                     }
                                 }
@@ -140,10 +136,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                                 app.chat_store.tool_calls =
                                                     crate::stores::rebuild_tool_calls(&s.messages);
                                             }
-                                            app.push_toast(
-                                                "Session imported",
-                                                ToastLevel::Info,
-                                            );
+                                            app.push_toast("Session imported", ToastLevel::Info);
                                         }
                                         Err(e) => {
                                             app.push_toast(
@@ -382,9 +375,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                         egui::RichText::new(arrow).size(app.ui_store.theme.text_sm),
                                     )
                                     .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(
-                                        app.ui_store.theme.radius_sm as u8,
-                                    )),
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
                                 )
                                 .clicked()
                             {
@@ -425,13 +420,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        egui::RichText::new(label)
-                                            .size(app.ui_store.theme.text_xs),
+                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
                                     )
                                     .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(
-                                        app.ui_store.theme.radius_sm as u8,
-                                    )),
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
                                 )
                                 .clicked()
                             {

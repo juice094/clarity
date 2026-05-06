@@ -224,14 +224,20 @@ fn is_valid_key(key: &str) -> bool {
 /// source-file extensions.
 fn extract_file_paths(line: &str) -> Vec<String> {
     const EXTENSIONS: &[&str] = &[
-        ".rs", ".toml", ".md", ".json", ".yaml", ".yml", ".py", ".js", ".ts", ".go",
-        ".java", ".cpp", ".c", ".h", ".hpp", ".sh", ".ps1",
+        ".rs", ".toml", ".md", ".json", ".yaml", ".yml", ".py", ".js", ".ts", ".go", ".java",
+        ".cpp", ".c", ".h", ".hpp", ".sh", ".ps1",
     ];
 
     let mut paths = Vec::new();
     for token in line.split_whitespace() {
         let token = token.trim_matches(|c: char| {
-            c == '`' || c == '*' || c == '[' || c == ']' || c == '(' || c == ')' || c == '"'
+            c == '`'
+                || c == '*'
+                || c == '['
+                || c == ']'
+                || c == '('
+                || c == ')'
+                || c == '"'
                 || c == '\''
         });
         if token.len() < 3 {
@@ -239,10 +245,11 @@ fn extract_file_paths(line: &str) -> Vec<String> {
         }
         for ext in EXTENSIONS {
             if token.ends_with(ext)
-                && (token.contains('/') || token.contains('\\') || !token.contains(' ')) {
-                    paths.push(token.to_string());
-                    break;
-                }
+                && (token.contains('/') || token.contains('\\') || !token.contains(' '))
+            {
+                paths.push(token.to_string());
+                break;
+            }
         }
     }
     paths
@@ -293,10 +300,7 @@ mod tests {
     fn test_known_skill_detection() {
         let records = vec![
             msg("user", "Deploy the service"),
-            msg(
-                "assistant",
-                "Using skill deploy-rust-service to deploy.",
-            ),
+            msg("assistant", "Using skill deploy-rust-service to deploy."),
         ];
         let config = AdapterConfig {
             known_skills: vec!["deploy-rust-service".to_string()],
@@ -377,10 +381,7 @@ mod tests {
         let obs = session_to_observations(&records, &AdapterConfig::default());
         assert_eq!(obs.len(), 2);
         // Second observation should include the summary turn
-        assert!(obs[1]
-            .before
-            .tags
-            .contains(&"role:summary".to_string()));
+        assert!(obs[1].before.tags.contains(&"role:summary".to_string()));
     }
 
     #[test]

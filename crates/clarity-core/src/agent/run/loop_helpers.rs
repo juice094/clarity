@@ -224,7 +224,9 @@ impl Agent {
         tool_names: &[String],
         messages: &[crate::llm::api::Message],
     ) -> Result<String, AgentError> {
-        let final_response = self.finish_sync_turn(final_response, completed, tool_names).await?;
+        let final_response = self
+            .finish_sync_turn(final_response, completed, tool_names)
+            .await?;
         self.persist_turn_memory(query, &final_response, completed)
             .await;
 

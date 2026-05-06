@@ -49,8 +49,14 @@ impl Agent {
             let mut inner = self.inner.write().unwrap();
             inner.last_turn_message_count = messages.len();
         }
-        self.finalize_sync_turn(query.as_ref(), final_response, completed, &tool_names, &messages)
-            .await
+        self.finalize_sync_turn(
+            query.as_ref(),
+            final_response,
+            completed,
+            &tool_names,
+            &messages,
+        )
+        .await
     }
 
     /// Jumpy World Model execution path.
@@ -68,7 +74,9 @@ impl Agent {
                 p.clone()
             } else if let Some(ref llm) = inner.llm {
                 let adapted = crate::agent::jumpy::LlmAdapter::new(llm.clone());
-                Arc::new(crate::agent::jumpy::LlmAugmentedPredictor::new(Arc::new(adapted)))
+                Arc::new(crate::agent::jumpy::LlmAugmentedPredictor::new(Arc::new(
+                    adapted,
+                )))
             } else {
                 return Err(AgentError::Llm(
                     "No LLM provider configured for Jumpy mode".into(),
@@ -134,7 +142,7 @@ impl Agent {
         registry: &ToolRegistry,
         skill_id: &str,
         params: &str,
-        working_dir: &std::path::PathBuf,
+        working_dir: &std::path::Path,
         read_only: bool,
     ) -> Result<crate::agent::jumpy::JumpyState, String> {
         use crate::agent::jumpy::JumpyState;
@@ -149,7 +157,7 @@ impl Agent {
             .map_err(|e| format!("Invalid JSON params for {}: {}", skill_id, e))?;
 
         let ctx = ToolContext {
-            working_dir: working_dir.clone(),
+            working_dir: working_dir.to_path_buf(),
             env: std::collections::HashMap::new(),
             timeout_secs: 60,
             max_output_size: 1024 * 1024,
@@ -166,8 +174,7 @@ impl Agent {
                 state.tags.push("success".to_string());
                 state.memory.insert("result".to_string(), value.to_string());
                 state.progress = 0.5;
-                state.context_summary =
-                    format!("Executed {} successfully", skill_id);
+                state.context_summary = format!("Executed {} successfully", skill_id);
                 // Heuristic: if result contains file paths, add to active_files
                 if let Some(paths) = value.get("paths").and_then(|v: &Value| v.as_array()) {
                     for p in paths {
@@ -204,10 +211,7 @@ impl Agent {
                 if step.replanned { " [replanned]" } else { "" }
             ));
         }
-        lines.push(format!(
-            "Final state tags: {:?}",
-            result.final_state.tags
-        ));
+        lines.push(format!("Final state tags: {:?}", result.final_state.tags));
         lines.push(format!(
             "Final state progress: {:.2}",
             result.final_state.progress
@@ -228,7 +232,8 @@ impl Agent {
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
         self.maybe_snapshot_post_turn().await;
-        self.finish_sync_turn(final_response, completed, &tool_names).await
+        self.finish_sync_turn(final_response, completed, &tool_names)
+            .await
     }
 
     /// Run the agent with streaming response.
@@ -276,8 +281,15 @@ impl Agent {
     async fn prepare_sync_turn(
         &self,
         query: &str,
-    ) -> Result<(Vec<Message>, Value, Arc<dyn crate::llm::api::LlmProvider>, CancellationToken), AgentError>
-    {
+    ) -> Result<
+        (
+            Vec<Message>,
+            Value,
+            Arc<dyn crate::llm::api::LlmProvider>,
+            CancellationToken,
+        ),
+        AgentError,
+    > {
         let cancel_token = self.begin_turn()?;
         self.activate_skills();
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
@@ -288,7 +300,14 @@ impl Agent {
 
     async fn setup_turn(
         &self,
-    ) -> Result<(Value, Arc<dyn crate::llm::api::LlmProvider>, CancellationToken), AgentError> {
+    ) -> Result<
+        (
+            Value,
+            Arc<dyn crate::llm::api::LlmProvider>,
+            CancellationToken,
+        ),
+        AgentError,
+    > {
         let cancel_token = self.begin_turn()?;
         self.activate_skills();
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;

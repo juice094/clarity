@@ -193,9 +193,13 @@ async fn async_main() -> Result<()> {
 async fn run_command(args: RunArgs) -> Result<()> {
     let prompt = read_prompt(&args).context("Failed to read prompt")?;
 
-    let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
-        .await
-        .context("Failed to build LLM provider")?;
+    let provider = build_provider(
+        args.provider,
+        args.model.as_deref(),
+        args.api_key.as_deref(),
+    )
+    .await
+    .context("Failed to build LLM provider")?;
 
     let approval_mode = if args.plan {
         ApprovalMode::Plan
@@ -262,8 +266,8 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
         if stdin.is_terminal() {
             anyhow::bail!("Either --state must be provided, or pipe state description via stdin");
         }
-        let buf = std::io::read_to_string(stdin.lock())
-            .context("Failed to read state from stdin")?;
+        let buf =
+            std::io::read_to_string(stdin.lock()).context("Failed to read state from stdin")?;
         if buf.trim().is_empty() {
             anyhow::bail!("Stdin state input is empty");
         }
@@ -273,9 +277,13 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
     // 2. Build predictor
     let predictor: Box<dyn OutcomePredictor> = match args.predictor {
         PredictorType::Llm => {
-            let provider = build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref())
-                .await
-                .context("Failed to build LLM provider")?;
+            let provider = build_provider(
+                args.provider,
+                args.model.as_deref(),
+                args.api_key.as_deref(),
+            )
+            .await
+            .context("Failed to build LLM provider")?;
             let adapted = LlmAdapter::new(provider);
             Box::new(LlmAugmentedPredictor::new(Arc::new(adapted)))
         }
@@ -287,8 +295,8 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
             if let Some(path) = args.observations {
                 let data = std::fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read observations: {}", path.display()))?;
-                let observations: Vec<SkillObservation> = serde_json::from_str(&data)
-                    .context("Failed to parse observations as JSON")?;
+                let observations: Vec<SkillObservation> =
+                    serde_json::from_str(&data).context("Failed to parse observations as JSON")?;
                 historical.observe_batch(observations);
             }
             Box::new(historical)
@@ -301,11 +309,17 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
             if let Some(path) = args.observations {
                 let data = std::fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read observations: {}", path.display()))?;
-                let observations: Vec<SkillObservation> = serde_json::from_str(&data)
-                    .context("Failed to parse observations as JSON")?;
+                let observations: Vec<SkillObservation> =
+                    serde_json::from_str(&data).context("Failed to parse observations as JSON")?;
                 historical.observe_batch(observations);
             }
-            match build_provider(args.provider, args.model.as_deref(), args.api_key.as_deref()).await {
+            match build_provider(
+                args.provider,
+                args.model.as_deref(),
+                args.api_key.as_deref(),
+            )
+            .await
+            {
                 Ok(provider) => {
                     let adapted = LlmAdapter::new(provider);
                     let llm = LlmAugmentedPredictor::new(Arc::new(adapted));
@@ -321,7 +335,12 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
 
     // 3. Predict
     let predicted = predictor
-        .predict(&args.skill, &params, &current, args.commitment.clamp(0.0, 1.0))
+        .predict(
+            &args.skill,
+            &params,
+            &current,
+            args.commitment.clamp(0.0, 1.0),
+        )
         .await
         .map_err(|e| anyhow::anyhow!("Prediction failed: {}", e))?;
 
@@ -526,9 +545,15 @@ mod tests {
 
     #[test]
     fn test_args_parse_run_file_json() {
-        let args =
-            Args::try_parse_from(["clarity-headless", "run", "--file", "test.md", "--output", "json"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "run",
+            "--file",
+            "test.md",
+            "--output",
+            "json",
+        ])
+        .unwrap();
         match args.command {
             Command::Run(run_args) => {
                 assert_eq!(run_args.file, Some("test.md".to_string()));
@@ -540,9 +565,15 @@ mod tests {
 
     #[test]
     fn test_args_parse_run_approval_yolo() {
-        let args =
-            Args::try_parse_from(["clarity-headless", "run", "--approval", "yolo", "--prompt", "hi"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "run",
+            "--approval",
+            "yolo",
+            "--prompt",
+            "hi",
+        ])
+        .unwrap();
         match args.command {
             Command::Run(run_args) => assert_eq!(run_args.approval, ApprovalModeArg::Yolo),
             _ => panic!("Expected Run command"),
@@ -551,9 +582,15 @@ mod tests {
 
     #[test]
     fn test_args_parse_run_provider_kimi() {
-        let args =
-            Args::try_parse_from(["clarity-headless", "run", "--provider", "kimi", "--prompt", "hi"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "run",
+            "--provider",
+            "kimi",
+            "--prompt",
+            "hi",
+        ])
+        .unwrap();
         match args.command {
             Command::Run(run_args) => assert_eq!(run_args.provider, ProviderType::Kimi),
             _ => panic!("Expected Run command"),
@@ -563,9 +600,15 @@ mod tests {
     #[test]
     #[cfg(feature = "local-llm")]
     fn test_args_parse_run_provider_local() {
-        let args =
-            Args::try_parse_from(["clarity-headless", "run", "--provider", "local", "--prompt", "hi"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "clarity-headless",
+            "run",
+            "--provider",
+            "local",
+            "--prompt",
+            "hi",
+        ])
+        .unwrap();
         match args.command {
             Command::Run(run_args) => assert_eq!(run_args.provider, ProviderType::Local),
             _ => panic!("Expected Run command"),

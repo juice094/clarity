@@ -46,10 +46,7 @@ impl SnapshotService {
     ///
     /// Returns `None` if snapshots are disabled or the working directory is
     /// not inside a Git repository.
-    pub async fn try_new(
-        config: &SnapshotConfig,
-        working_dir: &Path,
-    ) -> Option<Self> {
+    pub async fn try_new(config: &SnapshotConfig, working_dir: &Path) -> Option<Self> {
         if !config.enabled {
             return None;
         }
@@ -166,13 +163,12 @@ impl SnapshotService {
     /// Restore the workspace to the state of snapshot `id`.
     pub async fn restore(&self, id: usize) -> Result<(), AgentError> {
         let list = self.list();
-        let target = list
-            .iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| AgentError::ToolExecutionFailed(
+        let target = list.iter().find(|s| s.id == id).ok_or_else(|| {
+            AgentError::ToolExecutionFailed(
                 "git_restore".to_string(),
                 format!("Snapshot id {} not found", id),
-            ))?;
+            )
+        })?;
         self.git.checkout(&target.hash).await
     }
 
@@ -202,12 +198,14 @@ impl SnapshotService {
             })?;
         }
 
-        tokio::fs::write(&self.index_path, json).await.map_err(|e| {
-            AgentError::ToolExecutionFailed(
-                "snapshot_index".to_string(),
-                format!("Failed to write index: {}", e),
-            )
-        })?;
+        tokio::fs::write(&self.index_path, json)
+            .await
+            .map_err(|e| {
+                AgentError::ToolExecutionFailed(
+                    "snapshot_index".to_string(),
+                    format!("Failed to write index: {}", e),
+                )
+            })?;
 
         Ok(())
     }

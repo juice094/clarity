@@ -305,13 +305,18 @@ impl Agent {
     }
 
     /// Build message list from query, computing static-prompt hash and invalidating provider cache.
-    pub(crate) async fn build_messages_with_cache(&self, query: &str) -> Result<Vec<crate::llm::api::Message>, AgentError> {
+    pub(crate) async fn build_messages_with_cache(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::llm::api::Message>, AgentError> {
         let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
 
         let static_hash = {
-            use sha2::{Sha256, Digest};
+            use sha2::{Digest, Sha256};
             let hash = Sha256::digest(static_prompt.as_bytes());
-            hash.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+            hash.iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>()
         };
         {
             let inner = self.inner.read().unwrap();
@@ -660,7 +665,10 @@ mod tests {
             .build_split();
 
         assert_eq!(s1, s2, "Static part should be identical");
-        assert_ne!(d1, d2, "Dynamic part should differ when git context changes");
+        assert_ne!(
+            d1, d2,
+            "Dynamic part should differ when git context changes"
+        );
     }
 
     #[test]

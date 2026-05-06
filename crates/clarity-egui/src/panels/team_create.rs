@@ -23,9 +23,7 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.set_min_width(360.0);
             ui.set_max_width(520.0);
-            ui.heading(
-                egui::RichText::new("New Team").color(app.ui_store.theme.text),
-            );
+            ui.heading(egui::RichText::new("New Team").color(app.ui_store.theme.text));
             ui.add_space(app.ui_store.theme.space_12);
 
             // Team Name
@@ -96,9 +94,7 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
             for (idx, member) in app.team_store.create_members.iter_mut().enumerate() {
                 egui::Frame::new()
                     .fill(app.ui_store.theme.glass)
-                    .corner_radius(egui::CornerRadius::same(
-                        app.ui_store.theme.radius_sm as u8,
-                    ))
+                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
@@ -109,23 +105,26 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
                                     .strong()
                                     .color(app.ui_store.theme.text),
                             );
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new("Remove")
-                                                .size(app.ui_store.theme.text_xs),
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new("Remove")
+                                                    .size(app.ui_store.theme.text_xs),
+                                            )
+                                            .fill(app.ui_store.theme.danger.linear_multiply(0.25))
+                                            .corner_radius(egui::CornerRadius::same(
+                                                app.ui_store.theme.radius_sm as u8,
+                                            )),
                                         )
-                                        .fill(app.ui_store.theme.danger.linear_multiply(0.25))
-                                        .corner_radius(egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        )),
-                                    )
-                                    .clicked()
-                                {
-                                    members_to_remove.push(idx);
-                                }
-                            });
+                                        .clicked()
+                                    {
+                                        members_to_remove.push(idx);
+                                    }
+                                },
+                            );
                         });
                         ui.add_space(app.ui_store.theme.space_4);
 
@@ -168,9 +167,7 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
-                    .corner_radius(egui::CornerRadius::same(
-                        app.ui_store.theme.radius_sm as u8,
-                    ))
+                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                     .min_size(egui::vec2(0.0, 28.0)),
                 )
                 .clicked()

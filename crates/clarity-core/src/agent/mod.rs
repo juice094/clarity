@@ -14,15 +14,15 @@
 pub mod compaction_service;
 pub mod config;
 pub mod controller;
+pub mod cost_channel;
 pub mod definition;
 pub mod driver;
 pub mod enhanced;
 pub mod error_memory;
 pub mod flow;
 pub mod hooks;
-pub mod ops;
-pub mod cost_channel;
 pub mod lsp;
+pub mod ops;
 pub mod snapshot;
 pub mod tool_map;
 pub mod tool_parser;

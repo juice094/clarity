@@ -217,7 +217,7 @@ mod tests {
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["mime_type"].as_str().unwrap(), "image/png");
         assert_eq!(result["size_bytes"].as_u64().unwrap(), 8);
-        assert!(result["base64_data"].as_str().unwrap().len() > 0);
+        assert!(!result["base64_data"].as_str().unwrap().is_empty());
     }
 
     #[tokio::test]

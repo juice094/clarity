@@ -26,13 +26,13 @@ use crate::server::AppState;
 // ==================== 健康检查 ====================
 
 #[derive(Serialize)]
-pub(crate) struct HealthResponse {
+pub struct HealthResponse {
     pub status: String,
     pub version: String,
     pub timestamp: String,
 }
 
-pub(crate) async fn health_check() -> impl IntoResponse {
+pub async fn health_check() -> impl IntoResponse {
     debug!("Health check requested");
     let response = HealthResponse {
         status: "healthy".to_string(),
@@ -46,7 +46,7 @@ pub(crate) async fn health_check() -> impl IntoResponse {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-pub(crate) struct ChatCompletionRequest {
+pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
     #[serde(default)]
@@ -62,13 +62,13 @@ pub(crate) struct ChatCompletionRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(crate) struct Message {
+pub struct Message {
     pub role: String,
     pub content: String,
 }
 
 #[derive(Serialize)]
-pub(crate) struct ChatCompletionResponse {
+pub struct ChatCompletionResponse {
     pub id: String,
     pub object: String,
     pub created: i64,
@@ -80,20 +80,20 @@ pub(crate) struct ChatCompletionResponse {
 }
 
 #[derive(Serialize)]
-pub(crate) struct Choice {
+pub struct Choice {
     pub index: u32,
     pub message: Message,
     pub finish_reason: String,
 }
 
 #[derive(Serialize)]
-pub(crate) struct Usage {
+pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-pub(crate) async fn chat_completions(
+pub async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Response {

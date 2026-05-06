@@ -86,7 +86,9 @@ pub async fn download_model_files(
                     total_bytes: Some(1),
                 })
                 .await;
-            if let Err(e) = download_single_file(t_repo, t_file, &dest_dir, &progress_tx, &cancel_token).await {
+            if let Err(e) =
+                download_single_file(t_repo, t_file, &dest_dir, &progress_tx, &cancel_token).await
+            {
                 tracing::warn!("Tokenizer download failed (non-fatal): {}", e);
             }
             let _ = progress_tx
@@ -108,7 +110,9 @@ pub async fn download_model_files(
             let _ = progress_tx.send(ModelDownloadProgress::Cancelled).await;
         }
         Err(e) => {
-            let _ = progress_tx.send(ModelDownloadProgress::Failed(e.clone())).await;
+            let _ = progress_tx
+                .send(ModelDownloadProgress::Failed(e.clone()))
+                .await;
         }
     }
 
@@ -247,14 +251,7 @@ mod tests {
 
         let (tx, _rx) = mpsc::channel(4);
         let dir = std::env::temp_dir().join("clarity_test_cancel");
-        let result = download_single_file(
-            "dummy/repo",
-            "dummy.gguf",
-            &dir,
-            &tx,
-            &token,
-        )
-        .await;
+        let result = download_single_file("dummy/repo", "dummy.gguf", &dir, &tx, &token).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Cancelled");

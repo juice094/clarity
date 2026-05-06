@@ -65,7 +65,12 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
             }
             CronSectionAction::ToggleEnabled(task_id, enabled) => {
                 // TODO: wire to clarity-core backend (set_enabled)
-                if let Some(task) = app.cron_store.tasks.iter_mut().find(|t| t.task_id == task_id) {
+                if let Some(task) = app
+                    .cron_store
+                    .tasks
+                    .iter_mut()
+                    .find(|t| t.task_id == task_id)
+                {
                     task.enabled = enabled;
                 }
             }
@@ -125,8 +130,7 @@ fn render_cron_task_list(
                                     if ui
                                         .add(
                                             egui::Button::new(
-                                                egui::RichText::new("Delete")
-                                                    .size(theme.text_xs),
+                                                egui::RichText::new("Delete").size(theme.text_xs),
                                             )
                                             .fill(theme.danger)
                                             .corner_radius(egui::CornerRadius::same(
@@ -135,8 +139,7 @@ fn render_cron_task_list(
                                         )
                                         .clicked()
                                     {
-                                        action =
-                                            CronSectionAction::Delete(task.task_id.clone());
+                                        action = CronSectionAction::Delete(task.task_id.clone());
                                     }
                                     ui.add_space(theme.space_4);
 

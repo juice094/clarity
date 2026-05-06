@@ -17,9 +17,8 @@ use tracing::{debug, info};
 
 use crate::agent::lsp::protocol::{
     DidChangeTextDocumentParams, DidOpenTextDocumentParams, InitializeParams, InitializeResult,
-    JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
-    PublishDiagnosticsParams, TextDocumentContentChangeEvent, TextDocumentItem,
-    VersionedTextDocumentIdentifier,
+    JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, PublishDiagnosticsParams,
+    TextDocumentContentChangeEvent, TextDocumentItem, VersionedTextDocumentIdentifier,
 };
 use crate::error::AgentError;
 
@@ -105,8 +104,7 @@ impl LspClient {
                                     serde_json::from_value::<PublishDiagnosticsParams>(params)
                                 {
                                     let mut buf = diagnostics_clone.write().await;
-                                    if let Some(existing) =
-                                        buf.iter_mut().find(|d| d.uri == p.uri)
+                                    if let Some(existing) = buf.iter_mut().find(|d| d.uri == p.uri)
                                     {
                                         *existing = p;
                                     } else {
@@ -283,12 +281,7 @@ impl LspClient {
     }
 
     /// Send `textDocument/didChange` with full-document replacement.
-    pub async fn did_change(
-        &self,
-        uri: &str,
-        version: i32,
-        text: &str,
-    ) -> Result<(), AgentError> {
+    pub async fn did_change(&self, uri: &str, version: i32, text: &str) -> Result<(), AgentError> {
         let params = DidChangeTextDocumentParams {
             text_document: VersionedTextDocumentIdentifier {
                 uri: uri.to_string(),

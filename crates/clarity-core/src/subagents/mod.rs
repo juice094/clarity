@@ -100,7 +100,9 @@ impl SubagentManager {
     pub async fn run(
         &mut self,
         spec: RunSpec,
-        progress_tx: Option<tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>>,
+        progress_tx: Option<
+            tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>,
+        >,
     ) -> Result<SubagentResult, SubagentError> {
         let runner = if let Some(tx) = progress_tx {
             self.runner.clone().with_progress_tx(tx)
@@ -209,7 +211,9 @@ impl SubagentManager {
     pub async fn run_with_prediction(
         &mut self,
         spec: RunSpec,
-        progress_tx: Option<tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>>,
+        progress_tx: Option<
+            tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>,
+        >,
     ) -> Result<SubagentResult, SubagentError> {
         match &self.predictor {
             Some(predictor) => {

@@ -28,10 +28,7 @@ impl GitSnapshot {
 
     /// Initialise a bare repository at `side_dir/repo.git` and create the
     /// first commit from the current working-directory contents.
-    pub async fn init_bare(
-        work_tree: &Path,
-        side_dir: &Path,
-    ) -> Result<Self, AgentError> {
+    pub async fn init_bare(work_tree: &Path, side_dir: &Path) -> Result<Self, AgentError> {
         let git_dir = side_dir.join("repo.git");
         std::fs::create_dir_all(&git_dir).map_err(|e| {
             AgentError::ToolExecutionFailed(
@@ -48,7 +45,7 @@ impl GitSnapshot {
         // Initialise bare repo (must NOT pass --work-tree)
         let mut cmd = Command::new("git");
         cmd.arg(format!("--git-dir={}", snap.git_dir.display()))
-            .args(&["init", "--bare"]);
+            .args(["init", "--bare"]);
         let out = timeout(Duration::from_secs(30), cmd.output())
             .await
             .map_err(|_| {
@@ -57,9 +54,7 @@ impl GitSnapshot {
                     "git init --bare timed out".into(),
                 )
             })?
-            .map_err(|e| {
-                AgentError::ToolExecutionFailed("git".to_string(), e.to_string())
-            })?;
+            .map_err(|e| AgentError::ToolExecutionFailed("git".to_string(), e.to_string()))?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr);
             return Err(AgentError::ToolExecutionFailed(
@@ -69,8 +64,10 @@ impl GitSnapshot {
         }
 
         // Configure commit identity (required for first commit)
-        snap.run_git(&["config", "user.email", "clarity@local"]).await?;
-        snap.run_git(&["config", "user.name", "Clarity Agent"]).await?;
+        snap.run_git(&["config", "user.email", "clarity@local"])
+            .await?;
+        snap.run_git(&["config", "user.name", "Clarity Agent"])
+            .await?;
 
         // First commit from current work-tree state
         snap.run_git(&["add", "-A"]).await?;
@@ -135,14 +132,9 @@ impl GitSnapshot {
         let output = timeout(Duration::from_secs(30), cmd.output())
             .await
             .map_err(|_| {
-                AgentError::ToolExecutionFailed(
-                    "git".to_string(),
-                    "Git command timed out".into(),
-                )
+                AgentError::ToolExecutionFailed("git".to_string(), "Git command timed out".into())
             })?
-            .map_err(|e| {
-                AgentError::ToolExecutionFailed("git".to_string(), e.to_string())
-            })?;
+            .map_err(|e| AgentError::ToolExecutionFailed("git".to_string(), e.to_string()))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -171,12 +163,12 @@ mod tests {
         let _ = cmd.output().await.unwrap();
 
         let mut cmd = tokio::process::Command::new("git");
-        cmd.args(&["config", "user.email", "test@test.com"])
+        cmd.args(["config", "user.email", "test@test.com"])
             .current_dir(dir);
         let _ = cmd.output().await.unwrap();
 
         let mut cmd = tokio::process::Command::new("git");
-        cmd.args(&["config", "user.name", "Test"]).current_dir(dir);
+        cmd.args(["config", "user.name", "Test"]).current_dir(dir);
         let _ = cmd.output().await.unwrap();
     }
 
@@ -195,7 +187,7 @@ mod tests {
         assert!(!hash.is_empty());
 
         let commits = git.list_commits().await.unwrap();
-        assert!(commits.len() >= 1);
+        assert!(!commits.is_empty());
         assert!(commits.iter().any(|c| c.message == "test-snapshot"));
     }
 

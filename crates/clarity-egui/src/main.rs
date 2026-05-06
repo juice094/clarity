@@ -547,7 +547,9 @@ impl eframe::App for App {
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
         self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
-        self.render_safe(ctx, "cron_create", |app, ctx| app.render_cron_create_modal(ctx));
+        self.render_safe(ctx, "cron_create", |app, ctx| {
+            app.render_cron_create_modal(ctx)
+        });
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
         self.render_safe(ctx, "task_create", |app, ctx| {
             app.render_task_create_modal(ctx)

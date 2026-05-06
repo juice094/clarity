@@ -153,13 +153,20 @@ impl App {
                             SubagentProgressEvent::Output { agent_id, text } => {
                                 let _ = ui_tx2.send(UiEvent::SubagentOutput { agent_id, text });
                             }
-                            SubagentProgressEvent::StatusChange { agent_id, agent_type, status } => {
+                            SubagentProgressEvent::StatusChange {
+                                agent_id,
+                                agent_type,
+                                status,
+                            } => {
                                 let status_str = match status {
                                     clarity_core::subagents::SubagentStatus::Idle => "Idle",
                                     clarity_core::subagents::SubagentStatus::Running => "Running",
-                                    clarity_core::subagents::SubagentStatus::Completed => "Completed",
+                                    clarity_core::subagents::SubagentStatus::Completed => {
+                                        "Completed"
+                                    }
                                     clarity_core::subagents::SubagentStatus::Failed => "Failed",
-                                }.to_string();
+                                }
+                                .to_string();
                                 let _ = ui_tx2.send(UiEvent::SubagentStatus {
                                     agent_id: agent_id.clone(),
                                     agent_type,
@@ -170,11 +177,16 @@ impl App {
                                 {
                                     let _ = ui_tx2.send(UiEvent::SubagentComplete {
                                         agent_id,
-                                        success: status == clarity_core::subagents::SubagentStatus::Completed,
+                                        success: status
+                                            == clarity_core::subagents::SubagentStatus::Completed,
                                     });
                                 }
                             }
-                            SubagentProgressEvent::Progress { agent_id, steps, max_steps } => {
+                            SubagentProgressEvent::Progress {
+                                agent_id,
+                                steps,
+                                max_steps,
+                            } => {
                                 let _ = ui_tx2.send(UiEvent::SubagentProgress {
                                     agent_id,
                                     steps,

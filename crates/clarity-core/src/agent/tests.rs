@@ -1313,7 +1313,6 @@ async fn test_no_vision_no_switch() {
     assert_eq!(vision_llm.call_count.load(Ordering::SeqCst), 0);
 }
 
-
 #[tokio::test]
 async fn test_agent_jumpy_mode_execution() {
     use crate::agent::jumpy::predictor::OutcomePredictor;

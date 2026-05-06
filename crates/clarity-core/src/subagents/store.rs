@@ -136,9 +136,10 @@ impl SubagentStore {
 
     /// Save a single agent state to disk.
     pub async fn save(&self, agent_id: &str) -> anyhow::Result<()> {
-        let state = self.in_memory.get(agent_id).ok_or_else(|| {
-            anyhow::anyhow!("Agent {} not found in memory", agent_id)
-        })?;
+        let state = self
+            .in_memory
+            .get(agent_id)
+            .ok_or_else(|| anyhow::anyhow!("Agent {} not found in memory", agent_id))?;
         let agent_dir = self.root_dir.join(agent_id);
         tokio::fs::create_dir_all(&agent_dir).await?;
         let path = agent_dir.join("state.json");
@@ -211,9 +212,8 @@ impl SubagentStore {
             .filter(|s| s.status == SubagentStatus::Running)
             .max_by_key(|s| s.updated_at)
             .and_then(|s| {
-                s.max_iterations.map(|max| {
-                    (s.steps_taken as f32 / max as f32).clamp(0.0, 1.0)
-                })
+                s.max_iterations
+                    .map(|max| (s.steps_taken as f32 / max as f32).clamp(0.0, 1.0))
             })
             .unwrap_or(0.0)
     }

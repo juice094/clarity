@@ -82,8 +82,7 @@ pub fn render_file_tree(
             let row_rect =
                 egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
-            let is_selected =
-                selected_path.is_some_and(|sp| std::path::Path::new(sp) == full_path);
+            let is_selected = selected_path.is_some_and(|sp| std::path::Path::new(sp) == full_path);
 
             if ui.is_rect_visible(row_rect) {
                 let painter = ui.painter_at(row_rect);
@@ -104,7 +103,11 @@ pub fn render_file_tree(
                     );
                 }
                 let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 8.0, 3.0);
-                let text_color = if is_selected { theme.text } else { theme.text_dim };
+                let text_color = if is_selected {
+                    theme.text
+                } else {
+                    theme.text_dim
+                };
                 painter.text(
                     text_pos,
                     egui::Align2::LEFT_TOP,

@@ -123,9 +123,17 @@ pub enum SubagentProgressEvent {
     /// New output text was appended.
     Output { agent_id: String, text: String },
     /// The agent status changed.
-    StatusChange { agent_id: String, agent_type: String, status: SubagentStatus },
+    StatusChange {
+        agent_id: String,
+        agent_type: String,
+        status: SubagentStatus,
+    },
     /// Budget progress update (steps taken / max steps).
-    Progress { agent_id: String, steps: usize, max_steps: usize },
+    Progress {
+        agent_id: String,
+        steps: usize,
+        max_steps: usize,
+    },
 }
 
 // =============================================================================

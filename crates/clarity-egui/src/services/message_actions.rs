@@ -29,7 +29,9 @@ impl App {
     /// Commit the edit: overwrite the message, truncate everything after it,
     /// and re-submit so the agent regenerates the response from the new prompt.
     pub(crate) fn commit_edit(&mut self) {
-        let Some(idx) = self.chat_store.editing_message_idx else { return };
+        let Some(idx) = self.chat_store.editing_message_idx else {
+            return;
+        };
         let new_text = self.chat_store.edit_buffer.trim().to_string();
         if new_text.is_empty() {
             self.cancel_edit();

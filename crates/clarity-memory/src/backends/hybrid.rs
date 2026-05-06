@@ -272,7 +272,7 @@ impl StorageBackend for HybridStore {
             .get_facts_by_session(session_id, limit)
             .await?;
         let mut merged = self.merge_facts(cached, cold);
-        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        merged.sort_by_key(|b| std::cmp::Reverse(b.created_at));
         merged.truncate(limit);
         Ok(merged)
     }
@@ -281,7 +281,7 @@ impl StorageBackend for HybridStore {
         let cached = self.cached_facts(|f| f.created_at > since);
         let cold = self.cold_storage.get_facts_since(since).await?;
         let mut merged = self.merge_facts(cached, cold);
-        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        merged.sort_by_key(|b| std::cmp::Reverse(b.created_at));
         Ok(merged)
     }
 
@@ -289,7 +289,7 @@ impl StorageBackend for HybridStore {
         let cached = self.cached_facts(|_| true);
         let cold = self.cold_storage.get_recent_facts(limit).await?;
         let mut merged = self.merge_facts(cached, cold);
-        merged.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        merged.sort_by_key(|b| std::cmp::Reverse(b.created_at));
         merged.truncate(limit);
         Ok(merged)
     }

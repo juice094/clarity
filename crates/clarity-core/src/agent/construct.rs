@@ -460,8 +460,11 @@ impl Agent {
         };
         if needs_snapshot_init {
             if let Some(ref snapshot_config) = self.config.snapshot_config {
-                if let Some(service) =
-                    super::snapshot::SnapshotService::try_new(snapshot_config, &self.config.working_dir).await
+                if let Some(service) = super::snapshot::SnapshotService::try_new(
+                    snapshot_config,
+                    &self.config.working_dir,
+                )
+                .await
                 {
                     let service = std::sync::Arc::new(service);
                     let tool = super::snapshot::GitRestoreTool::new(service.clone());

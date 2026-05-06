@@ -147,7 +147,9 @@ impl<'a> FlowRunner<'a> {
                     last_skill_id = Some(skill_id.to_string());
                     last_skill_params = Some(params.to_string());
                     final_response = response.clone();
-                    current_state.memory.insert("last_result".to_string(), response);
+                    current_state
+                        .memory
+                        .insert("last_result".to_string(), response);
                     current_id = self.follow_edge(node, None)?;
                 }
                 FlowNodeKind::PredictCheckpoint => {

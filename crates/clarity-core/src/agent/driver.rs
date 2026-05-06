@@ -58,7 +58,10 @@ impl ChatDriver for DefaultChatDriver {
         dynamic_prompt: &str,
     ) -> Vec<Message> {
         if dynamic_prompt.is_empty() {
-            vec![Message::system(static_prompt.to_string()), Message::user(query)]
+            vec![
+                Message::system(static_prompt.to_string()),
+                Message::user(query),
+            ]
         } else {
             vec![
                 Message::system(static_prompt.to_string()),

@@ -81,7 +81,8 @@ impl LlmAugmentedPredictor {
     }
 
     fn build_prompt(&self, skill_id: &str, params: &str, current: &JumpyState) -> String {
-        let memory_json = serde_json::to_string(&current.memory).unwrap_or_else(|_| "{}".to_string());
+        let memory_json =
+            serde_json::to_string(&current.memory).unwrap_or_else(|_| "{}".to_string());
         format!(
             "{}\n\nCurrent State:\n- Tags: {:?}\n- Memory: {}\n- Active Files: {:?}\n- Progress: {}\n- Context: {}\n\nSkill to Execute: {}\nParameters: {}\n\nPredict the resulting state after execution. Output valid JSON with fields: tags, memory, active_files, context_summary, progress.",
             self.system_prompt,
@@ -161,11 +162,17 @@ impl OutcomePredictor for HybridPredictor {
         commitment: f32,
     ) -> Result<JumpyState, String> {
         // 1. Try historical first
-        match self.historical.predict(skill_id, params, current, commitment).await {
+        match self
+            .historical
+            .predict(skill_id, params, current, commitment)
+            .await
+        {
             Ok(state) => Ok(state),
             Err(_) => {
                 // 2. If Err(_) → fallback to llm.predict()
-                self.llm.predict(skill_id, params, current, commitment).await
+                self.llm
+                    .predict(skill_id, params, current, commitment)
+                    .await
             }
         }
     }
@@ -228,7 +235,11 @@ impl HistoricalPredictor {
 
     /// Ingest a new observation (offline learning).
     pub fn observe(&mut self, obs: SkillObservation) {
-        let key = format!("{}:{}", obs.skill_id, Self::canonicalize_params(&obs.params));
+        let key = format!(
+            "{}:{}",
+            obs.skill_id,
+            Self::canonicalize_params(&obs.params)
+        );
         self.observations.entry(key).or_default().push(obs);
     }
 
@@ -248,7 +259,9 @@ impl HistoricalPredictor {
     fn write_canonical(v: &serde_json::Value, buf: &mut Vec<u8>) {
         match v {
             serde_json::Value::Null => buf.extend_from_slice(b"null"),
-            serde_json::Value::Bool(b) => buf.extend_from_slice(if *b { b"true" } else { b"false" }),
+            serde_json::Value::Bool(b) => {
+                buf.extend_from_slice(if *b { b"true" } else { b"false" })
+            }
             serde_json::Value::Number(n) => buf.extend_from_slice(n.to_string().as_bytes()),
             serde_json::Value::String(s) => {
                 buf.push(b'"');
@@ -273,7 +286,9 @@ impl HistoricalPredictor {
             serde_json::Value::Array(arr) => {
                 buf.push(b'[');
                 for (i, item) in arr.iter().enumerate() {
-                    if i > 0 { buf.push(b','); }
+                    if i > 0 {
+                        buf.push(b',');
+                    }
                     Self::write_canonical(item, buf);
                 }
                 buf.push(b']');
@@ -283,7 +298,9 @@ impl HistoricalPredictor {
                 let mut items: Vec<_> = map.iter().collect();
                 items.sort_by(|a, b| a.0.cmp(b.0));
                 for (i, (k, v)) in items.iter().enumerate() {
-                    if i > 0 { buf.push(b','); }
+                    if i > 0 {
+                        buf.push(b',');
+                    }
                     Self::write_canonical(&serde_json::Value::String(k.to_string()), buf);
                     buf.push(b':');
                     Self::write_canonical(v, buf);
@@ -611,9 +628,12 @@ mod tests {
         // Query with different whitespace should find the observation.
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(
-                predictor.predict("file_read", r#"{"path":"src/main.rs"}"#, &JumpyState::default(), 0.5),
-            );
+            .block_on(predictor.predict(
+                "file_read",
+                r#"{"path":"src/main.rs"}"#,
+                &JumpyState::default(),
+                0.5,
+            ));
         assert!(result.is_ok());
         assert_eq!(result.unwrap().tags, vec!["matched"]);
     }

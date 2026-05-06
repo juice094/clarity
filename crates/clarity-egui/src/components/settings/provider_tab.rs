@@ -390,8 +390,13 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         );
         let path_edit_id = ui.id().with(&prov.id).with("local_model_path");
         let mut path_buffer = ui.data(|d| {
-            d.get_temp::<String>(path_edit_id)
-                .unwrap_or_else(|| app.settings_store.settings_edit.local_model_path.clone().unwrap_or_default())
+            d.get_temp::<String>(path_edit_id).unwrap_or_else(|| {
+                app.settings_store
+                    .settings_edit
+                    .local_model_path
+                    .clone()
+                    .unwrap_or_default()
+            })
         });
         ui.horizontal(|ui| {
             let is_empty = path_buffer.is_empty();

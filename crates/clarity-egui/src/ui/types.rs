@@ -393,7 +393,10 @@ pub enum InlineSpan {
 pub enum RenderBlock {
     Paragraph(Vec<InlineSpan>),
     Heading(u8, Vec<InlineSpan>),
-    CodeBlock { lang: String, code: String },
+    CodeBlock {
+        lang: String,
+        code: String,
+    },
     ListItem(Vec<InlineSpan>),
     Blockquote(Vec<InlineSpan>),
     HorizontalRule,

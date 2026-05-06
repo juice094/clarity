@@ -29,8 +29,7 @@ pub fn render_cron_create_modal(app: &mut App, ctx: &egui::Context) {
                     .strong(),
             );
             ui.add(
-                egui::TextEdit::singleline(&mut app.cron_store.create_name)
-                    .hint_text("Task name"),
+                egui::TextEdit::singleline(&mut app.cron_store.create_name).hint_text("Task name"),
             );
             ui.add_space(app.ui_store.theme.space_8);
 

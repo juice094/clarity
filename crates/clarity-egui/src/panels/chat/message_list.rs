@@ -51,9 +51,10 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     .map(|(i, u)| {
                         let editing = app.chat_store.editing_message_idx == Some(u.start);
                         if u.is_user {
-                            let bubble_h = session.messages[u.start]
-                                .cached_height
-                                .unwrap_or_else(|| ui::render::estimate_height(&session.messages[u.start]));
+                            let bubble_h =
+                                session.messages[u.start].cached_height.unwrap_or_else(|| {
+                                    ui::render::estimate_height(&session.messages[u.start])
+                                });
                             if editing {
                                 bubble_h + 80.0 // approximate edit controls height
                             } else {
@@ -66,11 +67,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 .copied()
                                 .flatten()
                                 .unwrap_or_else(|| {
-                                    let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                                        &session.messages[u.start..u.end],
-                                    );
+                                    let turn =
+                                        crate::components::agent_turn::AgentTurn::from_messages(
+                                            &session.messages[u.start..u.end],
+                                        );
                                     turn.estimate_height(&theme)
-                                }) + 28.0 // action bar
+                                })
+                                + 28.0 // action bar
                         }
                     })
                     .collect();
@@ -82,7 +85,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     .enumerate()
                     .map(|(i, m)| {
                         let editing = app.chat_store.editing_message_idx == Some(i);
-                        let bubble_h = m.cached_height
+                        let bubble_h = m
+                            .cached_height
                             .unwrap_or_else(|| crate::ui::render::estimate_height(m));
                         if editing && m.role == Role::User {
                             bubble_h + 80.0
@@ -102,7 +106,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let mut scroll_up = false;
     let output = egui::ScrollArea::vertical()
         .id_salt("chat_scroll")
-        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+        .scroll_bar_visibility(
+            egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+        )
         .stick_to_bottom(should_stick)
         .auto_shrink([false; 2])
         .max_height(available_height)
@@ -160,9 +166,10 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         .map(|(i, u)| {
                             let editing = app.chat_store.editing_message_idx == Some(u.start);
                             if u.is_user {
-                                let bubble_h = session.messages[u.start]
-                                    .cached_height
-                                    .unwrap_or_else(|| ui::render::estimate_height(&session.messages[u.start]));
+                                let bubble_h =
+                                    session.messages[u.start].cached_height.unwrap_or_else(|| {
+                                        ui::render::estimate_height(&session.messages[u.start])
+                                    });
                                 if editing {
                                     bubble_h + 80.0
                                 } else {
@@ -175,11 +182,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                     .copied()
                                     .flatten()
                                     .unwrap_or_else(|| {
-                                        let turn = crate::components::agent_turn::AgentTurn::from_messages(
-                                            &session.messages[u.start..u.end],
-                                        );
+                                        let turn =
+                                            crate::components::agent_turn::AgentTurn::from_messages(
+                                                &session.messages[u.start..u.end],
+                                            );
                                         turn.estimate_height(&theme)
-                                    }) + 28.0
+                                    })
+                                    + 28.0
                             }
                         })
                         .collect();
@@ -213,11 +222,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         if unit.is_user {
                             let editing = app.chat_store.editing_message_idx == Some(unit.start);
                             let bubble_h = if editing {
-                                let (h, save, cancel) = render_edit_bubble(
-                                    ui,
-                                    &mut app.chat_store.edit_buffer,
-                                    &theme,
-                                );
+                                let (h, save, cancel) =
+                                    render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
                                 if save {
                                     pending.save_edit = true;
                                 }
@@ -239,38 +245,49 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 ui.horizontal(|ui| {
                                     if let Some(msg) = session.messages.get(unit.start) {
                                         ui.label(
-                                            egui::RichText::new(format_relative_time(msg.timestamp))
-                                                .size(theme.text_xs)
-                                                .color(theme.text_dim),
+                                            egui::RichText::new(format_relative_time(
+                                                msg.timestamp,
+                                            ))
+                                            .size(theme.text_xs)
+                                            .color(theme.text_dim),
                                         );
                                     }
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        ui.add_space(theme.space_8);
-                                        let edit_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_EDIT)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                                            pending.edit_idx = Some(unit.start);
-                                        }
-                                        ui.add_space(4.0);
-                                        let copy_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_COPY)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                            if let Some(msg) = session.messages.get(unit.start) {
-                                                ui.ctx().copy_text(msg.content.clone());
-                                                pending.copy_content = Some(msg.content.clone());
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.add_space(theme.space_8);
+                                            let edit_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_EDIT)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
+                                                pending.edit_idx = Some(unit.start);
                                             }
-                                        }
-                                    });
+                                            ui.add_space(4.0);
+                                            let copy_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_COPY)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                                                if let Some(msg) = session.messages.get(unit.start)
+                                                {
+                                                    ui.ctx().copy_text(msg.content.clone());
+                                                    pending.copy_content =
+                                                        Some(msg.content.clone());
+                                                }
+                                            }
+                                        },
+                                    );
                                 });
                                 ui.add_space(theme.space_8);
                             }
@@ -297,36 +314,44 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                             .color(theme.text_dim),
                                     );
                                 }
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    ui.add_space(theme.space_8);
-                                    let regen_btn = egui::Button::new(
-                                        egui::RichText::new(crate::theme::ICON_REFRESH)
-                                            .font(theme.font_icon(theme.text_sm))
-                                            .color(theme.text_muted),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                    if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
-                                        pending.regenerate_idx = Some(unit.start);
-                                    }
-                                    ui.add_space(4.0);
-                                    let copy_btn = egui::Button::new(
-                                        egui::RichText::new(crate::theme::ICON_COPY)
-                                            .font(theme.font_icon(theme.text_sm))
-                                            .color(theme.text_muted),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                    if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                        let content: String = session.messages[unit.start..unit.end]
-                                            .iter()
-                                            .map(|m| m.content.as_str())
-                                            .collect::<Vec<_>>()
-                                            .join("\n\n");
-                                        ui.ctx().copy_text(content.clone());
-                                        pending.copy_content = Some(content);
-                                    }
-                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(theme.space_8);
+                                        let regen_btn = egui::Button::new(
+                                            egui::RichText::new(crate::theme::ICON_REFRESH)
+                                                .font(theme.font_icon(theme.text_sm))
+                                                .color(theme.text_muted),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .corner_radius(egui::CornerRadius::same(
+                                            theme.radius_sm as u8,
+                                        ));
+                                        if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
+                                            pending.regenerate_idx = Some(unit.start);
+                                        }
+                                        ui.add_space(4.0);
+                                        let copy_btn = egui::Button::new(
+                                            egui::RichText::new(crate::theme::ICON_COPY)
+                                                .font(theme.font_icon(theme.text_sm))
+                                                .color(theme.text_muted),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .corner_radius(egui::CornerRadius::same(
+                                            theme.radius_sm as u8,
+                                        ));
+                                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                                            let content: String = session.messages
+                                                [unit.start..unit.end]
+                                                .iter()
+                                                .map(|m| m.content.as_str())
+                                                .collect::<Vec<_>>()
+                                                .join("\n\n");
+                                            ui.ctx().copy_text(content.clone());
+                                            pending.copy_content = Some(content);
+                                        }
+                                    },
+                                );
                             });
                             ui.add_space(theme.space_8);
                         }
@@ -351,7 +376,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         .enumerate()
                         .map(|(i, m)| {
                             let editing = app.chat_store.editing_message_idx == Some(i);
-                            let bubble_h = m.cached_height
+                            let bubble_h = m
+                                .cached_height
                                 .unwrap_or_else(|| crate::ui::render::estimate_height(m));
                             if editing && m.role == Role::User {
                                 bubble_h + 80.0
@@ -391,11 +417,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             true
                         };
                         let bubble_h = if editing && session.messages[i].role == Role::User {
-                            let (h, save, cancel) = render_edit_bubble(
-                                ui,
-                                &mut app.chat_store.edit_buffer,
-                                &theme,
-                            );
+                            let (h, save, cancel) =
+                                render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
                             if save {
                                 pending.save_edit = true;
                             }
@@ -417,69 +440,95 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             if session.messages[i].role == Role::User {
                                 ui.horizontal(|ui| {
                                     ui.label(
-                                        egui::RichText::new(format_relative_time(session.messages[i].timestamp))
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
+                                        egui::RichText::new(format_relative_time(
+                                            session.messages[i].timestamp,
+                                        ))
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
                                     );
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        ui.add_space(theme.space_8);
-                                        let edit_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_EDIT)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                                            pending.edit_idx = Some(i);
-                                        }
-                                        ui.add_space(4.0);
-                                        let copy_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_COPY)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                            ui.ctx().copy_text(session.messages[i].content.clone());
-                                            pending.copy_content = Some(session.messages[i].content.clone());
-                                        }
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.add_space(theme.space_8);
+                                            let edit_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_EDIT)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
+                                                pending.edit_idx = Some(i);
+                                            }
+                                            ui.add_space(4.0);
+                                            let copy_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_COPY)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                                                ui.ctx()
+                                                    .copy_text(session.messages[i].content.clone());
+                                                pending.copy_content =
+                                                    Some(session.messages[i].content.clone());
+                                            }
+                                        },
+                                    );
                                 });
                                 ui.add_space(theme.space_8);
                             } else {
                                 ui.horizontal(|ui| {
                                     ui.label(
-                                        egui::RichText::new(format_relative_time(session.messages[i].timestamp))
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
+                                        egui::RichText::new(format_relative_time(
+                                            session.messages[i].timestamp,
+                                        ))
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
                                     );
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        ui.add_space(theme.space_8);
-                                        let regen_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_REFRESH)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
-                                            pending.regenerate_idx = Some(i);
-                                        }
-                                        ui.add_space(4.0);
-                                        let copy_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_COPY)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                            ui.ctx().copy_text(session.messages[i].content.clone());
-                                            pending.copy_content = Some(session.messages[i].content.clone());
-                                        }
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.add_space(theme.space_8);
+                                            let regen_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_REFRESH)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui
+                                                .add(regen_btn)
+                                                .on_hover_text("Regenerate")
+                                                .clicked()
+                                            {
+                                                pending.regenerate_idx = Some(i);
+                                            }
+                                            ui.add_space(4.0);
+                                            let copy_btn = egui::Button::new(
+                                                egui::RichText::new(crate::theme::ICON_COPY)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(theme.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(egui::CornerRadius::same(
+                                                theme.radius_sm as u8,
+                                            ));
+                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                                                ui.ctx()
+                                                    .copy_text(session.messages[i].content.clone());
+                                                pending.copy_content =
+                                                    Some(session.messages[i].content.clone());
+                                            }
+                                        },
+                                    );
                                 });
                                 ui.add_space(theme.space_8);
                             }
@@ -561,14 +610,22 @@ fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
     let n = messages.len();
     while i < n {
         if messages[i].role == Role::User {
-            units.push(RenderUnit { start: i, end: i + 1, is_user: true });
+            units.push(RenderUnit {
+                start: i,
+                end: i + 1,
+                is_user: true,
+            });
             i += 1;
         } else {
             let start = i;
             while i < n && messages[i].role == Role::Agent {
                 i += 1;
             }
-            units.push(RenderUnit { start, end: i, is_user: false });
+            units.push(RenderUnit {
+                start,
+                end: i,
+                is_user: false,
+            });
         }
     }
     units
@@ -580,11 +637,7 @@ fn aggregate_turns(messages: &[ui::types::Message]) -> Vec<RenderUnit> {
 
 /// Render an editable user bubble with Save / Cancel controls.
 /// Returns `(total_height, save_clicked, cancel_clicked)`.
-fn render_edit_bubble(
-    ui: &mut egui::Ui,
-    buffer: &mut String,
-    theme: &Theme,
-) -> (f32, bool, bool) {
+fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> (f32, bool, bool) {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 

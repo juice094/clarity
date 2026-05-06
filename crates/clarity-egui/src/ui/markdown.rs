@@ -229,7 +229,7 @@ fn parse_table_row(line: &str) -> Vec<String> {
     for cell in inner.split('|') {
         let c = cell.trim().to_string();
         // Skip trailing empty cell after last '|'
-        if c.is_empty() && cell == inner.split('|').last().unwrap_or("") {
+        if c.is_empty() && cell == inner.split('|').next_back().unwrap_or("") {
             continue;
         }
         cells.push(c);

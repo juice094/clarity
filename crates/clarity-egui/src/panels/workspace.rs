@@ -4,8 +4,8 @@
 //! Tools section).  Files can be browsed and previewed here while the user
 //! continues chatting in the central panel.
 
-use crate::App;
 use crate::ui::types::{AgentStatus, GatewayStatus};
+use crate::App;
 
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
@@ -44,7 +44,8 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                             .size(theme.text_xs)
                             .color(theme.text_dim),
                     );
-                    let (gw_rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    let (gw_rect, _) =
+                        ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                     ui.painter().circle_filled(gw_rect.center(), 4.0, gw_color);
                     ui.add_space(4.0);
 
@@ -60,18 +61,16 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                             .size(theme.text_xs)
                             .color(theme.text_dim),
                     );
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                     ui.painter().circle_filled(rect.center(), 4.0, status_color);
                 });
             });
             ui.add_space(theme.space_12);
 
             let work_dir = app.state.agent.config().working_dir.clone();
-            let selected_path: Option<String> = app
-                .ui_store
-                .preview_item
-                .as_ref()
-                .and_then(|p| match p {
+            let selected_path: Option<String> =
+                app.ui_store.preview_item.as_ref().and_then(|p| match p {
                     crate::ui::types::PreviewItem::File { path, .. } => Some(path.clone()),
                     _ => None,
                 });
@@ -84,27 +83,26 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                 scroll = scroll.max_height(ui.available_height() * 0.45);
             }
             scroll.show(ui, |ui| {
-                    crate::ui::file_browser::render_file_tree(
-                        ui,
-                        &work_dir,
-                        &theme,
-                        0,
-                        selected_path_ref,
-                        &mut |path| {
-                            if let Ok(content) = std::fs::read_to_string(path) {
-                                app.ui_store.preview_item =
-                                    Some(crate::ui::types::PreviewItem::File {
-                                        name: path
-                                            .file_name()
-                                            .map(|n| n.to_string_lossy().to_string())
-                                            .unwrap_or_default(),
-                                        content,
-                                        path: path.display().to_string(),
-                                    });
-                            }
-                        },
-                    );
-                });
+                crate::ui::file_browser::render_file_tree(
+                    ui,
+                    &work_dir,
+                    &theme,
+                    0,
+                    selected_path_ref,
+                    &mut |path| {
+                        if let Ok(content) = std::fs::read_to_string(path) {
+                            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                                name: path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default(),
+                                content,
+                                path: path.display().to_string(),
+                            });
+                        }
+                    },
+                );
+            });
 
             ui.add_space(theme.space_12);
 
@@ -114,16 +112,18 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     crate::ui::types::PreviewItem::File { name, content, .. } => {
                         (name.clone(), content.clone(), false)
                     }
-                    crate::ui::types::PreviewItem::WebPage {
-                        title, content, ..
-                    } => (title.clone(), content.clone(), true),
+                    crate::ui::types::PreviewItem::WebPage { title, content, .. } => {
+                        (title.clone(), content.clone(), true)
+                    }
                 };
 
                 ui.horizontal(|ui| {
-                    let icon = if is_web { "🌐" } else { crate::theme::ICON_PAPERCLIP };
-                    ui.label(
-                        egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)),
-                    );
+                    let icon = if is_web {
+                        "🌐"
+                    } else {
+                        crate::theme::ICON_PAPERCLIP
+                    };
+                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
                     ui.label(
                         egui::RichText::new(&title)
                             .size(theme.text_sm)
@@ -139,9 +139,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                                         .font(theme.font_icon(theme.text_base)),
                                 )
                                 .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(
-                                    theme.radius_sm as u8,
-                                )),
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                             )
                             .clicked()
                         {

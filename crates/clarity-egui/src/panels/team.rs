@@ -99,8 +99,7 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
                                         if ui
                                             .add(
                                                 egui::Button::new(
-                                                    egui::RichText::new("Run")
-                                                        .size(theme.text_xs),
+                                                    egui::RichText::new("Run").size(theme.text_xs),
                                                 )
                                                 .fill(theme.accent.linear_multiply(0.25))
                                                 .corner_radius(egui::CornerRadius::same(
@@ -150,12 +149,9 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
                                         .color(theme.text_dim),
                                 );
                                 ui.label(
-                                    egui::RichText::new(format!(
-                                        "{}s timeout",
-                                        team.timeout_secs
-                                    ))
-                                    .size(theme.text_xs)
-                                    .color(theme.text_muted),
+                                    egui::RichText::new(format!("{}s timeout", team.timeout_secs))
+                                        .size(theme.text_xs)
+                                        .color(theme.text_muted),
                                 );
                             });
 
@@ -163,12 +159,9 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
 
                             // Expandable member list
                             ui.collapsing(
-                                egui::RichText::new(format!(
-                                    "Members ({})",
-                                    team.members.len()
-                                ))
-                                .size(theme.text_sm)
-                                .color(theme.text),
+                                egui::RichText::new(format!("Members ({})", team.members.len()))
+                                    .size(theme.text_sm)
+                                    .color(theme.text),
                                 |ui| {
                                     ui.add_space(theme.space_4);
                                     for member in &team.members {
@@ -220,10 +213,7 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
             if let Some(i) = to_run {
                 let team_name = app.team_store.teams[i].name.clone();
                 // TODO: backend integration — call TeamCoordinator::execute_team
-                app.push_toast(
-                    format!("Running team: {}", team_name),
-                    ToastLevel::Info,
-                );
+                app.push_toast(format!("Running team: {}", team_name), ToastLevel::Info);
             }
         });
 }

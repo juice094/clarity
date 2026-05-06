@@ -176,13 +176,21 @@ pub fn process_events(app: &mut App) {
             UiEvent::SubagentOutput { agent_id, text } => {
                 subagent::on_subagent_output(&mut app.subagent_store, agent_id, text);
             }
-            UiEvent::SubagentStatus { agent_id, agent_type, status } => {
+            UiEvent::SubagentStatus {
+                agent_id,
+                agent_type,
+                status,
+            } => {
                 subagent::on_subagent_status(&mut app.subagent_store, agent_id, agent_type, status);
             }
             UiEvent::SubagentComplete { agent_id, success } => {
                 subagent::on_subagent_complete(&mut app.subagent_store, agent_id, success);
             }
-            UiEvent::SubagentProgress { agent_id, steps, max_steps } => {
+            UiEvent::SubagentProgress {
+                agent_id,
+                steps,
+                max_steps,
+            } => {
                 subagent::on_subagent_progress(&mut app.subagent_store, agent_id, steps, max_steps);
             }
             UiEvent::GatewayHealth(status) => {
