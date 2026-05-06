@@ -24,6 +24,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-fix-2026-05-06
       - run: cargo check --workspace
 
   test:
@@ -40,6 +42,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-fix-2026-05-06
       - run: cargo test --workspace --lib
 
   clippy:
@@ -58,6 +62,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-fix-2026-05-06
       - run: cargo clippy --workspace --lib --bins --tests -- -D warnings
 
   fmt:
@@ -96,6 +102,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-fix-2026-05-06
       - run: cargo install cargo-tarpaulin
       - run: cargo tarpaulin --workspace --lib --out Xml
       - uses: actions/upload-artifact@v4
