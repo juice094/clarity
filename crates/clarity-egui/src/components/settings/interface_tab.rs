@@ -86,7 +86,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                         .stroke(if active {
                             egui::Stroke::NONE
                         } else {
-                            egui::Stroke::new(1.0, theme.border)
+                            egui::Stroke::new(1.0_f32, theme.border)
                         })
                         .corner_radius(theme.radius_sm as u8),
                 )
@@ -129,7 +129,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                         .stroke(if active {
                             egui::Stroke::NONE
                         } else {
-                            egui::Stroke::new(1.0, theme.border)
+                            egui::Stroke::new(1.0_f32, theme.border)
                         })
                         .corner_radius(theme.radius_sm as u8),
                 )
@@ -161,7 +161,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                     .stroke(if en {
                         egui::Stroke::NONE
                     } else {
-                        egui::Stroke::new(1.0, theme.border)
+                        egui::Stroke::new(1.0_f32, theme.border)
                     })
                     .corner_radius(theme.radius_sm as u8),
             )
@@ -176,7 +176,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                     .stroke(if zh {
                         egui::Stroke::NONE
                     } else {
-                        egui::Stroke::new(1.0, theme.border)
+                        egui::Stroke::new(1.0_f32, theme.border)
                     })
                     .corner_radius(theme.radius_sm as u8),
             )
@@ -222,14 +222,14 @@ fn theme_card(
         ui.painter().rect_stroke(
             rect,
             cr,
-            egui::Stroke::new(2.0, theme.accent),
+            egui::Stroke::new(2.0_f32, theme.accent),
             egui::StrokeKind::Inside,
         );
     } else {
         ui.painter().rect_stroke(
             rect,
             cr,
-            egui::Stroke::new(1.0, theme.border),
+            egui::Stroke::new(1.0_f32, theme.border),
             egui::StrokeKind::Inside,
         );
     }

@@ -27,7 +27,7 @@ pub fn toggle(ui: &mut egui::Ui, value: &mut bool, theme: &Theme) -> egui::Respo
     ui.painter().rect_stroke(
         rect,
         egui::CornerRadius::same(track_radius as u8),
-        egui::Stroke::new(1.0, theme.border),
+        egui::Stroke::new(1.0_f32, theme.border),
         egui::StrokeKind::Inside,
     );
 
@@ -53,7 +53,7 @@ pub fn toggle(ui: &mut egui::Ui, value: &mut bool, theme: &Theme) -> egui::Respo
         ui.painter().rect_stroke(
             rect.expand(2.0),
             egui::CornerRadius::same((track_radius + 2.0) as u8),
-            egui::Stroke::new(1.5, theme.focus_ring),
+            egui::Stroke::new(1.5_f32, theme.focus_ring),
             egui::StrokeKind::Inside,
         );
     }

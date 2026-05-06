@@ -404,7 +404,7 @@ fn render_table(
                             egui::pos2(ui.cursor().min.x, row_y),
                             egui::pos2(ui.cursor().min.x + available, row_y),
                         ],
-                        egui::Stroke::new(1.0, theme.border),
+                        egui::Stroke::new(1.0_f32, theme.border),
                     );
                     ui.end_row();
 

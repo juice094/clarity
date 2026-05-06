@@ -9,7 +9,7 @@ pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
         egui::Frame::group(ui.style())
             .fill(app.ui_store.theme.surface)
             .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
-            .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
+            .stroke(egui::Stroke::new(1.0_f32, app.ui_store.theme.accent))
             .inner_margin(egui::Margin::same(10))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
@@ -150,7 +150,7 @@ pub fn render_plan(app: &mut App, ui: &mut egui::Ui) {
         egui::Frame::group(ui.style())
             .fill(app.ui_store.theme.surface)
             .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_md as u8))
-            .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
+            .stroke(egui::Stroke::new(1.0_f32, app.ui_store.theme.accent))
             .inner_margin(egui::Margin::same(10))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());

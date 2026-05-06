@@ -491,11 +491,12 @@ async fn test_agent_run_streaming_with_wire() {
             Ok(Some(msg)) => match msg {
                 WireMessage::DraftEvent {
                     event: DraftEvent::Content { text },
-                } => {
-                    if !text.is_empty() {
-                        content_received = true;
-                    }
+                } if !text.is_empty() => {
+                    content_received = true;
                 }
+                WireMessage::DraftEvent {
+                    event: DraftEvent::Content { .. },
+                } => {}
                 WireMessage::TurnEnd => break,
                 _ => {}
             },

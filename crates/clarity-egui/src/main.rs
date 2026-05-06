@@ -113,7 +113,7 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg)
-                    .stroke(egui::Stroke::new(1.0, theme.border))
+                    .stroke(egui::Stroke::new(1.0_f32, theme.border))
                     .inner_margin(egui::Margin::symmetric(8, 0)),
             )
             .show(ctx, |ui| {
@@ -222,7 +222,7 @@ impl App {
                             theme.text_dim
                         };
                         let max_c = max_resp.rect.center();
-                        let max_stroke = egui::Stroke::new(1.2, max_color);
+                        let max_stroke = egui::Stroke::new(1.2_f32, max_color);
                         if is_maximized {
                             // Restore: two overlapping rectangles
                             let s = 4.5;
@@ -288,7 +288,7 @@ impl App {
                                 egui::pos2(min_c.x - 5.0, min_c.y),
                                 egui::pos2(min_c.x + 5.0, min_c.y),
                             ],
-                            egui::Stroke::new(1.2, min_color),
+                            egui::Stroke::new(1.2_f32, min_color),
                         );
                     });
                 });

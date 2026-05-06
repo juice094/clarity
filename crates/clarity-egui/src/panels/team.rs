@@ -16,7 +16,7 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(theme.bg)
-                .stroke(egui::Stroke::new(1.0, theme.border))
+                .stroke(egui::Stroke::new(1.0_f32, theme.border))
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -64,7 +64,7 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
                     egui::Frame::new()
                         .fill(theme.surface)
                         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                        .stroke(egui::Stroke::new(1.0, theme.border))
+                        .stroke(egui::Stroke::new(1.0_f32, theme.border))
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());

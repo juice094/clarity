@@ -43,7 +43,7 @@ pub fn render_mcp_panel(
         egui::Frame::group(ui.style())
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-            .stroke(egui::Stroke::new(1.0, theme.border))
+            .stroke(egui::Stroke::new(1.0_f32, theme.border))
             .inner_margin(egui::Margin::same(10))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());

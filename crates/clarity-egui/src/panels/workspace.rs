@@ -18,7 +18,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(theme.bg)
-                .stroke(egui::Stroke::new(1.0, theme.border))
+                .stroke(egui::Stroke::new(1.0_f32, theme.border))
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {

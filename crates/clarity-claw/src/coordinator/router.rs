@@ -32,7 +32,7 @@ impl FederationRouter {
             FederationMessage::DispatchTask { target_node, .. } => Some(target_node.as_str()),
             FederationMessage::Heartbeat { node_id, .. } => Some(node_id.as_str()),
             FederationMessage::MemoryQuery { sender, .. } => Some(sender.as_str()),
-            FederationMessage::MemoryResponse { request_id: _, .. } => {
+            FederationMessage::MemoryResponse { .. } => {
                 // In a real implementation, track request_id → node mapping.
                 // Phase 1: broadcast to all memory-capable nodes.
                 return registry

@@ -547,23 +547,23 @@ impl Theme {
         style.visuals.extreme_bg_color = self.bg_accent;
         style.visuals.widgets.inactive.weak_bg_fill = self.surface;
         style.visuals.widgets.inactive.bg_fill = self.surface;
-        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, self.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, self.border);
         style.visuals.widgets.hovered.weak_bg_fill = self.bg_hover;
         style.visuals.widgets.hovered.bg_fill = self.bg_hover;
-        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, self.border_hover);
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, self.border_hover);
         style.visuals.widgets.active.bg_fill = self.bg_hover;
-        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, self.border_strong);
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, self.border_strong);
         style.visuals.widgets.noninteractive.bg_fill = self.surface;
-        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, self.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, self.border);
         style.visuals.selection.bg_fill = self.selection;
-        style.visuals.selection.stroke = egui::Stroke::new(1.0, self.text_strong);
+        style.visuals.selection.stroke = egui::Stroke::new(1.0_f32, self.text_strong);
         style.visuals.window_corner_radius = egui::CornerRadius::same(self.radius_lg as u8);
         style.visuals.window_shadow = self.shadow_panel;
         style.visuals.popup_shadow = self.shadow_panel;
-        style.visuals.window_stroke = egui::Stroke::new(1.0, self.border);
-        style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text);
-        style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
-        style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_strong);
+        style.visuals.window_stroke = egui::Stroke::new(1.0_f32, self.border);
+        style.visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, self.text);
+        style.visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, self.text_strong);
+        style.visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, self.text_strong);
         // Scale default text styles so markdown/chat content follows the theme font scale.
         let scale = self.font_scale;
         style.text_styles.insert(
@@ -607,7 +607,7 @@ impl Theme {
         egui::Frame::group(&egui::Style::default())
             .fill(self.surface)
             .corner_radius(egui::CornerRadius::same(self.radius_md as u8))
-            .stroke(egui::Stroke::new(1.0, self.border))
+            .stroke(egui::Stroke::new(1.0_f32, self.border))
             .shadow(self.shadow_card)
     }
 

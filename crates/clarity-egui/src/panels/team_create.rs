@@ -166,7 +166,7 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
                             .color(app.ui_store.theme.accent),
                     )
                     .fill(egui::Color32::TRANSPARENT)
-                    .stroke(egui::Stroke::new(1.0, app.ui_store.theme.accent))
+                    .stroke(egui::Stroke::new(1.0_f32, app.ui_store.theme.accent))
                     .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
                     .min_size(egui::vec2(0.0, 28.0)),
                 )

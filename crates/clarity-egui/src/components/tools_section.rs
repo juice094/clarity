@@ -107,7 +107,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
                     .color(theme.accent),
             )
             .fill(egui::Color32::TRANSPARENT)
-            .stroke(egui::Stroke::new(1.0, theme.accent))
+            .stroke(egui::Stroke::new(1.0_f32, theme.accent))
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
             .min_size(egui::vec2(0.0, 28.0)),
         )
