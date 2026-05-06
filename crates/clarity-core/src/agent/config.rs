@@ -58,6 +58,8 @@ pub struct AgentConfig {
     pub enable_jumpy: bool,
     /// Optional Jumpy composer configuration.
     pub jumpy_config: Option<ComposerConfig>,
+    /// Optional LSP client configuration.
+    pub lsp_config: Option<crate::agent::lsp::LspClientConfig>,
 }
 
 impl Default for AgentConfig {
@@ -84,6 +86,7 @@ impl Default for AgentConfig {
             iteration_budget: None,
             enable_jumpy: false,
             jumpy_config: None,
+            lsp_config: None,
         }
     }
 }
@@ -217,6 +220,12 @@ impl AgentConfig {
     /// Set Jumpy composer configuration.
     pub fn with_jumpy_config(mut self, config: ComposerConfig) -> Self {
         self.jumpy_config = Some(config);
+        self
+    }
+
+    /// Set LSP client configuration.
+    pub fn with_lsp_config(mut self, config: crate::agent::lsp::LspClientConfig) -> Self {
+        self.lsp_config = Some(config);
         self
     }
 }

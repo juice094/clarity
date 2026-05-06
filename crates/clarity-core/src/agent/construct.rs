@@ -75,6 +75,7 @@ impl Agent {
                 fallback_llms: Vec::new(),
                 static_prompt_hash: None,
                 jumpy_predictor: None,
+                lsp_initialized: false,
             })),
         }
     }
@@ -346,7 +347,8 @@ impl Agent {
 
     /// Set the agent lifecycle hook registry (builder pattern).
     pub fn with_hooks(self, hooks: super::hooks::HookRegistry) -> Self {
-        self.inner.write().unwrap().hook_registry = Some(std::sync::Arc::new(hooks));
+        self.inner.write().unwrap().hook_registry =
+            Some(std::sync::Arc::new(tokio::sync::RwLock::new(hooks)));
         self
     }
 
@@ -416,6 +418,38 @@ impl Agent {
                 let mut inner = self.inner.write().unwrap();
                 inner.skill_registry = Some(registry);
             }
+        }
+
+        // Initialize LSP hook if configured and not yet initialized
+        let needs_lsp_init = {
+            let inner = self.inner.read().unwrap();
+            !inner.lsp_initialized && self.config.lsp_config.is_some()
+        };
+        if needs_lsp_init {
+            if let Some(ref lsp_config) = self.config.lsp_config {
+                if lsp_config.enabled {
+                    if let Some(hook) =
+                        super::lsp::LspHook::try_new(lsp_config, &self.config.working_dir).await
+                    {
+                        let hook_registry_opt = {
+                            let inner = self.inner.read().unwrap();
+                            inner.hook_registry.clone()
+                        };
+                        if let Some(arc) = hook_registry_opt {
+                            let mut registry = arc.write().await;
+                            registry.register(Box::new(hook));
+                        } else {
+                            let mut registry = super::hooks::HookRegistry::new();
+                            registry.register(Box::new(hook));
+                            let mut inner = self.inner.write().unwrap();
+                            inner.hook_registry =
+                                Some(std::sync::Arc::new(tokio::sync::RwLock::new(registry)));
+                        }
+                    }
+                }
+            }
+            let mut inner = self.inner.write().unwrap();
+            inner.lsp_initialized = true;
         }
 
         Ok(())

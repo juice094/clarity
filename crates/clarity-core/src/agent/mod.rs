@@ -22,6 +22,7 @@ pub mod flow;
 pub mod hooks;
 pub mod ops;
 pub mod cost_channel;
+pub mod lsp;
 pub mod tool_map;
 pub mod tool_parser;
 
@@ -114,7 +115,7 @@ struct AgentInner {
     /// NOT injected into the system prompt; used only for tracing/audit.
     provider_label: Option<String>,
     /// Optional lifecycle hook registry for intercepting tool calls and LLM input.
-    hook_registry: Option<std::sync::Arc<hooks::HookRegistry>>,
+    hook_registry: Option<std::sync::Arc<tokio::sync::RwLock<hooks::HookRegistry>>>,
     /// Turn-level mutable state. Created by `begin_turn()` and cleared by `finish_turn()`.
     turn_context: Option<turn_context::TurnContext>,
     /// Message count from the last completed turn (for subagent progress reporting).
@@ -133,6 +134,8 @@ struct AgentInner {
     static_prompt_hash: Option<String>,
     /// Optional Jumpy World Model predictor for skill-level planning.
     jumpy_predictor: Option<Arc<dyn crate::agent::jumpy::predictor::OutcomePredictor>>,
+    /// Whether the LSP hook has already been initialized.
+    lsp_initialized: bool,
 }
 
 /// Simple mock LLM for testing

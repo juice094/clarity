@@ -99,9 +99,13 @@ impl Agent {
         // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
         for tool_call in tool_calls {
             let mut tc = tool_call.clone();
-            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            let hooks_opt = {
+                let inner = self.inner.read().unwrap();
+                inner.hook_registry.clone()
+            };
             let should_execute = if let Some(hooks) = hooks_opt {
-                match hooks.before_tool_call(&mut tc).await {
+                let registry = hooks.read().await;
+                match registry.before_tool_call(&mut tc).await {
                     crate::agent::hooks::HookResult::Cancel(e) => {
                         let err = crate::error::ToolError::execution_failed(e.to_string());
                         futures.push(Box::pin(async move { Err(err) }));
@@ -158,9 +162,13 @@ impl Agent {
                 Err(e) => serde_json::json!({"error": e.to_string()}),
             };
 
-            let hooks_opt = self.inner.read().unwrap().hook_registry.clone();
+            let hooks_opt = {
+                let inner = self.inner.read().unwrap();
+                inner.hook_registry.clone()
+            };
             if let Some(hooks) = hooks_opt {
-                hooks.after_tool_call(tool_call, &mut result_value).await;
+                let registry = hooks.read().await;
+                registry.after_tool_call(tool_call, &mut result_value).await;
             }
 
             let result_content = result_value.to_string();
