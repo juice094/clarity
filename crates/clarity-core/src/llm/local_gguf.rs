@@ -357,7 +357,7 @@ pub struct LocalGgufProvider {
     tokenizer: tokenizers::Tokenizer,
     device: Device,
     config: LocalGgufConfig,
-    cache_key: Option<String>,
+    cache_key: std::sync::Mutex<Option<String>>,
     /// Token cache for KV persistence across turns.
     /// Stores the token IDs of the last processed prompt + generated tokens.
     /// Used to compute LCP and avoid re-encoding the full prefix on each turn.
@@ -393,7 +393,7 @@ impl LocalGgufProvider {
             tokenizer,
             device,
             config,
-            cache_key: None,
+            cache_key: std::sync::Mutex::new(None),
             token_cache: Arc::new(std::sync::Mutex::new(Vec::new())),
         })
     }
@@ -680,8 +680,8 @@ impl LlmProvider for LocalGgufProvider {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
-        self.cache_key = Some(key.to_string());
+    fn set_prompt_cache_key(&self, key: &str) {
+        *self.cache_key.lock().unwrap() = Some(key.to_string());
     }
 
     fn clear_cache(&self) {

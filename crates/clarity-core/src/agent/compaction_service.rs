@@ -351,7 +351,7 @@ mod tests {
             Ok(rx)
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     struct FailingMockLlm;
@@ -383,7 +383,7 @@ mod tests {
             Ok(rx)
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     fn make_messages(n: usize, content_len: usize) -> Vec<Message> {
@@ -758,7 +758,7 @@ mod tests {
                 Ok(rx)
             }
 
-            fn set_prompt_cache_key(&mut self, _key: &str) {}
+            fn set_prompt_cache_key(&self, _key: &str) {}
         }
 
         let config = CompactionServiceConfig {

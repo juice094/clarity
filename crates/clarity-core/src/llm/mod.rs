@@ -188,7 +188,7 @@ pub struct OpenAiCompatibleLlm {
     base_url: String,
     model: String,
     client: reqwest::Client,
-    prompt_cache_key: Option<String>,
+    prompt_cache_key: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 impl OpenAiCompatibleLlm {
@@ -203,7 +203,7 @@ impl OpenAiCompatibleLlm {
             base_url: base_url.into(),
             model: model.into(),
             client: shared_http_client(),
-            prompt_cache_key: None,
+            prompt_cache_key: Arc::new(std::sync::RwLock::new(None)),
         }
     }
 
@@ -225,8 +225,8 @@ impl OpenAiCompatibleLlm {
         Ok(Self::new(api_key, base_url, model))
     }
 
-    pub fn set_prompt_cache_key(&mut self, key: impl Into<String>) {
-        self.prompt_cache_key = Some(key.into());
+    pub fn set_prompt_cache_key(&self, key: impl Into<String>) {
+        *self.prompt_cache_key.write().unwrap() = Some(key.into());
     }
 }
 
@@ -289,7 +289,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             temperature: None,
             max_tokens: None,
             stream: false,
-            prompt_cache_key: self.prompt_cache_key.clone(),
+            prompt_cache_key: self.prompt_cache_key.read().unwrap().clone(),
             thinking: thinking_opt,
         };
 
@@ -400,7 +400,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             temperature: None,
             max_tokens: None,
             stream: true,
-            prompt_cache_key: self.prompt_cache_key.clone(),
+            prompt_cache_key: self.prompt_cache_key.read().unwrap().clone(),
             thinking: thinking_opt,
         };
 
@@ -490,18 +490,19 @@ impl LlmProvider for OpenAiCompatibleLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
+    fn set_prompt_cache_key(&self, key: &str) {
         self.set_prompt_cache_key(key);
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_caching: true,
+            vision: false,
             pricing: Some(crate::llm::api::Pricing {
                 input_per_1m: 0.5,
                 output_per_1m: 1.5,
             }),
-            ..Default::default()
         }
     }
 }
@@ -556,14 +557,16 @@ impl LlmProvider for KimiLlm {
         self.inner.stream(messages, tools)
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
+    fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
-            ..Default::default()
+            prompt_caching: true,
+            vision: false,
+            pricing: None,
         }
     }
 }
@@ -615,7 +618,7 @@ impl OAuthLlm {
         ))
     }
 
-    pub fn set_prompt_cache_key(&mut self, key: &str) {
+    pub fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 }
@@ -666,14 +669,16 @@ impl LlmProvider for OAuthLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
+    fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
-            ..Default::default()
+            prompt_caching: true,
+            vision: false,
+            pricing: None,
         }
     }
 }
@@ -958,7 +963,7 @@ impl LlmProvider for AnthropicLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
@@ -1298,6 +1303,12 @@ mod tests {
         let json = serde_json::to_value(&request).unwrap();
         assert_eq!(json.get("model").unwrap(), "test-model");
         assert_eq!(json.get("prompt_cache_key").unwrap(), "cache-key-123");
+    }
+
+    #[test]
+    fn test_openai_prompt_caching_capability() {
+        let provider = OpenAiCompatibleLlm::new("key", "https://api.example.com/v1", "model");
+        assert!(provider.capabilities().prompt_caching);
     }
 
     #[test]

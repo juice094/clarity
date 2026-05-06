@@ -247,7 +247,7 @@ mod tests {
                 let (_, rx) = tokio::sync::mpsc::channel(1);
                 Ok(rx)
             }
-            fn set_prompt_cache_key(&mut self, _key: &str) {}
+            fn set_prompt_cache_key(&self, _key: &str) {}
         }
 
         let registry = crate::registry::mock_registry_with_tools(vec![]);
@@ -293,7 +293,7 @@ mod tests {
                 let (_, rx) = tokio::sync::mpsc::channel(1);
                 Ok(rx)
             }
-            fn set_prompt_cache_key(&mut self, _key: &str) {}
+            fn set_prompt_cache_key(&self, _key: &str) {}
         }
 
         let registry = crate::registry::mock_registry_with_tools(vec![]);

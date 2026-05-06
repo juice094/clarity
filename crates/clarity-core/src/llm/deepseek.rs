@@ -64,7 +64,7 @@ impl DeepSeekProvider {
         Self::new(api_key, "https://api.deepseek.com/v1", "deepseek-reasoner")
     }
 
-    pub fn set_prompt_cache_key(&mut self, key: &str) {
+    pub fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 }
@@ -88,14 +88,16 @@ impl LlmProvider for DeepSeekProvider {
         self.inner.stream(messages, tools)
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
+    fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
 
     fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
         crate::llm::api::ProviderCapabilities {
             native_tool_calling: true,
-            ..Default::default()
+            prompt_caching: true,
+            vision: false,
+            pricing: None,
         }
     }
 }
@@ -136,5 +138,11 @@ mod tests {
         let provider = DeepSeekProvider::chat("test-key");
         let caps = provider.capabilities();
         assert!(caps.native_tool_calling);
+    }
+
+    #[test]
+    fn test_deepseek_prompt_caching_capability() {
+        let provider = DeepSeekProvider::chat("test-key");
+        assert!(provider.capabilities().prompt_caching);
     }
 }

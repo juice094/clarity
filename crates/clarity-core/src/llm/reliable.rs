@@ -130,9 +130,10 @@ impl LlmProvider for ReliableProvider {
         Err(last_err.unwrap_or_else(|| AgentError::Llm("All providers failed in stream".into())))
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {
-        // No-op: individual providers may have been cloned and their cache keys
-        // are managed by the caller that created them.
+    fn set_prompt_cache_key(&self, key: &str) {
+        for provider in &self.providers {
+            provider.set_prompt_cache_key(key);
+        }
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
@@ -197,7 +198,7 @@ mod tests {
             }
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     #[tokio::test]

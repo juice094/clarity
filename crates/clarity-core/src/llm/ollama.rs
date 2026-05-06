@@ -368,7 +368,7 @@ impl LlmProvider for OllamaProvider {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {
+    fn set_prompt_cache_key(&self, _key: &str) {
         // Ollama does not support prompt cache key
     }
 

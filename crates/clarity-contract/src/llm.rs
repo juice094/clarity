@@ -88,7 +88,7 @@ pub trait LlmProvider: Send + Sync {
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError>;
 
     /// Set a prompt cache key for provider-side cache routing.
-    fn set_prompt_cache_key(&mut self, key: &str);
+    fn set_prompt_cache_key(&self, key: &str);
 
     /// Clear any provider-side cache (e.g., local KV cache).
     /// Default is a no-op; providers with local state should override.
@@ -169,7 +169,7 @@ mod tests {
             {
                 unreachable!()
             }
-            fn set_prompt_cache_key(&mut self, _key: &str) {}
+            fn set_prompt_cache_key(&self, _key: &str) {}
         }
 
         let provider = DummyProvider;

@@ -55,7 +55,7 @@ impl LlmProvider for SequentialMockLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 }
 
 /// Convenience builder for a simple text-only mock response.

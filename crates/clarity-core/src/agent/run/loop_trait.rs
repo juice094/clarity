@@ -243,7 +243,7 @@ mod tests {
             unreachable!()
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     struct MockLoopCircuit {

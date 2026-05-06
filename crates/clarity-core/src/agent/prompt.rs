@@ -309,17 +309,18 @@ impl Agent {
         let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
 
         let static_hash = {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            static_prompt.hash(&mut hasher);
-            hasher.finish().to_string()
+            use sha2::{Sha256, Digest};
+            let hash = Sha256::digest(static_prompt.as_bytes());
+            hash.iter().map(|b| format!("{:02x}", b)).collect::<String>()
         };
         {
             let inner = self.inner.read().unwrap();
             if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
                 if let Some(ref llm) = inner.llm {
                     llm.clear_cache();
+                    if llm.capabilities().prompt_caching {
+                        llm.set_prompt_cache_key(&static_hash);
+                    }
                 }
             }
         }

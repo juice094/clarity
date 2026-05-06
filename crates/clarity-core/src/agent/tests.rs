@@ -140,7 +140,7 @@ async fn test_compaction_triggered_in_agent() {
             Ok(rx)
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     let registry = ToolRegistry::new();
@@ -254,7 +254,7 @@ async fn test_tool_call_approval_flow() {
             Ok(rx)
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     let registry = crate::registry::mock_registry_with_tools(vec![]);
@@ -339,7 +339,7 @@ async fn test_tool_call_yolo_mode() {
             Ok(rx)
         }
 
-        fn set_prompt_cache_key(&mut self, _key: &str) {}
+        fn set_prompt_cache_key(&self, _key: &str) {}
     }
 
     let registry = ToolRegistry::new();
@@ -917,7 +917,7 @@ impl LlmProvider for MockLlmFailingTool {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 }
 
 #[tokio::test]
@@ -1016,7 +1016,7 @@ impl LlmProvider for MockLlmRecoverableLoop {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 }
 
 #[tokio::test]
@@ -1086,7 +1086,7 @@ impl LlmProvider for BudgetMockLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 
     fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
         crate::llm::api::ProviderCapabilities {
@@ -1231,7 +1231,7 @@ impl LlmProvider for VisionTrackingMockLlm {
         Ok(rx)
     }
 
-    fn set_prompt_cache_key(&mut self, _key: &str) {}
+    fn set_prompt_cache_key(&self, _key: &str) {}
 
     fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
         crate::llm::api::ProviderCapabilities {

@@ -48,7 +48,7 @@ impl KalosmConfig {
 
 /// Stub Kalosm provider — always returns an error.
 pub struct KalosmProvider {
-    cache_key: Option<String>,
+    cache_key: std::sync::Mutex<Option<String>>,
 }
 
 impl KalosmProvider {
@@ -83,8 +83,8 @@ impl LlmProvider for KalosmProvider {
         ))
     }
 
-    fn set_prompt_cache_key(&mut self, key: &str) {
-        self.cache_key = Some(key.to_string());
+    fn set_prompt_cache_key(&self, key: &str) {
+        *self.cache_key.lock().unwrap() = Some(key.to_string());
     }
 
     fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
