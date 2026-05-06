@@ -27,6 +27,7 @@ jobs:
         with:
           key: ci-fix-2026-05-06
       - run: cargo clean
+      - run: cargo check -p clarity-egui
       - run: cargo check --workspace
 
   test:
