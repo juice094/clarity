@@ -609,6 +609,70 @@ Week 3-4 (5.17-5.23): Phase 3 收尾 + Phase 4 设计
 
 已修复的历史问题见 [`CHANGELOG.md`](./CHANGELOG.md)。
 
+## CI Pipeline Rules
+
+> 源自 Sprint 38-C 合并后的 CI Hardening 迭代（2026-05-06）。以下规则用于预防跨平台编译失败和缓存污染导致的反常错误。
+
+### 1. `rust-cache` 污染排错（Hard Rule）
+
+**症状**：本地 `cargo check/test/clippy` 全部通过，但 CI（尤其 Ubuntu/macOS）报 `cannot find module or crate 'clarity_core' in this scope`，或其他无法解释的 rustc 错误。
+
+**根因**：`Swatinem/rust-cache@v2` 的 `target/` 缓存可能保存了损坏或 stale 的编译产物（如依赖图变更后旧 rlib 指纹未失效）。
+
+**处置**：
+1. 优先在 CI 步骤中插入 `cargo clean` 验证（一次性诊断）。
+2. 若确认是缓存问题，**不要**长期保留 `cargo clean`（浪费编译时间）。改为：
+   - 升级 `rust-cache` 的 `key` / `prefix-key` 以强制 miss；或
+   - 设置 `cache-targets: false` 仅缓存 registry/git，不缓存 `target/`；或
+   - 在 workflow 中检测 `Cargo.lock` / `Cargo.toml` 变更时自动 bump key。
+3. 禁止通过反复推送无意义 commit（如修改注释）来"撞运气"刷新缓存。
+
+### 2. `eframe` / `winit` 跨平台 Feature 规则
+
+**规则**：任何对 `eframe` 使用 `default-features = false` 的 crate，必须显式为 Linux 启用窗口系统 backend feature：
+```toml
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "x11"] }
+```
+**理由**：`eframe` 默认 features 包含 `x11` + `wayland`；禁用 default-features 后 Linux 上 `winit` 失去所有 backend，触发 `compile_error!("platform not supported")`。
+**扩展**：若需 Wayland 支持，可额外加 `"wayland"`；`x11` 在 Windows/macOS 上为 no-op，不会引入副作用。
+
+### 3. Match Guard 替代 Collapsible Match
+
+**规则**：clippy `collapsible_match` 出现时，将外层 `match` 与内层 `if` 合并为 `match` guard，而非嵌套块：
+```rust
+// ❌ Before
+match provider.as_str() {
+    "deepseek" => {
+        if env::var("DEEPSEEK_API_KEY").is_err() {
+            env::set_var("DEEPSEEK_API_KEY", api_key);
+        }
+    }
+    _ => {}
+}
+
+// ✅ After
+match provider.as_str() {
+    "deepseek" if env::var("DEEPSEEK_API_KEY").is_err() => {
+        env::set_var("DEEPSEEK_API_KEY", api_key);
+    }
+    _ => {}
+}
+```
+
+### 4. 平台特定代码的条件编译
+
+**规则**：
+- 平台特定工具（如 `PowerShellTool`、`BashTool`）的 `use` 和注册必须加 `#[cfg(target_os = "...")]`。
+- 测试中的平台特定断言（Windows 路径、PowerShell 调用）必须加 `#[cfg(target_os = "windows")]` 或 `#[cfg(windows)]`。
+- `notify-rust::Notification::urgency()` 是 **Linux-only** API，调用处必须用 `#[cfg(target_os = "linux")]` 包裹；非 Linux 平台用 `let _ = urgency;` 消除 unused 警告。
+
+### 5. Coverage 与 `const_assert` 不兼容
+
+**已知限制**：`cargo-tarpaulin` 的仪器化编译可能触发 `pulp` 等 crate 的 `const_assert` 失败（`error[E0080]: evaluation panicked`）。
+**处置**：Coverage job 中若遇此类错误，临时方案是 `--exclude` 相关 crate 或改用 `cargo llvm-cov`。
+
+---
+
 ## Code Style & Health Rules
 
 ### 基础风格
