@@ -89,14 +89,13 @@ pub fn render_markdown(text: &str, base_style: Style) -> Vec<Line<'static>> {
                     current_spans.push(Span::styled(text_content.into_string(), style));
                 }
             }
-            Event::Code(text_content) => {
-                if !in_code_block {
-                    let style = Style::default()
-                        .fg(Color::Rgb(255, 200, 150))
-                        .bg(Color::Rgb(40, 40, 60));
-                    current_spans.push(Span::styled(text_content.into_string(), style));
-                }
+            Event::Code(text_content) if !in_code_block => {
+                let style = Style::default()
+                    .fg(Color::Rgb(255, 200, 150))
+                    .bg(Color::Rgb(40, 40, 60));
+                current_spans.push(Span::styled(text_content.into_string(), style));
             }
+            Event::Code(_) => {}
             Event::SoftBreak | Event::HardBreak => {
                 if in_code_block {
                     code_block_buffer.push('\n');

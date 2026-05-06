@@ -166,13 +166,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resolve_gateway_url_default() {
+    fn test_resolve_gateway_url() {
+        // Default (no env var)
         std::env::remove_var("CLARITY_GATEWAY_URL");
         assert_eq!(resolve_gateway_url(), GATEWAY_URL);
-    }
 
-    #[test]
-    fn test_resolve_gateway_url_from_env() {
+        // From env var
         std::env::set_var("CLARITY_GATEWAY_URL", "http://custom:8080");
         assert_eq!(resolve_gateway_url(), "http://custom:8080");
         std::env::remove_var("CLARITY_GATEWAY_URL");
