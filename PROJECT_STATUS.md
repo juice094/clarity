@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-05-03
+> Last updated: 2026-05-06
 > Branch: `main`
-> Test baseline: **602 passed, 0 failed, 6 ignored**
+> Test baseline: **551 passed (clarity-core), 0 failed, 6 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -36,7 +36,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 602 passed, 6 ignored | 2026-05-03 |
+| Workspace lib tests | 551 passed (clarity-core), 6 ignored | 2026-05-06 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
 | Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |

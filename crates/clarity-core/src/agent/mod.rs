@@ -23,6 +23,7 @@ pub mod hooks;
 pub mod ops;
 pub mod cost_channel;
 pub mod lsp;
+pub mod snapshot;
 pub mod tool_map;
 pub mod tool_parser;
 
@@ -136,6 +137,8 @@ struct AgentInner {
     jumpy_predictor: Option<Arc<dyn crate::agent::jumpy::predictor::OutcomePredictor>>,
     /// Whether the LSP hook has already been initialized.
     lsp_initialized: bool,
+    /// Optional snapshot service for per-turn workspace snapshots.
+    snapshot_service: Option<std::sync::Arc<snapshot::SnapshotService>>,
 }
 
 /// Simple mock LLM for testing
@@ -299,6 +302,26 @@ impl Agent {
                     }
                 }
             });
+        }
+    }
+
+    /// Snapshot pre-turn if the snapshot service is active.
+    pub(crate) async fn maybe_snapshot_pre_turn(&self) {
+        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        if let Some(ref svc) = svc_opt {
+            if let Err(e) = svc.snapshot_pre_turn().await {
+                tracing::warn!("Pre-turn snapshot failed: {}", e);
+            }
+        }
+    }
+
+    /// Snapshot post-turn if the snapshot service is active.
+    pub(crate) async fn maybe_snapshot_post_turn(&self) {
+        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        if let Some(ref svc) = svc_opt {
+            if let Err(e) = svc.snapshot_post_turn().await {
+                tracing::warn!("Post-turn snapshot failed: {}", e);
+            }
         }
     }
 

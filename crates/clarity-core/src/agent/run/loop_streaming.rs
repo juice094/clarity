@@ -275,6 +275,8 @@ impl Agent {
 
         let cancel_token = self.begin_turn()?;
 
+        self.maybe_snapshot_pre_turn().await;
+
         // Discover project-local skills and activate those matching current file paths.
         if let Some(ref registry) = self.skill_registry() {
             registry.discover_for_path(&self.config.working_dir);
@@ -298,6 +300,8 @@ impl Agent {
         let loop_result = self
             .run_streaming_loop(&mut messages, &tools, llm, &mut on_chunk, &cancel_token)
             .await;
+
+        self.maybe_snapshot_post_turn().await;
 
         // Capture usage before finish_turn clears turn_context.
         let usage = self.get_session_usage();

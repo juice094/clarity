@@ -1,7 +1,7 @@
 # Clarity 未完成计划总览
 
-> 生成时间：2026-05-05  
-> 基线分支：`main` @ `91d20d73`  
+> 生成时间：2026-05-06  
+> 基线分支：`main` @ Sprint 38-C 完成  
 > 整合来源：ROADMAP / PROJECT_STATUS / FUTURE_DIRECTION / Sprint Plans / 解耦计划
 
 ---
@@ -83,7 +83,18 @@
 
 ---
 
-## 二、当前 Sprint（Sprint 27 — Prompt Reorder + KV Cache 策略层）
+### Sprint 37 — Prompt Cache + LSP + Cost Bypass（2026-05-05~06）
+
+| ID | 事项 | 状态 |
+|----|------|------|
+| S37-A | `prompt_cache_key` 策略层（SHA-256 stable hash + 5 provider 启用） | ✅ `e3fe0f6f` |
+| S37-B | README + BACKLOG 同步归档 | ✅ `0057f63a` |
+| S37-C | LSP 轻量级 stdio 客户端 + `LspHook` | ✅ `45b11488` |
+| S37-D | 进程级成本旁路通道 `cost_channel.rs` | ✅ `d590427b` |
+
+---
+
+## 二、当前 Sprint（Sprint 38 — 测试基线 + Side-Git + Jumpy 连接）
 
 > 来源：`vault/clarity/optimization-backlog/kimi-share-19df31da-insights.md`
 
@@ -272,7 +283,7 @@ cargo check --workspace --lib                   # 0 warnings
 |--------|----|------|--------|------|------|
 | **Sprint 38** | S38-A | egui 测试基线 | **P1** | 3–5d | Critical 债务。theme/markdown/store 纯函数优先 |
 | **Sprint 38** | S38-B | J5 — Jumpy 历史观测提取 | **P1** | 2–3d | `clarity-memory::session_store` → `SkillObservation` → `HistoricalPredictor` |
-| **Sprint 38** | S38-C | Side-Git 工作区快照 MVP | **P1** | 5–7d | DeepSeek-TUI #4 — `~/.clarity/snapshots/<hash>/.git` side repo，turn 前后自动 snapshot，`/restore N` 安全 checkout |
+| **Sprint 38** | S38-C | Side-Git 工作区快照 MVP | **P1** | 5–7d | ✅ 已完成 — `agent/snapshot/` 4 文件，bare repo + `--git-dir/--work-tree` 策略，`git_restore` 动态工具，Plan/Streaming/Sync 全路径接入 |
 | **Sprint 38** | S38-D | 子代理 Mailbox + CancellationToken 级联 | **P1** | 3–4d | DeepSeek-TUI #5 — 扩展 `SubagentProgressEvent` 为 Mailbox 风格（Started/Progress/ToolCallStarted/Completed/Failed/Cancelled/TokenUsage），`CancellationToken` 树级联 |
 | **Sprint 39** | S39-A | Sprint 27 收尾 — KV cache 跨 turn/跨会话 | **P1** | 3–4d | S27-A3 `LocalGgufProvider` 跨 turn 持久化 + S27-A4 System Prompt KV Snapshot |
 | **Sprint 39** | S39-B | Sprint 27 收尾 — `refresh_context()` 统一 | **P2** | 2d | S27-B1 + S27-B2 |
@@ -300,7 +311,7 @@ cargo check --workspace --lib                   # 0 warnings
 ## 八、验收命令（任何变更后必执行）
 
 ```bash
-cargo test --workspace --lib -- --test-threads=1   # 728 passed, 0 failed, 6 ignored (Sprint 36.6 基线)
+cargo test --workspace --lib -- --test-threads=1   # 545 passed in clarity-core, 0 failed, 6 ignored (Sprint 37 基线)
 cargo clippy --workspace -- -D warnings           # 0 warnings
 cargo fmt --all -- --check                         # 0 diff
 cargo doc --workspace --no-deps                    # 0 doc warnings

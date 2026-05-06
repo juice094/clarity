@@ -52,6 +52,7 @@ impl Agent {
     pub async fn plan(&self, query: impl AsRef<str>) -> Result<Plan, AgentError> {
         let query = query.as_ref();
         let _cancel_token = self.begin_turn()?;
+        self.maybe_snapshot_pre_turn().await;
 
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
 
@@ -132,6 +133,7 @@ Rules:
             ))
         })?;
 
+        self.maybe_snapshot_post_turn().await;
         self.finish_turn();
         Ok(plan)
     }
@@ -145,6 +147,7 @@ Rules:
     /// aborting the whole plan, so the caller can see partial progress.
     pub async fn execute_plan(&self, plan: &Plan) -> Result<Vec<PlanResult>, AgentError> {
         let cancel_token = self.begin_turn()?;
+        self.maybe_snapshot_pre_turn().await;
 
         self.send_wire_message(clarity_wire::WireMessage::TurnBegin {
             user_input: format!("Execute plan: {}", plan.title),
@@ -189,6 +192,7 @@ Rules:
         }
 
         self.send_wire_message(clarity_wire::WireMessage::TurnEnd);
+        self.maybe_snapshot_post_turn().await;
         self.finish_turn();
         Ok(results)
     }

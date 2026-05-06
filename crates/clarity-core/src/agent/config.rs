@@ -60,6 +60,8 @@ pub struct AgentConfig {
     pub jumpy_config: Option<ComposerConfig>,
     /// Optional LSP client configuration.
     pub lsp_config: Option<crate::agent::lsp::LspClientConfig>,
+    /// Optional workspace snapshot configuration.
+    pub snapshot_config: Option<crate::agent::snapshot::SnapshotConfig>,
 }
 
 impl Default for AgentConfig {
@@ -87,6 +89,7 @@ impl Default for AgentConfig {
             enable_jumpy: false,
             jumpy_config: None,
             lsp_config: None,
+            snapshot_config: None,
         }
     }
 }
@@ -226,6 +229,12 @@ impl AgentConfig {
     /// Set LSP client configuration.
     pub fn with_lsp_config(mut self, config: crate::agent::lsp::LspClientConfig) -> Self {
         self.lsp_config = Some(config);
+        self
+    }
+
+    /// Set workspace snapshot configuration.
+    pub fn with_snapshot_config(mut self, config: crate::agent::snapshot::SnapshotConfig) -> Self {
+        self.snapshot_config = Some(config);
         self
     }
 }

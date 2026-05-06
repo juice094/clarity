@@ -32,6 +32,9 @@ impl Agent {
         }
         let (mut messages, tools, llm, cancel_token) =
             self.prepare_sync_turn(query.as_ref()).await?;
+
+        self.maybe_snapshot_pre_turn().await;
+
         info!("Starting agent loop for query: {}", query.as_ref());
         self.send_wire_message(WireMessage::TurnBegin {
             user_input: query.as_ref().to_string(),
@@ -39,6 +42,9 @@ impl Agent {
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
+
+        self.maybe_snapshot_post_turn().await;
+
         {
             let mut inner = self.inner.write().unwrap();
             inner.last_turn_message_count = messages.len();
@@ -217,9 +223,11 @@ impl Agent {
     ) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
         let (tools, llm, cancel_token) = self.setup_turn().await?;
+        self.maybe_snapshot_pre_turn().await;
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;
+        self.maybe_snapshot_post_turn().await;
         self.finish_sync_turn(final_response, completed, &tool_names).await
     }
 

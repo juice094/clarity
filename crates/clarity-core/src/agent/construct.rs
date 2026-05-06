@@ -76,6 +76,7 @@ impl Agent {
                 static_prompt_hash: None,
                 jumpy_predictor: None,
                 lsp_initialized: false,
+                snapshot_service: None,
             })),
         }
     }
@@ -452,7 +453,32 @@ impl Agent {
             inner.lsp_initialized = true;
         }
 
+        // Initialize snapshot service if configured and not yet initialized
+        let needs_snapshot_init = {
+            let inner = self.inner.read().unwrap();
+            inner.snapshot_service.is_none() && self.config.snapshot_config.is_some()
+        };
+        if needs_snapshot_init {
+            if let Some(ref snapshot_config) = self.config.snapshot_config {
+                if let Some(service) =
+                    super::snapshot::SnapshotService::try_new(snapshot_config, &self.config.working_dir).await
+                {
+                    let service = std::sync::Arc::new(service);
+                    let tool = super::snapshot::GitRestoreTool::new(service.clone());
+                    let _ = self.registry.register(tool);
+                    let mut inner = self.inner.write().unwrap();
+                    inner.snapshot_service = Some(service);
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    /// Set snapshot configuration.
+    pub fn with_snapshot_config(mut self, config: super::snapshot::SnapshotConfig) -> Self {
+        self.config.snapshot_config = Some(config);
+        self
     }
 
     /// Set capability token for subagent permission isolation
