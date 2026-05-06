@@ -21,6 +21,7 @@ pub mod error_memory;
 pub mod flow;
 pub mod hooks;
 pub mod ops;
+pub mod cost_channel;
 pub mod tool_map;
 pub mod tool_parser;
 
@@ -429,9 +430,21 @@ impl Agent {
     }
 
     /// Check if the estimated cost exceeds per-turn or per-day budget.
+    /// Includes pending costs reported by background tasks (subagents, compaction, etc.).
     fn check_budget(&self, estimated_cost: f64) -> Result<(), AgentError> {
         let config = &self.config;
         let mut inner = self.inner.write().unwrap();
+
+        // Drain any cost reported by background tasks into the main tracker.
+        let pending = cost_channel::drain_pending_cost();
+        if pending > 0.0 {
+            let today = chrono::Utc::now().date_naive();
+            if inner.last_cost_date != today {
+                inner.daily_cost_usd = 0.0;
+                inner.last_cost_date = today;
+            }
+            inner.daily_cost_usd += pending;
+        }
 
         // Day boundary reset
         let today = chrono::Utc::now().date_naive();
@@ -451,7 +464,7 @@ impl Agent {
             }
         }
 
-        // Per-day limit
+        // Per-day limit (includes background-task costs already drained above)
         if let Some(limit) = config.max_cost_per_day_usd {
             let projected = inner.daily_cost_usd + estimated_cost;
             if projected > limit {
@@ -467,14 +480,16 @@ impl Agent {
     }
 
     /// Record actual cost after an LLM call.
+    /// Also drains any pending costs from background tasks.
     fn record_cost(&self, cost: f64) {
+        let pending = cost_channel::drain_pending_cost();
         let mut inner = self.inner.write().unwrap();
         let today = chrono::Utc::now().date_naive();
         if inner.last_cost_date != today {
             inner.daily_cost_usd = 0.0;
             inner.last_cost_date = today;
         }
-        inner.daily_cost_usd += cost;
+        inner.daily_cost_usd += cost + pending;
     }
 
     /// Execute a flow-driven skill.
