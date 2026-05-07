@@ -352,6 +352,7 @@ pub struct StdioMcpClient {
     stdin: Option<tokio::sync::Mutex<ChildStdin>>,
     request_id: AtomicU64,
     pending: Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse<Value>>>>>,
+    alive: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl StdioMcpClient {
@@ -362,6 +363,7 @@ impl StdioMcpClient {
             stdin: None,
             request_id: AtomicU64::new(1),
             pending: Arc::new(RwLock::new(HashMap::new())),
+            alive: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -432,6 +434,7 @@ impl McpClient for StdioMcpClient {
 
         self.child = Some(child);
         self.stdin = Some(tokio::sync::Mutex::new(stdin));
+        self.alive.store(true, std::sync::atomic::Ordering::SeqCst);
 
         // Give wrapper tools (npx, uvx) a moment to finish setup before
         // sending the initialization handshake.
@@ -439,6 +442,7 @@ impl McpClient for StdioMcpClient {
 
         // Start response reader
         let pending = self.pending.clone();
+        let alive = self.alive.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
@@ -451,6 +455,7 @@ impl McpClient for StdioMcpClient {
                     }
                 }
             }
+            alive.store(false, std::sync::atomic::Ordering::SeqCst);
         });
 
         // Perform MCP initialization handshake
@@ -489,10 +494,17 @@ impl McpClient for StdioMcpClient {
             let _ = child.kill().await;
         }
         self.stdin = None;
+        self.alive.store(false, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
     async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError> {
+        if !self.alive.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(McpError::ConnectionFailed(
+                "MCP server process is not running or has exited".into(),
+            ));
+        }
+
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
         let request = JsonRpcRequest {
             jsonrpc: "2.0",

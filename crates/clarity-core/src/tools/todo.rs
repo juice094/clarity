@@ -14,11 +14,7 @@ use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
 
 fn default_todos_path() -> ToolResult<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".clarity").join("todos.json"))
-        .ok_or_else(|| {
-            ToolError::execution_failed("Could not determine home directory".to_string())
-        })
+    super::clarity_data_dir().map(|p| p.join("todos.json"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

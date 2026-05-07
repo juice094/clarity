@@ -14,6 +14,14 @@ impl App {
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
         let mut state = AppState::default();
 
+        // Load persisted cron tasks into the scheduler
+        let bg_manager = Arc::clone(&state.bg_manager);
+        runtime.block_on(async {
+            if let Err(e) = bg_manager.load_cron_tasks().await {
+                tracing::warn!("Failed to load cron tasks: {}", e);
+            }
+        });
+
         // Initialize long-term memory store
         let memory_db = dirs::data_dir()
             .map(|d| d.join("clarity").join("memory.db"))
@@ -239,6 +247,7 @@ impl App {
                 stick_to_bottom: true,
                 editing_message_idx: None,
                 edit_buffer: String::new(),
+                last_snapshot: None,
             },
             settings_store: crate::stores::SettingsStore {
                 settings_open: false,
@@ -303,6 +312,8 @@ impl App {
                 editing_title: String::new(),
                 agent_turn_style: true,
                 agent_turn_glass: false,
+                workspace_plan_expanded: false,
+                workspace_plan_manually_collapsed: false,
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
@@ -338,6 +349,7 @@ impl App {
                 create_max_concurrency: 4,
                 create_timeout_secs: 300,
             },
+            snapshot_store: crate::stores::SnapshotStore::default(),
         };
         app.refresh_tasks();
         app

@@ -685,6 +685,48 @@ impl BackgroundTaskManager {
         Ok(())
     }
 
+    /// Enable or disable a cron task by its id.
+    pub async fn set_cron_enabled(&self, task_id: &str, enabled: bool) -> anyhow::Result<()> {
+        let cron = self
+            .cron_scheduler
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Cron scheduler not configured"))?;
+
+        let mut guard = cron.lock().await;
+        if !guard.set_enabled(task_id, enabled) {
+            return Err(anyhow::anyhow!("Cron task not found: {}", task_id));
+        }
+
+        let task = guard
+            .tasks()
+            .iter()
+            .find(|t| t.task_id == task_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Cron task disappeared: {}", task_id))?;
+        drop(guard);
+
+        self.store.save_cron(&task).await?;
+        info!("Set cron task {} enabled={}", task_id, enabled);
+        Ok(())
+    }
+
+    /// Load persisted cron tasks into the in-memory scheduler.
+    pub async fn load_cron_tasks(&self) -> anyhow::Result<usize> {
+        let cron = self
+            .cron_scheduler
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Cron scheduler not configured"))?;
+
+        let tasks = self.store.list_cron().await?;
+        let count = tasks.len();
+        let mut guard = cron.lock().await;
+        for task in tasks {
+            guard.add_task_raw(task);
+        }
+        info!("Loaded {} cron tasks from store", count);
+        Ok(count)
+    }
+
     /// Check for due cron tasks and spawn them.
     ///
     /// Returns the number of tasks that were spawned.

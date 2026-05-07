@@ -83,6 +83,10 @@ pub enum EventMsg {
         step_id: String,
         success: bool,
     },
+    /// A plan step was skipped by user request.
+    PlanStepSkipped {
+        step_id: String,
+    },
 }
 
 impl From<crate::WireMessage> for EventMsg {
@@ -120,6 +124,9 @@ impl From<crate::WireMessage> for EventMsg {
             }
             crate::WireMessage::PlanStepEnd { step_id, success } => {
                 EventMsg::PlanStepEnd { step_id, success }
+            }
+            crate::WireMessage::PlanStepSkipped { step_id } => {
+                EventMsg::PlanStepSkipped { step_id }
             }
         }
     }
@@ -325,6 +332,20 @@ mod tests {
             EventMsg::PlanStepEnd {
                 step_id: "s1".to_string(),
                 success: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_event_msg_from_wire_message_plan_step_skipped() {
+        let wire = WireMessage::PlanStepSkipped {
+            step_id: "s1".to_string(),
+        };
+        let event_msg: EventMsg = wire.into();
+        assert_eq!(
+            event_msg,
+            EventMsg::PlanStepSkipped {
+                step_id: "s1".to_string(),
             }
         );
     }

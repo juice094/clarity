@@ -12,8 +12,9 @@ impl App {
         if text.is_empty() && self.chat_store.attachments.is_empty() {
             return;
         }
-        // Clear any stale plan tracker from a previous turn.
+        // Clear any stale plan tracker / snapshot hint from a previous turn.
         self.chat_store.plan_tracker = None;
+        self.chat_store.last_snapshot = None;
 
         // If currently streaming, steer: cancel the current turn and queue the
         // message for immediate send when the cancellation completes.
@@ -317,6 +318,9 @@ impl App {
                         }
                         clarity_wire::WireMessage::PlanStepEnd { step_id, success } => {
                             Some(UiEvent::PlanStepEnd { step_id, success })
+                        }
+                        clarity_wire::WireMessage::PlanStepSkipped { step_id } => {
+                            Some(UiEvent::PlanStepSkipped { step_id })
                         }
                         clarity_wire::WireMessage::Usage {
                             prompt_tokens,

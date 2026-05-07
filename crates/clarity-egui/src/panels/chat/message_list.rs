@@ -1,4 +1,3 @@
-use crate::panels::chat::plan::render_plan;
 use crate::theme::Theme;
 use crate::ui;
 use crate::ui::types::Role;
@@ -297,11 +296,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             );
                             let bubble_h = if agent_turn_glass {
                                 crate::render::turn_renderer::render_agent_turn_glass(
-                                    ui, &mut turn, &theme,
+                                    ui, &mut turn, &theme, i,
                                 )
                             } else {
                                 crate::render::turn_renderer::render_agent_turn(
-                                    ui, &mut turn, &theme,
+                                    ui, &mut turn, &theme, i,
                                 )
                             };
                             session.turn_heights[i] = Some(bubble_h);
@@ -548,8 +547,6 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
                 }
             }
-            // Plan review card (rendered inside the same scroll area as messages)
-            render_plan(app, ui);
             // Detect user scroll-up intent to release stick-to-bottom.
             ui.input(|i| {
                 for event in &i.events {

@@ -51,6 +51,15 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 39 — Runtime Stability + Engineering Hygiene + Backlog（已完成 ✅，2026-05-07）**
+
+> 承接 Sprint 38-C，执行计划 `~/.kimi/plans/warpath-jubilee-forge.md`（A+B+C 合并）。
+
+- **Phase 1 — 运行时稳定性**: `TaskStore::get_result_opt()` 文件缺失时返回 `None` 而非 panic；`TaskOutputTool` 返回结构化 `{"exists": false}`；`StdioMcpClient` 新增 `alive: Arc<AtomicBool>` 进程健康检测，stdout reader 结束后后续请求返回 `ConnectionFailed` 而非 raw OS error 232
+- **Phase 2 — 工程纪律**: 6 个 TODO/FIXME 代码标记全部清理并迁移至 `docs/notes/todo-migration-2026-05-07.md`；unwrap 密度 clippy 审计约 209 个（生产代码），以文档记录替代硬性压缩
+- **Phase 3 — Backlog 推进**: `ParallelExecutor::execute` 新增 `cancel: Option<CancellationToken>` 参数；`TeamCoordinator` 将团队级 cancel token 级联到并行执行器；J5 Jumpy 已有完整实现+测试，无需改动
+- **验证**: `cargo test --workspace --lib` = 全部通过 / 0 failed / 7 ignored / 0 warning
+
 **Sprint 38-C — CI Pipeline Hardening（已完成 ✅，2026-05-06）**
 
 - A ✅: 修复 `clarity-egui` Cargo.toml 跨平台依赖解析（TOML 节顺序敏感，内部 crate 依赖误落入 `[target.'cfg(windows)'.dependencies]`）

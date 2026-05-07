@@ -61,6 +61,7 @@ pub(crate) struct App {
     pub(crate) mcp_store: stores::McpStore,
     pub(crate) onboarding_store: stores::OnboardingStore,
     pub(crate) team_store: stores::TeamStore,
+    pub(crate) snapshot_store: stores::SnapshotStore,
 }
 
 mod app_logic;
@@ -420,6 +421,10 @@ impl App {
     fn render_approval_modal(&mut self, ctx: &egui::Context) {
         panels::approval::render_approval_modal(self, ctx);
     }
+
+    fn render_snapshot_modal(&mut self, ctx: &egui::Context) {
+        panels::snapshot::render_snapshot_modal(self, ctx);
+    }
 }
 
 impl eframe::App for App {
@@ -551,6 +556,7 @@ impl eframe::App for App {
             app.render_cron_create_modal(ctx)
         });
         self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
+        self.render_safe(ctx, "snapshot", |app, ctx| app.render_snapshot_modal(ctx));
         self.render_safe(ctx, "task_create", |app, ctx| {
             app.render_task_create_modal(ctx)
         });

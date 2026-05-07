@@ -10,9 +10,7 @@ use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
 
 fn task_store_path() -> ToolResult<std::path::PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".clarity").join("tasks"))
-        .ok_or_else(|| ToolError::execution_failed("Could not determine home directory"))
+    super::clarity_data_dir().map(|p| p.join("tasks"))
 }
 
 /// Tool for listing background tasks
@@ -131,23 +129,32 @@ impl Tool for TaskOutputTool {
         let task_id = helpers::required_str(&args, "task_id")?;
         let store = TaskStore::new(task_store_path()?);
 
-        let result = store
-            .get_result(task_id)
+        let result_opt = store
+            .get_result_opt(task_id)
             .await
-            .map_err(|e| ToolError::execution_failed(format!("Task not found: {}", e)))?;
+            .map_err(|e| ToolError::execution_failed(format!("Failed to read task result: {}", e)))?;
 
-        let output = if result.output.len() > 5000 {
-            format!("{}...(truncated)", &result.output[..5000])
-        } else {
-            result.output
-        };
+        match result_opt {
+            Some(result) => {
+                let output = if result.output.len() > 5000 {
+                    format!("{}...(truncated)", &result.output[..5000])
+                } else {
+                    result.output
+                };
 
-        Ok(json!({
-            "status": result.status.as_str(),
-            "output": output,
-            "elapsed_ms": result.elapsed_ms,
-            "steps": result.steps,
-        }))
+                Ok(json!({
+                    "status": result.status.as_str(),
+                    "output": output,
+                    "elapsed_ms": result.elapsed_ms,
+                    "steps": result.steps,
+                }))
+            }
+            None => Ok(json!({
+                "exists": false,
+                "task_id": task_id,
+                "message": format!("Task '{}' has no result yet or does not exist", task_id)
+            })),
+        }
     }
 }
 

@@ -4,7 +4,8 @@
 //! HuggingFace GGUF models. Uses `reqwest` (already a core dependency)
 //! for HTTP streaming and `tokio::sync::mpsc` for progress callbacks.
 //!
-//! TODO(Sprint-31-debt): migrate to clarity-infrastructure crate.
+//! NOTE: Evaluate migration to clarity-infrastructure crate if the module
+//! grows beyond 500 lines or gains additional infrastructure-only deps.
 
 use futures::StreamExt;
 use std::path::PathBuf;

@@ -14,9 +14,7 @@ use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
 
 fn teams_dir() -> ToolResult<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".clarity").join("teams"))
-        .ok_or_else(|| ToolError::execution_failed("Could not determine home directory"))
+    super::clarity_data_dir().map(|p| p.join("teams"))
 }
 
 /// Serializable team member configuration

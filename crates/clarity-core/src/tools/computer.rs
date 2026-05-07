@@ -34,8 +34,11 @@ impl ComputerUseTool {
 
     fn call_python_bridge(&self, action: &str, args: Value) -> ToolResult<String> {
         let payload = json!({"action": action, "args": args});
+        let script_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("scripts")
+            .join("computer_bridge.py");
         let output = std::process::Command::new(&self.python_cmd)
-            .arg("scripts/computer_bridge.py")
+            .arg(&script_path)
             .arg(payload.to_string())
             .output()
             .map_err(|e| {

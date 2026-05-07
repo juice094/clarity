@@ -9,7 +9,7 @@ use crate::ui::types::ToolCallStatus;
 // ============================================================================
 
 /// Render an AgentTurn in **CLI style**: zero borders, single avatar, indented tools.
-pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme) -> f32 {
+pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme, turn_idx: usize) -> f32 {
     let start_y = ui.cursor().min.y;
 
     // ── Header: avatar + "Agent" + meta ──
@@ -39,7 +39,7 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme)
                 .size(theme.text_sm)
                 .color(theme.text_muted),
         )
-        .id_salt("agent_turn_thinking_cli")
+        .id_salt(format!("agent_turn_thinking_cli_{}", turn_idx))
         .default_open(false)
         .show(ui, |ui| {
             for step in &thinking.steps {
@@ -61,7 +61,7 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme)
                 .size(theme.text_sm)
                 .color(theme.text_dim),
         )
-        .id_salt("agent_turn_tools_cli")
+        .id_salt(format!("agent_turn_tools_cli_{}", turn_idx))
         .default_open(false)
         .show(ui, |ui| {
             for tc in &turn.tool_calls {
@@ -87,7 +87,7 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme)
 }
 
 /// Render an AgentTurn in **Glass style**: existing card aesthetic preserved.
-pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme) -> f32 {
+pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme, turn_idx: usize) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() - 32.0).max(120.0);
 
@@ -132,7 +132,7 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
                         .strong()
                         .color(theme.text_muted),
                 )
-                .id_salt("agent_turn_thinking_glass")
+                .id_salt(format!("agent_turn_thinking_glass_{}", turn_idx))
                 .default_open(false)
                 .show(ui, |ui| {
                     for step in &thinking.steps {
@@ -154,7 +154,7 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
                         .size(theme.text_sm)
                         .color(theme.text_dim),
                 )
-                .id_salt("agent_turn_tools_glass")
+                .id_salt(format!("agent_turn_tools_glass_{}", turn_idx))
                 .default_open(false)
                 .show(ui, |ui| {
                     for tc in &turn.tool_calls {

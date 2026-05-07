@@ -1,5 +1,6 @@
 use crate::ui::types::ToastLevel;
 use crate::App;
+use clarity_core::tools::Tool;
 
 pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
     if !app.team_store.team_panel_open {
@@ -206,14 +207,52 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
             });
 
             if let Some(i) = to_delete {
-                // TODO: backend integration — call TeamDeleteTool
+                let team = app.team_store.teams[i].clone();
+                let tool = clarity_core::tools::team::TeamDeleteTool::new();
+                let args = serde_json::json!({ "team_name": team.name });
+                app.runtime.spawn(async move {
+                    let ctx = clarity_core::tools::ToolContext::new();
+                    match tool.execute(args, ctx).await {
+                        Ok(_) => tracing::info!("Team deleted: {}", team.name),
+                        Err(e) => tracing::warn!("Failed to delete team: {}", e),
+                    }
+                });
                 app.team_store.teams.remove(i);
                 app.push_toast("Team deleted".to_string(), ToastLevel::Info);
             }
             if let Some(i) = to_run {
-                let team_name = app.team_store.teams[i].name.clone();
-                // TODO: backend integration — call TeamCoordinator::execute_team
-                app.push_toast(format!("Running team: {}", team_name), ToastLevel::Info);
+                let team = app.team_store.teams[i].clone();
+                let agent = app.state.agent.clone();
+                let tx = app.ui_tx.clone();
+                app.runtime.spawn(async move {
+                    let specs: Vec<_> = team.members.iter().map(|m| {
+                        clarity_core::subagents::RunSpec::new(&m.name, &m.description)
+                    }).collect();
+                    let team_config = clarity_core::subagents::AgentTeam::new(&team.name, &team.goal)
+                        .with_members(specs)
+                        .with_config(clarity_core::subagents::ParallelConfig {
+                            max_concurrency: team.max_concurrency,
+                            timeout_secs: Some(team.timeout_secs),
+                            cancel_on_error: false,
+                            enable_aggregation: true,
+                        });
+                    match agent.run_team(team_config).await {
+                        Ok(result) => {
+                            let text = format!(
+                                "Team {} completed: {} results",
+                                team.name,
+                                result.parallel.results.len()
+                            );
+                            let _ = tx.send(crate::ui::types::UiEvent::Chunk(text));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(crate::ui::types::UiEvent::Error(format!(
+                                "Team execution failed: {}",
+                                e
+                            )));
+                        }
+                    }
+                });
             }
         });
 }

@@ -3,7 +3,6 @@ use crate::App;
 pub mod header;
 pub mod input;
 pub mod message_list;
-pub mod plan;
 
 pub use self::header::render_header;
 pub use self::input::render_input;
@@ -73,7 +72,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                     .max_rect(centered_rect)
                     .layout(egui::Layout::top_down(egui::Align::LEFT)),
                 |ui| {
-                    // Message list owns the single ScrollArea (plan is rendered inside it)
+                    // Message list owns the single ScrollArea
                     render_message_list(app, ui);
                 },
             );

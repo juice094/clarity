@@ -15,11 +15,7 @@ use crate::tools::helpers;
 use crate::tools::{Tool, ToolContext, ToolResult};
 
 fn default_plans_dir() -> ToolResult<PathBuf> {
-    dirs::home_dir()
-        .map(|p| p.join(".clarity").join("plans"))
-        .ok_or_else(|| {
-            ToolError::execution_failed("Could not determine home directory".to_string())
-        })
+    super::clarity_data_dir().map(|p| p.join("plans"))
 }
 
 fn plan_path(dir: &std::path::Path, plan_id: &str) -> PathBuf {
@@ -200,6 +196,13 @@ impl Tool for PlanTool {
             }
             "get" => {
                 let plan_id = helpers::required_str(&args, "plan_id")?;
+                let path = plan_path(&dir, plan_id);
+                if !path.exists() {
+                    return Ok(json!({
+                        "exists": false,
+                        "plan_id": plan_id,
+                    }));
+                }
                 let plan = load_plan(&dir, plan_id).await?;
 
                 let steps_json: Vec<Value> = plan
@@ -312,6 +315,13 @@ impl Tool for PlanTool {
             "delete" => {
                 let plan_id = helpers::required_str(&args, "plan_id")?;
                 let path = plan_path(&dir, plan_id);
+                if !path.exists() {
+                    return Ok(json!({
+                        "deleted": false,
+                        "reason": "not found",
+                        "plan_id": plan_id,
+                    }));
+                }
                 tokio::fs::remove_file(&path).await.map_err(|e| {
                     ToolError::execution_failed(format!(
                         "Failed to delete plan '{}': {}",

@@ -67,6 +67,25 @@ pub struct PlanResult {
     pub output: String,
 }
 
+/// Runtime execution status of a single plan step.
+/// Distinct from the LLM-generated `PlanStep` — this tracks mutable runtime state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlanStepExecutionStatus {
+    Pending,
+    Running,
+    Success,
+    Failed,
+    Skipped,
+}
+
+/// Runtime state for one step of a plan execution.
+#[derive(Debug, Clone)]
+pub struct PlanExecutionState {
+    pub step_id: String,
+    pub status: PlanStepExecutionStatus,
+    pub result: Option<PlanResult>,
+}
+
 /// Definition of a subagent type.
 /// P1-1: Moved from `subagents/registry.rs` to `types.rs` to break the
 /// `background↔subagents` circular dependency.

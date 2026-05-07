@@ -2,6 +2,58 @@ use crate::components::input;
 use crate::App;
 
 pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
+    // Snapshot hint bar (non-intrusive, above input)
+    if let Some(ref snap) = app.chat_store.last_snapshot {
+        let theme = &app.ui_store.theme;
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("📸")
+                    .size(theme.text_sm),
+            );
+            ui.label(
+                egui::RichText::new(format!("Snapshot #{}", snap.id))
+                    .size(theme.text_xs)
+                    .color(theme.text_dim),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("📜 History")
+                                .size(theme.text_xs)
+                                .color(theme.accent),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    )
+                    .clicked()
+                {
+                    app.snapshot_store.modal_open = true;
+                    app.snapshot_store.snapshots = app.state.agent.snapshot_list();
+                }
+                ui.add_space(4.0);
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("↩ Restore")
+                                .size(theme.text_xs)
+                                .color(theme.danger),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    )
+                    .clicked()
+                {
+                    app.snapshot_store.modal_open = true;
+                    app.snapshot_store.confirm_restore_id = Some(snap.id);
+                    app.snapshot_store.selected_id = Some(snap.id);
+                    app.snapshot_store.snapshots = app.state.agent.snapshot_list();
+                }
+            });
+        });
+        ui.add_space(4.0);
+    }
+
     // Attachment chips above input bar
     if let Some(i) = input::attachment_chips(ui, &app.chat_store.attachments, &app.ui_store.theme) {
         app.chat_store.attachments.remove(i);

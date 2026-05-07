@@ -10,6 +10,12 @@ use crate::App;
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
 
+    // Auto-expand plan section when a plan becomes active (unless user manually collapsed)
+    let plan_active = app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
+    if plan_active && !app.ui_store.workspace_plan_manually_collapsed {
+        app.ui_store.workspace_plan_expanded = true;
+    }
+
     egui::SidePanel::right("workspace_panel")
         .default_width(320.0)
         .min_width(240.0)
@@ -78,9 +84,12 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
 
             // ── File tree (scrollable) ──
             let has_preview = app.ui_store.preview_item.is_some();
+            let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
             let mut scroll = egui::ScrollArea::vertical().id_salt("workspace_file_tree");
-            if has_preview {
-                scroll = scroll.max_height(ui.available_height() * 0.45);
+            if has_preview || has_plan {
+                // Reduce tree height when plan or preview is present
+                let factor = if has_preview && has_plan { 0.30 } else { 0.40 };
+                scroll = scroll.max_height(ui.available_height() * factor);
             }
             scroll.show(ui, |ui| {
                 crate::ui::file_browser::render_file_tree(
@@ -168,5 +177,8 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                             });
                     });
             }
+
+            // ── Plan foldable section (bottom) ──
+            crate::panels::workspace_plan::render_workspace_plan(app, ui);
         });
 }

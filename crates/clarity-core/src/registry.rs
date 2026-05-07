@@ -122,6 +122,64 @@ impl ToolRegistry {
         registry
     }
 
+    /// Create a registry with only egui-safe tools (no platform-specific
+    /// dark corners, no ~/-clarity dependencies, no external Python bridges).
+    pub fn with_egui_safe_tools() -> Self {
+        #[cfg(not(target_os = "windows"))]
+        use crate::tools::BashTool;
+        #[cfg(target_os = "windows")]
+        use crate::tools::PowerShellTool;
+        use crate::tools::{
+            AskUserTool, CancelCronTool, ChannelSendTool, FileEditTool, FileReadTool,
+            FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool,
+            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool,
+            TaskOutputTool, TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool,
+            ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
+        };
+
+        let registry = Self::new();
+
+        let _ = registry.register(FileReadTool::new());
+        let _ = registry.register(FileWriteTool::new());
+        let _ = registry.register(FileEditTool::new());
+        let _ = registry.register(GlobTool::new());
+        let _ = registry.register(GrepTool::new());
+        #[cfg(not(target_os = "windows"))]
+        let _ = registry.register(BashTool::new());
+        #[cfg(target_os = "windows")]
+        let _ = registry.register(PowerShellTool::new());
+        let _ = registry.register(WebSearchTool::new());
+        let _ = registry.register(WebFetchTool::new());
+        let _ = registry.register(WebBrowserTool::new());
+        let _ = registry.register(ThinkTool::new());
+        let _ = registry.register(AskUserTool::new());
+        let _ = registry.register(ChannelSendTool::new());
+        let _ = registry.register(ReadMediaFileTool::new());
+
+        // Plan & task management — now hardened for egui
+        let _ = registry.register(PlanTool::new());
+        let _ = registry.register(TaskCreateTool::new());
+        let _ = registry.register(TaskListTool::new());
+        let _ = registry.register(TaskOutputTool::new());
+        let _ = registry.register(TaskStopTool::new());
+
+        // Notifications & todos — now hardened for egui
+        let _ = registry.register(NotifyTool::new());
+        let _ = registry.register(TodoTool::new());
+
+        // Team collaboration — now hardened for egui
+        let _ = registry.register(TeamCreateTool::new());
+        let _ = registry.register(TeamListTool::new());
+        let _ = registry.register(TeamDeleteTool::new());
+
+        // Cron scheduling — scheduler now wired in egui AppState
+        let _ = registry.register(ScheduleCronTool::new());
+        let _ = registry.register(ListCronTool::new());
+        let _ = registry.register(CancelCronTool::new());
+
+        registry
+    }
+
     /// Register a tool in the registry
     ///
     /// # Arguments

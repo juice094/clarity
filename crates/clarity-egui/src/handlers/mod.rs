@@ -73,6 +73,28 @@ pub fn process_events(app: &mut App) {
             UiEvent::PlanStepEnd { step_id, success } => {
                 chat::on_plan_step_end(&mut app.chat_store, step_id, success);
             }
+            UiEvent::PlanSkip { step_id } => {
+                let agent = app.state.agent.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = agent.skip_plan_step(&step_id).await {
+                        tracing::warn!("Failed to skip plan step {}: {}", step_id, e);
+                    }
+                });
+            }
+            UiEvent::PlanRetry { step_id } => {
+                let agent = app.state.agent.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = agent.retry_plan_step(&step_id).await {
+                        tracing::warn!("Failed to retry plan step {}: {}", step_id, e);
+                    }
+                });
+            }
+            UiEvent::PlanStepSkipped { step_id } => {
+                chat::on_plan_step_skipped(&mut app.chat_store, step_id);
+            }
+            UiEvent::CronList(tasks) => {
+                cron::on_cron_list(&mut app.cron_store, tasks);
+            }
             UiEvent::ProviderTestResult {
                 provider_id,
                 success,
@@ -195,6 +217,23 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::GatewayHealth(status) => {
                 app.chat_store.gateway_status = status;
+            }
+            UiEvent::SnapshotRestored { id, success, error } => {
+                app.snapshot_store.restoring = false;
+                if success {
+                    app.push_toast(
+                        format!("Workspace restored to snapshot #{}", id),
+                        crate::ui::types::ToastLevel::Info,
+                    );
+                } else {
+                    app.push_toast(
+                        format!(
+                            "Restore failed: {}",
+                            error.unwrap_or_else(|| "unknown error".to_string())
+                        ),
+                        crate::ui::types::ToastLevel::Error,
+                    );
+                }
             }
         }
     }

@@ -60,19 +60,28 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
         let action = render_cron_task_list(ui, &app.cron_store.tasks, theme);
         match action {
             CronSectionAction::Delete(task_id) => {
-                // TODO: wire to clarity-core backend (cancel_cron)
-                app.cron_store.tasks.retain(|t| t.task_id != task_id);
+                let bg_manager = std::sync::Arc::clone(&app.state.bg_manager);
+                let tx = app.ui_tx.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = bg_manager.cancel_cron(&task_id).await {
+                        tracing::warn!("Failed to cancel cron: {}", e);
+                    }
+                    if let Ok(tasks) = bg_manager.list_cron_tasks().await {
+                        let _ = tx.send(crate::ui::types::UiEvent::CronList(tasks));
+                    }
+                });
             }
             CronSectionAction::ToggleEnabled(task_id, enabled) => {
-                // TODO: wire to clarity-core backend (set_enabled)
-                if let Some(task) = app
-                    .cron_store
-                    .tasks
-                    .iter_mut()
-                    .find(|t| t.task_id == task_id)
-                {
-                    task.enabled = enabled;
-                }
+                let bg_manager = std::sync::Arc::clone(&app.state.bg_manager);
+                let tx = app.ui_tx.clone();
+                app.runtime.spawn(async move {
+                    if let Err(e) = bg_manager.set_cron_enabled(&task_id, enabled).await {
+                        tracing::warn!("Failed to set cron enabled: {}", e);
+                    }
+                    if let Ok(tasks) = bg_manager.list_cron_tasks().await {
+                        let _ = tx.send(crate::ui::types::UiEvent::CronList(tasks));
+                    }
+                });
             }
             CronSectionAction::None => {}
         }

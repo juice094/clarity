@@ -56,6 +56,20 @@ pub enum UiEvent {
         step_id: String,
         success: bool,
     },
+    /// A plan step was skipped by user request.
+    PlanSkip {
+        step_id: String,
+    },
+    /// Retry a failed plan step.
+    PlanRetry {
+        step_id: String,
+    },
+    /// Notification that a plan step has been skipped (from wire).
+    PlanStepSkipped {
+        step_id: String,
+    },
+    /// Cron task list refreshed from backend store.
+    CronList(Vec<clarity_core::background::cron::CronTask>),
     /// Provider test connection result (async callback from Provider panel).
     ProviderTestResult {
         provider_id: String,
@@ -127,6 +141,12 @@ pub enum UiEvent {
     },
     /// Gateway health check result.
     GatewayHealth(GatewayStatus),
+    /// Snapshot restore operation completed (async callback).
+    SnapshotRestored {
+        id: usize,
+        success: bool,
+        error: Option<String>,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.
@@ -176,6 +196,7 @@ pub enum PlanStepStatus {
     Running,
     Success,
     Failed,
+    Skipped,
 }
 
 #[derive(Clone)]

@@ -32,6 +32,8 @@ pub struct AppState {
     pub cached_settings: Mutex<GuiSettings>,
     pub prewarm_error: Mutex<Option<String>>,
     pub task_store: clarity_core::background::TaskStore,
+    /// Background task manager (holds cron scheduler, worker pool, and task queue).
+    pub bg_manager: Arc<clarity_core::background::BackgroundTaskManager>,
     /// Mode-aware wrapper used by the Agent (holds batch grants & session approvals).
     pub mode_aware_approval_runtime: Arc<
         clarity_core::approval::ModeAwareApprovalRuntime<
@@ -44,7 +46,7 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        let registry = clarity_core::ToolRegistry::with_builtin_tools();
+        let registry = clarity_core::ToolRegistry::with_egui_safe_tools();
         let approval_rt = Arc::new(clarity_core::approval::InMemoryApprovalRuntime::new());
         let settings = GuiSettings::load();
         let mode = parse_approval_mode(&settings.approval_mode);
@@ -119,10 +121,14 @@ impl Default for AppState {
             .unwrap_or_else(|| PathBuf::from("."));
         let _ = std::fs::create_dir_all(&task_dir);
         let _ = std::fs::create_dir_all(&work_dir);
-        let bg_manager = Arc::new(clarity_core::background::BackgroundTaskManager::new(
-            &task_dir, &work_dir, &work_dir,
+        let cron_scheduler = Arc::new(tokio::sync::Mutex::new(
+            clarity_core::background::CronScheduler::new(),
         ));
-        agent.with_cron_manager(bg_manager);
+        let bg_manager = Arc::new(
+            clarity_core::background::BackgroundTaskManager::new(&task_dir, &work_dir, &work_dir)
+                .with_cron_scheduler(cron_scheduler),
+        );
+        agent.with_cron_manager(Arc::clone(&bg_manager));
         Self {
             agent,
             llm_binding: Mutex::new(None),
@@ -131,6 +137,7 @@ impl Default for AppState {
             cached_settings: Mutex::new(settings),
             prewarm_error: Mutex::new(None),
             task_store: clarity_core::background::TaskStore::new(task_dir),
+            bg_manager,
             mode_aware_approval_runtime: mode_aware_rt,
             memory_store: None,
         }

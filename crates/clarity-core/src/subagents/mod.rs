@@ -118,6 +118,7 @@ impl SubagentManager {
         specs: Vec<RunSpec>,
         config: ParallelConfig,
         progress: Option<std::sync::Arc<std::sync::Mutex<BatchProgress>>>,
+        cancel: Option<tokio_util::sync::CancellationToken>,
     ) -> anyhow::Result<ParallelResult> {
         use crate::background::BackgroundTaskManager;
 
@@ -130,7 +131,7 @@ impl SubagentManager {
         let batch = SubagentBatch::new().add_many(specs).with_config(config);
 
         let mut executor = ParallelExecutor::new(task_manager, self.runner.clone());
-        executor.execute(batch, progress).await
+        executor.execute(batch, progress, cancel).await
     }
 
     /// Execute an [`AgentTeam`] and return a unified [`TeamResult`].

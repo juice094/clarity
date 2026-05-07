@@ -11,6 +11,7 @@ use crate::subagents::runner::{RunSpec, SubagentError, SubagentResult, SubagentR
 use crate::subagents::store::SubagentStore;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 /// 并行执行配置
@@ -256,6 +257,7 @@ impl ParallelExecutor {
         &mut self,
         batch: SubagentBatch,
         progress: Option<Arc<Mutex<BatchProgress>>>,
+        cancel: Option<CancellationToken>,
     ) -> anyhow::Result<ParallelResult> {
         if batch.is_empty() {
             return Ok(ParallelResult {
@@ -345,6 +347,19 @@ impl ParallelExecutor {
         let mut should_cancel_others = false;
 
         for task_id in &task_ids {
+                if let Some(ref c) = cancel {
+                    if c.is_cancelled() {
+                        warn!("Parallel execution cancelled by external signal");
+                        for remaining in &task_ids {
+                            if remaining != task_id {
+                                if let Err(e) = self.task_manager.cancel(remaining).await {
+                                    warn!("Failed to cancel task {}: {}", remaining, e);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
             match self.task_manager.wait(task_id).await {
                 Ok(task_result) => {
                     if task_result.status == TaskStatus::Completed {
@@ -497,11 +512,12 @@ pub async fn run_parallel(
     task_manager: BackgroundTaskManager,
     config: ParallelConfig,
     progress: Option<Arc<Mutex<BatchProgress>>>,
+    cancel: Option<CancellationToken>,
 ) -> anyhow::Result<ParallelResult> {
     let batch = SubagentBatch::new().add_many(specs).with_config(config);
 
     let mut executor = ParallelExecutor::new(task_manager, runner);
-    executor.execute(batch, progress).await
+    executor.execute(batch, progress, cancel).await
 }
 
 #[cfg(test)]
@@ -602,7 +618,7 @@ mod tests {
         let mut executor = ParallelExecutor::new(task_manager, runner);
         let batch = SubagentBatch::new();
 
-        let result = executor.execute(batch, None).await.unwrap();
+        let result = executor.execute(batch, None, None).await.unwrap();
         assert!(result.results.is_empty());
         assert!(result.failures.is_empty());
     }

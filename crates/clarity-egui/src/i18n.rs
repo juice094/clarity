@@ -18,8 +18,8 @@
 //! Add new entries to `ZH_CN` map below.  No need to restart — reload
 //! happens on next frame.
 //!
-//! TODO-WEEK2: Load translation maps from JSON files so locale packs can
-//! be added without recompilation.
+//! NOTE: Future enhancement — load translation maps from JSON files so
+//! locale packs can be added without recompilation.
 
 use std::collections::HashMap;
 

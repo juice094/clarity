@@ -253,6 +253,11 @@ pub struct Agent {
     memory_factory: Option<MemoryFactoryFn>,
     /// Lazy SkillRegistry factory — called on first `run()` if no registry is set
     skill_factory: Option<SkillFactoryFn>,
+    /// Active plan execution controller, populated during `execute_plan`.
+    /// Allows external callers (UI, API) to skip or retry steps mid-flight.
+    /// Uses `tokio::sync::Mutex` because `execute_plan` is async and the
+    /// controller must be accessible across await points.
+    plan_controller: Arc<tokio::sync::Mutex<Option<crate::agent::plan::PlanExecutionController>>>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `std::sync::RwLock` is intentional.**
@@ -322,6 +327,30 @@ impl Agent {
             if let Err(e) = svc.snapshot_post_turn().await {
                 tracing::warn!("Post-turn snapshot failed: {}", e);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Sprint 39 — Snapshot UI API (egui integration)
+    // ------------------------------------------------------------------
+
+    /// Return a copy of all stored workspace snapshots.
+    /// Returns an empty list if the snapshot service is not active.
+    pub fn snapshot_list(&self) -> Vec<snapshot::SnapshotInfo> {
+        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        svc_opt.map(|svc| svc.list()).unwrap_or_default()
+    }
+
+    /// Restore the workspace to the state of snapshot `id`.
+    /// Returns an error if the snapshot service is not active or the id is unknown.
+    pub async fn restore_snapshot(&self, id: usize) -> Result<(), crate::error::AgentError> {
+        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        match svc_opt {
+            Some(svc) => svc.restore(id).await,
+            None => Err(crate::error::AgentError::ToolExecutionFailed(
+                "git_restore".to_string(),
+                "Snapshot service is not active".to_string(),
+            )),
         }
     }
 

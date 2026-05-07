@@ -114,6 +114,12 @@ pub enum WireMessage {
         /// Whether the step succeeded.
         success: bool,
     },
+
+    /// A plan step was skipped by user request.
+    PlanStepSkipped {
+        /// Identifier of the skipped step.
+        step_id: String,
+    },
 }
 
 pub mod event;

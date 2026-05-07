@@ -134,31 +134,34 @@ pub fn render_cron_create_modal(app: &mut App, ctx: &egui::Context) {
         });
 
     if created {
-        // TODO: wire to clarity-core backend (schedule_cron)
-        // For now, create a local mock entry so the UI is testable.
+        let bg_manager = std::sync::Arc::clone(&app.state.bg_manager);
+        let tx = app.ui_tx.clone();
+        let spec = clarity_core::background::TaskSpec {
+            name: app.cron_store.create_name.trim().to_string(),
+            description: app.cron_store.create_desc.trim().to_string(),
+            agent_type: "default".to_string(),
+            prompt: app.cron_store.create_prompt.trim().to_string(),
+            max_iterations: Some(10),
+            timeout_seconds: Some(300),
+            priority: clarity_core::background::TaskPriority::from_value(
+                app.cron_store.create_priority,
+            ),
+            model_alias: None,
+        };
         let expr = app.cron_store.create_expr.trim().to_string();
-        let next_run = match clarity_core::background::cron::CronSchedule::new(&expr) {
-            Ok(schedule) => schedule.next_run,
-            Err(_) => chrono::Utc::now() + chrono::Duration::hours(1),
-        };
-        let mock_task = clarity_core::background::cron::CronTask {
-            task_spec: clarity_core::background::TaskSpec {
-                name: app.cron_store.create_name.trim().to_string(),
-                description: app.cron_store.create_desc.trim().to_string(),
-                agent_type: "default".to_string(),
-                prompt: app.cron_store.create_prompt.trim().to_string(),
-                max_iterations: Some(10),
-                timeout_seconds: Some(300),
-                priority: clarity_core::background::TaskPriority::from_value(
-                    app.cron_store.create_priority,
-                ),
-                model_alias: None,
-            },
-            schedule: clarity_core::background::cron::CronSchedule { expr, next_run },
-            task_id: format!("cron-{}", uuid::Uuid::new_v4()),
-            enabled: true,
-        };
-        app.cron_store.tasks.push(mock_task);
+        app.runtime.spawn(async move {
+            match bg_manager.schedule_cron(spec, &expr).await {
+                Ok(task_id) => {
+                    tracing::info!("Scheduled cron task: {}", task_id);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to schedule cron: {}", e);
+                }
+            }
+            if let Ok(tasks) = bg_manager.list_cron_tasks().await {
+                let _ = tx.send(crate::ui::types::UiEvent::CronList(tasks));
+            }
+        });
 
         app.cron_store.create_name.clear();
         app.cron_store.create_desc.clear();

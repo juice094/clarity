@@ -8,7 +8,7 @@
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-05-03
+**最后更新**：2026-05-06
 **当前分支**：`main` @ `a090e5b6`（已推送 origin）
 **架构模式**：CLI
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
@@ -878,6 +878,72 @@ Codex + ZeroClaw 架构探索的脚手架设计已归档于：
 - **clarity**: `cargo test --workspace --lib -- --test-threads=1` = **763 passed / 0 failed / 6 ignored**
 - **clarity-mcp**: `cargo test --lib` = **31 passed / 0 failed / 0 ignored**
 - **devbase**: `cargo test --lib` = **378 passed / 偶发 Windows 文件锁 / 3 ignored**
+
+## 十五、Clarity × devbase 架构关系决策（2026-05-06）
+
+**来源**：与 Kimi K2.6 的架构对话 `https://www.kimi.com/share/19e013e6-9f42-8f66-8000-0000ac9b1eea`
+
+### 15.1 devbase 定位确认
+
+**决策**：devbase 是"可被任意运行时调用"的独立基础设施，而非 Clarity 的专属后端。
+
+- 前期分开开发是刻意的边界投资，不是技术债务
+- devbase 的 MCP 接口对所有运行时一视同仁（stdio/SSE/HTTP）
+- Clarity 只是 devbase 的众多消费者之一
+
+### 15.2 Clarity 第一方运行时特权
+
+**决策**：Clarity 作为核心枢纽，可以被"特殊对待"——但这种特殊是**实现层优化**，不是**协议层特权**。
+
+- devbase 的公共 MCP 接口保持不变，不对 Clarity 开放非标准扩展
+- 特殊通道仅限于：SQLite 只读视图共享、clarity-wire 事件总线订阅
+- 第三方运行时不会因此成为二等公民
+
+### 15.3 深耦合梯度谱系（L1-L5）
+
+| 层级 | 耦合形式 | 状态 | 说明 |
+|------|---------|------|------|
+| L1 | 协议优化（MCP 批量调用 + 流式进度） | 🔄 待实现 | 无架构风险，收益明确 |
+| L2 | 数据库共享（SQLite ATTACH 只读视图） | ⏳ 规划中 | 高收益，需 Schema 兼容性管理 |
+| L3 | Crate 链接（devbase-core 作为 path dep） | ⏸️ 冻结 | 会破坏 devbase 独立运行时身份 |
+| L4 | 事件总线融合（clarity-wire ↔ devbase 内部事件） | ⏳ 规划中 | 需严格单向（devbase → Clarity） |
+| L5 | 内存共享 | ❌ 否决 | 引入 unsafe，与工程质量背道而驰 |
+
+### 15.4 推荐中间态：L2.5
+
+**决策**：当前阶段采用"数据库只读共享 + 写操作保留 MCP"的混合策略。
+
+```
+Clarity Agent Loop
+    │
+    ├──→ MCP stdio/SSE（写操作：devkit_scan / sync / workflow_run）
+    │
+    └──→ SQLite ATTACH 只读视图（读操作：entities / health / relations / oplog）
+              │
+              └──→ clarity-wire EventBus 订阅（devbase 事件 → Clarity 上下文刷新）
+```
+
+**原则**：
+- 写操作仍走 MCP：保持事务边界清晰
+- 读操作可直连：J6 预测器、上下文构建、状态总览直接查 registry.db
+- 事件订阅单向：devbase → Clarity，Clarity 不反向注入事件（避免循环）
+
+**回退策略**：Schema 变更导致 ATTACH 失败时，自动降级为 MCP 查询。
+
+### 15.5 何时推进？
+
+| 触发条件 | 行动 |
+|---------|------|
+| Clarity 每个 Plan Step 都需要查询 devbase 状态 | 启动 L2 SQLite 只读视图 |
+| devbase daemon 实现 SSE 常驻 | 启动 L1 协议优化（流式进度） |
+| Clarity 多窗口 IPC 实现 | 启动 L4 事件总线融合 |
+| devbase-core crate 发布为独立库 | 重新评估 L3 的可行性 |
+
+### 15.6 与现有叙事的兼容性
+
+- **ID-287 "四项目协同"**：Clarity 为核心枢纽、devbase 为卫星生态 —— 兼容。devbase 的独立性是其作为"卫星"的价值（可被其他星系调用）。
+- **ID-320 "交互-审计-解耦协议"**：深耦合需人类审批 —— 兼容。L2 以上耦合需显式决策记录。
+- **"不入赘" Hard Veto**：Clarity 不依赖 devbase 作为核心运行时 —— 兼容。L2.5 的只读视图是可插拔优化，非核心依赖。
 
 ---
 

@@ -1,5 +1,6 @@
 use crate::stores::TeamMember;
 use crate::App;
+use clarity_core::tools::Tool;
 
 pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
     if !app.team_store.create_modal_open {
@@ -236,8 +237,28 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
             max_concurrency: app.team_store.create_max_concurrency,
             timeout_secs: app.team_store.create_timeout_secs,
         };
-        app.team_store.teams.push(team);
-        // TODO: backend integration — call TeamCreateTool
+        app.team_store.teams.push(team.clone());
+
+        let tool = clarity_core::tools::team::TeamCreateTool::new();
+        let args = serde_json::json!({
+            "team_name": team.name,
+            "goal": team.goal,
+            "members": team.members.iter().map(|m| serde_json::json!({
+                "name": m.name,
+                "description": m.description,
+                "agent_type": "default",
+            })).collect::<Vec<_>>(),
+            "max_concurrency": team.max_concurrency,
+            "timeout_secs": team.timeout_secs,
+        });
+        app.runtime.spawn(async move {
+            let ctx = clarity_core::tools::ToolContext::new();
+            match tool.execute(args, ctx).await {
+                Ok(_) => tracing::info!("Team created: {}", team.name),
+                Err(e) => tracing::warn!("Failed to create team: {}", e),
+            }
+        });
+
         app.team_store.create_name.clear();
         app.team_store.create_goal.clear();
         app.team_store.create_members.clear();

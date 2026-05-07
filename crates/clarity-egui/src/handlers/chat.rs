@@ -5,13 +5,15 @@ use crate::ui::types::{
     AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
 };
 
-// TODO: decompose App dependency
 pub fn on_done(app: &mut crate::App) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
     app.chat_store.stopping = false;
     app.state.agent.reset();
     app.save_current_session();
+    // Capture the latest snapshot created by this turn.
+    let snapshots = app.state.agent.snapshot_list();
+    app.chat_store.last_snapshot = snapshots.last().cloned();
     // Auto-send any queued message.
     if let Some((text, attachments)) = app.chat_store.pending_send.take() {
         app.chat_store.input = text;
@@ -20,7 +22,6 @@ pub fn on_done(app: &mut crate::App) {
     }
 }
 
-// TODO: decompose App dependency
 pub fn on_error(app: &mut crate::App, msg: String) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
@@ -268,6 +269,17 @@ pub fn on_plan_step_end(chat_store: &mut ChatStore, step_id: String, success: bo
                 } else {
                     crate::ui::types::PlanStepStatus::Failed
                 };
+                break;
+            }
+        }
+    }
+}
+
+pub fn on_plan_step_skipped(chat_store: &mut ChatStore, step_id: String) {
+    if let Some(ref mut tracker) = chat_store.plan_tracker {
+        for step in &mut tracker.steps {
+            if step.id == step_id {
+                step.status = crate::ui::types::PlanStepStatus::Skipped;
                 break;
             }
         }

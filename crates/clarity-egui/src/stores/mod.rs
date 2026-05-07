@@ -63,6 +63,8 @@ pub struct ChatStore {
     pub editing_message_idx: Option<usize>,
     /// Temporary buffer for inline message editing.
     pub edit_buffer: String,
+    /// Snapshot created by the most recently completed agent turn.
+    pub last_snapshot: Option<clarity_core::agent::snapshot::SnapshotInfo>,
 }
 
 // ============================================================================
@@ -214,6 +216,10 @@ pub struct UiStore {
     pub agent_turn_style: bool,
     /// When agent_turn_style is true, use glass card variant instead of CLI style.
     pub agent_turn_glass: bool,
+    /// Workspace panel Plan section expanded.
+    pub workspace_plan_expanded: bool,
+    /// User manually collapsed Plan section (blocks auto-expand).
+    pub workspace_plan_manually_collapsed: bool,
 }
 
 // ============================================================================
@@ -243,6 +249,41 @@ pub struct McpStore {
     pub last_mcp_poll: Instant,
     /// Last known mtime of mcp.json.
     pub last_mcp_mtime: Option<std::time::SystemTime>,
+}
+
+// ============================================================================
+// Snapshot Store — workspace snapshot list + modal state
+// ============================================================================
+
+pub struct SnapshotStore {
+    /// Whether the snapshot history modal is open.
+    pub modal_open: bool,
+    /// Cached snapshot list loaded from the core service.
+    pub snapshots: Vec<clarity_core::agent::snapshot::SnapshotInfo>,
+    /// Snapshot currently selected for diff preview.
+    pub selected_id: Option<usize>,
+    /// Snapshot ID awaiting restore confirmation.
+    pub confirm_restore_id: Option<usize>,
+    /// Whether a restore operation is in-flight.
+    pub restoring: bool,
+    /// Cached diff preview text for the selected snapshot.
+    pub preview: Option<String>,
+    /// Last time the list was refreshed.
+    pub last_refresh: Instant,
+}
+
+impl Default for SnapshotStore {
+    fn default() -> Self {
+        Self {
+            modal_open: false,
+            snapshots: Vec::new(),
+            selected_id: None,
+            confirm_restore_id: None,
+            restoring: false,
+            preview: None,
+            last_refresh: Instant::now(),
+        }
+    }
 }
 
 // ============================================================================

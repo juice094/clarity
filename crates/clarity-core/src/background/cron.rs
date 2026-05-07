@@ -144,6 +144,11 @@ impl CronScheduler {
             false
         }
     }
+
+    /// Add a raw CronTask directly (used for restoring persisted tasks).
+    pub fn add_task_raw(&mut self, task: CronTask) {
+        self.tasks.push(task);
+    }
 }
 
 #[cfg(test)]

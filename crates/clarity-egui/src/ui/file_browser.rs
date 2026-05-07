@@ -1,17 +1,26 @@
-//! File browser — recursive directory tree for the left sidebar.
+//! File browser — recursive directory tree for the workspace panel.
 //!
 //! IS-1 Sprint 32: restored from git history and wired into `render_sidebar`.
+//! Sprint 39: Windows path normalization, skip-list for large dirs,
+//!            directory click support, hidden-file whitelist.
+//!
 //! Design notes:
 //! - `MAX_DEPTH` prevents infinite recursion on circular symlinks.
 //! - Custom painter-based file rows (instead of `selectable_label`) give us
 //!   per-pixel control over hover / selected / accent-bar visuals.
 //! - `is_rect_visible` culling keeps the tree cheap even for large dirs.
+//! - `SKIP_DIRS` skips build artifacts (`target`, `node_modules`, etc.) to
+//!   keep the tree responsive on real projects.
 
 use crate::theme::Theme;
 use std::path::Path;
 
 /// Maximum recursion depth for the directory tree.
-const MAX_DEPTH: usize = 4;
+const MAX_DEPTH: usize = 6;
+
+/// Directories that are skipped entirely to avoid performance cliffs
+/// on typical development workspaces.
+const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", "dist", "build", ".clarity"];
 
 /// Render a directory tree starting at `path`.
 ///
@@ -45,22 +54,25 @@ pub fn render_file_tree(
 
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        // Skip hidden files / dirs to reduce clutter
-        if name.starts_with('.') {
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+        // Skip known large / irrelevant directories
+        if is_dir && SKIP_DIRS.contains(&name.as_str()) {
             continue;
         }
-        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
         let full_path = entry.path();
 
         if is_dir {
+            let header_id = ui.id().with(&full_path);
             let header = egui::CollapsingHeader::new(
                 egui::RichText::new(format!("📁 {}", name))
                     .size(theme.text_sm)
                     .color(theme.text),
             )
-            .id_salt(full_path.to_string_lossy().to_string())
+            .id_salt(header_id)
             .default_open(depth < 1);
-            header.show(ui, |ui| {
+            let resp = header.show(ui, |ui| {
                 render_file_tree(
                     ui,
                     &full_path,
@@ -70,6 +82,10 @@ pub fn render_file_tree(
                     on_file_click,
                 );
             });
+            // Allow clicking the directory header itself to select it
+            if resp.header_response.clicked() {
+                on_file_click(&full_path);
+            }
         } else {
             // ── Custom painter row for files ──
             // Using raw painter + interact gives us:
@@ -82,7 +98,12 @@ pub fn render_file_tree(
             let row_rect =
                 egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
             let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
-            let is_selected = selected_path.is_some_and(|sp| std::path::Path::new(sp) == full_path);
+            let is_selected = selected_path.is_some_and(|sp| {
+                // Normalise Windows back-slashes before comparison
+                let a = full_path.to_string_lossy().replace('\\', "/");
+                let b = std::path::Path::new(sp).to_string_lossy().replace('\\', "/");
+                a == b
+            });
 
             if ui.is_rect_visible(row_rect) {
                 let painter = ui.painter_at(row_rect);

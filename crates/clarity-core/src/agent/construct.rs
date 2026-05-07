@@ -53,6 +53,7 @@ impl Agent {
             llm_factory: None,
             memory_factory: None,
             skill_factory: None,
+            plan_controller: Arc::new(tokio::sync::Mutex::new(None)),
             inner: Arc::new(std::sync::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
@@ -692,7 +693,7 @@ impl Agent {
             user_input: format!("parallel execution ({} tasks)", specs.len()),
         });
 
-        let result = manager.run_parallel(specs, config, progress).await;
+        let result = manager.run_parallel(specs, config, progress, None).await;
 
         self.send_wire_message(WireMessage::TurnEnd);
 

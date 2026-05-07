@@ -50,6 +50,27 @@ pub use clarity_contract::{
     ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext, ToolError, ToolResult,
 };
 
+/// Return the base Clarity data directory with robust cross-platform fallback.
+///
+/// Priority:
+/// 1. `dirs::home_dir()` / `.clarity`  (keeps existing behaviour)
+/// 2. `dirs::data_dir()` / `clarity`   (platform-standard fallback)
+/// 3. `std::env::current_dir()` / `.clarity` (last resort)
+pub fn clarity_data_dir() -> ToolResult<PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        return Ok(home.join(".clarity"));
+    }
+    if let Some(data) = dirs::data_dir() {
+        return Ok(data.join("clarity"));
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        return Ok(cwd.join(".clarity"));
+    }
+    Err(ToolError::execution_failed(
+        "Could not determine a writable data directory for Clarity".to_string(),
+    ))
+}
+
 /// Common parameter extraction helpers
 pub mod helpers {
     use super::*;
