@@ -218,6 +218,25 @@
 
 ---
 
+## 文档治理 Sprint（架构透明度 + 安全闭环）✅ 已完成
+
+**交付：**
+- `clarity-mcp` 零文档补全：新建 `README.md`（87 行）+ `AGENTS.md`（28 行）
+- 3 个 crate 补 `AGENTS.md`：`clarity-contract`、`clarity-egui`、`clarity-headless`
+- 10 个 crate README 新增 `## 边界与稳定性`（稳定性等级 + 反向依赖规则）
+- `docs/adr/` 目录 + 4 条架构决策记录（Tauri→egui、parking_lot、contract 提取、rustls-tls）
+- `docs/ARCHITECTURE.md` 补全 3 条数据流：MCP End-to-End、Memory Compaction、Plan-Parallel Execution
+- `docs/OPERATIONS.md` 新建：二进制布局、资源需求、配置体系、日志观测、部署模式、故障排查
+- `docs/API_CONTRACT.md` 新建：Gateway HTTP + WebSocket 端点、认证、错误码矩阵
+- `docs/THREAT_MODEL.md` 新建：STRIDE 分析 16 条威胁、4 条攻击树、安全测试矩阵
+- CI `doc-guard` job 新建：强制 README.md + AGENTS.md + rustdoc 编译 + cargo-modules 结构验证
+- `scripts/verify.ps1` 升级：5 项检查（文档/编译/测试/Clippy/格式化）+ 可选 cargo-modules
+- 死代码审计：`devkit_dead_code` 扫描 50 条，全部验证为误报（serde default / unwrap_or_else / Axum 路由 / 测试函数）
+- 模块提取演习：`cargo check -p clarity-mcp` 独立编译通过
+- 提交：`92b77781`
+
+---
+
 ## 测试基线
 
 ```bash
