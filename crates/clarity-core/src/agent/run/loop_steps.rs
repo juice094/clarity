@@ -8,7 +8,7 @@ use crate::types::ToolCall;
 /// Run lifecycle hooks before LLM input.
 pub(crate) async fn run_hooks(agent: &Agent, messages: &mut Vec<Message>) {
     let hooks_opt = {
-        let inner = agent.inner.read().unwrap();
+        let inner = agent.inner.read();
         inner.hook_registry.clone()
     };
     if let Some(hooks) = hooks_opt {

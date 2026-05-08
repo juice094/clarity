@@ -207,7 +207,7 @@ impl Agent {
             // O2: approval_mode is read per-tool-call; caching it at the top of
             // dispatch_tool_calls (or passing it down) would save N-1 RwLock reads
             // when multiple tools are dispatched concurrently.
-            let mode = self.inner.read().unwrap().approval_mode;
+            let mode = self.inner.read().approval_mode;
             let needs_approval = match mode {
                 ApprovalMode::Interactive => {
                     risk == RiskLevel::High
@@ -258,7 +258,7 @@ impl Agent {
             }
         }
 
-        let mode = self.inner.read().unwrap().approval_mode;
+        let mode = self.inner.read().approval_mode;
         let ctx = ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)
@@ -273,7 +273,7 @@ impl Agent {
     ///
     /// Useful for programmatic tool execution
     pub async fn execute_tool(&self, name: &str, args: Value) -> Result<Value, ToolError> {
-        let mode = self.inner.read().unwrap().approval_mode;
+        let mode = self.inner.read().approval_mode;
         let ctx = ToolContext::new()
             .with_working_dir(&self.config.working_dir)
             .with_read_only(self.config.read_only)

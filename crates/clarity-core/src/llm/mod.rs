@@ -184,11 +184,11 @@ struct Choice {
 /// Works with any API that follows the OpenAI chat completions format
 #[derive(Debug, Clone)]
 pub struct OpenAiCompatibleLlm {
-    api_key: Arc<std::sync::RwLock<String>>,
+    api_key: Arc<parking_lot::RwLock<String>>,
     base_url: String,
     model: String,
     client: reqwest::Client,
-    prompt_cache_key: Arc<std::sync::RwLock<Option<String>>>,
+    prompt_cache_key: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
 impl OpenAiCompatibleLlm {
@@ -199,17 +199,17 @@ impl OpenAiCompatibleLlm {
         model: impl Into<String>,
     ) -> Self {
         Self {
-            api_key: Arc::new(std::sync::RwLock::new(api_key.into())),
+            api_key: Arc::new(parking_lot::RwLock::new(api_key.into())),
             base_url: base_url.into(),
             model: model.into(),
             client: shared_http_client(),
-            prompt_cache_key: Arc::new(std::sync::RwLock::new(None)),
+            prompt_cache_key: Arc::new(parking_lot::RwLock::new(None)),
         }
     }
 
     /// Update the API key at runtime (used by OAuth token refresh).
     pub fn update_api_key(&self, key: impl Into<String>) {
-        *self.api_key.write().unwrap() = key.into();
+        *self.api_key.write() = key.into();
     }
 
     /// Create from environment variables
@@ -226,7 +226,7 @@ impl OpenAiCompatibleLlm {
     }
 
     pub fn set_prompt_cache_key(&self, key: impl Into<String>) {
-        *self.prompt_cache_key.write().unwrap() = Some(key.into());
+        *self.prompt_cache_key.write() = Some(key.into());
     }
 }
 
@@ -289,7 +289,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             temperature: None,
             max_tokens: None,
             stream: false,
-            prompt_cache_key: self.prompt_cache_key.read().unwrap().clone(),
+            prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
         };
 
@@ -312,7 +312,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             .post(&url)
             .header(
                 "Authorization",
-                format!("Bearer {}", self.api_key.read().unwrap().clone()),
+                format!("Bearer {}", self.api_key.read().clone()),
             )
             .header("Content-Type", "application/json")
             .header("User-Agent", "claude-code/0.1.0 (Claude Code)")
@@ -400,7 +400,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             temperature: None,
             max_tokens: None,
             stream: true,
-            prompt_cache_key: self.prompt_cache_key.read().unwrap().clone(),
+            prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
         };
 
@@ -416,7 +416,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             format!("{}/v1/chat/completions", base)
         };
-        let api_key = self.api_key.read().unwrap().clone();
+        let api_key = self.api_key.read().clone();
         let client = self.client.clone();
 
         let (tx, rx) = tokio::sync::mpsc::channel(128);

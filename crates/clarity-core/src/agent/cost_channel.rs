@@ -8,7 +8,7 @@
 //! Design: `OnceLock<Mutex<f64>>` — thread-safe, lazy-initialised, zero-cost
 //! when unused. No channels or async required.
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::sync::OnceLock;
 
 static PENDING_COST_USD: OnceLock<Mutex<f64>> = OnceLock::new();
@@ -26,9 +26,8 @@ pub fn report_cost(cost: f64) {
     if cost <= 0.0 {
         return;
     }
-    if let Ok(mut guard) = ensure_init().lock() {
-        *guard += cost;
-    }
+    let mut guard = ensure_init().lock();
+    *guard += cost;
 }
 
 /// Drain all pending cost and return the total.
@@ -36,24 +35,18 @@ pub fn report_cost(cost: f64) {
 /// Call this once per main-Agent turn (e.g. inside `record_cost` or
 /// at turn start). Returns 0.0 if nothing is pending.
 pub fn drain_pending_cost() -> f64 {
-    if let Ok(mut guard) = ensure_init().lock() {
-        let cost = *guard;
-        *guard = 0.0;
-        cost
-    } else {
-        0.0
-    }
+    let mut guard = ensure_init().lock();
+    let cost = *guard;
+    *guard = 0.0;
+    cost
 }
 
 /// Peek at the current pending cost without draining.
 ///
 /// Useful for budget pre-checks.
 pub fn pending_cost() -> f64 {
-    if let Ok(guard) = ensure_init().lock() {
-        *guard
-    } else {
-        0.0
-    }
+    let guard = ensure_init().lock();
+    *guard
 }
 
 #[cfg(test)]
@@ -68,20 +61,28 @@ mod tests {
         report_cost(0.3);
         assert!((pending_cost() - 0.8).abs() < f64::EPSILON);
         assert!((drain_pending_cost() - 0.8).abs() < f64::EPSILON);
-        assert_eq!(pending_cost(), 0.0);
+        assert!((pending_cost()).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn test_drain_empty() {
-        let _ = drain_pending_cost();
-        assert_eq!(drain_pending_cost(), 0.0);
-    }
-
-    #[test]
-    fn test_negative_and_zero_cost_ignored() {
+    fn test_negative_cost_ignored() {
         let _ = drain_pending_cost();
         report_cost(-1.0);
+        assert!((pending_cost()).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_zero_cost_ignored() {
+        let _ = drain_pending_cost();
         report_cost(0.0);
-        assert_eq!(pending_cost(), 0.0);
+        assert!((pending_cost()).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_drain_resets_to_zero() {
+        let _ = drain_pending_cost();
+        report_cost(1.0);
+        assert!((drain_pending_cost() - 1.0).abs() < f64::EPSILON);
+        assert!((pending_cost()).abs() < f64::EPSILON);
     }
 }

@@ -6,7 +6,7 @@
 use clarity_core::agent::AgentConfig;
 use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
 use std::sync::Arc;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -80,7 +80,7 @@ async fn test_openai_streaming_e2e() {
     let result = agent
         .run_streaming("test query", move |chunk: &str| {
             assert!(!chunk.is_empty(), "chunk should not be empty");
-            chunks_clone.lock().unwrap().push(chunk.to_string());
+            chunks_clone.lock().push(chunk.to_string());
         })
         .await;
 
@@ -91,7 +91,7 @@ async fn test_openai_streaming_e2e() {
     assert!(result.is_ok(), "run_streaming failed: {:?}", result);
     assert_eq!(result.unwrap(), "Hello world");
 
-    let received = chunks.lock().unwrap().clone();
+    let received = chunks.lock().clone();
     assert!(!received.is_empty(), "should receive at least one chunk");
     assert_eq!(received.join(""), "Hello world");
     // Verify chunks appear in order without gaps or overlaps

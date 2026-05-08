@@ -2,7 +2,8 @@
 //! and injects diagnostics into the conversation.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
+use parking_lot::RwLock;
 
 use crate::agent::hooks::{AgentHook, HookResult};
 use crate::agent::lsp::client::LspClient;
@@ -179,7 +180,7 @@ impl AgentHook for LspHook {
         };
 
         debug!("LSP hook queued URI for sync: {}", uri);
-        let mut pending = self.pending_uris.write().unwrap();
+        let mut pending = self.pending_uris.write();
         if !pending.contains(&uri) {
             pending.push(uri);
         }
@@ -188,7 +189,7 @@ impl AgentHook for LspHook {
     async fn on_llm_input(&self, messages: &mut Vec<Message>) {
         // 1. Drain pending URIs
         let uris: Vec<String> = {
-            let mut pending = self.pending_uris.write().unwrap();
+            let mut pending = self.pending_uris.write();
             std::mem::take(&mut *pending)
         };
 
@@ -212,7 +213,7 @@ impl AgentHook for LspHook {
             };
 
             let is_new = {
-                let mut opened = self.opened_uris.write().unwrap();
+                let mut opened = self.opened_uris.write();
                 if opened.contains(uri) {
                     false
                 } else {
@@ -229,7 +230,7 @@ impl AgentHook for LspHook {
                 }
             } else {
                 let version = {
-                    let mut versions = self.uri_versions.write().unwrap();
+                    let mut versions = self.uri_versions.write();
                     let v = versions.get(uri).copied().unwrap_or(1) + 1;
                     versions.insert(uri.clone(), v);
                     v

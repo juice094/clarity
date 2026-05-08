@@ -280,6 +280,7 @@ async fn test_tui_wire_to_gateway_websocket() {
             WireMessage::PlanStepBegin { .. } => "plan_step_begin",
             WireMessage::PlanStepEnd { .. } => "plan_step_end",
             WireMessage::DraftEvent { .. } => "draft_event",
+            WireMessage::PlanStepSkipped { .. } => "plan_step_skipped",
         };
         wire_types.push(msg_type.to_string());
         if msg_type == "turn_end" {

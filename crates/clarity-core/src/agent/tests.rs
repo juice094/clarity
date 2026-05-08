@@ -78,7 +78,8 @@ async fn test_agent_lazy_llm_factory() {
 
 #[tokio::test]
 async fn test_agent_run_streaming() {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
+use parking_lot::Mutex;
 
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
@@ -88,13 +89,13 @@ async fn test_agent_run_streaming() {
     let chunks_clone = chunks.clone();
     let result = agent
         .run_streaming("Hello", move |chunk| {
-            chunks_clone.lock().unwrap().push(chunk.to_string());
+            chunks_clone.lock().push(chunk.to_string());
         })
         .await;
 
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "This is a mock response");
-    assert_eq!(*chunks.lock().unwrap(), vec!["This is a mock response"]);
+    assert_eq!(*chunks.lock(), vec!["This is a mock response"]);
 }
 
 #[tokio::test]
@@ -420,7 +421,8 @@ async fn test_agent_run_with_wire() {
 async fn test_agent_run_streaming_with_wire() {
     use clarity_wire::{DraftEvent, Wire};
     use std::sync::Arc;
-    use std::sync::{Arc as StdArc, Mutex};
+    use std::sync::Arc as StdArc;
+use parking_lot::Mutex;
     use tokio::time::{timeout, Duration};
 
     // Create Wire
@@ -440,7 +442,7 @@ async fn test_agent_run_streaming_with_wire() {
     let handle = tokio::spawn(async move {
         agent
             .run_streaming("streaming test", move |chunk| {
-                chunks_clone.lock().unwrap().push(chunk.to_string());
+                chunks_clone.lock().push(chunk.to_string());
             })
             .await
     });

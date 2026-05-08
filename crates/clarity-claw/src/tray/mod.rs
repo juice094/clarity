@@ -6,7 +6,8 @@
 use crate::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
 use clarity_wire::{Wire, WireMessage};
 use notify::Watcher;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use std::time::Duration;
 use tao::{
     event::Event,
@@ -169,7 +170,7 @@ pub fn run() -> anyhow::Result<()> {
                                 status: t.status.clone(),
                             })
                             .collect();
-                        *task_cache_bg.lock().unwrap() = tasks.clone();
+                        *task_cache_bg.lock() = tasks.clone();
 
                         let running_now: Vec<String> = tasks
                             .iter()
@@ -369,7 +370,7 @@ pub fn run() -> anyhow::Result<()> {
             } else if id == create_task_item.id() {
                 let _ = proxy.send_event(UserEvent::CreateTask);
             } else if id == refresh_tasks_item.id() {
-                let _ = proxy.send_event(UserEvent::TaskUpdate(task_cache.lock().unwrap().clone()));
+                let _ = proxy.send_event(UserEvent::TaskUpdate(task_cache.lock().clone()));
             } else if id == view_tasks_item.id() {
                 let url = format!("{}/chat.html", gateway_url);
                 let _ = open_url(&url);

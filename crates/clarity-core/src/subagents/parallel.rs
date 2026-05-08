@@ -9,7 +9,8 @@
 use crate::background::{BackgroundTaskManager, TaskResult, TaskSpec, TaskStatus};
 use crate::subagents::runner::{RunSpec, SubagentError, SubagentResult, SubagentRunner};
 use crate::subagents::store::SubagentStore;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -369,7 +370,7 @@ impl ParallelExecutor {
                             results.push(subagent_result.clone());
                             // 更新进度：一个子代理完成
                             if let Some(ref p) = progress {
-                                let mut p = p.lock().unwrap();
+                                let mut p = p.lock();
                                 p.completed += 1;
                                 p.running.retain(|id| id != &subagent_result.agent_id);
                                 p.results.push(subagent_result);
@@ -381,7 +382,7 @@ impl ParallelExecutor {
                                 "Failed to parse subagent result".to_string(),
                             ));
                             if let Some(ref p) = progress {
-                                let mut p = p.lock().unwrap();
+                                let mut p = p.lock();
                                 p.failed += 1;
                                 p.elapsed_ms = start_time.elapsed().as_millis() as u64;
                             }
@@ -389,7 +390,7 @@ impl ParallelExecutor {
                     } else if task_result.status == TaskStatus::Cancelled {
                         failures.push((task_id.clone(), "Task was cancelled".to_string()));
                         if let Some(ref p) = progress {
-                            let mut p = p.lock().unwrap();
+                            let mut p = p.lock();
                             p.failed += 1;
                             p.elapsed_ms = start_time.elapsed().as_millis() as u64;
                         }
@@ -399,7 +400,7 @@ impl ParallelExecutor {
                             format!("task failed: {}", task_result.output),
                         ));
                         if let Some(ref p) = progress {
-                            let mut p = p.lock().unwrap();
+                            let mut p = p.lock();
                             p.failed += 1;
                             p.elapsed_ms = start_time.elapsed().as_millis() as u64;
                         }
@@ -421,7 +422,7 @@ impl ParallelExecutor {
                 Err(e) => {
                     failures.push((task_id.clone(), format!("wait failed: {}", e)));
                     if let Some(ref p) = progress {
-                        let mut p = p.lock().unwrap();
+                        let mut p = p.lock();
                         p.failed += 1;
                         p.elapsed_ms = start_time.elapsed().as_millis() as u64;
                     }
@@ -431,7 +432,7 @@ impl ParallelExecutor {
 
         // 标记进度为完成
         if let Some(ref p) = progress {
-            let mut p = p.lock().unwrap();
+            let mut p = p.lock();
             p.running.clear();
             if failures.is_empty() {
                 p.status = BatchStatus::Completed;

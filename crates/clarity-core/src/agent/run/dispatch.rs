@@ -100,7 +100,7 @@ impl Agent {
         for tool_call in tool_calls {
             let mut tc = tool_call.clone();
             let hooks_opt = {
-                let inner = self.inner.read().unwrap();
+                let inner = self.inner.read();
                 inner.hook_registry.clone()
             };
             let should_execute = if let Some(hooks) = hooks_opt {
@@ -163,7 +163,7 @@ impl Agent {
             };
 
             let hooks_opt = {
-                let inner = self.inner.read().unwrap();
+                let inner = self.inner.read();
                 inner.hook_registry.clone()
             };
             if let Some(hooks) = hooks_opt {
@@ -185,7 +185,7 @@ impl Agent {
                 if !e.is_recoverable() {
                     fatal = Some((tool_call.function.name.clone(), e.to_string()));
                 } else {
-                    let mut inner = self.inner.write().unwrap();
+                    let mut inner = self.inner.write();
                     let ctx = inner
                         .turn_context
                         .as_mut()
@@ -217,7 +217,7 @@ impl Agent {
 
             // Check for repetitive output loops (only if no fatal error already).
             if fatal.is_none() {
-                let mut inner = self.inner.write().unwrap();
+                let mut inner = self.inner.write();
                 let ctx = inner
                     .turn_context
                     .as_mut()

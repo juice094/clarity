@@ -17,7 +17,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use tokio::sync::broadcast;
 use tracing::{debug, error, trace, warn};
 
@@ -373,14 +374,14 @@ impl WireSoulSide {
         }
 
         // Handle merging for the merged channel.
-        let mut merge_buffer = self.merge_buffer.lock().unwrap();
+        let mut merge_buffer = self.merge_buffer.lock();
         if msg.is_mergeable() {
             if let Some(ref mut buffer) = *merge_buffer {
                 if !buffer.try_merge(&msg) {
                     // Cannot merge, flush buffer first.
                     drop(merge_buffer);
                     self.flush();
-                    *self.merge_buffer.lock().unwrap() = Some(msg);
+                    *self.merge_buffer.lock() = Some(msg);
                 }
             } else {
                 *merge_buffer = Some(msg);
@@ -414,7 +415,7 @@ impl WireSoulSide {
     /// soul.flush(); // Sends the merged "Hello world" message
     /// ```
     pub fn flush(&self) {
-        if let Some(buffer) = self.merge_buffer.lock().unwrap().take() {
+        if let Some(buffer) = self.merge_buffer.lock().take() {
             debug!("Flushing merged message: {:?}", buffer);
             if let Err(e) = self.merged_sender.send(buffer) {
                 warn!("Failed to send merged message, no receivers: {}", e);

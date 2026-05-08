@@ -12,8 +12,8 @@ use std::sync::Arc;
 /// concurrently at runtime while remaining cheap to clone.
 #[derive(Debug, Clone, Default)]
 pub struct SkillRegistry {
-    skills: Arc<std::sync::RwLock<HashMap<String, Skill>>>,
-    active: Arc<std::sync::RwLock<HashSet<String>>>,
+    skills: Arc<parking_lot::RwLock<HashMap<String, Skill>>>,
+    active: Arc<parking_lot::RwLock<HashSet<String>>>,
 }
 
 impl SkillRegistry {
@@ -35,8 +35,8 @@ impl SkillRegistry {
             }
         }
         Self {
-            skills: Arc::new(std::sync::RwLock::new(map)),
-            active: Arc::new(std::sync::RwLock::new(HashSet::new())),
+            skills: Arc::new(parking_lot::RwLock::new(map)),
+            active: Arc::new(parking_lot::RwLock::new(HashSet::new())),
         }
     }
 
@@ -48,24 +48,23 @@ impl SkillRegistry {
 
     /// Get a skill by id.
     pub fn get(&self, id: &str) -> Option<Skill> {
-        self.skills.read().unwrap().get(id).cloned()
+        self.skills.read().get(id).cloned()
     }
 
     /// Check if a skill exists.
     pub fn contains(&self, id: &str) -> bool {
-        self.skills.read().unwrap().contains_key(id)
+        self.skills.read().contains_key(id)
     }
 
     /// List all skill ids.
     pub fn list_ids(&self) -> Vec<String> {
-        self.skills.read().unwrap().keys().cloned().collect()
+        self.skills.read().keys().cloned().collect()
     }
 
     /// List summaries for all skills.
     pub fn list_summaries(&self) -> Vec<String> {
         self.skills
             .read()
-            .unwrap()
             .values()
             .map(|s| s.summary())
             .collect()
@@ -76,7 +75,6 @@ impl SkillRegistry {
         let q = query.to_lowercase();
         self.skills
             .read()
-            .unwrap()
             .values()
             .filter(|s| {
                 s.meta.id.to_lowercase().contains(&q)
@@ -96,12 +94,12 @@ impl SkillRegistry {
 
     /// Return the number of registered skills.
     pub fn len(&self) -> usize {
-        self.skills.read().unwrap().len()
+        self.skills.read().len()
     }
 
     /// Check if the registry is empty.
     pub fn is_empty(&self) -> bool {
-        self.skills.read().unwrap().is_empty()
+        self.skills.read().is_empty()
     }
 
     /// Discover skills by walking from `working_dir` up to the root,
@@ -118,7 +116,7 @@ impl SkillRegistry {
             current = dir.parent();
         }
 
-        let mut map = self.skills.write().unwrap();
+        let mut map = self.skills.write();
         let mut new_ids = Vec::new();
         for skill in all_discovered {
             let id = skill.meta.id.clone();
@@ -134,7 +132,7 @@ impl SkillRegistry {
     ///
     /// Matching skills are marked as active and their ids are returned.
     pub fn activate_by_path(&self, paths: &[std::path::PathBuf]) -> Vec<String> {
-        let map = self.skills.read().unwrap();
+        let map = self.skills.read();
         let mut activated = Vec::new();
 
         for (id, skill) in map.iter() {
@@ -151,7 +149,7 @@ impl SkillRegistry {
         }
 
         drop(map);
-        let mut active = self.active.write().unwrap();
+        let mut active = self.active.write();
         for id in &activated {
             active.insert(id.clone());
         }
@@ -161,24 +159,24 @@ impl SkillRegistry {
 
     /// Check whether a skill is currently active.
     pub fn is_active(&self, id: &str) -> bool {
-        self.active.read().unwrap().contains(id)
+        self.active.read().contains(id)
     }
 
     /// Return a clone of the active skill ids set.
     pub fn active_ids(&self) -> HashSet<String> {
-        self.active.read().unwrap().clone()
+        self.active.read().clone()
     }
 
     /// Deactivate a skill by id.
     /// Returns `true` if the skill was active and is now deactivated.
     pub fn deactivate(&self, id: &str) -> bool {
-        self.active.write().unwrap().remove(id)
+        self.active.write().remove(id)
     }
 
     /// Toggle the active state of a skill.
     /// Returns the new active state.
     pub fn toggle_active(&self, id: &str) -> bool {
-        let mut active = self.active.write().unwrap();
+        let mut active = self.active.write();
         if active.contains(id) {
             active.remove(id);
             false
@@ -190,7 +188,7 @@ impl SkillRegistry {
 
     /// List all registered skills.
     pub fn list_skills(&self) -> Vec<super::Skill> {
-        self.skills.read().unwrap().values().cloned().collect()
+        self.skills.read().values().cloned().collect()
     }
 
     /// Run a flow-type skill.

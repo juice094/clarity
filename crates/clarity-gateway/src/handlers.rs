@@ -754,7 +754,7 @@ pub(crate) async fn run_parallel(
         .collect();
 
     // Create and register batch progress
-    let progress = Arc::new(std::sync::Mutex::new(
+    let progress = Arc::new(parking_lot::Mutex::new(
         clarity_core::subagents::BatchProgress::new(batch_id.clone(), &specs),
     ));
     {
@@ -806,9 +806,8 @@ pub(crate) async fn run_parallel(
         }
         Err(e) => {
             // Mark progress as failed
-            if let Ok(mut p) = progress.lock() {
-                p.status = clarity_core::subagents::BatchStatus::Failed(e.to_string());
-            }
+            let mut p = progress.lock();
+            p.status = clarity_core::subagents::BatchStatus::Failed(e.to_string());
             error!("Parallel execution failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -845,7 +844,7 @@ pub(crate) async fn get_parallel_status(
     let batches = state.parallel_batches.read().await;
     match batches.get(&batch_id) {
         Some(progress_arc) => {
-            let p = progress_arc.lock().unwrap();
+            let p = progress_arc.lock();
             let status_str = match &p.status {
                 clarity_core::subagents::BatchStatus::Running => "Running",
                 clarity_core::subagents::BatchStatus::Completed => "Completed",

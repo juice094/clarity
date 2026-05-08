@@ -38,3 +38,4 @@ notify = { version = "7", default-features = false, features = ["macos_fsevent",
 
 # Async trait support (clarity-contract uses #[async_trait])
 async-trait = { workspace = true }
+parking_lot = "0.12"

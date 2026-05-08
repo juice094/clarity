@@ -9,7 +9,8 @@ use parking_lot::RwLock;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use tracing::{debug, info, instrument};
 
 /// Cached incremental BM25 index paired with fact ID mappings.
@@ -90,7 +91,7 @@ impl SqliteStore {
     }
 
     pub fn enable_wal_mode(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute("PRAGMA journal_mode=WAL", [])?;
         conn.execute("PRAGMA synchronous=NORMAL", [])?;
         debug!("WAL mode enabled");
@@ -108,7 +109,7 @@ impl SqliteStore {
         let content = content.to_string();
         let conn = self.conn.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO session_notes (session_id, section, content) VALUES (?1, ?2, ?3)",
                 params![session_id, section, content],
@@ -121,7 +122,7 @@ impl SqliteStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "CREATE TABLE IF NOT EXISTS facts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,7 +230,7 @@ impl StorageBackend for SqliteStore {
 
         let fact_for_db = fact.clone();
         let id = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO facts (fact, tags, time, session_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![fact_for_db, tags_json, time, session_id, now],
@@ -251,7 +252,7 @@ impl StorageBackend for SqliteStore {
     async fn get_fact(&self, id: i64) -> Result<Option<Fact>> {
         let conn = self.conn.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let result = conn
                 .query_row(
                     "SELECT id, fact, tags, time, session_id, created_at FROM facts WHERE id = ?",
@@ -268,7 +269,7 @@ impl StorageBackend for SqliteStore {
     async fn delete_fact(&self, id: i64) -> Result<bool> {
         let conn = self.conn.clone();
         let deleted = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let rows = conn.execute("DELETE FROM facts WHERE id = ?", [id])?;
             Ok::<_, MemoryError>(rows > 0)
         })
@@ -293,7 +294,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare("SELECT id, fact, tags, time, session_id, created_at FROM facts ORDER BY created_at DESC LIMIT ?")?;
             let rows = stmt.query_map([limit as i64], Self::row_to_fact)?;
 
@@ -320,7 +321,7 @@ impl StorageBackend for SqliteStore {
         let decay = *decay;
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare(
                 "SELECT f.id, f.fact, f.tags, f.time, f.session_id, f.created_at, fts.rank
                  FROM facts f JOIN facts_fts fts ON f.id = fts.rowid
@@ -359,7 +360,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
                  WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
@@ -381,7 +382,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
                  WHERE created_at > ? ORDER BY created_at DESC",
@@ -402,7 +403,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare(
                 "SELECT id, fact, tags, time, session_id, created_at FROM facts 
                  ORDER BY created_at DESC LIMIT ?",
@@ -423,7 +424,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let count: i64 = conn.query_row("SELECT COUNT(*) FROM facts", [], |row| row.get(0))?;
             Ok::<_, MemoryError>(count)
         })
@@ -456,7 +457,7 @@ impl StorageBackend for SqliteStore {
         if cache_empty {
             let conn = self.conn.clone();
             let all_facts: Vec<(i64, String)> = tokio::task::spawn_blocking(move || {
-                let conn = conn.lock().unwrap();
+                let conn = conn.lock();
                 let mut stmt = conn.prepare("SELECT id, fact FROM facts")?;
                 let rows = stmt.query_map([], |row| {
                     Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
@@ -513,7 +514,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         let rows = tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let rows = conn.execute("DELETE FROM facts", [])?;
             Ok::<_, MemoryError>(rows)
         })
@@ -544,7 +545,7 @@ impl StorageBackend for SqliteStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let mut conn = conn.lock().unwrap();
+            let mut conn = conn.lock();
             let tx = conn.transaction()?;
             let mut ids = Vec::with_capacity(facts.len());
             let now = Utc::now().to_rfc3339();
@@ -571,7 +572,7 @@ mod tests {
     use chrono::Duration;
 
     fn insert_fact_with_time(store: &SqliteStore, text: &str, created_at: DateTime<Utc>) -> i64 {
-        let conn = store.conn.lock().unwrap();
+        let conn = store.conn.lock();
         let tags = serde_json::to_string(&Vec::<String>::new()).unwrap();
         conn.execute(
             "INSERT INTO facts (fact, tags, time, session_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",

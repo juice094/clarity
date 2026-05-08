@@ -357,11 +357,11 @@ pub struct LocalGgufProvider {
     tokenizer: tokenizers::Tokenizer,
     device: Device,
     config: LocalGgufConfig,
-    cache_key: std::sync::Mutex<Option<String>>,
+    cache_key: parking_lot::Mutex<Option<String>>,
     /// Token cache for KV persistence across turns.
     /// Stores the token IDs of the last processed prompt + generated tokens.
     /// Used to compute LCP and avoid re-encoding the full prefix on each turn.
-    token_cache: Arc<std::sync::Mutex<Vec<u32>>>,
+    token_cache: Arc<parking_lot::Mutex<Vec<u32>>>,
 }
 
 impl LocalGgufProvider {
@@ -393,8 +393,8 @@ impl LocalGgufProvider {
             tokenizer,
             device,
             config,
-            cache_key: std::sync::Mutex::new(None),
-            token_cache: Arc::new(std::sync::Mutex::new(Vec::new())),
+            cache_key: parking_lot::Mutex::new(None),
+            token_cache: Arc::new(parking_lot::Mutex::new(Vec::new())),
         })
     }
 
@@ -422,7 +422,7 @@ impl LocalGgufProvider {
 
         // Compute LCP with cached tokens to decide whether to reuse KV cache.
         let (input_ids, index_pos, prompt_len) = {
-            let cached = self.token_cache.lock().unwrap();
+            let cached = self.token_cache.lock();
             let lcp_len = longest_common_prefix(&cached, &prompt_tokens);
             let threshold = (prompt_tokens.len() * 8).saturating_div(10);
             if lcp_len > 0 && lcp_len >= threshold {
@@ -560,7 +560,7 @@ impl LocalGgufProvider {
 
         // Update token cache: prompt tokens + generated tokens.
         // This allows the next turn to compute LCP and reuse KV cache.
-        let mut cache = self.token_cache.lock().unwrap();
+        let mut cache = self.token_cache.lock();
         cache.clear();
         cache.extend_from_slice(&prompt_tokens);
         cache.extend_from_slice(&all_tokens);
@@ -681,11 +681,11 @@ impl LlmProvider for LocalGgufProvider {
     }
 
     fn set_prompt_cache_key(&self, key: &str) {
-        *self.cache_key.lock().unwrap() = Some(key.to_string());
+        *self.cache_key.lock() = Some(key.to_string());
     }
 
     fn clear_cache(&self) {
-        let mut cache = self.token_cache.lock().unwrap();
+        let mut cache = self.token_cache.lock();
         cache.clear();
     }
 
@@ -710,7 +710,7 @@ async fn generate_with_state(
     tokenizer: tokenizers::Tokenizer,
     device: Device,
     config: LocalGgufConfig,
-    token_cache: Arc<std::sync::Mutex<Vec<u32>>>,
+    token_cache: Arc<parking_lot::Mutex<Vec<u32>>>,
     prompt: &str,
     max_tokens: usize,
     tx: Option<tokio::sync::mpsc::Sender<Result<StreamDelta, AgentError>>>,
@@ -728,7 +728,7 @@ async fn generate_with_state(
 
     // Compute LCP with cached tokens to decide whether to reuse KV cache.
     let (input_ids, index_pos, prompt_len) = {
-        let cached = token_cache.lock().unwrap();
+        let cached = token_cache.lock();
         let lcp_len = longest_common_prefix(&cached, &prompt_tokens);
         let threshold = (prompt_tokens.len() * 8).saturating_div(10);
         if lcp_len > 0 && lcp_len >= threshold {
@@ -858,7 +858,7 @@ async fn generate_with_state(
     }
 
     // Update token cache: prompt tokens + generated tokens.
-    let mut cache = token_cache.lock().unwrap();
+    let mut cache = token_cache.lock();
     cache.clear();
     cache.extend_from_slice(&prompt_tokens);
     cache.extend_from_slice(&all_tokens);

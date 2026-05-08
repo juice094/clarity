@@ -46,7 +46,7 @@ impl Agent {
         self.maybe_snapshot_post_turn().await;
 
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.last_turn_message_count = messages.len();
         }
         self.finalize_sync_turn(
@@ -69,7 +69,7 @@ impl Agent {
 
         // 1. Build predictor (user-provided or auto-wrapped via LlmAdapter)
         let predictor: Arc<dyn crate::agent::jumpy::OutcomePredictor> = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             if let Some(ref p) = inner.jumpy_predictor {
                 p.clone()
             } else if let Some(ref llm) = inner.llm {
@@ -275,7 +275,7 @@ impl Agent {
     // ------------------------------------------------------------------
 
     fn is_plan_mode(&self) -> bool {
-        self.inner.read().unwrap().approval_mode == ApprovalMode::Plan
+        self.inner.read().approval_mode == ApprovalMode::Plan
     }
 
     async fn prepare_sync_turn(

@@ -319,7 +319,7 @@ impl Agent {
                 .collect::<String>()
         };
         {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             if inner.static_prompt_hash.as_ref() != Some(&static_hash) {
                 if let Some(ref llm) = inner.llm {
                     llm.clear_cache();
@@ -329,7 +329,7 @@ impl Agent {
                 }
             }
         }
-        self.inner.write().unwrap().static_prompt_hash = Some(static_hash);
+        self.inner.write().static_prompt_hash = Some(static_hash);
 
         Ok(if dynamic_prompt.is_empty() {
             vec![

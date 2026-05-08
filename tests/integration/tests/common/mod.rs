@@ -3,7 +3,7 @@ use clarity_core::agent::{LlmProvider, LlmResponse, Message, ToolCall};
 use clarity_core::error::AgentError;
 use clarity_core::llm::StreamDelta;
 use serde_json::Value;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 /// A mock LLM that returns a predetermined sequence of responses.
 /// Once the sequence is exhausted it returns a simple text response.
@@ -26,7 +26,7 @@ impl LlmProvider for SequentialMockLlm {
         _messages: &[Message],
         _tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
-        let mut responses = self.responses.lock().unwrap();
+        let mut responses = self.responses.lock();
         if responses.is_empty() {
             Ok(LlmResponse {
                 content: "Done".to_string(),

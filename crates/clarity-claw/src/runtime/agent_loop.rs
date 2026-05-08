@@ -53,7 +53,7 @@ impl FederalAgentSession {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use std::sync::Mutex;
+    use parking_lot::Mutex;
 
     struct MockExecutor {
         result: Mutex<Result<String, AgentError>>,
@@ -72,9 +72,9 @@ mod tests {
     #[async_trait]
     impl AgentExecutor for MockExecutor {
         async fn run_turn(&self, query: &str) -> Result<String, AgentError> {
-            let mut last = self.last_query.lock().unwrap();
+            let mut last = self.last_query.lock();
             *last = Some(query.to_string());
-            self.result.lock().unwrap().clone()
+            self.result.lock().clone()
         }
 
         fn last_turn_message_count(&self) -> usize {
@@ -91,7 +91,7 @@ mod tests {
 
         assert_eq!(result.unwrap(), "hello from mock");
         assert_eq!(
-            mock.last_query.lock().unwrap().as_ref().unwrap(),
+            mock.last_query.lock().as_ref().unwrap(),
             "user input"
         );
     }

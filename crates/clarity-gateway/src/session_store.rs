@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use tracing::{debug, info, instrument};
 
 /// A chat message stored in a session
@@ -87,7 +88,7 @@ impl PersistentSessionStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
@@ -140,7 +141,7 @@ impl PersistentSessionStore {
         let now = Utc::now().to_rfc3339();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             conn.execute(
                 "INSERT INTO sessions (session_id, created_at, updated_at) VALUES (?1, ?2, ?3)",
                 params![sid, now.clone(), now],
@@ -162,7 +163,7 @@ impl PersistentSessionStore {
         let now = Utc::now().to_rfc3339();
 
         tokio::task::spawn_blocking(move || {
-            let mut conn = conn.lock().unwrap();
+            let mut conn = conn.lock();
             let tx = conn.transaction()?;
 
             // Ensure session exists
@@ -217,7 +218,7 @@ impl PersistentSessionStore {
         let now = Utc::now().to_rfc3339();
 
         tokio::task::spawn_blocking(move || {
-            let mut conn = conn.lock().unwrap();
+            let mut conn = conn.lock();
             let tx = conn.transaction()?;
 
             // Ensure session exists
@@ -260,7 +261,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt = conn.prepare(
                 "SELECT role, content, tool_calls, tool_call_id, created_at 
                  FROM session_messages 
@@ -302,7 +303,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let mut stmt =
                 conn.prepare("SELECT session_id FROM sessions ORDER BY updated_at DESC")?;
             let rows = stmt.query_map([], |row| {
@@ -326,7 +327,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let rows = conn.execute("DELETE FROM sessions WHERE session_id = ?", [session_id])?;
             Ok::<_, SessionStoreError>(rows > 0)
         })
@@ -340,7 +341,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM sessions WHERE session_id = ?",
                 [session_id],
@@ -357,7 +358,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let count: i64 =
                 conn.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
             Ok::<_, SessionStoreError>(count as usize)
@@ -371,7 +372,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             conn.execute(
                 "UPDATE stats SET value = value + 1 WHERE key = 'total_requests'",
                 [],
@@ -389,7 +390,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let count: i64 = conn.query_row(
                 "SELECT value FROM stats WHERE key = 'total_requests'",
                 [],
@@ -406,7 +407,7 @@ impl PersistentSessionStore {
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = conn.lock().unwrap();
+            let conn = conn.lock();
             let cutoff = (Utc::now() - chrono::Duration::minutes(max_idle_minutes)).to_rfc3339();
             let rows = conn.execute("DELETE FROM sessions WHERE updated_at < ?", [cutoff])?;
             if rows > 0 {
@@ -591,7 +592,7 @@ mod tests {
 
         // Manually set old session's updated_at to a time in the past
         {
-            let conn = store.conn.lock().unwrap();
+            let conn = store.conn.lock();
             let old_time = (Utc::now() - chrono::Duration::minutes(100)).to_rfc3339();
             conn.execute(
                 "UPDATE sessions SET updated_at = ?1 WHERE session_id = 'old'",

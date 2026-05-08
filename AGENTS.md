@@ -60,6 +60,16 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - **Phase 3 — Backlog 推进**: `ParallelExecutor::execute` 新增 `cancel: Option<CancellationToken>` 参数；`TeamCoordinator` 将团队级 cancel token 级联到并行执行器；J5 Jumpy 已有完整实现+测试，无需改动
 - **验证**: `cargo test --workspace --lib` = 全部通过 / 0 failed / 7 ignored / 0 warning
 
+**Sprint 40 — Runtime Robustness Deepening + Integration Tests（已完成 ✅，2026-05-08）**
+
+> 执行计划 `docs/plans/sprint-40-plan.md`：parking_lot 迁移降低锁 unwrap 密度 + MCP 端到端集成测试 + dependabot 跟进。
+
+- **Phase 1 — parking_lot 迁移**: 将 `std::sync::RwLock`/`Mutex` 替换为 `parking_lot` 版本，消除 ~154 个锁 unwrap（占生产代码锁操作 100%）。涉及 `clarity-core`/`clarity-memory`/`clarity-gateway`/`clarity-claw`/`clarity-wire`/`tests/integration`。保留 `approval/mod.rs` 和 `tools/web_browser.rs` 的 `std::sync::Mutex`（依赖 `LockResult` poison 语义）。新增 `parking_lot = "0.12"` 到 5 个 crate 的 Cargo.toml
+- **Phase 2 — MCP 端到端集成测试**: 新增 `tests/integration/tests/mcp_end_to_end.rs`，覆盖 mock HTTP MCP server → `HttpMcpClient` → `McpRegistry` → `register_mcp_tools` → `ToolRegistry.execute` 完整链路；2 个测试全部通过
+- **Phase 3 — dependabot/22**: `cargo audit` 未检出 high severity；子代理调研确认 openssl/rustls-webpki/tokio-tungstenite/zip/idna 等依赖均无 active CVE。建议人工查看 GitHub Security → Dependabot alerts #22 确认是否为误报
+- **附带修复**: `gateway_http.rs` 补全 `WireMessage::PlanStepSkipped` match arm（pre-existing 编译错误，clippy 检出）
+- **验证**: `cargo test --workspace --lib` = 全部通过 / 0 failed / 7 ignored；`cargo clippy --workspace --lib --tests` = 0 error（2 个 pre-existing `collapsible_if` warning 在 `clarity-egui`）
+
 **Sprint 38-C — CI Pipeline Hardening（已完成 ✅，2026-05-06）**
 
 - A ✅: 修复 `clarity-egui` Cargo.toml 跨平台依赖解析（TOML 节顺序敏感，内部 crate 依赖误落入 `[target.'cfg(windows)'.dependencies]`）

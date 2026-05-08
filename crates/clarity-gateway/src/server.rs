@@ -24,7 +24,7 @@ use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::subagents::BatchProgress;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 /// 应用状态
 pub struct AppState {
@@ -101,11 +101,8 @@ pub async fn run(
             let mut batches = batch_cleanup_state.parallel_batches.write().await;
             let before = batches.len();
             batches.retain(|_batch_id, progress| {
-                if let Ok(p) = progress.lock() {
-                    p.status == clarity_core::subagents::BatchStatus::Running
-                } else {
-                    false
-                }
+                let p = progress.lock();
+                p.status == clarity_core::subagents::BatchStatus::Running
             });
             let removed = before - batches.len();
             if removed > 0 {

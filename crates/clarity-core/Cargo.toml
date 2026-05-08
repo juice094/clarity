@@ -38,6 +38,7 @@ similar = "2"
 hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
+parking_lot = "0.12"
 
 candle-core = { version = "0.10.2", optional = true }
 candle-transformers = { version = "0.10.2", optional = true }

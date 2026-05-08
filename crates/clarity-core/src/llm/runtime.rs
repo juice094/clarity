@@ -51,7 +51,7 @@ pub struct RuntimeProviderConfig {
     pub model: String,
 }
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 // ── Mutex cache ─────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ static ACTIVE_CONFIG: Mutex<Option<RuntimeProviderConfig>> = Mutex::new(None);
 
 /// Write the active provider config into the runtime cache.
 pub fn set_provider_config(cfg: RuntimeProviderConfig) {
-    let mut guard = ACTIVE_CONFIG.lock().unwrap();
+    let mut guard = ACTIVE_CONFIG.lock();
     let provider_id = cfg.provider_id.clone();
     *guard = Some(cfg);
     tracing::info!("RuntimeProviderConfig set: provider_id={}", provider_id);
@@ -67,12 +67,12 @@ pub fn set_provider_config(cfg: RuntimeProviderConfig) {
 
 /// Get a reference to the active runtime config, if one is set.
 pub fn get_active_config() -> Option<RuntimeProviderConfig> {
-    ACTIVE_CONFIG.lock().unwrap().clone()
+    ACTIVE_CONFIG.lock().clone()
 }
 
 /// Clear the active runtime config.
 pub fn clear_provider_config() {
-    *ACTIVE_CONFIG.lock().unwrap() = None;
+    *ACTIVE_CONFIG.lock() = None;
     tracing::info!("RuntimeProviderConfig cleared");
 }
 
@@ -84,7 +84,6 @@ pub fn clear_provider_config() {
 pub async fn build_from_active_config() -> Result<Box<dyn LlmProvider>, AgentError> {
     let cfg = ACTIVE_CONFIG
         .lock()
-        .unwrap()
         .clone()
         .ok_or_else(|| AgentError::Llm("No active runtime provider config".into()))?;
     build_provider(&cfg).await

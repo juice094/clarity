@@ -260,7 +260,7 @@ pub struct Agent {
     plan_controller: Arc<tokio::sync::Mutex<Option<crate::agent::plan::PlanExecutionController>>>,
     /// Shared mutable runtime state.
     ///
-    /// **Design choice: `std::sync::RwLock` is intentional.**
+    /// **Design choice: `parking_lot::RwLock` is intentional.**
     /// `Agent` methods (getters/setters/cancel/reset) are synchronous and may
     /// be called from non-async contexts (e.g. TUI event loop, Gateway
     /// handlers). Migrating to `tokio::sync::RwLock` would force every
@@ -268,23 +268,23 @@ pub struct Agent {
     /// and polluting the entire call-graph. All critical sections are
     /// short (field reads/writes only) and audit-confirmed safe (no await
     /// while holding the lock).
-    inner: Arc<std::sync::RwLock<AgentInner>>,
+    inner: Arc<parking_lot::RwLock<AgentInner>>,
 }
 
 impl Agent {
     /// Set the approval mode at runtime.
     pub fn set_approval_mode(&self, mode: ApprovalMode) {
-        self.inner.write().unwrap().approval_mode = mode;
+        self.inner.write().approval_mode = mode;
     }
 
     /// Get the current approval mode.
     pub fn approval_mode(&self) -> ApprovalMode {
-        self.inner.read().unwrap().approval_mode
+        self.inner.read().approval_mode
     }
 
     /// Get the message count from the last completed turn.
     pub fn last_turn_message_count(&self) -> usize {
-        self.inner.read().unwrap().last_turn_message_count
+        self.inner.read().last_turn_message_count
     }
 
     /// Spawn an async background task to extract structured notes from a turn transcript.
@@ -293,7 +293,7 @@ impl Agent {
         if !self.config.extract_memories {
             return;
         }
-        if let Some(ref llm) = self.inner.read().unwrap().llm {
+        if let Some(ref llm) = self.inner.read().llm {
             let llm = llm.clone();
             let working_dir = self.config.working_dir.clone();
             tokio::spawn(async move {
@@ -312,7 +312,7 @@ impl Agent {
 
     /// Snapshot pre-turn if the snapshot service is active.
     pub(crate) async fn maybe_snapshot_pre_turn(&self) {
-        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        let svc_opt = self.inner.read().snapshot_service.clone();
         if let Some(ref svc) = svc_opt {
             if let Err(e) = svc.snapshot_pre_turn().await {
                 tracing::warn!("Pre-turn snapshot failed: {}", e);
@@ -322,7 +322,7 @@ impl Agent {
 
     /// Snapshot post-turn if the snapshot service is active.
     pub(crate) async fn maybe_snapshot_post_turn(&self) {
-        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        let svc_opt = self.inner.read().snapshot_service.clone();
         if let Some(ref svc) = svc_opt {
             if let Err(e) = svc.snapshot_post_turn().await {
                 tracing::warn!("Post-turn snapshot failed: {}", e);
@@ -337,14 +337,14 @@ impl Agent {
     /// Return a copy of all stored workspace snapshots.
     /// Returns an empty list if the snapshot service is not active.
     pub fn snapshot_list(&self) -> Vec<snapshot::SnapshotInfo> {
-        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        let svc_opt = self.inner.read().snapshot_service.clone();
         svc_opt.map(|svc| svc.list()).unwrap_or_default()
     }
 
     /// Restore the workspace to the state of snapshot `id`.
     /// Returns an error if the snapshot service is not active or the id is unknown.
     pub async fn restore_snapshot(&self, id: usize) -> Result<(), crate::error::AgentError> {
-        let svc_opt = self.inner.read().unwrap().snapshot_service.clone();
+        let svc_opt = self.inner.read().snapshot_service.clone();
         match svc_opt {
             Some(svc) => svc.restore(id).await,
             None => Err(crate::error::AgentError::ToolExecutionFailed(
@@ -360,32 +360,32 @@ impl Agent {
 
     /// Set the cached Git context string.
     pub fn set_git_context(&self, ctx: Option<String>) {
-        self.inner.write().unwrap().git_context = ctx;
+        self.inner.write().git_context = ctx;
     }
 
     /// Get the cached Git context string.
     pub fn git_context(&self) -> Option<String> {
-        self.inner.read().unwrap().git_context.clone()
+        self.inner.read().git_context.clone()
     }
 
     /// Set the cached active files description.
     pub fn set_active_files(&self, files: Option<String>) {
-        self.inner.write().unwrap().active_files = files;
+        self.inner.write().active_files = files;
     }
 
     /// Get the cached active files description.
     pub fn active_files(&self) -> Option<String> {
-        self.inner.read().unwrap().active_files.clone()
+        self.inner.read().active_files.clone()
     }
 
     /// Set the cached project metadata string.
     pub fn set_project_metadata(&self, meta: Option<String>) {
-        self.inner.write().unwrap().project_metadata = meta;
+        self.inner.write().project_metadata = meta;
     }
 
     /// Get the cached project metadata string.
     pub fn project_metadata(&self) -> Option<String> {
-        self.inner.read().unwrap().project_metadata.clone()
+        self.inner.read().project_metadata.clone()
     }
 
     /// Refresh the cached context snapshot (Git, active files, project metadata).
@@ -488,7 +488,7 @@ impl Agent {
     /// Includes pending costs reported by background tasks (subagents, compaction, etc.).
     fn check_budget(&self, estimated_cost: f64) -> Result<(), AgentError> {
         let config = &self.config;
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
 
         // Drain any cost reported by background tasks into the main tracker.
         let pending = cost_channel::drain_pending_cost();
@@ -538,7 +538,7 @@ impl Agent {
     /// Also drains any pending costs from background tasks.
     fn record_cost(&self, cost: f64) {
         let pending = cost_channel::drain_pending_cost();
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         let today = chrono::Utc::now().date_naive();
         if inner.last_cost_date != today {
             inner.daily_cost_usd = 0.0;

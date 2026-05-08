@@ -54,7 +54,7 @@ impl Agent {
             memory_factory: None,
             skill_factory: None,
             plan_controller: Arc::new(tokio::sync::Mutex::new(None)),
-            inner: Arc::new(std::sync::RwLock::new(AgentInner {
+            inner: Arc::new(parking_lot::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
                 memory_store: None,
@@ -85,7 +85,7 @@ impl Agent {
     /// Set the vision LLM provider (builder pattern).
     pub fn with_vision_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.vision_llm = Some(llm);
         }
         self
@@ -93,7 +93,7 @@ impl Agent {
 
     /// Get the vision LLM provider, falling back to the default provider.
     pub fn vision_llm(&self) -> Option<Arc<dyn LlmProvider>> {
-        let inner = self.inner.read().unwrap();
+        let inner = self.inner.read();
         inner.vision_llm.clone().or_else(|| inner.llm.clone())
     }
 
@@ -104,7 +104,7 @@ impl Agent {
     /// so failures fall back through this chain.
     pub fn with_fallback_llms(self, fallbacks: Vec<Arc<dyn LlmProvider>>) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.fallback_llms = fallbacks;
             // Re-wrap existing LLM if any
             if let Some(ref existing) = inner.llm {
@@ -119,7 +119,7 @@ impl Agent {
     /// Set the LLM provider (builder pattern, for construction only)
     pub fn with_llm(self, llm: Arc<dyn LlmProvider>) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             let llm = if inner.fallback_llms.is_empty() {
                 llm
             } else {
@@ -139,7 +139,7 @@ impl Agent {
         predictor: Arc<dyn crate::agent::jumpy::predictor::OutcomePredictor>,
     ) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.jumpy_predictor = Some(predictor);
         }
         self
@@ -148,7 +148,7 @@ impl Agent {
     /// Hot-swap the LLM provider at runtime.
     /// All clones of this Agent will see the new provider immediately.
     pub fn set_llm(&self, llm: Arc<dyn LlmProvider>) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         let llm = if inner.fallback_llms.is_empty() {
             llm
         } else {
@@ -164,7 +164,7 @@ impl Agent {
 
     /// Remove the current LLM binding and revert to Unconfigured state.
     pub fn unset_llm(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         inner.llm = None;
         inner.state = AgentState::Unconfigured;
     }
@@ -172,19 +172,19 @@ impl Agent {
     /// Set the provider label for internal tracing/audit.
     /// This is NOT injected into the system prompt.
     pub fn set_provider_label(&self, label: impl Into<String>) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         inner.provider_label = Some(label.into());
     }
 
     /// Get the provider label (internal tracing only).
     pub fn provider_label(&self) -> Option<String> {
-        self.inner.read().unwrap().provider_label.clone()
+        self.inner.read().provider_label.clone()
     }
 
     /// Set the skill registry.
     pub fn with_skill_registry(self, registry: SkillRegistry) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.skill_registry = Some(registry);
         }
         self
@@ -193,13 +193,13 @@ impl Agent {
     /// Set (or clear) the active skill by id.
     /// All clones of this Agent will see the change immediately.
     pub fn set_active_skill(&self, skill_id: Option<String>) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         inner.active_skill = skill_id;
     }
 
     /// Get the currently active skill id, if any.
     pub fn active_skill(&self) -> Option<String> {
-        self.inner.read().unwrap().active_skill.clone()
+        self.inner.read().active_skill.clone()
     }
 
     /// List all skills from the registry.
@@ -236,18 +236,18 @@ impl Agent {
     /// Set the file paths representing the current user operation.
     /// These paths are used to dynamically activate skills at turn start.
     pub fn set_active_file_paths(&self, paths: Vec<std::path::PathBuf>) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         inner.active_file_paths = paths;
     }
 
     /// Get the currently set active file paths.
     pub fn active_file_paths(&self) -> Vec<std::path::PathBuf> {
-        self.inner.read().unwrap().active_file_paths.clone()
+        self.inner.read().active_file_paths.clone()
     }
 
     /// Remove the LLM provider at runtime.
     pub fn clear_llm(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         inner.llm = None;
         inner.state = AgentState::Unconfigured;
     }
@@ -255,7 +255,7 @@ impl Agent {
     /// Set the memory store
     pub fn with_memory(self, store: Arc<dyn MemoryStore>) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.memory_store = Some(store);
         }
         self
@@ -300,7 +300,7 @@ impl Agent {
     /// Set the approval mode (builder pattern)
     pub fn with_approval_mode(self, mode: ApprovalMode) -> Self {
         {
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.approval_mode = mode;
         }
         self
@@ -349,7 +349,7 @@ impl Agent {
 
     /// Set the agent lifecycle hook registry (builder pattern).
     pub fn with_hooks(self, hooks: super::hooks::HookRegistry) -> Self {
-        self.inner.write().unwrap().hook_registry =
+        self.inner.write().hook_registry =
             Some(std::sync::Arc::new(tokio::sync::RwLock::new(hooks)));
         self
     }
@@ -386,7 +386,7 @@ impl Agent {
     pub async fn ensure_initialized(&self) -> Result<(), AgentError> {
         // Initialize LLM if needed
         let needs_llm_init = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             inner.llm.is_none() && self.llm_factory.is_some()
         };
         if needs_llm_init {
@@ -398,33 +398,33 @@ impl Agent {
 
         // Initialize MemoryStore if needed
         let needs_memory_init = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             inner.memory_store.is_none() && self.memory_factory.is_some()
         };
         if needs_memory_init {
             if let Some(ref factory) = self.memory_factory {
                 let store = factory().await?;
-                let mut inner = self.inner.write().unwrap();
+                let mut inner = self.inner.write();
                 inner.memory_store = Some(store);
             }
         }
 
         // Initialize SkillRegistry if needed
         let needs_skill_init = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             inner.skill_registry.is_none() && self.skill_factory.is_some()
         };
         if needs_skill_init {
             if let Some(ref factory) = self.skill_factory {
                 let registry = factory().await?;
-                let mut inner = self.inner.write().unwrap();
+                let mut inner = self.inner.write();
                 inner.skill_registry = Some(registry);
             }
         }
 
         // Initialize LSP hook if configured and not yet initialized
         let needs_lsp_init = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             !inner.lsp_initialized && self.config.lsp_config.is_some()
         };
         if needs_lsp_init {
@@ -434,7 +434,7 @@ impl Agent {
                         super::lsp::LspHook::try_new(lsp_config, &self.config.working_dir).await
                     {
                         let hook_registry_opt = {
-                            let inner = self.inner.read().unwrap();
+                            let inner = self.inner.read();
                             inner.hook_registry.clone()
                         };
                         if let Some(arc) = hook_registry_opt {
@@ -443,20 +443,20 @@ impl Agent {
                         } else {
                             let mut registry = super::hooks::HookRegistry::new();
                             registry.register(Box::new(hook));
-                            let mut inner = self.inner.write().unwrap();
+                            let mut inner = self.inner.write();
                             inner.hook_registry =
                                 Some(std::sync::Arc::new(tokio::sync::RwLock::new(registry)));
                         }
                     }
                 }
             }
-            let mut inner = self.inner.write().unwrap();
+            let mut inner = self.inner.write();
             inner.lsp_initialized = true;
         }
 
         // Initialize snapshot service if configured and not yet initialized
         let needs_snapshot_init = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read();
             inner.snapshot_service.is_none() && self.config.snapshot_config.is_some()
         };
         if needs_snapshot_init {
@@ -470,7 +470,7 @@ impl Agent {
                     let service = std::sync::Arc::new(service);
                     let tool = super::snapshot::GitRestoreTool::new(service.clone());
                     let _ = self.registry.register(tool);
-                    let mut inner = self.inner.write().unwrap();
+                    let mut inner = self.inner.write();
                     inner.snapshot_service = Some(service);
                 }
             }
@@ -496,7 +496,7 @@ impl Agent {
 
     /// Cancel any in-flight agent run.
     pub fn cancel(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         if let AgentState::Running { ref cancel_token } = inner.state {
             cancel_token.cancel();
             inner.state = AgentState::Stalled;
@@ -505,7 +505,7 @@ impl Agent {
 
     /// Reset the agent state so a new turn can run.
     pub fn reset(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         if inner.llm.is_some() {
             inner.state = AgentState::Idle;
         } else {
@@ -521,7 +521,7 @@ impl Agent {
 
     /// Accumulate token usage into the session counter.
     pub(crate) fn accumulate_usage(&self, prompt_tokens: u32, completion_tokens: u32) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         if let Some(ref mut ctx) = inner.turn_context {
             ctx.session_usage.prompt_tokens += prompt_tokens;
             ctx.session_usage.completion_tokens += completion_tokens;
@@ -561,7 +561,6 @@ impl Agent {
     pub fn get_session_usage(&self) -> TokenUsage {
         self.inner
             .read()
-            .unwrap()
             .turn_context
             .as_ref()
             .map(|c| c.session_usage.clone())
@@ -587,17 +586,17 @@ impl Agent {
 
     /// Get the LLM provider (if configured)
     pub fn llm(&self) -> Option<Arc<dyn LlmProvider>> {
-        self.inner.read().unwrap().llm.clone()
+        self.inner.read().llm.clone()
     }
 
     /// Get the memory store (if configured)
     pub fn memory_store(&self) -> Option<Arc<dyn MemoryStore>> {
-        self.inner.read().unwrap().memory_store.clone()
+        self.inner.read().memory_store.clone()
     }
 
     /// Get the skill registry (if configured)
     pub fn skill_registry(&self) -> Option<SkillRegistry> {
-        self.inner.read().unwrap().skill_registry.clone()
+        self.inner.read().skill_registry.clone()
     }
 
     /// Get the agent configuration
@@ -607,7 +606,7 @@ impl Agent {
 
     /// Query the current agent state.
     pub fn state(&self) -> AgentState {
-        self.inner.read().unwrap().state.clone()
+        self.inner.read().state.clone()
     }
 
     /// Check whether the agent is currently running a turn.
@@ -618,7 +617,7 @@ impl Agent {
     /// Internal: atomically attempt to transition from Idle to Running.
     /// Returns the fresh CancellationToken on success.
     pub(crate) fn begin_turn(&self) -> Result<CancellationToken, crate::error::AgentError> {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         match &inner.state {
             AgentState::Unconfigured => Err(crate::error::AgentError::Unconfigured),
             AgentState::Running { .. } => Err(crate::error::AgentError::AlreadyRunning),
@@ -639,7 +638,7 @@ impl Agent {
 
     /// Internal: transition from Running to Idle.
     pub(crate) fn finish_turn(&self) {
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.write();
         if matches!(inner.state, AgentState::Running { .. }) {
             inner.state = AgentState::Idle;
         }
@@ -650,7 +649,6 @@ impl Agent {
     pub(crate) fn snapshotted_active_skill(&self) -> Option<String> {
         self.inner
             .read()
-            .unwrap()
             .turn_context
             .as_ref()
             .and_then(|c| c.snapshotted_skill.clone())
@@ -658,12 +656,12 @@ impl Agent {
 
     /// Internal: access the file prompt cache.
     pub(crate) fn file_prompt_cache(&self) -> Option<String> {
-        self.inner.read().unwrap().file_prompt_cache.clone()
+        self.inner.read().file_prompt_cache.clone()
     }
 
     /// Internal: set the file prompt cache.
     pub(crate) fn set_file_prompt_cache(&self, value: Option<String>) {
-        self.inner.write().unwrap().file_prompt_cache = value;
+        self.inner.write().file_prompt_cache = value;
     }
 
     /// Run multiple subagents in parallel.
@@ -675,7 +673,7 @@ impl Agent {
         &self,
         specs: Vec<crate::subagents::RunSpec>,
         config: crate::subagents::ParallelConfig,
-        progress: Option<std::sync::Arc<std::sync::Mutex<crate::subagents::BatchProgress>>>,
+        progress: Option<std::sync::Arc<parking_lot::Mutex<crate::subagents::BatchProgress>>>,
     ) -> anyhow::Result<crate::subagents::ParallelResult> {
         use crate::subagents::SubagentManager;
 

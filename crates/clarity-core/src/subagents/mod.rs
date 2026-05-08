@@ -117,7 +117,7 @@ impl SubagentManager {
         &mut self,
         specs: Vec<RunSpec>,
         config: ParallelConfig,
-        progress: Option<std::sync::Arc<std::sync::Mutex<BatchProgress>>>,
+        progress: Option<std::sync::Arc<parking_lot::Mutex<BatchProgress>>>,
         cancel: Option<tokio_util::sync::CancellationToken>,
     ) -> anyhow::Result<ParallelResult> {
         use crate::background::BackgroundTaskManager;
