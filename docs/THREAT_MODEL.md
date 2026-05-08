@@ -43,7 +43,7 @@
 |------|------|---------|---------|------|
 | MCP command injection | `clarity-mcp` | High | `validate_mcp_command()` 拒绝 metacharacters、相对路径、不存在的绝对路径 | ⚠️ 部分 |
 | Path traversal（文件路径篡改） | `clarity-core` / `clarity-gateway` | High | `resolve_path()` 强制 CWD 前缀；`sanitize_path()` 在 `canonicalize()` 后再次校验 | ⚠️ 部分 |
-| LLM prompt injection | `clarity-core` | Medium | `scrub_credentials()` 减少侧信道；无结构化 prompt 边界或输出 schema 锁定 | ❌ 未处理 |
+| LLM prompt injection | `clarity-core` | Medium | `<tool_result>` XML 边界符 + system prompt 防御指令；JSON schema 结构化输出待 v0.4.x | ⚠️ 部分 |
 | SSE reconnection 流篡改 | `clarity-mcp` | Low | SSE transport 使用 HTTP；localhost 场景下无 TLS pinning | ❌ 未处理 |
 
 ### 3.3 Repudiation（抵赖）
@@ -112,7 +112,7 @@
 
 | 风险 | 计划版本 | 缓解方向 |
 |------|---------|---------|
-| LLM prompt injection | v0.4.x | 引入结构化输出约束（JSON schema）与 prompt 边界符 |
+| LLM prompt injection | ⚠️ v0.3.x | `<tool_result>` XML 边界符 + system prompt 防御指令已落地；JSON schema 结构化输出待 v0.4.x |
 | Local GGUF supply chain | v0.4.x | 模型文件 SHA-256 校验与用户确认提示 |
 | SSE reconnection hijacking | Backlog | SSE over TLS 强制或本地 Unix domain socket 替代 |
 | OS notification spoofing | Backlog | 若通知带操作按钮，增加交互令牌校验（依赖 OS API 支持） |

@@ -179,7 +179,11 @@ impl Agent {
             });
 
             let scrubbed = scrub_credentials(&result_content);
-            messages.push(Message::tool(&tool_call.id, scrubbed));
+            let wrapped = format!(
+                "<tool_result name=\"{}\">{}</tool_result>",
+                tool_call.function.name, scrubbed
+            );
+            messages.push(Message::tool(&tool_call.id, wrapped));
 
             if let Err(ref e) = sanitized {
                 if !e.is_recoverable() {
