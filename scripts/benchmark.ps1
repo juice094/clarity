@@ -71,13 +71,13 @@ function Measure-StartupTime($binary, $argsList = @("--help"), $timeoutSec = 15)
     }
 }
 
-function Measure-ServiceStartup($binary, $readyPattern, $timeoutSec = 15) {
+function Measure-ServiceStartup($binary, $port, $timeoutSec = 15) {
     $exe = "$repoRoot/target/$ProfileDir/$binary.exe"
     if (-not (Test-Path $exe)) {
         Write-Warning "Binary not found: $exe"
         return $null
     }
-    Write-Host "Measuring service startup for $binary (pattern: '$readyPattern')..." -ForegroundColor Cyan
+    Write-Host "Measuring service startup for $binary (port: $port)..." -ForegroundColor Cyan
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exe
     $psi.RedirectStandardOutput = $true
@@ -89,15 +89,15 @@ function Measure-ServiceStartup($binary, $readyPattern, $timeoutSec = 15) {
     $ready = $false
     $maxWait = [timespan]::FromSeconds($timeoutSec)
     while ($sw.Elapsed -lt $maxWait -and -not $proc.HasExited) {
-        if ($proc.StandardOutput.EndOfStream -and $proc.StandardError.EndOfStream) {
-            Start-Sleep -Milliseconds 50
-            continue
-        }
-        $line = $proc.StandardOutput.ReadLineAsync().Result
-        if (-not $line) { $line = $proc.StandardError.ReadLineAsync().Result }
-        if ($line -and $line -match $readyPattern) {
+        Start-Sleep -Milliseconds 100
+        try {
+            $client = New-Object System.Net.Sockets.TcpClient
+            $client.Connect("127.0.0.1", $port)
+            $client.Close()
             $ready = $true
             break
+        } catch {
+            # Port not open yet, keep waiting
         }
     }
     $sw.Stop()
@@ -187,13 +187,16 @@ if (-not $SkipCompile) {
 
 # Startup benchmarks
 $report.startup += Measure-StartupTime "clarity-headless" @("--help")
-$report.startup += Measure-StartupTime "clarity-egui" @("--help")
-$report.startup += Measure-ServiceStartup "clarity-gateway" "API Server listening"
-$report.startup += Measure-ServiceStartup "clarity-claw" "Claw tray icon active"
+# clarity-egui is a GUI app without --help; skip startup timing
+# $report.startup += Measure-StartupTime "clarity-egui" @("--help")
+$report.startup += Measure-ServiceStartup "clarity-gateway" 18790 30
+# clarity-claw does not open a fixed port; skip service startup
+# $report.startup += Measure-ServiceStartup "clarity-claw" 18890 30
 
 # Memory benchmarks
 $report.memory += Measure-Memory "clarity-headless" @("--help")
-$report.memory += Measure-Memory "clarity-egui" @("--help")
+# GUI app memory requires manual measurement
+# $report.memory += Measure-Memory "clarity-egui" @("--help")
 $report.memory += Measure-Memory "clarity-gateway"
 
 # Summary

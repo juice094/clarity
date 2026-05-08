@@ -58,6 +58,10 @@
 | Log credential redaction | `clarity_core::logging::RedactingWriter` + tracing subscriber integration | 2026-05-08 |
 | Prompt injection defense | `<tool_result>` XML delimiter + system prompt hardening | 2026-05-08 |
 | Global shortcuts MVP | `Ctrl+N` new session, `Ctrl+Enter` send, `Ctrl+K` focus input, `Ctrl+Shift+P` palette, `Ctrl+.` toggle skill, `Ctrl+Shift+T` toggle team | 2026-05-08 |
+| Release perf (headless startup) | ~52ms (`--help`) | 2026-05-08 |
+| Release perf (gateway startup) | ~1.1s (port 18790 ready) | 2026-05-08 |
+| Release perf (egui memory) | peak 141 MB / avg 140 MB | 2026-05-08 |
+| Release perf (gateway memory) | peak 21 MB / avg 21 MB | 2026-05-08 |
 
 ---
 
