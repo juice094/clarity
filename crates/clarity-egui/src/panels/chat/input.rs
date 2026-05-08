@@ -97,7 +97,16 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                             .hint_text(hint)
                             .margin(egui::vec2(8.0, 8.0))
                             .frame(false);
-                        ui.add_sized(egui::vec2(input_width, input_height), text_edit);
+                        let response = ui.add_sized(
+                            egui::vec2(input_width, input_height),
+                            text_edit,
+                        );
+
+                        // Handle shortcut-driven focus request.
+                        if app.ui_store.focus_input_requested {
+                            response.request_focus();
+                            app.ui_store.focus_input_requested = false;
+                        }
 
                         if app.chat_store.input != prev_input {
                             app.ui_store.last_input_modified = std::time::Instant::now();
@@ -109,7 +118,14 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                                 .iter()
                                 .any(|e| matches!(e, egui::Event::Ime(egui::ImeEvent::Commit(_))))
                         });
-                        if enter_pressed && !ui.input(|i| i.modifiers.shift) && !ime_commit {
+                        // Only send on Enter when the input box actually has focus.
+                        // This prevents accidental sends while typing in settings
+                        // or other modal text fields.
+                        if response.has_focus()
+                            && enter_pressed
+                            && !ui.input(|i| i.modifiers.shift)
+                            && !ime_commit
+                        {
                             while app.chat_store.input.ends_with('\n') {
                                 app.chat_store.input.pop();
                             }

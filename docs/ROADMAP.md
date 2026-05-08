@@ -73,7 +73,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 文件浏览器集成 | ✅ 已完成 | 工作目录树 + `@path` 引用 |
 | LSP 支持 | ✅ 已完成 | LSP proxy layer + GUI panel |
 | WebBrowserTool | ✅ 已完成 | reqwest+scraper 轻量实现 |
-| 快捷键系统 | ⏸️ 未启动 | 全局快捷键 + Vim 键位引擎 |
+| 快捷键系统 | ✅ MVP 完成 | 全局快捷键 (`Ctrl+N/Enter/K/Shift+P/Period/Shift+T`) + 焦点守卫；Vim 键位引擎待 Phase 3 |
 | 搜索增强 | ⏸️ 未启动 | Command Palette 风格 |
 | 性能优化 | 🔄 部分完成 | 基准脚本已交付（dev 数据已采集），release 跑分待执行 |
 | 桌面端打包 | ✅ 已完成 | `.msi` / `.exe` / `.nsis` + GitHub Actions Release workflow |

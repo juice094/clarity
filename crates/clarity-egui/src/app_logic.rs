@@ -310,6 +310,7 @@ impl App {
                 subagents_expanded: false,
                 editing_session_id: None,
                 editing_title: String::new(),
+                focus_input_requested: false,
                 agent_turn_style: true,
                 agent_turn_glass: false,
                 workspace_plan_expanded: false,

@@ -28,6 +28,7 @@ mod render;
 mod services;
 mod session;
 mod settings;
+mod shortcuts;
 mod stores;
 mod theme;
 mod ui;
@@ -470,38 +471,60 @@ impl eframe::App for App {
             }
         }
 
-        // Check if approval modal is active — if so, suppress main-UI shortcuts.
-        let approval_active = !self.ui_store.pending_approvals.is_empty();
-
-        // ESC closes modals (but not when approval modal is open).
-        if !approval_active && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            if self.team_store.create_modal_open {
-                self.team_store.create_modal_open = false;
-            } else if self.settings_store.settings_open {
-                self.settings_store.settings_open = false;
-            } else if self.ui_store.skill_panel_open {
-                self.ui_store.skill_panel_open = false;
-            } else if self.team_store.team_panel_open {
-                self.team_store.team_panel_open = false;
+        // ── Global keyboard shortcuts ──
+        for action in shortcuts::collect_actions(ctx, self) {
+            match action {
+                shortcuts::ShortcutAction::CloseModal => {
+                    if self.team_store.create_modal_open {
+                        self.team_store.create_modal_open = false;
+                    } else if self.settings_store.settings_open {
+                        self.settings_store.settings_open = false;
+                    } else if self.ui_store.skill_panel_open {
+                        self.ui_store.skill_panel_open = false;
+                    } else if self.team_store.team_panel_open {
+                        self.team_store.team_panel_open = false;
+                    }
+                    if self.cron_store.create_modal_open {
+                        self.cron_store.create_modal_open = false;
+                    }
+                    if self.snapshot_store.modal_open {
+                        self.snapshot_store.modal_open = false;
+                    }
+                    if self.task_store.task_create_modal_open {
+                        self.task_store.task_create_modal_open = false;
+                    }
+                }
+                shortcuts::ShortcutAction::NewSession => {
+                    if !self.chat_store.is_loading {
+                        self.new_session();
+                    }
+                }
+                shortcuts::ShortcutAction::StopGeneration => {
+                    self.stop();
+                }
+                shortcuts::ShortcutAction::SendMessage => {
+                    if !self.chat_store.input.trim().is_empty() && !self.chat_store.is_loading {
+                        self.chat_store.stick_to_bottom = true;
+                        self.send();
+                    }
+                }
+                shortcuts::ShortcutAction::ToggleSkillPanel => {
+                    self.ui_store.skill_panel_open = !self.ui_store.skill_panel_open;
+                }
+                shortcuts::ShortcutAction::ToggleTeamPanel => {
+                    self.team_store.team_panel_open = !self.team_store.team_panel_open;
+                }
+                shortcuts::ShortcutAction::FocusInput => {
+                    self.ui_store.focus_input_requested = true;
+                }
+                shortcuts::ShortcutAction::ToggleCommandPalette => {
+                    // Placeholder: command palette skeleton
+                    self.push_toast(
+                        "Command Palette (Ctrl+Shift+P) — coming in v0.3.2".to_string(),
+                        crate::ui::types::ToastLevel::Info,
+                    );
+                }
             }
-            if self.cron_store.create_modal_open {
-                self.cron_store.create_modal_open = false;
-            }
-        }
-
-        if !self.settings_store.settings_open
-            && !self.chat_store.is_loading
-            && !approval_active
-            && ctx.input(|i| i.key_pressed(egui::Key::N) && i.modifiers.ctrl)
-        {
-            self.new_session();
-        }
-
-        // Ctrl+C stops the running agent turn (only when generating).
-        if self.chat_store.is_loading
-            && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
-        {
-            self.stop();
         }
 
         // Refresh task list periodically when panel is open

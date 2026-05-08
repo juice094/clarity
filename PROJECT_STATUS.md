@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-05-06
+> Last updated: 2026-05-08
 > Branch: `main`
-> Test baseline: **551 passed (clarity-core), 0 failed, 6 ignored**
+> Test baseline: **830 passed (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -29,6 +29,8 @@
 | 14 | **egui 设计系统硬化** | ✅ Complete | 配色深蓝灰+铜色、overlay阴影token、间距规范化、i18n、自绘标题栏 |
 | 15 | **OAuth Provider 架构重构** | ✅ Complete | 5 Phase 泛化：KimiCode→OAuthLlm/OAuthTokenManager/OAuthDeviceFlowClient，新增 provider 零代码 |
 | 16 | **契约层扩展 (Phase 0)** | ✅ Complete | `LlmProvider`/`Tool`/`AgentError`/`CapabilityToken` 提取到 `clarity-contract`，新增联邦原语 |
+| 17 | **安全硬化 (P0 双项)** | ✅ Complete | Log 层 credential 脱敏 (`RedactingWriter`) + LLM prompt injection 防御 (`<tool_result>` XML 边界符) |
+| 17.5 | **egui 全局快捷键 MVP** | ✅ Complete | `shortcuts` 模块集中化：Ctrl+N/Enter/K/Shift+P/Period/Shift+T；Enter 发送增加焦点守卫 |
 
 ---
 
@@ -36,6 +38,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib tests | 830 passed, 0 failed, 7 ignored | 2026-05-08 |
 | Workspace lib tests | 551 passed (clarity-core), 6 ignored | 2026-05-06 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
@@ -51,6 +54,10 @@
 | i18n framework | `i18n.rs` + `t()` + EN/中文 toggle in sidebar | 2026-05-01 |
 | Theme overhaul | Deep navy + copper, 13 new tokens | 2026-05-01 |
 | Spacing normalization | 50+ `add_space(N)` → `theme.space_*` | 2026-05-01 |
+| Release binary build | `cargo build --release` success, 5 binaries | 2026-05-08 |
+| Log credential redaction | `clarity_core::logging::RedactingWriter` + tracing subscriber integration | 2026-05-08 |
+| Prompt injection defense | `<tool_result>` XML delimiter + system prompt hardening | 2026-05-08 |
+| Global shortcuts MVP | `Ctrl+N` new session, `Ctrl+Enter` send, `Ctrl+K` focus input, `Ctrl+Shift+P` palette, `Ctrl+.` toggle skill, `Ctrl+Shift+T` toggle team | 2026-05-08 |
 
 ---
 
