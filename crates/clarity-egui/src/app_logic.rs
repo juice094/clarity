@@ -9,7 +9,10 @@ use crate::theme::Theme;
 use crate::ui::types::*;
 use crate::App;
 impl App {
-    pub(crate) fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub(crate) fn new(
+        cc: &eframe::CreationContext<'_>,
+        gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
+    ) -> Self {
         crate::theme::setup_fonts(&cc.egui_ctx);
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
         let mut state = AppState::default();
@@ -356,6 +359,7 @@ impl App {
                 create_timeout_secs: 300,
             },
             snapshot_store: crate::stores::SnapshotStore::default(),
+            gateway_manager,
         };
         app.refresh_tasks();
         app

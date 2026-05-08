@@ -63,6 +63,8 @@ pub(crate) struct App {
     pub(crate) onboarding_store: stores::OnboardingStore,
     pub(crate) team_store: stores::TeamStore,
     pub(crate) snapshot_store: stores::SnapshotStore,
+    /// Gateway process manager (auto-start + manual control).
+    pub(crate) gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
 }
 
 mod app_logic;
@@ -656,13 +658,32 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+    // ------------------------------------------------------------------
+    // Auto-start Gateway if not already running
+    // ------------------------------------------------------------------
+    let gateway_manager = crate::services::gateway_manager::GatewayManager::new();
+    let gateway_manager = match gateway_manager.start_if_needed() {
+        Ok(true) => {
+            tracing::info!("Auto-started Gateway");
+            Some(gateway_manager)
+        }
+        Ok(false) => {
+            tracing::info!("Gateway already running — no action needed");
+            None
+        }
+        Err(e) => {
+            tracing::warn!("Could not auto-start Gateway: {}", e);
+            None
+        }
+    };
+
     eframe::run_native(
         "Clarity",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             #[cfg(windows)]
             let _ = platform::windows::apply_rounded_corners(cc);
-            Ok(Box::new(App::new(cc)))
+            Ok(Box::new(App::new(cc, gateway_manager)))
         }),
     )
 }

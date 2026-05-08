@@ -4,7 +4,7 @@
 //! Tools section).  Files can be browsed and previewed here while the user
 //! continues chatting in the central panel.
 
-use crate::ui::types::{AgentStatus, GatewayStatus};
+use crate::ui::types::{AgentStatus, GatewayStatus, UiEvent};
 use crate::App;
 
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
@@ -39,6 +39,75 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                         .color(theme.text),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Gateway control button (only when offline and we can start it)
+                    match app.chat_store.gateway_status {
+                        GatewayStatus::Offline => {
+                            let btn = ui.add_sized(
+                                egui::vec2(36.0, 18.0),
+                                egui::Button::new(
+                                    egui::RichText::new("▶")
+                                        .size(theme.text_xs)
+                                        .color(theme.text),
+                                )
+                                .fill(theme.accent),
+                            );
+                            if btn.clicked() {
+                                if let Some(gw_mgr) = app.gateway_manager.take() {
+                                    let tx = app.ui_tx.clone();
+                                    app.runtime.spawn(async move {
+                                        match gw_mgr.start_if_needed() {
+                                            Ok(true) => {
+                                                let _ = tx.send(UiEvent::GatewayHealth(GatewayStatus::Online));
+                                            }
+                                            Ok(false) => {
+                                                let _ = tx.send(UiEvent::GatewayHealth(GatewayStatus::Online));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(UiEvent::Error(format!("Gateway start failed: {}", e)));
+                                            }
+                                        }
+                                    });
+                                } else {
+                                    let gw_mgr = crate::services::gateway_manager::GatewayManager::new();
+                                    let tx = app.ui_tx.clone();
+                                    app.runtime.spawn(async move {
+                                        match gw_mgr.start_if_needed() {
+                                            Ok(true) | Ok(false) => {
+                                                let _ = tx.send(UiEvent::GatewayHealth(GatewayStatus::Online));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(UiEvent::Error(format!("Gateway start failed: {}", e)));
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            ui.add_space(4.0);
+                        }
+                        GatewayStatus::Online => {
+                            // Show small stop button if we own the gateway process
+                            if app.gateway_manager.is_some() {
+                                let btn = ui.add_sized(
+                                    egui::vec2(36.0, 18.0),
+                                    egui::Button::new(
+                                        egui::RichText::new("■")
+                                            .size(theme.text_xs)
+                                            .color(theme.text),
+                                    )
+                                    .fill(theme.status_offline),
+                                );
+                                if btn.clicked() {
+                                    if let Some(gw_mgr) = app.gateway_manager.take() {
+                                        let _ = gw_mgr.stop();
+                                        app.chat_store.gateway_status = GatewayStatus::Offline;
+                                    }
+                                }
+                                ui.add_space(4.0);
+                            }
+                        }
+                        _ => {}
+                    }
+
                     // Gateway status
                     let (gw_color, gw_label) = match app.chat_store.gateway_status {
                         GatewayStatus::Online => (theme.status_online, "Gateway"),
