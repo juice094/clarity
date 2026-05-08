@@ -80,7 +80,7 @@
 
 ---
 
-## Sprint 32 进行中（修复 + 审计 + 硬化）
+## Sprint 32（修复 + 审计 + 硬化）✅ 已完成
 
 ### 已修复
 
@@ -114,6 +114,78 @@
 
 **Stubbed / 缺失：**
 - 文件浏览器 — `ui/file_browser.rs` 已 stub，未接入任何面板
+
+---
+
+---
+
+## Sprint 33（Cron/Team UI + 子代理状态持久化）✅ 已完成
+
+**交付：**
+- Cron 调度 UI（`panels/cron.rs` + `cron_create.rs`）本地 mock 状态
+- Team 协调 UI（`panels/team.rs` + `team_create.rs`）本地 mock 状态
+- `SubagentStore` 磁盘状态持久化（JSON save/load）
+- BACKLOG parity 矩阵同步
+
+---
+
+## Sprint 34（UI 指示器迁移与死代码清理）✅ 已完成
+
+**交付：**
+- Agent/Gateway 状态指示器从 sidebar 迁移至 Workspace 面板标题栏右侧
+- Dead code 清理 — 5 个未使用图标常量、`UiEvent::TeamList/CronList` 死变体、`SubAgentProgress`/`AgentStatusEntry` 死字段
+- FIXME-WEEK1-RISK 止血 — rapid-Enter debounce、`stopping...` 视觉状态、session-delete draft race
+
+---
+
+## Sprint 35（Cron 迁移 + Markdown 表格渲染）✅ 已完成
+
+**交付：**
+- Cron Jobs 从右侧独立 `SidePanel` 迁移至左侧 sidebar 可折叠 section（与 Subagents/Teams 并列）
+- Markdown 表格渲染 — 自研轻量解析器：`RenderBlock::Table` + `scan_table()`/`parse_table_lines()` + `egui::Grid` 渲染
+
+---
+
+## Sprint 36（Plan Skip/Retry 后端）✅ 已完成
+
+**交付：**
+- `PlanExecutionController` — `new`/`states`/`results`/`has_next`/`skip_step`/`retry_step`/`execute_next`
+- Agent 内部状态扩展 `plan_controller: Arc<tokio::sync::Mutex<Option<PlanExecutionController>>>`
+- `Agent::skip_plan_step` / `retry_plan_step` 公共 async 控制 API
+- 10 个单元测试：controller + agent-level async integration
+
+---
+
+## Sprint 37（Plan Skip/Retry 前端交互）✅ 已完成
+
+**交付：**
+- Wire 协议扩展：`PlanStepSkipped` 变体
+- egui UI：Tracker 每步添加条件按钮（Pending→Skip，Failed→Retry）
+- 事件分发：`UiEvent::PlanSkip`/`PlanRetry` → `agent.skip_plan_step()` / `retry_plan_step()`
+- `chat.rs` handler：更新 tracker 状态为 Skipped
+
+---
+
+## Sprint 38（Cron/Team 后端接线 + 工具健壮性）✅ 已完成
+
+**交付：**
+- Cron UI 6 个 TODO 全部替换为真实后端调用（`bg_manager.schedule_cron`/`cancel_cron`/`set_cron_enabled`）
+- Team UI 6 个 TODO 全部替换为真实后端调用（`TeamCreateTool`/`TeamDeleteTool`/`Agent::run_team`）
+- `AppState` 新增 `bg_manager` 字段持久化 `BackgroundTaskManager`
+- 工具健壮性：plan/cron/task/notify/team/todo + computer_use 屏蔽
+
+---
+
+## Sprint 39（运行时稳定性 + 工程纪律 + Backlog）✅ 已完成
+
+**交付：**
+- `TaskStore::get_result_opt()`：文件缺失 → `None`，不再抛 OS error 2/3
+- `TaskOutputTool` 返回 `{"exists": false}` 而非 raw error
+- `StdioMcpClient` 进程健康检测：`alive: Arc<AtomicBool>`，stdout reader 结束后返回 `ConnectionFailed`
+- TODO/FIXME 清理：6→0，迁移至 `docs/notes/todo-migration-2026-05-07.md`
+- `ParallelExecutor::execute` 新增 `cancel: Option<CancellationToken>` 参数
+- `TeamCoordinator` 将团队级 cancel token 级联到并行执行器
+- 提交：`072ad6ab`
 
 ---
 
