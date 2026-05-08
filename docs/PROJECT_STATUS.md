@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.3.1+ | 日期：2026-04-28 | `phase2/protocol-pilot` @ `4c9f4de` | 基于实机测试与代码审计  
+> 版本：v0.3.1+ | 日期：2026-05-08 | `main` @ `5e827983` | 基于实机测试与代码审计  
 > 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)
 
 ---
@@ -10,21 +10,21 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **568 passed, 0 failed, 4 ignored** | ✅ 全绿 |
+| **单元测试** | **800+ passed, 0 failed, 7 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` | ✅ 已集成 CI |
 | **代码规模** | ~130 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 8 + 1 集成测试 crate | 结构稳定 |
 
 **测试覆盖详情**：
-- `clarity-core`: 392 tests passed, 4 ignored
+- `clarity-core`: 565 tests passed, 7 ignored
 - `clarity-gateway`: 43 tests passed
-- `clarity-memory`: 79 tests passed
-- `clarity-wire`: 16 tests passed
+- `clarity-memory`: 82+ tests passed
+- `clarity-wire`: 37 tests passed
 - `clarity-tui`: 6 tests passed
-- `clarity-claw`: 6 tests passed
+- `clarity-claw`: 16 tests passed
 - `clarity-headless`: 0 tests
-- `clarity-integration-tests`: 0 tests（空骨架）
+- `clarity-integration-tests`: **12 个集成测试（core_wire ×2 / gateway_http ×7 / memory_persistence ×1 / mcp_end_to_end ×2）**
 - `clarity-egui`: **32 tests — 核心逻辑已覆盖（app_state/settings/theme），UI 渲染仍无测试**
 
 **前端测试**：31 passed / 11 test files（smoke + interaction）— Tauri 侧归档前数据

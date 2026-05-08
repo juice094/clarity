@@ -189,11 +189,22 @@
 
 ---
 
+## Sprint 40（运行时健壮性深化 + 集成测试补全）✅ 已完成
+
+**交付：**
+- `parking_lot` 迁移：6 个 crate 的 `std::sync::RwLock`/`Mutex` → `parking_lot`，消除 ~154 个锁 unwrap（100% 清零）
+- 保留 `approval/mod.rs` + `tools/web_browser.rs` 的 `std::sync::Mutex`（依赖 `LockResult` poison 语义）
+- 新增 MCP 端到端集成测试：`tests/integration/tests/mcp_end_to_end.rs`，mock HTTP server → `HttpMcpClient` → `ToolRegistry.execute`，2 个测试
+- `gateway_http.rs` 补全 `WireMessage::PlanStepSkipped` match arm
+- 提交：`5e827983`
+
+---
+
 ## 测试基线
 
 ```bash
-cargo test --workspace --lib -- --test-threads=1
-# 预期：~774 passed / 0 failed / 6 ignored
+cargo test --workspace --lib
+# 预期：~800+ passed / 0 failed / 7 ignored
 cargo check -p clarity-egui
 # 预期：零 error，零 warning
 ```

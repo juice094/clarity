@@ -1,7 +1,7 @@
 # Clarity Unwrap/Expect 债务地图
 
 > 生成日期：2026-04-26
-> 更新日期：2026-04-27（Phase 2b / v0.3.1 清理完成）
+> 更新日期：2026-05-08（Sprint 40 — parking_lot 迁移完成）
 > 范围：全 workspace 非测试代码（`#[cfg(test)]` 模块已排除）
 > 测量方法：AST-aware Python 扫描，追踪 `#[cfg(test)]` 花括号边界
 
@@ -11,8 +11,8 @@
 
 | 指标 | 数量 | 备注 |
 |------|------|------|
-| `unwrap()` / `expect()` 总量 | **171** | 非测试代码 |
-| 同步原语类（`lock/read/write`） | **92** | 低风险，允许保留 |
+| `unwrap()` / `expect()` 总量 | **~80** | 非测试代码（锁 unwrap 已清零） |
+| 同步原语类（`lock/read/write`） | **0** | Sprint 40 已全部替换为 `parking_lot` |
 | `Regex::new` 编译期正则 | **30** | 硬编码模式，不会失败 |
 | `duration_since(UNIX_EPOCH)` | **2** | 系统时间不可能早于 1970 |
 | 硬编码字符串 `parse()` | **6** | 如 HeaderValue parse，不会失败 |
@@ -29,7 +29,7 @@
 
 | 模式 | 数量 | 说明 |
 |------|------|------|
-| `mutex.lock().unwrap()` / `rwlock.read().unwrap()` | 92 | 锁 poison 即 panic 是合理行为 |
+| `mutex.lock()` / `rwlock.read()`（parking_lot） | 0 | Sprint 40 已迁移，不再返回 `LockResult` |
 | `Regex::new(r"...").unwrap()` | 30 | 编译期硬编码正则，模式语法由开发者保证 |
 | `SystemTime::duration_since(UNIX_EPOCH).unwrap()` | 2 | 系统时间不可能早于 1970 |
 | `"http://...".parse::<HeaderValue>().unwrap()` | 5 | 硬编码合法字符串 |
@@ -83,7 +83,7 @@
 
 ### 长期冻结
 
-- 同步原语 92 处：不投入，鼓励新代码用 `tokio::sync`
+- ~~同步原语 92 处~~ → **Sprint 40 已清零**，新代码默认使用 `parking_lot::RwLock`/`Mutex`
 - Regex 30 处：不投入，编译期安全
 - 初始化期 expect：不投入，启动失败即 panic 是合理行为
 - `clarity-tauri` 相关 2 处：已冻结，不投入
