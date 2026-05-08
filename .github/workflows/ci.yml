@@ -126,6 +126,12 @@ jobs:
             exit 1
           fi
           echo "Documentation guard PASSED: all crates have README.md and AGENTS.md"
+      - name: Verify module structure
+        run: |
+          if ! command -v cargo-modules &> /dev/null; then
+            cargo install cargo-modules
+          fi
+          cargo modules structure --package clarity-core --max-depth 3
       - name: Check rustdoc compilation
         run: cargo doc --workspace --no-deps
         env:

@@ -190,6 +190,28 @@ foreach ($crate in $Crates) {
     $Results += $result
 }
 
+# cargo-modules 可选检查
+Write-Host "`n  [Optional] Module Structure Check (cargo-modules)" -ForegroundColor Yellow
+$cargoModulesAvailable = $false
+cargo modules --version 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+    $cargoModulesAvailable = $true
+}
+
+if ($cargoModulesAvailable) {
+    $modulesOutput = cargo modules structure --package clarity-core --max-depth 3 2>&1
+    $modulesExit = $LASTEXITCODE
+    if ($modulesExit -eq 0) {
+        Write-Result "Module structure" $true
+    } else {
+        Write-Result "Module structure" $false
+        Write-Host "     $modulesOutput" -ForegroundColor Red
+    }
+} else {
+    Write-Host "  ⚠️ cargo-modules 未安装，跳过模块结构检查" -ForegroundColor Yellow
+    Write-Host "     安装: cargo install cargo-modules" -ForegroundColor Gray
+}
+
 # 生成报告
 Write-Header "验收总结"
 
