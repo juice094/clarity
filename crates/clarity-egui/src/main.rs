@@ -403,6 +403,10 @@ impl App {
         panels::task_view::render_task_view_modal(self, ctx);
     }
 
+    fn render_subagent_view_modal(&mut self, ctx: &egui::Context) {
+        panels::subagent_view::render_subagent_view_modal(self, ctx);
+    }
+
     fn render_team_panel(&mut self, ctx: &egui::Context) {
         panels::team::render_team_panel(self, ctx);
     }
@@ -589,6 +593,9 @@ impl eframe::App for App {
         });
         self.render_safe(ctx, "task_view", |app, ctx| {
             app.render_task_view_modal(ctx)
+        });
+        self.render_safe(ctx, "subagent_view", |app, ctx| {
+            app.render_subagent_view_modal(ctx)
         });
         self.render_safe(ctx, "team", |app, ctx| app.render_team_panel(ctx));
         self.render_safe(ctx, "team_create", |app, ctx| {

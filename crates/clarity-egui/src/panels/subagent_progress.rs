@@ -137,6 +137,24 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if is_finished {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("Output").size(theme.text_xs),
+                                )
+                                .fill(theme.overlay_medium)
+                                .corner_radius(
+                                    egui::CornerRadius::same(theme.radius_sm as u8),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            app.subagent_store.viewing_subagent_id = Some(agent_id.clone());
+                            app.subagent_store.subagent_view_modal_open = true;
+                        }
+                        ui.add_space(theme.space_4);
+                    }
                     if let Some(completed) = agent.completed_at {
                         let elapsed = completed.duration_since(agent.started_at).as_secs();
                         ui.label(

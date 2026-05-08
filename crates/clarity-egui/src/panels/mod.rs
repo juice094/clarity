@@ -7,6 +7,7 @@ pub mod sidebar;
 pub mod skill;
 pub mod snapshot;
 pub mod subagent_progress;
+pub mod subagent_view;
 pub mod task;
 pub mod task_create;
 pub mod task_view;

@@ -242,6 +242,10 @@ pub struct SubAgentStore {
     pub running_agents: std::collections::HashMap<String, SingleSubagentProgress>,
     /// Last Gateway health check poll time.
     pub last_gateway_health_poll: Instant,
+    /// Subagent result view modal open state.
+    pub subagent_view_modal_open: bool,
+    /// ID of the subagent whose output is being viewed.
+    pub viewing_subagent_id: Option<String>,
 }
 
 // ============================================================================

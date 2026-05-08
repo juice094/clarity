@@ -63,6 +63,7 @@
 | Release perf (egui memory) | peak 141 MB / avg 140 MB | 2026-05-08 |
 | Release perf (gateway memory) | peak 21 MB / avg 21 MB | 2026-05-08 |
 | Task panel output viewing | `Output` button for terminal tasks + async `get_result_opt()` + result modal | 2026-05-08 |
+| Subagent output viewing | `Output` button for completed subagents + live `output_lines` modal | 2026-05-08 |
 
 ---
 

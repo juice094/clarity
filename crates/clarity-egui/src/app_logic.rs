@@ -324,6 +324,8 @@ impl App {
                 last_parallel_poll: now,
                 running_agents: std::collections::HashMap::new(),
                 last_gateway_health_poll: now,
+                subagent_view_modal_open: false,
+                viewing_subagent_id: None,
             },
             mcp_store: crate::stores::McpStore {
                 mcp_panel_open: false,
