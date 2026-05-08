@@ -22,3 +22,13 @@ Clarity 系统托盘守护进程：常驻后台，监控任务状态，提供快
 ```bash
 cargo test -p clarity-claw --lib
 ```
+
+## 边界与稳定性
+
+- **Stability tier**: Experimental
+  - Experimental: API may change before v0.4.0
+- **MSRV**: 1.78.0
+- **反向依赖禁止** (No reverse dependencies):
+  - 可依赖 clarity-core + clarity-wire + clarity-gateway
+- **Library/binary classification**:
+  - Binary: application entry point, not a library

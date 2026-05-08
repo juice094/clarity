@@ -82,6 +82,16 @@ async fn main() -> anyhow::Result<()> {
 cargo test -p clarity-mcp --lib
 ```
 
+## 边界与稳定性
+
+- **Stability tier**: Experimental
+  - Experimental: API may change before v0.4.0
+- **MSRV**: 1.78.0
+- **反向依赖禁止** (No reverse dependencies):
+  - 可依赖 clarity-contract + clarity-wire
+- **Library/binary classification**:
+  - Library: designed for `use` by other crates
+
 ## License
 
 MIT

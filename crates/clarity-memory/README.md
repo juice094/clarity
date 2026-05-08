@@ -180,6 +180,16 @@ cargo run --example basic_usage
 cargo run --example integration_core
 ```
 
+## 边界与稳定性
+
+- **Stability tier**: Stable
+  - Stable: API unlikely to change in minor releases
+- **MSRV**: 1.78.0
+- **反向依赖禁止** (No reverse dependencies):
+  - 不得依赖 clarity-core
+- **Library/binary classification**:
+  - Library: designed for `use` by other crates
+
 ## License
 
 MIT

@@ -12,3 +12,13 @@ Lightweight desktop GUI for Clarity built on egui + glow. Ships as a single nati
 ```bash
 cargo test -p clarity-egui --lib
 ```
+
+## 边界与稳定性
+
+- **Stability tier**: Experimental
+  - Experimental: API may change before v0.4.0
+- **MSRV**: 1.78.0
+- **反向依赖禁止** (No reverse dependencies):
+  - 可依赖 clarity-core + clarity-memory + clarity-wire
+- **Library/binary classification**:
+  - Binary: application entry point, not a library

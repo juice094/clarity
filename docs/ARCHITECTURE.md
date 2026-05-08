@@ -309,6 +309,51 @@ TaskCreateTool::execute() → TaskStore::create()
     → claw detects file change → OS notification
 ```
 
+### 6.4 MCP End-to-End
+
+```
+Gateway startup / Config load → McpConfig::load_default()
+    → For each enabled server: McpClientBuilder::from_mcp_entry()
+    → McpClientInstance (Stdio / Http / Sse)
+    → McpRegistry::register(name, client)
+    → registry.connect_all() → initialize handshake
+    → McpManager::sync_tools() → ToolRegistry::register(mcp_tools)
+    → Agent loop: ToolRegistry::execute("mcp_tool_name")
+        → McpRegistry::get() → client.call_tool()
+        → McpError / ToolCallResult → scrub_credentials()
+        → ToolResult back to Agent
+```
+
+### 6.5 Memory Compaction
+
+```
+Agent::run() turn end → TurnContext.messages grows
+    → MemoryTicker::notify_turn() threshold reached
+    → MemoryCompiler::compile_all()
+        ├── Today: summarize last 24h → append to week
+        ├── Week: aggregate 7 days → compress to long-term
+        ├── Long-term: delta compression → dedup via SHA256 fingerprint
+        └── Facts: LLM-powered extraction → SQLite + FTS5
+    → MemoryStore::save() / SessionStore::append_summary()
+    → Next turn: relevant facts injected via retrieve_facts()
+```
+
+### 6.6 Plan-Parallel Execution
+
+```
+User Input → Agent::plan() → LLM generates JSON Plan (steps[])
+    → Approval (Plan mode) or auto-execute (Yolo)
+    → ParallelExecutor::execute_plan(plan)
+        → For each independent step:
+            ├── SubagentRegistry::build_subagent(type, spec)
+            ├── LaborMarket::resolve_type() → registered builder
+            └── spawn on tokio task
+        → FuturesUnordered / Semaphore(max_concurrency)
+        → Aggregate SubagentResult[]
+    → PlanResult (ordered merge of parallel outputs)
+    → Final response → Client
+```
+
 ---
 
 ## 7. Security Model
@@ -320,7 +365,7 @@ TaskCreateTool::execute() → TaskStore::create()
 | MCP commands | `validate_mcp_command()` rejects metacharacters, relative paths |
 | Sensitive files | Auto-detection of `.env`, SSH keys, kubeconfig |
 | Tool approval | `requires_approval()` gate for ComputerUse, WebBrowser |
-| TLS | reqwest default system TLS (never disabled) |
+| TLS | `rustls-tls` (pure Rust); `openssl` eliminated from dependency tree |
 
 ---
 
