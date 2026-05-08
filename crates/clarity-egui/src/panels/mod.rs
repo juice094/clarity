@@ -9,6 +9,7 @@ pub mod snapshot;
 pub mod subagent_progress;
 pub mod task;
 pub mod task_create;
+pub mod task_view;
 pub mod team;
 pub mod team_create;
 pub mod toast;

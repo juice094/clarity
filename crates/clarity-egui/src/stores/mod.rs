@@ -119,6 +119,12 @@ pub struct TaskStore {
     pub task_create_desc: String,
     pub task_create_prompt: String,
     pub task_create_priority: u8,
+    /// Task result view modal open state.
+    pub task_view_modal_open: bool,
+    /// ID of the task whose result is being viewed.
+    pub viewing_task_id: Option<String>,
+    /// Fetched result for the viewing task.
+    pub viewing_task_result: Option<clarity_core::background::TaskResult>,
 }
 
 // ============================================================================

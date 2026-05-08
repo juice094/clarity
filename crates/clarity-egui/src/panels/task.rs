@@ -43,23 +43,60 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                 &app.task_store.tasks,
                 &app.ui_store.theme,
             );
-            if let crate::ui::task_panel::TaskPanelAction::Cancel(task_id) = action {
-                let store = app.state.task_store.clone();
-                let tx = app.ui_tx.clone();
-                app.runtime.spawn(async move {
-                    if let Err(e) = store.update_status(&task_id, TaskStatus::Cancelled).await {
-                        tracing::warn!("Failed to cancel task {}: {}", task_id, e);
-                    } else {
-                        match store.list_all().await {
-                            Ok(tasks) => {
-                                let _ = tx.send(crate::ui::types::UiEvent::TaskList(tasks));
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to list tasks after cancel: {}", e);
+            match action {
+                crate::ui::task_panel::TaskPanelAction::Cancel(task_id) => {
+                    let store = app.state.task_store.clone();
+                    let tx = app.ui_tx.clone();
+                    app.runtime.spawn(async move {
+                        if let Err(e) = store.update_status(&task_id, TaskStatus::Cancelled).await {
+                            tracing::warn!("Failed to cancel task {}: {}", task_id, e);
+                        } else {
+                            match store.list_all().await {
+                                Ok(tasks) => {
+                                    let _ = tx.send(crate::ui::types::UiEvent::TaskList(tasks));
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to list tasks after cancel: {}", e);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
+                crate::ui::task_panel::TaskPanelAction::ViewOutput(task_id) => {
+                    app.task_store.viewing_task_id = Some(task_id.clone());
+                    app.task_store.task_view_modal_open = true;
+                    let store = app.state.task_store.clone();
+                    let tx = app.ui_tx.clone();
+                    app.runtime.spawn(async move {
+                        match store.get_result_opt(&task_id).await {
+                            Ok(Some(result)) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskResultLoaded {
+                                    task_id,
+                                    result,
+                                });
+                            }
+                            Ok(None) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskResultLoaded {
+                                    task_id,
+                                    result: clarity_core::background::TaskResult {
+                                        status: clarity_core::background::TaskStatus::Pending,
+                                        output: "No result available yet.".to_string(),
+                                        elapsed_ms: 0,
+                                        steps: 0,
+                                    },
+                                });
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to get task result: {}", e);
+                                let _ = tx.send(crate::ui::types::UiEvent::Error(format!(
+                                    "Failed to load task result: {}",
+                                    e
+                                )));
+                            }
+                        }
+                    });
+                }
+                _ => {}
             }
         });
 }

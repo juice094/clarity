@@ -235,6 +235,11 @@ pub fn process_events(app: &mut App) {
                     );
                 }
             }
+            UiEvent::TaskResultLoaded { task_id, result } => {
+                if app.task_store.viewing_task_id.as_ref() == Some(&task_id) {
+                    app.task_store.viewing_task_result = Some(result);
+                }
+            }
         }
     }
 }

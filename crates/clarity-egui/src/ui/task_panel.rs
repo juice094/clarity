@@ -5,6 +5,7 @@ use clarity_core::background::{TaskInfo, TaskStatus};
 pub enum TaskPanelAction {
     None,
     Cancel(String),
+    ViewOutput(String),
 }
 
 /// Render the task list inside a SidePanel or Window.
@@ -49,6 +50,24 @@ pub fn render_task_panel(ui: &mut egui::Ui, tasks: &[TaskInfo], theme: &Theme) -
                                 .color(theme.text),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            // View output for terminal tasks
+                            if task.status.is_terminal() {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("Output").size(theme.text_xs),
+                                        )
+                                        .fill(theme.overlay_medium)
+                                        .corner_radius(
+                                            egui::CornerRadius::same(theme.radius_sm as u8),
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    action = TaskPanelAction::ViewOutput(task.id.clone());
+                                }
+                                ui.add_space(theme.space_4);
+                            }
                             if !task.status.is_terminal() {
                                 if ui
                                     .add(

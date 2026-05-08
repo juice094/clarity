@@ -274,6 +274,9 @@ impl App {
                 task_create_desc: String::new(),
                 task_create_prompt: String::new(),
                 task_create_priority: 2,
+                task_view_modal_open: false,
+                viewing_task_id: None,
+                viewing_task_result: None,
             },
             cron_store: crate::stores::CronStore {
                 cron_expanded: false,

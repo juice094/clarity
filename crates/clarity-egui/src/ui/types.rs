@@ -147,6 +147,11 @@ pub enum UiEvent {
         success: bool,
         error: Option<String>,
     },
+    /// Task result loaded from background store (async callback).
+    TaskResultLoaded {
+        task_id: String,
+        result: clarity_core::background::TaskResult,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.
