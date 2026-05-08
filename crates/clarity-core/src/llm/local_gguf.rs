@@ -918,15 +918,13 @@ async fn load_tokenizer(config: &LocalGgufConfig) -> Result<tokenizers::Tokenize
     }
 
     if let Some(ref repo) = config.tokenizer_repo {
-        let repo = repo.clone();
-        let tokenizer_path = tokio::task::spawn_blocking(move || {
-            let api = hf_hub::api::sync::Api::new()?;
-            let api = api.model(repo);
-            api.get("tokenizer.json")
-        })
-        .await
-        .map_err(|e| AgentError::Llm(format!("Tokenizer download task panicked: {}", e)))?
-        .map_err(|e| AgentError::Llm(format!("Failed to download tokenizer: {}", e)))?;
+        let api = hf_hub::api::tokio::Api::new()
+            .map_err(|e| AgentError::Llm(format!("Failed to create HF Hub API: {}", e)))?;
+        let api = api.model(repo.clone());
+        let tokenizer_path = api
+            .get("tokenizer.json")
+            .await
+            .map_err(|e| AgentError::Llm(format!("Failed to download tokenizer: {}", e)))?;
 
         return tokenizers::Tokenizer::from_file(tokenizer_path)
             .map_err(|e| AgentError::Llm(format!("Failed to load downloaded tokenizer: {}", e)));

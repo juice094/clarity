@@ -200,6 +200,24 @@
 
 ---
 
+## 安全修复：彻底移除 openssl 依赖（Dependabot #22/#23）✅ 已完成
+
+**背景：** `openssl 0.10.79` 仍存在 CVE-2026-42327（high）和 AES key-wrap-with-padding heap buffer overflow（moderate），`cargo update` 无法修复。
+
+**措施：**
+- 5 个 crate 的 `reqwest` 切换 `default-features = false` + `rustls-tls`：`clarity-core`、`clarity-gateway`、`clarity-mcp`、`clarity-claw`、`clarity-egui`
+- `hf-hub` 禁用默认 features，启用 `tokio` + `rustls-tls`，移除 `ureq`/`native-tls`
+- `local_gguf.rs` 的 tokenizer 下载从 `hf_hub::api::sync::Api`（阻塞）改为 `hf_hub::api::tokio::Api`（异步）
+- `Cargo.lock` 移除：`openssl`、`native-tls`、`hyper-tls`、`tokio-native-tls`、`ureq` 共 17 个包
+
+**结果：**
+- `cargo tree -i openssl` → "did not match any packages" ✅
+- `cargo test --workspace --lib` → 800+ passed / 0 failed ✅
+- Dependabot alert #22、#23 消除 ✅
+- 提交：`67b22912`
+
+---
+
 ## 测试基线
 
 ```bash

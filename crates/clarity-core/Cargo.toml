@@ -11,7 +11,7 @@ description = "Core engine for Project Clarity - AI agent framework with tool re
 [dependencies]
 # Workspace dependencies
 tokio = { workspace = true }
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -42,7 +42,7 @@ parking_lot = "0.12"
 
 candle-core = { version = "0.10.2", optional = true }
 candle-transformers = { version = "0.10.2", optional = true }
-hf-hub = { version = "0.5.0", optional = true }
+hf-hub = { version = "0.5.0", optional = true, default-features = false, features = ["tokio", "rustls-tls"] }
 tokenizers = { version = "0.21", optional = true }
 
 clarity-contract = { path = "../clarity-contract" }

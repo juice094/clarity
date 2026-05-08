@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.3.1+ | 日期：2026-05-08 | `main` @ `5e827983` | 基于实机测试与代码审计  
+> 版本：v0.3.1+ | 日期：2026-05-05 | `main` @ `67b22912` | 基于实机测试与代码审计  
 > 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)
 
 ---
@@ -12,7 +12,7 @@
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
 | **单元测试** | **800+ passed, 0 failed, 7 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
-| **安全审计** | `cargo audit --deny unsound --deny yanked` | ✅ 已集成 CI |
+| **安全审计** | `cargo audit --deny unsound --deny yanked` | ✅ 已集成 CI；Dependabot #22/#23（openssl CVE）已修复，全 workspace 切换 `rustls-tls` |
 | **代码规模** | ~130 个 Rust 源文件 | 持续增长 |
 | **Workspace Crates** | 8 + 1 集成测试 crate | 结构稳定 |
 
