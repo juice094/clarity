@@ -14,6 +14,14 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("🐾 Clarity Claw starting...");
 
     // ------------------------------------------------------------------
+    // 0. Single-instance guard
+    // ------------------------------------------------------------------
+    if !clarity_claw::tray::ensure_single_instance() {
+        tracing::warn!("Another Clarity Claw instance is already running. Exiting.");
+        return Ok(());
+    }
+
+    // ------------------------------------------------------------------
     // 1. Initialize the Coordinator
     // ------------------------------------------------------------------
     let mut coordinator = Coordinator::new();

@@ -16,8 +16,45 @@ use tao::{
 };
 use tray_icon::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
-    MouseButton, TrayIconBuilder, TrayIconEvent,
+    Icon, MouseButton, TrayIconBuilder, TrayIconEvent,
 };
+
+// ------------------------------------------------------------------
+// Default icon (32×32 copper #c98a5e square)
+// ------------------------------------------------------------------
+fn default_icon() -> Icon {
+    const SIZE: usize = 32;
+    let mut rgba = Vec::with_capacity(SIZE * SIZE * 4);
+    for _ in 0..(SIZE * SIZE) {
+        rgba.push(0xC9); // R
+        rgba.push(0x8A); // G
+        rgba.push(0x5E); // B
+        rgba.push(0xFF); // A
+    }
+    Icon::from_rgba(rgba, SIZE as u32, SIZE as u32)
+        .unwrap_or_else(|_| Icon::from_rgba(vec![0xFF; 16], 2, 2).expect("fallback icon"))
+}
+
+// ------------------------------------------------------------------
+// Single-instance guard (cross-platform: TCP port binding)
+// ------------------------------------------------------------------
+pub fn ensure_single_instance() -> bool {
+    use std::net::TcpListener;
+    use std::sync::Mutex;
+
+    static INSTANCE_LOCK: Mutex<Option<TcpListener>> = Mutex::new(None);
+    let mut lock = INSTANCE_LOCK.lock().unwrap();
+    if lock.is_some() {
+        return false;
+    }
+    match TcpListener::bind("127.0.0.1:51987") {
+        Ok(listener) => {
+            *lock = Some(listener);
+            true
+        }
+        Err(_) => false,
+    }
+}
 
 /// Custom events for the Tao event loop.
 #[derive(Clone, Debug)]
@@ -32,6 +69,8 @@ pub enum UserEvent {
     CreateTask,
     /// Cancel a specific task.
     CancelTask(String),
+    /// Request graceful shutdown (e.g. Ctrl+C).
+    Quit,
 }
 
 /// Run the tray event loop.
@@ -75,6 +114,7 @@ pub fn run() -> anyhow::Result<()> {
     let tray_icon = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("Clarity Claw — connecting...")
+        .with_icon(default_icon())
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to create tray icon: {}", e))?;
 
@@ -86,6 +126,19 @@ pub fn run() -> anyhow::Result<()> {
     // ------------------------------------------------------------------
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
+
+    // ------------------------------------------------------------------
+    // Background: Ctrl+C graceful shutdown
+    // ------------------------------------------------------------------
+    let ctrlc_proxy = proxy.clone();
+    tokio::spawn(async move {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::warn!("Failed to listen for Ctrl+C: {}", e);
+            return;
+        }
+        tracing::info!("Ctrl+C received — requesting graceful shutdown");
+        let _ = ctrlc_proxy.send_event(UserEvent::Quit);
+    });
 
     // ------------------------------------------------------------------
     // Background: wire listener → OS notifications
@@ -227,6 +280,12 @@ pub fn run() -> anyhow::Result<()> {
     event_loop.run(move |event, _event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
+        if let Event::LoopDestroyed = event {
+            tracing::info!("Tray event loop destroyed — cleaning up icon");
+            let _ = tray_icon.set_visible(false);
+            return;
+        }
+
         if let Event::UserEvent(user_event) = &event {
             let gw_url = gateway_url.clone();
             let _cache = task_cache.clone();
@@ -345,6 +404,11 @@ pub fn run() -> anyhow::Result<()> {
                     let pending = tasks.iter().filter(|t| t.status == "Pending").count();
                     let tooltip = crate::format_tooltip(running, pending, tasks.len());
                     let _ = tray_icon.set_tooltip(Some(&tooltip));
+                }
+                UserEvent::Quit => {
+                    tracing::info!("Graceful shutdown requested");
+                    let _ = tray_icon.set_visible(false);
+                    *control_flow = ControlFlow::Exit;
                 }
             }
         }
