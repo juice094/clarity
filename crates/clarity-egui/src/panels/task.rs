@@ -1,3 +1,4 @@
+use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::App;
 use clarity_core::background::TaskStatus;
 
@@ -45,19 +46,25 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
             );
             match action {
                 crate::ui::task_panel::TaskPanelAction::Cancel(task_id) => {
-                    let store = app.state.task_store.clone();
+                    let gateway_client = GatewayTaskClient::new();
+                    let local_store = app.state.task_store.clone();
                     let tx = app.ui_tx.clone();
                     app.runtime.spawn(async move {
-                        if let Err(e) = store.update_status(&task_id, TaskStatus::Cancelled).await {
-                            tracing::warn!("Failed to cancel task {}: {}", task_id, e);
-                        } else {
-                            match store.list_all().await {
-                                Ok(tasks) => {
-                                    let _ = tx.send(crate::ui::types::UiEvent::TaskList(tasks));
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to list tasks after cancel: {}", e);
-                                }
+                        // Try Gateway first
+                        if let Err(e) = gateway_client.cancel_task(&task_id).await {
+                            tracing::debug!("Gateway cancel failed ({}), falling back to local store", e);
+                            if let Err(e) = local_store.update_status(&task_id, TaskStatus::Cancelled).await {
+                                tracing::warn!("Failed to cancel task {} locally: {}", task_id, e);
+                                return;
+                            }
+                        }
+                        // Refresh list after cancel
+                        match local_store.list_all().await {
+                            Ok(tasks) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskList(tasks));
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to list tasks after cancel: {}", e);
                             }
                         }
                     });
@@ -65,10 +72,38 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                 crate::ui::task_panel::TaskPanelAction::ViewOutput(task_id) => {
                     app.task_store.viewing_task_id = Some(task_id.clone());
                     app.task_store.task_view_modal_open = true;
-                    let store = app.state.task_store.clone();
+                    let gateway_client = GatewayTaskClient::new();
+                    let local_store = app.state.task_store.clone();
                     let tx = app.ui_tx.clone();
                     app.runtime.spawn(async move {
-                        match store.get_result_opt(&task_id).await {
+                        // Try Gateway first
+                        match gateway_client.get_task(&task_id).await {
+                            Ok((_, Some(result))) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskResultLoaded {
+                                    task_id,
+                                    result,
+                                });
+                                return;
+                            }
+                            Ok((_, None)) => {
+                                let _ = tx.send(crate::ui::types::UiEvent::TaskResultLoaded {
+                                    task_id,
+                                    result: clarity_core::background::TaskResult {
+                                        status: clarity_core::background::TaskStatus::Pending,
+                                        output: "No result available yet.".to_string(),
+                                        elapsed_ms: 0,
+                                        steps: 0,
+                                    },
+                                });
+                                return;
+                            }
+                            Err(e) => {
+                                tracing::debug!("Gateway get_task failed ({}), falling back to local store", e);
+                            }
+                        }
+
+                        // Fallback to local store
+                        match local_store.get_result_opt(&task_id).await {
                             Ok(Some(result)) => {
                                 let _ = tx.send(crate::ui::types::UiEvent::TaskResultLoaded {
                                     task_id,

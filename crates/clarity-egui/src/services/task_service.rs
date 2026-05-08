@@ -1,18 +1,37 @@
+use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::ui::types::UiEvent;
 use crate::App;
 
 impl App {
+    /// Refresh the task list from the Gateway if it is online,
+    /// otherwise fall back to the local `TaskStore`.
     pub(crate) fn refresh_tasks(&self) {
-        let store = self.state.task_store.clone();
+        let gateway_client = GatewayTaskClient::new();
+        let local_store = self.state.task_store.clone();
         let tx = self.ui_tx.clone();
+
         self.runtime.spawn(async move {
-            match store.list_all().await {
+            // Try Gateway first
+            match gateway_client.list_tasks().await {
                 Ok(tasks) => {
                     if let Err(e) = tx.send(UiEvent::TaskList(tasks)) {
-                        tracing::warn!("Failed to send TaskList: {}", e);
+                        tracing::warn!("Failed to send TaskList from Gateway: {}", e);
+                    }
+                    return;
+                }
+                Err(e) => {
+                    tracing::debug!("Gateway task list failed ({}), falling back to local store", e);
+                }
+            }
+
+            // Fallback to local store
+            match local_store.list_all().await {
+                Ok(tasks) => {
+                    if let Err(e) = tx.send(UiEvent::TaskList(tasks)) {
+                        tracing::warn!("Failed to send TaskList from local store: {}", e);
                     }
                 }
-                Err(e) => tracing::warn!("Failed to list tasks: {}", e),
+                Err(e) => tracing::warn!("Failed to list tasks from local store: {}", e),
             }
         });
     }

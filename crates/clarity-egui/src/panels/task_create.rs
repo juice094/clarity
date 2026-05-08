@@ -1,3 +1,4 @@
+use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::ui::types::UiEvent;
 use crate::App;
 
@@ -117,32 +118,50 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
             });
         });
     if created {
-        let spec = clarity_core::background::TaskSpec {
-            name: app.task_store.task_create_name.trim().to_string(),
-            description: app.task_store.task_create_desc.trim().to_string(),
-            agent_type: "default".to_string(),
-            prompt: app.task_store.task_create_prompt.trim().to_string(),
-            max_iterations: Some(10),
-            timeout_seconds: Some(300),
-            priority: clarity_core::background::TaskPriority::from_value(
-                app.task_store.task_create_priority,
-            ),
-            model_alias: None,
-        };
-        let task_id = format!("task-{}", uuid::Uuid::new_v4());
-        let store = app.state.task_store.clone();
+        let name = app.task_store.task_create_name.trim().to_string();
+        let prompt = app.task_store.task_create_prompt.trim().to_string();
+        let gateway_client = GatewayTaskClient::new();
+        let local_store = app.state.task_store.clone();
         let tx = app.ui_tx.clone();
+
         app.runtime.spawn(async move {
-            if let Err(e) = store.create(&task_id, spec).await {
-                tracing::warn!("Failed to create task {}: {}", task_id, e);
-                let _ = tx.send(UiEvent::Error(format!("Task create failed: {}", e)));
-            } else {
-                tracing::info!("Created task: {}", task_id);
-                let _ = tx.send(UiEvent::TaskList(
-                    store.list_all().await.unwrap_or_default(),
-                ));
+            // Try Gateway first
+            match gateway_client.create_task(&name, &prompt, Some(10)).await {
+                Ok(task_id) => {
+                    tracing::info!("Created task via Gateway: {}", task_id);
+                }
+                Err(e) => {
+                    tracing::debug!("Gateway create_task failed ({}), falling back to local store", e);
+                    let spec = clarity_core::background::TaskSpec {
+                        name: name.clone(),
+                        description: String::new(),
+                        agent_type: "default".to_string(),
+                        prompt: prompt.clone(),
+                        max_iterations: Some(10),
+                        timeout_seconds: Some(300),
+                        priority: clarity_core::background::TaskPriority::Normal,
+                        model_alias: None,
+                    };
+                    let task_id = format!("task-{}", uuid::Uuid::new_v4());
+                    if let Err(e) = local_store.create(&task_id, spec).await {
+                        tracing::warn!("Failed to create task {} locally: {}", task_id, e);
+                        let _ = tx.send(UiEvent::Error(format!("Task create failed: {}", e)));
+                        return;
+                    }
+                    tracing::info!("Created task locally: {}", task_id);
+                }
+            }
+            // Refresh task list regardless of which path succeeded
+            match local_store.list_all().await {
+                Ok(tasks) => {
+                    let _ = tx.send(UiEvent::TaskList(tasks));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to list tasks after create: {}", e);
+                }
             }
         });
+
         app.task_store.task_create_name.clear();
         app.task_store.task_create_desc.clear();
         app.task_store.task_create_prompt.clear();
