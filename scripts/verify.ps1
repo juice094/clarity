@@ -49,8 +49,23 @@ function Test-Crate($crateName) {
         Overall = "FAIL"
     }
     
-    # 检查 1: 编译
-    Write-Host "`n  [1/4] 编译检查..." -ForegroundColor Yellow
+    # 检查 1: 文档存在性
+    Write-Host "`n  [1/5] 文档检查..." -ForegroundColor Yellow
+    $readmePath = "crates/$crateName/README.md"
+    $agentsPath = "crates/$crateName/AGENTS.md"
+    $readmePass = Test-Path $readmePath
+    $agentsPass = Test-Path $agentsPath
+    $docPass = $readmePass -and $agentsPass
+    $result.Checks.Docs = @{
+        Status = if ($docPass) { "PASS" } else { "FAIL" }
+        Readme = $readmePass
+        Agents = $agentsPass
+    }
+    Write-Result "README.md 存在" $readmePass
+    Write-Result "AGENTS.md 存在" $agentsPass
+    
+    # 检查 2: 编译
+    Write-Host "`n  [2/5] 编译检查..." -ForegroundColor Yellow
     $compileTime = Measure-Command {
         $compileOutput = cargo check -p $crateName 2>&1
         $compileExit = $LASTEXITCODE
@@ -66,8 +81,8 @@ function Test-Crate($crateName) {
         Write-Host "     错误: $compileOutput" -ForegroundColor Red
     }
     
-    # 检查 2: 单元测试
-    Write-Host "`n  [2/4] 单元测试..." -ForegroundColor Yellow
+    # 检查 3: 单元测试
+    Write-Host "`n  [3/5] 单元测试..." -ForegroundColor Yellow
     $testTime = Measure-Command {
         $testOutput = cargo test -p $crateName 2>&1
         $testExit = $LASTEXITCODE
@@ -101,8 +116,8 @@ function Test-Crate($crateName) {
         }
     }
     
-    # 检查 3: Clippy
-    Write-Host "`n  [3/4] Clippy 检查..." -ForegroundColor Yellow
+    # 检查 4: Clippy
+    Write-Host "`n  [4/5] Clippy 检查..." -ForegroundColor Yellow
     $clippyOutput = cargo clippy -p $crateName -- -D warnings 2>&1
     $clippyExit = $LASTEXITCODE
     
@@ -119,8 +134,8 @@ function Test-Crate($crateName) {
         }
     }
     
-    # 检查 4: 代码格式化
-    Write-Host "`n  [4/4] 格式化检查..." -ForegroundColor Yellow
+    # 检查 5: 代码格式化
+    Write-Host "`n  [5/5] 格式化检查..." -ForegroundColor Yellow
     $fmtOutput = cargo fmt -p $crateName -- --check 2>&1
     $fmtExit = $LASTEXITCODE
     
@@ -134,7 +149,7 @@ function Test-Crate($crateName) {
     }
     
     # 总体结果
-    $overallPass = $compilePass -and $testPass -and $clippyPass
+    $overallPass = $docPass -and $compilePass -and $testPass -and $clippyPass
     if ($Strict) {
         $overallPass = $overallPass -and $fmtPass
     }
@@ -164,7 +179,7 @@ Set-Location $ProjectRoot
 
 # 确定要验证的 crates
 if ($Target -eq "--all") {
-    $Crates = @("clarity-core", "clarity-memory", "clarity-gateway", "clarity-tui")
+    $Crates = Get-ChildItem -Directory "crates/*" | ForEach-Object { $_.Name }
 } else {
     $Crates = @($Target)
 }

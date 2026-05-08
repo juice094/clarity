@@ -98,6 +98,39 @@ jobs:
       # separately (see cargo-audit output) but do not block CI.
       - run: cargo audit --deny unsound --deny yanked
 
+  doc-guard:
+    name: Documentation Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify crate documentation presence
+        run: |
+          MISSING=0
+          for crate in crates/*/; do
+            name=$(basename "$crate")
+            if [ ! -f "$crate/README.md" ]; then
+              echo "❌ MISSING: $crate/README.md"
+              MISSING=1
+            else
+              echo "✅ $crate/README.md"
+            fi
+            if [ ! -f "$crate/AGENTS.md" ]; then
+              echo "❌ MISSING: $crate/AGENTS.md"
+              MISSING=1
+            else
+              echo "✅ $crate/AGENTS.md"
+            fi
+          done
+          if [ $MISSING -ne 0 ]; then
+            echo "Documentation guard FAILED: some crates lack README.md or AGENTS.md"
+            exit 1
+          fi
+          echo "Documentation guard PASSED: all crates have README.md and AGENTS.md"
+      - name: Check rustdoc compilation
+        run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
