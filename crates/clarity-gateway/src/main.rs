@@ -269,13 +269,8 @@ async fn load_and_register_mcp_tools(agent: &Agent) {
 
 #[tokio::main]
 async fn main() {
-    // 初始化日志
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "clarity_gateway=debug,tower_http=debug".into()),
-        )
-        .init();
+    // 初始化日志（自动脱敏）
+    clarity_core::logging::init_with_default("clarity_gateway=debug,tower_http=debug");
 
     info!("🚀 Clarity Gateway starting...");
 

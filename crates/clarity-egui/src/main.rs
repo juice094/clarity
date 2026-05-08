@@ -585,7 +585,7 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result {
-    tracing_subscriber::fmt::init();
+    clarity_core::logging::init();
     std::panic::set_hook(Box::new(|info| {
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
             s.to_string()

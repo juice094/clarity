@@ -955,7 +955,6 @@ dependencies = [
  "tao",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "tray-icon",
 ]
 
@@ -1043,7 +1042,6 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "windows 0.61.3",
 ]
@@ -1078,7 +1076,6 @@ dependencies = [
  "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -1093,7 +1090,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

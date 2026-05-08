@@ -53,6 +53,7 @@ pub(crate) mod daemon;
 pub mod diff;
 pub mod error;
 pub mod hooks;
+pub mod logging;
 pub mod llm;
 #[cfg(feature = "mcp")]
 pub mod mcp;

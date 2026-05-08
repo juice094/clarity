@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("clarity_claw=info")
-        .init();
+    clarity_core::logging::init_with_default("clarity_claw=info");
 
     tracing::info!("🐾 Clarity Claw starting...");
 

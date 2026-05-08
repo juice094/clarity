@@ -57,7 +57,7 @@
 
 | 威胁 | 组件 | 风险等级 | 缓解措施 | 状态 |
 |------|------|---------|---------|------|
-| Credential leakage in logs | `clarity-core` / `clarity-mcp` | Medium | `scrub_credentials()` 在 MCP 结果进入 LLM 上下文前脱敏；tracing/log 层未全覆盖 | ⚠️ 部分 |
+| Credential leakage in logs | `clarity-core` / `clarity-mcp` | Medium | MCP 结果：`scrub_credentials()` 脱敏；tracing 输出：`RedactingWriter` 在 subscriber 层统一脱敏 | ✅ 已缓解 |
 | Sensitive file exfiltration via tools | `clarity-core` | High | 自动检测 `.env`、SSH keys、kubeconfig 等敏感文件；`requires_approval()` 强制人工审批 | ⚠️ 部分 |
 | Local GGUF model supply chain | `clarity-core` | Medium | 用户自行提供模型路径；无签名验证或哈希校验 | ❌ 未处理 |
 
@@ -99,7 +99,7 @@
 |------|------------------|
 | MCP command injection | `validate_mcp_command()` 单元测试（拒绝 `;`, `\|`、相对路径、不存在绝对路径） |
 | Path traversal | `resolve_path()` 边界测试；`sanitize_path()` CWD 前缀断言 |
-| Credential leakage | `scrub_credentials()` 集成测试（API key / token / password 脱敏） |
+| Credential leakage | `scrub_credentials()` 集成测试（API key / token / password 脱敏）；`RedactingWriter` 单元测试（跨 write 边界脱敏） |
 | Sensitive file exfiltration | `requires_approval()` 对敏感路径的自动拦截测试 |
 | Gateway admin bypass | Gateway 启动测试（端口绑定 `127.0.0.1`）；Bearer token 拒绝非法请求 |
 | Subagent budget exhaustion | `test_budget_day_limit` 等 token budget 超限测试 |
@@ -116,5 +116,5 @@
 | Local GGUF supply chain | v0.4.x | 模型文件 SHA-256 校验与用户确认提示 |
 | SSE reconnection hijacking | Backlog | SSE over TLS 强制或本地 Unix domain socket 替代 |
 | OS notification spoofing | Backlog | 若通知带操作按钮，增加交互令牌校验（依赖 OS API 支持） |
-| Log 层 credential 脱敏 | v0.3.x | 在 tracing subscriber 层统一应用 `scrub_credentials()` |
+| Log 层 credential 脱敏 | ✅ v0.3.x | 在 tracing subscriber 层统一应用 `RedactingWriter`（`clarity_core::logging`） |
 | Admin port mTLS | Backlog | 127.0.0.1 场景下评估自签名证书必要性 |

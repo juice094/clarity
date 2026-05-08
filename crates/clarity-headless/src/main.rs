@@ -178,9 +178,7 @@ fn main() -> Result<()> {
 }
 
 async fn async_main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    clarity_core::logging::init();
 
     let args = Args::parse();
 
