@@ -114,7 +114,7 @@ impl App {
     }
 
     fn render_titlebar(&mut self, ctx: &egui::Context) {
-        let theme = &self.ui_store.theme;
+        let theme = self.ui_store.theme.clone();
         let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
         egui::TopBottomPanel::top("titlebar")
@@ -129,7 +129,7 @@ impl App {
                 ui.set_min_height(TITLEBAR_HEIGHT);
 
                 // Single horizontal row:
-                // [toggle?] [badge] [title] [sessions] [elastic drag] [agent] [gateway] [settings] [buttons]
+                // [toggle?] [title] [sessions] [tabs] [elastic drag] [status] [settings] [buttons]
                 ui.horizontal_centered(|ui| {
                     ui.set_min_height(TITLEBAR_HEIGHT);
 
@@ -151,30 +151,6 @@ impl App {
                         ui.add_space(8.0);
                     }
 
-                    // Workspace badge
-                    if !self.session_store.active_category.is_empty() {
-                        let cat = &self.session_store.active_category;
-                        let display = if let Some(first) = cat.chars().next() {
-                            let mut s = first.to_uppercase().collect::<String>();
-                            s.push_str(&cat[first.len_utf8()..]);
-                            s
-                        } else {
-                            cat.clone()
-                        };
-                        egui::Frame::new()
-                            .fill(theme.bg_hover)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(6, 2))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new(display)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_muted),
-                                );
-                            });
-                        ui.add_space(8.0);
-                    }
-
                     ui.label(
                         egui::RichText::new("Clarity")
                             .size(theme.text_base)
@@ -192,6 +168,9 @@ impl App {
                                 .color(theme.text_dim),
                         );
                     }
+
+                    // Session tabs moved from chat header to titlebar
+                    crate::panels::chat::header::render_session_tabs(self, ui);
 
                     // Elastic filler — drag to move window.
                     let drag_w = ui.available_size().x.max(40.0);
@@ -372,24 +351,7 @@ impl App {
                             settings_color,
                         );
 
-                        // Gateway status indicator (rendered second in RTL → left of settings)
-                        let (gw_color, gw_label) = match self.chat_store.gateway_status {
-                            GatewayStatus::Online => (theme.status_online, "Gateway"),
-                            GatewayStatus::Checking => (theme.status_busy, "Gateway"),
-                            GatewayStatus::Offline => (theme.status_offline, "Gateway"),
-                        };
-                        ui.label(
-                            egui::RichText::new(gw_label)
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-                        ui.add_space(4.0);
-                        let gw_dot_size = egui::vec2(8.0, 8.0);
-                        let (gw_dot_rect, _) =
-                            ui.allocate_exact_size(gw_dot_size, egui::Sense::hover());
-                        ui.painter().circle_filled(gw_dot_rect.center(), 4.0, gw_color);
-
-                        // Agent status indicator (rendered last in RTL → leftmost of right section)
+                        // Combined status: "{AgentStatus} Gateway"
                         let (agent_color, agent_label) = match self.chat_store.agent_status {
                             AgentStatus::Online => (theme.status_online, "Online"),
                             AgentStatus::Busy => (theme.status_busy, "Busy"),
@@ -397,16 +359,12 @@ impl App {
                                 (theme.status_offline, "Offline")
                             }
                         };
+                        let status_text = format!("{} Gateway", agent_label);
                         ui.label(
-                            egui::RichText::new(agent_label)
+                            egui::RichText::new(status_text)
                                 .size(theme.text_xs)
-                                .color(theme.text_dim),
+                                .color(agent_color),
                         );
-                        ui.add_space(4.0);
-                        let agent_dot_size = egui::vec2(8.0, 8.0);
-                        let (agent_dot_rect, _) =
-                            ui.allocate_exact_size(agent_dot_size, egui::Sense::hover());
-                        ui.painter().circle_filled(agent_dot_rect.center(), 4.0, agent_color);
                     });
                 });
             });

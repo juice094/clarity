@@ -10,6 +10,14 @@ pub fn on_done(app: &mut crate::App) {
     app.chat_store.agent_status = AgentStatus::Online;
     app.chat_store.stopping = false;
     app.state.agent.reset();
+    // Trigger deferred markdown parse now that streaming is complete.
+    if let Some(session) = app.session_store.active_session_mut() {
+        if let Some(last) = session.messages.last_mut() {
+            if last.role == Role::Agent {
+                last.prepare();
+            }
+        }
+    }
     app.save_current_session();
     // Capture the latest snapshot created by this turn.
     let snapshots = app.state.agent.snapshot_list();
@@ -62,11 +70,11 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
                 } else {
                     last.blocks.push(ContentBlock::Text { text: text.clone() });
                 }
-                last.prepare();
+                // Deferred: prepare() will be called in on_done() after streaming ends.
                 return;
             }
         }
-        let mut msg = Message {
+        let msg = Message {
             role: Role::Agent,
             content: text.clone(),
             blocks: vec![ContentBlock::Text { text }],
@@ -75,7 +83,6 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
             cached_height: None,
             is_error: false,
         };
-        msg.prepare();
         session.messages.push(msg);
     }
 }
@@ -101,11 +108,10 @@ pub fn on_tool_start(
                     name,
                     args: arguments.to_string(),
                 });
-                last.prepare();
                 return;
             }
         }
-        let mut msg = Message {
+        let msg = Message {
             role: Role::Agent,
             content: String::new(),
             blocks: vec![ContentBlock::ToolCall {
@@ -118,7 +124,6 @@ pub fn on_tool_start(
             cached_height: None,
             is_error: false,
         };
-        msg.prepare();
         session.messages.push(msg);
     }
 }
@@ -207,7 +212,7 @@ pub fn on_tool_result(
     }
     if let Some(session) = session_store.active_session_mut() {
         let (display_result, truncated) = format_tool_output(&name, &result);
-        let mut msg = Message {
+        let msg = Message {
             role: Role::Agent,
             content: format!("🔧 **{}**\n```json\n{}\n```", name, display_result),
             blocks: vec![ContentBlock::ToolResult {
@@ -221,7 +226,6 @@ pub fn on_tool_result(
             cached_height: None,
             is_error: false,
         };
-        msg.prepare();
         session.messages.push(msg);
     }
 }

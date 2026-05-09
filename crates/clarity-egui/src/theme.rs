@@ -197,10 +197,10 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
-            // Borders: semi-transparent white — increased opacity for boundary visibility
-            border: rgba(255, 255, 255, 0.08),
-            border_strong: rgba(255, 255, 255, 0.14),
-            border_hover: rgba(255, 255, 255, 0.22),
+            // Borders: slate-blue tint for subtle boundary visibility on dark backgrounds
+            border: rgba(110, 135, 175, 0.08),
+            border_strong: rgba(110, 135, 175, 0.14),
+            border_hover: rgba(110, 135, 175, 0.22),
             input_bg: rgba(24, 24, 34, 0.65),
 
             // Focus: blue glow
@@ -330,10 +330,10 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
-            // Borders: glass reflection edge
-            border: rgba(255, 255, 255, 0.04),
-            border_strong: rgba(255, 255, 255, 0.08),
-            border_hover: rgba(255, 255, 255, 0.14),
+            // Borders: slate-blue tint for subtle boundary visibility on pure-black backgrounds
+            border: rgba(110, 135, 175, 0.04),
+            border_strong: rgba(110, 135, 175, 0.08),
+            border_hover: rgba(110, 135, 175, 0.14),
             input_bg: rgba(18, 18, 26, 0.60),
 
             // Focus: blue glow

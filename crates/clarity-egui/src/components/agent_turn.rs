@@ -117,7 +117,7 @@ impl AgentTurn {
     }
 
     /// Rough height estimation for virtual-list culling.
-    pub fn estimate_height(&self, theme: &crate::theme::Theme) -> f32 {
+    pub fn estimate_height(&self, content_max_width: f32, theme: &crate::theme::Theme) -> f32 {
         let mut h = 44.0; // header + spacing
         if self.thinking.is_some() {
             h += 28.0; // collapsed header
@@ -126,7 +126,7 @@ impl AgentTurn {
             h += 32.0; // each tool row
         }
         if let Some(ref msg) = self.final_response {
-            h += crate::ui::render::estimate_height(msg);
+            h += crate::ui::render::estimate_height(msg, content_max_width, theme);
         }
         h += theme.space_16;
         h

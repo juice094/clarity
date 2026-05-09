@@ -75,7 +75,15 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme,
     if let Some(ref msg) = turn.final_response {
         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
             ui.set_max_width(ui.available_width());
-            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+            if msg.parsed.is_empty() {
+                ui.label(
+                    egui::RichText::new(&msg.content)
+                        .size(theme.text_base)
+                        .color(theme.chat_text),
+                );
+            } else {
+                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+            }
         });
         ui.add_space(theme.space_12);
     }
@@ -166,7 +174,15 @@ pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &
 
             // Final response
             if let Some(ref msg) = turn.final_response {
-                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+                if msg.parsed.is_empty() {
+                    ui.label(
+                        egui::RichText::new(&msg.content)
+                            .size(theme.text_base)
+                            .color(theme.chat_text),
+                    );
+                } else {
+                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+                }
                 ui.add_space(theme.space_8);
             }
         });

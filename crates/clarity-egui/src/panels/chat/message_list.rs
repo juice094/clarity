@@ -18,6 +18,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height() - 70.0;
     let is_loading = app.chat_store.is_loading;
     let theme = app.ui_store.theme.clone();
+    let max_w = app.ui_store.content_max_width;
     let active_id = app.session_store.active_session_id.clone();
     let scroll_y = app.ui_store.last_scroll_offset;
     let mut configure_clicked = false;
@@ -52,7 +53,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         if u.is_user {
                             let bubble_h =
                                 session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                    ui::render::estimate_height(&session.messages[u.start])
+                                    ui::render::estimate_height(&session.messages[u.start], max_w, &theme)
                                 });
                             if editing {
                                 bubble_h + 80.0 // approximate edit controls height
@@ -70,7 +71,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                         crate::components::agent_turn::AgentTurn::from_messages(
                                             &session.messages[u.start..u.end],
                                         );
-                                    turn.estimate_height(&theme)
+                                    turn.estimate_height(max_w, &theme)
                                 })
                                 + 28.0 // action bar
                         }
@@ -86,7 +87,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         let editing = app.chat_store.editing_message_idx == Some(i);
                         let bubble_h = m
                             .cached_height
-                            .unwrap_or_else(|| crate::ui::render::estimate_height(m));
+                            .unwrap_or_else(|| crate::ui::render::estimate_height(m, max_w, &theme));
                         if editing && m.role == Role::User {
                             bubble_h + 80.0
                         } else {
@@ -167,7 +168,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             if u.is_user {
                                 let bubble_h =
                                     session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                        ui::render::estimate_height(&session.messages[u.start])
+                                        ui::render::estimate_height(&session.messages[u.start], max_w, &theme)
                                     });
                                 if editing {
                                     bubble_h + 80.0
@@ -185,7 +186,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                             crate::components::agent_turn::AgentTurn::from_messages(
                                                 &session.messages[u.start..u.end],
                                             );
-                                        turn.estimate_height(&theme)
+                                        turn.estimate_height(max_w, &theme)
                                     })
                                     + 28.0
                             }
@@ -377,7 +378,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             let editing = app.chat_store.editing_message_idx == Some(i);
                             let bubble_h = m
                                 .cached_height
-                                .unwrap_or_else(|| crate::ui::render::estimate_height(m));
+                                .unwrap_or_else(|| crate::ui::render::estimate_height(m, max_w, &theme));
                             if editing && m.role == Role::User {
                                 bubble_h + 80.0
                             } else {

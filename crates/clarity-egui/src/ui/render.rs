@@ -51,7 +51,10 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
         ui.add_space(theme.space_4);
     }
 
-    if msg.blocks.is_empty() {
+    if msg.parsed.is_empty() {
+        // Lazy parse fallback: streaming phase, show raw text without markdown parsing.
+        agent_text_plain_inner(ui, msg, theme);
+    } else if msg.blocks.is_empty() {
         // Fallback: render from parsed content (legacy sessions)
         if has_structure(msg) {
             agent_structured_card_inner(ui, msg, theme);
@@ -92,7 +95,16 @@ fn agent_text_plain_inner(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
     let max_width = ui.available_width();
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
-        crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+        if msg.parsed.is_empty() {
+            // Lazy parse fallback: streaming phase, show raw text.
+            ui.label(
+                egui::RichText::new(&msg.content)
+                    .size(theme.text_base)
+                    .color(theme.chat_text),
+            );
+        } else {
+            crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
+        }
     });
 
     // Bottom spacing — Swiss Style: whitespace instead of lines
@@ -415,9 +427,19 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
 
 /// Pretext-style height estimation for virtual list culling.
 /// Called on the cold path (once per message when height cache is missing).
-pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
+pub fn estimate_height(
+    msg: &crate::ui::types::Message,
+    content_max_width: f32,
+    theme: &crate::theme::Theme,
+) -> f32 {
     use crate::ui::types::RenderBlock;
     let mut height = 28.0; // bubble padding + trailing space_8
+
+    // Approximate chars per line based on available width and base font size.
+    // Average glyph width ≈ text_base * 0.65 (mix of Latin and CJK).
+    let chars_per_line = ((content_max_width / (theme.text_base * 0.65)).max(20.0)) as usize;
+    let line_height = theme.text_base * 1.5; // ~18px when text_base=12.0
+
     for block in &msg.parsed {
         match block {
             RenderBlock::Paragraph(spans) => {
@@ -430,24 +452,24 @@ pub fn estimate_height(msg: &crate::ui::types::Message) -> f32 {
                         crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
                     })
                     .sum();
-                let lines = (chars / 55).max(1);
-                height += lines as f32 * 18.0;
+                let lines = (chars / chars_per_line).max(1);
+                height += lines as f32 * line_height;
             }
-            RenderBlock::Heading(_, _) => height += 24.0,
+            RenderBlock::Heading(_, _) => height += theme.text_lg + theme.space_8,
             RenderBlock::CodeBlock { code, .. } => {
                 let lines = code.lines().count().max(1);
-                height += lines as f32 * 16.0 + 30.0;
+                height += lines as f32 * (theme.text_sm + theme.space_4) + 30.0;
             }
-            RenderBlock::ListItem(_) => height += 20.0,
-            RenderBlock::Blockquote(_) => height += 20.0,
-            RenderBlock::HorizontalRule => height += 20.0,
+            RenderBlock::ListItem(_) => height += line_height + theme.space_4,
+            RenderBlock::Blockquote(_) => height += line_height + theme.space_4,
+            RenderBlock::HorizontalRule => height += theme.space_12,
             RenderBlock::Table { rows, .. } => {
-                height += 28.0; // header row
-                height += rows.len() as f32 * 22.0;
-                height += 8.0; // padding
+                height += line_height + theme.space_8; // header row
+                height += rows.len() as f32 * (line_height + theme.space_4);
+                height += theme.space_8; // padding
             }
         }
-        height += 4.0; // inter-block spacing
+        height += theme.space_4; // inter-block spacing
     }
     height
 }
