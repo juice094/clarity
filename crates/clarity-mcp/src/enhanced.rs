@@ -50,6 +50,14 @@ pub enum McpTransport {
         #[serde(default = "default_reconnect_delay")]
         reconnect_delay_ms: u64,
     },
+    /// WebSocket transport (bidirectional JSON-RPC over WS)
+    WebSocket {
+        url: String,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+        #[serde(default = "default_timeout")]
+        timeout_seconds: u64,
+    },
 }
 
 fn default_timeout() -> u64 {
@@ -123,12 +131,27 @@ impl McpServerConfig {
         }
     }
 
-    /// Add header for HTTP/SSE transports
+    /// Create a new WebSocket server config
+    pub fn websocket(name: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            transport: McpTransport::WebSocket {
+                url: url.into(),
+                headers: HashMap::new(),
+                timeout_seconds: 30,
+            },
+            oauth: None,
+        }
+    }
+
+    /// Add header for HTTP/SSE/WebSocket transports
     pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         let key = key.into();
         let value = value.into();
         match &mut self.transport {
-            McpTransport::Http { headers, .. } | McpTransport::Sse { headers, .. } => {
+            McpTransport::Http { headers, .. }
+            | McpTransport::Sse { headers, .. }
+            | McpTransport::WebSocket { headers, .. } => {
                 headers.insert(key, value);
             }
             _ => {}
@@ -932,6 +955,192 @@ impl McpClient for SseMcpClient {
 }
 
 // =============================================================================
+// WebSocket Client
+// =============================================================================
+
+pub struct WebSocketMcpClient {
+    config: McpServerConfig,
+    request_id: AtomicU64,
+    pending: Arc<RwLock<HashMap<u64, oneshot::Sender<JsonRpcResponse<Value>>>>>,
+    ws_task: Option<tokio::task::JoinHandle<()>>,
+    ws_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
+}
+
+impl WebSocketMcpClient {
+    pub fn new(config: McpServerConfig) -> Self {
+        Self {
+            config,
+            request_id: AtomicU64::new(1),
+            pending: Arc::new(RwLock::new(HashMap::new())),
+            ws_task: None,
+            ws_tx: None,
+        }
+    }
+}
+
+#[async_trait]
+impl McpClient for WebSocketMcpClient {
+    async fn connect(&mut self) -> Result<(), McpError> {
+        let McpTransport::WebSocket { url, timeout_seconds, .. } = &self.config.transport
+        else {
+            return Err(McpError::InvalidTransport("Expected WebSocket transport".into()));
+        };
+
+        let pending = self.pending.clone();
+        let url = url.clone();
+        let timeout = *timeout_seconds;
+
+        let (ws_tx, mut ws_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+
+        let task = tokio::spawn(async move {
+            use futures::{SinkExt, StreamExt};
+
+            let result = tokio::time::timeout(
+                Duration::from_secs(timeout),
+                tokio_tungstenite::connect_async(&url),
+            ).await;
+
+            let (ws_stream, _) = match result {
+                Ok(Ok((s, r))) => (s, r),
+                Ok(Err(e)) => {
+                    warn!("WebSocket connection failed: {}", e);
+                    return;
+                }
+                Err(_) => {
+                    warn!("WebSocket connection timed out");
+                    return;
+                }
+            };
+
+            let (mut write, mut read) = ws_stream.split();
+
+            loop {
+                tokio::select! {
+                    msg = read.next() => {
+                        match msg {
+                            Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                                if let Ok(response) = serde_json::from_str::<JsonRpcResponse<Value>>(&text) {
+                                    let mut pending = pending.write().await;
+                                    if let Some(sender) = pending.remove(&response.id) {
+                                        let _ = sender.send(response);
+                                    }
+                                }
+                            }
+                            Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) | None => break,
+                            Some(Err(e)) => {
+                                warn!("WebSocket read error: {}", e);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    cmd = ws_rx.recv() => {
+                        match cmd {
+                            Some(text) => {
+                                if let Err(e) = write.send(tokio_tungstenite::tungstenite::Message::Text(text)).await {
+                                    warn!("WebSocket write error: {}", e);
+                                    break;
+                                }
+                            }
+                            None => break,
+                        }
+                    }
+                }
+            }
+        });
+
+        self.ws_task = Some(task);
+        self.ws_tx = Some(ws_tx);
+
+        // Brief delay to let connection establish before handshake
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Perform initialization handshake
+        let init_params = serde_json::json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "clarity-core",
+                "version": env!("CARGO_PKG_VERSION")
+            }
+        });
+        let _ = self.request_raw("initialize", Some(init_params)).await?;
+        let _ = self.request_raw("notifications/initialized", None).await;
+
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> Result<(), McpError> {
+        if let Some(task) = self.ws_task.take() {
+            task.abort();
+        }
+        self.ws_tx = None;
+        Ok(())
+    }
+
+    async fn request_raw(&self, method: &str, params: Option<Value>) -> Result<Value, McpError> {
+        let id = self.request_id.fetch_add(1, Ordering::SeqCst);
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0",
+            id,
+            method: method.to_string(),
+            params,
+        };
+
+        let McpTransport::WebSocket { timeout_seconds, .. } = &self.config.transport
+        else {
+            return Err(McpError::InvalidTransport("Expected WebSocket transport".into()));
+        };
+
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut pending = self.pending.write().await;
+            pending.insert(id, tx);
+        }
+
+        let json = match serde_json::to_string(&request) {
+            Ok(s) => s,
+            Err(e) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                return Err(McpError::RequestFailed(format!("JSON serialization failed: {}", e)));
+            }
+        };
+
+        if let Some(ws_tx) = &self.ws_tx {
+            if let Err(e) = ws_tx.send(json) {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                return Err(McpError::RequestFailed(format!("WebSocket send failed: {}", e)));
+            }
+        } else {
+            let mut pending = self.pending.write().await;
+            pending.remove(&id);
+            return Err(McpError::RequestFailed("WebSocket not connected".into()));
+        }
+
+        match tokio::time::timeout(Duration::from_secs(*timeout_seconds), rx).await {
+            Ok(Ok(response)) => {
+                if let Some(error) = response.error {
+                    return Err(McpError::RpcError(error.message));
+                }
+                response.result.ok_or_else(|| McpError::InvalidResponse("No result in WebSocket response".into()))
+            }
+            Ok(Err(_)) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                Err(McpError::RequestFailed("WebSocket response channel closed".into()))
+            }
+            Err(_) => {
+                let mut pending = self.pending.write().await;
+                pending.remove(&id);
+                Err(McpError::RequestTimeout)
+            }
+        }
+    }
+}
+
+// =============================================================================
 // Client Builder
 // =============================================================================
 
@@ -945,6 +1154,9 @@ impl McpClientBuilder {
             }
             McpTransport::Http { .. } => McpClientInstance::Http(HttpMcpClient::new(config)),
             McpTransport::Sse { .. } => McpClientInstance::Sse(SseMcpClient::new(config)),
+            McpTransport::WebSocket { .. } => {
+                McpClientInstance::WebSocket(WebSocketMcpClient::new(config))
+            }
         }
     }
 
@@ -963,6 +1175,12 @@ impl McpClientBuilder {
     pub fn sse(name: impl Into<String>, url: impl Into<String>) -> SseClientBuilder {
         SseClientBuilder {
             config: McpServerConfig::sse(name, url),
+        }
+    }
+
+    pub fn websocket(name: impl Into<String>, url: impl Into<String>) -> WebSocketClientBuilder {
+        WebSocketClientBuilder {
+            config: McpServerConfig::websocket(name, url),
         }
     }
 
@@ -985,6 +1203,14 @@ impl McpClientBuilder {
             Some("sse") | Some("Sse") => {
                 let url = entry.url.clone().unwrap_or_default();
                 let mut builder = Self::sse(&name, url);
+                for (k, v) in &entry.headers {
+                    builder = builder.header(k, v);
+                }
+                builder.build()
+            }
+            Some("websocket") | Some("WebSocket") | Some("ws") | Some("Ws") => {
+                let url = entry.url.clone().unwrap_or_default();
+                let mut builder = Self::websocket(&name, url);
                 for (k, v) in &entry.headers {
                     builder = builder.header(k, v);
                 }
@@ -1065,6 +1291,26 @@ impl SseClientBuilder {
 
     pub fn build(self) -> McpClientInstance {
         McpClientInstance::Sse(SseMcpClient::new(self.config))
+    }
+}
+
+pub struct WebSocketClientBuilder {
+    config: McpServerConfig,
+}
+
+impl WebSocketClientBuilder {
+    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.config = self.config.with_header(key, value);
+        self
+    }
+
+    pub fn oauth(mut self, oauth: OAuthConfig) -> Self {
+        self.config.oauth = Some(oauth);
+        self
+    }
+
+    pub fn build(self) -> McpClientInstance {
+        McpClientInstance::WebSocket(WebSocketMcpClient::new(self.config))
     }
 }
 
@@ -1256,6 +1502,7 @@ pub enum McpClientInstance {
     Stdio(Box<StdioMcpClient>),
     Http(HttpMcpClient),
     Sse(SseMcpClient),
+    WebSocket(WebSocketMcpClient),
 }
 
 #[async_trait]
@@ -1265,6 +1512,7 @@ impl McpClient for McpClientInstance {
             McpClientInstance::Stdio(c) => c.connect().await,
             McpClientInstance::Http(c) => c.connect().await,
             McpClientInstance::Sse(c) => c.connect().await,
+            McpClientInstance::WebSocket(c) => c.connect().await,
         }
     }
 
@@ -1273,6 +1521,7 @@ impl McpClient for McpClientInstance {
             McpClientInstance::Stdio(c) => c.disconnect().await,
             McpClientInstance::Http(c) => c.disconnect().await,
             McpClientInstance::Sse(c) => c.disconnect().await,
+            McpClientInstance::WebSocket(c) => c.disconnect().await,
         }
     }
 
@@ -1281,6 +1530,7 @@ impl McpClient for McpClientInstance {
             McpClientInstance::Stdio(c) => c.request_raw(method, params).await,
             McpClientInstance::Http(c) => c.request_raw(method, params).await,
             McpClientInstance::Sse(c) => c.request_raw(method, params).await,
+            McpClientInstance::WebSocket(c) => c.request_raw(method, params).await,
         }
     }
 }

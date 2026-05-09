@@ -52,7 +52,7 @@ pub use enhanced::{
     HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance, McpError,
     McpRegistry, McpResource, McpServerConfig, McpTool, McpTransport, OAuthConfig,
     SseClientBuilder, SseMcpClient, StdioClientBuilder, StdioMcpClient, ToolCallResult,
-    ToolContent,
+    ToolContent, WebSocketClientBuilder, WebSocketMcpClient,
 };
 
 // Re-export from config module

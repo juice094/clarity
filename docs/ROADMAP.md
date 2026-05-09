@@ -114,7 +114,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 工作项 | 状态 | 说明 |
 |--------|------|------|
 | WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
-| Gateway ↔ BackgroundTaskManager 集成 | ⏸️ 未启动 | 原 Tauri ↔ BTM 已废弃，迁移至 Gateway ↔ BTM（egui 直接消费 Gateway 事件） |
+| Gateway ↔ BackgroundTaskManager 集成 | ✅ 已完成 | `GatewayTaskClient` + `GatewayManager` — egui 自动启动 Gateway，BTM ops 全走 `/v1/tasks` REST API，本地 store fallback |
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
 | 会话层统一（SQLite） | ⏸️ 未启动 | 替代 JSON+JSONL 双系统 |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
