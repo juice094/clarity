@@ -42,6 +42,7 @@ pub mod capability;
 pub mod error;
 pub mod federation;
 pub mod llm;
+pub mod subagent;
 pub mod tool;
 
 // ============================================================================
@@ -149,7 +150,6 @@ impl StreamDelta {
 // Re-exports from submodules
 // ============================================================================
 
-pub use capability::{CapabilityToken, TokenError};
 pub use error::{
     sanitize_path_str, AgentError, ContractError, ContractResult, ToolError, ToolResult,
 };
@@ -158,6 +158,12 @@ pub use federation::{
     ToolSpec,
 };
 pub use llm::{LlmProvider, LlmResponse};
+pub use subagent::{
+    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchStatus,
+    CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
+    MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
+    SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus, TeamResult, TokenError,
+};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
 
 #[cfg(test)]

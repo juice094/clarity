@@ -3,4 +3,4 @@
 //! All types are defined in `clarity-contract` and re-exported here
 //! for backward compatibility.
 
-pub use clarity_contract::{CapabilityToken, TokenError};
+pub use clarity_contract::subagent::{CapabilityToken, TokenError};

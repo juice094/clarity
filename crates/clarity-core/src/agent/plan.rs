@@ -233,8 +233,8 @@ Rules:
     /// Execute an agent team asynchronously.
     pub async fn run_team(
         &self,
-        team: crate::subagents::AgentTeam,
-    ) -> Result<crate::subagents::TeamResult, AgentError> {
+        team: clarity_contract::subagent::AgentTeam,
+    ) -> Result<clarity_contract::subagent::TeamResult, AgentError> {
         let registry = self.registry().clone();
         let working_dir = self.config().working_dir.clone();
         let context_dir = working_dir.join("context");

@@ -10,6 +10,9 @@ use std::path::PathBuf;
 // continue to work.  Downstream crates may eventually migrate to `clarity_contract` directly.
 pub use clarity_contract::{FunctionCall, ToolCall};
 
+// P1-2: Re-export subagent contract types that were previously defined here.
+pub use clarity_contract::subagent::{AgentTypeDefinition, LaborMarket};
+
 /// Normalize a path by resolving `.` and `..` components.
 /// Does not require the path to exist and does not add UNC prefixes.
 pub fn normalize_path(path: &std::path::Path) -> PathBuf {
@@ -86,123 +89,4 @@ pub struct PlanExecutionState {
     pub result: Option<PlanResult>,
 }
 
-/// Definition of a subagent type.
-/// P1-1: Moved from `subagents/registry.rs` to `types.rs` to break the
-/// `background↔subagents` circular dependency.
-///
-/// Risk: `types.rs` now hosts a small registry type (`LaborMarket`).
-/// If registry logic grows significantly, consider extracting to a dedicated
-/// `agent-types` crate instead of bloating `types.rs`.
-#[derive(Debug, Clone)]
-pub struct AgentTypeDefinition {
-    pub name: String,
-    pub description: String,
-    pub system_prompt: String,
-    pub allowed_tools: Option<Vec<String>>,
-    pub max_iterations: usize,
-}
 
-/// Registry for subagent types (LaborMarket).
-/// P1-1: Moved from `subagents/registry.rs` to `types.rs` to break the
-/// `background↔subagents` circular dependency.
-#[derive(Clone)]
-pub struct LaborMarket {
-    types: std::collections::HashMap<String, AgentTypeDefinition>,
-}
-
-impl Default for LaborMarket {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl LaborMarket {
-    pub fn new() -> Self {
-        let mut market = Self {
-            types: std::collections::HashMap::new(),
-        };
-        market.register_builtin_types();
-        market
-    }
-
-    fn register_builtin_types(&mut self) {
-        self.register(AgentTypeDefinition {
-            name: "coder".to_string(),
-            description: "Code engineering tasks - implementation, refactoring, debugging"
-                .to_string(),
-            system_prompt: CODER_SYSTEM_PROMPT.to_string(),
-            allowed_tools: None,
-            max_iterations: 20,
-        });
-        self.register(AgentTypeDefinition {
-            name: "explore".to_string(),
-            description: "Codebase exploration and research".to_string(),
-            system_prompt: EXPLORE_SYSTEM_PROMPT.to_string(),
-            allowed_tools: Some(vec![
-                "file_read".to_string(),
-                "glob".to_string(),
-                "grep".to_string(),
-            ]),
-            max_iterations: 10,
-        });
-        self.register(AgentTypeDefinition {
-            name: "plan".to_string(),
-            description: "Implementation planning and design".to_string(),
-            system_prompt: PLAN_SYSTEM_PROMPT.to_string(),
-            allowed_tools: Some(vec![
-                "file_read".to_string(),
-                "glob".to_string(),
-                "grep".to_string(),
-                "file_write".to_string(),
-            ]),
-            max_iterations: 5,
-        });
-    }
-
-    pub fn register(&mut self, type_def: AgentTypeDefinition) {
-        self.types.insert(type_def.name.clone(), type_def);
-    }
-
-    pub fn get(&self, name: &str) -> Option<&AgentTypeDefinition> {
-        self.types.get(name)
-    }
-
-    pub fn require(&self, name: &str) -> &AgentTypeDefinition {
-        self.get(name)
-            .unwrap_or_else(|| panic!("Unknown agent type: {}", name))
-    }
-
-    pub fn list(&self) -> Vec<&AgentTypeDefinition> {
-        self.types.values().collect()
-    }
-}
-
-const CODER_SYSTEM_PROMPT: &str = r#"You are a code engineering assistant.
-Your task is to implement, refactor, or debug code.
-
-Guidelines:
-- Write clean, idiomatic code
-- Add appropriate error handling
-- Follow existing code style
-- Test your changes when possible
-"#;
-
-const EXPLORE_SYSTEM_PROMPT: &str = r#"You are a codebase exploration assistant.
-Your task is to understand and explain code structure.
-
-Guidelines:
-- Use file_read, glob, grep to explore
-- Provide clear summaries
-- Ask questions if unclear
-- Focus on understanding, not changing
-"#;
-
-const PLAN_SYSTEM_PROMPT: &str = r#"You are an implementation planning assistant.
-Your task is to design solutions before implementation.
-
-Guidelines:
-- Explore first to understand context
-- Design approach before coding
-- Write plan to file if needed
-- Get user approval before implementation
-"#;

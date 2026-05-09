@@ -30,7 +30,7 @@ pub struct AgentConfig {
     /// Directory containing Markdown prompt files
     pub prompts_dir: Option<std::path::PathBuf>,
     /// Optional capability token for subagent permission isolation
-    pub capability_token: Option<crate::subagents::token::CapabilityToken>,
+    pub capability_token: Option<clarity_contract::CapabilityToken>,
     /// Whether to enable automatic memory extraction after each turn.
     pub extract_memories: bool,
     /// Agent display name (from agent.yaml)
@@ -154,7 +154,7 @@ impl AgentConfig {
     /// Set capability token for permission isolation
     pub fn with_capability_token(
         mut self,
-        token: Option<crate::subagents::token::CapabilityToken>,
+        token: Option<clarity_contract::CapabilityToken>,
     ) -> Self {
         self.capability_token = token;
         self

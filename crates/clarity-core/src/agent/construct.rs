@@ -488,7 +488,7 @@ impl Agent {
     /// Set capability token for subagent permission isolation
     pub fn with_capability_token(
         mut self,
-        token: crate::subagents::token::CapabilityToken,
+        token: clarity_contract::CapabilityToken,
     ) -> Self {
         self.config.capability_token = Some(token);
         self
@@ -671,11 +671,11 @@ impl Agent {
     /// specs concurrently.
     pub async fn run_parallel(
         &self,
-        specs: Vec<crate::subagents::RunSpec>,
-        config: crate::subagents::ParallelConfig,
-        progress: Option<std::sync::Arc<parking_lot::Mutex<crate::subagents::BatchProgress>>>,
-    ) -> anyhow::Result<crate::subagents::ParallelResult> {
-        use crate::subagents::SubagentManager;
+        specs: Vec<clarity_contract::subagent::RunSpec>,
+        config: clarity_contract::subagent::ParallelConfig,
+        progress: Option<std::sync::Arc<parking_lot::Mutex<clarity_contract::subagent::BatchProgress>>>,
+    ) -> anyhow::Result<clarity_contract::subagent::ParallelResult> {
+        /* SubagentManager stays in subagents */
 
         let mut manager = SubagentManager::new(
             self.registry.clone(),

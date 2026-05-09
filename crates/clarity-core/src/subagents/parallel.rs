@@ -7,118 +7,17 @@
 //! - 超时控制
 
 use crate::background::{BackgroundTaskManager, TaskResult, TaskSpec, TaskStatus};
-use crate::subagents::runner::{RunSpec, SubagentError, SubagentResult, SubagentRunner};
+use crate::subagents::runner::{SubagentRunner};
 use crate::subagents::store::SubagentStore;
-use std::sync::{Arc};
+use clarity_contract::subagent::{
+    BatchProgress, BatchStatus, ParallelConfig, ParallelResult, RunSpec, SubagentError,
+    SubagentResult,
+};
+use std::sync::Arc;
 use parking_lot::Mutex;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-
-/// 并行执行配置
-#[derive(Debug, Clone)]
-pub struct ParallelConfig {
-    /// 最大并发数
-    pub max_concurrency: usize,
-    /// 超时时间（秒）
-    pub timeout_secs: Option<u64>,
-    /// 是否取消所有任务当其中一个失败
-    pub cancel_on_error: bool,
-    /// 是否启用结果聚合
-    pub enable_aggregation: bool,
-}
-
-impl Default for ParallelConfig {
-    fn default() -> Self {
-        Self {
-            max_concurrency: 3,
-            timeout_secs: Some(300),
-            cancel_on_error: false,
-            enable_aggregation: true,
-        }
-    }
-}
-
-impl ParallelConfig {
-    /// 创建默认配置
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// 设置最大并发数
-    pub fn with_max_concurrency(mut self, max: usize) -> Self {
-        self.max_concurrency = max.max(1);
-        self
-    }
-
-    /// 设置超时时间
-    pub fn with_timeout(mut self, secs: u64) -> Self {
-        self.timeout_secs = Some(secs);
-        self
-    }
-
-    /// 设置错误时取消
-    pub fn cancel_on_error(mut self) -> Self {
-        self.cancel_on_error = true;
-        self
-    }
-
-    /// 禁用结果聚合
-    pub fn without_aggregation(mut self) -> Self {
-        self.enable_aggregation = false;
-        self
-    }
-}
-
-/// 并行执行结果
-#[derive(Debug, Clone)]
-pub struct ParallelResult {
-    /// 成功的执行结果
-    pub results: Vec<SubagentResult>,
-    /// 失败的执行
-    pub failures: Vec<(String, String)>,
-    /// 总耗时（毫秒）
-    pub total_elapsed_ms: u64,
-    /// 实际并发数
-    pub actual_concurrency: usize,
-    /// 聚合摘要（如果启用）
-    pub aggregated_summary: Option<String>,
-}
-
-impl ParallelResult {
-    /// 检查是否全部成功
-    pub fn all_succeeded(&self) -> bool {
-        self.failures.is_empty()
-    }
-
-    /// 获取成功率
-    pub fn success_rate(&self) -> f64 {
-        let total = self.results.len() + self.failures.len();
-        if total == 0 {
-            0.0
-        } else {
-            self.results.len() as f64 / total as f64
-        }
-    }
-
-    /// 合并所有输出
-    pub fn merged_output(&self) -> String {
-        let mut outputs = Vec::new();
-
-        for result in &self.results {
-            outputs.push(format!(
-                "## {} ({}): {}\n{}\n",
-                result.agent_id, result.agent_type, result.status, result.summary
-            ));
-        }
-
-        for (id, err) in &self.failures {
-            outputs.push(format!("## {}: FAILED\n{}\n", id, err));
-        }
-
-        outputs.join("\n---\n")
-    }
-}
 
 /// 子代理批次构建器
 ///
@@ -173,68 +72,8 @@ impl SubagentBatch {
     }
 }
 
-// ------------------------------------------------------------------
-// Batch progress tracking — enables UI progress panels
-// ------------------------------------------------------------------
-
-/// Progress state of an in-flight parallel batch.
-#[derive(Debug, Clone)]
-pub struct BatchProgress {
-    /// Unique batch identifier.
-    pub batch_id: String,
-    /// Total number of subagents in this batch.
-    pub total: usize,
-    /// Number of subagents that have completed.
-    pub completed: usize,
-    /// Number of subagents that have failed.
-    pub failed: usize,
-    /// Agent IDs currently executing.
-    pub running: Vec<String>,
-    /// Current status of the batch.
-    pub status: BatchStatus,
-    /// Unix timestamp (seconds) when execution started.
-    pub started_at: u64,
-    /// Elapsed milliseconds so far.
-    pub elapsed_ms: u64,
-    /// Subagent results collected so far.
-    pub results: Vec<SubagentResult>,
-    /// Failures collected so far.
-    pub failures: Vec<(String, String)>,
-}
-
-impl BatchProgress {
-    pub fn new(batch_id: String, specs: &[RunSpec]) -> Self {
-        let total = specs.len();
-        let started_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        Self {
-            batch_id,
-            total,
-            completed: 0,
-            failed: 0,
-            running: specs.iter().map(|s| s.description.clone()).collect(),
-            status: BatchStatus::Running,
-            started_at,
-            elapsed_ms: 0,
-            results: Vec::new(),
-            failures: Vec::new(),
-        }
-    }
-}
-
 /// Convenience alias for shared progress handle.
 pub type BatchProgressHandle = Arc<Mutex<BatchProgress>>;
-
-/// Status of a parallel batch.
-#[derive(Debug, Clone, PartialEq)]
-pub enum BatchStatus {
-    Running,
-    Completed,
-    Cancelled,
-    Failed(String),
-}
 
 /// 并行执行器
 ///
@@ -524,8 +363,8 @@ pub async fn run_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clarity_contract::subagent::{ExecutionStatus, ParallelConfig, ParallelResult, RunSpec, SubagentResult};
     use crate::registry::ToolRegistry;
-    use crate::subagents::ExecutionStatus;
     use tempfile::TempDir;
 
     fn create_test_runner() -> (SubagentRunner, TempDir) {
