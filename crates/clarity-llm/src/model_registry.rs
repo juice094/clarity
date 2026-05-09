@@ -41,9 +41,9 @@
 //! 3. `~/.config/clarity/models.toml`
 //! 4. Built-in fallback (auto-detect from env vars)
 
-use crate::error::AgentError;
-use crate::llm::api::LlmProvider;
-use crate::llm::{LlamaServerProvider, OpenAiCompatibleLlm};
+use clarity_contract::AgentError;
+use crate::api::LlmProvider;
+use crate::{LlamaServerProvider, OpenAiCompatibleLlm};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -545,7 +545,7 @@ pub async fn build_provider_from_registry_with_key(
                     + super::LOCAL_MODEL_HELP
                 ))?;
             let tokenizer_repo = cfg.extra.get("tokenizer_repo").cloned();
-            let mut gguf_config = super::local_gguf::LocalGgufConfig::new(model_path);
+            let mut gguf_config = super::local_gguf::LocalGgufConfig::new(model_path)?;
             if let Some(repo) = tokenizer_repo {
                 gguf_config = gguf_config.with_tokenizer_repo(repo);
             }

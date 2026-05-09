@@ -43,18 +43,16 @@
 pub mod activity;
 pub mod agent;
 pub mod approval;
-pub mod auth;
 pub(crate) mod autodream;
 pub mod background;
 pub mod capability;
 pub mod compaction;
 pub mod config;
 pub(crate) mod daemon;
-pub mod diff;
+pub use clarity_tools::diff;
 pub mod error;
 pub mod hooks;
 pub mod logging;
-pub mod llm;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 pub mod memory;
@@ -72,7 +70,7 @@ pub mod view_models;
 // Re-export core types
 pub use agent::Agent;
 pub use error::{AgentError, ToolError};
-pub use llm::{AnthropicLlm, KimiLlm, LlmFactory, OllamaProvider, OpenAiCompatibleLlm};
+pub use clarity_llm::{AnthropicLlm, KimiLlm, LlmFactory, OllamaProvider, OpenAiCompatibleLlm};
 pub use registry::ToolRegistry;
 pub use tools::{Tool, ToolContext, ToolResult};
 

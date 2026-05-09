@@ -3,7 +3,7 @@
 //! This allows frontends (Gateway, TUI, Headless) to inject their own
 //! conversation-history formats without extending the `Op` enum.
 
-use crate::llm::api::Message;
+use clarity_llm::api::Message;
 
 /// A driver that decides how a user query is turned into a message list
 /// and how the final response is post-processed.
@@ -84,7 +84,7 @@ impl ChatDriver for ConversationChatDriver {
         let mut messages = self.history.clone();
         // Inject or update the system prompt at the front.
         if let Some(first) = messages.first_mut() {
-            if first.role == crate::llm::api::MessageRole::System {
+            if first.role == clarity_llm::api::MessageRole::System {
                 first.content = system_prompt.to_string();
             } else {
                 messages.insert(0, Message::system(system_prompt));
@@ -109,7 +109,7 @@ impl ChatDriver for ConversationChatDriver {
             if !dynamic_prompt.is_empty() {
                 messages.push(Message::system(dynamic_prompt.to_string()));
             }
-        } else if messages[0].role == crate::llm::api::MessageRole::System {
+        } else if messages[0].role == clarity_llm::api::MessageRole::System {
             // Replace first system with static, insert dynamic after.
             messages[0].content = static_prompt.to_string();
             if !dynamic_prompt.is_empty() {

@@ -68,8 +68,8 @@ pub use enhanced::{
 pub use ops::Op;
 
 // Re-export core API types from their canonical locations for backwards compatibility.
-// New code should import directly from `crate::types` or `crate::llm::api`.
-pub use crate::llm::api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
+// New code should import directly from `crate::types` or `clarity_llm::api`.
+pub use clarity_llm::api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
 pub use crate::types::{FunctionCall, ToolCall};
 
 // Re-export config

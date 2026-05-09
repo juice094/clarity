@@ -607,7 +607,7 @@ impl eframe::App for App {
             crate::components::login_modal::render_oauth_login_modal(
                 app,
                 ctx,
-                &clarity_core::auth::OAuthDeviceFlowConfig::default(),
+                &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
             );
         });
         self.render_safe(ctx, "onboarding", |app, ctx| {

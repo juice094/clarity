@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// - Pair with `unbind_llm` to detach.
 pub fn bind_llm(
     agent: &clarity_core::Agent,
-    backend: Arc<dyn clarity_core::llm::LlmProvider>,
+    backend: Arc<dyn clarity_llm::LlmProvider>,
     label: &str,
 ) {
     agent.set_llm(backend);

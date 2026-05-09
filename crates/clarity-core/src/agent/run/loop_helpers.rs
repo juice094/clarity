@@ -1,7 +1,7 @@
 //! Helper functions for agent execution loops.
 
 use crate::error::AgentError;
-use crate::llm::api::{Message, MessageRole};
+use clarity_llm::api::{Message, MessageRole};
 
 /// Retry an async operation with exponential backoff.
 ///
@@ -222,7 +222,7 @@ impl Agent {
         final_response: String,
         completed: bool,
         tool_names: &[String],
-        messages: &[crate::llm::api::Message],
+        messages: &[clarity_llm::api::Message],
     ) -> Result<String, AgentError> {
         let final_response = self
             .finish_sync_turn(final_response, completed, tool_names)

@@ -6,7 +6,7 @@
 
 use super::Agent;
 use crate::error::AgentError;
-use crate::llm::api::{LlmResponse, Message};
+use clarity_llm::api::{LlmResponse, Message};
 use crate::types::{Plan, PlanExecutionState, PlanResult, PlanStepExecutionStatus};
 
 impl Plan {
@@ -430,7 +430,7 @@ impl PlanExecutionController {
 mod tests {
     use super::*;
     use crate::agent::AgentConfig;
-    use crate::llm::api::LlmProvider;
+    use clarity_llm::api::LlmProvider;
     use crate::types::PlanStep;
     use std::sync::Arc;
 
@@ -456,7 +456,7 @@ mod tests {
                 _messages: &[Message],
                 _tools: &serde_json::Value,
             ) -> Result<
-                tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>,
+                tokio::sync::mpsc::Receiver<Result<clarity_llm::api::StreamDelta, AgentError>>,
                 AgentError,
             > {
                 let (_, rx) = tokio::sync::mpsc::channel(1);
@@ -502,7 +502,7 @@ mod tests {
                 _messages: &[Message],
                 _tools: &serde_json::Value,
             ) -> Result<
-                tokio::sync::mpsc::Receiver<Result<crate::llm::api::StreamDelta, AgentError>>,
+                tokio::sync::mpsc::Receiver<Result<clarity_llm::api::StreamDelta, AgentError>>,
                 AgentError,
             > {
                 let (_, rx) = tokio::sync::mpsc::channel(1);

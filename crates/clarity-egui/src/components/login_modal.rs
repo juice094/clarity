@@ -7,7 +7,7 @@ use crate::App;
 pub fn render_oauth_login_modal(
     app: &mut App,
     ctx: &egui::Context,
-    config: &clarity_core::auth::OAuthDeviceFlowConfig,
+    config: &clarity_llm::auth::OAuthDeviceFlowConfig,
 ) {
     if !app.settings_store.kimi_code_login_open {
         return;
@@ -199,13 +199,13 @@ pub fn render_oauth_login_modal(
     }
 }
 
-fn start_login(app: &mut App, config: clarity_core::auth::OAuthDeviceFlowConfig) {
+fn start_login(app: &mut App, config: clarity_llm::auth::OAuthDeviceFlowConfig) {
     app.settings_store.kimi_code_login_state = KimiCodeLoginState::Requesting;
     let tx = app.ui_tx.clone();
     let runtime = app.runtime.handle().clone();
 
     runtime.spawn(async move {
-        let client = clarity_core::auth::OAuthDeviceFlowClient::with_config(config.clone());
+        let client = clarity_llm::auth::OAuthDeviceFlowClient::with_config(config.clone());
 
         let auth = match client.request_device_authorization().await {
             Ok(a) => a,
@@ -255,7 +255,7 @@ fn start_login(app: &mut App, config: clarity_core::auth::OAuthDeviceFlowConfig)
 
             match client.poll_device_token(&auth).await {
                 Ok(token) => {
-                    let store = clarity_core::auth::TokenStore::default_kimi_code();
+                    let store = clarity_llm::auth::TokenStore::default_kimi_code();
                     if let Err(e) = store.save(&token) {
                         let _ = tx.send(UiEvent::KimiCodeLoginStateUpdate {
                             state: "error".into(),
@@ -283,7 +283,7 @@ fn start_login(app: &mut App, config: clarity_core::auth::OAuthDeviceFlowConfig)
                     });
                     return;
                 }
-                Err(clarity_core::auth::AuthError::Expired) => {
+                Err(clarity_llm::auth::AuthError::Expired) => {
                     let _ = tx.send(UiEvent::KimiCodeLoginStateUpdate {
                         state: "error".into(),
                         user_code: None,
@@ -297,7 +297,7 @@ fn start_login(app: &mut App, config: clarity_core::auth::OAuthDeviceFlowConfig)
                     });
                     return;
                 }
-                Err(clarity_core::auth::AuthError::Request(ref msg))
+                Err(clarity_llm::auth::AuthError::Request(ref msg))
                     if msg.contains("authorization_pending") =>
                 {
                     // Still waiting — send a heartbeat so UI knows we're alive

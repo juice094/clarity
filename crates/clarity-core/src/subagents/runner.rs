@@ -13,8 +13,8 @@
 use crate::agent::{Agent, AgentExecutor};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::error::{AgentError, ToolError};
-use crate::llm::api::{LlmProvider, Message};
-use crate::llm::{build_provider_from_registry, ModelRegistry};
+use clarity_llm::api::{LlmProvider, Message};
+use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use crate::registry::ToolRegistry;
 use crate::subagents::builder::SubagentBuilder;
 use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};

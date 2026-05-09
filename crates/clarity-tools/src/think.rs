@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use tracing::info;
 
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 /// Tool for structured thinking
 ///

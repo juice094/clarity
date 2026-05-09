@@ -447,7 +447,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 > **Status update (2026-04-27):** Previously flagged coupling issues resolved. v0.3.1 adds `model_download.rs` and `onboarding.rs` — core responsibility bloat tracked as new item #5.
 >
-> **Status update (2026-05-03, Sprint 13 complete):** 4-week architecture decoupling delivered. See Sprint 13 section above for full list.
+> **Status update (2026-05-09, Sprint 14 complete):** `clarity-llm` (~5.2K lines) and `clarity-tools` (~5.8K lines) extracted from `clarity-core`. Core reduced from 41K to 28K lines. `clarity-subagents` deferred due to `agent ↔ subagents` bidirectional coupling (see #6 below).
 >
 > ### Resolved ✅
 > - ~~`clarity-core` ↔ `clarity-gateway` coupling~~ — Fixed by introducing `ChatDriver` trait (`driver.rs`) and removing `Op::ConversationTurn` / `Op::ConversationTurnSync` variants. Gateway now injects message history via `ConversationChatDriver` instead of extending core enums (Sprint 14.5, `d7a40c79`).
@@ -470,6 +470,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 > 3. **`AppState` bloat**: `active_connections` (gateway) and `initialized` (egui) dead fields removed. `approval_runtime` deduplicated in `clarity-egui` via `ModeAwareApprovalRuntime::inner()`. Remaining: `tool_registry` is redundant because `agent.registry()` already holds it (kept for the admin API convenience). (Sprint 14.5, `d7a40c79`)
 > 4. **`std::sync::RwLock` in `Agent.inner`**: Intentionally kept as `std::sync::RwLock<AgentInner>`. `Agent` getters/setters are synchronous and may be called from non-async contexts (TUI event loop, Gateway handlers). All critical sections are short field reads/writes only. `background/` module locks have been migrated to `tokio::sync` (`1141ba9`).
 > 5. **`clarity-core` responsibility bloat (v0.3.1)**: `model_download.rs` (HF streaming download + progress callbacks) and `view_models/settings.rs` (Settings ViewModel) both landed in `clarity-core`. Core now carries GUI onboarding logic, network I/O, and settings serialization — blurring the "pure business logic" boundary. Long-term: evaluate extracting `clarity-infrastructure` for I/O-heavy modules (download, settings persistence, network probing).
+> 6. **`agent ↔ subagents` bidirectional coupling (2026-05-09)**: `subagents/` (~3K lines) remains in `clarity-core` because `agent/` imports `SubagentManager`/`AgentTeam`/`ParallelConfig` (orchestration types), while `subagents/` imports `Agent`/`AgentConfig`/`AgentExecutor` (execution types). Extracting `subagents` requires either (a) uplifting all shared orchestration types to `clarity-contract`, or (b) extracting `agent+subagents` together into a new `clarity-agent` crate. Option (a) is preferred but blocked by `SubagentManager` methods (`run_parallel`, `run_team`) that are called from `agent/construct.rs` and `agent/plan.rs`. Unlock path: define `SubagentOrchestrator` trait in `clarity-contract`, have `Agent` implement it, then move `subagents/` out.
 >
 > ### New Abstractions (Sprint 13)
 > | Trait / Type | Location | Purpose |

@@ -17,7 +17,7 @@ use app::App;
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_core::llm::LlmFactory;
+use clarity_llm::LlmFactory;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};

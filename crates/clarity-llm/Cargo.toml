@@ -1,0 +1,50 @@
+[package]
+name = "clarity-llm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "LLM provider integrations for Project Clarity"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+futures = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+url = "2.5"
+urlencoding = "2.1"
+tiktoken-rs = "0.11.0"
+parking_lot = "0.12"
+toml = "0.8"
+dirs = "5.0"
+rand = "0.10"
+
+# Local inference (feature-gated)
+candle-core = { version = "0.10.2", optional = true }
+candle-transformers = { version = "0.10.2", optional = true }
+hf-hub = { version = "0.5.0", optional = true, default-features = false, features = ["tokio", "rustls-tls"] }
+tokenizers = { version = "0.21", optional = true }
+
+# Internal crates
+clarity-contract = { path = "../clarity-contract" }
+clarity-memory = { path = "../clarity-memory" }
+
+[dev-dependencies]
+tempfile = "3.9"
+
+[features]
+default = ["local-llm"]
+local-llm = ["dep:candle-core", "dep:candle-transformers", "dep:hf-hub", "dep:tokenizers"]
+local-llm-cuda = ["local-llm", "candle-core/cuda"]

@@ -9,10 +9,10 @@
 //! ## Quick start
 //!
 //! ```no_run
-//! use clarity_core::llm::local_gguf::{LocalGgufConfig, LocalGgufProvider};
+//! use clarity_llm::local_gguf::{LocalGgufConfig, LocalGgufProvider};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let config = LocalGgufConfig::new("model.gguf")
+//! let config = LocalGgufConfig::new("model.gguf")?
 //!     .with_tokenizer_repo("deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B");
 //! let provider = LocalGgufProvider::new(config).await?;
 //! # Ok(())
@@ -20,8 +20,8 @@
 //! ```
 
 use super::{LlmProvider, LlmResponse, Message, StreamDelta};
-use crate::agent::{FunctionCall, ToolCall};
-use crate::error::AgentError;
+use clarity_contract::{FunctionCall, ToolCall};
+use clarity_contract::AgentError;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -69,16 +69,16 @@ impl ChatTemplate {
 
         for msg in messages {
             match msg.role {
-                crate::agent::MessageRole::System => {
+                crate::api::MessageRole::System => {
                     system.push_str(&msg.content);
                 }
-                crate::agent::MessageRole::User => {
+                crate::api::MessageRole::User => {
                     conversation.push(("user", msg.content.clone()));
                 }
-                crate::agent::MessageRole::Assistant => {
+                crate::api::MessageRole::Assistant => {
                     conversation.push(("assistant", msg.content.clone()));
                 }
-                crate::agent::MessageRole::Tool => {
+                crate::api::MessageRole::Tool => {
                     conversation.push(("tool", msg.content.clone()));
                 }
             }
@@ -142,7 +142,7 @@ impl ChatTemplate {
         let mut system = String::new();
 
         for msg in messages {
-            if msg.role == crate::agent::MessageRole::System {
+            if msg.role == crate::api::MessageRole::System {
                 system.push_str(&msg.content);
             }
         }
@@ -175,11 +175,11 @@ impl ChatTemplate {
 
         for msg in messages {
             match msg.role {
-                crate::agent::MessageRole::User => {
+                crate::api::MessageRole::User => {
                     result.push_str("<｜User｜>");
                     result.push_str(&msg.content);
                 }
-                crate::agent::MessageRole::Assistant => {
+                crate::api::MessageRole::Assistant => {
                     result.push_str("<｜Assistant｜>");
                     result.push_str(&msg.content);
                 }
@@ -246,29 +246,29 @@ impl Default for LocalGgufConfig {
 
 impl LocalGgufConfig {
     /// Create config with a model path.
-    pub fn new(model_path: impl Into<PathBuf>) -> Self {
+    pub fn new(model_path: impl Into<PathBuf>) -> Result<Self, clarity_contract::AgentError> {
         let path = model_path.into();
         if let Some(ext) = path.extension() {
             let ext = ext.to_string_lossy().to_lowercase();
             if ext != "gguf" {
-                panic!(
+                return Err(clarity_contract::AgentError::Llm(format!(
                     "LocalGgufConfig: model file must have .gguf extension, got: {}",
                     path.display()
-                );
+                )));
             }
         } else {
-            panic!(
+            return Err(clarity_contract::AgentError::Llm(format!(
                 "LocalGgufConfig: model file must have .gguf extension, got: {}",
                 path.display()
-            );
+            )));
         }
         let template =
             ChatTemplate::detect(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""));
-        Self {
+        Ok(Self {
             model_path: path,
             chat_template: template,
             ..Default::default()
-        }
+        })
     }
 
     pub fn with_tokenizer_repo(mut self, repo: impl Into<String>) -> Self {
@@ -689,8 +689,8 @@ impl LlmProvider for LocalGgufProvider {
         cache.clear();
     }
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> crate::api::ProviderCapabilities {
+        crate::api::ProviderCapabilities {
             native_tool_calling: true,
             prompt_caching: true,
             ..Default::default()
@@ -999,7 +999,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Requires local GGUF model"]
     async fn test_local_gguf_loads_real_model() {
-        let model_path = crate::llm::resolve_local_model_path().unwrap_or_else(|| {
+        let model_path = crate::resolve_local_model_path().unwrap_or_else(|| {
             PathBuf::from(r"C:\Users\22414\Desktop\model\Qwen2.5-7B-Instruct.Q4_K_M.gguf")
         });
         if !model_path.exists() {
@@ -1012,7 +1012,7 @@ mod tests {
 
         // Try tokenizer.json next to model, else hf-hub fallback
         let tokenizer_path = model_path.with_file_name("tokenizer.json");
-        let mut config = LocalGgufConfig::new(&model_path)
+        let mut config = LocalGgufConfig::new(&model_path).unwrap()
             .with_max_tokens(30)
             .with_temperature(0.7);
         if tokenizer_path.exists() {

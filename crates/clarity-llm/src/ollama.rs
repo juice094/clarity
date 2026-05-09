@@ -16,11 +16,11 @@
 //! - `OLLAMA_HOST` - Base URL (default: `http://localhost:11434`)
 //! - `OLLAMA_MODEL` - Model name (default: `llama3`)
 
-use crate::agent::FunctionCall;
-use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
-use crate::llm::shared_http_client;
-use crate::types::ToolCall;
+use clarity_contract::FunctionCall;
+use clarity_contract::AgentError;
+use crate::api::{LlmProvider, LlmResponse, Message, StreamDelta};
+use crate::shared_http_client;
+use clarity_contract::ToolCall;
 use async_trait::async_trait;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -372,8 +372,8 @@ impl LlmProvider for OllamaProvider {
         // Ollama does not support prompt cache key
     }
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> crate::api::ProviderCapabilities {
+        crate::api::ProviderCapabilities {
             native_tool_calling: true,
             ..Default::default()
         }

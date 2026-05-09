@@ -20,6 +20,18 @@ use tray_icon::{
 };
 
 // ------------------------------------------------------------------
+// Shared tokio runtime for tray callbacks (avoids spawning a new
+// Runtime on every menu click).
+// ------------------------------------------------------------------
+static TRAY_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+fn tray_runtime() -> &'static tokio::runtime::Runtime {
+    TRAY_RUNTIME.get_or_init(|| {
+        tokio::runtime::Runtime::new().expect("Failed to create tray tokio runtime")
+    })
+}
+
+// ------------------------------------------------------------------
 // Default icon (32×32 copper #c98a5e square)
 // ------------------------------------------------------------------
 fn default_icon() -> Icon {
@@ -302,7 +314,7 @@ pub fn run() -> anyhow::Result<()> {
                             let input = input.trim().to_string();
                             if !input.is_empty() {
                                 let gw = gw_url.clone();
-                                let rt = tokio::runtime::Runtime::new().unwrap();
+                                let rt = tray_runtime();
                                 match rt.block_on(crate::quick_chat(&gw, &input)) {
                                     Ok(reply) => {
                                         let _ = notify_rust::Notification::new()
@@ -339,7 +351,7 @@ pub fn run() -> anyhow::Result<()> {
                                     let prompt = prompt.trim().to_string();
                                     if !prompt.is_empty() {
                                         let gw = gw_url.clone();
-                                        let rt = tokio::runtime::Runtime::new().unwrap();
+                                        let rt = tray_runtime();
                                         match rt.block_on(crate::create_remote_task(
                                             &gw, &name, &prompt,
                                         )) {
@@ -371,7 +383,7 @@ pub fn run() -> anyhow::Result<()> {
                     let task_id = task_id.clone();
                     let gw = gw_url.clone();
                     std::thread::spawn(move || {
-                        let rt = tokio::runtime::Runtime::new().unwrap();
+                        let rt = tray_runtime();
                         match rt.block_on(crate::cancel_remote_task(&gw, &task_id)) {
                             Ok(()) => {
                                 let _ = notify_rust::Notification::new()

@@ -9,13 +9,13 @@ use std::sync::Arc;
 /// Lightweight subagent that extracts structured notes from a conversation turn.
 #[derive(Clone)]
 pub struct TurnMemoryExtractor {
-    llm: Arc<dyn crate::llm::api::LlmProvider>,
+    llm: Arc<dyn clarity_llm::api::LlmProvider>,
     working_dir: PathBuf,
 }
 
 impl TurnMemoryExtractor {
     pub fn new(
-        llm: Arc<dyn crate::llm::api::LlmProvider>,
+        llm: Arc<dyn clarity_llm::api::LlmProvider>,
         working_dir: impl Into<PathBuf>,
     ) -> Self {
         Self {

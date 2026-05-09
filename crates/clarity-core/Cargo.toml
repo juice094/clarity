@@ -41,15 +41,12 @@ sha2 = "0.10"
 base64 = "0.22"
 parking_lot = "0.12"
 
-candle-core = { version = "0.10.2", optional = true }
-candle-transformers = { version = "0.10.2", optional = true }
-hf-hub = { version = "0.5.0", optional = true, default-features = false, features = ["tokio", "rustls-tls"] }
-tokenizers = { version = "0.21", optional = true }
-
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }
 clarity-mcp = { path = "../clarity-mcp" }
 clarity-wire = { path = "../clarity-wire" }
+clarity-llm = { path = "../clarity-llm" }
+clarity-tools = { path = "../clarity-tools" }
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -60,8 +57,8 @@ criterion = { version = "0.5", features = ["async_tokio"] }
 
 [features]
 default = ["local-llm", "mcp"]
-local-llm = ["dep:candle-core", "dep:candle-transformers", "dep:hf-hub", "dep:tokenizers"]
-local-llm-cuda = ["local-llm", "candle-core/cuda"]
+local-llm = ["clarity-llm/local-llm"]
+local-llm-cuda = ["clarity-llm/local-llm-cuda"]
 mcp = []
 
 [[bench]]

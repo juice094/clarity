@@ -1091,10 +1091,10 @@ impl LlmProvider for BudgetMockLlm {
 
     fn set_prompt_cache_key(&self, _key: &str) {}
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> clarity_llm::api::ProviderCapabilities {
+        clarity_llm::api::ProviderCapabilities {
             native_tool_calling: true,
-            pricing: Some(crate::llm::api::Pricing {
+            pricing: Some(clarity_llm::api::Pricing {
                 input_per_1m: 200.0,
                 output_per_1m: 200.0,
             }),
@@ -1236,8 +1236,8 @@ impl LlmProvider for VisionTrackingMockLlm {
 
     fn set_prompt_cache_key(&self, _key: &str) {}
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> clarity_llm::api::ProviderCapabilities {
+        clarity_llm::api::ProviderCapabilities {
             vision: self.vision,
             ..Default::default()
         }

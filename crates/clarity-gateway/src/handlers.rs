@@ -12,7 +12,7 @@ use clarity_core::agent::{
     driver::ConversationChatDriver, AgentController, ControllerEvent, Message as AgentMessage,
     MessageRole, Op,
 };
-use clarity_core::llm::LlmFactory;
+use clarity_llm::LlmFactory;
 use futures::stream;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -102,6 +102,20 @@ pub async fn chat_completions(
         req.model, req.stream
     );
     debug!("Request messages: {:?}", req.messages);
+
+    // Acquire concurrency permit — prevents unbounded spawn under load.
+    let _permit = match state.chat_sem.acquire().await {
+        Ok(p) => p,
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Gateway is at maximum concurrency limit"
+                })),
+            )
+                .into_response();
+        }
+    };
 
     let _ = state.session_store.record_request().await;
 
@@ -508,7 +522,7 @@ pub(crate) struct ModelInfo {
 }
 
 pub(crate) async fn admin_models() -> impl IntoResponse {
-    let registry = match clarity_core::llm::ModelRegistry::load_async().await {
+    let registry = match clarity_llm::ModelRegistry::load_async().await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("Failed to load model registry: {}", e);
@@ -1054,8 +1068,8 @@ async fn save_persisted_config(cfg: &SetConfigRequest) -> Result<(), String> {
 pub async fn build_provider_from_config(
     cfg: &SetConfigRequest,
 ) -> Result<Box<dyn clarity_core::agent::LlmProvider>, String> {
-    use clarity_core::llm::LlmFactory;
-    use clarity_core::llm::{
+    use clarity_llm::LlmFactory;
+    use clarity_llm::{
         AnthropicLlm, DeepSeekProvider, KimiLlm, OAuthLlm, OpenAiCompatibleLlm,
     };
 
@@ -1091,7 +1105,7 @@ pub async fn build_provider_from_config(
                 &cfg.api_key,
                 base,
                 model,
-                clarity_core::auth::OAuthTokenManager::new(),
+                clarity_llm::auth::OAuthTokenManager::new(),
             )))
         }
         "anthropic" | "claude" => {

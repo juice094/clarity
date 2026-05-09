@@ -14,6 +14,9 @@ pub fn apply_rounded_corners(cc: &eframe::CreationContext<'_>) -> Option<()> {
 
     // DWMWCP_ROUND = 2
     let preference: u32 = 2;
+    // SAFETY: `hwnd` is a valid window handle obtained from `eframe`.
+    // `preference` is a properly aligned `u32` with lifetime extending past
+    // this call. The pointer and size arguments match the expected type.
     unsafe {
         DwmSetWindowAttribute(
             hwnd,

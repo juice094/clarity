@@ -7,6 +7,7 @@
 //! - More providers can be added by implementing the LlmProvider trait
 
 pub mod api;
+pub mod auth;
 pub mod deepseek;
 pub mod kalosm;
 pub mod llama_server;
@@ -37,7 +38,7 @@ pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabiliti
 pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};
 pub use tool_payload::{NativeToolAdapter, PromptGuidedAdapter, ToolPayloadAdapter};
 
-use crate::error::AgentError;
+use clarity_contract::AgentError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -350,18 +351,18 @@ impl LlmProvider for OpenAiCompatibleLlm {
                 }
             })
             .unwrap_or_default();
-        let tool_calls: Vec<crate::types::ToolCall> = choice
+        let tool_calls: Vec<clarity_contract::ToolCall> = choice
             .and_then(|c| c.message.tool_calls)
             .map(|tcs| {
                 tcs.into_iter()
-                    .map(|tc| crate::types::ToolCall {
+                    .map(|tc| clarity_contract::ToolCall {
                         id: tc.id,
                         call_type: if tc.call_type.is_empty() {
                             "function".to_string()
                         } else {
                             tc.call_type
                         },
-                        function: crate::agent::FunctionCall {
+                        function: clarity_contract::FunctionCall {
                             name: tc.function.name,
                             arguments: tc.function.arguments,
                         },
@@ -499,7 +500,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             native_tool_calling: true,
             prompt_caching: true,
             vision: false,
-            pricing: Some(crate::llm::api::Pricing {
+            pricing: Some(crate::api::Pricing {
                 input_per_1m: 0.5,
                 output_per_1m: 1.5,
             }),
@@ -768,8 +769,8 @@ impl LlmProvider for AnthropicLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
-        use crate::llm::tool_payload::PromptGuidedAdapter;
-        use crate::llm::tool_payload::ToolPayloadAdapter;
+        use crate::tool_payload::PromptGuidedAdapter;
+        use crate::tool_payload::ToolPayloadAdapter;
 
         let (adapted_messages, _adapted_tools) = PromptGuidedAdapter.adapt(messages, tools);
 
@@ -849,8 +850,8 @@ impl LlmProvider for AnthropicLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        use crate::llm::tool_payload::PromptGuidedAdapter;
-        use crate::llm::tool_payload::ToolPayloadAdapter;
+        use crate::tool_payload::PromptGuidedAdapter;
+        use crate::tool_payload::ToolPayloadAdapter;
 
         let (adapted_messages, _adapted_tools) = PromptGuidedAdapter.adapt(messages, tools);
 
@@ -968,7 +969,7 @@ impl LlmProvider for AnthropicLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: false,
-            pricing: Some(crate::llm::api::Pricing {
+            pricing: Some(crate::api::Pricing {
                 input_per_1m: 3.0,
                 output_per_1m: 15.0,
             }),
@@ -1048,7 +1049,7 @@ impl LlmFactory {
             );
             let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
                 .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
-            let config = LocalGgufConfig::new(model_path).with_tokenizer_repo(repo);
+            let config = LocalGgufConfig::new(model_path)?.with_tokenizer_repo(repo);
             return Ok(Box::new(LocalGgufProvider::new(config).await?));
         }
 
@@ -1106,7 +1107,7 @@ impl LlmFactory {
                 if let Some(model_path) = resolve_local_model_path() {
                     let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
                         .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
-                    let config = LocalGgufConfig::new(model_path)
+                    let config = LocalGgufConfig::new(model_path)?
                         .with_tokenizer_repo(repo);
                     return Ok(Box::new(LocalGgufProvider::new(config).await?));
                 }
@@ -1333,3 +1334,6 @@ mod tests {
         assert!(json.get("prompt_cache_key").is_none());
     }
 }
+
+/// Version of the clarity-llm crate
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

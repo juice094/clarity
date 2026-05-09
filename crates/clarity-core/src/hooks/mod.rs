@@ -73,7 +73,7 @@ pub trait RoutingHook: Send + Sync {
     /// routing decision.
     async fn on_route(
         &self,
-        message: &crate::llm::api::Message,
+        message: &clarity_llm::api::Message,
         tools: &[crate::types::ToolCall],
     ) -> Result<RoutingDecision, AgentError>;
 }
@@ -197,7 +197,7 @@ impl HookRegistry {
     /// If no hooks are registered, returns [`RoutingDecision::Proceed`].
     pub async fn run_routing(
         &self,
-        message: &crate::llm::api::Message,
+        message: &clarity_llm::api::Message,
         tools: &[crate::types::ToolCall],
     ) -> Result<RoutingDecision, AgentError> {
         let mut decision = RoutingDecision::Proceed;
@@ -338,7 +338,7 @@ mod tests {
     impl RoutingHook for AlwaysBlockRouting {
         async fn on_route(
             &self,
-            _message: &crate::llm::api::Message,
+            _message: &clarity_llm::api::Message,
             _tools: &[crate::types::ToolCall],
         ) -> Result<RoutingDecision, AgentError> {
             Ok(RoutingDecision::Block)
@@ -389,7 +389,7 @@ mod tests {
     #[tokio::test]
     async fn test_routing_block() {
         let registry = HookRegistry::new().register_routing(AlwaysBlockRouting);
-        let msg = crate::llm::api::Message::user("test");
+        let msg = clarity_llm::api::Message::user("test");
         let decision = registry.run_routing(&msg, &[]).await.unwrap();
         assert_eq!(decision, RoutingDecision::Block);
     }

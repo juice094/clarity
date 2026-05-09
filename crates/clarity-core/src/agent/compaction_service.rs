@@ -4,7 +4,7 @@
 //! old messages before the conversation hits token limits.
 
 use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, Message, MessageRole};
+use clarity_llm::api::{LlmProvider, Message, MessageRole};
 
 /// Budget allocation for different message roles.
 ///
@@ -336,13 +336,13 @@ mod tests {
             _messages: &[Message],
             _tools: &Value,
         ) -> Result<
-            tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+            tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
             AgentError,
         > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
                 let _ = tx
-                    .send(Ok(crate::llm::StreamDelta {
+                    .send(Ok(clarity_llm::StreamDelta {
                         content: Some("chunk".to_string()),
                         tool_calls: vec![],
                     }))
@@ -371,7 +371,7 @@ mod tests {
             _messages: &[Message],
             _tools: &Value,
         ) -> Result<
-            tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+            tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
             AgentError,
         > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
@@ -743,13 +743,13 @@ mod tests {
                 _messages: &[Message],
                 _tools: &Value,
             ) -> Result<
-                tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>,
+                tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
                 AgentError,
             > {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
                     let _ = tx
-                        .send(Ok(crate::llm::StreamDelta {
+                        .send(Ok(clarity_llm::StreamDelta {
                             content: Some("chunk".to_string()),
                             tool_calls: vec![],
                         }))

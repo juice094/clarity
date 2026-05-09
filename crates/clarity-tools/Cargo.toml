@@ -1,0 +1,42 @@
+[package]
+name = "clarity-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Built-in tool implementations for Project Clarity"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+regex = { workspace = true }
+glob = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+url = "2.5"
+urlencoding = "2.1"
+html-escape = "0.2"
+scraper = "0.19"
+similar = "2"
+dirs = "5.0"
+parking_lot = "0.12"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+anyhow = { workspace = true }
+
+# Internal crates
+clarity-contract = { path = "../clarity-contract" }
+clarity-memory = { path = "../clarity-memory" }
+
+[dev-dependencies]
+tempfile = "3.9"

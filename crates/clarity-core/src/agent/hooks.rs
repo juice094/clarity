@@ -22,7 +22,7 @@ pub trait AgentHook: Send + Sync {
     async fn after_tool_call(&self, tool_call: &ToolCall, result: &mut Value);
 
     /// Called before LLM inference. Can inspect or modify messages.
-    async fn on_llm_input(&self, messages: &mut Vec<crate::llm::api::Message>);
+    async fn on_llm_input(&self, messages: &mut Vec<clarity_llm::api::Message>);
 }
 
 /// Registry of hooks, applied in registration order.
@@ -62,7 +62,7 @@ impl HookRegistry {
         }
     }
 
-    pub async fn on_llm_input(&self, messages: &mut Vec<crate::llm::api::Message>) {
+    pub async fn on_llm_input(&self, messages: &mut Vec<clarity_llm::api::Message>) {
         for hook in &self.hooks {
             hook.on_llm_input(messages).await;
         }
@@ -72,7 +72,7 @@ impl HookRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::api::Message;
+    use clarity_llm::api::Message;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 

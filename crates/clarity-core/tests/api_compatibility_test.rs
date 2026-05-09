@@ -5,7 +5,7 @@
 
 use clarity_core::agent::{Agent, AgentConfig, LlmProvider, Message, MockLlm};
 use clarity_core::error::{AgentError, ToolError};
-use clarity_core::llm::LlmFactory;
+use clarity_llm::LlmFactory;
 use clarity_core::memory::{InMemoryStore, MemoryStore, MemoryTicker, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::tools::{FileReadTool, Tool, ToolContext};

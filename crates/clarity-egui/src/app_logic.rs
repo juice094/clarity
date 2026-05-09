@@ -167,7 +167,7 @@ impl App {
                 if !is_oauth {
                     continue;
                 }
-                let manager = clarity_core::auth::KimiCodeTokenManager::new();
+                let manager = clarity_llm::auth::KimiCodeTokenManager::new();
                 match manager.try_fresh().await {
                     Ok(Some(_)) => tracing::debug!("OAuth token pre-refreshed successfully"),
                     Ok(None) => tracing::debug!("OAuth token pre-refresh: no token on disk"),

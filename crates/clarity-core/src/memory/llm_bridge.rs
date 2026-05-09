@@ -1,7 +1,7 @@
-//! Bridge between `clarity_core::llm::LlmProvider` and `clarity_memory::extractor::LlmClient`.
+//! Bridge between `clarity_llm::LlmProvider` and `clarity_memory::extractor::LlmClient`.
 
-use crate::llm::api::LlmProvider;
-use crate::llm::Message as LlmMessage;
+use clarity_llm::api::LlmProvider;
+use clarity_llm::Message as LlmMessage;
 use async_trait::async_trait;
 use std::sync::Arc;
 

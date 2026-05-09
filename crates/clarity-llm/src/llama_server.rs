@@ -31,8 +31,8 @@
 //! preferable.
 
 use super::{OpenAiCompatibleLlm, StreamDelta};
-use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message};
+use clarity_contract::AgentError;
+use crate::api::{LlmProvider, LlmResponse, Message};
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -121,8 +121,8 @@ impl LlmProvider for LlamaServerProvider {
         self.inner.set_prompt_cache_key(key);
     }
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> crate::api::ProviderCapabilities {
+        crate::api::ProviderCapabilities {
             native_tool_calling: true,
             prompt_caching: true,
             vision: false,

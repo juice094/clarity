@@ -14,10 +14,10 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
 
-use crate::error::ToolError;
-use crate::tools::file::{is_sensitive_file, sniff_media_file};
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
+use crate::file::{is_sensitive_file, sniff_media_file};
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 /// Maximum default file size: 5MB (5120 KB)
 const DEFAULT_MAX_SIZE_KB: u64 = 5120;
@@ -200,7 +200,7 @@ fn guess_mime_from_extension(path: &Path) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ToolContext;
+    use crate::ToolContext;
 
     #[tokio::test]
     async fn test_read_media_tool_png() {

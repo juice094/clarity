@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use crate::agent::hooks::{AgentHook, HookResult};
 use crate::agent::lsp::client::LspClient;
 use crate::agent::lsp::config::LspClientConfig;
-use crate::llm::api::Message;
+use clarity_llm::api::Message;
 use crate::types::ToolCall;
 use serde_json::Value;
 use tracing::{debug, info, warn};

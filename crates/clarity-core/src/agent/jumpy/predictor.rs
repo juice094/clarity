@@ -31,12 +31,12 @@ pub trait LlmProvider: Send + Sync {
 /// This allows headless CLI / gateway code to reuse existing provider
 /// construction logic (OpenAI, Ollama, etc.) without duplicating setup.
 pub struct LlmAdapter {
-    inner: Arc<dyn crate::llm::api::LlmProvider>,
+    inner: Arc<dyn clarity_llm::api::LlmProvider>,
 }
 
 impl LlmAdapter {
     /// Wrap an existing LLM provider.
-    pub fn new(inner: Arc<dyn crate::llm::api::LlmProvider>) -> Self {
+    pub fn new(inner: Arc<dyn clarity_llm::api::LlmProvider>) -> Self {
         Self { inner }
     }
 }
@@ -44,7 +44,7 @@ impl LlmAdapter {
 #[async_trait::async_trait]
 impl LlmProvider for LlmAdapter {
     async fn complete(&self, prompt: &str, _model: &str) -> Result<String, AgentError> {
-        use crate::llm::api::{Message, MessageRole};
+        use clarity_llm::api::{Message, MessageRole};
         let messages = vec![Message {
             role: MessageRole::User,
             content: prompt.to_string(),

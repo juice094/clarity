@@ -35,7 +35,7 @@ pub use token::{CapabilityToken, TokenError};
 
 use crate::agent::jumpy::predictor::OutcomePredictor;
 use crate::agent::jumpy::state::JumpyState;
-use crate::llm::ModelRegistry;
+use clarity_llm::ModelRegistry;
 use crate::registry::ToolRegistry;
 use std::path::Path;
 use std::sync::Arc;

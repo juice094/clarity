@@ -12,7 +12,7 @@ pub(crate) use loop_helpers::format_plan_results;
 use crate::agent::Agent;
 use crate::approval::ApprovalMode;
 use crate::error::AgentError;
-use crate::llm::api::{Message, MessageRole};
+use clarity_llm::api::{Message, MessageRole};
 use crate::registry::ToolRegistry;
 use clarity_wire::WireMessage;
 use serde_json::Value;
@@ -285,7 +285,7 @@ impl Agent {
         (
             Vec<Message>,
             Value,
-            Arc<dyn crate::llm::api::LlmProvider>,
+            Arc<dyn clarity_llm::api::LlmProvider>,
             CancellationToken,
         ),
         AgentError,
@@ -303,7 +303,7 @@ impl Agent {
     ) -> Result<
         (
             Value,
-            Arc<dyn crate::llm::api::LlmProvider>,
+            Arc<dyn clarity_llm::api::LlmProvider>,
             CancellationToken,
         ),
         AgentError,

@@ -16,9 +16,9 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tracing::{debug, error};
 
-use crate::error::ToolError;
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 /// Internal mutable state kept between actions.
 #[derive(Debug, Clone, Default)]
@@ -40,7 +40,7 @@ pub struct WebBrowserTool {
 
 impl WebBrowserTool {
     /// Create a new `WebBrowserTool` with a default HTTP client.
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, ToolError> {
         let client = reqwest::Client::builder()
             .user_agent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
@@ -48,12 +48,12 @@ impl WebBrowserTool {
             )
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to build HTTP client");
+            .map_err(|e| ToolError::execution_failed(format!("Failed to build HTTP client: {e}")))?;
 
-        Self {
+        Ok(Self {
             client,
             state: Mutex::new(BrowserState::default()),
-        }
+        })
     }
 
     /// Create a new `WebBrowserTool` with a custom `reqwest` client.
@@ -236,29 +236,39 @@ impl WebBrowserTool {
 
     /// Convert raw HTML to readable plain text.
     fn html_to_text(html: &str) -> String {
-        // Strip script / style / nav / footer / header tags entirely.
+        // Pre-compiled regexes — avoid re-compilation on every call.
+        static SCRIPT_STYLE_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+        static BLOCK_OPEN_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+        static BLOCK_CLOSE_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+        static TAG_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+
         let mut text = html.to_string();
 
-        for tag in ["script", "style", "nav", "footer", "header"] {
-            let re = Regex::new(&format!(r"<{}[^>]*>[\s\S]*?</{}>", tag, tag)).unwrap();
-            text = re.replace_all(&text, "").to_string();
-        }
+        // Strip script / style / nav / footer / header tags entirely.
+        text = SCRIPT_STYLE_RE
+            .get_or_init(|| Regex::new(r"<(?:script|style|nav|footer|header)[^>]*>[\s\S]*?</(?:script|style|nav|footer|header)>").unwrap())
+            .replace_all(&text, "")
+            .to_string();
 
         // Replace common block elements with newlines.
-        for tag in ["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"] {
-            let open = Regex::new(&format!(r"<{}[^>]*>", tag)).unwrap();
-            let close = Regex::new(&format!(r"</{}>", tag)).unwrap();
-            text = open.replace_all(&text, "\n").to_string();
-            text = close.replace_all(&text, "\n").to_string();
-        }
+        text = BLOCK_OPEN_RE
+            .get_or_init(|| Regex::new(r"<(?:p|div|h[1-6]|li|tr)[^>]*>").unwrap())
+            .replace_all(&text, "\n")
+            .to_string();
+        text = BLOCK_CLOSE_RE
+            .get_or_init(|| Regex::new(r"</(?:p|div|h[1-6]|li|tr)>").unwrap())
+            .replace_all(&text, "\n")
+            .to_string();
 
         text = text
             .replace("<br>", "\n")
             .replace("<br/>", "\n")
             .replace("<br />", "\n");
 
-        let tag_re = Regex::new(r"<[^>]+>").unwrap();
-        text = tag_re.replace_all(&text, "").to_string();
+        text = TAG_RE
+            .get_or_init(|| Regex::new(r"<[^>]+>").unwrap())
+            .replace_all(&text, "")
+            .to_string();
 
         text = html_escape::decode_html_entities(&text).to_string();
 
@@ -281,7 +291,7 @@ impl WebBrowserTool {
 
 impl Default for WebBrowserTool {
     fn default() -> Self {
-        Self::new()
+        Self::with_client(reqwest::Client::new())
     }
 }
 
@@ -369,20 +379,20 @@ mod tests {
 
     #[test]
     fn test_webbrowser_tool_name() {
-        let tool = WebBrowserTool::new();
+        let tool = WebBrowserTool::new().unwrap();
         assert_eq!(tool.name(), "web_browser");
         assert!(!tool.description().is_empty());
     }
 
     #[test]
     fn test_webbrowser_requires_approval() {
-        let tool = WebBrowserTool::new();
+        let tool = WebBrowserTool::new().unwrap();
         assert!(tool.requires_approval());
     }
 
     #[test]
     fn test_webbrowser_parameters_schema() {
-        let tool = WebBrowserTool::new();
+        let tool = WebBrowserTool::new().unwrap();
         let params = tool.parameters();
 
         assert_eq!(params.get("type").unwrap().as_str().unwrap(), "object");
@@ -449,7 +459,7 @@ mod tests {
     fn test_get_text_without_navigation_fails() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "get_text"});
             let result = tool.execute(args, ctx).await;
@@ -462,7 +472,7 @@ mod tests {
     fn test_get_html_without_navigation_fails() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "get_html"});
             let result = tool.execute(args, ctx).await;
@@ -475,7 +485,7 @@ mod tests {
     fn test_click_returns_error() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "click", "selector": "button"});
             let result = tool.execute(args, ctx).await;
@@ -488,7 +498,7 @@ mod tests {
     fn test_type_returns_error() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "type", "selector": "input", "text": "hello"});
             let result = tool.execute(args, ctx).await;
@@ -501,7 +511,7 @@ mod tests {
     fn test_screenshot_returns_error() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "screenshot"});
             let result = tool.execute(args, ctx).await;
@@ -514,7 +524,7 @@ mod tests {
     fn test_unknown_action_error() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "invalid_action"});
             let result = tool.execute(args, ctx).await;
@@ -527,7 +537,7 @@ mod tests {
     fn test_navigate_invalid_url() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "navigate", "url": "not-a-url"});
             let result = tool.execute(args, ctx).await;
@@ -539,7 +549,7 @@ mod tests {
     fn test_navigate_non_http_url() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let tool = WebBrowserTool::new();
+            let tool = WebBrowserTool::new().unwrap();
             let ctx = ToolContext::new();
             let args = json!({"action": "navigate", "url": "ftp://example.com/file.txt"});
             let result = tool.execute(args, ctx).await;
@@ -552,7 +562,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Requires network access"]
     async fn test_navigate_and_get_text_integration() {
-        let tool = WebBrowserTool::new();
+        let tool = WebBrowserTool::new().unwrap();
         let ctx = ToolContext::new();
 
         let args = json!({"action": "navigate", "url": "https://www.rust-lang.org"});

@@ -5,7 +5,7 @@ use crate::approval::rules::{RiskLevel, RuleEngine};
 use crate::approval::{ApprovalMode, ApprovalResponse, ApprovalRuntime, ApprovalSource};
 use crate::compaction::estimate_message_tokens;
 use crate::error::{AgentError, ToolError};
-use crate::llm::api::Message;
+use clarity_llm::api::Message;
 use crate::tools::ToolContext;
 use crate::types::ToolCall;
 use serde_json::Value;

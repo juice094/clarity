@@ -10,9 +10,9 @@
 //! export DEEPSEEK_MODEL="deepseek-chat"  # or "deepseek-reasoner"
 //! ```
 
-use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message};
-use crate::llm::OpenAiCompatibleLlm;
+use clarity_contract::AgentError;
+use crate::api::{LlmProvider, LlmResponse, Message};
+use crate::OpenAiCompatibleLlm;
 use async_trait::async_trait;
 use serde_json::Value;
 use std::env;
@@ -83,7 +83,7 @@ impl LlmProvider for DeepSeekProvider {
         &self,
         messages: &[Message],
         tools: &Value,
-    ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::llm::StreamDelta, AgentError>>, AgentError>
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<crate::StreamDelta, AgentError>>, AgentError>
     {
         self.inner.stream(messages, tools)
     }
@@ -92,8 +92,8 @@ impl LlmProvider for DeepSeekProvider {
         self.inner.set_prompt_cache_key(key);
     }
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> crate::api::ProviderCapabilities {
+        crate::api::ProviderCapabilities {
             native_tool_calling: true,
             prompt_caching: true,
             vision: false,

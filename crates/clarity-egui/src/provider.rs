@@ -159,7 +159,7 @@ impl ProviderDefinition {
             } else {
                 &self.auth_token_key
             };
-            let store = clarity_core::auth::TokenStore::for_provider(token_key);
+            let store = clarity_llm::auth::TokenStore::for_provider(token_key);
             return store.load().ok().flatten().map(|t| t.access_token);
         }
 
@@ -296,22 +296,22 @@ impl ProviderDefinition {
     }
 }
 
-impl From<&ProviderDefinition> for clarity_core::llm::ProviderConfig {
+impl From<&ProviderDefinition> for clarity_llm::ProviderConfig {
     fn from(def: &ProviderDefinition) -> Self {
         let protocol = match def.api_format {
-            ApiFormat::OpenaiCompletions => clarity_core::llm::ProtocolType::OpenAiChat,
-            ApiFormat::AnthropicMessages => clarity_core::llm::ProtocolType::AnthropicMessages,
-            ApiFormat::Kimi => clarity_core::llm::ProtocolType::OpenAiChat,
+            ApiFormat::OpenaiCompletions => clarity_llm::ProtocolType::OpenAiChat,
+            ApiFormat::AnthropicMessages => clarity_llm::ProtocolType::AnthropicMessages,
+            ApiFormat::Kimi => clarity_llm::ProtocolType::OpenAiChat,
         };
 
         let auth_type = match def.auth_type {
-            AuthType::ApiKey => clarity_core::llm::AuthType::ApiKey,
-            AuthType::OAuth => clarity_core::llm::AuthType::OAuth,
-            AuthType::None => clarity_core::llm::AuthType::None,
+            AuthType::ApiKey => clarity_llm::AuthType::ApiKey,
+            AuthType::OAuth => clarity_llm::AuthType::OAuth,
+            AuthType::None => clarity_llm::AuthType::None,
         };
 
         let oauth = if def.auth_type == AuthType::OAuth {
-            Some(clarity_core::llm::OAuthProviderConfig {
+            Some(clarity_llm::OAuthProviderConfig {
                 client_id: "17e5f671-d194-4dfb-9706-5516cb48c098".into(),
                 host: "https://auth.kimi.com".into(),
                 device_auth_path: "/api/oauth/device_authorization".into(),
@@ -628,8 +628,8 @@ models = ["model-a", "model-b"]
             models: vec!["kimi-k2.6".into()],
             builtin: true,
         };
-        let cfg: clarity_core::llm::ProviderConfig = (&def).into();
-        assert_eq!(cfg.auth_type, clarity_core::llm::AuthType::OAuth);
+        let cfg: clarity_llm::ProviderConfig = (&def).into();
+        assert_eq!(cfg.auth_type, clarity_llm::AuthType::OAuth);
         assert!(cfg.oauth.is_some());
     }
 

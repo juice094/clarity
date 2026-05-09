@@ -77,7 +77,7 @@ impl ToolRegistry {
         // Register web tools
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(WebBrowserTool::new());
+        let _ = registry.register(WebBrowserTool::new().unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())));
 
         // Register think tool
         let _ = registry.register(ThinkTool::new());
@@ -150,7 +150,7 @@ impl ToolRegistry {
         let _ = registry.register(PowerShellTool::new());
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(WebBrowserTool::new());
+        let _ = registry.register(WebBrowserTool::new().unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())));
         let _ = registry.register(ThinkTool::new());
         let _ = registry.register(AskUserTool::new());
         let _ = registry.register(ChannelSendTool::new());

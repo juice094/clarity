@@ -7,10 +7,10 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
 
-use crate::approval::ApprovalMode;
-use crate::error::ToolError;
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ApprovalMode;
+use clarity_contract::ToolError;
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 /// Check whether a path points to a known sensitive file.
 ///
@@ -730,7 +730,7 @@ impl Tool for FileEditTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approval::ApprovalMode;
+    use clarity_contract::ApprovalMode;
     use tempfile::TempDir;
 
     #[tokio::test]

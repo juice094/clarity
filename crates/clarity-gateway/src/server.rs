@@ -9,7 +9,7 @@ use axum::{
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -35,6 +35,8 @@ pub struct AppState {
     pub started_at: DateTime<Utc>,
     /// Registry of in-flight parallel batch progress for UI polling.
     pub parallel_batches: Arc<RwLock<HashMap<String, Arc<Mutex<BatchProgress>>>>>,
+    /// Concurrency limit for /v1/chat/completions to prevent unbounded spawn.
+    pub chat_sem: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -68,6 +70,7 @@ impl AppState {
             activity_logger: ActivityLogger::new(),
             started_at: Utc::now(),
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
+            chat_sem: Arc::new(Semaphore::new(32)),
         }
     }
 }

@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub async fn load_llm(
     selection: ProviderSelection,
     settings: &GuiSettings,
-) -> Result<(Arc<dyn clarity_core::llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError>
+) -> Result<(Arc<dyn clarity_llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError>
 {
     match selection {
         ProviderSelection::Preferred { provider }
@@ -41,13 +41,13 @@ pub async fn load_llm(
 
 async fn try_load_local(
     settings: &GuiSettings,
-) -> Result<(Arc<dyn clarity_core::llm::LlmProvider>, LlmBinding), crate::error::EguiError> {
+) -> Result<(Arc<dyn clarity_llm::LlmProvider>, LlmBinding), crate::error::EguiError> {
     let desired_path = settings
         .local_model_path
         .clone()
         .filter(|s| !s.trim().is_empty())
         .or_else(|| {
-            clarity_core::llm::resolve_local_model_path().map(|p| p.to_string_lossy().into_owned())
+            clarity_llm::resolve_local_model_path().map(|p| p.to_string_lossy().into_owned())
         })
         .unwrap_or_default();
 
@@ -60,7 +60,7 @@ async fn try_load_local(
     let model_path = std::path::PathBuf::from(&desired_path);
     let sibling_tokenizer = model_path.with_file_name("tokenizer.json");
 
-    let mut config = clarity_core::llm::LocalGgufConfig::new(&desired_path)
+    let mut config = clarity_llm::LocalGgufConfig::new(&desired_path)?
         .with_tokenizer_repo("Qwen/Qwen2.5-7B-Instruct");
 
     if sibling_tokenizer.exists() {
@@ -78,7 +78,7 @@ async fn try_load_local(
         config = config.with_tokenizer_path(&sibling_tokenizer);
     }
 
-    let provider = clarity_core::llm::LocalGgufProvider::new(config)
+    let provider = clarity_llm::LocalGgufProvider::new(config)
         .await
         .map_err(|e| {
             crate::error::EguiError::LlmLoad(format!("Failed to load local model: {}", e))
@@ -95,12 +95,12 @@ async fn try_load_local(
 async fn try_load_cloud(
     desired_provider: &str,
     settings: &GuiSettings,
-) -> Result<Arc<dyn clarity_core::llm::LlmProvider>, crate::error::EguiError> {
+) -> Result<Arc<dyn clarity_llm::LlmProvider>, crate::error::EguiError> {
     let resolved_key = GuiSettings::resolve_api_key(&settings.api_key);
     let api_key = resolved_key.as_deref().unwrap_or("");
 
     let registry_llm = async {
-        let registry = clarity_core::llm::ModelRegistry::load_async().await.ok()?;
+        let registry = clarity_llm::ModelRegistry::load_async().await.ok()?;
         let provider_cfg = registry.get_provider(desired_provider)?;
         let model_id = if settings.model.is_empty() {
             registry
@@ -111,7 +111,7 @@ async fn try_load_cloud(
         } else {
             settings.model.clone()
         };
-        clarity_core::llm::build_provider_from_registry_with_key(
+        clarity_llm::build_provider_from_registry_with_key(
             provider_cfg,
             &model_id,
             if api_key.is_empty() {
@@ -129,7 +129,7 @@ async fn try_load_cloud(
         return Ok(llm);
     }
 
-    match clarity_core::llm::LlmFactory::create_with_key_arc(
+    match clarity_llm::LlmFactory::create_with_key_arc(
         desired_provider,
         api_key,
         &settings.model,
@@ -137,7 +137,7 @@ async fn try_load_cloud(
         Ok(llm) => Ok(llm),
         Err(e) => {
             if api_key.is_empty() {
-                match clarity_core::llm::LlmFactory::create_arc(desired_provider).await {
+                match clarity_llm::LlmFactory::create_arc(desired_provider).await {
                     Ok(llm) => Ok(llm),
                     Err(_) => Err(crate::error::EguiError::InvalidProvider(format!(
                         "Provider '{}' requires an API key. \

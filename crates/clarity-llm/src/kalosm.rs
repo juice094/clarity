@@ -5,7 +5,7 @@
 //! All constructors now return an error directing users to `LocalGgufProvider`.
 
 use super::{LlmProvider, LlmResponse, Message, StreamDelta};
-use crate::error::AgentError;
+use clarity_contract::AgentError;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -87,8 +87,8 @@ impl LlmProvider for KalosmProvider {
         *self.cache_key.lock() = Some(key.to_string());
     }
 
-    fn capabilities(&self) -> crate::llm::api::ProviderCapabilities {
-        crate::llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> crate::api::ProviderCapabilities {
+        crate::api::ProviderCapabilities {
             native_tool_calling: true,
             ..Default::default()
         }

@@ -2,7 +2,7 @@
 
 use crate::agent::Agent;
 use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, Message};
+use clarity_llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -127,8 +127,8 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
             });
         }
 
-        messages.push(crate::llm::api::Message {
-            role: crate::llm::api::MessageRole::Assistant,
+        messages.push(clarity_llm::api::Message {
+            role: clarity_llm::api::MessageRole::Assistant,
             content: result.response_content,
             tool_calls: Some(result.tool_calls.clone()),
             tool_call_id: None,
@@ -216,7 +216,7 @@ fn all_tools_filtered(tools: &serde_json::Value) -> bool {
 mod tests {
     use super::*;
     use crate::agent::{Agent, AgentConfig};
-    use crate::llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
+    use clarity_llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
     use crate::registry::ToolRegistry;
     use crate::types::{FunctionCall, ToolCall};
     use std::sync::atomic::{AtomicUsize, Ordering};

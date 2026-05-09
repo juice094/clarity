@@ -9,9 +9,9 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
 
-use crate::error::ToolError;
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 /// Tool for file globbing (pattern matching)
 ///

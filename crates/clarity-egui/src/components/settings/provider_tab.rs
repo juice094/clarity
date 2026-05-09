@@ -2,7 +2,7 @@ use crate::provider::{ApiFormat, ProviderDefinition, ProviderRegistry};
 use crate::ui::types::{ToastLevel, UiEvent};
 use crate::App;
 
-use clarity_core::llm::runtime::{
+use clarity_llm::runtime::{
     list_models, set_provider_config, test_connection, RuntimeProviderConfig,
 };
 
@@ -222,7 +222,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         } else {
             &prov.auth_token_key
         };
-        let has_token = clarity_core::auth::TokenStore::for_provider(token_key)
+        let has_token = clarity_llm::auth::TokenStore::for_provider(token_key)
             .load()
             .ok()
             .flatten()
@@ -247,7 +247,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                 .fill(theme.surface)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
                 if ui.add(logout_btn).clicked() {
-                    match clarity_core::auth::TokenStore::for_provider(token_key).delete() {
+                    match clarity_llm::auth::TokenStore::for_provider(token_key).delete() {
                         Ok(()) => {
                             app.push_toast(format!("{} logged out", display), ToastLevel::Info);
                         }

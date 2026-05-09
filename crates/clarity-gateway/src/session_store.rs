@@ -64,8 +64,12 @@ impl PersistentSessionStore {
     #[instrument(skip(db_path))]
     pub async fn new(db_path: impl AsRef<Path> + std::fmt::Debug) -> Result<Self> {
         let db_path = db_path.as_ref().to_path_buf();
-        let conn = tokio::task::spawn_blocking(move || {
-            Connection::open(&db_path).map_err(SessionStoreError::Database)
+        let conn = tokio::task::spawn_blocking(move || -> Result<Connection> {
+            let conn = Connection::open(&db_path).map_err(SessionStoreError::Database)?;
+            // Enable WAL for concurrent reads and reduced write-lock contention.
+            conn.pragma_update(None, "journal_mode", "WAL")
+                .map_err(SessionStoreError::Database)?;
+            Ok(conn)
         })
         .await
         .map_err(|e| SessionStoreError::Io(std::io::Error::other(e.to_string())))??;

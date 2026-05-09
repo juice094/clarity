@@ -11,9 +11,9 @@ use serde_json::json;
 use serde_json::Value;
 use tracing::{debug, error, warn};
 
-use crate::error::ToolError;
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 // =============================================================================
 // WebSearchTool - Search the internet using DuckDuckGo

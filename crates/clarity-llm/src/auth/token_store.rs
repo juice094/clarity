@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::error::AgentError;
+use clarity_contract::AgentError;
 
 /// An OAuth 2.0 token set returned by the Kimi Code authorization server.
 #[derive(Debug, Clone, Serialize, Deserialize)]

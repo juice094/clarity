@@ -10,7 +10,7 @@ use channels::{
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_core::llm::LlmFactory;
+use clarity_llm::LlmFactory;
 use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{
     LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker,
@@ -119,7 +119,7 @@ You are a methodological query assistant. When answering:
     let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
     // 1. 优先尝试加载用户持久化配置
-    let llm: Arc<dyn clarity_core::llm::api::LlmProvider> =
+    let llm: Arc<dyn clarity_llm::api::LlmProvider> =
         if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
             info!(
                 "Found persisted user config for provider: {}",
@@ -182,7 +182,7 @@ You are a methodological query assistant. When answering:
 }
 
 /// Fallback LLM provider auto-detection.
-async fn load_llm_fallback() -> Arc<dyn clarity_core::llm::api::LlmProvider> {
+async fn load_llm_fallback() -> Arc<dyn clarity_llm::api::LlmProvider> {
     match LlmFactory::auto().await {
         Ok(llm) => {
             info!("LLM provider initialized successfully");
@@ -304,7 +304,7 @@ async fn main() {
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
         );
         // Attach ModelRegistry for per-task model selection
-        if let Ok(model_registry) = clarity_core::llm::ModelRegistry::load_async().await {
+        if let Ok(model_registry) = clarity_llm::ModelRegistry::load_async().await {
             executor = executor.with_registry(model_registry);
         }
         let executor = Arc::new(executor);

@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 #[cfg(feature = "local-llm")]
-use clarity_core::llm::{LocalGgufConfig, LocalGgufProvider};
+use clarity_llm::{LocalGgufConfig, LocalGgufProvider};
 use clarity_core::{
     agent::{
         jumpy::{
@@ -481,7 +481,7 @@ async fn build_provider(
                 })
                 .context("No local model found. Set CLARITY_LOCAL_MODEL_PATH or place a .gguf file in ~/models/")?;
             let tokenizer_repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO").ok();
-            let mut config = LocalGgufConfig::new(model_path);
+            let mut config = LocalGgufConfig::new(model_path)?;
             if let Some(repo) = tokenizer_repo {
                 config = config.with_tokenizer_repo(repo);
             }

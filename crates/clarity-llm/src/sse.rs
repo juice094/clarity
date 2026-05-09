@@ -1,7 +1,7 @@
 //! SSE (Server-Sent Events) parser for OpenAI-compatible streaming responses.
 
-use crate::llm::api::StreamDelta;
-use crate::types::ToolCall;
+use crate::api::StreamDelta;
+use clarity_contract::ToolCall;
 
 /// Accumulates partial tool-call fragments from streaming deltas.
 #[derive(Default)]
@@ -158,7 +158,7 @@ fn assemble(ptc: &PartialToolCall) -> ToolCall {
         } else {
             ptc.call_type.clone()
         },
-        function: crate::types::FunctionCall {
+        function: clarity_contract::FunctionCall {
             name: ptc.name.clone(),
             arguments: ptc.arguments.clone(),
         },

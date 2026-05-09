@@ -6,7 +6,7 @@ use crate::agent::compaction_service::CompactionService;
 use crate::agent::enhanced::TokenUsage;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
-use crate::llm::api::LlmProvider;
+use clarity_llm::api::LlmProvider;
 use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, SharedMemoryTicker};
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
@@ -100,7 +100,7 @@ impl Agent {
     /// Set fallback LLM providers.
     ///
     /// When non-empty, the primary LLM set via `with_llm` / `set_llm` is
-    /// automatically wrapped in a [`ReliableProvider`](crate::llm::ReliableProvider)
+    /// automatically wrapped in a [`ReliableProvider`](clarity_llm::ReliableProvider)
     /// so failures fall back through this chain.
     pub fn with_fallback_llms(self, fallbacks: Vec<Arc<dyn LlmProvider>>) -> Self {
         {
@@ -110,7 +110,7 @@ impl Agent {
             if let Some(ref existing) = inner.llm {
                 let mut providers = vec![existing.clone()];
                 providers.extend(inner.fallback_llms.clone());
-                inner.llm = Some(Arc::new(crate::llm::ReliableProvider::new(providers)));
+                inner.llm = Some(Arc::new(clarity_llm::ReliableProvider::new(providers)));
             }
         }
         self
@@ -125,7 +125,7 @@ impl Agent {
             } else {
                 let mut providers = vec![llm];
                 providers.extend(inner.fallback_llms.clone());
-                Arc::new(crate::llm::ReliableProvider::new(providers))
+                Arc::new(clarity_llm::ReliableProvider::new(providers))
             };
             inner.llm = Some(llm);
             inner.state = AgentState::Idle;
@@ -154,7 +154,7 @@ impl Agent {
         } else {
             let mut providers = vec![llm];
             providers.extend(inner.fallback_llms.clone());
-            Arc::new(crate::llm::ReliableProvider::new(providers))
+            Arc::new(clarity_llm::ReliableProvider::new(providers))
         };
         inner.llm = Some(llm);
         if matches!(inner.state, AgentState::Unconfigured) {

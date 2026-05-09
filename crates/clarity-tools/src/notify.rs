@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use tracing::info;
 
-use crate::error::ToolError;
-use crate::tools::helpers;
-use crate::tools::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
+use crate::helpers;
+use crate::{Tool, ToolContext, ToolResult};
 
 fn notifications_dir() -> ToolResult<PathBuf> {
     super::clarity_data_dir().map(|p| p.join("notifications"))

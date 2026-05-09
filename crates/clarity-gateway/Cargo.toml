@@ -23,6 +23,7 @@ anyhow = { workspace = true }
 
 # Internal dependencies
 clarity-core = { workspace = true }
+clarity-llm = { path = "../clarity-llm" }
 clarity-wire = { path = "../clarity-wire" }
 clarity-memory = { path = "../clarity-memory", features = ["sqlite"] }
 

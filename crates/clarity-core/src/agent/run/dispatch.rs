@@ -2,7 +2,7 @@
 
 use crate::agent::Agent;
 use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, Message};
+use clarity_llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
 use clarity_wire::WireMessage;
 use std::pin::Pin;

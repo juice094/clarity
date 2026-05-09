@@ -11,7 +11,7 @@ use crate::agent::run::loop_trait::{
 };
 use crate::agent::Agent;
 use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message};
+use clarity_llm::api::{LlmProvider, LlmResponse, Message};
 use crate::types::ToolCall;
 use clarity_wire::{DraftEvent, WireMessage};
 use std::sync::Arc;

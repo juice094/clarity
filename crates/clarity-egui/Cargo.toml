@@ -31,6 +31,7 @@ rfd = "0.15"
 
 # Internal crates
 clarity-core = { path = "../clarity-core" }
+clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory" }
 clarity-wire = { path = "../clarity-wire" }
 

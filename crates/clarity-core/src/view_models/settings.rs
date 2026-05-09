@@ -410,7 +410,7 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
 
     // Phase 2: Merge dynamic registry with hardcoded fallback
     // Registry takes precedence; hardcoded fills gaps for backward compat.
-    if let Ok(registry) = crate::llm::ModelRegistry::load() {
+    if let Ok(registry) = clarity_llm::ModelRegistry::load() {
         for provider_id in registry.list_providers() {
             seen_providers.insert(provider_id.clone());
             let models: Vec<String> = if provider_id == "local" {

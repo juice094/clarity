@@ -5,7 +5,7 @@
 
 use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
-use crate::llm::{build_provider_from_registry, ModelRegistry};
+use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
 // P1-1: Import from `types` instead of `subagents::registry` to break the

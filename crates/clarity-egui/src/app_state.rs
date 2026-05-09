@@ -187,10 +187,10 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     // writes to ACTIVE_CONFIG. Without this ordering, binding_matches would
     // short-circuit on the same provider name and the new config would never
     // be consumed, even if the user changed model / key / base_url.
-    if let Some(cfg) = clarity_core::llm::runtime::get_active_config() {
+    if let Some(cfg) = clarity_llm::runtime::get_active_config() {
         let _load_guard = state.llm_load_lock.lock().await;
         let desc = format!("runtime:{}:{}", cfg.provider_id, cfg.model);
-        let llm = clarity_core::llm::runtime::build_from_active_config()
+        let llm = clarity_llm::runtime::build_from_active_config()
             .await
             .map_err(|e| {
                 crate::error::EguiError::LlmLoad(format!(

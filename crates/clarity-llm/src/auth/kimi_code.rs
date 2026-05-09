@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::error::AgentError;
+use clarity_contract::AgentError;
 
 const KIMI_CODE_CLIENT_ID: &str = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const DEFAULT_OAUTH_HOST: &str = "https://auth.kimi.com";

@@ -9,8 +9,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::error::AgentError;
-use crate::llm::api::{LlmProvider, LlmResponse, Message, ProviderCapabilities, StreamDelta};
+use clarity_contract::AgentError;
+use crate::api::{LlmProvider, LlmResponse, Message, ProviderCapabilities, StreamDelta};
 
 /// Retry an async operation with exponential backoff.
 ///
