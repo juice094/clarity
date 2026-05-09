@@ -5,6 +5,7 @@
 
 use crate::error::AgentError;
 use clarity_llm::api::{LlmProvider, Message, MessageRole};
+use std::sync::Arc;
 
 /// Budget allocation for different message roles.
 ///
@@ -56,7 +57,7 @@ impl BudgetRoles {
 }
 
 /// Configuration for the compaction service
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct CompactionServiceConfig {
     /// Token threshold that triggers compaction
     pub token_limit: usize,
@@ -67,22 +68,43 @@ pub struct CompactionServiceConfig {
     /// Optional role-based budget allocation. When set, budget compaction
     /// runs before tier1/tier2 to enforce per-role quotas (semantic drop).
     pub budget: Option<BudgetRoles>,
+    /// Optional path to the session store directory
+    pub session_store_path: Option<std::path::PathBuf>,
+    /// Optional session ID for the session store
+    pub session_id: Option<String>,
 }
 
 /// Service that compacts conversation history by summarizing old messages
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct CompactionService {
     config: CompactionServiceConfig,
     tier1_enabled: bool,
+    session_store: Option<Arc<clarity_memory::SessionStore>>,
+    session_id: String,
 }
 
 impl CompactionService {
     /// Create a new compaction service from configuration
     pub fn new(config: CompactionServiceConfig) -> Self {
+        let session_id = config.session_id.clone().unwrap_or_else(|| "default".to_string());
         Self {
             config,
             tier1_enabled: true,
+            session_store: None,
+            session_id,
         }
+    }
+
+    /// Set the session store and session ID for message persistence
+    pub fn with_session_store(mut self, store: Arc<clarity_memory::SessionStore>, session_id: impl Into<String>) -> Self {
+        self.session_store = Some(store);
+        self.session_id = session_id.into();
+        self
+    }
+
+    /// Get the session store, if configured
+    pub fn session_store(&self) -> Option<Arc<clarity_memory::SessionStore>> {
+        self.session_store.clone()
     }
 
     /// Budget compaction (Tier-0): enforce per-role token quotas by dropping
@@ -194,6 +216,22 @@ impl CompactionService {
         messages: &mut Vec<Message>,
         llm: &dyn LlmProvider,
     ) -> Result<(), AgentError> {
+        // Write messages to session store if configured
+        if let Some(ref session_store) = self.session_store {
+            let sid = if self.session_id.is_empty() { "default" } else { &self.session_id };
+            for msg in messages.iter() {
+                let role = match msg.role {
+                    MessageRole::System => "system",
+                    MessageRole::User => "user",
+                    MessageRole::Assistant => "assistant",
+                    MessageRole::Tool => "tool",
+                };
+                if let Err(e) = session_store.append_message(sid, role, &msg.content) {
+                    tracing::warn!("Failed to append message to session store: {}", e);
+                }
+            }
+        }
+
         if !self.needs_compaction(messages) {
             return Ok(());
         }
@@ -420,6 +458,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 5,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::new(config);
         // 15 short messages * ~1 token each = ~15 tokens > 10
@@ -434,6 +473,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 20,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::new(config);
         let messages = make_messages(3, 8); // 3 * 2 = 6 tokens
@@ -447,6 +487,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 6, // keep ~2 messages (each ~3 tokens via cl100k)
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -490,6 +531,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -526,6 +568,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -557,6 +600,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 100,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -588,6 +632,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -617,6 +662,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -650,6 +696,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -679,6 +726,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config).with_tier1(false);
 
@@ -766,6 +814,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 2,
             budget: None,
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -795,6 +844,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
             budget: Some(BudgetRoles::new()),
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 
@@ -838,6 +888,7 @@ mod tests {
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
             budget: Some(BudgetRoles::new()),
+            ..Default::default()
         };
         let service = CompactionService::with_config(config);
 

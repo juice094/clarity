@@ -22,196 +22,13 @@
 //! }
 //! ```
 
-use super::parallel::{ParallelConfig, ParallelExecutor, ParallelResult, SubagentBatch};
-use super::runner::{RunSpec, SubagentRunner};
-use super::store::SubagentStatus;
+use super::parallel::{ParallelExecutor, SubagentBatch};
+use super::runner::SubagentRunner;
+use clarity_contract::subagent::{AgentTeam, ParallelResult, TeamResult};
 use crate::background::BackgroundTaskManager;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-
-/// A message sent between team members via the shared [`Mailbox`].
-#[derive(Debug, Clone)]
-pub struct MailboxMessage {
-    /// Agent ID of the sender.
-    pub from: String,
-    /// Message payload.
-    pub payload: MessagePayload,
-    /// Unix timestamp (seconds).
-    pub timestamp: u64,
-}
-
-/// Payload variants for [`MailboxMessage`].
-#[derive(Debug, Clone)]
-pub enum MessagePayload {
-    /// Free-form text broadcast.
-    Text(String),
-    /// Status update (started, completed, failed, etc.).
-    StatusUpdate(SubagentStatus),
-    /// Intermediate result that other members may consume.
-    IntermediateResult(String),
-}
-
-/// Shared message bus for an [`AgentTeam`].
-///
-/// Uses a `tokio::sync::broadcast` channel under the hood. Any clone of the
-/// mailbox can send; receivers are obtained via [`Mailbox::subscribe`].
-#[derive(Clone)]
-pub struct Mailbox {
-    tx: tokio::sync::broadcast::Sender<MailboxMessage>,
-}
-
-impl Default for Mailbox {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Mailbox {
-    /// Create a new mailbox with capacity for 256 in-flight messages.
-    pub fn new() -> Self {
-        let (tx, _rx) = tokio::sync::broadcast::channel(256);
-        Self { tx }
-    }
-
-    /// Subscribe to messages. Callers will receive messages sent *after* the
-    /// subscription is created.
-    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<MailboxMessage> {
-        self.tx.subscribe()
-    }
-
-    /// Broadcast a message to all active subscribers.
-    pub fn send(&self, msg: MailboxMessage) -> Result<(), MailboxError> {
-        // If there are no receivers the message is silently dropped;
-        // that is acceptable for a fire-and-forget broadcast.
-        let _ = self.tx.send(msg);
-        Ok(())
-    }
-
-    /// Returns the number of active subscribers.
-    pub fn subscriber_count(&self) -> usize {
-        self.tx.receiver_count()
-    }
-}
-
-/// Error type for mailbox operations.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MailboxError {
-    /// The mailbox has been closed and no more messages can be sent.
-    Closed,
-    /// The message channel is full.
-    Full,
-}
-
-impl std::fmt::Display for MailboxError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MailboxError::Closed => write!(f, "Mailbox closed"),
-            MailboxError::Full => write!(f, "Mailbox full"),
-        }
-    }
-}
-
-impl std::error::Error for MailboxError {}
-
-/// A team of sub-agents working toward a shared goal.
-#[derive(Clone)]
-pub struct AgentTeam {
-    /// Human-readable team name.
-    pub name: String,
-    /// High-level objective.
-    pub goal: String,
-    /// Member specifications.
-    pub members: Vec<RunSpec>,
-    /// Shared mailbox for loose coordination.
-    pub mailbox: Mailbox,
-    /// Parallel execution configuration.
-    pub config: ParallelConfig,
-}
-
-impl AgentTeam {
-    /// Create a new team with the given name and goal.
-    pub fn new(name: impl Into<String>, goal: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            goal: goal.into(),
-            members: Vec::new(),
-            mailbox: Mailbox::new(),
-            config: ParallelConfig::default(),
-        }
-    }
-
-    /// Add a member to the team (builder pattern).
-    pub fn with_member(mut self, spec: RunSpec) -> Self {
-        self.members.push(spec);
-        self
-    }
-
-    /// Batch-add members (builder pattern).
-    pub fn with_members(mut self, specs: Vec<RunSpec>) -> Self {
-        self.members.extend(specs);
-        self
-    }
-
-    /// Set parallel execution config (builder pattern).
-    pub fn with_config(mut self, config: ParallelConfig) -> Self {
-        self.config = config;
-        self
-    }
-
-    /// Replace the default mailbox with a custom one.
-    pub fn with_mailbox(mut self, mailbox: Mailbox) -> Self {
-        self.mailbox = mailbox;
-        self
-    }
-
-    /// Returns true if the team has no members.
-    pub fn is_empty(&self) -> bool {
-        self.members.is_empty()
-    }
-
-    /// Number of members.
-    pub fn len(&self) -> usize {
-        self.members.len()
-    }
-}
-
-/// Unified result after executing an [`AgentTeam`].
-#[derive(Debug, Clone)]
-pub struct TeamResult {
-    /// Underlying parallel execution results.
-    pub parallel: ParallelResult,
-    /// Messages collected from the team's mailbox during execution.
-    pub messages: Vec<MailboxMessage>,
-}
-
-impl TeamResult {
-    /// Check if every member succeeded.
-    pub fn all_succeeded(&self) -> bool {
-        self.parallel.all_succeeded()
-    }
-
-    /// Aggregate success rate.
-    pub fn success_rate(&self) -> f64 {
-        self.parallel.success_rate()
-    }
-
-    /// Filter messages by payload type.
-    pub fn filter_text(&self) -> Vec<&MailboxMessage> {
-        self.messages
-            .iter()
-            .filter(|m| matches!(m.payload, MessagePayload::Text(_)))
-            .collect()
-    }
-
-    /// Filter intermediate results.
-    pub fn filter_intermediate(&self) -> Vec<&MailboxMessage> {
-        self.messages
-            .iter()
-            .filter(|m| matches!(m.payload, MessagePayload::IntermediateResult(_)))
-            .collect()
-    }
-}
 
 /// Coordinates the execution of an [`AgentTeam`].
 ///
@@ -287,6 +104,9 @@ impl TeamCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clarity_contract::subagent::{
+        Mailbox, MailboxMessage, MessagePayload, ParallelConfig, RunSpec,
+    };
 
     #[test]
     fn test_mailbox_send_and_receive() {

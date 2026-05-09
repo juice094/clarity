@@ -520,6 +520,7 @@ use parking_lot::Mutex;
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_active_skill_snapshotted_at_turn_start() {
     let registry = ToolRegistry::new();
     let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(MockLlm));
@@ -547,6 +548,7 @@ fn test_active_skill_snapshotted_at_turn_start() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn test_active_skill_snapshot_none_when_not_set() {
     let registry = ToolRegistry::new();
     let agent = Agent::with_config(registry, AgentConfig::new()).with_llm(Arc::new(MockLlm));

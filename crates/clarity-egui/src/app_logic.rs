@@ -223,6 +223,21 @@ impl App {
             .ok()
             .and_then(|p| std::fs::metadata(&p).ok())
             .and_then(|m| m.modified().ok());
+
+        // Start skill file watcher for hot-reload.
+        let skill_watcher = if let Some(ref registry) = state.agent.skill_registry() {
+            let mut watch_paths = vec![];
+            if let Ok(cwd) = std::env::current_dir() {
+                watch_paths.push(cwd.join(".clarity").join("skills"));
+            }
+            if let Some(config_dir) = dirs::config_dir() {
+                watch_paths.push(config_dir.join("clarity").join("skills"));
+            }
+            clarity_core::skills::SkillWatcher::start(registry.clone(), watch_paths)
+        } else {
+            None
+        };
+
         let app = Self {
             state,
             runtime,
@@ -321,6 +336,8 @@ impl App {
                 agent_turn_glass: false,
                 workspace_plan_expanded: false,
                 workspace_plan_manually_collapsed: false,
+                dashboard_panel_open: false,
+                gantt_panel_open: false,
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
@@ -360,6 +377,8 @@ impl App {
             },
             snapshot_store: crate::stores::SnapshotStore::default(),
             gateway_manager,
+            skill_watcher,
+            last_frame_width: None,
         };
         app.refresh_tasks();
         app

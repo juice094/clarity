@@ -129,6 +129,24 @@ impl Default for AppState {
                 .with_cron_scheduler(cron_scheduler),
         );
         agent.with_cron_manager(Arc::clone(&bg_manager));
+
+        // 注入 SubagentOrchestrator（SubagentManager）
+        let subagent_ctx = work_dir.join("subagent_context");
+        let _ = std::fs::create_dir_all(&subagent_ctx);
+        let orchestrator = Arc::new(
+            clarity_subagents::SubagentManager::new(
+                agent.registry().clone(),
+                &work_dir,
+                &subagent_ctx,
+            )
+        );
+        agent = agent.with_orchestrator(orchestrator);
+
+        // Load skill registry from well-known directories.
+        if let Some(skill_registry) = load_skill_registry() {
+            agent = agent.with_skill_registry(skill_registry);
+        }
+
         Self {
             agent,
             llm_binding: Mutex::new(None),
@@ -141,6 +159,37 @@ impl Default for AppState {
             mode_aware_approval_runtime: mode_aware_rt,
             memory_store: None,
         }
+    }
+}
+
+/// Attempt to load skills from well-known directories.
+fn load_skill_registry() -> Option<clarity_core::skills::SkillRegistry> {
+    let mut all_skills = Vec::new();
+
+    // 1. Project-local .clarity/skills/ directory
+    if let Ok(cwd) = std::env::current_dir() {
+        let local_dir = cwd.join(".clarity").join("skills");
+        if local_dir.is_dir() {
+            if let Ok(skills) = clarity_core::skills::SkillLoader::load_dir(&local_dir) {
+                all_skills.extend(skills);
+            }
+        }
+    }
+
+    // 2. User config directory (~/.config/clarity/skills or %APPDATA%\clarity\skills)
+    if let Some(config_dir) = dirs::config_dir() {
+        let user_dir = config_dir.join("clarity").join("skills");
+        if user_dir.is_dir() {
+            if let Ok(skills) = clarity_core::skills::SkillLoader::load_dir(&user_dir) {
+                all_skills.extend(skills);
+            }
+        }
+    }
+
+    if all_skills.is_empty() {
+        None
+    } else {
+        Some(clarity_core::skills::SkillRegistry::from_skills(all_skills))
     }
 }
 

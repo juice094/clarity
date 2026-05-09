@@ -137,15 +137,17 @@ impl CommandHandler for StopCommand {
 pub struct SkillListCommand;
 impl CommandHandler for SkillListCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
-        match &app.skill_registry {
+        match app.agent.skill_registry() {
             Some(reg) if !reg.is_empty() => {
+                let active_ids = reg.active_ids();
                 let mut lines = vec!["可用 Skills:".to_string()];
-                for summary in reg.list_summaries() {
-                    lines.push(format!("  • {}", summary));
-                }
-                if let Some(active) = app.active_skill() {
-                    lines.push(String::new());
-                    lines.push(format!("当前激活: {}", active));
+                for skill in reg.list_skills() {
+                    let marker = if active_ids.contains(&skill.meta.id) {
+                        "[x]"
+                    } else {
+                        "[ ]"
+                    };
+                    lines.push(format!("  {} {}", marker, skill.summary()));
                 }
                 app.messages
                     .push(Message::new(lines.join("\n"), MessageType::System));
@@ -165,28 +167,33 @@ pub struct SkillUseCommand;
 impl CommandHandler for SkillUseCommand {
     fn execute(&self, app: &mut App, args: &[&str]) {
         if args.is_empty() {
-            match app.active_skill() {
-                Some(id) => {
-                    app.messages.push(Message::new(
-                        format!("当前 Skill: {}", id),
-                        MessageType::System,
-                    ));
-                }
-                None => {
-                    app.messages.push(Message::new(
-                        "未激活任何 Skill。用法: /skill use <id>",
-                        MessageType::System,
-                    ));
-                }
+            let active_ids = app.agent.skill_active_ids();
+            if active_ids.is_empty() {
+                app.messages.push(Message::new(
+                    "未激活任何 Skill。用法: /skill use <id>",
+                    MessageType::System,
+                ));
+            } else {
+                app.messages.push(Message::new(
+                    format!(
+                        "当前激活 Skills: {}",
+                        active_ids.into_iter().collect::<Vec<_>>().join(", ")
+                    ),
+                    MessageType::System,
+                ));
             }
             return;
         }
         let id = args.join(" ");
-        if let Some(ref reg) = app.skill_registry {
+        if let Some(ref reg) = app.agent.skill_registry() {
             if reg.contains(&id) {
-                app.set_active_skill(Some(id.clone()));
+                let now_active = reg.toggle_active(&id);
                 app.messages.push(Message::new(
-                    format!("已激活 Skill: {}", id),
+                    format!(
+                        "Skill {}: {}",
+                        id,
+                        if now_active { "已激活" } else { "已取消激活" }
+                    ),
                     MessageType::System,
                 ));
                 return;
@@ -198,7 +205,7 @@ impl CommandHandler for SkillUseCommand {
         ));
     }
     fn description(&self) -> &str {
-        "激活或查看当前 Skill"
+        "激活或取消激活 Skill（toggle）"
     }
 }
 

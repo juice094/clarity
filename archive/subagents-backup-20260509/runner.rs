@@ -12,7 +12,7 @@
 // returns the concrete `Agent` so that caller-side builder methods work.
 use crate::agent::{Agent, AgentExecutor};
 use crate::approval::{ApprovalMode, ApprovalRuntime};
-use crate::error::{AgentError, ToolError};
+use crate::error::AgentError;
 use clarity_llm::api::{LlmProvider, Message};
 use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use crate::registry::ToolRegistry;
@@ -23,8 +23,7 @@ use clarity_contract::subagent::{
     SubagentError, SubagentProgressEvent, SubagentResult, SubagentStatus,
 };
 use clarity_wire::{Wire, WireMessage};
-use serde::{Deserialize, Serialize};
-use std::fmt;
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};

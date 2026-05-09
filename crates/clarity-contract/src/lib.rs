@@ -159,10 +159,11 @@ pub use federation::{
 };
 pub use llm::{LlmProvider, LlmResponse};
 pub use subagent::{
-    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchStatus,
-    CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
+    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle,
+    BatchStatus, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
     MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
-    SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus, TeamResult, TokenError,
+    SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
+    TeamResult, TokenError,
 };
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
 

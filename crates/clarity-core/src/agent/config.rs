@@ -30,7 +30,7 @@ pub struct AgentConfig {
     /// Directory containing Markdown prompt files
     pub prompts_dir: Option<std::path::PathBuf>,
     /// Optional capability token for subagent permission isolation
-    pub capability_token: Option<clarity_contract::CapabilityToken>,
+    pub capability_token: Option<clarity_contract::subagent::CapabilityToken>,
     /// Whether to enable automatic memory extraction after each turn.
     pub extract_memories: bool,
     /// Agent display name (from agent.yaml)
@@ -62,6 +62,12 @@ pub struct AgentConfig {
     pub lsp_config: Option<crate::agent::lsp::LspClientConfig>,
     /// Optional workspace snapshot configuration.
     pub snapshot_config: Option<crate::agent::snapshot::SnapshotConfig>,
+    /// Number of turns before triggering memory compilation
+    pub memory_ticker_turns: Option<u32>,
+    /// Directory for compiled memory output
+    pub compiled_memory_dir: Option<std::path::PathBuf>,
+    /// Session ID for memory and session store
+    pub session_id: Option<String>,
 }
 
 impl Default for AgentConfig {
@@ -90,6 +96,9 @@ impl Default for AgentConfig {
             jumpy_config: None,
             lsp_config: None,
             snapshot_config: None,
+            memory_ticker_turns: None,
+            compiled_memory_dir: None,
+            session_id: None,
         }
     }
 }
@@ -154,7 +163,7 @@ impl AgentConfig {
     /// Set capability token for permission isolation
     pub fn with_capability_token(
         mut self,
-        token: Option<clarity_contract::CapabilityToken>,
+        token: Option<clarity_contract::subagent::CapabilityToken>,
     ) -> Self {
         self.capability_token = token;
         self
@@ -235,6 +244,24 @@ impl AgentConfig {
     /// Set workspace snapshot configuration.
     pub fn with_snapshot_config(mut self, config: crate::agent::snapshot::SnapshotConfig) -> Self {
         self.snapshot_config = Some(config);
+        self
+    }
+
+    /// Set the number of turns before triggering memory compilation.
+    pub fn with_memory_ticker_turns(mut self, turns: u32) -> Self {
+        self.memory_ticker_turns = Some(turns);
+        self
+    }
+
+    /// Set the directory for compiled memory output.
+    pub fn with_compiled_memory_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.compiled_memory_dir = Some(dir.into());
+        self
+    }
+
+    /// Set the session ID for memory and session store.
+    pub fn with_session_id(mut self, id: impl Into<String>) -> Self {
+        self.session_id = Some(id.into());
         self
     }
 }

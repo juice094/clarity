@@ -229,6 +229,10 @@ pub struct UiStore {
     pub workspace_plan_expanded: bool,
     /// User manually collapsed Plan section (blocks auto-expand).
     pub workspace_plan_manually_collapsed: bool,
+    /// Whether the right-side Dashboard metrics panel is open.
+    pub dashboard_panel_open: bool,
+    /// Whether the Plan Timeline Gantt chart window is open.
+    pub gantt_panel_open: bool,
 }
 
 // ============================================================================

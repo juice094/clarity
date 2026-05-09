@@ -756,10 +756,10 @@ pub(crate) async fn run_parallel(
         .map(|t| (t.agent_type.clone(), t.prompt.clone()))
         .collect();
 
-    let specs: Vec<clarity_core::subagents::RunSpec> = task_refs
+    let specs: Vec<clarity_contract::subagent::RunSpec> = task_refs
         .iter()
         .map(|(agent_type, prompt)| {
-            clarity_core::subagents::RunSpec::new(
+            clarity_contract::subagent::RunSpec::new(
                 format!("parallel-{}", agent_type),
                 prompt.clone(),
             )
@@ -769,14 +769,14 @@ pub(crate) async fn run_parallel(
 
     // Create and register batch progress
     let progress = Arc::new(parking_lot::Mutex::new(
-        clarity_core::subagents::BatchProgress::new(batch_id.clone(), &specs),
+        clarity_contract::subagent::BatchProgress::new(batch_id.clone(), &specs),
     ));
     {
         let mut batches = state.parallel_batches.write().await;
         batches.insert(batch_id.clone(), progress.clone());
     }
 
-    let config = clarity_core::subagents::ParallelConfig::new()
+    let config = clarity_contract::subagent::ParallelConfig::new()
         .with_max_concurrency(req.max_concurrency.unwrap_or(4).max(1));
 
     let agent = (*state.agent).clone();
@@ -821,7 +821,7 @@ pub(crate) async fn run_parallel(
         Err(e) => {
             // Mark progress as failed
             let mut p = progress.lock();
-            p.status = clarity_core::subagents::BatchStatus::Failed(e.to_string());
+            p.status = clarity_contract::subagent::BatchStatus::Failed(e.to_string());
             error!("Parallel execution failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -860,10 +860,10 @@ pub(crate) async fn get_parallel_status(
         Some(progress_arc) => {
             let p = progress_arc.lock();
             let status_str = match &p.status {
-                clarity_core::subagents::BatchStatus::Running => "Running",
-                clarity_core::subagents::BatchStatus::Completed => "Completed",
-                clarity_core::subagents::BatchStatus::Cancelled => "Cancelled",
-                clarity_core::subagents::BatchStatus::Failed(_) => "Failed",
+                clarity_contract::subagent::BatchStatus::Running => "Running",
+                clarity_contract::subagent::BatchStatus::Completed => "Completed",
+                clarity_contract::subagent::BatchStatus::Cancelled => "Cancelled",
+                clarity_contract::subagent::BatchStatus::Failed(_) => "Failed",
             };
 
             let mut agent_statuses: Vec<AgentStatusSummary> = p

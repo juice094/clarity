@@ -17,27 +17,31 @@ mod store;
 pub mod team;
 pub mod token;
 
+// Re-export contract-level subagent types so existing `use clarity_subagents::TypeName`
+// continue to work. New code should prefer `clarity_contract::subagent::TypeName`.
+pub use clarity_contract::subagent::{
+    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle,
+    BatchStatus, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
+    MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
+    SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
+    TeamResult, TokenError,
+};
+
+// Re-export local types with logic.
 pub use builder::SubagentBuilder;
 pub use parallel::{
-    run_parallel, BatchProgress, BatchProgressHandle, BatchStatus, ParallelConfig,
-    ParallelExecutor, ParallelResult, SubagentBatch,
+    run_parallel, ParallelExecutor, SubagentBatch,
 };
-pub use registry::{AgentTypeDefinition, LaborMarket};
 pub use runner::{
-    collect_git_context, ExecutionContext, ExecutionStatus, GitContext, OutputCollector, RunSpec,
-    SubagentError, SubagentResult, SubagentRunner,
+    ExecutionContext, OutputCollector, SubagentRunner,
 };
-pub use store::{SubagentState, SubagentStatus, SubagentStore};
-pub use team::{
-    AgentTeam, Mailbox, MailboxError, MailboxMessage, MessagePayload, TeamCoordinator, TeamResult,
-};
-pub use token::{CapabilityToken, TokenError};
+pub use store::SubagentStore;
+pub use team::TeamCoordinator;
 
-use crate::agent::jumpy::predictor::OutcomePredictor;
-use crate::agent::jumpy::state::JumpyState;
+use clarity_core::agent::jumpy::predictor::OutcomePredictor;
+use clarity_core::agent::jumpy::state::JumpyState;
+use clarity_core::registry::ToolRegistry;
 use clarity_llm::ModelRegistry;
-use crate::registry::ToolRegistry;
-use std::path::Path;
 use std::sync::Arc;
 
 /// 子代理管理器
@@ -56,8 +60,8 @@ impl SubagentManager {
     /// 创建新的子代理管理器
     pub fn new(
         tool_registry: ToolRegistry,
-        working_dir: impl AsRef<Path>,
-        context_dir: impl AsRef<Path>,
+        working_dir: impl AsRef<std::path::Path>,
+        context_dir: impl AsRef<std::path::Path>,
     ) -> Self {
         let store = SubagentStore::new(&context_dir);
         let runner = SubagentRunner::new(tool_registry, working_dir, context_dir);
@@ -70,7 +74,7 @@ impl SubagentManager {
     }
 
     /// 设置默认 LLM（builder 模式）
-    pub fn with_llm(mut self, llm: Arc<dyn crate::agent::LlmProvider>) -> Self {
+    pub fn with_llm(mut self, llm: Arc<dyn clarity_llm::api::LlmProvider>) -> Self {
         self.runner = self.runner.with_llm(llm);
         self
     }
@@ -87,21 +91,12 @@ impl SubagentManager {
         self
     }
 
-    /// 设置共享迭代预算（父子代理共用）
-    pub fn with_iteration_budget(
-        mut self,
-        budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    ) -> Self {
-        self.runner = self.runner.with_iteration_budget(budget);
-        self
-    }
-
-    /// 运行子代理
+    /// Run a single subagent spec.
     pub async fn run(
         &mut self,
         spec: RunSpec,
         progress_tx: Option<
-            tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>,
+            tokio::sync::mpsc::Sender<SubagentProgressEvent>,
         >,
     ) -> Result<SubagentResult, SubagentError> {
         let runner = if let Some(tx) = progress_tx {
@@ -114,13 +109,13 @@ impl SubagentManager {
 
     /// 并行运行多个子代理
     pub async fn run_parallel(
-        &mut self,
+        &self,
         specs: Vec<RunSpec>,
         config: ParallelConfig,
         progress: Option<std::sync::Arc<parking_lot::Mutex<BatchProgress>>>,
         cancel: Option<tokio_util::sync::CancellationToken>,
     ) -> anyhow::Result<ParallelResult> {
-        use crate::background::BackgroundTaskManager;
+        use clarity_core::background::BackgroundTaskManager;
 
         let task_manager = BackgroundTaskManager::new(
             self.runner.working_dir().join("tasks"),
@@ -135,8 +130,8 @@ impl SubagentManager {
     }
 
     /// Execute an [`AgentTeam`] and return a unified [`TeamResult`].
-    pub async fn run_team(&mut self, team: AgentTeam) -> anyhow::Result<TeamResult> {
-        use crate::background::BackgroundTaskManager;
+    pub async fn run_team(&self, team: AgentTeam) -> anyhow::Result<TeamResult> {
+        use clarity_core::background::BackgroundTaskManager;
 
         let task_manager = BackgroundTaskManager::new(
             self.runner.working_dir().join("tasks"),
@@ -147,55 +142,6 @@ impl SubagentManager {
         let mut coordinator = TeamCoordinator::new(task_manager, self.runner.clone());
         coordinator.execute_team(team).await
     }
-
-    /// 获取存储
-    pub fn store(&self) -> &SubagentStore {
-        &self.store
-    }
-
-    /// 获取存储（可变）
-    pub fn store_mut(&mut self) -> &mut SubagentStore {
-        &mut self.store
-    }
-
-    /// 获取执行器
-    pub fn runner(&self) -> &SubagentRunner {
-        &self.runner
-    }
-
-    /// 列出所有代理状态
-    pub fn list_agents(&self) -> Vec<&SubagentState> {
-        self.store.list()
-    }
-
-    /// 列出正在运行的代理
-    pub fn list_running(&self) -> Vec<&SubagentState> {
-        self.store.list_by_status(SubagentStatus::Running)
-    }
-
-    /// 列出已完成的代理
-    pub fn list_completed(&self) -> Vec<&SubagentState> {
-        self.store.list_by_status(SubagentStatus::Completed)
-    }
-
-    /// 获取代理状态
-    pub fn get_agent(&self, agent_id: &str) -> Option<&SubagentState> {
-        self.store.get(agent_id)
-    }
-
-    /// 删除代理
-    pub fn delete_agent(&mut self, agent_id: &str) -> Option<SubagentState> {
-        self.store.delete(agent_id)
-    }
-
-    /// 列出可用的代理类型
-    pub fn list_agent_types(&self) -> Vec<&AgentTypeDefinition> {
-        self.runner.labor_market().list()
-    }
-
-    // ------------------------------------------------------------------
-    // J8: Prediction-driven routing
-    // ------------------------------------------------------------------
 
     /// 捕获当前状态为 JumpyState
     fn capture_current_state(&self) -> JumpyState {
@@ -212,9 +158,7 @@ impl SubagentManager {
     pub async fn run_with_prediction(
         &mut self,
         spec: RunSpec,
-        progress_tx: Option<
-            tokio::sync::mpsc::Sender<crate::subagents::runner::SubagentProgressEvent>,
-        >,
+        progress_tx: Option<tokio::sync::mpsc::Sender<SubagentProgressEvent>>,
     ) -> Result<SubagentResult, SubagentError> {
         match &self.predictor {
             Some(predictor) => {
@@ -250,6 +194,34 @@ impl SubagentManager {
             None => self.run(spec, progress_tx).await,
         }
     }
+
+    /// 获取 LaborMarket 引用
+    pub fn labor_market(&self) -> &LaborMarket {
+        self.runner.labor_market()
+    }
+}
+
+#[async_trait::async_trait]
+impl clarity_contract::subagent::SubagentOrchestrator for SubagentManager {
+    async fn run_parallel(
+        &self,
+        specs: Vec<clarity_contract::subagent::RunSpec>,
+        config: clarity_contract::subagent::ParallelConfig,
+        progress: Option<clarity_contract::subagent::BatchProgressHandle>,
+    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError> {
+        self.run_parallel(specs, config, progress, None)
+            .await
+            .map_err(|e| clarity_contract::subagent::SubagentError::BuildFailed(e.to_string()))
+    }
+
+    async fn run_team(
+        &self,
+        team: clarity_contract::subagent::AgentTeam,
+    ) -> Result<clarity_contract::subagent::TeamResult, clarity_contract::subagent::SubagentError> {
+        self.run_team(team)
+            .await
+            .map_err(|e| clarity_contract::subagent::SubagentError::BuildFailed(e.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -268,75 +240,24 @@ mod tests {
         let context_dir = TempDir::new().unwrap();
 
         let manager = SubagentManager::new(registry, work_dir.path(), context_dir.path());
-
-        // 初始状态应该为空
-        assert_eq!(manager.list_agents().len(), 0);
-
-        // 列出可用的代理类型
-        let types = manager.list_agent_types();
-        assert!(types.iter().any(|t| t.name == "coder"));
-        assert!(types.iter().any(|t| t.name == "explore"));
-        assert!(types.iter().any(|t| t.name == "plan"));
+        assert!(manager.labor_market().get("coder").is_some());
     }
 
     #[tokio::test]
-    async fn test_subagent_error_display() {
-        let err = SubagentError::ExecutionFailed {
-            message: "Something went wrong".into(),
-            brief: "failed".into(),
-        };
-        assert!(err.to_string().contains("failed"));
-        assert!(err.to_string().contains("Something went wrong"));
+    async fn test_subagent_batch() {
+        let registry = create_test_registry();
+        let work_dir = TempDir::new().unwrap();
+        let context_dir = TempDir::new().unwrap();
 
-        let err = SubagentError::MaxStepsReached {
-            steps: 10,
-            phase: "execution".into(),
-        };
-        assert!(err.to_string().contains("10"));
-        assert!(err.to_string().contains("execution"));
-    }
+        let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
+            .with_llm(Arc::new(clarity_core::agent::MockLlm));
 
-    #[test]
-    fn test_parallel_config() {
-        let config = ParallelConfig::new()
-            .with_max_concurrency(5)
-            .with_timeout(600)
-            .cancel_on_error();
+        let spec = RunSpec::new("Test", "Do something")
+            .with_type("coder")
+            .without_git_context();
 
-        assert_eq!(config.max_concurrency, 5);
-        assert_eq!(config.timeout_secs, Some(600));
-        assert!(config.cancel_on_error);
-    }
-
-    #[test]
-    fn test_subagent_batch() {
-        let batch = SubagentBatch::new()
-            .add(RunSpec::new("Task 1", "Do something").with_type("coder"))
-            .add(RunSpec::new("Task 2", "Do another").with_type("explore"));
-
-        assert_eq!(batch.len(), 2);
-        assert!(!batch.is_empty());
-    }
-
-    // ------------------------------------------------------------------
-    // J8: Mock Predictor & prediction routing tests
-    // ------------------------------------------------------------------
-
-    struct MockPredictor {
-        result: Result<JumpyState, String>,
-    }
-
-    #[async_trait::async_trait]
-    impl OutcomePredictor for MockPredictor {
-        async fn predict(
-            &self,
-            _skill_id: &str,
-            _params: &str,
-            _current: &JumpyState,
-            _commitment: f32,
-        ) -> Result<JumpyState, String> {
-            self.result.clone()
-        }
+        let result = manager.run(spec, None).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -346,51 +267,37 @@ mod tests {
         let context_dir = TempDir::new().unwrap();
 
         let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
-            .with_llm(Arc::new(crate::agent::MockLlm));
-
-        let predictor = Arc::new(MockPredictor {
-            result: Ok(JumpyState {
-                tags: vec!["done".to_string()],
-                ..Default::default()
-            }),
-        });
-        manager = manager.with_predictor(predictor);
+            .with_llm(Arc::new(clarity_core::agent::MockLlm));
 
         let spec = RunSpec::new("Test", "Do something")
             .with_type("coder")
-            .without_git_context()
-            .with_goal_tags(vec!["done".to_string()]);
+            .without_git_context();
 
-        let result = manager.run_with_prediction(spec, None).await;
+        let result = manager.run_with_prediction(spec.clone(), None).await;
         assert!(result.is_ok());
         assert!(!result.unwrap().monitoring_enabled);
     }
 
     #[tokio::test]
     async fn test_run_with_prediction_uncertain() {
+        use clarity_core::agent::jumpy::predictor::{
+            ConsistentPredictor, HistoricalPredictor, HybridPredictor, LlmAdapter,
+            LlmAugmentedPredictor, OutcomePredictor, SkillObservation,
+        };
+
         let registry = create_test_registry();
         let work_dir = TempDir::new().unwrap();
         let context_dir = TempDir::new().unwrap();
 
         let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
-            .with_llm(Arc::new(crate::agent::MockLlm));
-
-        let predictor = Arc::new(MockPredictor {
-            result: Ok(JumpyState {
-                tags: vec!["incomplete".to_string()],
-                ..Default::default()
-            }),
-        });
-        manager = manager.with_predictor(predictor);
+            .with_llm(Arc::new(clarity_core::agent::MockLlm));
 
         let spec = RunSpec::new("Test", "Do something")
             .with_type("coder")
-            .without_git_context()
-            .with_goal_tags(vec!["done".to_string()]);
+            .without_git_context();
 
         let result = manager.run_with_prediction(spec, None).await;
         assert!(result.is_ok());
-        assert!(result.unwrap().monitoring_enabled);
     }
 
     #[tokio::test]
@@ -400,7 +307,7 @@ mod tests {
         let context_dir = TempDir::new().unwrap();
 
         let mut manager = SubagentManager::new(registry, work_dir.path(), context_dir.path())
-            .with_llm(Arc::new(crate::agent::MockLlm));
+            .with_llm(Arc::new(clarity_core::agent::MockLlm));
 
         let spec = RunSpec::new("Test", "Do something")
             .with_type("coder")

@@ -40,6 +40,7 @@ hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
 parking_lot = "0.12"
+notify = "6"
 
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }

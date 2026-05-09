@@ -16,7 +16,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
         }
         // ── Category instance tabs (hidden for emotion) ──
         if app.session_store.active_category != "emotion" {
-            let category_sessions: Vec<(String, String, bool)> = app
+            let category_sessions: Vec<(String, String, bool, String)> = app
                 .session_store
                 .sessions
                 .iter()
@@ -26,6 +26,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                         s.id.clone(),
                         s.title.clone(),
                         s.id == app.session_store.active_session_id,
+                        s.category.clone(),
                     )
                 })
                 .collect();
@@ -44,7 +45,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                 ui.spacing_mut().item_spacing.x = 4.0;
                                 let mut rename_commit: Option<(String, String)> = None;
                                 let mut tab_to_close: Option<String> = None;
-                                for (id, title, is_active) in &category_sessions {
+                                for (id, title, is_active, category) in &category_sessions {
                                     let editing =
                                         app.ui_store.editing_session_id.as_ref() == Some(id);
                                     if editing {
@@ -91,11 +92,20 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                             app.ui_store.theme.font(app.ui_store.theme.text_sm);
                                         let text_galley = ui.painter().layout_no_wrap(
                                             title.clone(),
-                                            font_id,
+                                            font_id.clone(),
                                             egui::Color32::PLACEHOLDER,
                                         );
                                         let text_width = text_galley.rect.width();
-                                        let tab_width = (text_width + 32.0).clamp(60.0, 160.0);
+                                        const TAB_MIN: f32 = 80.0;
+                                        const TAB_MAX: f32 = 200.0;
+                                        const TAB_PAD: f32 = 36.0;
+                                        let tab_count = category_sessions.len();
+                                        let use_compressed = tab_count > 8;
+                                        let tab_width = if use_compressed {
+                                            (tab_max / tab_count as f32).max(60.0).min(160.0)
+                                        } else {
+                                            (text_width + TAB_PAD).clamp(TAB_MIN, TAB_MAX)
+                                        };
                                         let (tab_rect, tab_resp) = ui.allocate_exact_size(
                                             egui::vec2(tab_width, 28.0),
                                             egui::Sense::click(),
@@ -115,6 +125,15 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                             )
                                         };
                                         ui.painter().rect_filled(tab_rect, cr, bg);
+                                        // Category indicator dot
+                                        let dot_color = match category.as_str() {
+                                            "emotion" => app.ui_store.theme.status_busy,
+                                            "knowledge" => app.ui_store.theme.status_online,
+                                            "engineering" => app.ui_store.theme.accent,
+                                            _ => app.ui_store.theme.text_dim,
+                                        };
+                                        let dot_center = egui::pos2(tab_rect.min.x + 8.0, tab_rect.center().y);
+                                        ui.painter().circle_filled(dot_center, 3.0, dot_color);
                                         // Active tab: 2px accent line at the top.
                                         if *is_active {
                                             let accent_line = egui::Rect::from_min_max(
@@ -129,15 +148,54 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                         }
                                         // Title text — clipped to tab interior so long titles
                                         // don't bleed into adjacent tabs or the close button.
+                                        let text_left = tab_rect.min.x + 18.0;
                                         let text_clip = egui::Rect::from_min_max(
-                                            egui::pos2(tab_rect.min.x + 2.0, tab_rect.min.y),
+                                            egui::pos2(tab_rect.min.x + 14.0, tab_rect.min.y),
                                             egui::pos2(tab_rect.max.x - 22.0, tab_rect.max.y),
                                         );
+                                        let max_text_w = tab_width - TAB_PAD;
+                                        let display_title = if text_width > max_text_w {
+                                            let ellipsis_galley = ui.painter().layout_no_wrap(
+                                                "…".to_string(),
+                                                font_id.clone(),
+                                                egui::Color32::PLACEHOLDER,
+                                            );
+                                            let ellipsis_w = ellipsis_galley.rect.width();
+                                            // Collect valid UTF-8 char boundaries to avoid
+                                            // slicing inside multi-byte chars (e.g. CJK).
+                                            let boundaries: Vec<usize> = std::iter::once(0)
+                                                .chain(title.char_indices().map(|(i, c)| i + c.len_utf8()))
+                                                .collect();
+                                            let mut lo = 0usize;
+                                            let mut hi = boundaries.len().saturating_sub(1);
+                                            while lo < hi {
+                                                let mid = (lo + hi + 1) / 2;
+                                                let substr = &title[..boundaries[mid]];
+                                                let g = ui.painter().layout_no_wrap(
+                                                    substr.to_string(),
+                                                    font_id.clone(),
+                                                    egui::Color32::PLACEHOLDER,
+                                                );
+                                                if g.rect.width() + ellipsis_w <= max_text_w {
+                                                    lo = mid;
+                                                } else {
+                                                    hi = mid - 1;
+                                                }
+                                            }
+                                            let safe_len = boundaries[lo];
+                                            if safe_len == 0 {
+                                                "…".to_string()
+                                            } else {
+                                                format!("{}…", &title[..safe_len])
+                                            }
+                                        } else {
+                                            title.clone()
+                                        };
                                         ui.painter_at(text_clip).text(
-                                            egui::pos2(tab_rect.min.x + 10.0, tab_rect.center().y),
+                                            egui::pos2(text_left, tab_rect.center().y),
                                             egui::Align2::LEFT_CENTER,
-                                            title.as_str(),
-                                            app.ui_store.theme.font(app.ui_store.theme.text_sm),
+                                            &display_title,
+                                            font_id.clone(),
                                             text_color,
                                         );
                                         // Close button: always show for active tab;
@@ -176,6 +234,9 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
                                                 close_col,
                                             );
                                             close_clicked = close_resp.clicked();
+                                        }
+                                        if use_compressed && tab_resp.hovered() {
+                                            let _ = tab_resp.clone().on_hover_text(title.as_str());
                                         }
 
                                         if close_clicked {

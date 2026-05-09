@@ -96,7 +96,7 @@ pub struct App {
     #[allow(dead_code)]
     pub async_job: ToolCallJob,
     /// Agent 实例
-    agent: Arc<Agent>,
+    pub(crate) agent: Arc<Agent>,
     /// 事件发送器（用于后台任务发送事件）
     event_tx: Option<UnboundedSender<Event>>,
     /// AgentController 操作发送器
@@ -112,6 +112,9 @@ pub struct App {
     pub session_usage: Option<(u32, u32, u32)>,
     /// Skill registry for listing and selection
     pub skill_registry: Option<clarity_core::skills::SkillRegistry>,
+    /// File-system watcher for live skill reloading.
+    #[allow(dead_code)]
+    pub skill_watcher: Option<clarity_core::skills::SkillWatcher>,
     /// Background task manager (shared with Gateway if running)
     pub task_manager: Option<Arc<BackgroundTaskManager>>,
     /// Most recently generated plan, awaiting user confirmation.
@@ -162,6 +165,7 @@ impl App {
             complete_last_index: 0,
             session_usage: None,
             skill_registry: None,
+            skill_watcher: None,
             task_manager,
             pending_plan: None,
             settings_vm: None,
@@ -661,10 +665,10 @@ impl App {
             return;
         }
 
-        let specs: Vec<clarity_core::subagents::RunSpec> = parsed
+        let specs: Vec<clarity_contract::subagent::RunSpec> = parsed
             .into_iter()
             .map(|(agent_type, prompt)| {
-                clarity_core::subagents::RunSpec::new(format!("parallel-{}", &agent_type), prompt)
+                clarity_contract::subagent::RunSpec::new(format!("parallel-{}", &agent_type), prompt)
                     .with_type(&agent_type)
             })
             .collect();
@@ -675,7 +679,7 @@ impl App {
         ));
 
         let config =
-            clarity_core::subagents::ParallelConfig::new().with_max_concurrency(specs.len().min(4));
+            clarity_contract::subagent::ParallelConfig::new().with_max_concurrency(specs.len().min(4));
 
         match self.agent.run_parallel(specs, config, None).await {
             Ok(result) => {
@@ -817,11 +821,15 @@ impl App {
     }
 
     /// Set the active skill on the underlying agent.
+    /// Kept for backward compatibility; prefer `skill_registry().toggle_active()`.
+    #[allow(dead_code, deprecated)]
     pub fn set_active_skill(&self, skill_id: Option<String>) {
         self.agent.set_active_skill(skill_id);
     }
 
     /// Get the currently active skill id from the underlying agent.
+    /// Kept for backward compatibility; prefer `skill_registry().active_ids()`.
+    #[allow(dead_code, deprecated)]
     pub fn active_skill(&self) -> Option<String> {
         self.agent.active_skill()
     }

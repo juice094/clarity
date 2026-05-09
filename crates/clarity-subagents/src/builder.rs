@@ -2,12 +2,11 @@
 //!
 //! Builds Agent instances for subagents.
 
-use crate::agent::{Agent, AgentConfig};
+use clarity_core::agent::{Agent, AgentConfig};
+use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::Message;
-use crate::registry::ToolRegistry;
-use crate::subagents::registry::{AgentTypeDefinition, LaborMarket};
-use crate::subagents::store::SubagentStore;
-use crate::subagents::token::CapabilityToken;
+use crate::store::SubagentStore;
+use clarity_contract::subagent::{AgentTypeDefinition, CapabilityToken, LaborMarket};
 
 /// Builder for subagent instances
 pub struct SubagentBuilder {
@@ -166,7 +165,7 @@ impl SubagentBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::subagents::store::SubagentStatus;
+    use clarity_contract::subagent::SubagentStatus;
 
     fn create_test_registry() -> ToolRegistry {
         ToolRegistry::with_builtin_tools()

@@ -19,9 +19,9 @@ use clarity_core::{
         AgentConfig, TokenUsage,
     },
     approval::ApprovalMode,
-    llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm},
     Agent, ToolRegistry,
 };
+use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;

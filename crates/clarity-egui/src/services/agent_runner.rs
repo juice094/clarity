@@ -145,7 +145,7 @@ impl App {
                 let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(128);
                 let ui_tx2 = tx.clone();
                 let _recv_handle = tokio::spawn(async move {
-                    use clarity_core::subagents::runner::SubagentProgressEvent;
+                    use clarity_contract::subagent::SubagentProgressEvent;
                     while let Some(event) = progress_rx.recv().await {
                         match event {
                             SubagentProgressEvent::Stage { agent_id, name } => {
@@ -160,12 +160,12 @@ impl App {
                                 status,
                             } => {
                                 let status_str = match status {
-                                    clarity_core::subagents::SubagentStatus::Idle => "Idle",
-                                    clarity_core::subagents::SubagentStatus::Running => "Running",
-                                    clarity_core::subagents::SubagentStatus::Completed => {
+                                    clarity_contract::subagent::SubagentStatus::Idle => "Idle",
+                                    clarity_contract::subagent::SubagentStatus::Running => "Running",
+                                    clarity_contract::subagent::SubagentStatus::Completed => {
                                         "Completed"
                                     }
-                                    clarity_core::subagents::SubagentStatus::Failed => "Failed",
+                                    clarity_contract::subagent::SubagentStatus::Failed => "Failed",
                                 }
                                 .to_string();
                                 let _ = ui_tx2.send(UiEvent::SubagentStatus {
@@ -173,13 +173,13 @@ impl App {
                                     agent_type,
                                     status: status_str.clone(),
                                 });
-                                if status == clarity_core::subagents::SubagentStatus::Completed
-                                    || status == clarity_core::subagents::SubagentStatus::Failed
+                                if status == clarity_contract::subagent::SubagentStatus::Completed
+                                    || status == clarity_contract::subagent::SubagentStatus::Failed
                                 {
                                     let _ = ui_tx2.send(UiEvent::SubagentComplete {
                                         agent_id,
                                         success: status
-                                            == clarity_core::subagents::SubagentStatus::Completed,
+                                            == clarity_contract::subagent::SubagentStatus::Completed,
                                     });
                                 }
                             }
@@ -198,16 +198,16 @@ impl App {
                     }
                 });
 
-                let runner = clarity_core::subagents::SubagentRunner::new(
+                let runner = clarity_subagents::SubagentRunner::new(
                     registry,
                     &working_dir,
                     &context_dir,
                 )
                 .with_llm(llm)
                 .with_progress_tx(progress_tx);
-                let mut store = clarity_core::subagents::SubagentStore::new(&context_dir);
+                let mut store = clarity_subagents::SubagentStore::new(&context_dir);
                 let spec =
-                    clarity_core::subagents::RunSpec::new(&subagent_prompt, &subagent_prompt)
+                    clarity_contract::subagent::RunSpec::new(&subagent_prompt, &subagent_prompt)
                         .with_type(&agent_type_string);
                 match runner.run(spec, &mut store, None).await {
                     Ok(result) => {

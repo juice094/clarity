@@ -191,6 +191,56 @@ impl SkillRegistry {
         self.skills.read().values().cloned().collect()
     }
 
+    /// Validate that every tool referenced by loaded skills exists in the given ToolRegistry.
+    /// Logs a `tracing::warn!` for each missing tool without rejecting the skill.
+    pub fn validate_tools(&self, tool_registry: &crate::registry::ToolRegistry) {
+        if let Ok(tool_names) = tool_registry.list_tools() {
+            let tool_set: std::collections::HashSet<String> = tool_names.into_iter().collect();
+            for skill in self.list_skills() {
+                for tool in &skill.meta.tools {
+                    if !tool_set.contains(tool) {
+                        tracing::warn!(
+                            "Skill '{}' references unknown tool '{}'",
+                            skill.meta.id,
+                            tool
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Reload skills from multiple directories, preserving active state for skills
+    /// that still exist. Skills that no longer exist in any directory are removed.
+    pub fn reload_all(&self, dirs: &[std::path::PathBuf]) -> SkillResult<()> {
+        let active_before = self.active_ids();
+        let mut new_skills = HashMap::with_capacity(self.len());
+
+        for dir in dirs {
+            if let Ok(skills) = super::SkillLoader::load_dir(dir) {
+                for skill in skills {
+                    let id = skill.meta.id.clone();
+                    new_skills.insert(id, skill);
+                }
+            }
+        }
+
+        // Preserve active state only for skills that still exist after reload.
+        let preserved_active: HashSet<String> = active_before
+            .into_iter()
+            .filter(|id| new_skills.contains_key(id))
+            .collect();
+
+        let mut map = self.skills.write();
+        *map = new_skills;
+        drop(map);
+
+        let mut active = self.active.write();
+        *active = preserved_active;
+
+        Ok(())
+    }
+
     /// Run a flow-type skill.
     ///
     /// Returns the final response from the flow execution.

@@ -12,7 +12,7 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(app.ui_store.theme.bg)
-                .stroke(egui::Stroke::new(1.0_f32, app.ui_store.theme.border))
+                .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {

@@ -14,10 +14,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+mod llm_adapter;
 mod llm_bridge;
 mod store;
 
 pub use clarity_memory::chunking::{Chunk, ChunkConfig, Chunker};
+pub use llm_adapter::LlmProviderAdapter;
 pub use llm_bridge::LlmProviderBridge;
 pub use store::{InMemoryStore, MemoryStore};
 
@@ -87,9 +89,6 @@ impl Default for MemoryConfig {
 // has been removed. Use SharedMemoryTicker for async-safe cross-boundary
 // usage, or MemoryTicker directly for single-threaded scenarios.
 pub use clarity_memory::{MemoryTicker, SharedMemoryTicker};
-
-pub mod extraction;
-pub use extraction::TurnMemoryExtractor;
 
 /// Persistent memory store backed by `clarity-memory`
 #[derive(Debug)]

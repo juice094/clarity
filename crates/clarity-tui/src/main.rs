@@ -76,7 +76,22 @@ async fn main() -> Result<()> {
             }
 
             let mut app = App::new(agent, model_name, task_manager);
-            app.skill_registry = skill_registry;
+            app.skill_registry = skill_registry.clone();
+
+            // Start skill file watcher for hot-reload.
+            if let Some(ref registry) = skill_registry {
+                let mut watch_paths = vec![std::path::PathBuf::from("skills")];
+                let config_dir = std::env::var("APPDATA")
+                    .map(std::path::PathBuf::from)
+                    .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+                    .ok();
+                if let Some(config_dir) = config_dir {
+                    watch_paths.push(config_dir.join("clarity").join("skills"));
+                }
+                app.skill_watcher =
+                    clarity_core::skills::SkillWatcher::start(registry.clone(), watch_paths);
+            }
+
             run_app(&mut terminal, &mut app).await
         }
         Err(e) => Err(e),
@@ -149,6 +164,20 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
     if let Some(ref reg) = skill_registry {
         agent = agent.with_skill_registry(reg.clone());
     }
+
+    // 注入 SubagentOrchestrator（SubagentManager）
+    let working_dir = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let subagent_ctx = working_dir.join("subagent_context");
+    let _ = std::fs::create_dir_all(&subagent_ctx);
+    let orchestrator = Arc::new(
+        clarity_subagents::SubagentManager::new(
+            agent.registry().clone(),
+            &working_dir,
+            &subagent_ctx,
+        )
+    );
+    agent = agent.with_orchestrator(orchestrator);
 
     Ok((Arc::new(agent), model_name, skill_registry))
 }

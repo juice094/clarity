@@ -51,6 +51,7 @@ use crate::error::AgentError;
 use crate::memory::{MemoryStore, SharedMemoryTicker};
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
+use clarity_contract::subagent::{CapabilityToken, ParallelConfig, RunSpec};
 use clarity_wire::Wire;
 
 use std::future::Future;
@@ -99,6 +100,8 @@ struct AgentInner {
     llm: Option<Arc<dyn LlmProvider>>,
     memory_store: Option<Arc<dyn MemoryStore>>,
     skill_registry: Option<SkillRegistry>,
+    /// Deprecated: use `SkillRegistry::active_ids()` instead.
+    /// Kept for backward compatibility and internal snapshotting.
     active_skill: Option<String>,
     file_prompt_cache: Option<String>,
     /// File paths representing the user's current operation.
@@ -258,6 +261,8 @@ pub struct Agent {
     /// Uses `tokio::sync::Mutex` because `execute_plan` is async and the
     /// controller must be accessible across await points.
     plan_controller: Arc<tokio::sync::Mutex<Option<crate::agent::plan::PlanExecutionController>>>,
+    /// Optional subagent orchestrator — injected at build time.
+    orchestrator: Option<Arc<dyn clarity_contract::subagent::SubagentOrchestrator>>,
     /// Shared mutable runtime state.
     ///
     /// **Design choice: `parking_lot::RwLock` is intentional.**
@@ -288,26 +293,49 @@ impl Agent {
     }
 
     /// Spawn an async background task to extract structured notes from a turn transcript.
-    /// Does nothing if `extract_memories` is disabled or no LLM is configured.
+    /// Does nothing if `extract_memories` is disabled or no orchestrator is configured.
     pub(crate) fn maybe_extract_memories(&self, transcript: String) {
         if !self.config.extract_memories {
             return;
         }
-        if let Some(ref llm) = self.inner.read().llm {
-            let llm = llm.clone();
-            let working_dir = self.config.working_dir.clone();
-            tokio::spawn(async move {
-                let extractor = crate::memory::TurnMemoryExtractor::new(llm, working_dir);
-                match extractor.extract(&transcript).await {
-                    Ok(notes) => {
-                        tracing::info!("Extracted session notes: {:?}", notes);
-                    }
-                    Err(e) => {
-                        tracing::warn!("Memory extraction failed: {}", e);
+        let Some(ref orchestrator) = self.orchestrator else {
+            return;
+        };
+        let orchestrator = orchestrator.clone();
+        tokio::spawn(async move {
+            let spec = RunSpec::new(
+                "Extract structured notes from conversation turn",
+                format!(
+                    "Analyze the following conversation turn and extract structured notes. \
+                     Respond with a JSON object containing exactly these keys: \
+                     current_state (string), errors (array of strings), \
+                     learnings (array of strings), key_results (array of strings).\n\n{}",
+                    transcript
+                ),
+            )
+            .with_type("memory-extractor")
+            .with_capability_token(CapabilityToken::read_only())
+            .without_git_context();
+
+            match orchestrator
+                .run_parallel(vec![spec], ParallelConfig::new().with_max_concurrency(1), None)
+                .await
+            {
+                Ok(result) => {
+                    if let Some(subagent_result) = result.results.into_iter().next() {
+                        tracing::info!(
+                            "Extracted session notes summary: {}",
+                            subagent_result.summary
+                        );
+                    } else if let Some((id, err)) = result.failures.into_iter().next() {
+                        tracing::warn!("Memory extraction subagent {} failed: {}", id, err);
                     }
                 }
-            });
-        }
+                Err(e) => {
+                    tracing::warn!("Memory extraction failed: {}", e);
+                }
+            }
+        });
     }
 
     /// Snapshot pre-turn if the snapshot service is active.
@@ -394,7 +422,7 @@ impl Agent {
         let working_dir = &self.config.working_dir;
 
         // 1. Git context
-        let git_ctx = crate::subagents::collect_git_context(working_dir).await;
+        let git_ctx = clarity_contract::subagent::collect_git_context(working_dir).await;
         self.set_git_context(git_ctx);
 
         // 2. Active files

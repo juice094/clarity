@@ -22,7 +22,7 @@ use chrono::{DateTime, Utc};
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_core::subagents::BatchProgress;
+use clarity_contract::subagent::BatchProgress;
 use std::collections::HashMap;
 use parking_lot::Mutex;
 
@@ -105,7 +105,7 @@ pub async fn run(
             let before = batches.len();
             batches.retain(|_batch_id, progress| {
                 let p = progress.lock();
-                p.status == clarity_core::subagents::BatchStatus::Running
+                p.status == clarity_contract::subagent::BatchStatus::Running
             });
             let removed = before - batches.len();
             if removed > 0 {

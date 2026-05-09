@@ -8,7 +8,9 @@ ratatui = "0.30"
 crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
 clarity-core = { path = "../clarity-core" }
+clarity-contract = { path = "../clarity-contract" }
 clarity-llm = { path = "../clarity-llm" }
+clarity-subagents = { path = "../clarity-subagents" }
 clarity-wire = { path = "../clarity-wire" }
 anyhow = "1.0"
 unicode-width = "0.2"

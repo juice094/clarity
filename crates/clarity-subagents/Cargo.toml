@@ -1,0 +1,31 @@
+[package]
+name = "clarity-subagents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Subagent orchestration for Clarity — parallel execution, team coordination, and labor market"
+
+[dependencies]
+# Internal crates
+clarity-core = { path = "../clarity-core" }
+clarity-contract = { path = "../clarity-contract" }
+clarity-llm = { path = "../clarity-llm" }
+clarity-wire = { path = "../clarity-wire" }
+
+# External crates
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+parking_lot = "0.12"
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+rand = "0.10"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.9"

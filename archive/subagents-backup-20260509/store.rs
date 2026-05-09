@@ -2,50 +2,10 @@
 //!
 //! Manages persistent state for subagent instances.
 
+use clarity_contract::subagent::{SubagentState, SubagentStatus};
 use clarity_llm::api::Message;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-/// Status of a subagent instance
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SubagentStatus {
-    Idle,
-    Running,
-    Completed,
-    Failed,
-}
-
-/// State of a subagent instance
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubagentState {
-    pub agent_id: String,
-    pub agent_type: String,
-    pub status: SubagentStatus,
-    pub history: Vec<Message>,
-    pub created_at: u64,
-    pub updated_at: u64,
-    /// Maximum iterations allowed for this subagent (used for progress estimation).
-    pub max_iterations: Option<usize>,
-    /// Actual steps taken in the last run (for progress reporting).
-    pub steps_taken: usize,
-}
-
-impl SubagentState {
-    pub fn new(agent_id: String, agent_type: String) -> Self {
-        let now = now_timestamp();
-        Self {
-            agent_id,
-            agent_type,
-            status: SubagentStatus::Idle,
-            history: Vec::new(),
-            created_at: now,
-            updated_at: now,
-            max_iterations: None,
-            steps_taken: 0,
-        }
-    }
-}
 
 /// Storage for subagent states
 pub struct SubagentStore {

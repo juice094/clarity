@@ -235,16 +235,13 @@ Rules:
         &self,
         team: clarity_contract::subagent::AgentTeam,
     ) -> Result<clarity_contract::subagent::TeamResult, AgentError> {
-        let registry = self.registry().clone();
-        let working_dir = self.config().working_dir.clone();
-        let context_dir = working_dir.join("context");
+        let orchestrator = self.orchestrator.as_ref().ok_or_else(|| {
+            AgentError::Tool(crate::error::ToolError::execution_failed(
+                "No subagent orchestrator configured".to_string(),
+            ))
+        })?;
 
-        let mut manager = crate::subagents::SubagentManager::new(registry, &working_dir, &context_dir);
-        if let Some(llm) = self.llm() {
-            manager = manager.with_llm(llm);
-        }
-
-        manager.run_team(team).await.map_err(|e| {
+        orchestrator.run_team(team).await.map_err(|e| {
             AgentError::Tool(crate::error::ToolError::execution_failed(format!(
                 "Team execution failed: {}",
                 e

@@ -60,7 +60,8 @@ async fn try_load_local(
     let model_path = std::path::PathBuf::from(&desired_path);
     let sibling_tokenizer = model_path.with_file_name("tokenizer.json");
 
-    let mut config = clarity_llm::LocalGgufConfig::new(&desired_path)?
+    let mut config = clarity_llm::LocalGgufConfig::new(&desired_path)
+        .map_err(|e| crate::error::EguiError::LlmLoad(e.to_string()))?
         .with_tokenizer_repo("Qwen/Qwen2.5-7B-Instruct");
 
     if sibling_tokenizer.exists() {

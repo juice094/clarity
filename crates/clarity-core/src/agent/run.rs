@@ -49,14 +49,32 @@ impl Agent {
             let mut inner = self.inner.write();
             inner.last_turn_message_count = messages.len();
         }
-        self.finalize_sync_turn(
-            query.as_ref(),
-            final_response,
-            completed,
-            &tool_names,
-            &messages,
-        )
-        .await
+        let result = self
+            .finalize_sync_turn(
+                query.as_ref(),
+                final_response,
+                completed,
+                &tool_names,
+                &messages,
+            )
+            .await;
+
+        // Notify memory ticker of turn completion
+        if let Some(ref ticker) = self.memory_ticker {
+            let session_id = self
+                .config
+                .session_id
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
+            if let Some(future) = ticker.notify_turn(&session_id).await {
+                // Spawn in background to avoid blocking
+                tokio::spawn(async move {
+                    let _ = future.await;
+                });
+            }
+        }
+
+        result
     }
 
     /// Jumpy World Model execution path.

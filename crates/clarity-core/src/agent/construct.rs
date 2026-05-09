@@ -42,18 +42,36 @@ impl Agent {
         Self {
             registry,
             config: config.clone(),
-            memory_ticker: None,
             wire: None,
             event_bus: None,
             approval_runtime: None,
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
-            compaction_service: config.compaction_service.map(CompactionService::new),
+            compaction_service: config.compaction_service.as_ref().map(|c| {
+                let mut service = CompactionService::new(c.clone());
+                if let Some(ref path) = c.session_store_path {
+                    if let Ok(store) = clarity_memory::SessionStore::new(path) {
+                        let session_id = c.session_id.clone()
+                            .or_else(|| config.session_id.clone())
+                            .unwrap_or_else(|| "default".to_string());
+                        service = service.with_session_store(Arc::new(store), session_id);
+                    }
+                }
+                service
+            }),
+            memory_ticker: if let Some(turns) = config.memory_ticker_turns {
+                let output_dir = config.compiled_memory_dir.clone()
+                    .unwrap_or_else(|| config.working_dir.join(".clarity_memory"));
+                Some(SharedMemoryTicker::new(clarity_memory::MemoryTicker::new(&output_dir, Some(turns))))
+            } else {
+                None
+            },
             hook_registry: None,
             llm_factory: None,
             memory_factory: None,
             skill_factory: None,
             plan_controller: Arc::new(tokio::sync::Mutex::new(None)),
+            orchestrator: None,
             inner: Arc::new(parking_lot::RwLock::new(AgentInner {
                 state: AgentState::Unconfigured,
                 llm: None,
@@ -80,6 +98,15 @@ impl Agent {
                 snapshot_service: None,
             })),
         }
+    }
+
+    /// Set the subagent orchestrator (builder pattern).
+    pub fn with_orchestrator(
+        mut self,
+        orchestrator: Arc<dyn clarity_contract::subagent::SubagentOrchestrator>,
+    ) -> Self {
+        self.orchestrator = Some(orchestrator);
+        self
     }
 
     /// Set the vision LLM provider (builder pattern).
@@ -183,6 +210,7 @@ impl Agent {
 
     /// Set the skill registry.
     pub fn with_skill_registry(self, registry: SkillRegistry) -> Self {
+        registry.validate_tools(&self.registry);
         {
             let mut inner = self.inner.write();
             inner.skill_registry = Some(registry);
@@ -192,12 +220,14 @@ impl Agent {
 
     /// Set (or clear) the active skill by id.
     /// All clones of this Agent will see the change immediately.
+    #[deprecated(note = "Use skill_registry().toggle_active() instead")]
     pub fn set_active_skill(&self, skill_id: Option<String>) {
         let mut inner = self.inner.write();
         inner.active_skill = skill_id;
     }
 
     /// Get the currently active skill id, if any.
+    #[deprecated(note = "Use skill_registry().active_ids() instead")]
     pub fn active_skill(&self) -> Option<String> {
         self.inner.read().active_skill.clone()
     }
@@ -335,6 +365,52 @@ impl Agent {
         }
     }
 
+    /// Initialize memory compilation by wiring the MemoryCompiler to the ticker.
+    ///
+    /// Must be called after the LLM provider is set (via `with_llm` or `set_llm`).
+    pub async fn initialize_memory_compilation(&self) {
+        if let Some(ref _ticker) = self.memory_ticker {
+            if let Some(ref compiled_dir) = self.config.compiled_memory_dir {
+                if let Some(ref llm) = self.llm() {
+                    let adapter = Arc::new(crate::memory::LlmProviderAdapter::new(llm.clone()));
+                    let store = match clarity_memory::MemoryStore::new_in_memory() {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::warn!("Failed to create in-memory store for memory compiler: {}", e);
+                            return;
+                        }
+                    };
+                    let session_store = self.compaction_service.as_ref()
+                        .and_then(|s| s.session_store())
+                        .map(|arc| (*arc).clone())
+                        .unwrap_or_else(|| {
+                            let path = self.config.working_dir.join(".clarity_sessions");
+                            clarity_memory::SessionStore::new(&path).unwrap_or_else(|_| {
+                                clarity_memory::SessionStore::new(std::env::temp_dir().join("clarity_sessions"))
+                                    .expect("Failed to create fallback session store")
+                            })
+                        });
+                    let config = clarity_memory::CompileConfig::default();
+                    let compiler = Arc::new(tokio::sync::Mutex::new(clarity_memory::MemoryCompiler::new(
+                        store,
+                        session_store,
+                        adapter,
+                        config,
+                    )));
+                    let output_dir = compiled_dir.clone();
+                    self.set_memory_compile_callback(move || {
+                        let compiler = compiler.clone();
+                        let output_dir = output_dir.clone();
+                        async move {
+                            let mut compiler = compiler.lock().await;
+                            compiler.compile_all(&output_dir).await
+                        }
+                    }).await;
+                }
+            }
+        }
+    }
+
     /// Set the compaction service
     pub fn with_compaction_service(mut self, service: CompactionService) -> Self {
         self.compaction_service = Some(service);
@@ -417,6 +493,7 @@ impl Agent {
         if needs_skill_init {
             if let Some(ref factory) = self.skill_factory {
                 let registry = factory().await?;
+                registry.validate_tools(&self.registry);
                 let mut inner = self.inner.write();
                 inner.skill_registry = Some(registry);
             }
@@ -488,7 +565,7 @@ impl Agent {
     /// Set capability token for subagent permission isolation
     pub fn with_capability_token(
         mut self,
-        token: clarity_contract::CapabilityToken,
+        token: clarity_contract::subagent::CapabilityToken,
     ) -> Self {
         self.config.capability_token = Some(token);
         self
@@ -673,25 +750,19 @@ impl Agent {
         &self,
         specs: Vec<clarity_contract::subagent::RunSpec>,
         config: clarity_contract::subagent::ParallelConfig,
-        progress: Option<std::sync::Arc<parking_lot::Mutex<clarity_contract::subagent::BatchProgress>>>,
-    ) -> anyhow::Result<clarity_contract::subagent::ParallelResult> {
-        /* SubagentManager stays in subagents */
-
-        let mut manager = SubagentManager::new(
-            self.registry.clone(),
-            &self.config.working_dir,
-            self.config.working_dir.join("subagent_context"),
-        );
-
-        if let Some(llm) = self.llm() {
-            manager = manager.with_llm(llm);
-        }
+        progress: Option<clarity_contract::subagent::BatchProgressHandle>,
+    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError> {
+        let orchestrator = self.orchestrator.as_ref().ok_or_else(|| {
+            clarity_contract::subagent::SubagentError::BuildFailed(
+                "No subagent orchestrator configured".to_string(),
+            )
+        })?;
 
         self.send_wire_message(WireMessage::TurnBegin {
             user_input: format!("parallel execution ({} tasks)", specs.len()),
         });
 
-        let result = manager.run_parallel(specs, config, progress, None).await;
+        let result = orchestrator.run_parallel(specs, config, progress).await;
 
         self.send_wire_message(WireMessage::TurnEnd);
 

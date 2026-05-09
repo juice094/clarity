@@ -41,10 +41,12 @@
 pub mod discovery;
 mod loader;
 mod registry;
+pub mod watcher;
 
 pub use discovery::SkillDiscovery;
 pub use loader::SkillLoader;
 pub use registry::SkillRegistry;
+pub use watcher::SkillWatcher;
 
 /// Error type for Skill operations.
 #[derive(Debug, thiserror::Error)]

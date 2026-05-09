@@ -24,7 +24,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(theme.bg)
-                .stroke(egui::Stroke::new(1.0_f32, theme.border))
+                .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -168,6 +168,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     0,
                     selected_path_ref,
                     &mut |path| {
+                        app.state.agent.set_active_file_paths(vec![path.to_path_buf()]);
                         if let Ok(content) = std::fs::read_to_string(path) {
                             app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
                                 name: path

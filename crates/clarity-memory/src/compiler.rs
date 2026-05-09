@@ -333,6 +333,12 @@ Long-term memory summary:"#,
 
         fs::write(output_path, content)?;
 
+        // Also export as flashcards for spaced-repetition review
+        let flashcards_path = output_path.with_file_name("flashcards.json");
+        if let Err(e) = crate::flashcards::export_facts_to_flashcards(&unique_facts, &flashcards_path) {
+            warn!("Failed to export flashcards: {}", e);
+        }
+
         info!("Compiled {} unique facts", unique_facts.len());
         Ok(CompileStatus::Success { fingerprint })
     }

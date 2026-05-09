@@ -26,6 +26,8 @@ pub enum ShortcutAction {
     FocusInput,
     /// Toggle the command palette (placeholder).
     ToggleCommandPalette,
+    /// Toggle the dashboard metrics side-panel.
+    ToggleDashboardPanel,
 }
 
 /// Collect global shortcut actions for the current frame.
@@ -81,6 +83,10 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.shift) {
         actions.push(ShortcutAction::ToggleTeamPanel);
+    }
+
+    if ctx.input(|i| i.key_pressed(egui::Key::D) && i.modifiers.ctrl && i.modifiers.shift) {
+        actions.push(ShortcutAction::ToggleDashboardPanel);
     }
 
     actions

@@ -31,8 +31,10 @@ rfd = "0.15"
 
 # Internal crates
 clarity-core = { path = "../clarity-core" }
+clarity-contract = { path = "../clarity-contract" }
 clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory" }
+clarity-subagents = { path = "../clarity-subagents" }
 clarity-wire = { path = "../clarity-wire" }
 
 [target.'cfg(windows)'.dependencies]

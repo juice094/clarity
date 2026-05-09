@@ -442,6 +442,79 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     crate::panels::cron::render_cron_section(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── Dashboard ──
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("Dashboard")
+                                .size(app.ui_store.theme.text_sm)
+                                .strong()
+                                .color(app.ui_store.theme.text),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let label = if app.ui_store.dashboard_panel_open {
+                                "Close"
+                            } else {
+                                "Open"
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(label)
+                                            .size(app.ui_store.theme.text_xs),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                app.ui_store.dashboard_panel_open =
+                                    !app.ui_store.dashboard_panel_open;
+                            }
+                        });
+                    });
+
+                    ui.add_space(app.ui_store.theme.space_16);
+
+                    // ── Plan Timeline ──
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("Plan Timeline")
+                                .size(app.ui_store.theme.text_sm)
+                                .strong()
+                                .color(app.ui_store.theme.text),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let label = if app.ui_store.gantt_panel_open {
+                                "Close"
+                            } else {
+                                "Open"
+                            };
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(label)
+                                            .size(app.ui_store.theme.text_xs),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(
+                                        egui::CornerRadius::same(
+                                            app.ui_store.theme.radius_sm as u8,
+                                        ),
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                app.ui_store.gantt_panel_open = !app.ui_store.gantt_panel_open;
+                            }
+                        });
+                    });
+
+                    ui.add_space(app.ui_store.theme.space_16);
+
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });
         });

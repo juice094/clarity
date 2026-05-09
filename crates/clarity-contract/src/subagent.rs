@@ -916,3 +916,36 @@ pub async fn collect_git_context(working_dir: impl AsRef<Path>) -> Option<String
         .await
         .map(|ctx| ctx.to_prompt_string())
 }
+
+// ============================================================================
+// SubagentOrchestrator trait — breaks agent↔subagents coupling
+// ============================================================================
+
+use async_trait::async_trait;
+use std::sync::Arc;
+
+/// Handle for progress tracking in parallel subagent execution.
+pub type BatchProgressHandle = Arc<parking_lot::Mutex<BatchProgress>>;
+
+/// Trait for subagent orchestration (parallel execution, team coordination).
+///
+/// Implemented by `SubagentManager` in `clarity-core`. `Agent` can hold
+/// an `Option<Arc<dyn SubagentOrchestrator>>` and delegate `run_parallel`
+/// / `run_team` calls to it, avoiding a direct dependency on `SubagentManager`.
+#[async_trait]
+pub trait SubagentOrchestrator: Send + Sync {
+    /// Execute multiple subagent specs in parallel.
+    async fn run_parallel(
+        &self,
+        specs: Vec<RunSpec>,
+        config: ParallelConfig,
+        progress: Option<BatchProgressHandle>,
+    ) -> Result<ParallelResult, SubagentError>;
+
+    /// Execute an agent team collaboratively.
+    async fn run_team(
+        &self,
+        team: AgentTeam,
+    ) -> Result<TeamResult, SubagentError>;
+}
+

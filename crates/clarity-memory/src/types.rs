@@ -232,4 +232,12 @@ impl SessionNotes {
     }
 }
 
+/// A flashcard for spaced-repetition review (Anki-compatible)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Flashcard {
+    pub front: String,
+    pub back: String,
+    pub tags: String,
+}
+
 pub type Result<T> = std::result::Result<T, MemoryError>;

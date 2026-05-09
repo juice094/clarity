@@ -17,7 +17,7 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
                 .fill(theme.bg)
-                .stroke(egui::Stroke::new(1.0_f32, theme.border))
+                .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -226,11 +226,11 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
                 let tx = app.ui_tx.clone();
                 app.runtime.spawn(async move {
                     let specs: Vec<_> = team.members.iter().map(|m| {
-                        clarity_core::subagents::RunSpec::new(&m.name, &m.description)
+                        clarity_contract::subagent::RunSpec::new(&m.name, &m.description)
                     }).collect();
-                    let team_config = clarity_core::subagents::AgentTeam::new(&team.name, &team.goal)
+                    let team_config = clarity_contract::subagent::AgentTeam::new(&team.name, &team.goal)
                         .with_members(specs)
-                        .with_config(clarity_core::subagents::ParallelConfig {
+                        .with_config(clarity_contract::subagent::ParallelConfig {
                             max_concurrency: team.max_concurrency,
                             timeout_secs: Some(team.timeout_secs),
                             cancel_on_error: false,

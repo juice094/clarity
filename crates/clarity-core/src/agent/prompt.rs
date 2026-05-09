@@ -289,6 +289,17 @@ pub(crate) async fn build_system_prompt_split(
         }
     }
 
+    if let Some(ref compiled_dir) = agent.config.compiled_memory_dir {
+        let memory_path = compiled_dir.join("memory.md");
+        if memory_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&memory_path) {
+                if !content.is_empty() {
+                    dynamic_prompt.push_str(&format!("\n\n# Compiled Memory\n{}\n", content));
+                }
+            }
+        }
+    }
+
     (static_prompt, dynamic_prompt)
 }
 

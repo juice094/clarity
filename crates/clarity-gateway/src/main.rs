@@ -140,10 +140,22 @@ You are a methodological query assistant. When answering:
         };
 
     // 创建 Agent
-    let agent = Agent::with_config(registry, config)
+    let mut agent = Agent::with_config(registry, config)
         .with_memory(memory_store.clone())
         .with_memory_ticker(memory_ticker)
         .with_llm(llm.clone());
+
+    // 注入 SubagentOrchestrator（SubagentManager）
+    let subagent_ctx = clarity_dir.join("subagent_context");
+    let _ = tokio::fs::create_dir_all(&subagent_ctx).await;
+    let orchestrator = Arc::new(
+        clarity_subagents::SubagentManager::new(
+            agent.registry().clone(),
+            &clarity_dir,
+            &subagent_ctx,
+        )
+    );
+    agent = agent.with_orchestrator(orchestrator);
 
     // 设置 MemoryCompiler callback（OpenHanako 四级编译管道）
     let sessions_dir = clarity_dir.join("sessions");

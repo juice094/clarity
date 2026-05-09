@@ -2,6 +2,8 @@ pub mod approval;
 pub mod chat;
 pub mod cron;
 pub mod cron_create;
+pub mod dashboard;
+pub mod gantt;
 pub mod mcp;
 pub mod sidebar;
 pub mod skill;

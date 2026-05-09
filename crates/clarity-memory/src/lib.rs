@@ -81,6 +81,7 @@ pub mod embedding;
 pub mod extractor;
 pub mod session_store;
 pub mod store;
+pub mod flashcards;
 pub mod ticker;
 pub mod types;
 
@@ -98,8 +99,10 @@ pub use session_store::SessionStore;
 pub use store::DecayConfig;
 pub use store::MemoryStore;
 pub use ticker::{MemoryTicker, SharedMemoryTicker, DEFAULT_TURNS_PER_SUMMARY};
+pub use flashcards::export_facts_to_flashcards;
 pub use types::{
-    CompileConfig, CompileStatus, Fact, MemoryError, Message, MetaFact, Result, SessionNotes,
+    CompileConfig, CompileStatus, Fact, Flashcard, MemoryError, Message, MetaFact, Result,
+    SessionNotes,
 };
 
 #[cfg(test)]

@@ -13,8 +13,8 @@ use clarity_contract::subagent::{
     BatchProgress, BatchStatus, ParallelConfig, ParallelResult, RunSpec, SubagentError,
     SubagentResult,
 };
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -72,9 +72,6 @@ impl SubagentBatch {
     }
 }
 
-/// Convenience alias for shared progress handle.
-pub type BatchProgressHandle = Arc<Mutex<BatchProgress>>;
-
 /// 并行执行器
 ///
 /// 基于 BackgroundTaskManager 实现子代理并行执行
@@ -96,7 +93,7 @@ impl ParallelExecutor {
     pub async fn execute(
         &mut self,
         batch: SubagentBatch,
-        progress: Option<Arc<Mutex<BatchProgress>>>,
+        progress: Option<std::sync::Arc<Mutex<BatchProgress>>>,
         cancel: Option<CancellationToken>,
     ) -> anyhow::Result<ParallelResult> {
         if batch.is_empty() {

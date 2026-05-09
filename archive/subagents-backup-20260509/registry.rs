@@ -1,10 +1,10 @@
 //! LaborMarket - Subagent type registry
 //!
-//! P1-1: `AgentTypeDefinition` and `LaborMarket` have been moved to `crate::types`
-//! to break the `background↔subagents` circular dependency.
+//! P1-2: `AgentTypeDefinition` and `LaborMarket` have been moved to `clarity-contract`
+//! to break the `background↔subagents` and `agent↔subagents` circular dependencies.
 //! This module now only re-exports them for backwards compatibility.
 
-pub use crate::types::{AgentTypeDefinition, LaborMarket};
+pub use clarity_contract::subagent::{AgentTypeDefinition, LaborMarket};
 
 #[cfg(test)]
 mod tests {

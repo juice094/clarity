@@ -65,6 +65,11 @@ pub(crate) struct App {
     pub(crate) snapshot_store: stores::SnapshotStore,
     /// Gateway process manager (auto-start + manual control).
     pub(crate) gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
+    /// File-system watcher for live skill reloading.
+    #[allow(dead_code)]
+    pub(crate) skill_watcher: Option<clarity_core::skills::SkillWatcher>,
+    /// Last frame's screen width for responsive breakpoint detection.
+    last_frame_width: Option<f32>,
 }
 
 mod app_logic;
@@ -117,13 +122,14 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg)
-                    .stroke(egui::Stroke::new(1.0_f32, theme.border))
+                    .stroke(egui::Stroke::NONE)
                     .inner_margin(egui::Margin::symmetric(8, 0)),
             )
             .show(ctx, |ui| {
                 ui.set_min_height(TITLEBAR_HEIGHT);
 
-                // Single horizontal row: [toggle?] [title] [elastic drag] [buttons]
+                // Single horizontal row:
+                // [toggle?] [badge] [title] [sessions] [elastic drag] [agent] [gateway] [settings] [buttons]
                 ui.horizontal_centered(|ui| {
                     ui.set_min_height(TITLEBAR_HEIGHT);
 
@@ -145,6 +151,30 @@ impl App {
                         ui.add_space(8.0);
                     }
 
+                    // Workspace badge
+                    if !self.session_store.active_category.is_empty() {
+                        let cat = &self.session_store.active_category;
+                        let display = if let Some(first) = cat.chars().next() {
+                            let mut s = first.to_uppercase().collect::<String>();
+                            s.push_str(&cat[first.len_utf8()..]);
+                            s
+                        } else {
+                            cat.clone()
+                        };
+                        egui::Frame::new()
+                            .fill(theme.bg_hover)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                            .inner_margin(egui::Margin::symmetric(6, 2))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(display)
+                                        .size(theme.text_xs)
+                                        .color(theme.text_muted),
+                                );
+                            });
+                        ui.add_space(8.0);
+                    }
+
                     ui.label(
                         egui::RichText::new("Clarity")
                             .size(theme.text_base)
@@ -152,9 +182,18 @@ impl App {
                             .color(theme.text_muted),
                     );
 
+                    // Session count
+                    let session_count = self.session_store.sessions.len();
+                    if session_count > 0 {
+                        ui.add_space(6.0);
+                        ui.label(
+                            egui::RichText::new(format!("{} sessions", session_count))
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                        );
+                    }
+
                     // Elastic filler — drag to move window.
-                    // Using `allocate_exact_size` with remaining horizontal space
-                    // creates a click-and-drag region that fills the titlebar.
                     let drag_w = ui.available_size().x.max(40.0);
                     let (_drag_id, drag_resp) = ui.allocate_exact_size(
                         egui::vec2(drag_w, TITLEBAR_HEIGHT),
@@ -164,7 +203,9 @@ impl App {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
 
-                    // Window control buttons (right-aligned)
+                    // Right section: status indicators + settings + window controls.
+                    // Rendered right-to-left so interactive elements have higher z-order
+                    // than the drag region — clicks are not swallowed.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
                         let close_resp = ui.add_sized(
@@ -294,6 +335,78 @@ impl App {
                             ],
                             egui::Stroke::new(1.2_f32, min_color),
                         );
+
+                        // Separator between system buttons and indicators
+                        ui.add_space(8.0);
+
+                        // Settings button
+                        let settings_resp = ui.add_sized(
+                            btn_size,
+                            egui::Button::new("")
+                                .fill(egui::Color32::TRANSPARENT)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        );
+                        if settings_resp.clicked() {
+                            self.settings_store.settings_open = true;
+                        }
+                        let settings_fill = if settings_resp.hovered() {
+                            theme.overlay_medium
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        ui.painter().rect_filled(
+                            settings_resp.rect,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            settings_fill,
+                        );
+                        let settings_color = if settings_resp.hovered() {
+                            theme.text
+                        } else {
+                            theme.text_dim
+                        };
+                        ui.painter().text(
+                            settings_resp.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            crate::theme::ICON_SETTINGS,
+                            theme.font_icon(theme.text_base),
+                            settings_color,
+                        );
+
+                        // Gateway status indicator (rendered second in RTL → left of settings)
+                        let (gw_color, gw_label) = match self.chat_store.gateway_status {
+                            GatewayStatus::Online => (theme.status_online, "Gateway"),
+                            GatewayStatus::Checking => (theme.status_busy, "Gateway"),
+                            GatewayStatus::Offline => (theme.status_offline, "Gateway"),
+                        };
+                        ui.label(
+                            egui::RichText::new(gw_label)
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                        );
+                        ui.add_space(4.0);
+                        let gw_dot_size = egui::vec2(8.0, 8.0);
+                        let (gw_dot_rect, _) =
+                            ui.allocate_exact_size(gw_dot_size, egui::Sense::hover());
+                        ui.painter().circle_filled(gw_dot_rect.center(), 4.0, gw_color);
+
+                        // Agent status indicator (rendered last in RTL → leftmost of right section)
+                        let (agent_color, agent_label) = match self.chat_store.agent_status {
+                            AgentStatus::Online => (theme.status_online, "Online"),
+                            AgentStatus::Busy => (theme.status_busy, "Busy"),
+                            AgentStatus::Offline | AgentStatus::Unconfigured => {
+                                (theme.status_offline, "Offline")
+                            }
+                        };
+                        ui.label(
+                            egui::RichText::new(agent_label)
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                        );
+                        ui.add_space(4.0);
+                        let agent_dot_size = egui::vec2(8.0, 8.0);
+                        let (agent_dot_rect, _) =
+                            ui.allocate_exact_size(agent_dot_size, egui::Sense::hover());
+                        ui.painter().circle_filled(agent_dot_rect.center(), 4.0, agent_color);
                     });
                 });
             });
@@ -417,6 +530,14 @@ impl App {
         panels::team_create::render_team_create_modal(self, ctx);
     }
 
+    fn render_dashboard_panel(&mut self, ctx: &egui::Context) {
+        panels::dashboard::render_dashboard_panel(self, ctx);
+    }
+
+    fn render_gantt_panel(&mut self, ctx: &egui::Context) {
+        panels::gantt::render_gantt_panel(self, ctx);
+    }
+
     fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
         panels::cron_create::render_cron_create_modal(self, ctx);
     }
@@ -534,6 +655,9 @@ impl eframe::App for App {
                         crate::ui::types::ToastLevel::Info,
                     );
                 }
+                shortcuts::ShortcutAction::ToggleDashboardPanel => {
+                    self.ui_store.dashboard_panel_open = !self.ui_store.dashboard_panel_open;
+                }
             }
         }
 
@@ -572,6 +696,22 @@ impl eframe::App for App {
             AgentState::Stalled => AgentStatus::Offline,
         };
 
+        // ── Responsive breakpoints: auto-collapse panels when window is too narrow ──
+        let current_width = ctx.screen_rect().width();
+        if let Some(last_width) = self.last_frame_width {
+            // One-way collapse: only trigger when window becomes narrower.
+            // Do NOT auto-restore on widen to avoid fighting user intent.
+            if last_width >= 1100.0 && current_width < 1100.0 {
+                self.ui_store.dashboard_panel_open = false;
+                self.team_store.team_panel_open = false;
+                self.task_store.task_panel_open = false;
+            }
+            if last_width >= 768.0 && current_width < 768.0 {
+                self.ui_store.sidebar_collapsed = true;
+            }
+        }
+        self.last_frame_width = Some(current_width);
+
         ctx.style_mut(|style| {
             self.ui_store.theme.apply(style);
         });
@@ -603,6 +743,10 @@ impl eframe::App for App {
         self.render_safe(ctx, "team_create", |app, ctx| {
             app.render_team_create_modal(ctx)
         });
+        self.render_safe(ctx, "dashboard", |app, ctx| {
+            app.render_dashboard_panel(ctx)
+        });
+        self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
         self.render_safe(ctx, "kimi_login", |app, ctx| {
             crate::components::login_modal::render_oauth_login_modal(
                 app,
