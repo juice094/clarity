@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test baseline: `cargo test --workspace --lib` = 830 passed / 0 failed / 7 ignored.
 - Release binaries: 5 targets (headless / gateway / egui / tui / claw).
 
+## [Unreleased]
+
+### Added
+
+- **WebSocket MCP Transport** — `clarity-mcp` crate 新增 `WebSocketMcpClient`，`McpTransport` enum 新增 `WebSocket { url, headers, timeout_seconds }` 变体。双向 JSON-RPC over WebSocket，pending-map + oneshot 请求-响应关联模式（与 `SseMcpClient` 同构）。`McpClientBuilder::websocket()` + `WebSocketClientBuilder` 完整 builder 链。配置文件 `transport = "websocket"` 自动识别。
+
 ## [0.3.2] — 2026-05-03
 
 ### Added
