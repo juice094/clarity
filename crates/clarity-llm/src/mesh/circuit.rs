@@ -82,3 +82,46 @@ impl Default for CircuitBreaker {
         Self::new(5, 30)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_circuit_starts_closed() {
+        let cb = CircuitBreaker::new(3, 1);
+        assert!(cb.allow());
+        assert_eq!(cb.state(), CircuitState::Closed);
+    }
+
+    #[test]
+    fn test_circuit_opens_after_threshold() {
+        let cb = CircuitBreaker::new(2, 60);
+        cb.record_failure();
+        assert!(cb.allow()); // still closed after 1 failure
+        cb.record_failure();
+        assert!(!cb.allow()); // open after 2 failures
+        assert_eq!(cb.state(), CircuitState::Open);
+    }
+
+    #[test]
+    fn test_circuit_closes_after_success() {
+        let cb = CircuitBreaker::new(2, 60);
+        cb.record_failure();
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+        cb.record_success();
+        assert!(cb.allow());
+        assert_eq!(cb.state(), CircuitState::Closed);
+    }
+
+    #[test]
+    fn test_half_open_after_timeout() {
+        let cb = CircuitBreaker::new(1, 0); // 0s recovery timeout
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+        std::thread::sleep(Duration::from_millis(10));
+        assert!(cb.allow()); // should transition to HalfOpen
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+    }
+}

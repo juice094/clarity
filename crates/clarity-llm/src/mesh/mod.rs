@@ -55,6 +55,29 @@ impl MeshLlmProvider {
         })
     }
 
+    /// Build a mesh from an explicit list of provider names.
+    pub async fn from_names(names: Vec<String>) -> Result<Self, AgentError> {
+        let mut providers = HashMap::new();
+        for name in &names {
+            match crate::LlmFactory::create_arc(name).await {
+                Ok(provider) => {
+                    tracing::info!("Mesh loaded provider: {}", name);
+                    providers.insert(name.clone(), provider);
+                }
+                Err(e) => {
+                    tracing::warn!("Mesh failed to load provider '{}': {}", name, e);
+                }
+            }
+        }
+        if providers.is_empty() {
+            return Err(AgentError::Llm(
+                "No mesh providers could be loaded from the given names".into(),
+            ));
+        }
+        let router = MeshRouter::with_chain(names);
+        Ok(Self::new(providers, router))
+    }
+
     /// Build a mesh from an explicit provider map and fallback chain.
     pub fn new(providers: HashMap<String, Arc<dyn LlmProvider>>, router: MeshRouter) -> Self {
         let mut breakers = HashMap::new();

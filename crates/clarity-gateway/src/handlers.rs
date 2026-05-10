@@ -980,22 +980,65 @@ pub(crate) async fn admin_switch_provider(
 ) -> impl IntoResponse {
     info!("Admin: switching provider to '{}'", req.provider);
 
-    match LlmFactory::create(&req.provider).await {
-        Ok(new_llm) => {
-            state.agent.set_llm(Arc::from(new_llm));
-            let resp = SwitchProviderResponse {
-                provider: req.provider,
-                message: "Provider switched successfully".to_string(),
-            };
-            (StatusCode::OK, Json(resp))
+    let names: Vec<String> = if req.provider.trim() == "mesh" {
+        std::env::var("CLARITY_MESH_PROVIDERS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else if req.provider.contains(',') {
+        req.provider
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        vec![req.provider.clone()]
+    };
+
+    if names.len() == 1 {
+        // Single provider — direct replacement
+        match LlmFactory::create(&names[0]).await {
+            Ok(new_llm) => {
+                state.agent.set_llm(Arc::from(new_llm));
+                let resp = SwitchProviderResponse {
+                    provider: names[0].clone(),
+                    message: "Provider switched successfully".to_string(),
+                };
+                (StatusCode::OK, Json(resp))
+            }
+            Err(e) => {
+                error!("Failed to switch provider: {}", e);
+                let resp = SwitchProviderResponse {
+                    provider: names[0].clone(),
+                    message: format!("Failed to create provider: {}", e),
+                };
+                (StatusCode::BAD_REQUEST, Json(resp))
+            }
         }
-        Err(e) => {
-            error!("Failed to switch provider: {}", e);
-            let resp = SwitchProviderResponse {
-                provider: req.provider,
-                message: format!("Failed to create provider: {}", e),
-            };
-            (StatusCode::BAD_REQUEST, Json(resp))
+    } else {
+        // Multi-provider mesh
+        match clarity_llm::mesh::MeshLlmProvider::from_names(names.clone()).await {
+            Ok(mesh) => {
+                state.agent.set_llm(Arc::new(mesh));
+                let resp = SwitchProviderResponse {
+                    provider: req.provider,
+                    message: format!(
+                        "Switched to mesh with providers: {:?}",
+                        names
+                    ),
+                };
+                (StatusCode::OK, Json(resp))
+            }
+            Err(e) => {
+                error!("Failed to create mesh: {}", e);
+                let resp = SwitchProviderResponse {
+                    provider: req.provider,
+                    message: format!("Failed to create mesh: {}", e),
+                };
+                (StatusCode::BAD_REQUEST, Json(resp))
+            }
         }
     }
 }
