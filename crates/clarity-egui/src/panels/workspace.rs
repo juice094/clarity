@@ -188,6 +188,9 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
             egui::ScrollArea::vertical()
                 .id_salt("workspace_preview_drawer_scroll")
                 .auto_shrink([false; 2])
+                .scroll_bar_visibility(
+                    egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                )
                 .show(ui, |ui| {
                     let parsed = crate::ui::markdown::parse_markdown(&content);
                     crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);

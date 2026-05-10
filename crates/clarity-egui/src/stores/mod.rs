@@ -203,6 +203,8 @@ pub struct UiStore {
     pub web_tabs: Vec<WebTab>,
     /// Whether the web tabs section is expanded in the sidebar.
     pub web_tabs_expanded: bool,
+    /// Whether to show the URL input row when web tabs are empty.
+    pub web_tabs_add_visible: bool,
     /// Whether the thinking log section is expanded in the sidebar.
     pub thinking_log_expanded: bool,
     /// Whether the thinking log shows all tool calls or only the latest 3.

@@ -15,6 +15,22 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // [+] button to reveal input when empty
+            if app.ui_store.web_tabs.is_empty() {
+                let plus_resp = ui.add(
+                    egui::Button::new(
+                        egui::RichText::new("+")
+                            .size(theme.text_sm)
+                            .color(theme.accent),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                );
+                if plus_resp.clicked() {
+                    app.ui_store.web_tabs_add_visible = true;
+                }
+            }
+
             let arrow = if expanded { "▼" } else { "▶" };
             if ui
                 .add(
@@ -35,9 +51,12 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
 
     ui.add_space(theme.space_8);
 
-    if app.ui_store.web_tabs.is_empty() {
+    let tabs_empty = app.ui_store.web_tabs.is_empty();
+    let show_input = !tabs_empty || app.ui_store.web_tabs_add_visible;
+
+    if tabs_empty {
         ui.label(
-            egui::RichText::new("No web tabs yet.")
+            egui::RichText::new("No web tabs · click + to add")
                 .size(theme.text_xs)
                 .color(theme.text_dim),
         );
@@ -113,36 +132,38 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
             });
     }
 
-    ui.add_space(theme.space_8);
+    if show_input {
+        ui.add_space(theme.space_8);
 
-    // ── Add new tab input row ──
-    ui.horizontal(|ui| {
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut app.ui_store.editing_title)
-                .hint_text("Paste URL…")
-                .desired_width(ui.available_width() - 48.0)
-                .margin(egui::Margin::symmetric(6, 4)),
-        );
+        // ── Add new tab input row ──
+        ui.horizontal(|ui| {
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut app.ui_store.editing_title)
+                    .hint_text("Paste URL…")
+                    .desired_width(ui.available_width() - 48.0)
+                    .margin(egui::Margin::symmetric(6, 4)),
+            );
 
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new("Add")
-                        .size(theme.text_xs)
-                        .color(theme.accent),
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("Add")
+                            .size(theme.text_xs)
+                            .color(theme.accent),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                 )
-                .fill(egui::Color32::TRANSPARENT)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-            )
-            .clicked()
-            || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-        {
-            let url = app.ui_store.editing_title.trim().to_string();
-            if !url.is_empty() {
-                let title = crate::ui::render::truncate(&url, 32);
-                app.ui_store.web_tabs.push(WebTab { title, url });
-                app.ui_store.editing_title.clear();
+                .clicked()
+                || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+            {
+                let url = app.ui_store.editing_title.trim().to_string();
+                if !url.is_empty() {
+                    let title = crate::ui::render::truncate(&url, 32);
+                    app.ui_store.web_tabs.push(WebTab { title, url });
+                    app.ui_store.editing_title.clear();
+                }
             }
-        }
-    });
+        });
+    }
 }

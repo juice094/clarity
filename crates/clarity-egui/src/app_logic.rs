@@ -324,6 +324,7 @@ impl App {
                 last_input_modified: now,
                 web_tabs,
                 web_tabs_expanded: true,
+                web_tabs_add_visible: false,
                 thinking_log_expanded: false,
                 thinking_log_show_all: false,
                 pending_approvals: Vec::new(),
