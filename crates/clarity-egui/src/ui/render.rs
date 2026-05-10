@@ -339,7 +339,7 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
         egui::Frame::new()
             .fill(theme.error_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .stroke(egui::Stroke::new(1.0_f32, theme.error_text))
+            .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
@@ -433,7 +433,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
         egui::Frame::new()
             .fill(bg)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-            .stroke(egui::Stroke::new(1.0_f32, theme.border))
+            .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {

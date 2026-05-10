@@ -151,28 +151,11 @@ impl App {
                         ui.add_space(8.0);
                     }
 
-                    ui.label(
-                        egui::RichText::new("Clarity")
-                            .size(theme.text_base)
-                            .strong()
-                            .color(theme.text_muted),
-                    );
-
-                    // Session count
-                    let session_count = self.session_store.sessions.len();
-                    if session_count > 0 {
-                        ui.add_space(6.0);
-                        ui.label(
-                            egui::RichText::new(format!("{} sessions", session_count))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-                    }
-
+                    // Brand removed: titlebar is now pure navigation + controls.
                     // Session tabs moved from chat header to titlebar
                     crate::panels::chat::header::render_session_tabs(self, ui);
 
-                    // Elastic filler — drag to move window.
+                    // Elastic filler — drag to move window; double-click toggles maximize.
                     let drag_w = ui.available_size().x.max(40.0);
                     let (_drag_id, drag_resp) = ui.allocate_exact_size(
                         egui::vec2(drag_w, TITLEBAR_HEIGHT),
@@ -180,6 +163,10 @@ impl App {
                     );
                     if drag_resp.drag_started_by(egui::PointerButton::Primary) {
                         ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
+                    if drag_resp.double_clicked() {
+                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
 
                     // Right section: status indicators + settings + window controls.
@@ -351,7 +338,7 @@ impl App {
                             settings_color,
                         );
 
-                        // Combined status: "{AgentStatus} Gateway"
+                        // Gateway capsule button: consolidated status + action entry.
                         let (agent_color, agent_label) = match self.chat_store.agent_status {
                             AgentStatus::Online => (theme.status_online, "Online"),
                             AgentStatus::Busy => (theme.status_busy, "Busy"),
@@ -359,12 +346,21 @@ impl App {
                                 (theme.status_offline, "Offline")
                             }
                         };
-                        let status_text = format!("{} Gateway", agent_label);
-                        ui.label(
-                            egui::RichText::new(status_text)
+                        let capsule_text = format!("● {} Gateway", agent_label);
+                        let capsule_btn = egui::Button::new(
+                            egui::RichText::new(&capsule_text)
                                 .size(theme.text_xs)
                                 .color(agent_color),
-                        );
+                        )
+                        .fill(theme.bg_elevated)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(capsule_btn).clicked() {
+                            // Toggle a simple gateway menu (placeholder; full menu in future sprint)
+                            self.push_toast(
+                                format!("Gateway: {} — menu TBD", agent_label),
+                                crate::ui::types::ToastLevel::Info,
+                            );
+                        }
                     });
                 });
             });
