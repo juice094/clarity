@@ -212,39 +212,39 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/chat.html", get(serve_chat))
         .route("/chat-v1.html", get(serve_chat_v1))
         .nest_service("/assets", ServeDir::new(assets_dir))
-        .route("/health", get(handlers::health_check))
-        .route("/v1/chat/completions", post(handlers::chat_completions))
+        .route("/health", get(handlers::chat::health_check))
+        .route("/v1/chat/completions", post(handlers::chat::chat_completions))
         .route(
             "/v1/tasks",
-            post(handlers::create_task).get(handlers::list_tasks),
+            post(handlers::tasks::create_task).get(handlers::tasks::list_tasks),
         )
         .route(
             "/v1/tasks/:id",
-            get(handlers::get_task).delete(handlers::cancel_task),
+            get(handlers::tasks::get_task).delete(handlers::tasks::cancel_task),
         )
-        .route("/v1/parallel", post(handlers::run_parallel))
+        .route("/v1/parallel", post(handlers::tasks::run_parallel))
         .route(
             "/v1/parallel/:batch_id/status",
-            get(handlers::get_parallel_status),
+            get(handlers::tasks::get_parallel_status),
         )
-        .route("/api/files/tree", get(handlers::file_tree))
-        .route("/api/files/read", get(handlers::file_read))
-        .route("/api/files/write", post(handlers::file_write))
-        .route("/api/files/glob", get(handlers::file_glob))
-        .route("/api/provider", post(handlers::admin_switch_provider))
-        .route("/api/mcp/servers", get(handlers::list_mcp_servers))
+        .route("/api/files/tree", get(handlers::files::file_tree))
+        .route("/api/files/read", get(handlers::files::file_read))
+        .route("/api/files/write", post(handlers::files::file_write))
+        .route("/api/files/glob", get(handlers::files::file_glob))
+        .route("/api/provider", post(handlers::admin::admin_switch_provider))
+        .route("/api/mcp/servers", get(handlers::mcp::list_mcp_servers))
         .route(
             "/api/mcp/servers/:name",
-            get(handlers::get_mcp_server)
-                .post(handlers::update_mcp_server)
-                .delete(handlers::delete_mcp_server),
+            get(handlers::mcp::get_mcp_server)
+                .post(handlers::mcp::update_mcp_server)
+                .delete(handlers::mcp::delete_mcp_server),
         )
         .route(
             "/api/cron/tasks",
-            get(handlers::list_cron_tasks).post(handlers::create_cron_task),
+            get(handlers::cron::list_cron_tasks).post(handlers::cron::create_cron_task),
         )
-        .route("/api/cron/tasks/:id", delete(handlers::delete_cron_task))
-        .route("/api/search", post(handlers::search_memory))
+        .route("/api/cron/tasks/:id", delete(handlers::cron::delete_cron_task))
+        .route("/api/search", post(handlers::memory::search_memory))
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -280,23 +280,23 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/", get(serve_index))
         .route("/index.html", get(serve_index))
         .route("/chat.html", get(serve_chat))
-        .route("/api/stats", get(handlers::admin_stats))
-        .route("/api/tools", get(handlers::admin_tools))
-        .route("/api/models", get(handlers::admin_models))
-        .route("/api/provider", post(handlers::admin_switch_provider))
-        .route("/api/mesh", get(handlers::admin_mesh_status))
+        .route("/api/stats", get(handlers::admin::admin_stats))
+        .route("/api/tools", get(handlers::admin::admin_tools))
+        .route("/api/models", get(handlers::admin::admin_models))
+        .route("/api/provider", post(handlers::admin::admin_switch_provider))
+        .route("/api/mesh", get(handlers::admin::admin_mesh_status))
         .route(
             "/api/approval-mode",
-            get(handlers::admin_get_approval_mode).post(handlers::admin_set_approval_mode),
+            get(handlers::admin::admin_get_approval_mode).post(handlers::admin::admin_set_approval_mode),
         )
         .route(
             "/api/config",
-            get(handlers::admin_get_config).post(handlers::admin_set_config),
+            get(handlers::config::admin_get_config).post(handlers::config::admin_set_config),
         )
-        .route("/api/sessions", get(handlers::list_sessions))
+        .route("/api/sessions", get(handlers::sessions::list_sessions))
         .route(
             "/api/sessions/:id",
-            get(handlers::get_session).delete(handlers::delete_session),
+            get(handlers::sessions::get_session).delete(handlers::sessions::delete_session),
         )
         .layer(middleware::from_fn(admin_auth))
         .layer(TraceLayer::new_for_http())

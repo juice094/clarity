@@ -223,12 +223,12 @@ async fn load_llm_mcp() -> Option<Arc<dyn clarity_llm::api::LlmProvider>> {
 
 /// Load a single LLM provider: persisted config → auto-detection fallback.
 async fn load_llm_single() -> Arc<dyn clarity_llm::api::LlmProvider> {
-    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
+    if let Some(user_cfg) = clarity_gateway::handlers::config::load_persisted_config().await {
         info!(
             "Found persisted user config for provider: {}",
             user_cfg.provider
         );
-        match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
+        match clarity_gateway::handlers::config::build_provider_from_config(&user_cfg).await {
             Ok(provider) => {
                 info!("LLM provider loaded from persisted config");
                 Arc::from(provider)
