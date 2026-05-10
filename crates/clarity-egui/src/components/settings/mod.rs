@@ -22,7 +22,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
     let screen = ctx.screen_rect();
 
     // ── Dimmer + outside-click-to-close ──
-    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+    let scrim = app.ui_store.theme.overlay;
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen,
         egui::CornerRadius::same(0),

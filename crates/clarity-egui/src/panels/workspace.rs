@@ -25,23 +25,25 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
         .max_width(480.0)
         .resizable(true)
         .frame(
-            egui::Frame::side_top_panel(&ctx.style())
+            egui::Frame::new()
                 .fill(theme.bg)
                 .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
-            ui.add_space(theme.space_12);
-
-            // ── Workspace title (minimal) ──
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("Workspace")
-                        .size(theme.text_sm)
-                        .color(theme.text_dim),
-                );
-            });
-            ui.add_space(theme.space_8);
+            // ── Workspace header ──
+            ui.label(
+                egui::RichText::new("WORKSPACE")
+                    .size(theme.text_xs)
+                    .color(theme.text_dim),
+            );
+            let available_width = ui.available_width();
+            let (rect, _) = ui.allocate_exact_size(
+                egui::vec2(available_width, 1.0),
+                egui::Sense::hover(),
+            );
+            ui.painter().rect_filled(rect, 0.0, theme.border);
+            ui.add_space(theme.space_4);
 
             let work_dir = app.state.agent.config().working_dir.clone();
             let selected_path: Option<String> =

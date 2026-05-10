@@ -468,7 +468,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             app.switch_category(cat);
                         }
                     }
-                    ui.add_space(app.ui_store.theme.space_16);
+                    ui.add_space(app.ui_store.theme.space_12);
 
                     // ── LIVE ──
                     group_header(ui, "LIVE");
@@ -542,7 +542,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         crate::panels::subagent_progress::render_subagent_progress(app, ui);
                     }
 
-                    ui.add_space(app.ui_store.theme.space_16);
+                    ui.add_space(app.ui_store.theme.space_12);
 
                     // ── WORKSPACE ──
                     group_header(ui, "WORKSPACE");
@@ -565,7 +565,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── Cron Jobs ──
                     crate::panels::cron::render_cron_section(app, ui);
-                    ui.add_space(app.ui_store.theme.space_16);
+                    ui.add_space(app.ui_store.theme.space_12);
 
                     // ── ANALYTICS ──
                     group_header(ui, "ANALYTICS");
@@ -590,7 +590,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         &mut app.ui_store.gantt_panel_open,
                     );
 
-                    ui.add_space(app.ui_store.theme.space_16);
 
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });

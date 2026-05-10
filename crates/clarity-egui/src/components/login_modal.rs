@@ -14,7 +14,7 @@ pub fn render_oauth_login_modal(
     }
 
     let screen = ctx.screen_rect();
-    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+    let scrim = app.ui_store.theme.overlay;
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen,
         egui::CornerRadius::same(0),

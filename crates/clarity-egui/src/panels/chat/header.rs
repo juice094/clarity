@@ -1,18 +1,8 @@
 use crate::App;
 
 pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
-    if app.session_store.active_category == "emotion" {
-        let reserved_right = 260.0;
-        let tab_max = (ui.available_width() - reserved_right)
-            .max(200.0)
-            .min(480.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(tab_max, 28.0),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |_ui| {},
-        );
-        return;
-    }
+    // All categories render tabs uniformly — no special-casing for emotion.
+    // Emotion with a single session shows one tab, same visual weight as others.
     let category_sessions: Vec<(String, String, bool, String)> = app
         .session_store
         .sessions
@@ -29,7 +19,8 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         .collect();
     // Reserve space for drag region (min 40) + right-side buttons (~220px).
     // This prevents tabs from pushing window controls off-screen.
-    let reserved_right = 260.0;
+    // Reserve space for drag region (min 40) + right-side controls.
+    let reserved_right = 220.0;
     let tab_max = (ui.available_width() - reserved_right)
         .max(200.0)
         .min(480.0);
@@ -44,7 +35,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 16.0;
+                        ui.spacing_mut().item_spacing.x = 12.0;
                         let mut rename_commit: Option<(String, String)> = None;
                         let mut tab_to_close: Option<String> = None;
                         for (id, title, is_active, _category) in &category_sessions {

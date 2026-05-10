@@ -17,7 +17,7 @@ struct PendingActions {
 }
 
 pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
-    let available_height = ui.available_height() - 70.0;
+    let available_height = ui.available_height();
     let is_loading = app.chat_store.is_loading;
     let theme = app.ui_store.theme.clone();
     let max_w = app.ui_store.content_max_width;
@@ -130,7 +130,8 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             {
                 if session.messages.is_empty() && !is_loading {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(120.0);
+                        let empty_state_offset = (ui.available_height() / 3.0).max(60.0);
+                        ui.add_space(empty_state_offset);
                         ui.label(
                             egui::RichText::new("Clarity")
                                 .size(theme.text_2xl)
