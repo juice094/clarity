@@ -118,25 +118,17 @@ You are a methodological query assistant. When answering:
     let _ = tokio::fs::create_dir_all(&compiled_dir).await;
     let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
-    // 1. 优先尝试加载用户持久化配置
+    // 1. Try LLM mesh (multi-provider failover) first
     let llm: Arc<dyn clarity_llm::api::LlmProvider> =
-        if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
-            info!(
-                "Found persisted user config for provider: {}",
-                user_cfg.provider
-            );
-            match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
-                Ok(provider) => {
-                    info!("LLM provider loaded from persisted config");
-                    Arc::from(provider)
-                }
-                Err(e) => {
-                    warn!("Failed to build provider from persisted config: {}", e);
-                    load_llm_fallback().await
-                }
+        if let Ok(mesh) = clarity_llm::mesh::MeshLlmProvider::from_env().await {
+            if !mesh.provider_names().is_empty() {
+                info!("LLM mesh loaded with providers: {:?}", mesh.provider_names());
+                Arc::new(mesh)
+            } else {
+                load_llm_single().await
             }
         } else {
-            load_llm_fallback().await
+            load_llm_single().await
         };
 
     // 创建 Agent
@@ -191,6 +183,28 @@ You are a methodological query assistant. When answering:
     }
 
     Ok(Arc::new(agent))
+}
+
+/// Load a single LLM provider: persisted config → auto-detection fallback.
+async fn load_llm_single() -> Arc<dyn clarity_llm::api::LlmProvider> {
+    if let Some(user_cfg) = clarity_gateway::handlers::load_persisted_config().await {
+        info!(
+            "Found persisted user config for provider: {}",
+            user_cfg.provider
+        );
+        match clarity_gateway::handlers::build_provider_from_config(&user_cfg).await {
+            Ok(provider) => {
+                info!("LLM provider loaded from persisted config");
+                Arc::from(provider)
+            }
+            Err(e) => {
+                warn!("Failed to build provider from persisted config: {}", e);
+                load_llm_fallback().await
+            }
+        }
+    } else {
+        load_llm_fallback().await
+    }
 }
 
 /// Fallback LLM provider auto-detection.
