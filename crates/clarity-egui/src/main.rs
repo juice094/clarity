@@ -167,6 +167,7 @@ impl App {
     }
 
     fn render_titlebar(&mut self, ctx: &egui::Context) {
+        let total_w = ctx.screen_rect().width();
         let theme = self.ui_store.theme.clone();
         let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
@@ -391,58 +392,103 @@ impl App {
                             settings_color,
                         );
 
-                        // Provider label (compact) — shows active backend type.
-                        let provider_text = self
-                            .state
-                            .agent
-                            .provider_label()
-                            .map(|l| {
+                        // Provider label (compact capsule) — shows active backend type.
+                        if total_w >= 860.0 {
+                            let provider_label_full = self
+                                .state
+                                .agent
+                                .provider_label()
+                                .unwrap_or_else(|| "No LLM".to_string());
+                            let (prefix, body) = if let Some(l) = self.state.agent.provider_label() {
                                 if l.starts_with("mesh:") {
                                     let rest = &l[5..];
-                                    let first = rest.split(',').next().unwrap_or(rest);
-                                    if rest.len() > first.len() + 1 {
-                                        format!("mesh:{} +", first)
-                                    } else {
-                                        format!("mesh:{}", first)
-                                    }
+                                    let providers: Vec<&str> = rest.split(',').collect();
+                                    (Some("[≋] "), providers.join("+"))
                                 } else if l.starts_with("mcp:") {
-                                    format!("mcp:{}", &l[4..])
+                                    (Some("[M] "), l[4..].to_string())
                                 } else {
-                                    // Shorten "runtime:deepseek:deepseek-chat" → "deepseek-chat"
-                                    l.split(':')
+                                    let short = l.split(':')
                                         .nth_back(1)
                                         .or_else(|| l.split(':').next())
                                         .unwrap_or(&l)
-                                        .to_string()
+                                        .to_string();
+                                    (None, short)
                                 }
-                            })
-                            .unwrap_or_else(|| "No LLM".to_string());
-                        ui.label(
-                            egui::RichText::new(provider_text)
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
+                            } else {
+                                (None, "No LLM".to_string())
+                            };
 
-                        ui.add_space(4.0);
+                            let provider_resp = egui::Frame::new()
+                                .fill(theme.bg_elevated)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .inner_margin(egui::Margin::symmetric(8, 4))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        if let Some(p) = prefix {
+                                            ui.label(
+                                                egui::RichText::new(p)
+                                                    .size(theme.text_xs)
+                                                    .color(theme.accent),
+                                            );
+                                        }
+                                        ui.label(
+                                            egui::RichText::new(body)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_muted),
+                                        );
+                                    });
+                                })
+                                .response;
+                            if provider_resp.hovered() {
+                                provider_resp.clone().on_hover_text(provider_label_full);
+                            }
 
-                        // Gateway capsule button: consolidated status + action entry.
-                        let (agent_color, agent_label) = match self.chat_store.agent_status {
-                            AgentStatus::Online => (theme.status_online, "Online"),
-                            AgentStatus::Busy => (theme.status_busy, "Busy"),
+                            ui.add_space(4.0);
+                        }
+
+                        // Gateway capsule: colored dot + compact label.
+                        let agent_color = match self.chat_store.agent_status {
+                            AgentStatus::Online => theme.status_online,
+                            AgentStatus::Busy => theme.status_busy,
                             AgentStatus::Offline | AgentStatus::Unconfigured => {
-                                (theme.status_offline, "Offline")
+                                theme.status_offline
                             }
                         };
-                        let capsule_text = format!("● {} Gateway", agent_label);
-                        let capsule_btn = egui::Button::new(
-                            egui::RichText::new(&capsule_text)
-                                .size(theme.text_xs)
-                                .color(agent_color),
-                        )
-                        .fill(theme.bg_elevated)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(capsule_btn).clicked() {
-                            // Toggle a simple gateway menu (placeholder; full menu in future sprint)
+                        let gateway_w = if total_w >= 700.0 { 68.0 } else { 24.0 };
+                        let (gateway_rect, gateway_resp) = ui.allocate_exact_size(
+                            egui::vec2(gateway_w, TITLEBAR_HEIGHT),
+                            egui::Sense::click(),
+                        );
+                        ui.painter().rect_filled(
+                            gateway_rect,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            theme.bg_elevated,
+                        );
+                        let dot_x = if total_w >= 700.0 {
+                            gateway_rect.min.x + 12.0
+                        } else {
+                            gateway_rect.center().x
+                        };
+                        ui.painter().circle_filled(
+                            egui::pos2(dot_x, gateway_rect.center().y),
+                            4.0,
+                            agent_color,
+                        );
+                        if total_w >= 700.0 {
+                            ui.painter().text(
+                                egui::pos2(gateway_rect.min.x + 20.0, gateway_rect.center().y),
+                                egui::Align2::LEFT_CENTER,
+                                "Gateway",
+                                theme.font(theme.text_xs),
+                                agent_color,
+                            );
+                        }
+                        if gateway_resp.clicked() {
+                            let agent_label = match self.chat_store.agent_status {
+                                AgentStatus::Online => "Online",
+                                AgentStatus::Busy => "Busy",
+                                AgentStatus::Offline | AgentStatus::Unconfigured => "Offline",
+                            };
                             self.push_toast(
                                 format!("Gateway: {} — menu TBD", agent_label),
                                 crate::ui::types::ToastLevel::Info,

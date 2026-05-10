@@ -2,6 +2,15 @@ use crate::App;
 
 pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     if app.session_store.active_category == "emotion" {
+        let reserved_right = 260.0;
+        let tab_max = (ui.available_width() - reserved_right)
+            .max(200.0)
+            .min(480.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(tab_max, 28.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_ui| {},
+        );
         return;
     }
     let category_sessions: Vec<(String, String, bool, String)> = app
@@ -47,7 +56,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                                     egui::vec2(120.0, 28.0),
                                     egui::TextEdit::singleline(&mut buf)
                                         .font(egui::FontId::proportional(
-                                            app.ui_store.theme.text_sm,
+                                            app.ui_store.theme.text_md,
                                         ))
                                         .margin(egui::vec2(6.0, 4.0)),
                                 );
@@ -62,7 +71,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                                 }
                             } else {
                                 // Precise text width measurement via egui galley.
-                                let font_id = app.ui_store.theme.font(app.ui_store.theme.text_sm);
+                                let font_id = app.ui_store.theme.font(app.ui_store.theme.text_md);
                                 let text_galley = ui.painter().layout_no_wrap(
                                     title.clone(),
                                     font_id.clone(),
@@ -88,7 +97,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                                 } else if tab_resp.hovered() {
                                     app.ui_store.theme.text
                                 } else {
-                                    app.ui_store.theme.text_dim
+                                    app.ui_store.theme.text_muted
                                 };
                                 // Active tab: bottom 1px accent line.
                                 if *is_active {
