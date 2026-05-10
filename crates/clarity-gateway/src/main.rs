@@ -119,18 +119,27 @@ You are a methodological query assistant. When answering:
     let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
     // 1. Try MCP LLM server (explicit user config)
-    let llm: Arc<dyn clarity_llm::api::LlmProvider> =
+    let (llm, provider_label): (Arc<dyn clarity_llm::api::LlmProvider>, String) =
         if let Some(mcp_llm) = load_llm_mcp().await {
-            mcp_llm
+            let label = if let Ok(cmd) = std::env::var("CLARITY_MCP_LLM_COMMAND") {
+                format!("mcp:{}", cmd)
+            } else {
+                "mcp:unknown".to_string()
+            };
+            (mcp_llm, label)
         } else if let Ok(mesh) = clarity_llm::mesh::MeshLlmProvider::from_env().await {
             if !mesh.provider_names().is_empty() {
-                info!("LLM mesh loaded with providers: {:?}", mesh.provider_names());
-                Arc::new(mesh)
+                let names = mesh.provider_names();
+                info!("LLM mesh loaded with providers: {:?}", names);
+                let label = format!("mesh:{}", names.join(","));
+                (Arc::new(mesh), label)
             } else {
-                load_llm_single().await
+                let single = load_llm_single().await;
+                (single, "single".to_string())
             }
         } else {
-            load_llm_single().await
+            let single = load_llm_single().await;
+            (single, "single".to_string())
         };
 
     // 创建 Agent
@@ -138,6 +147,7 @@ You are a methodological query assistant. When answering:
         .with_memory(memory_store.clone())
         .with_memory_ticker(memory_ticker)
         .with_llm(llm.clone());
+    agent.set_provider_label(provider_label);
 
     // 注入 SubagentOrchestrator（SubagentManager）
     let subagent_ctx = clarity_dir.join("subagent_context");

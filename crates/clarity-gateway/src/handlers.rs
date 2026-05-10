@@ -993,6 +993,7 @@ pub(crate) async fn admin_switch_provider(
         match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&cmd, &args).await {
             Ok(provider) => {
                 state.agent.set_llm(Arc::new(provider));
+                state.agent.set_provider_label(format!("mcp:{}", cmd));
                 let resp = SwitchProviderResponse {
                     provider: provider_raw,
                     message: format!("Switched to MCP LLM server: {}", cmd),
@@ -1032,6 +1033,7 @@ pub(crate) async fn admin_switch_provider(
         match LlmFactory::create(&names[0]).await {
             Ok(new_llm) => {
                 state.agent.set_llm(Arc::from(new_llm));
+                state.agent.set_provider_label(&names[0]);
                 let resp = SwitchProviderResponse {
                     provider: names[0].clone(),
                     message: "Provider switched successfully".to_string(),
@@ -1054,6 +1056,7 @@ pub(crate) async fn admin_switch_provider(
                 let mesh = Arc::new(mesh);
                 let _ = MESH_PROVIDER.set(mesh.clone());
                 state.agent.set_llm(mesh);
+                state.agent.set_provider_label(format!("mesh:{}", names.join(",")));
                 let resp = SwitchProviderResponse {
                     provider: req.provider,
                     message: format!(
