@@ -19,6 +19,8 @@ pub fn window_control_button(
     let fill = if hovered { hover_fill } else { egui::Color32::TRANSPARENT };
     let color = if hovered { hover_icon_color } else { normal_icon_color };
 
+    // Return the *button's* response so hover state is fully synchronized
+    // with the widget we actually draw.
     ui.put(
         response.rect,
         egui::Button::new(
@@ -28,8 +30,7 @@ pub fn window_control_button(
         )
         .fill(fill)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .min_size(desired_size),
-    );
-
-    response
+        .min_size(desired_size)
+        .frame(false),
+    )
 }

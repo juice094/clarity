@@ -57,8 +57,8 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     ui.available_width()
                 };
                 ui.allocate_ui_with_layout(
-                    egui::vec2(tree_width, ui.available_height()),
-                    egui::Layout::top_down(egui::Align::LEFT),
+                    egui::vec2(tree_width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
                         let max_tree_h = if has_plan {

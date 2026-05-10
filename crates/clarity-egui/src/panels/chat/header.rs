@@ -34,18 +34,15 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         };
         let total_available =
             (ui.available_width() - reserved_for_plus - total_spacing).max(0.0);
-        const TAB_MIN: f32 = 60.0;
+        const TAB_MIN: f32 = 48.0;
         const TAB_MAX: f32 = 180.0;
         let raw_width = if tab_count == 0 {
             0.0
         } else {
             total_available / tab_count as f32
         };
-        let tab_width = if raw_width < TAB_MIN {
-            raw_width.max(40.0)
-        } else {
-            raw_width.clamp(TAB_MIN, TAB_MAX)
-        };
+        // Continuous clamp — no piecewise discontinuity that causes width jumps
+        let tab_width = raw_width.clamp(TAB_MIN, TAB_MAX);
 
         for (id, title, is_active, _category) in &category_sessions {
             let editing = app.ui_store.editing_session_id.as_ref() == Some(id);

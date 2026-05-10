@@ -7,9 +7,8 @@ use crate::theme::Theme;
 ///
 /// # Layout
 /// Uses `allocate_exact_size` (allowed per RULE 4 for custom widgets in `widgets/`)
-/// so the capsule has a predictable, measured footprint.  This prevents the
-/// overlap that occurs when `Frame::show` auto-sizes collide in a cramped
-/// title-bar right section.
+/// so the capsule has a predictable, measured footprint.  A 1px subtle stroke is
+/// added to prevent visual merging with adjacent capsules in cramped titlebars.
 pub fn status_capsule(
     ui: &mut egui::Ui,
     dot_color: egui::Color32,
@@ -53,14 +52,13 @@ pub fn status_capsule(
     };
     let (rect, response) = ui.allocate_exact_size(desired_size, sense);
 
-    let _hovered = response.hovered();
-
-    // ── Background frame (decorative fill, not interactive) ──
+    // ── Background frame with subtle stroke to prevent visual merging ──
     ui.allocate_new_ui(
         egui::UiBuilder::new().max_rect(rect),
         |ui| {
             egui::Frame::new()
                 .fill(theme.bg_elevated)
+                .stroke(egui::Stroke::new(1.0, theme.border))
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                 .inner_margin(egui::Margin::symmetric(margin_x as i8, margin_y as i8))
                 .show(ui, |ui| {

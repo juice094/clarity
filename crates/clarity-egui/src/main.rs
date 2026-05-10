@@ -182,10 +182,26 @@ impl App {
 
                 // Single horizontal row:
                 // [toggle?] [title] [sessions] [tabs] [elastic drag] [status] [settings] [buttons]
+                // ── Titlebar three-zone layout ──
+                // LEFT  : sidebar toggle + Brand
+                // CENTER: session tabs + elastic drag filler (bounded)
+                // RIGHT : window controls + status capsules
+                //
+                // We pre-compute the right-section footprint so the center zone
+                // never encroaches on it, eliminating overlap / truncation.
+                let show_status_labels = ctx.screen_rect().width() >= 720.0;
+                let right_section_w = {
+                    let btn_w = 36.0_f32;
+                    let gap = 8.0_f32;
+                    let capsule_w = if show_status_labels { 72.0 } else { 24.0 };
+                    // Close + Max + Min + Settings + gap + 2 capsules + inner gap
+                    btn_w * 4.0 + gap + capsule_w * 2.0 + 4.0
+                };
+
                 ui.horizontal_centered(|ui| {
                     ui.set_min_height(TITLEBAR_HEIGHT);
 
-                    // Sidebar toggle when collapsed
+                    // ── LEFT zone ──
                     if self.ui_store.sidebar_collapsed {
                         if crate::widgets::icon_button_toolbar(
                             ui,
@@ -199,8 +215,6 @@ impl App {
                         }
                         ui.add_space(8.0);
                     }
-
-                    // Brand
                     ui.label(
                         egui::RichText::new("Clarify")
                             .size(theme.text_base)
@@ -208,27 +222,34 @@ impl App {
                     );
                     ui.add_space(8.0);
 
-                    // Session tabs moved from chat header to titlebar
-                    crate::panels::chat::header::render_session_tabs(self, ui);
-
-                    // Elastic filler — drag to move window; double-click toggles maximize.
-                    let drag_w = ui.available_size().x.max(40.0);
-                    let (_drag_id, drag_resp) = ui.allocate_exact_size(
-                        egui::vec2(drag_w, TITLEBAR_HEIGHT),
-                        egui::Sense::click_and_drag(),
+                    // ── CENTER zone: tabs + drag filler ──
+                    let center_w = (ui.available_width() - right_section_w).max(40.0);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(center_w, TITLEBAR_HEIGHT),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            crate::panels::chat::header::render_session_tabs(self, ui);
+                            let drag_w = ui.available_width().max(20.0);
+                            let (_, drag_resp) = ui.allocate_exact_size(
+                                egui::vec2(drag_w, TITLEBAR_HEIGHT),
+                                egui::Sense::click_and_drag(),
+                            );
+                            if drag_resp.drag_started_by(egui::PointerButton::Primary) {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                            }
+                            if drag_resp.double_clicked() {
+                                let is_maximized =
+                                    ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                                ctx.send_viewport_cmd(
+                                    egui::ViewportCommand::Maximized(!is_maximized),
+                                );
+                            }
+                        },
                     );
-                    if drag_resp.drag_started_by(egui::PointerButton::Primary) {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                    }
-                    if drag_resp.double_clicked() {
-                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                    }
 
-                    // Right section: status indicators + settings + window controls.
-                    // Rendered right-to-left so interactive elements have higher z-order
-                    // than the drag region — clicks are not swallowed.
+                    // ── RIGHT zone ──
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
                         // Close
                         let close_resp = crate::widgets::window_control_button(
                             ui,
@@ -291,7 +312,6 @@ impl App {
                         }
 
                         // Connection status capsule (label hidden on narrow windows)
-                        let show_status_labels = ctx.screen_rect().width() >= 720.0;
                         let (conn_label, conn_color) = match self.chat_store.agent_status {
                             AgentStatus::Online => ("Online", theme.status_online),
                             AgentStatus::Busy => ("Busy", theme.status_busy),
