@@ -20,9 +20,11 @@ pub const ICON_EDIT: &str = "\u{E3AE}";
 pub const ICON_REFRESH: &str = "\u{E19E}";
 pub const ICON_EXPORT: &str = "\u{E524}";
 pub const ICON_IMPORT: &str = "\u{E52A}";
-pub const ICON_BRAIN: &str = "\u{E74E}";
+pub const ICON_CHAT: &str = "\u{E15C}";
 pub const ICON_BOOK: &str = "\u{E0E2}";
 pub const ICON_WRENCH: &str = "\u{E5D4}";
+pub const ICON_PUZZLE: &str = "\u{E596}";
+pub const ICON_PLUG: &str = "\u{E946}";
 pub const ICON_CARET_DOWN: &str = "\u{E136}";
 pub const ICON_CARET_RIGHT: &str = "\u{E13A}";
 

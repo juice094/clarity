@@ -178,7 +178,13 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 } else {
                                     app.ui_store.theme.text_dim
                                 };
-                                crate::ui::icons::paint_mcp(&painter, icon_center, icon_color);
+                                painter.text(
+                                    icon_center,
+                                    egui::Align2::CENTER_CENTER,
+                                    crate::theme::ICON_PLUG,
+                                    app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
+                                    icon_color,
+                                );
                                 if mcp_count > 0 {
                                     painter.text(
                                         mcp_resp.rect.center() + egui::vec2(6.0, 0.0),
@@ -211,7 +217,13 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 } else {
                                     app.ui_store.theme.text_dim
                                 };
-                                crate::ui::icons::paint_skills(&painter, skills_resp.rect.center(), skills_color);
+                                painter.text(
+                                    skills_resp.rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    crate::theme::ICON_PUZZLE,
+                                    app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
+                                    skills_color,
+                                );
                             }
                             if skills_resp.clicked() {
                                 app.ui_store.skill_panel_open = true;
@@ -399,7 +411,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                         // Role icon (Phosphor font)
                         let role_icon = match cat {
-                            "emotion" => crate::theme::ICON_BRAIN,
+                            "emotion" => crate::theme::ICON_CHAT,
                             "knowledge" => crate::theme::ICON_BOOK,
                             _ => crate::theme::ICON_WRENCH,
                         };
