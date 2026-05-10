@@ -41,8 +41,14 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         } else {
             total_available / tab_count as f32
         };
-        // Continuous clamp — no piecewise discontinuity that causes width jumps
-        let tab_width = raw_width.clamp(TAB_MIN, TAB_MAX);
+        // When space is too tight even for TAB_MIN, shrink proportionally
+        // rather than clamping — this prevents the tab bar from overflowing
+        // its allocated zone and being visually truncated.
+        let tab_width = if raw_width < TAB_MIN {
+            raw_width.max(28.0)
+        } else {
+            raw_width.clamp(TAB_MIN, TAB_MAX)
+        };
 
         for (id, title, is_active, _category) in &category_sessions {
             let editing = app.ui_store.editing_session_id.as_ref() == Some(id);

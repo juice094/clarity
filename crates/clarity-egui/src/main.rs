@@ -192,10 +192,9 @@ impl App {
                 let show_status_labels = ctx.screen_rect().width() >= 720.0;
                 let right_section_w = {
                     let btn_w = 36.0_f32;
-                    let gap = 8.0_f32;
-                    let capsule_w = if show_status_labels { 72.0 } else { 24.0 };
-                    // Close + Max + Min + Settings + gap + 2 capsules + inner gap
-                    btn_w * 4.0 + gap + capsule_w * 2.0 + 4.0
+                    let capsule_w = if show_status_labels { 60.0 } else { 24.0 };
+                    // 4 buttons + 8px sep + 2 capsules + 4px inner gap
+                    btn_w * 4.0 + 8.0 + capsule_w * 2.0 + 4.0
                 };
 
                 ui.horizontal_centered(|ui| {
