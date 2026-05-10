@@ -103,11 +103,7 @@ pub fn render_file_tree(
                 on_file_click(&full_path);
             }
         } else {
-            // ── Custom painter row for files ──
-            // Using raw painter + interact gives us:
-            //   - full-width hover background
-            //   - 3px left accent bar on selection
-            //   - depth-based indent (8px per level + 12px base)
+            // ── File row (layout-driven, decorator painter only) ──
             let full_width = ui.available_width();
             let row_height = 20.0;
             let row_rect = ui.available_rect_before_wrap();
@@ -123,77 +119,92 @@ pub fn render_file_tree(
                 a == b
             });
 
+            let fill = if is_selected {
+                theme.bg_hover
+            } else if response.hovered() {
+                theme.bg_hover.linear_multiply(0.5)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            let text_color = if is_selected {
+                theme.text
+            } else {
+                theme.text_dim
+            };
+            let indent = if compact {
+                4.0
+            } else {
+                8.0 * depth as f32 + 12.0
+            };
+
             if ui.is_rect_visible(row_rect) {
-                let painter = ui.painter_at(row_rect);
-                if is_selected {
-                    // Selected: full bg_hover + accent bar on left edge
-                    painter.rect_filled(row_rect, egui::CornerRadius::same(4), theme.bg_hover);
-                    let accent_bar = egui::Rect::from_min_max(
-                        egui::pos2(row_rect.min.x, row_rect.min.y + 2.0),
-                        egui::pos2(row_rect.min.x + 3.0, row_rect.max.y - 2.0),
-                    );
-                    painter.rect_filled(accent_bar, egui::CornerRadius::same(2), theme.accent);
-                } else if response.hovered() {
-                    // Hover: subtle bg_hover
-                    painter.rect_filled(
-                        row_rect,
-                        egui::CornerRadius::same(4),
-                        theme.bg_hover.linear_multiply(0.5),
-                    );
-                }
-                let indent = if compact {
-                    4.0
-                } else {
-                    8.0 * depth as f32 + 12.0
-                };
-                let text_color = if is_selected {
-                    theme.text
-                } else {
-                    theme.text_dim
-                };
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new().max_rect(row_rect),
+                    |ui| {
+                        egui::Frame::new()
+                            .fill(fill)
+                            .corner_radius(egui::CornerRadius::same(4))
+                            .show(ui, |ui| {
+                                if is_selected {
+                                    let accent_bar = egui::Rect::from_min_max(
+                                        egui::pos2(ui.min_rect().min.x, ui.min_rect().min.y + 2.0),
+                                        egui::pos2(ui.min_rect().min.x + 3.0, ui.min_rect().max.y - 2.0),
+                                    );
+                                    ui.painter().rect_filled(
+                                        accent_bar,
+                                        egui::CornerRadius::same(2),
+                                        theme.accent,
+                                    );
+                                }
+                                ui.horizontal(|ui| {
+                                    ui.add_space(indent);
 
-                // Icon
-                let icon_size = if compact { 10.0 } else { 14.0 };
-                let icon_rect = egui::Rect::from_min_size(
-                    row_rect.min + egui::vec2(indent, 3.0),
-                    egui::vec2(icon_size, icon_size),
-                );
-                crate::ui::icons::paint_file(&painter, icon_rect, text_color);
+                                    // Icon (decorative painter — allowed per RULE 2)
+                                    let icon_size = if compact { 10.0 } else { 14.0 };
+                                    let icon_resp = ui.allocate_exact_size(
+                                        egui::vec2(icon_size, icon_size),
+                                        egui::Sense::hover(),
+                                    );
+                                    let icon_rect = icon_resp.1.rect;
+                                    if ui.is_rect_visible(icon_rect) {
+                                        let painter = ui.painter_at(icon_rect);
+                                        crate::ui::icons::paint_file(&painter, icon_rect, text_color);
+                                        if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
+                                            let badge = match ext {
+                                                "rs" => Some("R"),
+                                                "md" => Some("M"),
+                                                "toml" => Some("≡"),
+                                                _ => None,
+                                            };
+                                            if let Some(b) = badge {
+                                                crate::ui::icons::paint_file_badge(
+                                                    &painter,
+                                                    icon_rect,
+                                                    b,
+                                                    text_color,
+                                                    if compact { 5.0 } else { 6.0 },
+                                                );
+                                            }
+                                        }
+                                    }
 
-                // File-type badge
-                if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
-                    let badge = match ext {
-                        "rs" => Some("R"),
-                        "md" => Some("M"),
-                        "toml" => Some("≡"),
-                        _ => None,
-                    };
-                    if let Some(b) = badge {
-                        crate::ui::icons::paint_file_badge(
-                            &painter,
-                            icon_rect,
-                            b,
-                            text_color,
-                            if compact { 5.0 } else { 6.0 },
-                        );
-                    }
-                }
+                                    ui.add_space(4.0);
 
-                // Filename text
-                let text_pos = row_rect.min
-                    + egui::vec2(indent + icon_size + 4.0, 3.0);
-                let label = if compact {
-                    let prefix: String = name.chars().take(3).collect();
-                    prefix
-                } else {
-                    name.clone()
-                };
-                painter.text(
-                    text_pos,
-                    egui::Align2::LEFT_TOP,
-                    label,
-                    egui::FontId::new(theme.text_sm, egui::FontFamily::Proportional),
-                    text_color,
+                                    // Filename
+                                    let label = if compact {
+                                        let prefix: String = name.chars().take(3).collect();
+                                        prefix
+                                    } else {
+                                        name.clone()
+                                    };
+                                    ui.label(
+                                        egui::RichText::new(label)
+                                            .size(theme.text_sm)
+                                            .color(text_color),
+                                    );
+                                });
+                            });
+                    },
                 );
             }
             if response.clicked() {
