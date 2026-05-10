@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, info};
 
+use crate::handlers::AgentHandle;
 use crate::server::AppState;
 use clarity_core::background::TaskId;
 use clarity_core::background::{TaskResult, TaskSpec, TaskStatus};
@@ -240,7 +241,7 @@ pub(crate) async fn run_parallel(
     let config = clarity_contract::subagent::ParallelConfig::new()
         .with_max_concurrency(req.max_concurrency.unwrap_or(4).max(1));
 
-    let agent = (*state.agent).clone();
+    let agent = state.clone_agent();
 
     match agent
         .run_parallel(specs, config, Some(progress.clone()))

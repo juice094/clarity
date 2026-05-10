@@ -17,18 +17,19 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
+use crate::handlers::AgentHandle;
 use crate::server::AppState;
 
 // ==================== 健康检查 ====================
 
 #[derive(Serialize)]
-pub struct HealthResponse {
+pub(crate) struct HealthResponse {
     pub status: String,
     pub version: String,
     pub timestamp: String,
 }
 
-pub async fn health_check() -> impl IntoResponse {
+pub(crate) async fn health_check() -> impl IntoResponse {
     debug!("Health check requested");
     let response = HealthResponse {
         status: "healthy".to_string(),
@@ -42,7 +43,7 @@ pub async fn health_check() -> impl IntoResponse {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-pub struct ChatCompletionRequest {
+pub(crate) struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<Message>,
     #[serde(default)]
@@ -58,13 +59,13 @@ pub struct ChatCompletionRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Message {
+pub(crate) struct Message {
     pub role: String,
     pub content: String,
 }
 
 #[derive(Serialize)]
-pub struct ChatCompletionResponse {
+pub(crate) struct ChatCompletionResponse {
     pub id: String,
     pub object: String,
     pub created: i64,
@@ -76,20 +77,20 @@ pub struct ChatCompletionResponse {
 }
 
 #[derive(Serialize)]
-pub struct Choice {
+pub(crate) struct Choice {
     pub index: u32,
     pub message: Message,
     pub finish_reason: String,
 }
 
 #[derive(Serialize)]
-pub struct Usage {
+pub(crate) struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-pub async fn chat_completions(
+pub(crate) async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Response {
@@ -134,7 +135,7 @@ pub async fn chat_completions(
     }
 
     // Create a per-request AgentController so that streaming events are isolated.
-    let agent = (*state.agent).clone();
+    let agent = state.clone_agent();
 
     // Security: log a warning when the agent is in Yolo mode via Gateway,
     // since HTTP clients cannot interactively approve dangerous tool calls.

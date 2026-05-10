@@ -75,6 +75,32 @@ impl AppState {
     }
 }
 
+impl crate::handlers::AgentHandle for AppState {
+    fn clone_agent(&self) -> clarity_core::agent::Agent {
+        (*self.agent).clone()
+    }
+
+    fn registry(&self) -> &clarity_core::registry::ToolRegistry {
+        self.agent.registry()
+    }
+
+    fn set_approval_mode(&self, mode: clarity_core::approval::ApprovalMode) {
+        self.agent.set_approval_mode(mode);
+    }
+
+    fn approval_mode(&self) -> clarity_core::approval::ApprovalMode {
+        self.agent.approval_mode()
+    }
+
+    fn set_llm(&self, backend: std::sync::Arc<dyn clarity_core::agent::LlmProvider>) {
+        self.agent.set_llm(backend);
+    }
+
+    fn set_provider_label<S: Into<String>>(&self, label: S) {
+        self.agent.set_provider_label(label);
+    }
+}
+
 /// 运行双端口服务器
 pub async fn run(
     agent: Arc<Agent>,

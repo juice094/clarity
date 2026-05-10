@@ -10,6 +10,19 @@ pub mod mcp;
 pub mod cron;
 pub mod memory;
 
+/// Trait abstracting the agent operations required by HTTP handlers.
+///
+/// Decouples handlers from the concrete `AppState` god-object so that
+/// only the operations actually used by the HTTP layer are exposed.
+pub(crate) trait AgentHandle {
+    fn clone_agent(&self) -> clarity_core::agent::Agent;
+    fn registry(&self) -> &clarity_core::registry::ToolRegistry;
+    fn set_approval_mode(&self, mode: clarity_core::approval::ApprovalMode);
+    fn approval_mode(&self) -> clarity_core::approval::ApprovalMode;
+    fn set_llm(&self, backend: std::sync::Arc<dyn clarity_core::agent::LlmProvider>);
+    fn set_provider_label<S: Into<String>>(&self, label: S);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

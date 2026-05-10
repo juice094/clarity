@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use std::sync::Arc;
 
+use crate::handlers::AgentHandle;
 use crate::server::AppState;
 use serde_json::json;
 
@@ -199,7 +200,7 @@ pub(crate) async fn admin_set_config(
                 );
             }
             // Apply to agent
-            state.agent.set_llm(Arc::from(provider));
+            state.set_llm(Arc::from(provider));
 
             let resp = ConfigResponse {
                 provider: req.provider.clone(),

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
+use crate::handlers::AgentHandle;
 use crate::server::AppState;
 use crate::session::SessionId;
 use crate::session_store::SessionMessage;
@@ -129,7 +130,7 @@ async fn handle_chat_with_wire(
 
     // Create wire and wire-enabled agent
     let wire = clarity_wire::Wire::new();
-    let agent = (*state.agent).clone().with_wire(Arc::new(wire.clone()));
+    let agent = state.clone_agent().with_wire(Arc::new(wire.clone()));
 
     // Run agent in background
     let message_clone = message.clone();
@@ -301,7 +302,7 @@ async fn handle_request(
             }
 
             // 使用 Agent 处理消息
-            match state.agent.run(&message).await {
+            match state.clone_agent().run(&message).await {
                 Ok(response_text) => {
                     // 记录助手回复到持久化存储
                     let assistant_msg = SessionMessage::new("assistant", &response_text);

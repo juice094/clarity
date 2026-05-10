@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, info};
 
+use crate::handlers::AgentHandle;
 use crate::server::AppState;
 
 // ==================== Admin API ====================
@@ -48,7 +49,7 @@ pub(crate) struct ToolInfo {
 }
 
 pub(crate) async fn admin_tools(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let tools = match state.agent.registry().get_tool_schemas() {
+    let tools = match state.registry().get_tool_schemas() {
         Ok(schemas) => {
             if let Some(functions) = schemas.as_array() {
                 functions
@@ -153,7 +154,7 @@ pub(crate) async fn admin_set_approval_mode(
         }
     };
 
-    state.agent.set_approval_mode(mode);
+    state.set_approval_mode(mode);
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
     };
@@ -163,7 +164,7 @@ pub(crate) async fn admin_set_approval_mode(
 pub(crate) async fn admin_get_approval_mode(
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    let mode = state.agent.approval_mode();
+    let mode = state.approval_mode();
     let resp = ApprovalModeResponse {
         mode: format!("{:?}", mode).to_lowercase(),
     };
@@ -201,8 +202,8 @@ pub(crate) async fn admin_switch_provider(
         info!("MCP LLM switch: command={}, args={:?}", cmd, args);
         match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&cmd, &args).await {
             Ok(provider) => {
-                state.agent.set_llm(Arc::new(provider));
-                state.agent.set_provider_label(format!("mcp:{}", cmd));
+                state.set_llm(Arc::new(provider));
+                state.set_provider_label(format!("mcp:{}", cmd));
                 let resp = SwitchProviderResponse {
                     provider: provider_raw,
                     message: format!("Switched to MCP LLM server: {}", cmd),
@@ -241,8 +242,8 @@ pub(crate) async fn admin_switch_provider(
         // Single provider — direct replacement
         match LlmFactory::create(&names[0]).await {
             Ok(new_llm) => {
-                state.agent.set_llm(Arc::from(new_llm));
-                state.agent.set_provider_label(&names[0]);
+                state.set_llm(Arc::from(new_llm));
+                state.set_provider_label(&names[0]);
                 let resp = SwitchProviderResponse {
                     provider: names[0].clone(),
                     message: "Provider switched successfully".to_string(),
@@ -264,8 +265,8 @@ pub(crate) async fn admin_switch_provider(
             Ok(mesh) => {
                 let mesh = Arc::new(mesh);
                 let _ = MESH_PROVIDER.set(mesh.clone());
-                state.agent.set_llm(mesh);
-                state.agent.set_provider_label(format!("mesh:{}", names.join(",")));
+                state.set_llm(mesh);
+                state.set_provider_label(format!("mesh:{}", names.join(",")));
                 let resp = SwitchProviderResponse {
                     provider: req.provider,
                     message: format!(
