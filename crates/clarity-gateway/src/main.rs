@@ -118,9 +118,11 @@ You are a methodological query assistant. When answering:
     let _ = tokio::fs::create_dir_all(&compiled_dir).await;
     let memory_ticker = SharedMemoryTicker::new(MemoryTicker::new(&compiled_dir, Some(5)));
 
-    // 1. Try LLM mesh (multi-provider failover) first
+    // 1. Try MCP LLM server (explicit user config)
     let llm: Arc<dyn clarity_llm::api::LlmProvider> =
-        if let Ok(mesh) = clarity_llm::mesh::MeshLlmProvider::from_env().await {
+        if let Some(mcp_llm) = load_llm_mcp().await {
+            mcp_llm
+        } else if let Ok(mesh) = clarity_llm::mesh::MeshLlmProvider::from_env().await {
             if !mesh.provider_names().is_empty() {
                 info!("LLM mesh loaded with providers: {:?}", mesh.provider_names());
                 Arc::new(mesh)
@@ -183,6 +185,30 @@ You are a methodological query assistant. When answering:
     }
 
     Ok(Arc::new(agent))
+}
+
+/// Try connecting to an MCP LLM server via stdio.
+/// Controlled by `CLARITY_MCP_LLM_COMMAND` and `CLARITY_MCP_LLM_ARGS`.
+async fn load_llm_mcp() -> Option<Arc<dyn clarity_llm::api::LlmProvider>> {
+    let command = std::env::var("CLARITY_MCP_LLM_COMMAND").ok()?;
+    let args = std::env::var("CLARITY_MCP_LLM_ARGS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+
+    info!("Attempting MCP LLM connection: {} {:?}", command, args);
+    match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&command, &args).await {
+        Ok(provider) => {
+            info!("MCP LLM provider connected successfully");
+            Some(Arc::new(provider))
+        }
+        Err(e) => {
+            warn!("Failed to connect MCP LLM provider: {}", e);
+            None
+        }
+    }
 }
 
 /// Load a single LLM provider: persisted config → auto-detection fallback.
