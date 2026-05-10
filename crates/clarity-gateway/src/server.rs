@@ -284,6 +284,7 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/tools", get(handlers::admin_tools))
         .route("/api/models", get(handlers::admin_models))
         .route("/api/provider", post(handlers::admin_switch_provider))
+        .route("/api/mesh", get(handlers::admin_mesh_status))
         .route(
             "/api/approval-mode",
             get(handlers::admin_get_approval_mode).post(handlers::admin_set_approval_mode),

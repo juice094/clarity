@@ -974,6 +974,8 @@ pub(crate) struct SwitchProviderResponse {
     pub message: String,
 }
 
+static MESH_PROVIDER: std::sync::OnceLock<Arc<clarity_llm::mesh::MeshLlmProvider>> = std::sync::OnceLock::new();
+
 pub(crate) async fn admin_switch_provider(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SwitchProviderRequest>,
@@ -1021,7 +1023,9 @@ pub(crate) async fn admin_switch_provider(
         // Multi-provider mesh
         match clarity_llm::mesh::MeshLlmProvider::from_names(names.clone()).await {
             Ok(mesh) => {
-                state.agent.set_llm(Arc::new(mesh));
+                let mesh = Arc::new(mesh);
+                let _ = MESH_PROVIDER.set(mesh.clone());
+                state.agent.set_llm(mesh);
                 let resp = SwitchProviderResponse {
                     provider: req.provider,
                     message: format!(
@@ -1040,6 +1044,36 @@ pub(crate) async fn admin_switch_provider(
                 (StatusCode::BAD_REQUEST, Json(resp))
             }
         }
+    }
+}
+
+#[derive(Serialize)]
+pub(crate) struct MeshStatusResponse {
+    pub active: bool,
+    pub providers: Vec<String>,
+    pub circuits: std::collections::HashMap<String, String>,
+}
+
+pub(crate) async fn admin_mesh_status() -> impl IntoResponse {
+    if let Some(mesh) = MESH_PROVIDER.get() {
+        let circuits = mesh
+            .circuit_states()
+            .into_iter()
+            .map(|(k, v)| (k, format!("{:?}", v).to_lowercase()))
+            .collect();
+        let resp = MeshStatusResponse {
+            active: true,
+            providers: mesh.provider_names(),
+            circuits,
+        };
+        (StatusCode::OK, Json(resp))
+    } else {
+        let resp = MeshStatusResponse {
+            active: false,
+            providers: vec![],
+            circuits: std::collections::HashMap::new(),
+        };
+        (StatusCode::OK, Json(resp))
     }
 }
 
