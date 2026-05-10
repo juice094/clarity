@@ -195,7 +195,7 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                         let bar_x = row_rect.min.x + label_col_w;
                         let bar_w = 200.0_f32.min(bar_col_w);
                         let bar_rect = egui::Rect::from_min_size(
-                            egui::pos2(bar_x, row_rect.min.y + (bar_height - bar_height) * 0.5),
+                            egui::pos2(bar_x, row_rect.min.y),
                             egui::vec2(bar_w, bar_height),
                         );
                         let color = step_color(step.status, &theme);
