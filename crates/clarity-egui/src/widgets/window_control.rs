@@ -27,7 +27,8 @@ pub fn window_control_button(
                 .color(color),
         )
         .fill(fill)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .min_size(desired_size),
     );
 
     response

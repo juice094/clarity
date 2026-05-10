@@ -61,13 +61,16 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
-                        let mut scroll = egui::ScrollArea::vertical()
+                        let max_tree_h = if has_plan {
+                            ui.available_height() * 0.55
+                        } else {
+                            ui.available_height()
+                        };
+                        egui::ScrollArea::vertical()
                             .id_salt("workspace_file_tree")
-                            .auto_shrink([true, false]);
-                        if has_plan {
-                            scroll = scroll.max_height(ui.available_height() * 0.55);
-                        }
-                        scroll.show(ui, |ui| {
+                            .auto_shrink([true, true])
+                            .max_height(max_tree_h)
+                            .show(ui, |ui| {
                             crate::ui::file_browser::render_file_tree(
                                 ui,
                                 &work_dir,
