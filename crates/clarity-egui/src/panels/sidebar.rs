@@ -257,6 +257,99 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     });
                     ui.add_space(app.ui_store.theme.space_12);
 
+                    // Helper for group headers
+                    let group_header = |ui: &mut egui::Ui, text: &str| {
+                        ui.label(
+                            egui::RichText::new(text)
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                        );
+                        let available_width = ui.available_width();
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(available_width, 1.0),
+                            egui::Sense::hover(),
+                        );
+                        ui.painter().rect_filled(rect, 0.0, theme.border);
+                        ui.add_space(theme.space_4);
+                    };
+
+                    // Helper for clickable sidebar rows
+                    let clickable_row = |ui: &mut egui::Ui,
+                                         id: egui::Id,
+                                         label: &str,
+                                         count: Option<usize>,
+                                         is_open: &mut bool| {
+                        let available_width = ui.available_width();
+                        let row_rect = egui::Rect::from_min_size(
+                            ui.cursor().min,
+                            egui::vec2(available_width, 28.0),
+                        );
+                        let row_resp = ui.interact(row_rect, id, egui::Sense::click());
+                        if row_resp.clicked() {
+                            *is_open = !*is_open;
+                        }
+                        if row_resp.hovered() {
+                            ui.painter()
+                                .rect_filled(row_rect, theme.radius_sm, theme.bg_hover);
+                        }
+
+                        let text_color = if row_resp.hovered() || *is_open {
+                            theme.text
+                        } else {
+                            theme.text_dim
+                        };
+
+                        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(row_rect), |ui| {
+                            ui.horizontal(|ui| {
+                                ui.add_space(8.0);
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .size(theme.text_sm)
+                                        .strong()
+                                        .color(text_color),
+                                );
+                                if let Some(c) = count {
+                                    if c > 0 {
+                                        ui.label(
+                                            egui::RichText::new(format!("({})", c))
+                                                .size(theme.text_sm)
+                                                .color(theme.text_muted),
+                                        );
+                                    }
+                                }
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(8.0);
+                                        if *is_open {
+                                            let chevron_resp = ui.add(
+                                                egui::Button::new("")
+                                                    .fill(egui::Color32::TRANSPARENT)
+                                                    .corner_radius(egui::CornerRadius::same(
+                                                        theme.radius_sm as u8,
+                                                    ))
+                                                    .min_size(egui::vec2(20.0, 20.0)),
+                                            );
+                                            if ui.is_rect_visible(chevron_resp.rect) {
+                                                let painter = ui.painter_at(chevron_resp.rect);
+                                                crate::ui::icons::paint_chevron_right(
+                                                    &painter,
+                                                    chevron_resp.rect.center(),
+                                                    6.0,
+                                                    theme.accent,
+                                                );
+                                            }
+                                        }
+                                    },
+                                );
+                            });
+                        });
+                        ui.advance_cursor_after_rect(row_rect);
+                    };
+
+                    // ── ROLES ──
+                    group_header(ui, "ROLES");
+
                     // ── Category navigation ──
                     let categories = [
                         ("emotion", app.t("Emotion")),
@@ -321,20 +414,35 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         );
 
                         // Status dot + active count
-                        let dot_y = line_y + theme.text_base + 4.0;
-                        let dot_center = egui::pos2(content_left + 4.0, dot_y + 5.0);
-                        painter.circle_filled(dot_center, 3.0, theme.status_online);
-                        painter.text(
-                            egui::pos2(content_left + 14.0, dot_y),
-                            egui::Align2::LEFT_TOP,
-                            format!("{} active", count),
-                            theme.font(theme.text_xs),
-                            theme.text_dim,
-                        );
+                        if count > 0 {
+                            let dot_y = line_y + theme.text_base + 4.0;
+                            let dot_center = egui::pos2(content_left + 4.0, dot_y + 5.0);
+                            painter.circle_filled(dot_center, 4.5, theme.status_online);
+                            painter.circle_stroke(
+                                dot_center,
+                                4.5,
+                                egui::Stroke::new(1.0, theme.status_online),
+                            );
+                            let session_text = if count == 1 {
+                                format!("{} session", count)
+                            } else {
+                                format!("{} sessions", count)
+                            };
+                            painter.text(
+                                egui::pos2(content_left + 16.0, dot_y),
+                                egui::Align2::LEFT_TOP,
+                                session_text,
+                                theme.font(theme.text_xs),
+                                theme.text_dim,
+                            );
+                        }
 
                         // Latest instance name (truncated)
                         if let Some(s) = latest {
-                            let name_y = dot_y + theme.text_xs + 4.0;
+                            let name_y = line_y
+                                + theme.text_base
+                                + 4.0
+                                + if count > 0 { theme.text_xs + 4.0 } else { 0.0 };
                             let display = if s.title.chars().count() > 18 {
                                 let truncated: String = s.title.chars().take(15).collect();
                                 format!("└─ {}...", truncated)
@@ -356,12 +464,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── LIVE ──
+                    group_header(ui, "LIVE");
+
                     // ── Web Tabs ──
                     crate::components::web_tabs::render_web_tabs(app, ui);
-                    ui.add_space(app.ui_store.theme.space_16);
-
-                    // ── Tools / Tasks (migrated from right panel) ──
-                    crate::components::tools_section::render_tools_section(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // ── Thinking Log ──
@@ -429,46 +536,22 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── WORKSPACE ──
+                    group_header(ui, "WORKSPACE");
+
+                    // ── Tools / Tasks ──
+                    crate::components::tools_section::render_tools_section(app, ui);
+                    ui.add_space(app.ui_store.theme.space_16);
+
                     // ── Teams ──
                     let team_count = app.team_store.teams.len();
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Teams")
-                                .size(app.ui_store.theme.text_sm)
-                                .strong()
-                                .color(app.ui_store.theme.text),
-                        );
-                        if team_count > 0 {
-                            ui.label(
-                                egui::RichText::new(format!("({})", team_count))
-                                    .size(app.ui_store.theme.text_sm)
-                                    .color(app.ui_store.theme.text_muted),
-                            );
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let label = if app.team_store.team_panel_open {
-                                "Close"
-                            } else {
-                                "Open"
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                app.team_store.team_panel_open = !app.team_store.team_panel_open;
-                            }
-                        });
-                    });
+                    clickable_row(
+                        ui,
+                        ui.id().with("teams_row"),
+                        "Teams",
+                        Some(team_count),
+                        &mut app.team_store.team_panel_open,
+                    );
 
                     ui.add_space(app.ui_store.theme.space_16);
 
@@ -476,74 +559,28 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     crate::panels::cron::render_cron_section(app, ui);
                     ui.add_space(app.ui_store.theme.space_16);
 
+                    // ── ANALYTICS ──
+                    group_header(ui, "ANALYTICS");
+
                     // ── Dashboard ──
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Dashboard")
-                                .size(app.ui_store.theme.text_sm)
-                                .strong()
-                                .color(app.ui_store.theme.text),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let label = if app.ui_store.dashboard_panel_open {
-                                "Close"
-                            } else {
-                                "Open"
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                app.ui_store.dashboard_panel_open =
-                                    !app.ui_store.dashboard_panel_open;
-                            }
-                        });
-                    });
+                    clickable_row(
+                        ui,
+                        ui.id().with("dashboard_row"),
+                        "Dashboard",
+                        None,
+                        &mut app.ui_store.dashboard_panel_open,
+                    );
 
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // ── Plan Timeline ──
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new("Plan Timeline")
-                                .size(app.ui_store.theme.text_sm)
-                                .strong()
-                                .color(app.ui_store.theme.text),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let label = if app.ui_store.gantt_panel_open {
-                                "Close"
-                            } else {
-                                "Open"
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                app.ui_store.gantt_panel_open = !app.ui_store.gantt_panel_open;
-                            }
-                        });
-                    });
+                    clickable_row(
+                        ui,
+                        ui.id().with("plan_timeline_row"),
+                        "Plan Timeline",
+                        None,
+                        &mut app.ui_store.gantt_panel_open,
+                    );
 
                     ui.add_space(app.ui_store.theme.space_16);
 
