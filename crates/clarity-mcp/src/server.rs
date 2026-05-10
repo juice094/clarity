@@ -271,3 +271,136 @@ impl StdioMcpServer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockServer;
+
+    #[async_trait]
+    impl McpServer for MockServer {
+        fn name(&self) -> &str {
+            "mock"
+        }
+        fn version(&self) -> &str {
+            "0.1.0"
+        }
+        async fn list_tools(&self) -> Vec<McpTool> {
+            vec![McpTool {
+                name: "echo".into(),
+                description: Some("Echo input".into()),
+                input_schema: serde_json::json!({ "type": "object" }),
+            }]
+        }
+        async fn call_tool(&self, name: &str, args: Value) -> Result<ToolCallResult, McpError> {
+            if name == "echo" {
+                let text = args
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                Ok(ToolCallResult {
+                    content: vec![ToolContent::Text { text }],
+                    is_error: false,
+                })
+            } else {
+                Err(McpError::RequestFailed("unknown tool".into()))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_initialize() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(1.into()),
+            method: "initialize".into(),
+            params: None,
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        let result = resp.result.unwrap();
+        assert_eq!(result["serverInfo"]["name"], "mock");
+        assert_eq!(result["serverInfo"]["version"], "0.1.0");
+    }
+
+    #[tokio::test]
+    async fn test_tools_list() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(2.into()),
+            method: "tools/list".into(),
+            params: None,
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        let result = resp.result.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0]["name"], "echo");
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_success() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(3.into()),
+            method: "tools/call".into(),
+            params: Some(serde_json::json!({
+                "name": "echo",
+                "arguments": { "text": "hello" }
+            })),
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        let result = resp.result.unwrap();
+        let content = result["content"].as_array().unwrap();
+        assert_eq!(content[0]["text"], "hello");
+        assert_eq!(result["isError"], false);
+    }
+
+    #[tokio::test]
+    async fn test_tools_call_unknown_tool() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(4.into()),
+            method: "tools/call".into(),
+            params: Some(serde_json::json!({
+                "name": "unknown",
+                "arguments": {}
+            })),
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        let result = resp.result.unwrap();
+        assert_eq!(result["isError"], true);
+    }
+
+    #[tokio::test]
+    async fn test_unknown_method() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(5.into()),
+            method: "unknown".into(),
+            params: None,
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        assert!(resp.error.is_some());
+        assert_eq!(resp.result, None);
+    }
+
+    #[tokio::test]
+    async fn test_missing_params() {
+        let server = MockServer;
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(6.into()),
+            method: "tools/call".into(),
+            params: None,
+        };
+        let resp = StdioMcpServer::handle_request(&server, req).await;
+        assert!(resp.error.is_some());
+    }
+}
