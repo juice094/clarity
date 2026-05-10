@@ -321,6 +321,19 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 
+    let content = msg.content.trim();
+    let is_long = content.len() > 120 || content.lines().count() > 2;
+
+    // Stable fold state keyed by message content hash.
+    let fold_id = ui.id().with({
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut h = DefaultHasher::new();
+        content.hash(&mut h);
+        h.finish()
+    });
+    let mut folded = ui.data_mut(|d| *d.get_temp_mut_or(fold_id, is_long));
+
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
         egui::Frame::new()
@@ -331,6 +344,8 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
                 ui.set_min_width(48.0);
+
+                // Header: icon + label + action buttons
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(crate::theme::ICON_WARNING)
@@ -342,9 +357,56 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                             .strong()
                             .color(theme.error_text),
                     );
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Copy button
+                        let copy_btn = egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_COPY)
+                                .font(theme.font_icon(theme.text_xs))
+                                .color(theme.error_text),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(copy_btn).on_hover_text("Copy error").clicked() {
+                            ui.ctx().copy_text(content.to_string());
+                        }
+
+                        // Fold / Unfold
+                        if is_long {
+                            let fold_label = if folded { "Expand" } else { "Collapse" };
+                            let fold_btn = egui::Button::new(
+                                egui::RichText::new(fold_label)
+                                    .size(theme.text_xs)
+                                    .color(theme.error_text),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::NONE)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                            if ui.add(fold_btn).clicked() {
+                                folded = !folded;
+                                ui.data_mut(|d| d.insert_temp(fold_id, folded));
+                            }
+                        }
+                    });
                 });
+
                 ui.add_space(theme.space_4);
-                crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.error_text);
+
+                if folded && is_long {
+                    // Collapsed: show first line truncated to ~80 chars
+                    let first_line = content.lines().next().unwrap_or(content);
+                    let summary: String = first_line.chars().take(80).collect();
+                    let ellipsis = if first_line.len() > 80 { "…" } else { "" };
+                    ui.label(
+                        egui::RichText::new(format!("{}{}", summary, ellipsis))
+                            .size(theme.text_sm)
+                            .color(theme.error_text),
+                    );
+                } else {
+                    // Expanded: render full parsed blocks
+                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.error_text);
+                }
             });
     });
     ui.add_space(theme.space_16);
