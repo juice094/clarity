@@ -268,74 +268,62 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                          label: &str,
                                          count: Option<usize>,
                                          is_open: &mut bool| {
-                        let available_width = ui.available_width();
-                        let row_rect = egui::Rect::from_min_size(
-                            ui.cursor().min,
-                            egui::vec2(available_width, 28.0),
-                        );
-                        let row_resp = ui.interact(row_rect, id, egui::Sense::click());
-                        if row_resp.clicked() {
-                            *is_open = !*is_open;
-                        }
-
-                        let fill = if row_resp.hovered() || *is_open {
-                            theme.bg_hover
+                        let caret_icon = if *is_open {
+                            crate::theme::ICON_CARET_DOWN
                         } else {
-                            egui::Color32::TRANSPARENT
+                            crate::theme::ICON_CARET_RIGHT
                         };
-                        let text_color = if row_resp.hovered() || *is_open {
+                        let caret_color = if *is_open {
+                            theme.accent
+                        } else {
+                            theme.text_dim
+                        };
+                        let text_color = if *is_open {
                             theme.text
                         } else {
                             theme.text_dim
                         };
 
-                        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(row_rect), |ui| {
-                            egui::Frame::new()
-                                .fill(fill)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.add_space(8.0);
-                                        ui.label(
-                                            egui::RichText::new(label)
-                                                .size(theme.text_sm)
-                                                .strong()
-                                                .color(text_color),
-                                        );
-                                        if let Some(c) = count {
-                                            if c > 0 {
-                                                ui.label(
-                                                    egui::RichText::new(format!("({})", c))
-                                                        .size(theme.text_sm)
-                                                        .color(theme.text_muted),
-                                                );
-                                            }
+                        let resp = crate::widgets::interactive_row(
+                            ui,
+                            id,
+                            *is_open,
+                            &theme,
+                            |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        egui::RichText::new(label)
+                                            .size(theme.text_sm)
+                                            .strong()
+                                            .color(text_color),
+                                    );
+                                    if let Some(c) = count {
+                                        if c > 0 {
+                                            ui.label(
+                                                egui::RichText::new(format!("({})", c))
+                                                    .size(theme.text_sm)
+                                                    .color(theme.text_muted),
+                                            );
                                         }
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                ui.add_space(8.0);
-                                                let caret_icon = if *is_open {
-                                                    crate::theme::ICON_CARET_DOWN
-                                                } else {
-                                                    crate::theme::ICON_CARET_RIGHT
-                                                };
-                                                let caret_color = if *is_open {
-                                                    theme.accent
-                                                } else {
-                                                    theme.text_dim
-                                                };
-                                                ui.label(
-                                                    egui::RichText::new(caret_icon)
-                                                        .font(theme.font_icon(theme.text_sm))
-                                                        .color(caret_color),
-                                                );
-                                            },
-                                        );
-                                    });
+                                    }
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.add_space(8.0);
+                                            ui.label(
+                                                egui::RichText::new(caret_icon)
+                                                    .font(theme.font_icon(theme.text_sm))
+                                                    .color(caret_color),
+                                            );
+                                        },
+                                    );
                                 });
-                        });
-                        ui.advance_cursor_after_rect(row_rect);
+                            },
+                        );
+                        if resp.response.clicked() {
+                            *is_open = !*is_open;
+                        }
                     };
 
                     // ── ROLES ──

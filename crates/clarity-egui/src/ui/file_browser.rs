@@ -103,13 +103,7 @@ pub fn render_file_tree(
                 on_file_click(&full_path);
             }
         } else {
-            // ── File row (layout-driven, decorator painter only) ──
-            let full_width = ui.available_width();
-            let row_height = 20.0;
-            let row_rect = ui.available_rect_before_wrap();
-            let row_rect =
-                egui::Rect::from_min_size(row_rect.min, egui::vec2(full_width, row_height));
-            let response = ui.interact(row_rect, ui.id().with(&full_path), egui::Sense::click());
+            // ── File row (interactive_row + decorator painter) ──
             let is_selected = selected_path.is_some_and(|sp| {
                 // Normalise Windows back-slashes before comparison
                 let a = full_path.to_string_lossy().replace('\\', "/");
@@ -118,14 +112,6 @@ pub fn render_file_tree(
                     .replace('\\', "/");
                 a == b
             });
-
-            let fill = if is_selected {
-                theme.bg_hover
-            } else if response.hovered() {
-                theme.bg_hover.linear_multiply(0.5)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
             let text_color = if is_selected {
                 theme.text
             } else {
@@ -137,80 +123,75 @@ pub fn render_file_tree(
                 8.0 * depth as f32 + 12.0
             };
 
-            if ui.is_rect_visible(row_rect) {
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(row_rect),
-                    |ui| {
-                        egui::Frame::new()
-                            .fill(fill)
-                            .corner_radius(egui::CornerRadius::same(4))
-                            .show(ui, |ui| {
-                                if is_selected {
-                                    let accent_bar = egui::Rect::from_min_max(
-                                        egui::pos2(ui.min_rect().min.x, ui.min_rect().min.y + 2.0),
-                                        egui::pos2(ui.min_rect().min.x + 3.0, ui.min_rect().max.y - 2.0),
-                                    );
-                                    ui.painter().rect_filled(
-                                        accent_bar,
-                                        egui::CornerRadius::same(2),
-                                        theme.accent,
+            let resp = crate::widgets::interactive_row(
+                ui,
+                ui.id().with(&full_path),
+                is_selected,
+                theme,
+                |ui| {
+                    if is_selected {
+                        let accent_bar = egui::Rect::from_min_max(
+                            egui::pos2(ui.min_rect().min.x, ui.min_rect().min.y + 2.0),
+                            egui::pos2(ui.min_rect().min.x + 3.0, ui.min_rect().max.y - 2.0),
+                        );
+                        ui.painter().rect_filled(
+                            accent_bar,
+                            egui::CornerRadius::same(2),
+                            theme.accent,
+                        );
+                    }
+                    ui.horizontal(|ui| {
+                        ui.add_space(indent);
+
+                        // Icon (decorative painter — allowed per RULE 2)
+                        let icon_size = if compact { 10.0 } else { 14.0 };
+                        let icon_resp = ui.allocate_exact_size(
+                            egui::vec2(icon_size, icon_size),
+                            egui::Sense::hover(),
+                        );
+                        let icon_rect = icon_resp.1.rect;
+                        if ui.is_rect_visible(icon_rect) {
+                            let painter = ui.painter_at(icon_rect);
+                            crate::ui::icons::paint_file(&painter, icon_rect, text_color);
+                            if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
+                                let badge = match ext {
+                                    "rs" => Some("R"),
+                                    "md" => Some("M"),
+                                    "toml" => Some("≡"),
+                                    _ => None,
+                                };
+                                if let Some(b) = badge {
+                                    crate::ui::icons::paint_file_badge(
+                                        &painter,
+                                        icon_rect,
+                                        b,
+                                        text_color,
+                                        if compact { 5.0 } else { 6.0 },
                                     );
                                 }
-                                ui.horizontal(|ui| {
-                                    ui.add_space(indent);
+                            }
+                        }
 
-                                    // Icon (decorative painter — allowed per RULE 2)
-                                    let icon_size = if compact { 10.0 } else { 14.0 };
-                                    let icon_resp = ui.allocate_exact_size(
-                                        egui::vec2(icon_size, icon_size),
-                                        egui::Sense::hover(),
-                                    );
-                                    let icon_rect = icon_resp.1.rect;
-                                    if ui.is_rect_visible(icon_rect) {
-                                        let painter = ui.painter_at(icon_rect);
-                                        crate::ui::icons::paint_file(&painter, icon_rect, text_color);
-                                        if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
-                                            let badge = match ext {
-                                                "rs" => Some("R"),
-                                                "md" => Some("M"),
-                                                "toml" => Some("≡"),
-                                                _ => None,
-                                            };
-                                            if let Some(b) = badge {
-                                                crate::ui::icons::paint_file_badge(
-                                                    &painter,
-                                                    icon_rect,
-                                                    b,
-                                                    text_color,
-                                                    if compact { 5.0 } else { 6.0 },
-                                                );
-                                            }
-                                        }
-                                    }
+                        ui.add_space(4.0);
 
-                                    ui.add_space(4.0);
-
-                                    // Filename
-                                    let label = if compact {
-                                        let prefix: String = name.chars().take(3).collect();
-                                        prefix
-                                    } else {
-                                        name.clone()
-                                    };
-                                    ui.label(
-                                        egui::RichText::new(label)
-                                            .size(theme.text_sm)
-                                            .color(text_color),
-                                    );
-                                });
-                            });
-                    },
-                );
-            }
-            if response.clicked() {
+                        // Filename
+                        let label = if compact {
+                            let prefix: String = name.chars().take(3).collect();
+                            prefix
+                        } else {
+                            name.clone()
+                        };
+                        ui.label(
+                            egui::RichText::new(label)
+                                .size(theme.text_sm)
+                                .color(text_color),
+                        );
+                    });
+                },
+            );
+            if resp.response.clicked() {
                 on_file_click(&full_path);
             }
-            ui.allocate_space(egui::vec2(full_width, row_height));
         }
     }
 }
