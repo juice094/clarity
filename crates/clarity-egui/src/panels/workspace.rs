@@ -66,8 +66,9 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
-                        let mut scroll =
-                            egui::ScrollArea::vertical().id_salt("workspace_file_tree");
+                        let mut scroll = egui::ScrollArea::vertical()
+                            .id_salt("workspace_file_tree")
+                            .auto_shrink([true, false]);
                         if has_plan {
                             scroll = scroll.max_height(ui.available_height() * 0.55);
                         }
