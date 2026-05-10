@@ -31,3 +31,32 @@ cargo test -p clarity-egui --lib
 - UI 架构：即时模式 egui + Zustand 风格 stores
 - `render_safe()` 提供 React 式 error boundary，按面板隔离崩溃
 - Windows 平台通过 `raw-window-handle` + `windows` crate 实现圆角窗口
+
+## Sprint 43 冻结声明（2026-05-10 起生效）
+
+> **范围**：egui 布局架构重构期间（Phase 2 完成前）
+> **目的**：防止在反模式代码上堆叠新债务，确保重构可控
+
+### 禁止项
+
+- ❌ 任何新的 UI 面板或组件
+- ❌ 任何涉及 `painter.text()` / `painter.rect_filled()` / `painter.circle_filled()` 在 UI 交互元素中的新代码
+- ❌ 任何新的 `ui.interact(rect, ...)` on raw rect
+- ❌ 任何新的 `allocate_exact_size(..., Sense::click())` 用于交互组件
+- ❌ 任何新的硬编码坐标值 > 8.0px（所有布局常量必须通过 `theme.rs`）
+- ❌ 修改 `theme.rs` 中已定义 token 的语义（可补充新 token）
+
+### 例外流程
+
+如需解冻，需提交书面申请说明：
+1. 为什么该需求不能在重构后的架构上实现
+2. 预计增加的代码行数和涉及文件
+3. 是否引入新的 painter / 硬编码坐标
+
+由技术负责人（主会话）审批。
+
+### 当前基线
+
+- `cargo check -p clarity-egui`: 0 errors, 0 warnings
+- `cargo test --workspace --lib`: 177 passed, 0 failed, 5 ignored
+- 视觉基线：需手动截图保存（sidebar / titlebar / chat / workspace / settings）
