@@ -8,81 +8,6 @@
 
 use egui::{Align2, Color32, Painter, Pos2, Rect, Stroke, Vec2};
 
-/// Paint the Emotion icon (two wave lines) at the given center.
-/// Viewport: 20×20, stroke 1.5px.
-pub fn paint_emotion(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    // Upper wave
-    let p1 = center + Vec2::new(-7.0, -3.0);
-    let p2 = center + Vec2::new(-3.5, -6.0);
-    let p3 = center + Vec2::new(0.0, -3.0);
-    let p4 = center + Vec2::new(3.5, -6.0);
-    let p5 = center + Vec2::new(7.0, -3.0);
-    painter.line_segment([p1, p2], stroke);
-    painter.line_segment([p2, p3], stroke);
-    painter.line_segment([p3, p4], stroke);
-    painter.line_segment([p4, p5], stroke);
-
-    // Lower wave (offset down by 5px)
-    let q1 = center + Vec2::new(-7.0, 2.0);
-    let q2 = center + Vec2::new(-3.5, -1.0);
-    let q3 = center + Vec2::new(0.0, 2.0);
-    let q4 = center + Vec2::new(3.5, -1.0);
-    let q5 = center + Vec2::new(7.0, 2.0);
-    painter.line_segment([q1, q2], stroke);
-    painter.line_segment([q2, q3], stroke);
-    painter.line_segment([q3, q4], stroke);
-    painter.line_segment([q4, q5], stroke);
-}
-
-/// Paint the Knowledge icon (two offset diamonds).
-/// Viewport: 20×20, stroke 1.5px.
-pub fn paint_knowledge(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    // Back diamond (larger, offset down-right)
-    let back = diamond_points(center + Vec2::new(2.0, 2.0), 6.0);
-    painter.line_segment([back[0], back[1]], stroke);
-    painter.line_segment([back[1], back[2]], stroke);
-    painter.line_segment([back[2], back[3]], stroke);
-    painter.line_segment([back[3], back[0]], stroke);
-
-    // Front diamond (smaller)
-    let front = diamond_points(center + Vec2::new(-1.0, -1.0), 5.0);
-    painter.line_segment([front[0], front[1]], stroke);
-    painter.line_segment([front[1], front[2]], stroke);
-    painter.line_segment([front[2], front[3]], stroke);
-    painter.line_segment([front[3], front[0]], stroke);
-}
-
-fn diamond_points(center: Pos2, half_size: f32) -> [Pos2; 4] {
-    [
-        center + Vec2::new(0.0, -half_size), // top
-        center + Vec2::new(half_size, 0.0),  // right
-        center + Vec2::new(0.0, half_size),  // bottom
-        center + Vec2::new(-half_size, 0.0), // left
-    ]
-}
-
-/// Paint the Engineering icon (hexagon + vertical stem).
-/// Viewport: 20×20, stroke 1.5px.
-pub fn paint_engineering(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    let r = 5.0; // hexagon circumradius
-    let hex: Vec<Pos2> = (0..6)
-        .map(|i| {
-            let angle = (i as f32) * std::f32::consts::PI / 3.0 - std::f32::consts::PI / 2.0;
-            center + Vec2::new(r * angle.cos(), r * angle.sin())
-        })
-        .collect();
-    for i in 0..6 {
-        painter.line_segment([hex[i], hex[(i + 1) % 6]], stroke);
-    }
-    // Vertical stem below hexagon
-    let stem_top = center + Vec2::new(0.0, r);
-    let stem_bottom = center + Vec2::new(0.0, r + 4.0);
-    painter.line_segment([stem_top, stem_bottom], stroke);
-}
-
 /// Paint a status dot (6px for sidebar, 4px for tray badge).
 #[allow(dead_code)]
 pub fn paint_status_dot(painter: &Painter, center: Pos2, radius: f32, color: Color32) {
@@ -150,36 +75,6 @@ pub fn paint_file_badge(
         egui::FontId::new(font_size, egui::FontFamily::Proportional),
         color,
     );
-}
-
-/// Convenience: get the correct role paint function by category name.
-pub fn paint_role_icon(painter: &Painter, category: &str, center: Pos2, color: Color32) {
-    match category {
-        "emotion" => paint_emotion(painter, center, color),
-        "knowledge" => paint_knowledge(painter, center, color),
-        "engineering" => paint_engineering(painter, center, color),
-        _ => paint_engineering(painter, center, color),
-    }
-}
-
-/// Paint a chevron pointing down.
-pub fn paint_chevron_down(painter: &Painter, center: Pos2, size: f32, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    let left = center + Vec2::new(-size * 0.5, -size * 0.25);
-    let right = center + Vec2::new(size * 0.5, -size * 0.25);
-    let bottom = center + Vec2::new(0.0, size * 0.4);
-    painter.line_segment([left, bottom], stroke);
-    painter.line_segment([right, bottom], stroke);
-}
-
-/// Paint a chevron pointing right.
-pub fn paint_chevron_right(painter: &Painter, center: Pos2, size: f32, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    let top = center + Vec2::new(-size * 0.25, -size * 0.4);
-    let right = center + Vec2::new(size * 0.3, 0.0);
-    let bottom = center + Vec2::new(-size * 0.25, size * 0.4);
-    painter.line_segment([top, right], stroke);
-    painter.line_segment([bottom, right], stroke);
 }
 
 /// Paint MCP icon (two linked circles — protocol/connection).

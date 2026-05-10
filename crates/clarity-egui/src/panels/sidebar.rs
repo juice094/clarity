@@ -321,25 +321,21 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
                                         ui.add_space(8.0);
-                                        if *is_open {
-                                            let chevron_resp = ui.add(
-                                                egui::Button::new("")
-                                                    .fill(egui::Color32::TRANSPARENT)
-                                                    .corner_radius(egui::CornerRadius::same(
-                                                        theme.radius_sm as u8,
-                                                    ))
-                                                    .min_size(egui::vec2(20.0, 20.0)),
-                                            );
-                                            if ui.is_rect_visible(chevron_resp.rect) {
-                                                let painter = ui.painter_at(chevron_resp.rect);
-                                                crate::ui::icons::paint_chevron_right(
-                                                    &painter,
-                                                    chevron_resp.rect.center(),
-                                                    6.0,
-                                                    theme.accent,
-                                                );
-                                            }
-                                        }
+                                        let caret_icon = if *is_open {
+                                    crate::theme::ICON_CARET_RIGHT
+                                } else {
+                                    crate::theme::ICON_CARET_RIGHT
+                                };
+                                let caret_color = if *is_open {
+                                    theme.accent
+                                } else {
+                                    theme.text_dim
+                                };
+                                ui.label(
+                                    egui::RichText::new(caret_icon)
+                                        .font(theme.font_icon(theme.text_sm))
+                                        .color(caret_color),
+                                );
                                     },
                                 );
                             });
@@ -400,9 +396,19 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         let content_left = btn_resp.rect.min.x + 12.0;
                         let line_y = btn_resp.rect.min.y + 10.0;
 
-                        // Role icon (code-drawn, theme-coloured)
-                        let icon_center = egui::pos2(content_left + 10.0, line_y + 10.0);
-                        crate::ui::icons::paint_role_icon(&painter, cat, icon_center, text_color);
+                        // Role icon (Phosphor font)
+                        let role_icon = match cat {
+                            "emotion" => crate::theme::ICON_BRAIN,
+                            "knowledge" => crate::theme::ICON_BOOK,
+                            _ => crate::theme::ICON_WRENCH,
+                        };
+                        painter.text(
+                            egui::pos2(content_left + 10.0, line_y + 10.0),
+                            egui::Align2::CENTER_CENTER,
+                            role_icon,
+                            theme.font_icon(theme.text_base),
+                            text_color,
+                        );
 
                         // Name
                         painter.text(
@@ -510,19 +516,21 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                     )
                                     .min_size(egui::vec2(20.0, 20.0)),
                             );
-                            if ui.is_rect_visible(chevron_resp.rect) {
-                                let painter = ui.painter_at(chevron_resp.rect);
-                                let chevron_color = if chevron_resp.hovered() {
-                                    app.ui_store.theme.text
-                                } else {
-                                    app.ui_store.theme.text_dim
-                                };
-                                if subagents_expanded {
-                                    crate::ui::icons::paint_chevron_down(&painter, chevron_resp.rect.center(), 6.0, chevron_color);
-                                } else {
-                                    crate::ui::icons::paint_chevron_right(&painter, chevron_resp.rect.center(), 6.0, chevron_color);
-                                }
-                            }
+                            let caret_icon = if subagents_expanded {
+                                crate::theme::ICON_CARET_DOWN
+                            } else {
+                                crate::theme::ICON_CARET_RIGHT
+                            };
+                            let caret_color = if chevron_resp.hovered() {
+                                app.ui_store.theme.text
+                            } else {
+                                app.ui_store.theme.text_dim
+                            };
+                            ui.label(
+                                egui::RichText::new(caret_icon)
+                                    .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
+                                    .color(caret_color),
+                            );
                             if chevron_resp.clicked() {
                                 app.ui_store.subagents_expanded = !subagents_expanded;
                             }
