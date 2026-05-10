@@ -379,124 +379,41 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .iter()
                             .filter(|s| s.category == cat)
                             .max_by_key(|s| s.updated_at);
-                        let fill = if is_active {
-                            theme.bg_hover
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-                        let btn_resp = ui.add(
-                            egui::Button::new("")
-                                .fill(fill)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                                .stroke(egui::Stroke::NONE)
-                                .min_size(egui::vec2(ui.available_width(), 56.0)),
-                        );
-                        // Hover fill when not active
-                        if !is_active && btn_resp.hovered() {
-                            ui.painter().rect_filled(
-                                btn_resp.rect,
-                                egui::CornerRadius::same(theme.radius_md as u8),
-                                theme.bg_hover.linear_multiply(0.5),
-                            );
-                        }
 
-                        let text_color = if is_active || btn_resp.hovered() {
-                            theme.text
-                        } else {
-                            theme.text_dim
-                        };
-                        let painter = ui.painter_at(btn_resp.rect);
-                        let content_left = btn_resp.rect.min.x + 12.0;
-                        let line_y = btn_resp.rect.min.y + 10.0;
-
-                        // Role icon (Phosphor font)
                         let role_icon = match cat {
                             "emotion" => crate::theme::ICON_CHAT,
                             "knowledge" => crate::theme::ICON_BOOK,
                             _ => crate::theme::ICON_WRENCH,
                         };
-                        painter.text(
-                            egui::pos2(content_left + 10.0, line_y + 10.0),
-                            egui::Align2::CENTER_CENTER,
-                            role_icon,
-                            theme.font_icon(theme.text_base),
-                            text_color,
-                        );
 
-                        // Name (bold for parent-level hierarchy)
-                        painter.text(
-                            egui::pos2(content_left + 24.0, line_y),
-                            egui::Align2::LEFT_TOP,
-                            label,
-                            theme.font_bold(theme.text_base),
-                            text_color,
-                        );
-
-                        // Status dot + active count
-                        if count > 0 {
-                            let dot_y = line_y + theme.text_base + 4.0;
-                            let dot_center = egui::pos2(content_left + 4.0, dot_y + 5.0);
-                            painter.circle_filled(dot_center, 4.5, theme.status_online);
-                            painter.circle_stroke(
-                                dot_center,
-                                4.5,
-                                egui::Stroke::new(1.0, theme.status_online),
-                            );
-                            let session_text = if count == 1 {
-                                format!("{} session", count)
-                            } else {
-                                format!("{} sessions", count)
-                            };
-                            let text_pos = egui::pos2(content_left + 16.0, dot_y);
-                            let galley = ui.ctx().fonts(|f| {
-                                f.layout_no_wrap(
-                                    session_text.clone(),
-                                    theme.font(theme.text_xs),
-                                    theme.text_dim,
-                                )
-                            });
-                            let text_rect = egui::Rect::from_min_size(text_pos, galley.size());
-                            ui.put(
-                                text_rect,
-                                egui::Label::new(
-                                    egui::RichText::new(session_text)
-                                        .font(theme.font(theme.text_xs))
-                                        .color(theme.text_dim),
-                                )
-                                .selectable(false),
-                            )
-                            .on_hover_text("Total sessions in current workspace");
-                        }
-
-                        // Latest instance name (truncated) — tree child indicator
-                        if let Some(s) = latest {
-                            let name_y = line_y
-                                + theme.text_base
-                                + 4.0
-                                + if count > 0 { theme.text_xs + 4.0 } else { 0.0 };
-                            let dot_x = content_left + 6.0;
-                            let dot_center = egui::pos2(dot_x, name_y + theme.text_xs * 0.5);
-                            painter.circle_filled(
-                                dot_center,
-                                2.0,
-                                theme.border.linear_multiply(0.6),
-                            );
-                            let display = if s.title.chars().count() > 18 {
+                        let subtitle_str = if count > 0 {
+                            Some(format!(
+                                "{} session{}",
+                                count,
+                                if count == 1 { "" } else { "s" }
+                            ))
+                        } else {
+                            None
+                        };
+                        let badge_str = latest.map(|s| {
+                            if s.title.chars().count() > 18 {
                                 let truncated: String = s.title.chars().take(15).collect();
                                 format!("{}...", truncated)
                             } else {
                                 s.title.clone()
-                            };
-                            painter.text(
-                                egui::pos2(content_left + 14.0, name_y),
-                                egui::Align2::LEFT_TOP,
-                                display,
-                                theme.font(theme.text_xs),
-                                theme.text_dim,
-                            );
-                        }
+                            }
+                        });
 
-                        if btn_resp.clicked() {
+                        let resp = crate::widgets::sidebar_card(
+                            ui,
+                            role_icon,
+                            label,
+                            subtitle_str.as_deref(),
+                            badge_str.as_deref(),
+                            is_active,
+                            &theme,
+                        );
+                        if resp.clicked() {
                             app.switch_category(cat);
                         }
                     }

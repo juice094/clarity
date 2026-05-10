@@ -169,7 +169,7 @@ impl App {
     fn render_titlebar(&mut self, ctx: &egui::Context) {
         let _total_w = ctx.screen_rect().width();
         let theme = self.ui_store.theme.clone();
-        let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
+        let _btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
         egui::TopBottomPanel::top("titlebar")
             .min_height(TITLEBAR_HEIGHT)
@@ -235,147 +235,65 @@ impl App {
                     // than the drag region — clicks are not swallowed.
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close
-                        let close_resp = ui.add_sized(
-                            btn_size,
-                            egui::Button::new("")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        let close_resp = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_X,
+                            &theme,
+                            theme.danger.linear_multiply(0.25),
+                            egui::Color32::WHITE,
+                            14.0,
                         );
                         if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                         }
-                        let close_fill = if close_resp.hovered() {
-                            theme.danger.linear_multiply(0.25)
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-                        let close_text = if close_resp.hovered() {
-                            egui::Color32::WHITE
-                        } else {
-                            theme.text_dim
-                        };
-                        ui.painter().rect_filled(
-                            close_resp.rect,
-                            egui::CornerRadius::same(theme.radius_sm as u8),
-                            close_fill,
-                        );
-                        ui.painter().text(
-                            close_resp.rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            crate::theme::ICON_X,
-                            theme.font_icon(14.0),
-                            close_text,
-                        );
 
                         // Maximize / Restore
                         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        let max_resp = ui.add_sized(
-                            btn_size,
-                            egui::Button::new("")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                        );
-                        if max_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                        }
-                        let max_fill = if max_resp.hovered() {
-                            theme.overlay_medium
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-                        ui.painter().rect_filled(
-                            max_resp.rect,
-                            egui::CornerRadius::same(theme.radius_sm as u8),
-                            max_fill,
-                        );
-                        let max_color = if max_resp.hovered() {
-                            theme.text
-                        } else {
-                            theme.text_dim
-                        };
-                        let _max_c = max_resp.rect.center();
-                        let _max_stroke = egui::Stroke::new(1.2_f32, max_color);
                         let max_icon = if is_maximized {
                             crate::theme::ICON_COPY
                         } else {
                             crate::theme::ICON_SQUARE
                         };
-                        ui.painter().text(
-                            max_resp.rect.center(),
-                            egui::Align2::CENTER_CENTER,
+                        let max_resp = crate::widgets::window_control_button(
+                            ui,
                             max_icon,
-                            theme.font_icon(14.0),
-                            max_color,
+                            &theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            14.0,
                         );
+                        if max_resp.clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+                        }
 
                         // Minimize
-                        let min_resp = ui.add_sized(
-                            btn_size,
-                            egui::Button::new("")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        let min_resp = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_MINUS,
+                            &theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            14.0,
                         );
                         if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                         }
-                        let min_fill = if min_resp.hovered() {
-                            theme.overlay_medium
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-                        ui.painter().rect_filled(
-                            min_resp.rect,
-                            egui::CornerRadius::same(theme.radius_sm as u8),
-                            min_fill,
-                        );
-                        let min_color = if min_resp.hovered() {
-                            theme.text
-                        } else {
-                            theme.text_dim
-                        };
-                        ui.painter().text(
-                            min_resp.rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            crate::theme::ICON_MINUS,
-                            theme.font_icon(14.0),
-                            min_color,
-                        );
 
                         // Separator between system buttons and indicators
                         ui.add_space(8.0);
 
                         // Settings button
-                        let settings_resp = ui.add_sized(
-                            btn_size,
-                            egui::Button::new("")
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        let settings_resp = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_SETTINGS,
+                            &theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            theme.text_base,
                         );
                         if settings_resp.clicked() {
                             self.settings_store.settings_open = true;
                         }
-                        let settings_fill = if settings_resp.hovered() {
-                            theme.overlay_medium
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
-                        ui.painter().rect_filled(
-                            settings_resp.rect,
-                            egui::CornerRadius::same(theme.radius_sm as u8),
-                            settings_fill,
-                        );
-                        let settings_color = if settings_resp.hovered() {
-                            theme.text
-                        } else {
-                            theme.text_dim
-                        };
-                        ui.painter().text(
-                            settings_resp.rect.center(),
-                            egui::Align2::CENTER_CENTER,
-                            crate::theme::ICON_SETTINGS,
-                            theme.font_icon(theme.text_base),
-                            settings_color,
-                        );
 
                         // Connection status capsule
                         let (conn_label, conn_color) = match self.chat_store.agent_status {
@@ -385,26 +303,8 @@ impl App {
                                 ("断开", theme.status_offline)
                             }
                         };
-                        let conn_resp = egui::Frame::new()
-                            .fill(theme.bg_elevated)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(8, 5))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("●")
-                                            .size(theme.text_sm)
-                                            .color(conn_color),
-                                    );
-                                    ui.add_space(2.0);
-                                    ui.label(
-                                        egui::RichText::new(conn_label)
-                                            .size(theme.text_xs)
-                                            .color(conn_color),
-                                    );
-                                });
-                            })
-                            .response;
+                        let conn_resp =
+                            crate::widgets::status_capsule(ui, conn_label, conn_color, &theme);
                         if conn_resp.hovered() {
                             conn_resp.clone().on_hover_text("Agent connection status");
                         }
@@ -416,26 +316,8 @@ impl App {
                             crate::ui::types::GatewayStatus::Offline => theme.status_offline,
                             crate::ui::types::GatewayStatus::Checking => theme.status_busy,
                         };
-                        let gw_resp = egui::Frame::new()
-                            .fill(theme.bg_elevated)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(8, 5))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("●")
-                                            .size(theme.text_sm)
-                                            .color(gw_dot_color),
-                                    );
-                                    ui.add_space(2.0);
-                                    ui.label(
-                                        egui::RichText::new("Gateway")
-                                            .size(theme.text_xs)
-                                            .color(theme.text_muted),
-                                    );
-                                });
-                            })
-                            .response;
+                        let gw_resp =
+                            crate::widgets::status_capsule(ui, "Gateway", gw_dot_color, &theme);
                         if gw_resp.hovered() {
                             gw_resp.clone().on_hover_text("Click to start/stop Gateway");
                         }
