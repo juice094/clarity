@@ -388,19 +388,15 @@ impl App {
                         let conn_resp = egui::Frame::new()
                             .fill(theme.bg_elevated)
                             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .inner_margin(egui::Margin::symmetric(8, 5))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    let dot_size = egui::vec2(8.0, 8.0);
-                                    let dot_rect = ui
-                                        .allocate_exact_size(dot_size, egui::Sense::hover())
-                                        .0;
-                                    ui.painter().circle_filled(
-                                        dot_rect.center(),
-                                        4.0,
-                                        conn_color,
+                                    ui.label(
+                                        egui::RichText::new("●")
+                                            .size(theme.text_sm)
+                                            .color(conn_color),
                                     );
-                                    ui.add_space(4.0);
+                                    ui.add_space(2.0);
                                     ui.label(
                                         egui::RichText::new(conn_label)
                                             .size(theme.text_xs)
@@ -423,19 +419,15 @@ impl App {
                         let gw_resp = egui::Frame::new()
                             .fill(theme.bg_elevated)
                             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .inner_margin(egui::Margin::symmetric(8, 5))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    let dot_size = egui::vec2(8.0, 8.0);
-                                    let dot_rect = ui
-                                        .allocate_exact_size(dot_size, egui::Sense::hover())
-                                        .0;
-                                    ui.painter().circle_filled(
-                                        dot_rect.center(),
-                                        4.0,
-                                        gw_dot_color,
+                                    ui.label(
+                                        egui::RichText::new("●")
+                                            .size(theme.text_sm)
+                                            .color(gw_dot_color),
                                     );
-                                    ui.add_space(4.0);
+                                    ui.add_space(2.0);
                                     ui.label(
                                         egui::RichText::new("Gateway")
                                             .size(theme.text_xs)

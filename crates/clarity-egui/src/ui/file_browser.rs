@@ -74,7 +74,8 @@ pub fn render_file_tree(
         if is_dir {
             let header_id = ui.id().with(&full_path);
             let dir_label = if compact {
-                name.chars().next().unwrap_or('D').to_string()
+                let prefix: String = name.chars().take(3).collect();
+                prefix
             } else {
                 name.clone()
             };
@@ -182,7 +183,8 @@ pub fn render_file_tree(
                 let text_pos = row_rect.min
                     + egui::vec2(indent + icon_size + 4.0, 3.0);
                 let label = if compact {
-                    name.chars().next().unwrap_or('F').to_string()
+                    let prefix: String = name.chars().take(3).collect();
+                    prefix
                 } else {
                     name.clone()
                 };

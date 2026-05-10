@@ -55,9 +55,9 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
 
             // ── Horizontal split: file tree + preview drawer ──
             ui.horizontal(|ui| {
-                // 1. File tree (full width or compact 60px icon strip)
+                // 1. File tree (full width or compact 80px icon strip)
                 let tree_width = if has_preview {
-                    60.0
+                    80.0
                 } else {
                     ui.available_width()
                 };

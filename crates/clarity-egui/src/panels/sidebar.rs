@@ -423,12 +423,12 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             text_color,
                         );
 
-                        // Name
+                        // Name (bold for parent-level hierarchy)
                         painter.text(
                             egui::pos2(content_left + 24.0, line_y),
                             egui::Align2::LEFT_TOP,
                             label,
-                            theme.font(theme.text_base),
+                            theme.font_bold(theme.text_base),
                             text_color,
                         );
 
