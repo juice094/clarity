@@ -77,15 +77,17 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                     &app.ui_store.theme,
                     tab_width,
                 );
-                if tab.response.hovered() {
-                    tab.response.clone().on_hover_text(title.as_str());
-                }
+                let tab_response = if tab.response.hovered() {
+                    tab.response.on_hover_text(title.as_str())
+                } else {
+                    tab.response
+                };
                 if tab.close_clicked {
                     tab_to_close = Some(id.clone());
                 } else if tab.double_clicked {
                     app.ui_store.editing_session_id = Some(id.clone());
                     app.ui_store.editing_title = title.clone();
-                } else if tab.response.clicked() {
+                } else if tab_response.clicked() {
                     app.save_current_session();
                     let old_id = app.session_store.active_session_id.clone();
                     if !app.chat_store.input.trim().is_empty() {
