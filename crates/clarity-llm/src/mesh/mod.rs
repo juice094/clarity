@@ -144,9 +144,10 @@ impl LlmProvider for MeshLlmProvider {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| {
-            AgentError::Llm("All mesh providers exhausted".into())
-        }))
+        Err(AgentError::Llm(format!(
+            "All mesh providers exhausted. Last error: {}",
+            last_err.map(|e| e.to_string()).unwrap_or_else(|| "none".into())
+        )))
     }
 
     fn stream(
@@ -183,9 +184,10 @@ impl LlmProvider for MeshLlmProvider {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| {
-            AgentError::Llm("All mesh providers exhausted (stream)".into())
-        }))
+        Err(AgentError::Llm(format!(
+            "All mesh providers exhausted (stream). Last error: {}",
+            last_err.map(|e| e.to_string()).unwrap_or_else(|| "none".into())
+        )))
     }
 
     fn set_prompt_cache_key(&self, key: &str) {
@@ -220,5 +222,128 @@ impl LlmProvider for MeshLlmProvider {
             }
         }
         caps
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clarity_contract::{AgentError, Message};
+    use serde_json::json;
+
+    struct MockProvider {
+        name: String,
+        fail: bool,
+    }
+
+    #[async_trait]
+    impl LlmProvider for MockProvider {
+        async fn complete(
+            &self,
+            _messages: &[Message],
+            _tools: &Value,
+        ) -> Result<LlmResponse, AgentError> {
+            if self.fail {
+                Err(AgentError::Llm(format!("{} failed", self.name)))
+            } else {
+                Ok(LlmResponse {
+                    content: format!("from {}", self.name),
+                    tool_calls: vec![],
+                    is_complete: true,
+                })
+            }
+        }
+
+        fn stream(
+            &self,
+            _messages: &[Message],
+            _tools: &Value,
+        ) -> Result<Receiver<Result<StreamDelta, AgentError>>, AgentError> {
+            if self.fail {
+                Err(AgentError::Llm(format!("{} stream failed", self.name)))
+            } else {
+                let (tx, rx) = tokio::sync::mpsc::channel(1);
+                let name = self.name.clone();
+                tokio::spawn(async move {
+                    let _ = tx.send(Ok(StreamDelta {
+                        content: Some(format!("stream from {}", name)),
+                        tool_calls: vec![],
+                    })).await;
+                });
+                Ok(rx)
+            }
+        }
+
+        fn set_prompt_cache_key(&self, _key: &str) {}
+        fn capabilities(&self) -> ProviderCapabilities {
+            ProviderCapabilities::default()
+        }
+    }
+
+    fn build_mesh(providers: Vec<(String, bool)>, chain: Vec<String>) -> MeshLlmProvider {
+        let mut map = HashMap::new();
+        for (name, fail) in providers {
+            map.insert(name.clone(), Arc::new(MockProvider { name, fail }) as Arc<dyn LlmProvider>);
+        }
+        MeshLlmProvider::new(map, MeshRouter::with_chain(chain))
+    }
+
+    #[tokio::test]
+    async fn test_mesh_first_succeeds() {
+        let mesh = build_mesh(
+            vec![("a".into(), false), ("b".into(), true)],
+            vec!["a".into(), "b".into()],
+        );
+        let resp = mesh.complete(&[], &json!({})).await.unwrap();
+        assert_eq!(resp.content, "from a");
+    }
+
+    #[tokio::test]
+    async fn test_mesh_fallback_on_failure() {
+        let mesh = build_mesh(
+            vec![("a".into(), true), ("b".into(), false)],
+            vec!["a".into(), "b".into()],
+        );
+        let resp = mesh.complete(&[], &json!({})).await.unwrap();
+        assert_eq!(resp.content, "from b");
+    }
+
+    #[tokio::test]
+    async fn test_mesh_all_fail() {
+        let mesh = build_mesh(
+            vec![("a".into(), true), ("b".into(), true)],
+            vec!["a".into(), "b".into()],
+        );
+        let err = mesh.complete(&[], &json!({})).await.unwrap_err();
+        assert!(err.to_string().contains("All mesh providers exhausted"));
+    }
+
+    #[tokio::test]
+    async fn test_mesh_circuit_opens_after_threshold() {
+        let mut mesh = build_mesh(
+            vec![("a".into(), true), ("b".into(), false)],
+            vec!["a".into(), "b".into()],
+        );
+        // Override breaker to threshold 1 for fast testing
+        mesh.breakers.insert("a".into(), Arc::new(CircuitBreaker::new(1, 60)));
+
+        // First call fails and opens circuit
+        let _ = mesh.complete(&[], &json!({})).await;
+        assert_eq!(mesh.breakers.get("a").unwrap().state(), circuit::CircuitState::Open);
+
+        // Second call should skip 'a' and go straight to 'b'
+        let resp = mesh.complete(&[], &json!({})).await.unwrap();
+        assert_eq!(resp.content, "from b");
+    }
+
+    #[tokio::test]
+    async fn test_mesh_stream_fallback() {
+        let mesh = build_mesh(
+            vec![("a".into(), true), ("b".into(), false)],
+            vec!["a".into(), "b".into()],
+        );
+        let mut rx = mesh.stream(&[], &json!({})).unwrap();
+        let delta = rx.recv().await.unwrap().unwrap();
+        assert_eq!(delta.content, Some("stream from b".into()));
     }
 }
