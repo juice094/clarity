@@ -151,14 +151,11 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                 });
             let selected_path_ref = selected_path.as_deref();
 
-            // ── File tree (scrollable) ──
-            let has_preview = app.ui_store.preview_item.is_some();
+            // ── File tree (scrollable, full height) ──
             let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
             let mut scroll = egui::ScrollArea::vertical().id_salt("workspace_file_tree");
-            if has_preview || has_plan {
-                // Reduce tree height when plan or preview is present
-                let factor = if has_preview && has_plan { 0.30 } else { 0.40 };
-                scroll = scroll.max_height(ui.available_height() * factor);
+            if has_plan {
+                scroll = scroll.max_height(ui.available_height() * 0.55);
             }
             scroll.show(ui, |ui| {
                 crate::ui::file_browser::render_file_tree(
@@ -183,59 +180,59 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                 );
             });
 
-            ui.add_space(theme.space_12);
+            // ── Plan foldable section (bottom) ──
+            crate::panels::workspace_plan::render_workspace_plan(app, ui);
+        });
+}
 
-            // ── File preview (bottom half, inline) ──
-            if let Some(ref preview) = app.ui_store.preview_item {
-                let (title, content, is_web) = match preview {
-                    crate::ui::types::PreviewItem::File { name, content, .. } => {
-                        (name.clone(), content.clone(), false)
-                    }
-                    crate::ui::types::PreviewItem::WebPage { title, content, .. } => {
-                        (title.clone(), content.clone(), true)
-                    }
-                };
+/// Render file preview as a floating popup window instead of inline inside workspace.
+/// This prevents the preview from squeezing the file tree and central chat area.
+pub fn render_file_preview_window(app: &mut App, ctx: &egui::Context) {
+    let Some(ref preview) = app.ui_store.preview_item else {
+        return;
+    };
 
-                ui.horizontal(|ui| {
-                    let icon = if is_web {
-                        "🌐"
-                    } else {
-                        crate::theme::ICON_PAPERCLIP
-                    };
-                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
-                    ui.label(
-                        egui::RichText::new(&title)
-                            .size(theme.text_sm)
-                            .strong()
-                            .color(theme.text)
-                            .monospace(),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(crate::theme::ICON_X)
-                                        .font(theme.font_icon(theme.text_base)),
-                                )
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                            )
-                            .clicked()
-                        {
-                            app.ui_store.preview_item = None;
-                        }
-                    });
-                });
+    let (title, content, is_web) = match preview {
+        crate::ui::types::PreviewItem::File { name, content, .. } => {
+            (name.clone(), content.clone(), false)
+        }
+        crate::ui::types::PreviewItem::WebPage { title, content, .. } => {
+            (title.clone(), content.clone(), true)
+        }
+    };
 
-                ui.add_space(theme.space_8);
+    let theme = app.ui_store.theme.clone();
+    let mut open = true;
 
+    let icon = if is_web { "🌐" } else { crate::theme::ICON_PAPERCLIP };
+    let window_title = format!("{} {}", icon, title);
+
+    egui::Window::new(&window_title)
+        .id(egui::Id::new("file_preview_popup"))
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(true)
+        .default_pos(egui::pos2(
+            ctx.screen_rect().max.x - 560.0,
+            52.0, // below titlebar (36 + 16 padding)
+        ))
+        .default_size([520.0, 580.0])
+        .min_size([320.0, 240.0])
+        .frame(
+            egui::Frame::window(&ctx.style())
+                .fill(theme.bg_elevated)
+                .stroke(egui::Stroke::NONE),
+        )
+        .show(ctx, |ui| {
+            ui.vertical(|ui| {
+                ui.add_space(theme.space_4);
                 egui::Frame::new()
                     .fill(theme.code_block_bg)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         egui::ScrollArea::vertical()
-                            .id_salt("workspace_preview_scroll")
+                            .id_salt("file_preview_popup_scroll")
                             .show(ui, |ui| {
                                 let parsed = crate::ui::markdown::parse_markdown(&content);
                                 crate::ui::markdown::render_blocks(
@@ -246,9 +243,10 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                                 );
                             });
                     });
-            }
-
-            // ── Plan foldable section (bottom) ──
-            crate::panels::workspace_plan::render_workspace_plan(app, ui);
+            });
         });
+
+    if !open {
+        app.ui_store.preview_item = None;
+    }
 }
