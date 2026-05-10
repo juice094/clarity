@@ -360,7 +360,7 @@ pub fn render_blocks(
                 ui.add_space(theme.space_4);
             }
             RenderBlock::Table { headers, rows } => {
-                render_table(ui, headers, rows, theme, text_color);
+                render_table(ui, i, headers, rows, theme, text_color);
             }
         }
     }
@@ -368,6 +368,7 @@ pub fn render_blocks(
 
 fn render_table(
     ui: &mut egui::Ui,
+    idx: usize,
     headers: &[String],
     rows: &[Vec<String>],
     theme: &Theme,
@@ -382,7 +383,7 @@ fn render_table(
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::same(8))
         .show(ui, |ui| {
-            egui::Grid::new("md_table")
+            egui::Grid::new(ui.id().with(idx))
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
                     // Header row
