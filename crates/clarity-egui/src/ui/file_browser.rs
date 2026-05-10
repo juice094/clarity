@@ -73,6 +73,7 @@ pub fn render_file_tree(
             .id_salt(header_id)
             .default_open(depth < 1);
             let resp = header.show(ui, |ui| {
+                ui.spacing_mut().indent = 16.0;
                 render_file_tree(
                     ui,
                     &full_path,
@@ -91,7 +92,7 @@ pub fn render_file_tree(
             // Using raw painter + interact gives us:
             //   - full-width hover background
             //   - 3px left accent bar on selection
-            //   - depth-based indent
+            //   - depth-based indent (8px per level + 12px base)
             let full_width = ui.available_width();
             let row_height = 20.0;
             let row_rect = ui.available_rect_before_wrap();
@@ -123,7 +124,7 @@ pub fn render_file_tree(
                         theme.bg_hover.linear_multiply(0.5),
                     );
                 }
-                let text_pos = row_rect.min + egui::vec2(4.0 * depth as f32 + 8.0, 3.0);
+                let text_pos = row_rect.min + egui::vec2(8.0 * depth as f32 + 12.0, 3.0);
                 let text_color = if is_selected {
                     theme.text
                 } else {
