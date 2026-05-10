@@ -167,9 +167,7 @@ impl App {
     }
 
     fn render_titlebar(&mut self, ctx: &egui::Context) {
-        let _total_w = ctx.screen_rect().width();
         let theme = self.ui_store.theme.clone();
-        let _btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
         egui::TopBottomPanel::top("titlebar")
             .min_height(TITLEBAR_HEIGHT)
