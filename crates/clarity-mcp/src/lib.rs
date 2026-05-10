@@ -1,7 +1,9 @@
-//! MCP (Model Context Protocol) Client Interface
+//! MCP (Model Context Protocol) Client and Server Interface
 //!
 //! This crate provides JSON-RPC 2.0 clients for MCP servers,
 //! allowing the agent to connect to external tool servers.
+//! It also includes a minimal server infrastructure for exposing
+//! internal capabilities as MCP tools over stdio.
 //!
 //! ## Features
 //!
@@ -46,6 +48,7 @@
 pub mod config;
 pub mod devkit;
 pub mod enhanced;
+pub mod server;
 
 // Re-export from enhanced module
 pub use enhanced::{
@@ -57,6 +60,9 @@ pub use enhanced::{
 
 // Re-export from config module
 pub use config::{default_config_path, McpConfig, McpServerEntry};
+
+// Re-export server types
+pub use server::{McpServer, StdioMcpServer};
 
 // Re-export from devkit module
 pub use devkit::{DevkitAsset, DevkitProjectContextResult, DevkitRepo, DevkitVaultNote};

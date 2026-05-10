@@ -1166,6 +1166,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clarity-contract",
+ "clarity-llm",
  "clarity-wire",
  "dirs 5.0.1",
  "futures",
