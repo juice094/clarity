@@ -32,6 +32,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
             ui.set_min_width(ui.available_width());
             egui::ScrollArea::vertical()
                 .id_salt("sidebar_scroll")
+                .auto_shrink([false, true])
                 .show(ui, |ui| {
                     let theme = app.ui_store.theme.clone();
                     // ── Top toolbar: collapse + global controls ──
