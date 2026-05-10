@@ -437,30 +437,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let chevron_resp = ui.add(
-                                egui::Button::new("")
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    )
-                                    .min_size(egui::vec2(20.0, 20.0)),
-                            );
                             let caret_icon = if subagents_expanded {
                                 crate::theme::ICON_CARET_DOWN
                             } else {
                                 crate::theme::ICON_CARET_RIGHT
                             };
-                            let caret_color = if chevron_resp.hovered() {
-                                app.ui_store.theme.text
-                            } else {
-                                app.ui_store.theme.text_dim
-                            };
-                            ui.label(
-                                egui::RichText::new(caret_icon)
-                                    .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
-                                    .color(caret_color),
+                            let chevron_resp = crate::widgets::icon_button_toolbar(
+                                ui,
+                                caret_icon,
+                                app.ui_store.theme.text_sm,
+                                &app.ui_store.theme,
                             );
                             if chevron_resp.clicked() {
                                 app.ui_store.subagents_expanded = !subagents_expanded;

@@ -189,16 +189,13 @@ impl App {
 
                     // Sidebar toggle when collapsed
                     if self.ui_store.sidebar_collapsed {
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(crate::theme::ICON_LIST)
-                                        .font(theme.font_icon(theme.text_base)),
-                                )
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                            )
-                            .clicked()
+                        if crate::widgets::icon_button_toolbar(
+                            ui,
+                            crate::theme::ICON_LIST,
+                            theme.text_base,
+                            &theme,
+                        )
+                        .clicked()
                         {
                             self.ui_store.sidebar_collapsed = false;
                         }
