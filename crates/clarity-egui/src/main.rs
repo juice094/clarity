@@ -391,6 +391,28 @@ impl App {
                             settings_color,
                         );
 
+                        // Provider label (compact) — shows active backend type.
+                        let provider_text = self
+                            .state
+                            .agent
+                            .provider_label()
+                            .map(|l| {
+                                // Shorten "runtime:deepseek:deepseek-chat" → "deepseek"
+                                l.split(':')
+                                    .nth_back(1)
+                                    .or_else(|| l.split(':').next())
+                                    .unwrap_or(&l)
+                                    .to_string()
+                            })
+                            .unwrap_or_else(|| "No LLM".to_string());
+                        ui.label(
+                            egui::RichText::new(provider_text)
+                                .size(theme.text_xs)
+                                .color(theme.text_muted),
+                        );
+
+                        ui.add_space(4.0);
+
                         // Gateway capsule button: consolidated status + action entry.
                         let (agent_color, agent_label) = match self.chat_store.agent_status {
                             AgentStatus::Online => (theme.status_online, "Online"),
