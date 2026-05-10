@@ -280,11 +280,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_with_prediction_uncertain() {
-        use clarity_core::agent::jumpy::predictor::{
-            ConsistentPredictor, HistoricalPredictor, HybridPredictor, LlmAdapter,
-            LlmAugmentedPredictor, OutcomePredictor, SkillObservation,
-        };
-
         let registry = create_test_registry();
         let work_dir = TempDir::new().unwrap();
         let context_dir = TempDir::new().unwrap();

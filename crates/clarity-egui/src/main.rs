@@ -64,6 +64,7 @@ pub(crate) struct App {
     pub(crate) team_store: stores::TeamStore,
     pub(crate) snapshot_store: stores::SnapshotStore,
     /// Gateway process manager (auto-start + manual control).
+    #[allow(dead_code)]
     pub(crate) gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
     /// File-system watcher for live skill reloading.
     #[allow(dead_code)]

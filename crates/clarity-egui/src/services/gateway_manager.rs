@@ -59,6 +59,7 @@ impl GatewayManager {
     /// Stop the Gateway process that we started.
     ///
     /// Returns `Ok(true)` if we stopped it, `Ok(false)` if we did not own it.
+    #[allow(dead_code)]
     pub fn stop(&self) -> Result<bool, String> {
         let mut guard = self.child.lock().unwrap();
         if let Some(mut child) = guard.take() {

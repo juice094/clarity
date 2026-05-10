@@ -1887,6 +1887,75 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
+
+    #[tokio::test]
+    async fn test_admin_mesh_status_inactive() {
+        let state = test_state().await;
+        let app = create_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/mesh")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["active"], false);
+        assert!(json["providers"].as_array().unwrap().is_empty());
+        assert!(json["circuits"].as_object().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_admin_switch_provider_invalid_single() {
+        let state = test_state().await;
+        let app = create_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/provider")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"provider":"this_provider_does_not_exist_12345"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["message"].as_str().unwrap().contains("Failed to create provider"));
+    }
+
+    #[tokio::test]
+    async fn test_admin_switch_provider_mcp_invalid_command() {
+        let state = test_state().await;
+        let app = create_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/provider")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"provider":"mcp:this_command_does_not_exist_12345"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["message"].as_str().unwrap().contains("Failed to connect MCP LLM"));
+    }
 }
 
 // ==================== MCP 服务器管理 API ====================
