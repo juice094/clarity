@@ -468,20 +468,27 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .on_hover_text("Total sessions in current workspace");
                         }
 
-                        // Latest instance name (truncated)
+                        // Latest instance name (truncated) — tree child indicator
                         if let Some(s) = latest {
                             let name_y = line_y
                                 + theme.text_base
                                 + 4.0
                                 + if count > 0 { theme.text_xs + 4.0 } else { 0.0 };
+                            let dot_x = content_left + 6.0;
+                            let dot_center = egui::pos2(dot_x, name_y + theme.text_xs * 0.5);
+                            painter.circle_filled(
+                                dot_center,
+                                2.0,
+                                theme.border.linear_multiply(0.6),
+                            );
                             let display = if s.title.chars().count() > 18 {
                                 let truncated: String = s.title.chars().take(15).collect();
-                                format!("└─ {}...", truncated)
+                                format!("{}...", truncated)
                             } else {
-                                format!("└─ {}", s.title)
+                                s.title.clone()
                             };
                             painter.text(
-                                egui::pos2(content_left, name_y),
+                                egui::pos2(content_left + 14.0, name_y),
                                 egui::Align2::LEFT_TOP,
                                 display,
                                 theme.font(theme.text_xs),
