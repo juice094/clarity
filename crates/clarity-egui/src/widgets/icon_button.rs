@@ -34,20 +34,5 @@ pub fn icon_button_toolbar(
     )
 }
 
-/// Convenience: icon button with text color and full radius (primary action style, e.g. Send).
-pub fn icon_button_primary(
-    ui: &mut egui::Ui,
-    icon: &str,
-    size: f32,
-    fill: egui::Color32,
-    theme: &Theme,
-) -> egui::Response {
-    icon_button(
-        ui,
-        icon,
-        size,
-        fill,
-        egui::CornerRadius::same(theme.radius_full as u8),
-        theme,
-    )
-}
+// Note: icon_button_primary removed — use icon_button directly with desired radius.
+// If a full-radius (circular) primary button is needed again, restore from git history.

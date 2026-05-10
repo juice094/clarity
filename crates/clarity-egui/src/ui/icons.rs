@@ -77,30 +77,6 @@ pub fn paint_file_badge(
     );
 }
 
-/// Paint MCP icon (two linked circles — protocol/connection).
-pub fn paint_mcp(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    let r = 2.5;
-    let gap = 3.5;
-    let left_c = center + Vec2::new(-gap, 0.0);
-    let right_c = center + Vec2::new(gap, 0.0);
-    painter.circle_stroke(left_c, r, stroke);
-    painter.circle_stroke(right_c, r, stroke);
-    painter.line_segment([left_c + Vec2::new(r, 0.0), right_c + Vec2::new(-r, 0.0)], stroke);
-}
-
-/// Paint Skills icon (four-spoke gear symbol).
-pub fn paint_skills(painter: &Painter, center: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.5, color);
-    let r = 2.0;
-    painter.circle_stroke(center, r, stroke);
-    let spoke = 4.0;
-    painter.line_segment([center + Vec2::new(-spoke, 0.0), center + Vec2::new(-r, 0.0)], stroke);
-    painter.line_segment([center + Vec2::new(spoke, 0.0), center + Vec2::new(r, 0.0)], stroke);
-    painter.line_segment([center + Vec2::new(0.0, -spoke), center + Vec2::new(0.0, -r)], stroke);
-    painter.line_segment([center + Vec2::new(0.0, spoke), center + Vec2::new(0.0, r)], stroke);
-}
-
 /// Paint a globe/web icon (circle + equator + two arcs).
 pub fn paint_globe(painter: &Painter, center: Pos2, color: Color32) {
     let stroke = Stroke::new(1.5, color);

@@ -27,8 +27,8 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text),
         );
         ui.label(
-            egui::RichText::new("●")
-                .size(theme.text_xs)
+            egui::RichText::new(crate::theme::ICON_CIRCLE)
+                .font(theme.font_icon(theme.text_xs))
                 .color(status_color),
         );
         ui.label(
@@ -37,12 +37,19 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text_muted),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let arrow = if expanded { "▼" } else { "▶" };
+            let arrow = if expanded {
+                crate::theme::ICON_CARET_DOWN
+            } else {
+                crate::theme::ICON_CARET_RIGHT
+            };
             if ui
                 .add(
-                    egui::Button::new(egui::RichText::new(arrow).size(theme.text_sm))
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    egui::Button::new(
+                        egui::RichText::new(arrow)
+                            .font(theme.font_icon(theme.text_sm)),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                 )
                 .clicked()
             {

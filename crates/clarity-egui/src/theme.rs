@@ -27,6 +27,9 @@ pub const ICON_PUZZLE: &str = "\u{E596}";
 pub const ICON_PLUG: &str = "\u{E946}";
 pub const ICON_CARET_DOWN: &str = "\u{E136}";
 pub const ICON_CARET_RIGHT: &str = "\u{E13A}";
+pub const ICON_MINUS: &str = "\u{E4A2}";
+pub const ICON_SQUARE: &str = "\u{E5B4}";
+pub const ICON_CIRCLE: &str = "\u{E184}";
 
 // ============================================================================
 // Design Token System — Phase A Foundation

@@ -6,7 +6,7 @@ pub mod status_dot;
 pub mod toggle;
 
 pub use icon_button::icon_button;
-pub use icon_button::icon_button_primary;
+// pub use icon_button::icon_button_primary; // restored via git history if needed
 pub use icon_button::icon_button_toolbar;
 // pub use settings_row::settings_row; // not yet integrated into tabs
 pub use status_dot::status_dot;
