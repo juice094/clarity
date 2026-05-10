@@ -78,6 +78,11 @@ cargo run -p clarity-egui
 - ✅ **后台任务 UI**：Cron Jobs 可折叠 sidebar section（创建/列表/删除/启用开关）、Team 协调面板
 - ✅ **Markdown 渲染**：代码块高亮 + 表格渲染（`RenderBlock::Table` + `egui::Grid`，零外部依赖）
 - ✅ **运行时健康**：Gateway 状态指示器（实时轮询）、面板级 panic 隔离（`render_safe` + `catch_unwind`）、rapid-Enter debounce + session-delete draft race 修复
+- ✅ **CJK 字体子集化**：NotoSansSC-subset.ttf 精确裁剪至 297KB（477 codepoints），消除字重回退
+- ✅ **错误气泡增强**：Retry / Switch Model 动作按钮 + 50% 红色玻璃背景 + danger 描边
+- ✅ **侧边栏信息架构**：ROLES / LIVE / WORKSPACE / ANALYTICS 分组导航 + clickable_row 交互模式
+- ✅ **Phosphor 图标系统**：角色/箭头图标统一使用 Phosphor 字体字形，零 emoji 策略
+- ✅ **响应式标题栏**：Provider 胶囊 + Gateway 状态点，窗口缩小时自动降级
 
 ### 进行中 / 未实现
 
@@ -143,7 +148,7 @@ crates/
 
 ```bash
 # Run the full validation suite (what CI runs)
-cargo test --workspace --lib                          # 728 tests, 0 failed, 6 ignored
+cargo test --workspace --lib                          # 849 tests, 0 failed, 7 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # zero doc warnings

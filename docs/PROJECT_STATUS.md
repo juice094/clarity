@@ -1,6 +1,6 @@
 # Clarity 项目现状报告
 
-> 版本：v0.3.1+ | 日期：2026-05-08 | `main` @ `92b77781` | 基于实机测试与代码审计  
+> 版本：v0.3.2 | 日期：2026-05-10 | `main` @ `5dc1fe23` | 基于实机测试与代码审计  
 > 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)
 
 ---
@@ -10,7 +10,7 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **800+ passed, 0 failed, 7 ignored** | ✅ 全绿 |
+| **单元测试** | **849 passed, 0 failed, 7 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` + [`THREAT_MODEL.md`](THREAT_MODEL.md) | ✅ Dependabot #22/#23 已修复；STRIDE 威胁模型 16 条已建档，6 项未缓解风险已排期 |
 | **代码规模** | ~130 个 Rust 源文件 | 持续增长 |
@@ -18,7 +18,7 @@
 
 **测试覆盖详情**：
 - `clarity-core`: 565 tests passed, 7 ignored
-- `clarity-gateway`: 43 tests passed
+- `clarity-gateway`: 47 tests passed
 - `clarity-memory`: 82+ tests passed
 - `clarity-wire`: 37 tests passed
 - `clarity-tui`: 6 tests passed

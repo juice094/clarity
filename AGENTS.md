@@ -60,6 +60,22 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - **Phase 3 — Backlog 推进**: `ParallelExecutor::execute` 新增 `cancel: Option<CancellationToken>` 参数；`TeamCoordinator` 将团队级 cancel token 级联到并行执行器；J5 Jumpy 已有完整实现+测试，无需改动
 - **验证**: `cargo test --workspace --lib` = 全部通过 / 0 failed / 7 ignored / 0 warning
 
+**Sprint 41 — UI 审计修复与视觉精调（已完成 ✅，2026-05-10）**
+
+> 执行 UI 审计清单：`docs/ui-audit-rebuttal-2026-05-09.md`（7 项 P0/P1/P2 修复）。
+
+- **P0 CJK 字体修复**: 使用系统 `NotoSansSC-VF.ttf` 通过 `fontTools.subset` 重新生成子集字体，精确保留 477 个 UI codepoints（172 个 CJK + ASCII/标点）。体积 1.35MB → 297KB，消除字重缺失导致的渲染回退
+- **P0 错误气泡增强**: 添加 Retry (`ICON_REFRESH`) 和 Switch Model (`ICON_SETTINGS`) 按钮；背景透明度 30%→50%；新增 1px `theme.danger` 描边；动作通过 `PendingActions` 延迟模式线程安全转发
+- **P1 侧边栏信息架构**: 导航分组为 ROLES / LIVE / WORKSPACE / ANALYTICS，`group_header()` 带 1px 底部分隔线；Teams/Dashboard/Plan Timeline 移除 "Open" 按钮，改为全行 `clickable_row` 点击 + 悬停高亮 + 展开时强调色 chevron
+- **P1 Web Tabs 空状态折叠**: 空状态仅显示单行提示 + `[+]` 按钮；URL 输入框默认隐藏，点击 `[+]` 后展开；新增 `UiStore.web_tabs_add_visible`
+- **P1 Tab 可读性**: 字体 11px→13px (`text_md`)；非活动标签颜色 `text_dim`→`text_muted`（不透明度 72%）
+- **P2 输入框视觉权重**: `input_bg` 不透明度 dark 65%→85%，oled 60%→80%；发送按钮图标 `ICON_PLAY`→`ICON_SEND`
+- **P2 Workspace 滚动指示器**: 预览 drawer `ScrollBarVisibility::AlwaysVisible`
+- **P2 Role 卡片状态**: 状态点半径 3.0→4.5px + glow 描边；文案 `"{} active"`→`"{} session(s)"`；计数为 0 时隐藏
+- **P2 标题栏信息精简**: Provider 标签转为紧凑胶囊（`[M] cmd` / `[≋] p1+p2`），窗口宽度 <860px 时隐藏；Gateway 胶囊缩至 4px 状态点 + "Gateway" 文字（<700px 仅保留点）
+- **图标系统重构**: 角色图标（emotion/knowledge/engineering）和折叠箭头从代码绘制（`paint_emotion`/`paint_chevron_*`）迁移至 Phosphor 字体字形（`brain` U+E74E、`book` U+E0E2、`wrench` U+E5D4、`caret-right` U+E13A、`caret-down` U+E136）。`ui/icons.rs` 移除 140 行死代码
+- **验证**: `cargo test --workspace --lib` = 849 passed / 0 failed / 7 ignored；`cargo check -p clarity-egui` = 0 error（2 个 pre-existing `collapsible_if` warning）
+
 **Sprint 40 — Runtime Robustness Deepening + Integration Tests（已完成 ✅，2026-05-08）**
 
 > 执行计划 `docs/plans/sprint-40-plan.md`：parking_lot 迁移降低锁 unwrap 密度 + MCP 端到端集成测试 + dependabot 跟进。

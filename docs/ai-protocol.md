@@ -8,12 +8,12 @@
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-05-06
-**当前分支**：`main` @ `a090e5b6`（已推送 origin）
+**最后更新**：2026-05-10
+**当前分支**：`main` @ `5dc1fe23`（未推送 origin，领先 20 commits）
 **架构模式**：CLI
 **定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 **会话状态**：
-- v0.3.1 已发布（tag `v0.3.1`）：model_download + onboarding + unwrap 审计 + egui release CI
+- v0.3.1 已发布（tag `v0.3.1`）
 - clarity-tauri 完全归档移出仓库；Dependabot 报警清零
 - Settings 模型选择缺陷修复；Mutex 硬化完成
 - **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔓 已解锁
@@ -26,7 +26,13 @@
 - **Sprint 14.5 — 架构解耦与代码健康**：✅ 已完成（2026-05-02）
 - **Sprint 15 — 多方面强化**：✅ 已完成（2026-05-02 ~ 2026-05-03）
 - **Sprint 16 — 内核升级 + 基础设施**：✅ 已完成（2026-05-03）
-- **Sprint 17 — ZeroClaw 吸收与工程深化**：🔄 已规划（2026-05-03 ~ 2026-05-10）
+- **Sprint 17 — ZeroClaw 吸收与工程深化**：✅ 已完成（2026-05-03 ~ 2026-05-06）
+- **Sprint 38-C — CI Pipeline Hardening**：✅ 已完成（2026-05-06）
+- **Sprint 36/36.5/36.6 — Cron/Team UI + 死代码清理 + Markdown 表格**：✅ 已完成（2026-05-05）
+- **Sprint 39 — Runtime Stability + Engineering Hygiene**：✅ 已完成（2026-05-07）
+- **Sprint 40 — Runtime Robustness + Integration Tests**：✅ 已完成（2026-05-08）
+- **Sprint 41 — UI 审计修复与视觉精调**：✅ 已完成（2026-05-10）
+- **进行中**：LLM Mesh（circuit-breaker + McpLlmProvider + MCP Server 基础设施）、Gateway handler 模块化拆分、Phosphor 图标系统
 
 ---
 
