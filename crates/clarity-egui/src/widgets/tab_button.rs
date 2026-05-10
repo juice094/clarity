@@ -32,7 +32,7 @@ pub fn tab_button(
             theme.text_muted
         };
 
-        ui.horizontal_centered(|ui| {
+        ui.horizontal(|ui| {
             ui.add_space(4.0);
 
             // Tail-preserve truncation if the title is too wide for the tab.
@@ -54,7 +54,7 @@ pub fn tab_button(
                     .color(text_color),
             );
 
-            // Close button — revealed on hover, placed at the right edge.
+            // Close button — revealed on hover, pushed to the right edge.
             if tab_hovered {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(2.0);
@@ -90,7 +90,7 @@ pub fn tab_button(
 
     // `allocate_ui` returns Sense::hover() by default; re-register with click so
     // callers can detect tab selection and double-click to rename.
-    let response = ui.interact(inner.response.rect, inner.response.id, egui::Sense::click());
+    let response = inner.response.interact(egui::Sense::click());
     let double_clicked = response.double_clicked();
 
     TabResponse {
