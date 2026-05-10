@@ -253,12 +253,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .size(theme.text_xs)
                                 .color(theme.text_dim),
                         );
-                        let available_width = ui.available_width();
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(available_width, 1.0),
-                            egui::Sense::hover(),
-                        );
-                        ui.painter().rect_filled(rect, 0.0, theme.border);
+                        ui.separator();
                         ui.add_space(theme.space_4);
                     };
 
