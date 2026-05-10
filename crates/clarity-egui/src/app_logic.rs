@@ -530,41 +530,6 @@ impl App {
     pub(crate) fn new_session(&mut self) {
         let category = self.session_store.active_category.clone();
 
-        // Mature AI clients (ChatGPT, Claude, Cursor) never accumulate blank chats.
-        // If the current session has no messages, reuse it — just refresh the title.
-        // The user stays on the same tab; no new empty tab is created.
-        let is_empty = self
-            .session_store
-            .active_session()
-            .map(|s| s.messages.is_empty())
-            .unwrap_or(false);
-        if is_empty {
-            let count = self
-                .session_store
-                .sessions
-                .iter()
-                .filter(|s| s.category == category && !s.messages.is_empty())
-                .count();
-            let base = match category.as_str() {
-                "emotion" => "Emotion",
-                "knowledge" => "Knowledge",
-                "engineering" => "Engineering",
-                _ => "Chat",
-            };
-            let title = if count == 0 {
-                format!("New {}", base)
-            } else {
-                format!("New {} {}", base, count + 1)
-            };
-            if let Some(active) = self.session_store.active_session_mut() {
-                active.title = title;
-                active.updated_at = crate::session::now_millis();
-            }
-            self.chat_store.input = String::new();
-            self.chat_store.last_usage = None;
-            return;
-        }
-
         // Current session has real messages — save it and create a fresh one.
         let old_id = self.session_store.active_session_id.clone();
         self.save_current_session();
