@@ -670,6 +670,27 @@ impl eframe::App for App {
         }
         self.last_frame_width = Some(current_width);
 
+        // ── Content-area guard: ensure chat area never drops below 480px ──
+        // This catches cases where user manually resized side panels narrower
+        // than the window-width breakpoints above.
+        let sidebar_w = if self.ui_store.sidebar_collapsed { 36.0 } else { 220.0 };
+        let workspace_w = 280.0; // always present
+        let dashboard_w = if self.ui_store.dashboard_panel_open { 240.0 } else { 0.0 };
+        let team_w = if self.team_store.team_panel_open { 240.0 } else { 0.0 };
+        let task_w = if self.task_store.task_panel_open { 240.0 } else { 0.0 };
+        let content_w = current_width - sidebar_w - workspace_w - dashboard_w - team_w - task_w;
+        const CONTENT_MIN: f32 = 480.0;
+        if content_w < CONTENT_MIN {
+            // Priority: dashboard → team → task (sidebar handled by 768px breakpoint)
+            if self.ui_store.dashboard_panel_open {
+                self.ui_store.dashboard_panel_open = false;
+            } else if self.team_store.team_panel_open {
+                self.team_store.team_panel_open = false;
+            } else if self.task_store.task_panel_open {
+                self.task_store.task_panel_open = false;
+            }
+        }
+
         ctx.style_mut(|style| {
             self.ui_store.theme.apply(style);
         });

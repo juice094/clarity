@@ -10,8 +10,8 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
 
     egui::SidePanel::right("team_panel")
-        .default_width(320.0)
-        .min_width(240.0)
+        .default_width(280.0)
+        .min_width(200.0)
         .max_width(400.0)
         .resizable(true)
         .frame(

@@ -17,8 +17,8 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     }
 
     egui::SidePanel::right("workspace_panel")
-        .default_width(320.0)
-        .min_width(240.0)
+        .default_width(280.0)
+        .min_width(200.0)
         .max_width(480.0)
         .resizable(true)
         .frame(

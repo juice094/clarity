@@ -18,7 +18,12 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
             )
         })
         .collect();
-    let tab_max = (ui.available_width() - 8.0).max(200.0);
+    // Reserve space for drag region (min 40) + right-side buttons (~220px).
+    // This prevents tabs from pushing window controls off-screen.
+    let reserved_right = 260.0;
+    let tab_max = (ui.available_width() - reserved_right)
+        .max(200.0)
+        .min(480.0);
     ui.allocate_ui_with_layout(
         egui::vec2(tab_max, 28.0),
         egui::Layout::left_to_right(egui::Align::Center),
