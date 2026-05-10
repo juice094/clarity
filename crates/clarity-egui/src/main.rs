@@ -167,7 +167,7 @@ impl App {
     }
 
     fn render_titlebar(&mut self, ctx: &egui::Context) {
-        let total_w = ctx.screen_rect().width();
+        let _total_w = ctx.screen_rect().width();
         let theme = self.ui_store.theme.clone();
         let btn_size = egui::vec2(36.0, TITLEBAR_HEIGHT);
 
@@ -205,7 +205,14 @@ impl App {
                         ui.add_space(8.0);
                     }
 
-                    // Brand removed: titlebar is now pure navigation + controls.
+                    // Brand
+                    ui.label(
+                        egui::RichText::new("Clarify")
+                            .size(theme.text_base)
+                            .color(theme.text_strong),
+                    );
+                    ui.add_space(8.0);
+
                     // Session tabs moved from chat header to titlebar
                     crate::panels::chat::header::render_session_tabs(self, ui);
 
@@ -286,41 +293,20 @@ impl App {
                         } else {
                             theme.text_dim
                         };
-                        let max_c = max_resp.rect.center();
-                        let max_stroke = egui::Stroke::new(1.2_f32, max_color);
-                        if is_maximized {
-                            // Restore: two overlapping rectangles
-                            let s = 4.5;
-                            let back = egui::Rect::from_center_size(
-                                egui::pos2(max_c.x - 1.0, max_c.y - 1.0),
-                                egui::vec2(s * 2.0, s * 2.0),
-                            );
-                            let front = egui::Rect::from_center_size(
-                                egui::pos2(max_c.x + 1.0, max_c.y + 1.0),
-                                egui::vec2(s * 2.0, s * 2.0),
-                            );
-                            ui.painter().rect_stroke(
-                                back,
-                                egui::CornerRadius::same(1),
-                                max_stroke,
-                                egui::StrokeKind::Inside,
-                            );
-                            ui.painter().rect_stroke(
-                                front,
-                                egui::CornerRadius::same(1),
-                                max_stroke,
-                                egui::StrokeKind::Inside,
-                            );
+                        let _max_c = max_resp.rect.center();
+                        let _max_stroke = egui::Stroke::new(1.2_f32, max_color);
+                        let max_icon = if is_maximized {
+                            crate::theme::ICON_COPY
                         } else {
-                            // Maximize: single rectangle
-                            let rect = egui::Rect::from_center_size(max_c, egui::vec2(10.0, 10.0));
-                            ui.painter().rect_stroke(
-                                rect,
-                                egui::CornerRadius::same(1),
-                                max_stroke,
-                                egui::StrokeKind::Inside,
-                            );
-                        }
+                            crate::theme::ICON_SQUARE
+                        };
+                        ui.painter().text(
+                            max_resp.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            max_icon,
+                            theme.font_icon(14.0),
+                            max_color,
+                        );
 
                         // Minimize
                         let min_resp = ui.add_sized(
@@ -347,13 +333,12 @@ impl App {
                         } else {
                             theme.text_dim
                         };
-                        let min_c = min_resp.rect.center();
-                        ui.painter().line_segment(
-                            [
-                                egui::pos2(min_c.x - 5.0, min_c.y),
-                                egui::pos2(min_c.x + 5.0, min_c.y),
-                            ],
-                            egui::Stroke::new(1.2_f32, min_color),
+                        ui.painter().text(
+                            min_resp.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            crate::theme::ICON_MINUS,
+                            theme.font_icon(14.0),
+                            min_color,
                         );
 
                         // Separator between system buttons and indicators
@@ -392,107 +377,117 @@ impl App {
                             settings_color,
                         );
 
-                        // Provider label (compact capsule) — shows active backend type.
-                        if total_w >= 860.0 {
-                            let provider_label_full = self
-                                .state
-                                .agent
-                                .provider_label()
-                                .unwrap_or_else(|| "No LLM".to_string());
-                            let (prefix, body) = if let Some(l) = self.state.agent.provider_label() {
-                                if l.starts_with("mesh:") {
-                                    let rest = &l[5..];
-                                    let providers: Vec<&str> = rest.split(',').collect();
-                                    (Some("[≋] "), providers.join("+"))
-                                } else if l.starts_with("mcp:") {
-                                    (Some("[M] "), l[4..].to_string())
-                                } else {
-                                    let short = l.split(':')
-                                        .nth_back(1)
-                                        .or_else(|| l.split(':').next())
-                                        .unwrap_or(&l)
-                                        .to_string();
-                                    (None, short)
-                                }
-                            } else {
-                                (None, "No LLM".to_string())
-                            };
-
-                            let provider_resp = egui::Frame::new()
-                                .fill(theme.bg_elevated)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                                .inner_margin(egui::Margin::symmetric(8, 4))
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        if let Some(p) = prefix {
-                                            ui.label(
-                                                egui::RichText::new(p)
-                                                    .size(theme.text_xs)
-                                                    .color(theme.accent),
-                                            );
-                                        }
-                                        ui.label(
-                                            egui::RichText::new(body)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_muted),
-                                        );
-                                    });
-                                })
-                                .response;
-                            if provider_resp.hovered() {
-                                provider_resp.clone().on_hover_text(provider_label_full);
-                            }
-
-                            ui.add_space(4.0);
-                        }
-
-                        // Gateway capsule: colored dot + compact label.
-                        let agent_color = match self.chat_store.agent_status {
-                            AgentStatus::Online => theme.status_online,
-                            AgentStatus::Busy => theme.status_busy,
+                        // Connection status capsule
+                        let (conn_label, conn_color) = match self.chat_store.agent_status {
+                            AgentStatus::Online => ("Online", theme.status_online),
+                            AgentStatus::Busy => ("Busy", theme.status_busy),
                             AgentStatus::Offline | AgentStatus::Unconfigured => {
-                                theme.status_offline
+                                ("断开", theme.status_offline)
                             }
                         };
-                        let gateway_w = if total_w >= 700.0 { 68.0 } else { 24.0 };
-                        let (gateway_rect, gateway_resp) = ui.allocate_exact_size(
-                            egui::vec2(gateway_w, TITLEBAR_HEIGHT),
-                            egui::Sense::click(),
-                        );
-                        ui.painter().rect_filled(
-                            gateway_rect,
-                            egui::CornerRadius::same(theme.radius_sm as u8),
-                            theme.bg_elevated,
-                        );
-                        let dot_x = if total_w >= 700.0 {
-                            gateway_rect.min.x + 12.0
-                        } else {
-                            gateway_rect.center().x
-                        };
-                        ui.painter().circle_filled(
-                            egui::pos2(dot_x, gateway_rect.center().y),
-                            4.0,
-                            agent_color,
-                        );
-                        if total_w >= 700.0 {
-                            ui.painter().text(
-                                egui::pos2(gateway_rect.min.x + 20.0, gateway_rect.center().y),
-                                egui::Align2::LEFT_CENTER,
-                                "Gateway",
-                                theme.font(theme.text_xs),
-                                agent_color,
-                            );
+                        let conn_resp = egui::Frame::new()
+                            .fill(theme.bg_elevated)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    let dot_size = egui::vec2(8.0, 8.0);
+                                    let dot_rect = ui
+                                        .allocate_exact_size(dot_size, egui::Sense::hover())
+                                        .0;
+                                    ui.painter().circle_filled(
+                                        dot_rect.center(),
+                                        4.0,
+                                        conn_color,
+                                    );
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        egui::RichText::new(conn_label)
+                                            .size(theme.text_xs)
+                                            .color(conn_color),
+                                    );
+                                });
+                            })
+                            .response;
+                        if conn_resp.hovered() {
+                            conn_resp.clone().on_hover_text("Agent connection status");
                         }
-                        if gateway_resp.clicked() {
-                            let agent_label = match self.chat_store.agent_status {
-                                AgentStatus::Online => "Online",
-                                AgentStatus::Busy => "Busy",
-                                AgentStatus::Offline | AgentStatus::Unconfigured => "Offline",
-                            };
-                            self.push_toast(
-                                format!("Gateway: {} — menu TBD", agent_label),
-                                crate::ui::types::ToastLevel::Info,
-                            );
+                        ui.add_space(4.0);
+
+                        // Gateway capsule (clickable)
+                        let gw_dot_color = match self.chat_store.gateway_status {
+                            crate::ui::types::GatewayStatus::Online => theme.status_online,
+                            crate::ui::types::GatewayStatus::Offline => theme.status_offline,
+                            crate::ui::types::GatewayStatus::Checking => theme.status_busy,
+                        };
+                        let gw_resp = egui::Frame::new()
+                            .fill(theme.bg_elevated)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                            .inner_margin(egui::Margin::symmetric(8, 4))
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    let dot_size = egui::vec2(8.0, 8.0);
+                                    let dot_rect = ui
+                                        .allocate_exact_size(dot_size, egui::Sense::hover())
+                                        .0;
+                                    ui.painter().circle_filled(
+                                        dot_rect.center(),
+                                        4.0,
+                                        gw_dot_color,
+                                    );
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        egui::RichText::new("Gateway")
+                                            .size(theme.text_xs)
+                                            .color(theme.text_muted),
+                                    );
+                                });
+                            })
+                            .response;
+                        if gw_resp.hovered() {
+                            gw_resp.clone().on_hover_text("Click to start/stop Gateway");
+                        }
+                        if gw_resp.clicked() {
+                            match self.chat_store.gateway_status {
+                                crate::ui::types::GatewayStatus::Online => {
+                                    if let Some(ref gm) = self.gateway_manager {
+                                        match gm.stop() {
+                                            Ok(_) => self.push_toast(
+                                                "Gateway stopping...".to_string(),
+                                                crate::ui::types::ToastLevel::Info,
+                                            ),
+                                            Err(e) => self.push_toast(
+                                                format!("Gateway stop failed: {}", e),
+                                                crate::ui::types::ToastLevel::Error,
+                                            ),
+                                        }
+                                    } else {
+                                        self.push_toast(
+                                            "Gateway manager not available".to_string(),
+                                            crate::ui::types::ToastLevel::Warn,
+                                        );
+                                    }
+                                }
+                                _ => {
+                                    if let Some(ref gm) = self.gateway_manager {
+                                        match gm.start_if_needed() {
+                                            Ok(_) => self.push_toast(
+                                                "Gateway starting...".to_string(),
+                                                crate::ui::types::ToastLevel::Info,
+                                            ),
+                                            Err(e) => self.push_toast(
+                                                format!("Gateway start failed: {}", e),
+                                                crate::ui::types::ToastLevel::Error,
+                                            ),
+                                        }
+                                    } else {
+                                        self.push_toast(
+                                            "Gateway manager not available".to_string(),
+                                            crate::ui::types::ToastLevel::Warn,
+                                        );
+                                    }
+                                }
+                            }
                         }
                     });
                 });

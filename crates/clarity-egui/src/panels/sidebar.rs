@@ -335,7 +335,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                     |ui| {
                                         ui.add_space(8.0);
                                         let caret_icon = if *is_open {
-                                    crate::theme::ICON_CARET_RIGHT
+                                    crate::theme::ICON_CARET_DOWN
                                 } else {
                                     crate::theme::ICON_CARET_RIGHT
                                 };
@@ -447,13 +447,25 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             } else {
                                 format!("{} sessions", count)
                             };
-                            painter.text(
-                                egui::pos2(content_left + 16.0, dot_y),
-                                egui::Align2::LEFT_TOP,
-                                session_text,
-                                theme.font(theme.text_xs),
-                                theme.text_dim,
-                            );
+                            let text_pos = egui::pos2(content_left + 16.0, dot_y);
+                            let galley = ui.ctx().fonts(|f| {
+                                f.layout_no_wrap(
+                                    session_text.clone(),
+                                    theme.font(theme.text_xs),
+                                    theme.text_dim,
+                                )
+                            });
+                            let text_rect = egui::Rect::from_min_size(text_pos, galley.size());
+                            ui.put(
+                                text_rect,
+                                egui::Label::new(
+                                    egui::RichText::new(session_text)
+                                        .font(theme.font(theme.text_xs))
+                                        .color(theme.text_dim),
+                                )
+                                .selectable(false),
+                            )
+                            .on_hover_text("Total sessions in current workspace");
                         }
 
                         // Latest instance name (truncated)

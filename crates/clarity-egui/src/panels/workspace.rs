@@ -183,6 +183,19 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
     ui.add_space(4.0);
 
     // ── Content area ──
+    let is_code_file = !is_web && {
+        let ext = std::path::Path::new(&title)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        matches!(
+            ext,
+            "rs" | "toml"
+                | "json" | "yaml" | "yml" | "py" | "js" | "ts" | "sh" | "ps1"
+                | "cpp" | "c" | "h" | "hpp" | "go" | "java" | "kt" | "swift"
+                | "rb" | "php" | "html" | "css" | "scss" | "xml" | "sql"
+        )
+    };
     egui::Frame::new()
         .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -195,8 +208,18 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
                 )
                 .show(ui, |ui| {
-                    let parsed = crate::ui::markdown::parse_markdown(&content);
-                    crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                    if is_code_file {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut content.clone())
+                                .font(egui::FontId::monospace(theme.text_sm))
+                                .desired_rows(20)
+                                .lock_focus(true)
+                                .frame(false),
+                        );
+                    } else {
+                        let parsed = crate::ui::markdown::parse_markdown(&content);
+                        crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                    }
                 });
         });
 }

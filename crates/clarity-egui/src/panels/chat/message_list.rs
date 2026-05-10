@@ -231,6 +231,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         .skip(start_idx)
                         .take(end_idx - start_idx)
                     {
+                        if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
+                            continue;
+                        }
                         if unit.is_user {
                             let editing = app.chat_store.editing_message_idx == Some(unit.start);
                             let bubble_h = if editing {
@@ -259,13 +262,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             if !editing {
                                 ui.horizontal(|ui| {
                                     if let Some(msg) = session.messages.get(unit.start) {
-                                        ui.label(
-                                            egui::RichText::new(format_relative_time(
-                                                msg.timestamp,
-                                            ))
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
-                                        );
+                                        if let Some(ts) = format_relative_time(msg.timestamp) {
+                                            ui.label(
+                                                egui::RichText::new(ts)
+                                                    .size(theme.text_xs)
+                                                    .color(theme.text_dim),
+                                            );
+                                        }
                                     }
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
@@ -323,11 +326,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
 
                             ui.horizontal(|ui| {
                                 if let Some(msg) = session.messages.get(unit.start) {
-                                    ui.label(
-                                        egui::RichText::new(format_relative_time(msg.timestamp))
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
-                                    );
+                                    if let Some(ts) = format_relative_time(msg.timestamp) {
+                                        ui.label(
+                                            egui::RichText::new(ts)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_dim),
+                                        );
+                                    }
                                 }
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
@@ -425,6 +430,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     }
 
                     for i in start_idx..end_idx {
+                        if session.messages[i].content.trim().is_empty() {
+                            continue;
+                        }
                         let editing = app.chat_store.editing_message_idx == Some(i);
                         let show_header = if session.messages[i].role == Role::Agent {
                             i == 0 || session.messages[i - 1].role != Role::Agent
@@ -457,13 +465,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         if !editing {
                             if session.messages[i].role == Role::User {
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(format_relative_time(
-                                            session.messages[i].timestamp,
-                                        ))
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                    );
+                                    if let Some(ts) = format_relative_time(session.messages[i].timestamp) {
+                                        ui.label(
+                                            egui::RichText::new(ts)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_dim),
+                                        );
+                                    }
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
@@ -502,13 +510,13 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 ui.add_space(theme.space_8);
                             } else {
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(format_relative_time(
-                                            session.messages[i].timestamp,
-                                        ))
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                    );
+                                    if let Some(ts) = format_relative_time(session.messages[i].timestamp) {
+                                        ui.label(
+                                            egui::RichText::new(ts)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_dim),
+                                        );
+                                    }
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
@@ -704,15 +712,16 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
 // ============================================================================
 
 /// Format an `Instant` as a human-readable relative string (e.g. "2m ago").
-fn format_relative_time(instant: std::time::Instant) -> String {
+/// Returns `None` for messages less than 60 seconds old to avoid visual clutter.
+fn format_relative_time(instant: std::time::Instant) -> Option<String> {
     let elapsed = instant.elapsed().as_secs();
     if elapsed < 60 {
-        "just now".to_string()
+        None
     } else if elapsed < 3600 {
-        format!("{}m ago", elapsed / 60)
+        Some(format!("{}m ago", elapsed / 60))
     } else if elapsed < 86400 {
-        format!("{}h ago", elapsed / 3600)
+        Some(format!("{}h ago", elapsed / 3600))
     } else {
-        format!("{}d ago", elapsed / 86400)
+        Some(format!("{}d ago", elapsed / 86400))
     }
 }

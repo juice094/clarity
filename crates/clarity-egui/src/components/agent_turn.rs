@@ -89,7 +89,7 @@ impl AgentTurn {
             .iter()
             .rev()
             .find(|m| {
-                !m.content.is_empty()
+                !m.content.trim().is_empty()
                     || m.blocks.iter().any(|b| {
                         matches!(
                             b,
