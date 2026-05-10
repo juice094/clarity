@@ -9,7 +9,12 @@ use crate::ui::types::ToolCallStatus;
 // ============================================================================
 
 /// Render an AgentTurn in **CLI style**: zero borders, single avatar, indented tools.
-pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme, turn_idx: usize) -> f32 {
+pub fn render_agent_turn(
+    ui: &mut egui::Ui,
+    turn: &mut AgentTurn,
+    theme: &Theme,
+    turn_idx: usize,
+) -> f32 {
     let start_y = ui.cursor().min.y;
 
     // ── Header: avatar + "Agent" + meta ──
@@ -95,7 +100,12 @@ pub fn render_agent_turn(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme,
 }
 
 /// Render an AgentTurn in **Glass style**: existing card aesthetic preserved.
-pub fn render_agent_turn_glass(ui: &mut egui::Ui, turn: &mut AgentTurn, theme: &Theme, turn_idx: usize) -> f32 {
+pub fn render_agent_turn_glass(
+    ui: &mut egui::Ui,
+    turn: &mut AgentTurn,
+    theme: &Theme,
+    turn_idx: usize,
+) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() - 32.0).max(120.0);
 

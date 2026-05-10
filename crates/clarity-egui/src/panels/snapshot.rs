@@ -29,11 +29,8 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
         .interactable(true)
         .show(ctx, |ui| {
             let response = ui.allocate_response(screen.size(), egui::Sense::click());
-            ui.painter_at(response.rect).rect_filled(
-                response.rect,
-                0.0,
-                theme.overlay,
-            );
+            ui.painter_at(response.rect)
+                .rect_filled(response.rect, 0.0, theme.overlay);
         });
 
     // ESC closes modal
@@ -149,7 +146,11 @@ fn render_snapshot_row(
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .stroke(egui::Stroke::new(
             1.0_f32,
-            if is_selected { theme.border_strong } else { egui::Color32::TRANSPARENT },
+            if is_selected {
+                theme.border_strong
+            } else {
+                egui::Color32::TRANSPARENT
+            },
         ))
         .inner_margin(egui::Margin::symmetric(10, 8));
 
@@ -199,7 +200,11 @@ fn render_snapshot_row(
                     egui::Button::new(
                         egui::RichText::new(format!("{} Restore", crate::theme::ICON_REFRESH))
                             .font(theme.font_icon(theme.text_sm))
-                            .color(if is_confirming { theme.danger } else { theme.text_dim }),
+                            .color(if is_confirming {
+                                theme.danger
+                            } else {
+                                theme.text_dim
+                            }),
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
@@ -251,11 +256,7 @@ fn render_snapshot_row(
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                 );
                 if preview_btn.clicked() {
-                    app.snapshot_store.selected_id = if is_selected {
-                        None
-                    } else {
-                        Some(info.id)
-                    };
+                    app.snapshot_store.selected_id = if is_selected { None } else { Some(info.id) };
                 }
             });
         });
@@ -300,9 +301,7 @@ fn render_snapshot_row(
                                     } else {
                                         theme.text_dim
                                     };
-                                    ui.monospace(
-                                        egui::RichText::new(line).color(color).size(11.0),
-                                    );
+                                    ui.monospace(egui::RichText::new(line).color(color).size(11.0));
                                 }
                             }
                         });

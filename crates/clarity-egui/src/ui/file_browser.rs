@@ -20,7 +20,14 @@ const MAX_DEPTH: usize = 6;
 
 /// Directories that are skipped entirely to avoid performance cliffs
 /// on typical development workspaces.
-const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", "dist", "build", ".clarity"];
+const SKIP_DIRS: &[&str] = &[
+    "target",
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".clarity",
+];
 
 /// Render a directory tree starting at `path`.
 ///
@@ -33,6 +40,7 @@ pub fn render_file_tree(
     depth: usize,
     selected_path: Option<&str>,
     on_file_click: &mut dyn FnMut(&Path),
+    compact: bool,
 ) {
     if depth > MAX_DEPTH {
         return;
@@ -65,8 +73,13 @@ pub fn render_file_tree(
 
         if is_dir {
             let header_id = ui.id().with(&full_path);
+            let dir_label = if compact {
+                name.chars().next().unwrap_or('D').to_string()
+            } else {
+                name.clone()
+            };
             let header = egui::CollapsingHeader::new(
-                egui::RichText::new(format!("📁 {}", name))
+                egui::RichText::new(dir_label)
                     .size(theme.text_sm)
                     .color(theme.text),
             )
@@ -81,6 +94,7 @@ pub fn render_file_tree(
                     depth + 1,
                     selected_path,
                     on_file_click,
+                    compact,
                 );
             });
             // Allow clicking the directory header itself to select it
@@ -102,7 +116,9 @@ pub fn render_file_tree(
             let is_selected = selected_path.is_some_and(|sp| {
                 // Normalise Windows back-slashes before comparison
                 let a = full_path.to_string_lossy().replace('\\', "/");
-                let b = std::path::Path::new(sp).to_string_lossy().replace('\\', "/");
+                let b = std::path::Path::new(sp)
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 a == b
             });
 
@@ -124,16 +140,56 @@ pub fn render_file_tree(
                         theme.bg_hover.linear_multiply(0.5),
                     );
                 }
-                let text_pos = row_rect.min + egui::vec2(8.0 * depth as f32 + 12.0, 3.0);
+                let indent = if compact {
+                    4.0
+                } else {
+                    8.0 * depth as f32 + 12.0
+                };
                 let text_color = if is_selected {
                     theme.text
                 } else {
                     theme.text_dim
                 };
+
+                // Icon
+                let icon_size = if compact { 10.0 } else { 14.0 };
+                let icon_rect = egui::Rect::from_min_size(
+                    row_rect.min + egui::vec2(indent, 3.0),
+                    egui::vec2(icon_size, icon_size),
+                );
+                crate::ui::icons::paint_file(&painter, icon_rect, text_color);
+
+                // File-type badge
+                if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
+                    let badge = match ext {
+                        "rs" => Some("R"),
+                        "md" => Some("M"),
+                        "toml" => Some("≡"),
+                        _ => None,
+                    };
+                    if let Some(b) = badge {
+                        crate::ui::icons::paint_file_badge(
+                            &painter,
+                            icon_rect,
+                            b,
+                            text_color,
+                            if compact { 5.0 } else { 6.0 },
+                        );
+                    }
+                }
+
+                // Filename text
+                let text_pos = row_rect.min
+                    + egui::vec2(indent + icon_size + 4.0, 3.0);
+                let label = if compact {
+                    name.chars().next().unwrap_or('F').to_string()
+                } else {
+                    name.clone()
+                };
                 painter.text(
                     text_pos,
                     egui::Align2::LEFT_TOP,
-                    format!("📄 {}", name),
+                    label,
                     egui::FontId::new(theme.text_sm, egui::FontFamily::Proportional),
                     text_color,
                 );

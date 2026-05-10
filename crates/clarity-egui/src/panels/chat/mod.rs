@@ -14,6 +14,7 @@ pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
     let theme = &app.ui_store.theme;
     let max_w = app.ui_store.content_max_width;
     egui::TopBottomPanel::bottom("input_panel")
+        .max_height(200.0)
         .frame(
             egui::Frame::new()
                 .fill(theme.bg)
@@ -54,6 +55,8 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 )),
         )
         .show(ctx, |ui| {
+            // Hard minimum to prevent layout collapse when side panels are wide.
+            ui.set_min_size(egui::vec2(360.0, 200.0));
             // Header uses the full CentralPanel width (not constrained by content_max_width).
             // This gives the tab bar maximum breathing room; overflow is handled by
             // ScrollArea::horizontal inside render_header.

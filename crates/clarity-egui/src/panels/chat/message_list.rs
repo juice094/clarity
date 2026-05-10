@@ -53,7 +53,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         if u.is_user {
                             let bubble_h =
                                 session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                    ui::render::estimate_height(&session.messages[u.start], max_w, &theme)
+                                    ui::render::estimate_height(
+                                        &session.messages[u.start],
+                                        max_w,
+                                        &theme,
+                                    )
                                 });
                             if editing {
                                 bubble_h + 80.0 // approximate edit controls height
@@ -85,9 +89,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     .enumerate()
                     .map(|(i, m)| {
                         let editing = app.chat_store.editing_message_idx == Some(i);
-                        let bubble_h = m
-                            .cached_height
-                            .unwrap_or_else(|| crate::ui::render::estimate_height(m, max_w, &theme));
+                        let bubble_h = m.cached_height.unwrap_or_else(|| {
+                            crate::ui::render::estimate_height(m, max_w, &theme)
+                        });
                         if editing && m.role == Role::User {
                             bubble_h + 80.0
                         } else {
@@ -106,6 +110,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let mut scroll_up = false;
     let output = egui::ScrollArea::vertical()
         .id_salt("chat_scroll")
+        .auto_shrink([false; 2])
         .scroll_bar_visibility(
             egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
         )
@@ -168,7 +173,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             if u.is_user {
                                 let bubble_h =
                                     session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                        ui::render::estimate_height(&session.messages[u.start], max_w, &theme)
+                                        ui::render::estimate_height(
+                                            &session.messages[u.start],
+                                            max_w,
+                                            &theme,
+                                        )
                                     });
                                 if editing {
                                     bubble_h + 80.0
@@ -376,9 +385,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         .enumerate()
                         .map(|(i, m)| {
                             let editing = app.chat_store.editing_message_idx == Some(i);
-                            let bubble_h = m
-                                .cached_height
-                                .unwrap_or_else(|| crate::ui::render::estimate_height(m, max_w, &theme));
+                            let bubble_h = m.cached_height.unwrap_or_else(|| {
+                                crate::ui::render::estimate_height(m, max_w, &theme)
+                            });
                             if editing && m.role == Role::User {
                                 bubble_h + 80.0
                             } else {

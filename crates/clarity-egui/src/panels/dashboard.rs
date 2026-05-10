@@ -122,12 +122,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
             ui.add_space(theme.space_8);
 
             // ── FPS ──
-            metric_card(
-                ui,
-                &theme,
-                "FPS",
-                &format!("{:.1}", app.ui_store.fps),
-            );
+            metric_card(ui, &theme, "FPS", &format!("{:.1}", app.ui_store.fps));
         });
 }
 
@@ -206,10 +201,10 @@ fn status_card(
             );
             ui.add_space(theme.space_4);
             ui.horizontal(|ui| {
-                let (rect, _response) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                let (rect, _response) =
+                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
                 let dot_center = rect.center();
-                ui.painter()
-                    .circle_filled(dot_center, 4.5, dot_color);
+                ui.painter().circle_filled(dot_center, 4.5, dot_color);
                 ui.label(
                     egui::RichText::new(label)
                         .size(theme.text_xl)

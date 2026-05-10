@@ -74,7 +74,8 @@ pub struct GatewayTaskClient {
 impl GatewayTaskClient {
     /// Create a new client pointing at `CLARITY_GATEWAY_URL` or the default.
     pub fn new() -> Self {
-        let base_url = std::env::var("CLARITY_GATEWAY_URL").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string());
+        let base_url =
+            std::env::var("CLARITY_GATEWAY_URL").unwrap_or_else(|_| DEFAULT_GATEWAY.to_string());
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
@@ -85,7 +86,12 @@ impl GatewayTaskClient {
     /// `GET /v1/tasks`
     pub async fn list_tasks(&self) -> Result<Vec<TaskInfo>, String> {
         let url = format!("{}/v1/tasks", self.base_url);
-        let resp = self.client.get(&url).send().await.map_err(|e| e.to_string())?;
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         if !resp.status().is_success() {
             return Err(format!("Gateway returned {}", resp.status()));
         }
@@ -98,14 +104,25 @@ impl GatewayTaskClient {
     }
 
     /// `POST /v1/tasks`
-    pub async fn create_task(&self, name: &str, prompt: &str, max_iterations: Option<usize>) -> Result<TaskId, String> {
+    pub async fn create_task(
+        &self,
+        name: &str,
+        prompt: &str,
+        max_iterations: Option<usize>,
+    ) -> Result<TaskId, String> {
         let url = format!("{}/v1/tasks", self.base_url);
         let req_body = CreateTaskRequest {
             name: name.to_string(),
             prompt: prompt.to_string(),
             max_iterations,
         };
-        let resp = self.client.post(&url).json(&req_body).send().await.map_err(|e| e.to_string())?;
+        let resp = self
+            .client
+            .post(&url)
+            .json(&req_body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         if !resp.status().is_success() {
             return Err(format!("Gateway returned {}", resp.status()));
         }
@@ -116,7 +133,12 @@ impl GatewayTaskClient {
     /// `GET /v1/tasks/{id}`
     pub async fn get_task(&self, task_id: &str) -> Result<(TaskInfo, Option<TaskResult>), String> {
         let url = format!("{}/v1/tasks/{}", self.base_url, task_id);
-        let resp = self.client.get(&url).send().await.map_err(|e| e.to_string())?;
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         if !resp.status().is_success() {
             return Err(format!("Gateway returned {}", resp.status()));
         }
@@ -128,7 +150,12 @@ impl GatewayTaskClient {
     /// `DELETE /v1/tasks/{id}`
     pub async fn cancel_task(&self, task_id: &str) -> Result<(), String> {
         let url = format!("{}/v1/tasks/{}", self.base_url, task_id);
-        let resp = self.client.delete(&url).send().await.map_err(|e| e.to_string())?;
+        let resp = self
+            .client
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         if !resp.status().is_success() {
             return Err(format!("Gateway returned {}", resp.status()));
         }

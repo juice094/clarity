@@ -45,9 +45,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         actions.push(ShortcutAction::CloseModal);
     }
 
-    if app.chat_store.is_loading
-        && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
-    {
+    if app.chat_store.is_loading && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl) {
         actions.push(ShortcutAction::StopGeneration);
     }
 

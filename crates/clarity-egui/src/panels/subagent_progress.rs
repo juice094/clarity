@@ -144,9 +144,7 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                                     egui::RichText::new("Output").size(theme.text_xs),
                                 )
                                 .fill(theme.overlay_medium)
-                                .corner_radius(
-                                    egui::CornerRadius::same(theme.radius_sm as u8),
-                                ),
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                             )
                             .clicked()
                         {

@@ -1,20 +1,23 @@
-//! Right-side Workspace panel — file browser + inline file preview.
+//! Right-side Workspace panel — file browser + drawer-style file preview.
 //!
-//! Replaces the legacy task panel (tasks now live exclusively in the sidebar
-//! Tools section).  Files can be browsed and previewed here while the user
-//! continues chatting in the central panel.
+//! Drawer design (Kimi-style):
+//!   - Default: full-width file tree (280px)
+//!   - Click file: file tree shrinks to 60px icon strip, preview drawer slides in
+//!   - Click drawer ✕: drawer closes, file tree restores full width
 
-use crate::ui::types::UiEvent;
 use crate::App;
 
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
 
     // Auto-expand plan section when a plan becomes active (unless user manually collapsed)
-    let plan_active = app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
+    let plan_active =
+        app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
     if plan_active && !app.ui_store.workspace_plan_manually_collapsed {
         app.ui_store.workspace_plan_expanded = true;
     }
+
+    let has_preview = app.ui_store.preview_item.is_some() && app.ui_store.preview_drawer_open;
 
     egui::SidePanel::right("workspace_panel")
         .default_width(280.0)
@@ -48,43 +51,79 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                 });
             let selected_path_ref = selected_path.as_deref();
 
-            // ── File tree (scrollable, full height) ──
-            let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
-            let mut scroll = egui::ScrollArea::vertical().id_salt("workspace_file_tree");
-            if has_plan {
-                scroll = scroll.max_height(ui.available_height() * 0.55);
-            }
-            scroll.show(ui, |ui| {
-                crate::ui::file_browser::render_file_tree(
-                    ui,
-                    &work_dir,
-                    &theme,
-                    0,
-                    selected_path_ref,
-                    &mut |path| {
-                        app.state.agent.set_active_file_paths(vec![path.to_path_buf()]);
-                        if let Ok(content) = std::fs::read_to_string(path) {
-                            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
-                                name: path
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().to_string())
-                                    .unwrap_or_default(),
-                                content,
-                                path: path.display().to_string(),
-                            });
+            // ── Horizontal split: file tree + preview drawer ──
+            ui.horizontal(|ui| {
+                // 1. File tree (full width or compact 60px icon strip)
+                let tree_width = if has_preview {
+                    60.0
+                } else {
+                    ui.available_width()
+                };
+                ui.allocate_ui_with_layout(
+                    egui::vec2(tree_width, ui.available_height()),
+                    egui::Layout::top_down(egui::Align::LEFT),
+                    |ui| {
+                        let has_plan = plan_active && app.ui_store.workspace_plan_expanded;
+                        let mut scroll =
+                            egui::ScrollArea::vertical().id_salt("workspace_file_tree");
+                        if has_plan {
+                            scroll = scroll.max_height(ui.available_height() * 0.55);
+                        }
+                        scroll.show(ui, |ui| {
+                            crate::ui::file_browser::render_file_tree(
+                                ui,
+                                &work_dir,
+                                &theme,
+                                0,
+                                selected_path_ref,
+                                &mut |path| {
+                                    app.state
+                                        .agent
+                                        .set_active_file_paths(vec![path.to_path_buf()]);
+                                    if let Ok(content) = std::fs::read_to_string(path) {
+                                        app.ui_store.preview_item =
+                                            Some(crate::ui::types::PreviewItem::File {
+                                                name: path
+                                                    .file_name()
+                                                    .map(|n| n.to_string_lossy().to_string())
+                                                    .unwrap_or_default(),
+                                                content,
+                                                path: path.display().to_string(),
+                                            });
+                                        app.ui_store.preview_drawer_open = true;
+                                    }
+                                },
+                                has_preview,
+                            );
+                        });
+
+                        // Plan section at bottom (only in full-width mode)
+                        if !has_preview {
+                            crate::panels::workspace_plan::render_workspace_plan(app, ui);
                         }
                     },
                 );
-            });
 
-            // ── Plan foldable section (bottom) ──
-            crate::panels::workspace_plan::render_workspace_plan(app, ui);
+                // 2. Preview drawer
+                if has_preview {
+                    ui.add_space(4.0);
+                    ui.separator();
+                    ui.add_space(4.0);
+
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width(), ui.available_height()),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            render_preview_drawer(app, ui, &theme);
+                        },
+                    );
+                }
+            });
         });
 }
 
-/// Render file preview as a floating popup window instead of inline inside workspace.
-/// This prevents the preview from squeezing the file tree and central chat area.
-pub fn render_file_preview_window(app: &mut App, ctx: &egui::Context) {
+/// Render the preview drawer inside the workspace panel.
+fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     let Some(ref preview) = app.ui_store.preview_item else {
         return;
     };
@@ -98,52 +137,60 @@ pub fn render_file_preview_window(app: &mut App, ctx: &egui::Context) {
         }
     };
 
-    let theme = app.ui_store.theme.clone();
-    let mut open = true;
-
-    let icon = if is_web { "🌐" } else { crate::theme::ICON_PAPERCLIP };
-    let window_title = format!("{} {}", icon, title);
-
-    egui::Window::new(&window_title)
-        .id(egui::Id::new("file_preview_popup"))
-        .open(&mut open)
-        .collapsible(false)
-        .resizable(true)
-        .default_pos(egui::pos2(
-            ctx.screen_rect().max.x - 560.0,
-            52.0, // below titlebar (36 + 16 padding)
-        ))
-        .default_size([520.0, 580.0])
-        .min_size([320.0, 240.0])
-        .frame(
-            egui::Frame::window(&ctx.style())
-                .fill(theme.bg_elevated)
-                .stroke(egui::Stroke::NONE),
-        )
-        .show(ctx, |ui| {
-            ui.vertical(|ui| {
-                ui.add_space(theme.space_4);
-                egui::Frame::new()
-                    .fill(theme.code_block_bg)
-                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::same(10))
-                    .show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .id_salt("file_preview_popup_scroll")
-                            .show(ui, |ui| {
-                                let parsed = crate::ui::markdown::parse_markdown(&content);
-                                crate::ui::markdown::render_blocks(
-                                    ui,
-                                    &parsed,
-                                    &theme,
-                                    theme.chat_text,
-                                );
-                            });
-                    });
-            });
+    // ── Drawer header ──
+    ui.horizontal(|ui| {
+        if is_web {
+            let (globe_rect, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+            if ui.is_rect_visible(globe_rect) {
+                crate::ui::icons::paint_globe(&ui.painter_at(globe_rect), globe_rect.center(), theme.text);
+            }
+            ui.add_space(4.0);
+        } else {
+            ui.label(
+                egui::RichText::new(crate::theme::ICON_PAPERCLIP)
+                    .font(theme.font_icon(theme.text_sm))
+                    .color(theme.text),
+            );
+            ui.add_space(4.0);
+        }
+        ui.label(
+            egui::RichText::new(&title)
+                .size(theme.text_sm)
+                .color(theme.text),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new(crate::theme::ICON_X)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                )
+                .clicked()
+            {
+                app.ui_store.preview_drawer_open = false;
+            }
         });
+    });
+    ui.add_space(4.0);
+    ui.separator();
+    ui.add_space(4.0);
 
-    if !open {
-        app.ui_store.preview_item = None;
-    }
+    // ── Content area ──
+    egui::Frame::new()
+        .fill(theme.code_block_bg)
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .inner_margin(egui::Margin::same(10))
+        .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("workspace_preview_drawer_scroll")
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    let parsed = crate::ui::markdown::parse_markdown(&content);
+                    crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                });
+        });
 }

@@ -47,8 +47,8 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(theme.space_12);
 
-            let has_plan = app.chat_store.pending_plan.is_some()
-                || app.chat_store.plan_tracker.is_some();
+            let has_plan =
+                app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
 
             if !has_plan {
                 ui.vertical_centered(|ui| {
@@ -178,8 +178,7 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                         );
                         let step_num = idx + 1;
                         let desc = if step.description.chars().count() > 30 {
-                            let truncated: String =
-                                step.description.chars().take(27).collect();
+                            let truncated: String = step.description.chars().take(27).collect();
                             format!("{}...", truncated)
                         } else {
                             step.description.clone()
@@ -215,14 +214,14 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                         );
 
                         // Connection line to next step (simple sequential dependency)
-                        let bar_center = egui::pos2(bar_rect.min.x + bar_w * 0.5, row_rect.center().y);
+                        let bar_center =
+                            egui::pos2(bar_rect.min.x + bar_w * 0.5, row_rect.center().y);
                         if let Some(prev) = prev_bar_center {
-                            let from = egui::pos2(prev.x, prev.y + bar_height * 0.5 + row_gap * 0.3);
+                            let from =
+                                egui::pos2(prev.x, prev.y + bar_height * 0.5 + row_gap * 0.3);
                             let to = egui::pos2(bar_center.x, bar_center.y - bar_height * 0.5);
-                            ui.painter().line_segment(
-                                [from, to],
-                                egui::Stroke::new(1.5, theme.border),
-                            );
+                            ui.painter()
+                                .line_segment([from, to], egui::Stroke::new(1.5, theme.border));
                         }
                         prev_bar_center = Some(bar_center);
 
@@ -250,7 +249,10 @@ fn step_color(status: PlanStepStatus, theme: &crate::theme::Theme) -> egui::Colo
     }
 }
 
-fn step_status_text(status: PlanStepStatus, theme: &crate::theme::Theme) -> (&'static str, egui::Color32) {
+fn step_status_text(
+    status: PlanStepStatus,
+    theme: &crate::theme::Theme,
+) -> (&'static str, egui::Color32) {
     match status {
         PlanStepStatus::Pending => ("Pending", theme.text_dim),
         PlanStepStatus::Running => ("Running", theme.status_busy),

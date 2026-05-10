@@ -1,4 +1,5 @@
 pub mod file_browser;
+pub mod icons;
 pub mod markdown;
 pub mod mcp_panel;
 pub mod render;

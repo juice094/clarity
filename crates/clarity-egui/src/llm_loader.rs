@@ -15,8 +15,7 @@ use std::sync::Arc;
 pub async fn load_llm(
     selection: ProviderSelection,
     settings: &GuiSettings,
-) -> Result<(Arc<dyn clarity_llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError>
-{
+) -> Result<(Arc<dyn clarity_llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError> {
     match selection {
         ProviderSelection::Preferred { provider }
         | ProviderSelection::Fallback {
@@ -130,11 +129,7 @@ async fn try_load_cloud(
         return Ok(llm);
     }
 
-    match clarity_llm::LlmFactory::create_with_key_arc(
-        desired_provider,
-        api_key,
-        &settings.model,
-    ) {
+    match clarity_llm::LlmFactory::create_with_key_arc(desired_provider, api_key, &settings.model) {
         Ok(llm) => Ok(llm),
         Err(e) => {
             if api_key.is_empty() {

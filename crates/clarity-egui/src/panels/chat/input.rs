@@ -6,10 +6,7 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
     if let Some(ref snap) = app.chat_store.last_snapshot {
         let theme = &app.ui_store.theme;
         ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("📸")
-                    .size(theme.text_sm),
-            );
+            ui.label(egui::RichText::new("📸").size(theme.text_sm));
             ui.label(
                 egui::RichText::new(format!("Snapshot #{}", snap.id))
                     .size(theme.text_xs)
@@ -97,10 +94,8 @@ pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
                             .hint_text(hint)
                             .margin(egui::vec2(8.0, 8.0))
                             .frame(false);
-                        let response = ui.add_sized(
-                            egui::vec2(input_width, input_height),
-                            text_edit,
-                        );
+                        let response =
+                            ui.add_sized(egui::vec2(input_width, input_height), text_edit);
 
                         // Handle shortcut-driven focus request.
                         if app.ui_store.focus_input_requested {

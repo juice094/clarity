@@ -1095,7 +1095,7 @@ pub async fn build_provider_from_config(
             let model = cfg.model.clone().unwrap_or_else(|| "kimi-k2-07132k".into());
             Ok(Box::new(KimiLlm::new(&cfg.api_key, base, model)))
         }
-        "kimi-code" => {
+        "kimi-code" | "kimi_code" => {
             let base = cfg
                 .base_url
                 .clone()

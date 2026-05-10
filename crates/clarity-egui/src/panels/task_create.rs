@@ -131,7 +131,10 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                     tracing::info!("Created task via Gateway: {}", task_id);
                 }
                 Err(e) => {
-                    tracing::debug!("Gateway create_task failed ({}), falling back to local store", e);
+                    tracing::debug!(
+                        "Gateway create_task failed ({}), falling back to local store",
+                        e
+                    );
                     let spec = clarity_core::background::TaskSpec {
                         name: name.clone(),
                         description: String::new(),

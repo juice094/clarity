@@ -649,14 +649,14 @@ impl Theme {
         egui::FontId::new(size, egui::FontFamily::Monospace)
     }
 
-    /// Bold font at the given semantic size token (requires bold face registered).
+    /// Bold font at the given semantic size token (Inter Medium + Noto SC).
     pub fn font_bold(&self, size: f32) -> egui::FontId {
         egui::FontId::new(size, egui::FontFamily::Name("bold".into()))
     }
 
-    /// Italic font at the given semantic size token (requires italic face registered).
+    /// Italic font — falls back to proportional since no italic face is embedded.
     pub fn font_italic(&self, size: f32) -> egui::FontId {
-        egui::FontId::new(size, egui::FontFamily::Name("italic".into()))
+        egui::FontId::new(size, egui::FontFamily::Proportional)
     }
 
     /// Scale all typography tokens by a factor (e.g. 0.9 for compact, 1.15 for large).
@@ -703,119 +703,63 @@ pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
     // ------------------------------------------------------------------
-    // CJK fonts — cross-platform probing
+    // 1. Inter — UI proportional (Regular + Medium for bold)
     // ------------------------------------------------------------------
-    let cjk_candidates: &[&str] = &[
-        // Windows — prefer Light weight for softer CJK rendering
-        r"C:\Windows\Fonts\msyhl.ttc",
-        r"C:\Windows\Fonts\msyh.ttc",
-        r"C:\Windows\Fonts\simhei.ttf",
-        r"C:\Windows\Fonts\simsun.ttc",
-        r"C:\Windows\Fonts\msyhbd.ttc",
-        // macOS
-        "/System/Library/Fonts/PingFang.ttc",
-        "/System/Library/Fonts/Hiragino Sans GB.ttc",
-        "/Library/Fonts/Arial Unicode.ttf",
-        // Linux
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    ];
-
-    for path in cjk_candidates {
-        if let Ok(bytes) = std::fs::read(path) {
-            let name = std::path::Path::new(path)
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            fonts
-                .font_data
-                .insert(name.clone(), egui::FontData::from_owned(bytes).into());
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default()
-                .push(name.clone());
-            fonts
-                .families
-                .entry(egui::FontFamily::Monospace)
-                .or_default()
-                .push(name);
-            tracing::info!("Loaded CJK font from {}", path);
-            break;
-        }
-    }
+    fonts.font_data.insert(
+        "inter".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/Inter-Regular.ttf")).into(),
+    );
+    fonts.font_data.insert(
+        "inter-medium".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/Inter-Medium.ttf")).into(),
+    );
 
     // ------------------------------------------------------------------
-    // Bold / Italic faces — best-effort system font loading
+    // 2. JetBrains Mono — code/monospace
     // ------------------------------------------------------------------
-    let bold_candidates: &[(&str, &str)] = &[
-        (r"C:\Windows\Fonts\segoeuib.ttf", "segoeuib"),
-        (r"C:\Windows\Fonts\msyhbd.ttc", "msyhbd"),
-        ("/System/Library/Fonts/Helvetica.ttc", "helvetica"),
-        (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "dejavu-sans-bold",
-        ),
-        (
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-            "liberation-sans-bold",
-        ),
-    ];
-
-    for (path, key) in bold_candidates {
-        if let Ok(bytes) = std::fs::read(path) {
-            fonts
-                .font_data
-                .insert((*key).into(), egui::FontData::from_owned(bytes).into());
-            fonts
-                .families
-                .entry(egui::FontFamily::Name("bold".into()))
-                .or_default()
-                .push((*key).into());
-            tracing::info!("Loaded bold font from {}", path);
-            break;
-        }
-    }
-
-    let italic_candidates: &[(&str, &str)] = &[
-        (r"C:\Windows\Fonts\segoeuii.ttf", "segoeuii"),
-        ("/System/Library/Fonts/Helvetica.ttc", "helvetica-italic"),
-        (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
-            "dejavu-sans-oblique",
-        ),
-        (
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf",
-            "liberation-sans-italic",
-        ),
-    ];
-
-    for (path, key) in italic_candidates {
-        if let Ok(bytes) = std::fs::read(path) {
-            fonts
-                .font_data
-                .insert((*key).into(), egui::FontData::from_owned(bytes).into());
-            fonts
-                .families
-                .entry(egui::FontFamily::Name("italic".into()))
-                .or_default()
-                .push((*key).into());
-            tracing::info!("Loaded italic font from {}", path);
-            break;
-        }
-    }
+    fonts.font_data.insert(
+        "jetbrains-mono".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf"))
+            .into(),
+    );
 
     // ------------------------------------------------------------------
-    // Icon font — Phosphor Regular (embedded)
+    // 3. Noto Sans SC subset — CJK fallback (embedded, no system probing)
     // ------------------------------------------------------------------
-    let icon_font_bytes = include_bytes!("../assets/fonts/Phosphor.ttf");
+    fonts.font_data.insert(
+        "noto-sc".into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSansSC-subset.ttf")).into(),
+    );
+
+    // ------------------------------------------------------------------
+    // 4. Phosphor — icon font
+    // ------------------------------------------------------------------
     fonts.font_data.insert(
         "phosphor".into(),
-        egui::FontData::from_static(icon_font_bytes).into(),
+        egui::FontData::from_static(include_bytes!("../assets/fonts/Phosphor.ttf")).into(),
     );
+
+    // ------------------------------------------------------------------
+    // Font stack assignments
+    // ------------------------------------------------------------------
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .extend(["inter".into(), "noto-sc".into()]);
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .extend(["jetbrains-mono".into(), "noto-sc".into()]);
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Name("bold".into()))
+        .or_default()
+        .extend(["inter-medium".into(), "noto-sc".into()]);
+
     fonts
         .families
         .entry(egui::FontFamily::Name("icons".into()))

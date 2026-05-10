@@ -68,6 +68,12 @@ pub(crate) struct App {
     /// File-system watcher for live skill reloading.
     #[allow(dead_code)]
     pub(crate) skill_watcher: Option<clarity_core::skills::SkillWatcher>,
+    /// System tray manager (minimize-to-tray + context menu).
+    pub(crate) tray_manager: Option<crate::services::tray::TrayManager>,
+    /// When true, the next close request should be honoured (Quit from tray menu).
+    pub(crate) tray_quit_requested: bool,
+    /// Last tray status to avoid redundant icon updates every frame.
+    pub(crate) last_tray_status: Option<crate::services::tray::TrayIconStatus>,
     /// Last frame's screen width for responsive breakpoint detection.
     last_frame_width: Option<f32>,
 }
@@ -110,6 +116,52 @@ impl App {
             };
             tracing::error!("Panel '{}' panicked: {}", name, payload);
             self.push_toast(format!("UI error in {} panel", name), ToastLevel::Error);
+        }
+    }
+
+    /// Handle system tray events: show/hide window and menu actions.
+    fn handle_tray_events(&mut self, ctx: &egui::Context) {
+        let Some(tray) = self.tray_manager.as_ref() else {
+            return;
+        };
+
+        // Tray icon clicks (double-click → show)
+        for event in tray.poll_tray_events() {
+            use tray_icon::TrayIconEvent;
+            match event {
+                TrayIconEvent::DoubleClick { .. } | TrayIconEvent::Click { .. } => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                }
+                _ => {}
+            }
+        }
+
+        // Context menu actions
+        for action in tray.poll_menu_events() {
+            use crate::services::tray::TrayAction;
+            match action {
+                TrayAction::Show => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                }
+                TrayAction::CopySessionLink => {
+                    if let Some(session) = self.session_store.active_session() {
+                        let link = format!("clarity://session/{}", session.id);
+                        ctx.copy_text(link);
+                        self.push_toast("Session link copied".to_string(), ToastLevel::Info);
+                    }
+                }
+                TrayAction::Pause => {
+                    self.stop();
+                    self.push_toast("Agent paused".to_string(), ToastLevel::Info);
+                }
+                TrayAction::Settings => {
+                    self.settings_store.settings_open = true;
+                }
+                TrayAction::Quit => {
+                    self.tray_quit_requested = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
         }
     }
 
@@ -181,7 +233,7 @@ impl App {
                                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                         );
                         if close_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                         }
                         let close_fill = if close_resp.hovered() {
                             theme.danger.linear_multiply(0.25)
@@ -276,7 +328,7 @@ impl App {
                                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                         );
                         if min_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                         }
                         let min_fill = if min_resp.hovered() {
                             theme.overlay_medium
@@ -515,6 +567,19 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // ── Intercept system close (Alt+F4 / taskbar close) → hide to tray ──
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.tray_quit_requested {
+                // Allow the close to proceed (Quit from tray menu).
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            }
+        }
+
+        // ── Poll system tray events ──
+        self.handle_tray_events(ctx);
+
         let now = ctx.input(|i| i.time);
         self.ui_store.frame_count += 1;
         if now - self.ui_store.last_fps_time >= 1.0 {
@@ -650,6 +715,25 @@ impl eframe::App for App {
             AgentState::Stalled => AgentStatus::Offline,
         };
 
+        // ── Sync tray icon colour with runtime state ──
+        if let Some(ref mut tray) = self.tray_manager {
+            let new_status = if !self.ui_store.pending_approvals.is_empty() {
+                crate::services::tray::TrayIconStatus::Message
+            } else {
+                match self.chat_store.agent_status {
+                    AgentStatus::Online | AgentStatus::Unconfigured => {
+                        crate::services::tray::TrayIconStatus::Idle
+                    }
+                    AgentStatus::Busy => crate::services::tray::TrayIconStatus::Active,
+                    AgentStatus::Offline => crate::services::tray::TrayIconStatus::Error,
+                }
+            };
+            if self.last_tray_status != Some(new_status) {
+                tray.set_status(new_status);
+                self.last_tray_status = Some(new_status);
+            }
+        }
+
         // ── Responsive breakpoints: auto-collapse panels when window is too narrow ──
         let current_width = ctx.screen_rect().width();
         if let Some(last_width) = self.last_frame_width {
@@ -669,11 +753,27 @@ impl eframe::App for App {
         // ── Content-area guard: ensure chat area never drops below 480px ──
         // This catches cases where user manually resized side panels narrower
         // than the window-width breakpoints above.
-        let sidebar_w = if self.ui_store.sidebar_collapsed { 36.0 } else { 220.0 };
+        let sidebar_w = if self.ui_store.sidebar_collapsed {
+            36.0
+        } else {
+            220.0
+        };
         let workspace_w = 280.0; // always present
-        let dashboard_w = if self.ui_store.dashboard_panel_open { 240.0 } else { 0.0 };
-        let team_w = if self.team_store.team_panel_open { 240.0 } else { 0.0 };
-        let task_w = if self.task_store.task_panel_open { 240.0 } else { 0.0 };
+        let dashboard_w = if self.ui_store.dashboard_panel_open {
+            240.0
+        } else {
+            0.0
+        };
+        let team_w = if self.team_store.team_panel_open {
+            240.0
+        } else {
+            0.0
+        };
+        let task_w = if self.task_store.task_panel_open {
+            240.0
+        } else {
+            0.0
+        };
         let content_w = current_width - sidebar_w - workspace_w - dashboard_w - team_w - task_w;
         const CONTENT_MIN: f32 = 480.0;
         if content_w < CONTENT_MIN {
@@ -694,9 +794,6 @@ impl eframe::App for App {
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
         self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
-        self.render_safe(ctx, "file_preview", |app, ctx| {
-            crate::panels::workspace::render_file_preview_window(app, ctx)
-        });
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
         self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
         self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
@@ -711,9 +808,7 @@ impl eframe::App for App {
         self.render_safe(ctx, "task_create", |app, ctx| {
             app.render_task_create_modal(ctx)
         });
-        self.render_safe(ctx, "task_view", |app, ctx| {
-            app.render_task_view_modal(ctx)
-        });
+        self.render_safe(ctx, "task_view", |app, ctx| app.render_task_view_modal(ctx));
         self.render_safe(ctx, "subagent_view", |app, ctx| {
             app.render_subagent_view_modal(ctx)
         });
@@ -721,9 +816,7 @@ impl eframe::App for App {
         self.render_safe(ctx, "team_create", |app, ctx| {
             app.render_team_create_modal(ctx)
         });
-        self.render_safe(ctx, "dashboard", |app, ctx| {
-            app.render_dashboard_panel(ctx)
-        });
+        self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
         self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
         self.render_safe(ctx, "kimi_login", |app, ctx| {
             crate::components::login_modal::render_oauth_login_modal(
@@ -805,7 +898,11 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             #[cfg(windows)]
             let _ = platform::windows::apply_rounded_corners(cc);
-            Ok(Box::new(App::new(cc, gateway_manager)))
+            let tray_manager = crate::services::tray::TrayManager::new();
+            if tray_manager.is_none() {
+                tracing::warn!("Failed to initialize system tray icon");
+            }
+            Ok(Box::new(App::new(cc, gateway_manager, tray_manager)))
         }),
     )
 }

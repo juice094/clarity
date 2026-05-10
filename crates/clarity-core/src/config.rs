@@ -216,7 +216,7 @@ impl Config {
                     env::set_var("ANTHROPIC_AUTH_TOKEN", api_key);
                     info!("Exported ANTHROPIC_AUTH_TOKEN from config profile");
                 }
-                "kimi" | "kimi-code" | "moonshot"
+                "kimi" | "kimi-code" | "kimi_code" | "moonshot"
                     if env::var("KIMI_API_KEY").is_err()
                         && env::var("KIMI_CODE_API_KEY").is_err() =>
                 {

@@ -154,44 +154,65 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .mcp_config
                                 .as_ref()
                                 .map_or(0, |c| c.servers.len());
-                            let mcp_icon = if mcp_count > 0 {
-                                format!("🔌{}", mcp_count)
-                            } else {
-                                "🔌".to_string()
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(&mcp_icon)
-                                            .size(app.ui_store.theme.text_sm),
-                                    )
+                            let mcp_btn_w = if mcp_count > 0 { 36.0 } else { 20.0 };
+                            let mcp_resp = ui.add(
+                                egui::Button::new("")
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(
                                         egui::CornerRadius::same(
                                             app.ui_store.theme.radius_sm as u8,
                                         ),
-                                    ),
-                                )
-                                .clicked()
-                            {
+                                    )
+                                    .min_size(egui::vec2(mcp_btn_w, 20.0)),
+                            );
+                            if ui.is_rect_visible(mcp_resp.rect) {
+                                let painter = ui.painter_at(mcp_resp.rect);
+                                let icon_center = if mcp_count > 0 {
+                                    mcp_resp.rect.center() - egui::vec2(5.0, 0.0)
+                                } else {
+                                    mcp_resp.rect.center()
+                                };
+                                let icon_color = if mcp_resp.hovered() {
+                                    app.ui_store.theme.text
+                                } else {
+                                    app.ui_store.theme.text_dim
+                                };
+                                crate::ui::icons::paint_mcp(&painter, icon_center, icon_color);
+                                if mcp_count > 0 {
+                                    painter.text(
+                                        mcp_resp.rect.center() + egui::vec2(6.0, 0.0),
+                                        egui::Align2::CENTER_CENTER,
+                                        format!("{}", mcp_count),
+                                        app.ui_store.theme.font(app.ui_store.theme.text_xs),
+                                        icon_color,
+                                    );
+                                }
+                            }
+                            if mcp_resp.clicked() {
                                 app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
                             }
 
                             // Skills
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("🛠").size(app.ui_store.theme.text_sm),
-                                    )
+                            let skills_resp = ui.add(
+                                egui::Button::new("")
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(
                                         egui::CornerRadius::same(
                                             app.ui_store.theme.radius_sm as u8,
                                         ),
-                                    ),
-                                )
-                                .clicked()
-                            {
+                                    )
+                                    .min_size(egui::vec2(20.0, 20.0)),
+                            );
+                            if ui.is_rect_visible(skills_resp.rect) {
+                                let painter = ui.painter_at(skills_resp.rect);
+                                let skills_color = if skills_resp.hovered() {
+                                    app.ui_store.theme.text
+                                } else {
+                                    app.ui_store.theme.text_dim
+                                };
+                                crate::ui::icons::paint_skills(&painter, skills_resp.rect.center(), skills_color);
+                            }
+                            if skills_resp.clicked() {
                                 app.ui_store.skill_panel_open = true;
                             }
 
@@ -238,11 +259,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── Category navigation ──
                     let categories = [
-                        ("emotion", app.t("Emotion"), "💭"),
-                        ("knowledge", app.t("Knowledge"), "📚"),
-                        ("engineering", app.t("Engineering"), "🔧"),
+                        ("emotion", app.t("Emotion")),
+                        ("knowledge", app.t("Knowledge")),
+                        ("engineering", app.t("Engineering")),
                     ];
-                    for (cat, label, icon) in categories {
+                    for (cat, label) in categories {
                         let is_active = app.session_store.active_category == cat;
                         let count = app
                             .session_store
@@ -286,11 +307,15 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         let content_left = btn_resp.rect.min.x + 12.0;
                         let line_y = btn_resp.rect.min.y + 10.0;
 
-                        // Icon + Name
+                        // Role icon (code-drawn, theme-coloured)
+                        let icon_center = egui::pos2(content_left + 10.0, line_y + 10.0);
+                        crate::ui::icons::paint_role_icon(&painter, cat, icon_center, text_color);
+
+                        // Name
                         painter.text(
-                            egui::pos2(content_left, line_y),
+                            egui::pos2(content_left + 24.0, line_y),
                             egui::Align2::LEFT_TOP,
-                            format!("{} {}", icon, label),
+                            label,
                             theme.font(theme.text_base),
                             text_color,
                         );
@@ -368,21 +393,30 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let arrow = if subagents_expanded { "▼" } else { "▶" };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(arrow).size(app.ui_store.theme.text_sm),
-                                    )
+                            let chevron_resp = ui.add(
+                                egui::Button::new("")
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(
                                         egui::CornerRadius::same(
                                             app.ui_store.theme.radius_sm as u8,
                                         ),
-                                    ),
-                                )
-                                .clicked()
-                            {
+                                    )
+                                    .min_size(egui::vec2(20.0, 20.0)),
+                            );
+                            if ui.is_rect_visible(chevron_resp.rect) {
+                                let painter = ui.painter_at(chevron_resp.rect);
+                                let chevron_color = if chevron_resp.hovered() {
+                                    app.ui_store.theme.text
+                                } else {
+                                    app.ui_store.theme.text_dim
+                                };
+                                if subagents_expanded {
+                                    crate::ui::icons::paint_chevron_down(&painter, chevron_resp.rect.center(), 6.0, chevron_color);
+                                } else {
+                                    crate::ui::icons::paint_chevron_right(&painter, chevron_resp.rect.center(), 6.0, chevron_color);
+                                }
+                            }
+                            if chevron_resp.clicked() {
                                 app.ui_store.subagents_expanded = !subagents_expanded;
                             }
                         });
@@ -459,8 +493,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        egui::RichText::new(label)
-                                            .size(app.ui_store.theme.text_xs),
+                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
                                     )
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(
@@ -496,8 +529,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        egui::RichText::new(label)
-                                            .size(app.ui_store.theme.text_xs),
+                                        egui::RichText::new(label).size(app.ui_store.theme.text_xs),
                                     )
                                     .fill(egui::Color32::TRANSPARENT)
                                     .corner_radius(

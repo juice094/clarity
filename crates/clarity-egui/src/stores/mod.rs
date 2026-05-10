@@ -195,6 +195,8 @@ pub struct UiStore {
     pub last_scroll_offset: f32,
     /// Preview item in chat area (file or web page).
     pub preview_item: Option<PreviewItem>,
+    /// Whether the file preview drawer inside the workspace is open.
+    pub preview_drawer_open: bool,
     /// Timestamp of the most recent input modification.
     pub last_input_modified: Instant,
     /// Web tabs managed in the left sidebar.

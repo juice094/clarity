@@ -12,6 +12,7 @@ impl App {
     pub(crate) fn new(
         cc: &eframe::CreationContext<'_>,
         gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
+        tray_manager: Option<crate::services::tray::TrayManager>,
     ) -> Self {
         crate::theme::setup_fonts(&cc.egui_ctx);
         let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
@@ -319,6 +320,7 @@ impl App {
                 locale: crate::i18n::Locale::default(),
                 last_scroll_offset: 0.0,
                 preview_item: None,
+                preview_drawer_open: true,
                 last_input_modified: now,
                 web_tabs,
                 web_tabs_expanded: true,
@@ -378,6 +380,9 @@ impl App {
             snapshot_store: crate::stores::SnapshotStore::default(),
             gateway_manager,
             skill_watcher,
+            tray_manager,
+            tray_quit_requested: false,
+            last_tray_status: None,
             last_frame_width: None,
         };
         app.refresh_tasks();

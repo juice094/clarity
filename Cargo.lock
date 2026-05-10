@@ -1046,6 +1046,7 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
+ "tray-icon",
  "uuid",
  "windows 0.61.3",
 ]

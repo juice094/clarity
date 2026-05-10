@@ -133,13 +133,11 @@ impl Default for AppState {
         // 注入 SubagentOrchestrator（SubagentManager）
         let subagent_ctx = work_dir.join("subagent_context");
         let _ = std::fs::create_dir_all(&subagent_ctx);
-        let orchestrator = Arc::new(
-            clarity_subagents::SubagentManager::new(
-                agent.registry().clone(),
-                &work_dir,
-                &subagent_ctx,
-            )
-        );
+        let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
+            agent.registry().clone(),
+            &work_dir,
+            &subagent_ctx,
+        ));
         agent = agent.with_orchestrator(orchestrator);
 
         // Load skill registry from well-known directories.

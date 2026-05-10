@@ -23,7 +23,16 @@ pub fn render_workspace_plan(app: &mut App, ui: &mut egui::Ui) {
     let header_text = if let Some(ref plan) = app.chat_store.pending_plan {
         format!("📋 Plan: {} (review)", plan.title)
     } else if let Some(ref tracker) = app.chat_store.plan_tracker {
-        let done = tracker.steps.iter().filter(|s| matches!(s.status, PlanStepStatus::Success | PlanStepStatus::Failed | PlanStepStatus::Skipped)).count();
+        let done = tracker
+            .steps
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s.status,
+                    PlanStepStatus::Success | PlanStepStatus::Failed | PlanStepStatus::Skipped
+                )
+            })
+            .count();
         format!("📋 {} ({}/{})", tracker.title, done, tracker.steps.len())
     } else {
         "📋 Plan".to_string()
@@ -56,7 +65,9 @@ pub fn render_workspace_plan(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn render_plan_review(app: &mut App, ui: &mut egui::Ui) {
-    let Some(ref plan) = app.chat_store.pending_plan else { return };
+    let Some(ref plan) = app.chat_store.pending_plan else {
+        return;
+    };
     let theme = &app.ui_store.theme;
     let mut execute = false;
     let mut cancel = false;
@@ -180,7 +191,9 @@ fn render_plan_review(app: &mut App, ui: &mut egui::Ui) {
                     }
                 }
                 Err(e) => {
-                    if let Err(err) = tx.send(UiEvent::Error(format!("Plan execution failed: {}", e))) {
+                    if let Err(err) =
+                        tx.send(UiEvent::Error(format!("Plan execution failed: {}", e)))
+                    {
                         tracing::warn!("Failed to send Error: {}", err);
                     }
                 }
@@ -195,7 +208,9 @@ fn render_plan_review(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
-    let Some(ref tracker) = app.chat_store.plan_tracker else { return };
+    let Some(ref tracker) = app.chat_store.plan_tracker else {
+        return;
+    };
     let theme = &app.ui_store.theme;
     let mut dismiss = false;
     let mut skip_step_id: Option<String> = None;
@@ -237,10 +252,7 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                     PlanStepStatus::Skipped => ("⏭", theme.text_dim),
                 };
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(icon)
-                            .font(theme.font_icon(theme.text_sm)),
-                    );
+                    ui.label(egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)));
                     ui.label(
                         egui::RichText::new(format!("{}.", step.id))
                             .size(theme.text_sm)

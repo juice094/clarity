@@ -52,8 +52,14 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                     app.runtime.spawn(async move {
                         // Try Gateway first
                         if let Err(e) = gateway_client.cancel_task(&task_id).await {
-                            tracing::debug!("Gateway cancel failed ({}), falling back to local store", e);
-                            if let Err(e) = local_store.update_status(&task_id, TaskStatus::Cancelled).await {
+                            tracing::debug!(
+                                "Gateway cancel failed ({}), falling back to local store",
+                                e
+                            );
+                            if let Err(e) = local_store
+                                .update_status(&task_id, TaskStatus::Cancelled)
+                                .await
+                            {
                                 tracing::warn!("Failed to cancel task {} locally: {}", task_id, e);
                                 return;
                             }
@@ -98,7 +104,10 @@ pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
                                 return;
                             }
                             Err(e) => {
-                                tracing::debug!("Gateway get_task failed ({}), falling back to local store", e);
+                                tracing::debug!(
+                                    "Gateway get_task failed ({}), falling back to local store",
+                                    e
+                                );
                             }
                         }
 

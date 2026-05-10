@@ -15,11 +15,7 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
         .viewing_subagent_id
         .clone()
         .unwrap_or_default();
-    let agent_opt = app
-        .subagent_store
-        .running_agents
-        .get(&agent_id)
-        .cloned();
+    let agent_opt = app.subagent_store.running_agents.get(&agent_id).cloned();
 
     let title = if let Some(ref agent) = agent_opt {
         format!("{} Output", agent.agent_type)
@@ -108,9 +104,11 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
                 ui.vertical_centered(|ui| {
                     ui.add_space(theme.space_40);
                     ui.label(
-                        egui::RichText::new("Output no longer available (agent cleaned up after 30s)")
-                            .size(theme.text_base)
-                            .color(theme.text_dim),
+                        egui::RichText::new(
+                            "Output no longer available (agent cleaned up after 30s)",
+                        )
+                        .size(theme.text_base)
+                        .color(theme.text_dim),
                     );
                 });
             }

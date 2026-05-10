@@ -225,17 +225,20 @@ pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
                 let agent = app.state.agent.clone();
                 let tx = app.ui_tx.clone();
                 app.runtime.spawn(async move {
-                    let specs: Vec<_> = team.members.iter().map(|m| {
-                        clarity_contract::subagent::RunSpec::new(&m.name, &m.description)
-                    }).collect();
-                    let team_config = clarity_contract::subagent::AgentTeam::new(&team.name, &team.goal)
-                        .with_members(specs)
-                        .with_config(clarity_contract::subagent::ParallelConfig {
-                            max_concurrency: team.max_concurrency,
-                            timeout_secs: Some(team.timeout_secs),
-                            cancel_on_error: false,
-                            enable_aggregation: true,
-                        });
+                    let specs: Vec<_> = team
+                        .members
+                        .iter()
+                        .map(|m| clarity_contract::subagent::RunSpec::new(&m.name, &m.description))
+                        .collect();
+                    let team_config =
+                        clarity_contract::subagent::AgentTeam::new(&team.name, &team.goal)
+                            .with_members(specs)
+                            .with_config(clarity_contract::subagent::ParallelConfig {
+                                max_concurrency: team.max_concurrency,
+                                timeout_secs: Some(team.timeout_secs),
+                                cancel_on_error: false,
+                                enable_aggregation: true,
+                            });
                     match agent.run_team(team_config).await {
                         Ok(result) => {
                             let text = format!(

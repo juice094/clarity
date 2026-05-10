@@ -20,7 +20,10 @@ impl App {
                     return;
                 }
                 Err(e) => {
-                    tracing::debug!("Gateway task list failed ({}), falling back to local store", e);
+                    tracing::debug!(
+                        "Gateway task list failed ({}), falling back to local store",
+                        e
+                    );
                 }
             }
 

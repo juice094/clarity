@@ -42,8 +42,7 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
                         _ => (crate::theme::ICON_HOURGLASS, theme.status_busy),
                     };
                     ui.label(
-                        egui::RichText::new(status_icon)
-                            .font(theme.font_icon(theme.text_base)),
+                        egui::RichText::new(status_icon).font(theme.font_icon(theme.text_base)),
                     );
                     ui.label(
                         egui::RichText::new(format!("{:?}", result.status))
