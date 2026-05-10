@@ -231,10 +231,14 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                         .color(theme.text),
                 );
                 if ui
-                    .button(
-                        egui::RichText::new(crate::theme::ICON_X)
-                            .font(theme.font_icon(theme.text_sm))
-                            .color(theme.text_dim),
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_X)
+                                .font(theme.font_icon(theme.text_sm))
+                                .color(theme.text_dim),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                     )
                     .clicked()
                 {
