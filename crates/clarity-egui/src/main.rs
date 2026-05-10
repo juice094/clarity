@@ -309,7 +309,7 @@ impl App {
                             &theme,
                         );
                         if conn_resp.hovered() {
-                            conn_resp.clone().on_hover_text("Agent connection status");
+                            let _ = conn_resp.on_hover_text("Agent connection status");
                         }
                         ui.add_space(4.0);
 
@@ -327,9 +327,11 @@ impl App {
                             true,
                             &theme,
                         );
-                        if gw_resp.hovered() {
-                            gw_resp.clone().on_hover_text("Click to start/stop Gateway");
-                        }
+                        let gw_resp = if gw_resp.hovered() {
+                            gw_resp.on_hover_text("Click to start/stop Gateway")
+                        } else {
+                            gw_resp
+                        };
                         if gw_resp.clicked() {
                             match self.chat_store.gateway_status {
                                 crate::ui::types::GatewayStatus::Online => {
