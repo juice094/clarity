@@ -397,12 +397,24 @@ impl App {
                             .agent
                             .provider_label()
                             .map(|l| {
-                                // Shorten "runtime:deepseek:deepseek-chat" → "deepseek"
-                                l.split(':')
-                                    .nth_back(1)
-                                    .or_else(|| l.split(':').next())
-                                    .unwrap_or(&l)
-                                    .to_string()
+                                if l.starts_with("mesh:") {
+                                    let rest = &l[5..];
+                                    let first = rest.split(',').next().unwrap_or(rest);
+                                    if rest.len() > first.len() + 1 {
+                                        format!("mesh:{} +", first)
+                                    } else {
+                                        format!("mesh:{}", first)
+                                    }
+                                } else if l.starts_with("mcp:") {
+                                    format!("mcp:{}", &l[4..])
+                                } else {
+                                    // Shorten "runtime:deepseek:deepseek-chat" → "deepseek-chat"
+                                    l.split(':')
+                                        .nth_back(1)
+                                        .or_else(|| l.split(':').next())
+                                        .unwrap_or(&l)
+                                        .to_string()
+                                }
                             })
                             .unwrap_or_else(|| "No LLM".to_string());
                         ui.label(
