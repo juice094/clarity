@@ -122,17 +122,13 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
 
 /// Render the preview drawer inside the workspace panel.
 fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    let Some(ref preview) = app.ui_store.preview_item else {
+    let Some(preview) = app.ui_store.preview_item.as_ref() else {
         return;
     };
 
-    let (title, content, is_web) = match preview {
-        crate::ui::types::PreviewItem::File { name, content, .. } => {
-            (name.clone(), content.clone(), false)
-        }
-        crate::ui::types::PreviewItem::WebPage { title, content, .. } => {
-            (title.clone(), content.clone(), true)
-        }
+    let (title, is_web) = match preview {
+        crate::ui::types::PreviewItem::File { name, .. } => (name.clone(), false),
+        crate::ui::types::PreviewItem::WebPage { title, .. } => (title.clone(), true),
     };
 
     // ── Drawer header ──
@@ -191,6 +187,8 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                 | "rb" | "php" | "html" | "css" | "scss" | "xml" | "sql"
         )
     };
+
+    let preview = app.ui_store.preview_item.as_mut().unwrap();
     egui::Frame::new()
         .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -203,17 +201,25 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
                 )
                 .show(ui, |ui| {
-                    if is_code_file {
-                        ui.add(
-                            egui::TextEdit::multiline(&mut content.clone())
-                                .font(egui::FontId::monospace(theme.text_sm))
-                                .desired_rows(20)
-                                .lock_focus(true)
-                                .frame(false),
-                        );
-                    } else {
-                        let parsed = crate::ui::markdown::parse_markdown(&content);
-                        crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                    match preview {
+                        crate::ui::types::PreviewItem::File { content, .. } => {
+                            if is_code_file {
+                                ui.add(
+                                    egui::TextEdit::multiline(content)
+                                        .font(egui::FontId::monospace(theme.text_sm))
+                                        .desired_rows(20)
+                                        .lock_focus(true)
+                                        .frame(false),
+                                );
+                            } else {
+                                let parsed = crate::ui::markdown::parse_markdown(content);
+                                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                            }
+                        }
+                        crate::ui::types::PreviewItem::WebPage { content, .. } => {
+                            let parsed = crate::ui::markdown::parse_markdown(content);
+                            crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+                        }
                     }
                 });
         });
