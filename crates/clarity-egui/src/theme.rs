@@ -186,7 +186,7 @@ impl Theme {
             user_bubble: rgba(45, 80, 160, 0.32),
             ai_bubble: rgba(255, 255, 255, 0.06),
             chat_text: hex("#E8EAEF"),
-            error_bubble: rgba(239, 91, 91, 0.30),
+            error_bubble: rgba(239, 91, 91, 0.50),
             error_text: hex("#EF8A8A"),
 
             // Status: semantic palette
@@ -201,7 +201,7 @@ impl Theme {
             border: rgba(110, 135, 175, 0.08),
             border_strong: rgba(110, 135, 175, 0.14),
             border_hover: rgba(110, 135, 175, 0.22),
-            input_bg: rgba(24, 24, 34, 0.65),
+            input_bg: rgba(32, 32, 48, 0.85),
 
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
@@ -319,7 +319,7 @@ impl Theme {
             user_bubble: rgba(45, 80, 160, 0.30),
             ai_bubble: rgba(255, 255, 255, 0.04),
             chat_text: hex("#E8EAEF"),
-            error_bubble: rgba(239, 91, 91, 0.28),
+            error_bubble: rgba(239, 91, 91, 0.50),
             error_text: hex("#EF8A8A"),
 
             // Status
@@ -334,7 +334,7 @@ impl Theme {
             border: rgba(110, 135, 175, 0.04),
             border_strong: rgba(110, 135, 175, 0.08),
             border_hover: rgba(110, 135, 175, 0.14),
-            input_bg: rgba(18, 18, 26, 0.60),
+            input_bg: rgba(28, 28, 40, 0.80),
 
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
@@ -445,7 +445,7 @@ impl Theme {
             user_bubble: hex("#c98a5e"),
             ai_bubble: hex("#e8eaf0"),
             chat_text: hex("#1e1d24"),
-            error_bubble: hex_alpha("#c97060", 0.10),
+            error_bubble: rgba(239, 91, 91, 0.50),
             error_text: hex("#1e1d24"),
 
             // Status: same palette as dark, works on light bg

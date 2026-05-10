@@ -10,6 +10,8 @@ struct PendingActions {
     copy_content: Option<String>,
     edit_idx: Option<usize>,
     regenerate_idx: Option<usize>,
+    retry_error_idx: Option<usize>,
+    switch_model: bool,
     save_edit: bool,
     cancel_edit: bool,
 }
@@ -246,6 +248,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                     &session.messages[unit.start],
                                     &theme,
                                     true,
+                                    unit.start,
+                                    &mut pending.retry_error_idx,
+                                    &mut pending.switch_model,
                                 )
                             };
                             session.messages[unit.start].cached_height = Some(bubble_h);
@@ -441,6 +446,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 &session.messages[i],
                                 &theme,
                                 show_header,
+                                i,
+                                &mut pending.retry_error_idx,
+                                &mut pending.switch_model,
                             )
                         };
                         session.messages[i].cached_height = Some(bubble_h);
@@ -582,6 +590,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some(idx) = pending.regenerate_idx {
         app.regenerate(idx);
+    }
+    if let Some(idx) = pending.retry_error_idx {
+        app.regenerate(idx);
+    }
+    if pending.switch_model {
+        app.settings_store.settings_open = true;
     }
     if pending.copy_content.is_some() {
         app.push_toast("Copied to clipboard", crate::ui::types::ToastLevel::Info);

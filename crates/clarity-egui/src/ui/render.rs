@@ -21,9 +21,17 @@ use crate::ui::types::{ContentBlock, Message, RenderBlock, Role, ToolCallInfo, T
 /// - `user_bubble()` for user messages (right-aligned glass card)
 /// - `agent_message()` for agent messages (Swiss plain text OR glass card)
 /// - `error_bubble()` for error messages (left-aligned glass card)
-pub fn message_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
+pub fn message_bubble(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    show_header: bool,
+    msg_idx: usize,
+    retry_idx: &mut Option<usize>,
+    switch_model: &mut bool,
+) -> f32 {
     if msg.is_error {
-        error_bubble(ui, msg, theme)
+        error_bubble(ui, msg, theme, msg_idx, retry_idx, switch_model)
     } else {
         match msg.role {
             Role::User => user_bubble(ui, msg, theme),
@@ -317,7 +325,14 @@ fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
 
 // ── Error ──
 
-fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+fn error_bubble(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    msg_idx: usize,
+    retry_idx: &mut Option<usize>,
+    switch_model: &mut bool,
+) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 
@@ -339,7 +354,7 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
         egui::Frame::new()
             .fill(theme.error_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .stroke(egui::Stroke::NONE)
+            .stroke(egui::Stroke::new(1.0_f32, theme.danger))
             .shadow(egui::Shadow::NONE)
             .inner_margin(egui::Margin::symmetric(18, 14))
             .show(ui, |ui| {
@@ -387,6 +402,32 @@ fn error_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                                 folded = !folded;
                                 ui.data_mut(|d| d.insert_temp(fold_id, folded));
                             }
+                        }
+
+                        // Retry button
+                        let retry_btn = egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_REFRESH)
+                                .font(theme.font_icon(theme.text_xs))
+                                .color(theme.error_text),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(retry_btn).on_hover_text("Retry").clicked() {
+                            *retry_idx = Some(msg_idx);
+                        }
+
+                        // Switch Model button
+                        let switch_btn = egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_SETTINGS)
+                                .font(theme.font_icon(theme.text_xs))
+                                .color(theme.error_text),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(switch_btn).on_hover_text("Switch Model").clicked() {
+                            *switch_model = true;
                         }
                     });
                 });
