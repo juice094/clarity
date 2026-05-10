@@ -530,6 +530,18 @@ impl App {
     pub(crate) fn new_session(&mut self) {
         let category = self.session_store.active_category.clone();
 
+        // If the current session is empty, reuse it rather than accumulating blank tabs.
+        let is_empty = self
+            .session_store
+            .active_session()
+            .map(|s| s.messages.is_empty())
+            .unwrap_or(false);
+        if is_empty {
+            self.chat_store.input = String::new();
+            self.chat_store.last_usage = None;
+            return;
+        }
+
         // Current session has real messages — save it and create a fresh one.
         let old_id = self.session_store.active_session_id.clone();
         self.save_current_session();
