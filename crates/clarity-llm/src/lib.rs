@@ -14,6 +14,7 @@ pub mod llama_server;
 #[cfg(feature = "local-llm")]
 pub mod local_gguf;
 pub mod mesh;
+pub mod mcp_llm_provider;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;

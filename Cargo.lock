@@ -1136,6 +1136,7 @@ dependencies = [
  "candle-transformers",
  "chrono",
  "clarity-contract",
+ "clarity-mcp",
  "clarity-memory",
  "dirs 5.0.1",
  "futures",
