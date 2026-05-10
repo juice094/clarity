@@ -241,7 +241,7 @@ impl App {
                             &theme,
                             theme.danger.linear_multiply(0.25),
                             egui::Color32::WHITE,
-                            14.0,
+                            theme.text_dim,
                         );
                         if close_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
@@ -260,7 +260,7 @@ impl App {
                             &theme,
                             theme.overlay_medium,
                             theme.text,
-                            14.0,
+                            theme.text_dim,
                         );
                         if max_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
@@ -273,7 +273,7 @@ impl App {
                             &theme,
                             theme.overlay_medium,
                             theme.text,
-                            14.0,
+                            theme.text_dim,
                         );
                         if min_resp.clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
@@ -289,7 +289,7 @@ impl App {
                             &theme,
                             theme.overlay_medium,
                             theme.text,
-                            theme.text_base,
+                            theme.text_dim,
                         );
                         if settings_resp.clicked() {
                             self.settings_store.settings_open = true;
@@ -303,8 +303,14 @@ impl App {
                                 ("断开", theme.status_offline)
                             }
                         };
-                        let conn_resp =
-                            crate::widgets::status_capsule(ui, conn_label, conn_color, &theme);
+                        let conn_resp = crate::widgets::status_capsule(
+                            ui,
+                            conn_color,
+                            conn_label,
+                            conn_color,
+                            false,
+                            &theme,
+                        );
                         if conn_resp.hovered() {
                             conn_resp.clone().on_hover_text("Agent connection status");
                         }
@@ -316,8 +322,14 @@ impl App {
                             crate::ui::types::GatewayStatus::Offline => theme.status_offline,
                             crate::ui::types::GatewayStatus::Checking => theme.status_busy,
                         };
-                        let gw_resp =
-                            crate::widgets::status_capsule(ui, "Gateway", gw_dot_color, &theme);
+                        let gw_resp = crate::widgets::status_capsule(
+                            ui,
+                            gw_dot_color,
+                            "Gateway",
+                            theme.text_muted,
+                            true,
+                            &theme,
+                        );
                         if gw_resp.hovered() {
                             gw_resp.clone().on_hover_text("Click to start/stop Gateway");
                         }

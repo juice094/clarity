@@ -156,75 +156,51 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .as_ref()
                                 .map_or(0, |c| c.servers.len());
                             let mcp_btn_w = if mcp_count > 0 { 36.0 } else { 20.0 };
-                            let mcp_resp = ui.add(
-                                egui::Button::new("")
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    )
-                                    .min_size(egui::vec2(mcp_btn_w, 20.0)),
+                            let (mcp_rect, mcp_resp) = ui.allocate_exact_size(
+                                egui::vec2(mcp_btn_w, 20.0),
+                                egui::Sense::click(),
                             );
-                            if ui.is_rect_visible(mcp_resp.rect) {
-                                let painter = ui.painter_at(mcp_resp.rect);
-                                let icon_center = if mcp_count > 0 {
-                                    mcp_resp.rect.center() - egui::vec2(5.0, 0.0)
-                                } else {
-                                    mcp_resp.rect.center()
-                                };
+                            if ui.is_rect_visible(mcp_rect) {
                                 let icon_color = if mcp_resp.hovered() {
                                     app.ui_store.theme.text
                                 } else {
                                     app.ui_store.theme.text_dim
                                 };
-                                painter.text(
-                                    icon_center,
-                                    egui::Align2::CENTER_CENTER,
-                                    crate::theme::ICON_PLUG,
-                                    app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
-                                    icon_color,
+                                ui.allocate_new_ui(
+                                    egui::UiBuilder::new().max_rect(mcp_rect),
+                                    |ui| {
+                                        ui.horizontal_centered(|ui| {
+                                            ui.label(
+                                                egui::RichText::new(crate::theme::ICON_PLUG)
+                                                    .font(
+                                                        app.ui_store
+                                                            .theme
+                                                            .font_icon(app.ui_store.theme.text_base),
+                                                    )
+                                                    .color(icon_color),
+                                            );
+                                            if mcp_count > 0 {
+                                                ui.label(
+                                                    egui::RichText::new(format!("{}", mcp_count))
+                                                        .size(app.ui_store.theme.text_xs)
+                                                        .color(icon_color),
+                                                );
+                                            }
+                                        });
+                                    },
                                 );
-                                if mcp_count > 0 {
-                                    painter.text(
-                                        mcp_resp.rect.center() + egui::vec2(6.0, 0.0),
-                                        egui::Align2::CENTER_CENTER,
-                                        format!("{}", mcp_count),
-                                        app.ui_store.theme.font(app.ui_store.theme.text_xs),
-                                        icon_color,
-                                    );
-                                }
                             }
                             if mcp_resp.clicked() {
                                 app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
                             }
 
                             // Skills
-                            let skills_resp = ui.add(
-                                egui::Button::new("")
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
-                                        ),
-                                    )
-                                    .min_size(egui::vec2(20.0, 20.0)),
+                            let skills_resp = crate::widgets::icon_button_toolbar(
+                                ui,
+                                crate::theme::ICON_PUZZLE,
+                                app.ui_store.theme.text_base,
+                                &app.ui_store.theme,
                             );
-                            if ui.is_rect_visible(skills_resp.rect) {
-                                let painter = ui.painter_at(skills_resp.rect);
-                                let skills_color = if skills_resp.hovered() {
-                                    app.ui_store.theme.text
-                                } else {
-                                    app.ui_store.theme.text_dim
-                                };
-                                painter.text(
-                                    skills_resp.rect.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    crate::theme::ICON_PUZZLE,
-                                    app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
-                                    skills_color,
-                                );
-                            }
                             if skills_resp.clicked() {
                                 app.ui_store.skill_panel_open = true;
                             }
@@ -301,11 +277,12 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         if row_resp.clicked() {
                             *is_open = !*is_open;
                         }
-                        if row_resp.hovered() {
-                            ui.painter()
-                                .rect_filled(row_rect, theme.radius_sm, theme.bg_hover);
-                        }
 
+                        let fill = if row_resp.hovered() || *is_open {
+                            theme.bg_hover
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
                         let text_color = if row_resp.hovered() || *is_open {
                             theme.text
                         } else {
@@ -313,45 +290,50 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         };
 
                         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(row_rect), |ui| {
-                            ui.horizontal(|ui| {
-                                ui.add_space(8.0);
-                                ui.label(
-                                    egui::RichText::new(label)
-                                        .size(theme.text_sm)
-                                        .strong()
-                                        .color(text_color),
-                                );
-                                if let Some(c) = count {
-                                    if c > 0 {
-                                        ui.label(
-                                            egui::RichText::new(format!("({})", c))
-                                                .size(theme.text_sm)
-                                                .color(theme.text_muted),
-                                        );
-                                    }
-                                }
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
+                            egui::Frame::new()
+                                .fill(fill)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
                                         ui.add_space(8.0);
-                                        let caret_icon = if *is_open {
-                                    crate::theme::ICON_CARET_DOWN
-                                } else {
-                                    crate::theme::ICON_CARET_RIGHT
-                                };
-                                let caret_color = if *is_open {
-                                    theme.accent
-                                } else {
-                                    theme.text_dim
-                                };
-                                ui.label(
-                                    egui::RichText::new(caret_icon)
-                                        .font(theme.font_icon(theme.text_sm))
-                                        .color(caret_color),
-                                );
-                                    },
-                                );
-                            });
+                                        ui.label(
+                                            egui::RichText::new(label)
+                                                .size(theme.text_sm)
+                                                .strong()
+                                                .color(text_color),
+                                        );
+                                        if let Some(c) = count {
+                                            if c > 0 {
+                                                ui.label(
+                                                    egui::RichText::new(format!("({})", c))
+                                                        .size(theme.text_sm)
+                                                        .color(theme.text_muted),
+                                                );
+                                            }
+                                        }
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.add_space(8.0);
+                                                let caret_icon = if *is_open {
+                                                    crate::theme::ICON_CARET_DOWN
+                                                } else {
+                                                    crate::theme::ICON_CARET_RIGHT
+                                                };
+                                                let caret_color = if *is_open {
+                                                    theme.accent
+                                                } else {
+                                                    theme.text_dim
+                                                };
+                                                ui.label(
+                                                    egui::RichText::new(caret_icon)
+                                                        .font(theme.font_icon(theme.text_sm))
+                                                        .color(caret_color),
+                                                );
+                                            },
+                                        );
+                                    });
+                                });
                         });
                         ui.advance_cursor_after_rect(row_rect);
                     };

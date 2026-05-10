@@ -70,105 +70,22 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                         Some((id.clone(), app.ui_store.editing_title.clone()));
                 }
             } else {
-                // Precise text width measurement via egui galley.
-                let font_id = app.ui_store.theme.font(app.ui_store.theme.text_md);
-                let text_galley = ui.painter().layout_no_wrap(
-                    title.clone(),
-                    font_id.clone(),
-                    egui::Color32::PLACEHOLDER,
+                let tab = crate::widgets::tab_button(
+                    ui,
+                    title,
+                    *is_active,
+                    &app.ui_store.theme,
+                    tab_width,
                 );
-                let text_width = text_galley.rect.width();
-                const TAB_PAD: f32 = 20.0;
-                let (tab_rect, tab_resp) = ui.allocate_exact_size(
-                    egui::vec2(tab_width, 28.0),
-                    egui::Sense::click(),
-                );
-                let text_color = if *is_active {
-                    app.ui_store.theme.text_strong
-                } else if tab_resp.hovered() {
-                    app.ui_store.theme.text
-                } else {
-                    app.ui_store.theme.text_muted
-                };
-                // Active tab: bottom 1px accent line.
-                if *is_active {
-                    let accent_line = egui::Rect::from_min_max(
-                        egui::pos2(tab_rect.min.x, tab_rect.max.y - 1.0),
-                        egui::pos2(tab_rect.max.x, tab_rect.max.y),
-                    );
-                    ui.painter().rect_filled(
-                        accent_line,
-                        egui::CornerRadius::ZERO,
-                        app.ui_store.theme.accent,
-                    );
+                if tab.response.hovered() {
+                    tab.response.clone().on_hover_text(title.as_str());
                 }
-                // Title text — clipped to tab interior so long titles
-                // don't bleed into adjacent tabs or the close button.
-                let text_clip = egui::Rect::from_min_max(
-                    egui::pos2(tab_rect.min.x + 4.0, tab_rect.min.y),
-                    egui::pos2(tab_rect.max.x - 22.0, tab_rect.max.y),
-                );
-                let max_text_w = tab_width - TAB_PAD;
-                let display_title = if text_width > max_text_w {
-                    // Tail-preserve truncation: keep first 4 chars + "…" + last 3 chars.
-                    let chars: Vec<char> = title.chars().collect();
-                    if chars.len() <= 8 {
-                        title.clone()
-                    } else {
-                        let prefix: String = chars.iter().take(4).collect();
-                        let suffix: String = chars
-                            .iter()
-                            .rev()
-                            .take(3)
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .rev()
-                            .collect();
-                        format!("{}…{}", prefix, suffix)
-                    }
-                } else {
-                    title.clone()
-                };
-                ui.painter_at(text_clip).text(
-                    egui::pos2(tab_rect.center().x, tab_rect.center().y),
-                    egui::Align2::CENTER_CENTER,
-                    &display_title,
-                    font_id.clone(),
-                    text_color,
-                );
-                // Close button: interact detection always runs,
-                // but only draw the X icon when the tab is hovered.
-                let close_rect = egui::Rect::from_min_max(
-                    egui::pos2(tab_rect.max.x - 20.0, tab_rect.min.y + 2.0),
-                    egui::pos2(tab_rect.max.x - 2.0, tab_rect.max.y - 2.0),
-                );
-                let close_id = egui::Id::new(("tab_close", id.clone()));
-                let close_resp =
-                    ui.interact(close_rect, close_id, egui::Sense::click());
-                if tab_resp.hovered() {
-                    let close_col = if close_resp.hovered() {
-                        app.ui_store.theme.danger
-                    } else {
-                        text_color
-                    };
-                    ui.painter().text(
-                        close_rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        crate::theme::ICON_X,
-                        app.ui_store.theme.font_icon(app.ui_store.theme.text_xs),
-                        close_col,
-                    );
-                }
-                if tab_resp.hovered() {
-                    let _ = tab_resp.clone().on_hover_text(title.as_str());
-                }
-
-                if close_resp.clicked() {
+                if tab.close_clicked {
                     tab_to_close = Some(id.clone());
-                } else if tab_resp.double_clicked() {
+                } else if tab.double_clicked {
                     app.ui_store.editing_session_id = Some(id.clone());
                     app.ui_store.editing_title = title.clone();
-                } else if tab_resp.clicked() {
+                } else if tab.response.clicked() {
                     app.save_current_session();
                     let old_id = app.session_store.active_session_id.clone();
                     if !app.chat_store.input.trim().is_empty() {

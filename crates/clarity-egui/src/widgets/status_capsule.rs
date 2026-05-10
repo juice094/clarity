@@ -1,22 +1,18 @@
 use crate::theme::Theme;
 
-/// Status capsule — compact pill-shaped indicator with a colored dot + label.
+/// Status capsule widget — a rounded pill showing a colored dot + label.
 ///
-/// Used in titlebar for connection status, gateway status, and similar
-/// state indicators.
-///
-/// # Example
-/// ```ignore
-/// let resp = status_capsule(ui, "Online", theme.status_online, &theme);
-/// if resp.hovered() { resp.clone().on_hover_text("Agent connection status"); }
-/// ```
+/// Replaces inline `Frame::new()` + `ui.painter().circle_filled()` constructions
+/// in the title-bar status indicators.
 pub fn status_capsule(
     ui: &mut egui::Ui,
-    label: &str,
     dot_color: egui::Color32,
+    label: &str,
+    label_color: egui::Color32,
+    is_clickable: bool,
     theme: &Theme,
 ) -> egui::Response {
-    egui::Frame::new()
+    let inner = egui::Frame::new()
         .fill(theme.bg_elevated)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::symmetric(8, 5))
@@ -31,9 +27,14 @@ pub fn status_capsule(
                 ui.label(
                     egui::RichText::new(label)
                         .size(theme.text_xs)
-                        .color(theme.text_muted),
+                        .color(label_color),
                 );
             });
-        })
-        .response
+        });
+
+    if is_clickable {
+        ui.interact(inner.response.rect, inner.response.id, egui::Sense::click())
+    } else {
+        inner.response
+    }
 }
