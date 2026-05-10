@@ -966,6 +966,8 @@ pub(crate) async fn admin_get_approval_mode(
 #[derive(Deserialize)]
 pub(crate) struct SwitchProviderRequest {
     pub provider: String,
+    #[serde(default)]
+    pub args: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -981,6 +983,32 @@ pub(crate) async fn admin_switch_provider(
     Json(req): Json<SwitchProviderRequest>,
 ) -> impl IntoResponse {
     info!("Admin: switching provider to '{}'", req.provider);
+
+    // MCP LLM prefix: "mcp:<command>"
+    let provider_raw = req.provider.clone();
+    if let Some(cmd) = provider_raw.strip_prefix("mcp:") {
+        let cmd = cmd.to_string();
+        let args = req.args.unwrap_or_default();
+        info!("MCP LLM switch: command={}, args={:?}", cmd, args);
+        match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&cmd, &args).await {
+            Ok(provider) => {
+                state.agent.set_llm(Arc::new(provider));
+                let resp = SwitchProviderResponse {
+                    provider: provider_raw,
+                    message: format!("Switched to MCP LLM server: {}", cmd),
+                };
+                return (StatusCode::OK, Json(resp));
+            }
+            Err(e) => {
+                error!("Failed to connect MCP LLM: {}", e);
+                let resp = SwitchProviderResponse {
+                    provider: provider_raw,
+                    message: format!("Failed to connect MCP LLM: {}", e),
+                };
+                return (StatusCode::BAD_REQUEST, Json(resp));
+            }
+        }
+    }
 
     let names: Vec<String> = if req.provider.trim() == "mesh" {
         std::env::var("CLARITY_MESH_PROVIDERS")
