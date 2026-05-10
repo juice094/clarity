@@ -729,12 +729,60 @@ pub fn setup_fonts(ctx: &egui::Context) {
     );
 
     // ------------------------------------------------------------------
-    // 3. Noto Sans SC subset — CJK fallback (embedded, no system probing)
+    // 3. Noto Sans SC subset — CJK fallback (embedded, minimal UI coverage)
     // ------------------------------------------------------------------
     fonts.font_data.insert(
         "noto-sc".into(),
         egui::FontData::from_static(include_bytes!("../assets/fonts/NotoSansSC-subset.ttf")).into(),
     );
+
+    // ------------------------------------------------------------------
+    // 3b. System CJK font — runtime fallback for full Chinese chat coverage
+    // ------------------------------------------------------------------
+    let system_cjk_paths: &[&str] = if cfg!(windows) {
+        &[
+            // Static fonts first — Variable Fonts may not be fully supported by ttf-parser
+            r"C:\Windows\Fonts\msyh.ttc",
+            r"C:\Windows\Fonts\simsun.ttc",
+            r"C:\Windows\Fonts\NotoSansSC-VF.ttf",
+        ]
+    } else if cfg!(target_os = "macos") {
+        &[
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+        ]
+    } else {
+        &[
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        ]
+    };
+
+    for path in system_cjk_paths {
+        if let Ok(data) = std::fs::read(path) {
+            fonts.font_data.insert(
+                "noto-sc-system".into(),
+                egui::FontData::from_owned(data).into(),
+            );
+            fonts
+                .families
+                .entry(egui::FontFamily::Proportional)
+                .or_default()
+                .push("noto-sc-system".into());
+            fonts
+                .families
+                .entry(egui::FontFamily::Monospace)
+                .or_default()
+                .push("noto-sc-system".into());
+            fonts
+                .families
+                .entry(egui::FontFamily::Name("bold".into()))
+                .or_default()
+                .push("noto-sc-system".into());
+            break;
+        }
+    }
 
     // ------------------------------------------------------------------
     // 4. Phosphor — icon font
