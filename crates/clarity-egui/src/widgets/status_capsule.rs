@@ -34,7 +34,8 @@ pub fn status_capsule(
         )
     });
 
-    let gap = 2.0_f32;
+    let has_label = !label.is_empty();
+    let gap = if has_label { 2.0_f32 } else { 0.0 };
     let inner_h = dot_galley.rect.height().max(label_galley.rect.height());
     let inner_w = dot_galley.rect.width() + gap + label_galley.rect.width();
 
@@ -70,12 +71,14 @@ pub fn status_capsule(
                                 .size(theme.text_sm)
                                 .color(dot_color),
                         );
-                        ui.add_space(gap);
-                        ui.label(
-                            egui::RichText::new(label)
-                                .size(theme.text_xs)
-                                .color(label_color),
-                        );
+                        if has_label {
+                            ui.add_space(gap);
+                            ui.label(
+                                egui::RichText::new(label)
+                                    .size(theme.text_xs)
+                                    .color(label_color),
+                            );
+                        }
                     });
                 });
         },

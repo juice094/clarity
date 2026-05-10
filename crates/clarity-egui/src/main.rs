@@ -290,7 +290,8 @@ impl App {
                             self.settings_store.settings_open = true;
                         }
 
-                        // Connection status capsule
+                        // Connection status capsule (label hidden on narrow windows)
+                        let show_status_labels = ctx.screen_rect().width() >= 720.0;
                         let (conn_label, conn_color) = match self.chat_store.agent_status {
                             AgentStatus::Online => ("Online", theme.status_online),
                             AgentStatus::Busy => ("Busy", theme.status_busy),
@@ -301,7 +302,7 @@ impl App {
                         let conn_resp = crate::widgets::status_capsule(
                             ui,
                             conn_color,
-                            conn_label,
+                            if show_status_labels { conn_label } else { "" },
                             conn_color,
                             false,
                             &theme,
@@ -320,7 +321,7 @@ impl App {
                         let gw_resp = crate::widgets::status_capsule(
                             ui,
                             gw_dot_color,
-                            "Gateway",
+                            if show_status_labels { "Gateway" } else { "" },
                             theme.text_muted,
                             true,
                             &theme,
