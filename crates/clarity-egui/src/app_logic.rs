@@ -593,55 +593,68 @@ impl App {
         self.ui_store.locale.t(key)
     }
 
+    /// S3.2 (ADR-006 follow-up): centralized "commit settings" primitive.
+    ///
+    /// Persists `settings_edit` to disk **and** mirrors into `cached_settings`
+    /// in a single atomic step. Callers that need approval-mode propagation
+    /// or LLM reload should call [`Self::apply_approval_mode_to_runtime`] and
+    /// [`Self::trigger_llm_reload`] explicitly afterwards.
+    ///
+    /// Returns `Err` only on disk save failure; caller decides whether to
+    /// skip downstream side effects.
+    pub(crate) fn commit_settings(&self) -> Result<(), String> {
+        self.settings_store.settings_edit.save()?;
+        let mut guard = self.state.cached_settings.lock();
+        *guard = self.settings_store.settings_edit.clone();
+        Ok(())
+    }
+
+    /// Propagate the current `settings_edit.approval_mode` to the agent and
+    /// the mode-aware approval runtime. Idempotent.
+    pub(crate) fn apply_approval_mode_to_runtime(&self) {
+        let mode = crate::app_state::parse_approval_mode(
+            &self.settings_store.settings_edit.approval_mode,
+        );
+        self.state.agent.set_approval_mode(mode);
+        self.state.mode_aware_approval_runtime.set_mode(mode);
+    }
+
+    /// Spawn an async task that triggers `reload_llm`. Fire-and-forget; errors
+    /// are logged via `tracing::warn!`.
+    pub(crate) fn trigger_llm_reload(&self) {
+        let state = self.state.clone();
+        self.runtime.spawn(async move {
+            if let Err(e) = crate::app_state::reload_llm(&state).await {
+                tracing::warn!("reload_llm failed: {}", e);
+            }
+        });
+    }
+
     /// Save current settings to disk and reload the LLM.
     #[allow(dead_code)]
     pub(crate) fn save_settings_and_reload(&mut self) {
-        if let Err(e) = self.settings_store.settings_edit.save() {
+        if let Err(e) = self.commit_settings() {
             tracing::error!("Failed to save settings: {}", e);
-        } else {
-            {
-                let mut guard = self.state.cached_settings.lock();
-                *guard = self.settings_store.settings_edit.clone();
-            }
-            let mode = crate::app_state::parse_approval_mode(
-                &self.settings_store.settings_edit.approval_mode,
-            );
-            self.state.agent.set_approval_mode(mode);
-            self.state.mode_aware_approval_runtime.set_mode(mode);
-            let state = self.state.clone();
-            self.runtime.spawn(async move {
-                if let Err(e) = crate::app_state::reload_llm(&state).await {
-                    tracing::warn!("reload_llm failed: {}", e);
-                }
-            });
+            return;
         }
+        self.apply_approval_mode_to_runtime();
+        self.trigger_llm_reload();
     }
 
     /// Auto-save after any change (no user confirmation needed).
     pub(crate) fn auto_save_settings(&mut self) {
-        if let Err(e) = self.settings_store.settings_edit.save() {
+        if let Err(e) = self.commit_settings() {
             tracing::error!("Failed to save settings: {}", e);
-        } else {
-            {
-                let mut guard = self.state.cached_settings.lock();
-                *guard = self.settings_store.settings_edit.clone();
-            }
-            let mode = crate::app_state::parse_approval_mode(
-                &self.settings_store.settings_edit.approval_mode,
-            );
-            self.state.agent.set_approval_mode(mode);
-            self.state.mode_aware_approval_runtime.set_mode(mode);
+            return;
         }
+        self.apply_approval_mode_to_runtime();
     }
 
     /// Save settings to disk without reloading LLM.
     #[allow(dead_code)]
     pub(crate) fn save_settings_internal(&self) {
-        if let Err(e) = self.settings_store.settings_edit.save() {
+        if let Err(e) = self.commit_settings() {
             tracing::error!("Failed to save settings: {}", e);
-        } else {
-            let mut guard = self.state.cached_settings.lock();
-            *guard = self.settings_store.settings_edit.clone();
         }
     }
 

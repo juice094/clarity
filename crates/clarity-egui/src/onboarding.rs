@@ -334,19 +334,13 @@ fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "local".to_string());
     app.settings_store.settings_edit.local_model_path = Some(model_path.display().to_string());
-    let _ = app.settings_store.settings_edit.save();
 
-    // Sync to AppState and reload LLM
-    {
-        let mut guard = app.state.cached_settings.lock();
-        *guard = app.settings_store.settings_edit.clone();
+    // S3.2: use centralized commit + reload helpers instead of inline mirror.
+    if let Err(e) = app.commit_settings() {
+        tracing::error!("Onboarding: failed to save settings: {}", e);
+        return;
     }
-    let state = app.state.clone();
-    app.runtime.spawn(async move {
-        if let Err(e) = crate::app_state::reload_llm(&state).await {
-            tracing::warn!("reload_llm after auto-download failed: {}", e);
-        }
-    });
+    app.trigger_llm_reload();
 
     app.onboarding_store.onboarding_state = crate::onboarding::OnboardingState::Hidden;
     app.onboarding_store.cancel_token = None;
