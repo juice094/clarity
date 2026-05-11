@@ -63,11 +63,7 @@ impl SkillRegistry {
 
     /// List summaries for all skills.
     pub fn list_summaries(&self) -> Vec<String> {
-        self.skills
-            .read()
-            .values()
-            .map(|s| s.summary())
-            .collect()
+        self.skills.read().values().map(|s| s.summary()).collect()
     }
 
     /// Find skills whose id, name, description, or tags contain the query (case-insensitive).

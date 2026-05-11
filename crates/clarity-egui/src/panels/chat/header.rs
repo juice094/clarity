@@ -31,8 +31,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     } else {
         0.0
     };
-    let total_available =
-        (ui.available_width() - reserved_for_plus - total_spacing).max(0.0);
+    let total_available = (ui.available_width() - reserved_for_plus - total_spacing).max(0.0);
     const TAB_MIN: f32 = 48.0;
     const TAB_MAX: f32 = 180.0;
     let raw_width = if tab_count == 0 {
@@ -59,9 +58,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                 egui::vec2(edit_w, 28.0),
                 egui::TextEdit::singleline(&mut buf)
                     .id(ui.id().with("rename"))
-                    .font(egui::FontId::proportional(
-                        app.ui_store.theme.text_md,
-                    ))
+                    .font(egui::FontId::proportional(app.ui_store.theme.text_md))
                     .margin(egui::vec2(6.0, 4.0)),
             );
             app.ui_store.editing_title = buf;
@@ -69,21 +66,14 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                 app.ui_store.editing_session_id = None;
                 app.ui_store.editing_title.clear();
             } else if resp.lost_focus() {
-                rename_commit =
-                    Some((id.clone(), app.ui_store.editing_title.clone()));
+                rename_commit = Some((id.clone(), app.ui_store.editing_title.clone()));
             }
             if resp.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                rename_commit =
-                    Some((id.clone(), app.ui_store.editing_title.clone()));
+                rename_commit = Some((id.clone(), app.ui_store.editing_title.clone()));
             }
         } else {
-            let tab = crate::widgets::tab_button(
-                ui,
-                title,
-                *is_active,
-                &app.ui_store.theme,
-                tab_width,
-            );
+            let tab =
+                crate::widgets::tab_button(ui, title, *is_active, &app.ui_store.theme, tab_width);
             let tab_response = if tab.response.hovered() {
                 tab.response.on_hover_text(title.as_str())
             } else {
@@ -105,8 +95,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                     app.session_store.drafts.remove(&old_id);
                 }
                 app.session_store.active_session_id = id.clone();
-                app.chat_store.input =
-                    app.session_store.drafts.remove(id).unwrap_or_default();
+                app.chat_store.input = app.session_store.drafts.remove(id).unwrap_or_default();
                 app.chat_store.tool_calls = app
                     .session_store
                     .sessions
@@ -118,9 +107,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     if let Some((sid, new_title)) = rename_commit {
-        if let Some(session) =
-            app.session_store.sessions.iter_mut().find(|s| s.id == sid)
-        {
+        if let Some(session) = app.session_store.sessions.iter_mut().find(|s| s.id == sid) {
             session.title = new_title;
             let _ = crate::session::save_session_internal(session);
         }
@@ -129,9 +116,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     }
     // Handle tab close
     if let Some(close_id) = tab_to_close {
-        if let Some(session) =
-            app.session_store.sessions.iter().find(|s| s.id == close_id)
-        {
+        if let Some(session) = app.session_store.sessions.iter().find(|s| s.id == close_id) {
             let _ = crate::session::save_session_internal(session);
         }
         let was_active = app.session_store.active_session_id == close_id;
@@ -162,13 +147,9 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     if ui
         .add(
-            egui::Button::new(
-                egui::RichText::new("+").size(app.ui_store.theme.text_base),
-            )
-            .fill(egui::Color32::TRANSPARENT)
-            .corner_radius(
-                egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8),
-            ),
+            egui::Button::new(egui::RichText::new("+").size(app.ui_store.theme.text_base))
+                .fill(egui::Color32::TRANSPARENT)
+                .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8)),
         )
         .clicked()
     {

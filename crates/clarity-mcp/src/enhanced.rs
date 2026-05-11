@@ -981,9 +981,15 @@ impl WebSocketMcpClient {
 #[async_trait]
 impl McpClient for WebSocketMcpClient {
     async fn connect(&mut self) -> Result<(), McpError> {
-        let McpTransport::WebSocket { url, timeout_seconds, .. } = &self.config.transport
+        let McpTransport::WebSocket {
+            url,
+            timeout_seconds,
+            ..
+        } = &self.config.transport
         else {
-            return Err(McpError::InvalidTransport("Expected WebSocket transport".into()));
+            return Err(McpError::InvalidTransport(
+                "Expected WebSocket transport".into(),
+            ));
         };
 
         let pending = self.pending.clone();
@@ -998,7 +1004,8 @@ impl McpClient for WebSocketMcpClient {
             let result = tokio::time::timeout(
                 Duration::from_secs(timeout),
                 tokio_tungstenite::connect_async(&url),
-            ).await;
+            )
+            .await;
 
             let (ws_stream, _) = match result {
                 Ok(Ok((s, r))) => (s, r),
@@ -1087,9 +1094,13 @@ impl McpClient for WebSocketMcpClient {
             params,
         };
 
-        let McpTransport::WebSocket { timeout_seconds, .. } = &self.config.transport
+        let McpTransport::WebSocket {
+            timeout_seconds, ..
+        } = &self.config.transport
         else {
-            return Err(McpError::InvalidTransport("Expected WebSocket transport".into()));
+            return Err(McpError::InvalidTransport(
+                "Expected WebSocket transport".into(),
+            ));
         };
 
         let (tx, rx) = oneshot::channel();
@@ -1103,7 +1114,10 @@ impl McpClient for WebSocketMcpClient {
             Err(e) => {
                 let mut pending = self.pending.write().await;
                 pending.remove(&id);
-                return Err(McpError::RequestFailed(format!("JSON serialization failed: {}", e)));
+                return Err(McpError::RequestFailed(format!(
+                    "JSON serialization failed: {}",
+                    e
+                )));
             }
         };
 
@@ -1111,7 +1125,10 @@ impl McpClient for WebSocketMcpClient {
             if let Err(e) = ws_tx.send(json) {
                 let mut pending = self.pending.write().await;
                 pending.remove(&id);
-                return Err(McpError::RequestFailed(format!("WebSocket send failed: {}", e)));
+                return Err(McpError::RequestFailed(format!(
+                    "WebSocket send failed: {}",
+                    e
+                )));
             }
         } else {
             let mut pending = self.pending.write().await;
@@ -1124,12 +1141,16 @@ impl McpClient for WebSocketMcpClient {
                 if let Some(error) = response.error {
                     return Err(McpError::RpcError(error.message));
                 }
-                response.result.ok_or_else(|| McpError::InvalidResponse("No result in WebSocket response".into()))
+                response.result.ok_or_else(|| {
+                    McpError::InvalidResponse("No result in WebSocket response".into())
+                })
             }
             Ok(Err(_)) => {
                 let mut pending = self.pending.write().await;
                 pending.remove(&id);
-                Err(McpError::RequestFailed("WebSocket response channel closed".into()))
+                Err(McpError::RequestFailed(
+                    "WebSocket response channel closed".into(),
+                ))
             }
             Err(_) => {
                 let mut pending = self.pending.write().await;

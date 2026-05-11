@@ -67,4 +67,3 @@ pub(crate) async fn delete_session(
         ),
     }
 }
-

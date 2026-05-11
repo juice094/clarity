@@ -1,15 +1,11 @@
 use axum::{
     extract::Json,
     http::StatusCode,
-    response::{
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 
 use tracing::warn;
-
-
 
 /// Overview of a single MCP server entry (from `mcp.json`).
 #[derive(Serialize)]
@@ -201,4 +197,3 @@ pub(crate) async fn delete_mcp_server(
             .into_response(),
     }
 }
-

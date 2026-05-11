@@ -1,9 +1,7 @@
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::{
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
 };
 use chrono::Utc;
 use clarity_llm::LlmFactory;
@@ -122,7 +120,6 @@ pub(crate) async fn admin_models() -> impl IntoResponse {
     (StatusCode::OK, Json(ModelsResponse { models }))
 }
 
-
 // ==================== Admin: Approval Mode ====================
 
 #[derive(Deserialize)]
@@ -186,7 +183,8 @@ pub(crate) struct SwitchProviderResponse {
     pub message: String,
 }
 
-static MESH_PROVIDER: std::sync::OnceLock<Arc<clarity_llm::mesh::MeshLlmProvider>> = std::sync::OnceLock::new();
+static MESH_PROVIDER: std::sync::OnceLock<Arc<clarity_llm::mesh::MeshLlmProvider>> =
+    std::sync::OnceLock::new();
 
 pub(crate) async fn admin_switch_provider(
     State(state): State<Arc<AppState>>,
@@ -269,10 +267,7 @@ pub(crate) async fn admin_switch_provider(
                 state.set_provider_label(format!("mesh:{}", names.join(",")));
                 let resp = SwitchProviderResponse {
                     provider: req.provider,
-                    message: format!(
-                        "Switched to mesh with providers: {:?}",
-                        names
-                    ),
+                    message: format!("Switched to mesh with providers: {:?}", names),
                 };
                 (StatusCode::OK, Json(resp))
             }
@@ -317,4 +312,3 @@ pub(crate) async fn admin_mesh_status() -> impl IntoResponse {
         (StatusCode::OK, Json(resp))
     }
 }
-

@@ -9,9 +9,9 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tracing::info;
 
-use clarity_contract::ToolError;
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
 
 fn teams_dir() -> ToolResult<PathBuf> {
     super::clarity_data_dir().map(|p| p.join("teams"))

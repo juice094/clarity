@@ -2,11 +2,11 @@
 //!
 //! Builds Agent instances for subagents.
 
+use crate::store::SubagentStore;
+use clarity_contract::subagent::{AgentTypeDefinition, CapabilityToken, LaborMarket};
 use clarity_core::agent::{Agent, AgentConfig};
 use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::Message;
-use crate::store::SubagentStore;
-use clarity_contract::subagent::{AgentTypeDefinition, CapabilityToken, LaborMarket};
 
 /// Builder for subagent instances
 pub struct SubagentBuilder {

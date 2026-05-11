@@ -86,7 +86,10 @@ pub struct CompactionService {
 impl CompactionService {
     /// Create a new compaction service from configuration
     pub fn new(config: CompactionServiceConfig) -> Self {
-        let session_id = config.session_id.clone().unwrap_or_else(|| "default".to_string());
+        let session_id = config
+            .session_id
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
         Self {
             config,
             tier1_enabled: true,
@@ -96,7 +99,11 @@ impl CompactionService {
     }
 
     /// Set the session store and session ID for message persistence
-    pub fn with_session_store(mut self, store: Arc<clarity_memory::SessionStore>, session_id: impl Into<String>) -> Self {
+    pub fn with_session_store(
+        mut self,
+        store: Arc<clarity_memory::SessionStore>,
+        session_id: impl Into<String>,
+    ) -> Self {
         self.session_store = Some(store);
         self.session_id = session_id.into();
         self
@@ -218,7 +225,11 @@ impl CompactionService {
     ) -> Result<(), AgentError> {
         // Write messages to session store if configured
         if let Some(ref session_store) = self.session_store {
-            let sid = if self.session_id.is_empty() { "default" } else { &self.session_id };
+            let sid = if self.session_id.is_empty() {
+                "default"
+            } else {
+                &self.session_id
+            };
             for msg in messages.iter() {
                 let role = match msg.role {
                     MessageRole::System => "system",

@@ -77,7 +77,10 @@ impl ToolRegistry {
         // Register web tools
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(WebBrowserTool::new().unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())));
+        let _ = registry.register(
+            WebBrowserTool::new()
+                .unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())),
+        );
 
         // Register think tool
         let _ = registry.register(ThinkTool::new());
@@ -132,9 +135,9 @@ impl ToolRegistry {
         use crate::tools::{
             AskUserTool, CancelCronTool, ChannelSendTool, FileEditTool, FileReadTool,
             FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool,
-            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool,
-            TaskOutputTool, TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool,
-            ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
+            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool, TaskOutputTool,
+            TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool, TodoTool,
+            WebBrowserTool, WebFetchTool, WebSearchTool,
         };
 
         let registry = Self::new();
@@ -150,7 +153,10 @@ impl ToolRegistry {
         let _ = registry.register(PowerShellTool::new());
         let _ = registry.register(WebSearchTool::new());
         let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(WebBrowserTool::new().unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())));
+        let _ = registry.register(
+            WebBrowserTool::new()
+                .unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())),
+        );
         let _ = registry.register(ThinkTool::new());
         let _ = registry.register(AskUserTool::new());
         let _ = registry.register(ChannelSendTool::new());

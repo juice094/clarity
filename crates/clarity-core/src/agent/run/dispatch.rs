@@ -2,8 +2,8 @@
 
 use crate::agent::Agent;
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
+use clarity_llm::api::{LlmProvider, Message};
 use clarity_wire::WireMessage;
 use std::pin::Pin;
 use tokio_util::sync::CancellationToken;

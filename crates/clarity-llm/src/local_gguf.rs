@@ -20,8 +20,8 @@
 //! ```
 
 use super::{LlmProvider, LlmResponse, Message, StreamDelta};
-use clarity_contract::{FunctionCall, ToolCall};
 use clarity_contract::AgentError;
+use clarity_contract::{FunctionCall, ToolCall};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1012,7 +1012,8 @@ mod tests {
 
         // Try tokenizer.json next to model, else hf-hub fallback
         let tokenizer_path = model_path.with_file_name("tokenizer.json");
-        let mut config = LocalGgufConfig::new(&model_path).unwrap()
+        let mut config = LocalGgufConfig::new(&model_path)
+            .unwrap()
             .with_max_tokens(30)
             .with_temperature(0.7);
         if tokenizer_path.exists() {

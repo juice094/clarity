@@ -129,10 +129,9 @@ impl Tool for TaskOutputTool {
         let task_id = helpers::required_str(&args, "task_id")?;
         let store = TaskStore::new(task_store_path()?);
 
-        let result_opt = store
-            .get_result_opt(task_id)
-            .await
-            .map_err(|e| ToolError::execution_failed(format!("Failed to read task result: {}", e)))?;
+        let result_opt = store.get_result_opt(task_id).await.map_err(|e| {
+            ToolError::execution_failed(format!("Failed to read task result: {}", e))
+        })?;
 
         match result_opt {
             Some(result) => {

@@ -47,7 +47,11 @@ impl McpServer for LlmMcpServer {
         }]
     }
 
-    async fn call_tool(&self, name: &str, args: Value) -> Result<ToolCallResult, clarity_mcp::McpError> {
+    async fn call_tool(
+        &self,
+        name: &str,
+        args: Value,
+    ) -> Result<ToolCallResult, clarity_mcp::McpError> {
         if name != "chat_completion" {
             return Err(clarity_mcp::McpError::RequestFailed(format!(
                 "Unknown tool: {}",

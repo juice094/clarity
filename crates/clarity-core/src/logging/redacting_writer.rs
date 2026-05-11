@@ -30,10 +30,7 @@ static CREDENTIAL_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         // Google API key
         r"AIza[a-zA-Z0-9_\-]{30,}",
     ];
-    patterns
-        .iter()
-        .filter_map(|p| Regex::new(p).ok())
-        .collect()
+    patterns.iter().filter_map(|p| Regex::new(p).ok()).collect()
 });
 
 /// Replace every credential match with `[REDACTED]`.

@@ -90,10 +90,7 @@ mod tests {
         let result = session.run_turn("user input").await;
 
         assert_eq!(result.unwrap(), "hello from mock");
-        assert_eq!(
-            mock.last_query.lock().as_ref().unwrap(),
-            "user input"
-        );
+        assert_eq!(mock.last_query.lock().as_ref().unwrap(), "user input");
     }
 
     #[tokio::test]

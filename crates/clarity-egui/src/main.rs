@@ -239,9 +239,9 @@ impl App {
                             if drag_resp.double_clicked() {
                                 let is_maximized =
                                     ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                                ctx.send_viewport_cmd(
-                                    egui::ViewportCommand::Maximized(!is_maximized),
-                                );
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
+                                    !is_maximized,
+                                ));
                             }
                         },
                     );

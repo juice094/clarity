@@ -5,8 +5,8 @@
 
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::ToolRegistry;
-use std::sync::{Arc};
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -79,9 +79,9 @@ pub mod chunking;
 pub mod compiler;
 pub mod embedding;
 pub mod extractor;
+pub mod flashcards;
 pub mod session_store;
 pub mod store;
-pub mod flashcards;
 pub mod ticker;
 pub mod types;
 
@@ -95,11 +95,11 @@ pub use bm25::{Bm25Index, IncrementalBm25Index};
 pub use compiler::MemoryCompiler;
 pub use embedding::{CosineIndex, SparseVector, TfidfVectorizer, VectorStore};
 pub use extractor::{FactExtractor, LlmClient};
+pub use flashcards::export_facts_to_flashcards;
 pub use session_store::SessionStore;
 pub use store::DecayConfig;
 pub use store::MemoryStore;
 pub use ticker::{MemoryTicker, SharedMemoryTicker, DEFAULT_TURNS_PER_SUMMARY};
-pub use flashcards::export_facts_to_flashcards;
 pub use types::{
     CompileConfig, CompileStatus, Fact, Flashcard, MemoryError, Message, MetaFact, Result,
     SessionNotes,

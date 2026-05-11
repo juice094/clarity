@@ -2,8 +2,8 @@
 
 use crate::agent::Agent;
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
+use clarity_llm::api::{LlmProvider, Message};
 
 /// Run lifecycle hooks before LLM input.
 pub(crate) async fn run_hooks(agent: &Agent, messages: &mut Vec<Message>) {

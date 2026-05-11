@@ -6,10 +6,10 @@ use crate::agent::compaction_service::CompactionService;
 use crate::agent::enhanced::TokenUsage;
 use crate::approval::{ApprovalMode, ApprovalRuntime};
 use crate::compaction::CompactionConfig;
-use clarity_llm::api::LlmProvider;
 use crate::memory::{ChunkConfig, Chunker, Memory, MemoryStore, SharedMemoryTicker};
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
+use clarity_llm::api::LlmProvider;
 use clarity_wire::{Wire, WireMessage};
 use std::collections::HashMap;
 use std::future::Future;
@@ -51,7 +51,9 @@ impl Agent {
                 let mut service = CompactionService::new(c.clone());
                 if let Some(ref path) = c.session_store_path {
                     if let Ok(store) = clarity_memory::SessionStore::new(path) {
-                        let session_id = c.session_id.clone()
+                        let session_id = c
+                            .session_id
+                            .clone()
                             .or_else(|| config.session_id.clone())
                             .unwrap_or_else(|| "default".to_string());
                         service = service.with_session_store(Arc::new(store), session_id);
@@ -60,9 +62,14 @@ impl Agent {
                 service
             }),
             memory_ticker: if let Some(turns) = config.memory_ticker_turns {
-                let output_dir = config.compiled_memory_dir.clone()
+                let output_dir = config
+                    .compiled_memory_dir
+                    .clone()
                     .unwrap_or_else(|| config.working_dir.join(".clarity_memory"));
-                Some(SharedMemoryTicker::new(clarity_memory::MemoryTicker::new(&output_dir, Some(turns))))
+                Some(SharedMemoryTicker::new(clarity_memory::MemoryTicker::new(
+                    &output_dir,
+                    Some(turns),
+                )))
             } else {
                 None
             },
@@ -376,27 +383,31 @@ impl Agent {
                     let store = match clarity_memory::MemoryStore::new_in_memory() {
                         Ok(s) => s,
                         Err(e) => {
-                            tracing::warn!("Failed to create in-memory store for memory compiler: {}", e);
+                            tracing::warn!(
+                                "Failed to create in-memory store for memory compiler: {}",
+                                e
+                            );
                             return;
                         }
                     };
-                    let session_store = self.compaction_service.as_ref()
+                    let session_store = self
+                        .compaction_service
+                        .as_ref()
                         .and_then(|s| s.session_store())
                         .map(|arc| (*arc).clone())
                         .unwrap_or_else(|| {
                             let path = self.config.working_dir.join(".clarity_sessions");
                             clarity_memory::SessionStore::new(&path).unwrap_or_else(|_| {
-                                clarity_memory::SessionStore::new(std::env::temp_dir().join("clarity_sessions"))
-                                    .expect("Failed to create fallback session store")
+                                clarity_memory::SessionStore::new(
+                                    std::env::temp_dir().join("clarity_sessions"),
+                                )
+                                .expect("Failed to create fallback session store")
                             })
                         });
                     let config = clarity_memory::CompileConfig::default();
-                    let compiler = Arc::new(tokio::sync::Mutex::new(clarity_memory::MemoryCompiler::new(
-                        store,
-                        session_store,
-                        adapter,
-                        config,
-                    )));
+                    let compiler = Arc::new(tokio::sync::Mutex::new(
+                        clarity_memory::MemoryCompiler::new(store, session_store, adapter, config),
+                    ));
                     let output_dir = compiled_dir.clone();
                     self.set_memory_compile_callback(move || {
                         let compiler = compiler.clone();
@@ -405,7 +416,8 @@ impl Agent {
                             let mut compiler = compiler.lock().await;
                             compiler.compile_all(&output_dir).await
                         }
-                    }).await;
+                    })
+                    .await;
                 }
             }
         }
@@ -751,7 +763,8 @@ impl Agent {
         specs: Vec<clarity_contract::subagent::RunSpec>,
         config: clarity_contract::subagent::ParallelConfig,
         progress: Option<clarity_contract::subagent::BatchProgressHandle>,
-    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError> {
+    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError>
+    {
         let orchestrator = self.orchestrator.as_ref().ok_or_else(|| {
             clarity_contract::subagent::SubagentError::BuildFailed(
                 "No subagent orchestrator configured".to_string(),

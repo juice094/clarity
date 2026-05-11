@@ -82,8 +82,23 @@ pub fn paint_globe(painter: &Painter, center: Pos2, color: Color32) {
     let stroke = Stroke::new(1.5, color);
     let r = 5.0;
     painter.circle_stroke(center, r, stroke);
-    painter.line_segment([center + Vec2::new(-r, 0.0), center + Vec2::new(r, 0.0)], stroke);
+    painter.line_segment(
+        [center + Vec2::new(-r, 0.0), center + Vec2::new(r, 0.0)],
+        stroke,
+    );
     let arc_y = r * 0.55;
-    painter.line_segment([center + Vec2::new(-r * 0.75, -arc_y), center + Vec2::new(r * 0.75, -arc_y)], stroke);
-    painter.line_segment([center + Vec2::new(-r * 0.75, arc_y), center + Vec2::new(r * 0.75, arc_y)], stroke);
+    painter.line_segment(
+        [
+            center + Vec2::new(-r * 0.75, -arc_y),
+            center + Vec2::new(r * 0.75, -arc_y),
+        ],
+        stroke,
+    );
+    painter.line_segment(
+        [
+            center + Vec2::new(-r * 0.75, arc_y),
+            center + Vec2::new(r * 0.75, arc_y),
+        ],
+        stroke,
+    );
 }

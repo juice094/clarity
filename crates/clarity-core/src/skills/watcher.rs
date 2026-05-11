@@ -30,32 +30,27 @@ impl SkillWatcher {
     pub fn start(registry: SkillRegistry, paths: Vec<PathBuf>) -> Option<Self> {
         let (tx, rx) = std::sync::mpsc::channel::<notify::Event>();
 
-        let mut watcher = match notify::recommended_watcher(
-            move |res: Result<notify::Event, notify::Error>| {
+        let mut watcher =
+            match notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
                     let _ = tx.send(event);
                 }
-            },
-        ) {
-            Ok(w) => w,
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialise file-system watcher for skills: {}. \
+            }) {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to initialise file-system watcher for skills: {}. \
                      Hot-reload is disabled.",
-                    e
-                );
-                return None;
-            }
-        };
+                        e
+                    );
+                    return None;
+                }
+            };
 
         for path in &paths {
             if path.exists() {
                 if let Err(e) = watcher.watch(path, notify::RecursiveMode::NonRecursive) {
-                    tracing::warn!(
-                        "Failed to watch skill directory {}: {}",
-                        path.display(),
-                        e
-                    );
+                    tracing::warn!("Failed to watch skill directory {}: {}", path.display(), e);
                 }
             }
         }

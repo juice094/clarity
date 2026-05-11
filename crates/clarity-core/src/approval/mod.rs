@@ -8,7 +8,7 @@ use crate::types::ToolCall;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 use tokio::sync::oneshot;

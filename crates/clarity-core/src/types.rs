@@ -88,5 +88,3 @@ pub struct PlanExecutionState {
     pub status: PlanStepExecutionStatus,
     pub result: Option<PlanResult>,
 }
-
-

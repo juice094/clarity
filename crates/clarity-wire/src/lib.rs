@@ -15,10 +15,10 @@
 //! - **Soul side**: Produces messages (TurnBegin, StepBegin, ContentPart, etc.)
 //! - **UI side**: Consumes messages for display
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::{Arc};
-use parking_lot::Mutex;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, trace, warn};
 

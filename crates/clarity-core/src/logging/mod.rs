@@ -40,8 +40,7 @@ pub fn init() {
 /// First attempts to read `RUST_LOG`; if that fails or is unset the
 /// provided `default` string is used.
 pub fn init_with_default(default: &str) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(default));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
     init_with_filter(filter);
 }
 

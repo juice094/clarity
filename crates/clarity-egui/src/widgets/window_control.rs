@@ -16,8 +16,16 @@ pub fn window_control_button(
     let desired_size = egui::vec2(36.0, 36.0);
     let (_id, rect) = ui.allocate_space(desired_size);
     let hovered = ui.rect_contains_pointer(rect);
-    let fill = if hovered { hover_fill } else { egui::Color32::TRANSPARENT };
-    let color = if hovered { hover_icon_color } else { normal_icon_color };
+    let fill = if hovered {
+        hover_fill
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let color = if hovered {
+        hover_icon_color
+    } else {
+        normal_icon_color
+    };
 
     ui.put(
         rect,

@@ -306,4 +306,3 @@ pub(crate) async fn file_glob(
         ),
     }
 }
-

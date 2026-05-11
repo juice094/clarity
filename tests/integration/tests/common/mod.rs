@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use clarity_core::agent::{LlmProvider, LlmResponse, Message, ToolCall};
 use clarity_core::error::AgentError;
 use clarity_core::llm::StreamDelta;
-use serde_json::Value;
 use parking_lot::Mutex;
+use serde_json::Value;
 
 /// A mock LLM that returns a predetermined sequence of responses.
 /// Once the sequence is exhausted it returns a simple text response.

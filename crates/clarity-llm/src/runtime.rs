@@ -25,9 +25,9 @@
 //! channel messages adds serde tag complexity and handler overhead for
 //! zero benefit.
 
-use clarity_contract::AgentError;
 use crate::api::LlmProvider;
 use crate::{AnthropicLlm, LlamaServerProvider, OllamaProvider, OpenAiCompatibleLlm};
+use clarity_contract::AgentError;
 
 /// Runtime provider configuration set by the frontend settings panel.
 ///

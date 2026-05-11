@@ -16,10 +16,14 @@ impl MeshRouter {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
-        Self { fallback_chain: chain }
+        Self {
+            fallback_chain: chain,
+        }
     }
 
     pub fn with_chain(chain: Vec<String>) -> Self {
-        Self { fallback_chain: chain }
+        Self {
+            fallback_chain: chain,
+        }
     }
 }

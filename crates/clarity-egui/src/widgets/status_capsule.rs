@@ -40,10 +40,7 @@ pub fn status_capsule(
 
     let margin_x = theme.space_8;
     let margin_y = 5.0_f32;
-    let desired_size = egui::vec2(
-        inner_w + margin_x * 2.0,
-        inner_h + margin_y * 2.0,
-    );
+    let desired_size = egui::vec2(inner_w + margin_x * 2.0, inner_h + margin_y * 2.0);
 
     let sense = if is_clickable {
         egui::Sense::click()
@@ -53,34 +50,31 @@ pub fn status_capsule(
     let (rect, response) = ui.allocate_exact_size(desired_size, sense);
 
     // ── Background frame with subtle stroke to prevent visual merging ──
-    ui.allocate_new_ui(
-        egui::UiBuilder::new().max_rect(rect),
-        |ui| {
-            egui::Frame::new()
-                .fill(theme.bg_elevated)
-                .stroke(egui::Stroke::new(1.0, theme.border))
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .inner_margin(egui::Margin::symmetric(margin_x as i8, margin_y as i8))
-                .show(ui, |ui| {
-                    ui.set_min_size(ui.available_size());
-                    ui.horizontal(|ui| {
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::Frame::new()
+            .fill(theme.bg_elevated)
+            .stroke(egui::Stroke::new(1.0, theme.border))
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+            .inner_margin(egui::Margin::symmetric(margin_x as i8, margin_y as i8))
+            .show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("●")
+                            .size(theme.text_sm)
+                            .color(dot_color),
+                    );
+                    if has_label {
+                        ui.add_space(gap);
                         ui.label(
-                            egui::RichText::new("●")
-                                .size(theme.text_sm)
-                                .color(dot_color),
+                            egui::RichText::new(label)
+                                .size(theme.text_xs)
+                                .color(label_color),
                         );
-                        if has_label {
-                            ui.add_space(gap);
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .size(theme.text_xs)
-                                    .color(label_color),
-                            );
-                        }
-                    });
+                    }
                 });
-        },
-    );
+            });
+    });
 
     response
 }

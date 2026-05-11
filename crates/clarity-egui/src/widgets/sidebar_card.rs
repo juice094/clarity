@@ -36,77 +36,74 @@ pub fn sidebar_card(
         theme.text_dim
     };
 
-    ui.allocate_new_ui(
-        egui::UiBuilder::new().max_rect(rect),
-        |ui| {
-            egui::Frame::new()
-                .fill(fill)
-                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                .stroke(egui::Stroke::NONE)
-                .inner_margin(egui::Margin::symmetric(
-                    theme.space_12 as i8,
-                    theme.space_8 as i8,
-                ))
-                .show(ui, |ui| {
-                    // Force the frame content to fill the allocated rect.
-                    ui.set_min_size(ui.available_size());
-                    ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
-                            // ---- Icon (Phosphor) ----
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::Frame::new()
+            .fill(fill)
+            .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+            .stroke(egui::Stroke::NONE)
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_12 as i8,
+                theme.space_8 as i8,
+            ))
+            .show(ui, |ui| {
+                // Force the frame content to fill the allocated rect.
+                ui.set_min_size(ui.available_size());
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        // ---- Icon (Phosphor) ----
+                        ui.label(
+                            egui::RichText::new(icon)
+                                .font(theme.font_icon(theme.text_base))
+                                .color(text_color),
+                        );
+
+                        ui.add_space(theme.space_4);
+
+                        // ---- Text stack ----
+                        ui.vertical(|ui| {
+                            // Title
                             ui.label(
-                                egui::RichText::new(icon)
-                                    .font(theme.font_icon(theme.text_base))
+                                egui::RichText::new(title)
+                                    .font(theme.font_bold(theme.text_base))
                                     .color(text_color),
                             );
 
-                            ui.add_space(theme.space_4);
+                            // Subtitle with status dot
+                            if let Some(sub) = subtitle {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("●")
+                                            .size(theme.text_xs * 1.2)
+                                            .color(theme.status_online),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(sub)
+                                            .font(theme.font(theme.text_xs))
+                                            .color(theme.text_dim),
+                                    );
+                                });
+                            }
 
-                            // ---- Text stack ----
-                            ui.vertical(|ui| {
-                                // Title
-                                ui.label(
-                                    egui::RichText::new(title)
-                                        .font(theme.font_bold(theme.text_base))
-                                        .color(text_color),
-                                );
-
-                                // Subtitle with status dot
-                                if let Some(sub) = subtitle {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("●")
-                                                .size(theme.text_xs * 1.2)
-                                                .color(theme.status_online),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new(sub)
-                                                .font(theme.font(theme.text_xs))
-                                                .color(theme.text_dim),
-                                        );
-                                    });
-                                }
-
-                                // Badge with micro dot
-                                if let Some(badge_text) = badge {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("●")
-                                                .size(4.0)
-                                                .color(theme.border.linear_multiply(0.6)),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new(badge_text)
-                                                .font(theme.font(theme.text_xs))
-                                                .color(theme.text_dim),
-                                        );
-                                    });
-                                }
-                            });
+                            // Badge with micro dot
+                            if let Some(badge_text) = badge {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("●")
+                                            .size(4.0)
+                                            .color(theme.border.linear_multiply(0.6)),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(badge_text)
+                                            .font(theme.font(theme.text_xs))
+                                            .color(theme.text_dim),
+                                    );
+                                });
+                            }
                         });
                     });
                 });
-        },
-    );
+            });
+    });
 
     response
 }

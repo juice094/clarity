@@ -10,18 +10,18 @@
 // P1-2: Import the trait alongside the concrete type.
 // `execute_agent` now accepts `&dyn AgentExecutor`, but `build_agent` still
 // returns the concrete `Agent` so that caller-side builder methods work.
-use clarity_core::agent::{Agent, AgentExecutor};
-use clarity_core::approval::{ApprovalMode, ApprovalRuntime};
-use clarity_core::error::AgentError;
-use clarity_core::registry::ToolRegistry;
-use clarity_llm::api::{LlmProvider, Message};
-use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use crate::builder::SubagentBuilder;
 use crate::store::SubagentStore;
 use clarity_contract::subagent::{
     AgentTypeDefinition, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, RunSpec,
     SubagentError, SubagentProgressEvent, SubagentResult, SubagentStatus,
 };
+use clarity_core::agent::{Agent, AgentExecutor};
+use clarity_core::approval::{ApprovalMode, ApprovalRuntime};
+use clarity_core::error::AgentError;
+use clarity_core::registry::ToolRegistry;
+use clarity_llm::api::{LlmProvider, Message};
+use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use clarity_wire::{Wire, WireMessage};
 
 use std::path::{Path, PathBuf};

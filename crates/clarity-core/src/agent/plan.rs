@@ -6,8 +6,8 @@
 
 use super::Agent;
 use crate::error::AgentError;
-use clarity_llm::api::{LlmResponse, Message};
 use crate::types::{Plan, PlanExecutionState, PlanResult, PlanStepExecutionStatus};
+use clarity_llm::api::{LlmResponse, Message};
 
 impl Plan {
     /// Render the plan as human-readable Markdown.
@@ -304,7 +304,10 @@ impl PlanExecutionController {
 
     /// All completed results so far (includes Failed and Skipped steps).
     pub fn results(&self) -> Vec<PlanResult> {
-        self.states.iter().filter_map(|s| s.result.clone()).collect()
+        self.states
+            .iter()
+            .filter_map(|s| s.result.clone())
+            .collect()
     }
 
     /// Whether any Pending steps remain.
@@ -321,13 +324,20 @@ impl PlanExecutionController {
             .states
             .iter()
             .position(|s| s.step_id == step_id)
-            .ok_or_else(|| AgentError::Tool(crate::error::ToolError::invalid_params(format!("Step '{}' not found", step_id))))?;
+            .ok_or_else(|| {
+                AgentError::Tool(crate::error::ToolError::invalid_params(format!(
+                    "Step '{}' not found",
+                    step_id
+                )))
+            })?;
         let state = &mut self.states[idx];
         if state.status != PlanStepExecutionStatus::Pending {
-            return Err(AgentError::Tool(crate::error::ToolError::invalid_params(format!(
-                "Cannot skip step '{}' with status {:?}",
-                step_id, state.status
-            ))));
+            return Err(AgentError::Tool(crate::error::ToolError::invalid_params(
+                format!(
+                    "Cannot skip step '{}' with status {:?}",
+                    step_id, state.status
+                ),
+            )));
         }
         state.status = PlanStepExecutionStatus::Skipped;
         // If we skipped the step at current_idx, advance past it so
@@ -344,12 +354,19 @@ impl PlanExecutionController {
             .states
             .iter_mut()
             .find(|s| s.step_id == step_id)
-            .ok_or_else(|| AgentError::Tool(crate::error::ToolError::invalid_params(format!("Step '{}' not found", step_id))))?;
+            .ok_or_else(|| {
+                AgentError::Tool(crate::error::ToolError::invalid_params(format!(
+                    "Step '{}' not found",
+                    step_id
+                )))
+            })?;
         if state.status != PlanStepExecutionStatus::Failed {
-            return Err(AgentError::Tool(crate::error::ToolError::invalid_params(format!(
-                "Cannot retry step '{}' with status {:?}",
-                step_id, state.status
-            ))));
+            return Err(AgentError::Tool(crate::error::ToolError::invalid_params(
+                format!(
+                    "Cannot retry step '{}' with status {:?}",
+                    step_id, state.status
+                ),
+            )));
         }
         state.status = PlanStepExecutionStatus::Pending;
         state.result = None;
@@ -427,8 +444,8 @@ impl PlanExecutionController {
 mod tests {
     use super::*;
     use crate::agent::AgentConfig;
-    use clarity_llm::api::LlmProvider;
     use crate::types::PlanStep;
+    use clarity_llm::api::LlmProvider;
     use std::sync::Arc;
 
     #[tokio::test]
@@ -566,7 +583,10 @@ mod tests {
     fn test_controller_init() {
         let controller = PlanExecutionController::new(sample_plan());
         assert_eq!(controller.states().len(), 3);
-        assert!(controller.states().iter().all(|s| s.status == PlanStepExecutionStatus::Pending));
+        assert!(controller
+            .states()
+            .iter()
+            .all(|s| s.status == PlanStepExecutionStatus::Pending));
         assert!(controller.has_next());
     }
 
@@ -574,7 +594,10 @@ mod tests {
     fn test_skip_pending_step() {
         let mut controller = PlanExecutionController::new(sample_plan());
         controller.skip_step("2").unwrap();
-        assert_eq!(controller.states()[1].status, PlanStepExecutionStatus::Skipped);
+        assert_eq!(
+            controller.states()[1].status,
+            PlanStepExecutionStatus::Skipped
+        );
         assert!(controller.has_next());
     }
 
@@ -602,7 +625,10 @@ mod tests {
         });
 
         controller.retry_step("1").unwrap();
-        assert_eq!(controller.states()[0].status, PlanStepExecutionStatus::Pending);
+        assert_eq!(
+            controller.states()[0].status,
+            PlanStepExecutionStatus::Pending
+        );
         assert!(controller.states()[0].result.is_none());
     }
 
@@ -657,7 +683,10 @@ mod tests {
         controller.skip_step("1").unwrap();
         // Skipping the step at current_idx should advance it
         assert_eq!(controller.current_idx, 1);
-        assert_eq!(controller.states()[0].status, PlanStepExecutionStatus::Skipped);
+        assert_eq!(
+            controller.states()[0].status,
+            PlanStepExecutionStatus::Skipped
+        );
     }
 
     #[test]
@@ -678,7 +707,10 @@ mod tests {
         controller.retry_step("1").unwrap();
         // current_idx should rewind so the retried step is picked up
         assert_eq!(controller.current_idx, 0);
-        assert_eq!(controller.states()[0].status, PlanStepExecutionStatus::Pending);
+        assert_eq!(
+            controller.states()[0].status,
+            PlanStepExecutionStatus::Pending
+        );
         assert!(controller.states()[0].result.is_none());
     }
 

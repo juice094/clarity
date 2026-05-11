@@ -8,11 +8,11 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use tracing::{debug, error, warn};
 
-use clarity_contract::ApprovalMode;
-use clarity_contract::ToolError;
 use crate::file::is_sensitive_file;
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
+use clarity_contract::ApprovalMode;
+use clarity_contract::ToolError;
 
 /// Best-effort scan of a shell command string for references to sensitive files.
 fn detect_sensitive_in_command(command: &str) -> Option<String> {

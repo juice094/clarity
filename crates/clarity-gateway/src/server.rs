@@ -19,12 +19,12 @@ use tracing::{info, warn};
 use crate::handlers;
 use crate::session_store::PersistentSessionStore;
 use chrono::{DateTime, Utc};
+use clarity_contract::subagent::BatchProgress;
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_contract::subagent::BatchProgress;
-use std::collections::HashMap;
 use parking_lot::Mutex;
+use std::collections::HashMap;
 
 /// 应用状态
 pub struct AppState {
@@ -239,7 +239,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/chat-v1.html", get(serve_chat_v1))
         .nest_service("/assets", ServeDir::new(assets_dir))
         .route("/health", get(handlers::chat::health_check))
-        .route("/v1/chat/completions", post(handlers::chat::chat_completions))
+        .route(
+            "/v1/chat/completions",
+            post(handlers::chat::chat_completions),
+        )
         .route(
             "/v1/tasks",
             post(handlers::tasks::create_task).get(handlers::tasks::list_tasks),
@@ -257,7 +260,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
         .route("/api/files/read", get(handlers::files::file_read))
         .route("/api/files/write", post(handlers::files::file_write))
         .route("/api/files/glob", get(handlers::files::file_glob))
-        .route("/api/provider", post(handlers::admin::admin_switch_provider))
+        .route(
+            "/api/provider",
+            post(handlers::admin::admin_switch_provider),
+        )
         .route("/api/mcp/servers", get(handlers::mcp::list_mcp_servers))
         .route(
             "/api/mcp/servers/:name",
@@ -269,7 +275,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             "/api/cron/tasks",
             get(handlers::cron::list_cron_tasks).post(handlers::cron::create_cron_task),
         )
-        .route("/api/cron/tasks/:id", delete(handlers::cron::delete_cron_task))
+        .route(
+            "/api/cron/tasks/:id",
+            delete(handlers::cron::delete_cron_task),
+        )
         .route("/api/search", post(handlers::memory::search_memory))
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
@@ -309,11 +318,15 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
         .route("/api/stats", get(handlers::admin::admin_stats))
         .route("/api/tools", get(handlers::admin::admin_tools))
         .route("/api/models", get(handlers::admin::admin_models))
-        .route("/api/provider", post(handlers::admin::admin_switch_provider))
+        .route(
+            "/api/provider",
+            post(handlers::admin::admin_switch_provider),
+        )
         .route("/api/mesh", get(handlers::admin::admin_mesh_status))
         .route(
             "/api/approval-mode",
-            get(handlers::admin::admin_get_approval_mode).post(handlers::admin::admin_set_approval_mode),
+            get(handlers::admin::admin_get_approval_mode)
+                .post(handlers::admin::admin_set_approval_mode),
         )
         .route(
             "/api/config",

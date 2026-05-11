@@ -6,8 +6,8 @@
 use crate::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
 use clarity_wire::{Wire, WireMessage};
 use notify::Watcher;
-use std::sync::{Arc};
 use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Duration;
 use tao::{
     event::Event,

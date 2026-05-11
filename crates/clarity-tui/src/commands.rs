@@ -192,7 +192,11 @@ impl CommandHandler for SkillUseCommand {
                     format!(
                         "Skill {}: {}",
                         id,
-                        if now_active { "已激活" } else { "已取消激活" }
+                        if now_active {
+                            "已激活"
+                        } else {
+                            "已取消激活"
+                        }
                     ),
                     MessageType::System,
                 ));

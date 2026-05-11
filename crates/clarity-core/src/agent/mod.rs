@@ -70,8 +70,8 @@ pub use ops::Op;
 
 // Re-export core API types from their canonical locations for backwards compatibility.
 // New code should import directly from `crate::types` or `clarity_llm::api`.
-pub use clarity_llm::api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
 pub use crate::types::{FunctionCall, ToolCall};
+pub use clarity_llm::api::{LlmProvider, LlmResponse, Message, MessageRole, StreamDelta};
 
 // Re-export config
 pub use config::AgentConfig;
@@ -318,7 +318,11 @@ impl Agent {
             .without_git_context();
 
             match orchestrator
-                .run_parallel(vec![spec], ParallelConfig::new().with_max_concurrency(1), None)
+                .run_parallel(
+                    vec![spec],
+                    ParallelConfig::new().with_max_concurrency(1),
+                    None,
+                )
                 .await
             {
                 Ok(result) => {

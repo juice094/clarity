@@ -83,7 +83,10 @@ impl TeamCoordinator {
             .add_many(team.members)
             .with_config(team.config);
 
-        let parallel_result = self.executor.execute(batch, None, Some(cancel.clone())).await;
+        let parallel_result = self
+            .executor
+            .execute(batch, None, Some(cancel.clone()))
+            .await;
 
         // Gracefully stop the collector.
         cancel.cancel();

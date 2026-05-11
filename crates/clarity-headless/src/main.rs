@@ -5,8 +5,6 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-#[cfg(feature = "local-llm")]
-use clarity_llm::{LocalGgufConfig, LocalGgufProvider};
 use clarity_core::{
     agent::{
         jumpy::{
@@ -22,6 +20,8 @@ use clarity_core::{
     Agent, ToolRegistry,
 };
 use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm};
+#[cfg(feature = "local-llm")]
+use clarity_llm::{LocalGgufConfig, LocalGgufProvider};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;

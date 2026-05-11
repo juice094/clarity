@@ -14,10 +14,10 @@ use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
 
-use clarity_contract::ToolError;
 use crate::file::{is_sensitive_file, sniff_media_file};
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
 
 /// Maximum default file size: 5MB (5120 KB)
 const DEFAULT_MAX_SIZE_KB: u64 = 5120;

@@ -24,10 +24,7 @@ impl McpLlmProvider {
     ///
     /// `command` is the executable path (e.g. `cargo` or a compiled binary).
     /// `args` are passed to the command (e.g. `["run", "--example", "mcp_llm_stdio_server"]`).
-    pub async fn connect_stdio(
-        command: &str,
-        args: &[String],
-    ) -> Result<Self, AgentError> {
+    pub async fn connect_stdio(command: &str, args: &[String]) -> Result<Self, AgentError> {
         let mut builder = clarity_mcp::McpClientBuilder::stdio("llm-mcp", command);
         for arg in args {
             builder = builder.arg(arg);

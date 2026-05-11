@@ -5,12 +5,12 @@ use crate::store::DecayConfig;
 use crate::types::{Fact, MemoryError, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc};
-use parking_lot::Mutex;
+use std::sync::Arc;
 use tracing::{debug, info, instrument};
 
 /// Cached incremental BM25 index paired with fact ID mappings.

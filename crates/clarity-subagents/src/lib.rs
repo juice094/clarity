@@ -29,12 +29,8 @@ pub use clarity_contract::subagent::{
 
 // Re-export local types with logic.
 pub use builder::SubagentBuilder;
-pub use parallel::{
-    run_parallel, ParallelExecutor, SubagentBatch,
-};
-pub use runner::{
-    ExecutionContext, OutputCollector, SubagentRunner,
-};
+pub use parallel::{run_parallel, ParallelExecutor, SubagentBatch};
+pub use runner::{ExecutionContext, OutputCollector, SubagentRunner};
 pub use store::SubagentStore;
 pub use team::TeamCoordinator;
 
@@ -95,9 +91,7 @@ impl SubagentManager {
     pub async fn run(
         &mut self,
         spec: RunSpec,
-        progress_tx: Option<
-            tokio::sync::mpsc::Sender<SubagentProgressEvent>,
-        >,
+        progress_tx: Option<tokio::sync::mpsc::Sender<SubagentProgressEvent>>,
     ) -> Result<SubagentResult, SubagentError> {
         let runner = if let Some(tx) = progress_tx {
             self.runner.clone().with_progress_tx(tx)
@@ -208,7 +202,8 @@ impl clarity_contract::subagent::SubagentOrchestrator for SubagentManager {
         specs: Vec<clarity_contract::subagent::RunSpec>,
         config: clarity_contract::subagent::ParallelConfig,
         progress: Option<clarity_contract::subagent::BatchProgressHandle>,
-    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError> {
+    ) -> Result<clarity_contract::subagent::ParallelResult, clarity_contract::subagent::SubagentError>
+    {
         self.run_parallel(specs, config, progress, None)
             .await
             .map_err(|e| clarity_contract::subagent::SubagentError::BuildFailed(e.to_string()))
@@ -217,7 +212,8 @@ impl clarity_contract::subagent::SubagentOrchestrator for SubagentManager {
     async fn run_team(
         &self,
         team: clarity_contract::subagent::AgentTeam,
-    ) -> Result<clarity_contract::subagent::TeamResult, clarity_contract::subagent::SubagentError> {
+    ) -> Result<clarity_contract::subagent::TeamResult, clarity_contract::subagent::SubagentError>
+    {
         self.run_team(team)
             .await
             .map_err(|e| clarity_contract::subagent::SubagentError::BuildFailed(e.to_string()))

@@ -1,15 +1,15 @@
 //! `AgentHook` implementation that syncs file edits to an LSP server
 //! and injects diagnostics into the conversation.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc};
 use parking_lot::RwLock;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use crate::agent::hooks::{AgentHook, HookResult};
 use crate::agent::lsp::client::LspClient;
 use crate::agent::lsp::config::LspClientConfig;
-use clarity_llm::api::Message;
 use crate::types::ToolCall;
+use clarity_llm::api::Message;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 

@@ -19,8 +19,8 @@
 //! ```
 
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, Message, MessageRole};
 use async_trait::async_trait;
+use clarity_llm::api::{LlmProvider, Message, MessageRole};
 use std::sync::OnceLock;
 
 /// Default trigger ratio for compaction (80% of max tokens)

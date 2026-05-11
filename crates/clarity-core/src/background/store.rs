@@ -326,7 +326,10 @@ impl TaskStore {
     }
 
     /// 获取任务结果（graceful：文件不存在时返回 None 而非 Error）
-    pub async fn get_result_opt(&self, task_id: impl AsRef<str>) -> anyhow::Result<Option<TaskResult>> {
+    pub async fn get_result_opt(
+        &self,
+        task_id: impl AsRef<str>,
+    ) -> anyhow::Result<Option<TaskResult>> {
         let task_id = task_id.as_ref();
         let result_path = self.task_dir(task_id).join("result.json");
         if !result_path.exists() {

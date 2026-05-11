@@ -2,13 +2,10 @@ mod common;
 
 use std::net::SocketAddr;
 
-use axum::{
-    routing::post,
-    Json, Router,
-};
+use axum::{routing::post, Json, Router};
 use clarity_core::mcp::{register_mcp_tools, McpRegistry};
-use clarity_mcp::McpClient;
 use clarity_core::registry::ToolRegistry;
+use clarity_mcp::McpClient;
 use serde_json::Value;
 
 /// Start a mock MCP HTTP server on a random local port.
@@ -16,57 +13,52 @@ use serde_json::Value;
 async fn start_mock_mcp_server() -> SocketAddr {
     let app = Router::new().route(
         "/",
-        post(
-            |Json(body): Json<Value>| async move {
-                let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
-                match method {
-                    "tools/list" => Json(serde_json::json!({
+        post(|Json(body): Json<Value>| async move {
+            let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+            match method {
+                "tools/list" => Json(serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "result": {
+                        "tools": [{
+                            "name": "greet",
+                            "description": "Returns a greeting",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"}
+                                },
+                                "required": ["name"]
+                            }
+                        }]
+                    }
+                })),
+                "tools/call" => {
+                    let args = body
+                        .get("params")
+                        .and_then(|p| p.get("arguments"))
+                        .cloned()
+                        .unwrap_or_default();
+                    let name = args.get("name").and_then(|n| n.as_str()).unwrap_or("world");
+                    Json(serde_json::json!({
                         "jsonrpc": "2.0",
                         "id": body.get("id"),
                         "result": {
-                            "tools": [{
-                                "name": "greet",
-                                "description": "Returns a greeting",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {"type": "string"}
-                                    },
-                                    "required": ["name"]
-                                }
-                            }]
+                            "content": [{
+                                "type": "text",
+                                "text": format!("Hello, {}!", name)
+                            }],
+                            "isError": false
                         }
-                    })),
-                    "tools/call" => {
-                        let args = body
-                            .get("params")
-                            .and_then(|p| p.get("arguments"))
-                            .cloned()
-                            .unwrap_or_default();
-                        let name = args
-                            .get("name")
-                            .and_then(|n| n.as_str())
-                            .unwrap_or("world");
-                        Json(serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": body.get("id"),
-                            "result": {
-                                "content": [{
-                                    "type": "text",
-                                    "text": format!("Hello, {}!", name)
-                                }],
-                                "isError": false
-                            }
-                        }))
-                    }
-                    _ => Json(serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": body.get("id"),
-                        "error": {"code": -32601, "message": "Method not found"}
-                    })),
+                    }))
                 }
-            },
-        ),
+                _ => Json(serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": body.get("id"),
+                    "error": {"code": -32601, "message": "Method not found"}
+                })),
+            }
+        }),
     );
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -95,7 +87,10 @@ async fn test_mcp_tool_registration_and_execution() {
     // Build HTTP MCP client.
     let config = clarity_mcp::McpServerConfig::http("mock", &url);
     let mut client = clarity_mcp::HttpMcpClient::new(config);
-    client.connect().await.expect("Failed to connect to mock MCP server");
+    client
+        .connect()
+        .await
+        .expect("Failed to connect to mock MCP server");
 
     // Register client in McpRegistry.
     let mut mcp_registry = McpRegistry::new();
@@ -118,9 +113,12 @@ async fn test_mcp_tool_registration_and_execution() {
     // Verify tool schema is present.
     let schemas = tool_registry.get_tool_schemas().unwrap();
     let tools = schemas.as_array().unwrap();
-    let greet_schema = tools
-        .iter()
-        .find(|s| s.get("function").and_then(|f| f.get("name")).and_then(|n| n.as_str()) == Some("mock_greet"));
+    let greet_schema = tools.iter().find(|s| {
+        s.get("function")
+            .and_then(|f| f.get("name"))
+            .and_then(|n| n.as_str())
+            == Some("mock_greet")
+    });
     assert!(greet_schema.is_some(), "Expected schema for 'mock_greet'");
 }
 

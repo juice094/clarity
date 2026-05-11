@@ -25,8 +25,8 @@ struct DevMcpServer {
 
 impl DevMcpServer {
     fn new() -> Self {
-        let workspace_root = std::env::current_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let workspace_root =
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         Self { workspace_root }
     }
 
@@ -39,8 +39,12 @@ impl DevMcpServer {
 
         let output = timeout(Duration::from_secs(300), cmd.output())
             .await
-            .map_err(|_| clarity_mcp::McpError::RequestFailed("cargo command timed out after 300s".into()))?
-            .map_err(|e| clarity_mcp::McpError::RequestFailed(format!("failed to spawn cargo: {}", e)))?;
+            .map_err(|_| {
+                clarity_mcp::McpError::RequestFailed("cargo command timed out after 300s".into())
+            })?
+            .map_err(|e| {
+                clarity_mcp::McpError::RequestFailed(format!("failed to spawn cargo: {}", e))
+            })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -82,7 +86,9 @@ impl McpServer for DevMcpServer {
             },
             McpTool {
                 name: "cargo_clippy".into(),
-                description: Some("Run cargo clippy --workspace --lib --bins --tests -- -D warnings".into()),
+                description: Some(
+                    "Run cargo clippy --workspace --lib --bins --tests -- -D warnings".into(),
+                ),
                 input_schema: serde_json::json!({ "type": "object", "properties": {} }),
             },
             McpTool {
@@ -93,13 +99,32 @@ impl McpServer for DevMcpServer {
         ]
     }
 
-    async fn call_tool(&self, name: &str, _args: Value) -> Result<ToolCallResult, clarity_mcp::McpError> {
+    async fn call_tool(
+        &self,
+        name: &str,
+        _args: Value,
+    ) -> Result<ToolCallResult, clarity_mcp::McpError> {
         match name {
             "cargo_check" => self.run_cargo(&["check", "--workspace"]).await,
             "cargo_test" => self.run_cargo(&["test", "--workspace", "--lib"]).await,
-            "cargo_clippy" => self.run_cargo(&["clippy", "--workspace", "--lib", "--bins", "--tests", "--", "-D", "warnings"]).await,
+            "cargo_clippy" => {
+                self.run_cargo(&[
+                    "clippy",
+                    "--workspace",
+                    "--lib",
+                    "--bins",
+                    "--tests",
+                    "--",
+                    "-D",
+                    "warnings",
+                ])
+                .await
+            }
             "cargo_fmt_check" => self.run_cargo(&["fmt", "--all", "--", "--check"]).await,
-            _ => Err(clarity_mcp::McpError::RequestFailed(format!("Unknown tool: {}", name))),
+            _ => Err(clarity_mcp::McpError::RequestFailed(format!(
+                "Unknown tool: {}",
+                name
+            ))),
         }
     }
 }

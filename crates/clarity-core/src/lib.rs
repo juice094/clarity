@@ -68,8 +68,8 @@ pub mod view_models;
 
 // Re-export core types
 pub use agent::Agent;
-pub use error::{AgentError, ToolError};
 pub use clarity_llm::{AnthropicLlm, KimiLlm, LlmFactory, OllamaProvider, OpenAiCompatibleLlm};
+pub use error::{AgentError, ToolError};
 pub use registry::ToolRegistry;
 pub use tools::{Tool, ToolContext, ToolResult};
 

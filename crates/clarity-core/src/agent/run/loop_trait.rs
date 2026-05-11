@@ -2,8 +2,8 @@
 
 use crate::agent::Agent;
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, Message};
 use crate::types::ToolCall;
+use clarity_llm::api::{LlmProvider, Message};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -216,9 +216,9 @@ fn all_tools_filtered(tools: &serde_json::Value) -> bool {
 mod tests {
     use super::*;
     use crate::agent::{Agent, AgentConfig};
-    use clarity_llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
     use crate::registry::ToolRegistry;
     use crate::types::{FunctionCall, ToolCall};
+    use clarity_llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 

@@ -77,9 +77,7 @@ pub async fn build_provider_from_config(
     cfg: &SetConfigRequest,
 ) -> Result<Box<dyn clarity_core::agent::LlmProvider>, String> {
     use clarity_llm::LlmFactory;
-    use clarity_llm::{
-        AnthropicLlm, DeepSeekProvider, KimiLlm, OAuthLlm, OpenAiCompatibleLlm,
-    };
+    use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
 
     let provider_lower = cfg.provider.to_lowercase();
     match provider_lower.as_str() {
@@ -216,4 +214,3 @@ pub(crate) async fn admin_set_config(
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))),
     }
 }
-

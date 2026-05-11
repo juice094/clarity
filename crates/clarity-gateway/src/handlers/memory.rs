@@ -1,9 +1,7 @@
 use axum::{
     extract::Json,
     http::StatusCode,
-    response::{
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 

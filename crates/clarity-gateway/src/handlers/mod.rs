@@ -1,14 +1,12 @@
-
-
-pub mod chat;
 pub mod admin;
-pub mod tasks;
+pub mod chat;
 pub mod config;
-pub mod files;
-pub mod sessions;
-pub mod mcp;
 pub mod cron;
+pub mod files;
+pub mod mcp;
 pub mod memory;
+pub mod sessions;
+pub mod tasks;
 
 /// Trait abstracting the agent operations required by HTTP handlers.
 ///
@@ -277,7 +275,9 @@ mod tests {
                     .uri("/api/provider")
                     .method("POST")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"provider":"this_provider_does_not_exist_12345"}"#))
+                    .body(Body::from(
+                        r#"{"provider":"this_provider_does_not_exist_12345"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -286,7 +286,10 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"].as_str().unwrap().contains("Failed to create provider"));
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to create provider"));
     }
 
     #[tokio::test]
@@ -300,7 +303,9 @@ mod tests {
                     .uri("/api/provider")
                     .method("POST")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{"provider":"mcp:this_command_does_not_exist_12345"}"#))
+                    .body(Body::from(
+                        r#"{"provider":"mcp:this_command_does_not_exist_12345"}"#,
+                    ))
                     .unwrap(),
             )
             .await
@@ -309,14 +314,20 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"].as_str().unwrap().contains("Failed to connect MCP LLM"));
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to connect MCP LLM"));
     }
 
     #[tokio::test]
     async fn test_admin_switch_provider_mesh_invalid() {
         // Temporarily override mesh env with invalid providers
         let _guard = std::env::var("CLARITY_MESH_PROVIDERS");
-        std::env::set_var("CLARITY_MESH_PROVIDERS", "invalid_provider_1,invalid_provider_2");
+        std::env::set_var(
+            "CLARITY_MESH_PROVIDERS",
+            "invalid_provider_1,invalid_provider_2",
+        );
 
         let state = test_state().await;
         let app = create_admin_router(state);
@@ -336,7 +347,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"].as_str().unwrap().contains("Failed to create mesh"));
+        assert!(json["message"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to create mesh"));
     }
 }
-

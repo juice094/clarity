@@ -4,12 +4,12 @@
 
 use clarity_core::agent::{Agent, AgentConfig, Message, MessageRole, MockLlm};
 use clarity_core::error::AgentError;
-use clarity_llm::LlmFactory;
 use clarity_core::memory::{Memory, MemoryStore, MemoryTicker, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 #[cfg(not(target_os = "windows"))]
 use clarity_core::tools::BashTool;
 use clarity_core::tools::{FileReadTool, Tool};
+use clarity_llm::LlmFactory;
 #[cfg(not(target_os = "windows"))]
 use serde_json::json;
 use std::sync::Arc;

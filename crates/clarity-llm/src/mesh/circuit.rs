@@ -41,9 +41,11 @@ impl CircuitBreaker {
         match *state {
             CircuitState::Closed => true,
             CircuitState::Open => {
-                let should_try = self.last_failure.lock().unwrap().map_or(false, |t| {
-                    t.elapsed() >= self.recovery_timeout
-                });
+                let should_try = self
+                    .last_failure
+                    .lock()
+                    .unwrap()
+                    .map_or(false, |t| t.elapsed() >= self.recovery_timeout);
                 if should_try {
                     *state = CircuitState::HalfOpen;
                     true

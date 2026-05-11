@@ -78,8 +78,8 @@ async fn test_agent_lazy_llm_factory() {
 
 #[tokio::test]
 async fn test_agent_run_streaming() {
+    use parking_lot::Mutex;
     use std::sync::Arc;
-use parking_lot::Mutex;
 
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
@@ -420,9 +420,9 @@ async fn test_agent_run_with_wire() {
 #[tokio::test]
 async fn test_agent_run_streaming_with_wire() {
     use clarity_wire::{DraftEvent, Wire};
+    use parking_lot::Mutex;
     use std::sync::Arc;
     use std::sync::Arc as StdArc;
-use parking_lot::Mutex;
     use tokio::time::{timeout, Duration};
 
     // Create Wire

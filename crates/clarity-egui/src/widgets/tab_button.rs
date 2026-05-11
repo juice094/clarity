@@ -81,9 +81,9 @@ pub fn tab_button(
                 egui::pos2(tab_rect.min.x, tab_rect.max.y - 1.0),
                 egui::pos2(tab_rect.max.x, tab_rect.max.y),
             );
-            ui.painter().rect_filled(line_rect, egui::CornerRadius::ZERO, theme.accent);
+            ui.painter()
+                .rect_filled(line_rect, egui::CornerRadius::ZERO, theme.accent);
         }
-
     });
 
     let response = inner.response.interact(egui::Sense::click());

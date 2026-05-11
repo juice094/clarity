@@ -1,9 +1,7 @@
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::{
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 
@@ -374,4 +372,3 @@ pub(crate) async fn get_parallel_status(
             .into_response(),
     }
 }
-

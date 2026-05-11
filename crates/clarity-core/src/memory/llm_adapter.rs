@@ -22,7 +22,10 @@ impl clarity_memory::extractor::LlmClient for LlmProviderAdapter {
             Message::user(prompt),
         ];
         let tools = serde_json::json!({ "functions": [] });
-        let response = self.provider.complete(&messages, &tools).await
+        let response = self
+            .provider
+            .complete(&messages, &tools)
+            .await
             .map_err(|e| clarity_memory::MemoryError::LlmClient(e.to_string()))?;
         Ok(response.content)
     }

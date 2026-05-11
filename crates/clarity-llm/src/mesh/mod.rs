@@ -146,7 +146,9 @@ impl LlmProvider for MeshLlmProvider {
 
         Err(AgentError::Llm(format!(
             "All mesh providers exhausted. Last error: {}",
-            last_err.map(|e| e.to_string()).unwrap_or_else(|| "none".into())
+            last_err
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "none".into())
         )))
     }
 
@@ -186,7 +188,9 @@ impl LlmProvider for MeshLlmProvider {
 
         Err(AgentError::Llm(format!(
             "All mesh providers exhausted (stream). Last error: {}",
-            last_err.map(|e| e.to_string()).unwrap_or_else(|| "none".into())
+            last_err
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "none".into())
         )))
     }
 
@@ -265,10 +269,12 @@ mod tests {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 let name = self.name.clone();
                 tokio::spawn(async move {
-                    let _ = tx.send(Ok(StreamDelta {
-                        content: Some(format!("stream from {}", name)),
-                        tool_calls: vec![],
-                    })).await;
+                    let _ = tx
+                        .send(Ok(StreamDelta {
+                            content: Some(format!("stream from {}", name)),
+                            tool_calls: vec![],
+                        }))
+                        .await;
                 });
                 Ok(rx)
             }
@@ -283,7 +289,10 @@ mod tests {
     fn build_mesh(providers: Vec<(String, bool)>, chain: Vec<String>) -> MeshLlmProvider {
         let mut map = HashMap::new();
         for (name, fail) in providers {
-            map.insert(name.clone(), Arc::new(MockProvider { name, fail }) as Arc<dyn LlmProvider>);
+            map.insert(
+                name.clone(),
+                Arc::new(MockProvider { name, fail }) as Arc<dyn LlmProvider>,
+            );
         }
         MeshLlmProvider::new(map, MeshRouter::with_chain(chain))
     }
@@ -325,11 +334,15 @@ mod tests {
             vec!["a".into(), "b".into()],
         );
         // Override breaker to threshold 1 for fast testing
-        mesh.breakers.insert("a".into(), Arc::new(CircuitBreaker::new(1, 60)));
+        mesh.breakers
+            .insert("a".into(), Arc::new(CircuitBreaker::new(1, 60)));
 
         // First call fails and opens circuit
         let _ = mesh.complete(&[], &json!({})).await;
-        assert_eq!(mesh.breakers.get("a").unwrap().state(), circuit::CircuitState::Open);
+        assert_eq!(
+            mesh.breakers.get("a").unwrap().state(),
+            circuit::CircuitState::Open
+        );
 
         // Second call should skip 'a' and go straight to 'b'
         let resp = mesh.complete(&[], &json!({})).await.unwrap();

@@ -465,7 +465,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         if !editing {
                             if session.messages[i].role == Role::User {
                                 ui.horizontal(|ui| {
-                                    if let Some(ts) = format_relative_time(session.messages[i].timestamp) {
+                                    if let Some(ts) =
+                                        format_relative_time(session.messages[i].timestamp)
+                                    {
                                         ui.label(
                                             egui::RichText::new(ts)
                                                 .size(theme.text_xs)
@@ -510,7 +512,9 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 ui.add_space(theme.space_8);
                             } else {
                                 ui.horizontal(|ui| {
-                                    if let Some(ts) = format_relative_time(session.messages[i].timestamp) {
+                                    if let Some(ts) =
+                                        format_relative_time(session.messages[i].timestamp)
+                                    {
                                         ui.label(
                                             egui::RichText::new(ts)
                                                 .size(theme.text_xs)

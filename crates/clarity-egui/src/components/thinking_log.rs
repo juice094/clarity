@@ -36,8 +36,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new(arrow)
-                            .font(theme.font_icon(theme.text_sm)),
+                        egui::RichText::new(arrow).font(theme.font_icon(theme.text_sm)),
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),

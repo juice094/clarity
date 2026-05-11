@@ -16,9 +16,9 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use tracing::info;
 
-use clarity_contract::ToolError;
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
 
 /// Tool for sending messages to IM channels
 pub struct ChannelSendTool;

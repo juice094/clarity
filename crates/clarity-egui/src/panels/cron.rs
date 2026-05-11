@@ -49,11 +49,10 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
             if ui
                 .add(
                     egui::Button::new(
-                        egui::RichText::new(arrow)
-                            .font(theme.font_icon(theme.text_sm)),
+                        egui::RichText::new(arrow).font(theme.font_icon(theme.text_sm)),
                     )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
                 )
                 .clicked()
             {

@@ -16,9 +16,9 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tracing::{debug, error};
 
-use clarity_contract::ToolError;
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
+use clarity_contract::ToolError;
 
 /// Internal mutable state kept between actions.
 #[derive(Debug, Clone, Default)]
@@ -48,7 +48,9 @@ impl WebBrowserTool {
             )
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .map_err(|e| ToolError::execution_failed(format!("Failed to build HTTP client: {e}")))?;
+            .map_err(|e| {
+                ToolError::execution_failed(format!("Failed to build HTTP client: {e}"))
+            })?;
 
         Ok(Self {
             client,

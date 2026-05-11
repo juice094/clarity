@@ -439,4 +439,3 @@ pub(crate) async fn chat_completions(
         (StatusCode::OK, Json(response)).into_response()
     }
 }
-

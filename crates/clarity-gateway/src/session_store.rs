@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::{Arc};
-use parking_lot::Mutex;
+use std::sync::Arc;
 use tracing::{debug, info, instrument};
 
 /// A chat message stored in a session

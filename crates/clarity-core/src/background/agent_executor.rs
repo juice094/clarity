@@ -5,9 +5,9 @@
 
 use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
-use clarity_llm::{build_provider_from_registry, ModelRegistry};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
+use clarity_llm::{build_provider_from_registry, ModelRegistry};
 // P1-1: Import from `types` instead of `subagents::registry` to break the
 // background↔subagents circular dependency.
 use crate::types::{AgentTypeDefinition, LaborMarket};

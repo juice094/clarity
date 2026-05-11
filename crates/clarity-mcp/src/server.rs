@@ -191,14 +191,8 @@ impl StdioMcpServer {
                         };
                     }
                 };
-                let name = params
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let args = params
-                    .get("arguments")
-                    .cloned()
-                    .unwrap_or(Value::Null);
+                let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let args = params.get("arguments").cloned().unwrap_or(Value::Null);
 
                 if name.is_empty() {
                     return JsonRpcResponse {

@@ -943,9 +943,5 @@ pub trait SubagentOrchestrator: Send + Sync {
     ) -> Result<ParallelResult, SubagentError>;
 
     /// Execute an agent team collaboratively.
-    async fn run_team(
-        &self,
-        team: AgentTeam,
-    ) -> Result<TeamResult, SubagentError>;
+    async fn run_team(&self, team: AgentTeam) -> Result<TeamResult, SubagentError>;
 }
-

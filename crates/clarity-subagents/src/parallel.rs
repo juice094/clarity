@@ -6,13 +6,13 @@
 //! - 错误处理
 //! - 超时控制
 
-use clarity_core::background::{BackgroundTaskManager, TaskResult, TaskSpec, TaskStatus};
-use crate::runner::{SubagentRunner};
+use crate::runner::SubagentRunner;
 use crate::store::SubagentStore;
 use clarity_contract::subagent::{
     BatchProgress, BatchStatus, ParallelConfig, ParallelResult, RunSpec, SubagentError,
     SubagentResult,
 };
+use clarity_core::background::{BackgroundTaskManager, TaskResult, TaskSpec, TaskStatus};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -184,19 +184,19 @@ impl ParallelExecutor {
         let mut should_cancel_others = false;
 
         for task_id in &task_ids {
-                if let Some(ref c) = cancel {
-                    if c.is_cancelled() {
-                        warn!("Parallel execution cancelled by external signal");
-                        for remaining in &task_ids {
-                            if remaining != task_id {
-                                if let Err(e) = self.task_manager.cancel(remaining).await {
-                                    warn!("Failed to cancel task {}: {}", remaining, e);
-                                }
+            if let Some(ref c) = cancel {
+                if c.is_cancelled() {
+                    warn!("Parallel execution cancelled by external signal");
+                    for remaining in &task_ids {
+                        if remaining != task_id {
+                            if let Err(e) = self.task_manager.cancel(remaining).await {
+                                warn!("Failed to cancel task {}: {}", remaining, e);
                             }
                         }
-                        break;
                     }
+                    break;
                 }
+            }
             match self.task_manager.wait(task_id).await {
                 Ok(task_result) => {
                     if task_result.status == TaskStatus::Completed {
@@ -360,7 +360,9 @@ pub async fn run_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clarity_contract::subagent::{ExecutionStatus, ParallelConfig, ParallelResult, RunSpec, SubagentResult};
+    use clarity_contract::subagent::{
+        ExecutionStatus, ParallelConfig, ParallelResult, RunSpec, SubagentResult,
+    };
     use clarity_core::registry::ToolRegistry;
     use tempfile::TempDir;
 

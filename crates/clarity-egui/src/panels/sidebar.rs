@@ -173,9 +173,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                             ui.label(
                                                 egui::RichText::new(crate::theme::ICON_PLUG)
                                                     .font(
-                                                        app.ui_store
-                                                            .theme
-                                                            .font_icon(app.ui_store.theme.text_base),
+                                                        app.ui_store.theme.font_icon(
+                                                            app.ui_store.theme.text_base,
+                                                        ),
                                                     )
                                                     .color(icon_color),
                                             );
@@ -258,68 +258,60 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     };
 
                     // Helper for clickable sidebar rows
-                    let clickable_row = |ui: &mut egui::Ui,
-                                         id: egui::Id,
-                                         label: &str,
-                                         count: Option<usize>,
-                                         is_open: &mut bool| {
-                        let caret_icon = if *is_open {
-                            crate::theme::ICON_CARET_DOWN
-                        } else {
-                            crate::theme::ICON_CARET_RIGHT
-                        };
-                        let caret_color = if *is_open {
-                            theme.accent
-                        } else {
-                            theme.text_dim
-                        };
-                        let text_color = if *is_open {
-                            theme.text
-                        } else {
-                            theme.text_dim
-                        };
+                    let clickable_row =
+                        |ui: &mut egui::Ui,
+                         id: egui::Id,
+                         label: &str,
+                         count: Option<usize>,
+                         is_open: &mut bool| {
+                            let caret_icon = if *is_open {
+                                crate::theme::ICON_CARET_DOWN
+                            } else {
+                                crate::theme::ICON_CARET_RIGHT
+                            };
+                            let caret_color = if *is_open {
+                                theme.accent
+                            } else {
+                                theme.text_dim
+                            };
+                            let text_color = if *is_open { theme.text } else { theme.text_dim };
 
-                        let resp = crate::widgets::interactive_row(
-                            ui,
-                            id,
-                            *is_open,
-                            &theme,
-                            |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.add_space(8.0);
-                                    ui.label(
-                                        egui::RichText::new(label)
-                                            .size(theme.text_sm)
-                                            .strong()
-                                            .color(text_color),
-                                    );
-                                    if let Some(c) = count {
-                                        if c > 0 {
-                                            ui.label(
-                                                egui::RichText::new(format!("({})", c))
-                                                    .size(theme.text_sm)
-                                                    .color(theme.text_muted),
-                                            );
+                            let resp =
+                                crate::widgets::interactive_row(ui, id, *is_open, &theme, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(8.0);
+                                        ui.label(
+                                            egui::RichText::new(label)
+                                                .size(theme.text_sm)
+                                                .strong()
+                                                .color(text_color),
+                                        );
+                                        if let Some(c) = count {
+                                            if c > 0 {
+                                                ui.label(
+                                                    egui::RichText::new(format!("({})", c))
+                                                        .size(theme.text_sm)
+                                                        .color(theme.text_muted),
+                                                );
+                                            }
                                         }
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.add_space(8.0);
-                                            ui.label(
-                                                egui::RichText::new(caret_icon)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(caret_color),
-                                            );
-                                        },
-                                    );
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.add_space(8.0);
+                                                ui.label(
+                                                    egui::RichText::new(caret_icon)
+                                                        .font(theme.font_icon(theme.text_sm))
+                                                        .color(caret_color),
+                                                );
+                                            },
+                                        );
+                                    });
                                 });
-                            },
-                        );
-                        if resp.response.clicked() {
-                            *is_open = !*is_open;
-                        }
-                    };
+                            if resp.response.clicked() {
+                                *is_open = !*is_open;
+                            }
+                        };
 
                     // ── ROLES ──
                     group_header(ui, "ROLES");
@@ -489,7 +481,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         None,
                         &mut app.ui_store.gantt_panel_open,
                     );
-
 
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });

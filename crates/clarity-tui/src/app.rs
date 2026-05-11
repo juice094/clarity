@@ -668,8 +668,11 @@ impl App {
         let specs: Vec<clarity_contract::subagent::RunSpec> = parsed
             .into_iter()
             .map(|(agent_type, prompt)| {
-                clarity_contract::subagent::RunSpec::new(format!("parallel-{}", &agent_type), prompt)
-                    .with_type(&agent_type)
+                clarity_contract::subagent::RunSpec::new(
+                    format!("parallel-{}", &agent_type),
+                    prompt,
+                )
+                .with_type(&agent_type)
             })
             .collect();
 
@@ -678,8 +681,8 @@ impl App {
             MessageType::System,
         ));
 
-        let config =
-            clarity_contract::subagent::ParallelConfig::new().with_max_concurrency(specs.len().min(4));
+        let config = clarity_contract::subagent::ParallelConfig::new()
+            .with_max_concurrency(specs.len().min(4));
 
         match self.agent.run_parallel(specs, config, None).await {
             Ok(result) => {

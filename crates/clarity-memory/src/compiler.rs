@@ -335,7 +335,9 @@ Long-term memory summary:"#,
 
         // Also export as flashcards for spaced-repetition review
         let flashcards_path = output_path.with_file_name("flashcards.json");
-        if let Err(e) = crate::flashcards::export_facts_to_flashcards(&unique_facts, &flashcards_path) {
+        if let Err(e) =
+            crate::flashcards::export_facts_to_flashcards(&unique_facts, &flashcards_path)
+        {
             warn!("Failed to export flashcards: {}", e);
         }
 

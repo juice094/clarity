@@ -17,12 +17,12 @@ use app::App;
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_llm::LlmFactory;
 use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::skills::SkillRegistry;
+use clarity_llm::LlmFactory;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -83,7 +83,9 @@ async fn main() -> Result<()> {
                 let mut watch_paths = vec![std::path::PathBuf::from("skills")];
                 let config_dir = std::env::var("APPDATA")
                     .map(std::path::PathBuf::from)
-                    .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+                    .or_else(|_| {
+                        std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
+                    })
                     .ok();
                 if let Some(config_dir) = config_dir {
                     watch_paths.push(config_dir.join("clarity").join("skills"));
@@ -166,17 +168,14 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
     }
 
     // 注入 SubagentOrchestrator（SubagentManager）
-    let working_dir = std::env::current_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let working_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let subagent_ctx = working_dir.join("subagent_context");
     let _ = std::fs::create_dir_all(&subagent_ctx);
-    let orchestrator = Arc::new(
-        clarity_subagents::SubagentManager::new(
-            agent.registry().clone(),
-            &working_dir,
-            &subagent_ctx,
-        )
-    );
+    let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
+        agent.registry().clone(),
+        &working_dir,
+        &subagent_ctx,
+    ));
     agent = agent.with_orchestrator(orchestrator);
 
     Ok((Arc::new(agent), model_name, skill_registry))

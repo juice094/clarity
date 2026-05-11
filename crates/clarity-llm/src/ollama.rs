@@ -16,12 +16,12 @@
 //! - `OLLAMA_HOST` - Base URL (default: `http://localhost:11434`)
 //! - `OLLAMA_MODEL` - Model name (default: `llama3`)
 
-use clarity_contract::FunctionCall;
-use clarity_contract::AgentError;
 use crate::api::{LlmProvider, LlmResponse, Message, StreamDelta};
 use crate::shared_http_client;
-use clarity_contract::ToolCall;
 use async_trait::async_trait;
+use clarity_contract::AgentError;
+use clarity_contract::FunctionCall;
+use clarity_contract::ToolCall;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::env;

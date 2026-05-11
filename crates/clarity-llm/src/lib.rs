@@ -13,8 +13,8 @@ pub mod kalosm;
 pub mod llama_server;
 #[cfg(feature = "local-llm")]
 pub mod local_gguf;
-pub mod mesh;
 pub mod mcp_llm_provider;
+pub mod mesh;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
@@ -40,8 +40,8 @@ pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabiliti
 pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};
 pub use tool_payload::{NativeToolAdapter, PromptGuidedAdapter, ToolPayloadAdapter};
 
-use clarity_contract::AgentError;
 use async_trait::async_trait;
+use clarity_contract::AgentError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;

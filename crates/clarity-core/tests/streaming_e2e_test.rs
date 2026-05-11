@@ -5,8 +5,8 @@
 
 use clarity_core::agent::AgentConfig;
 use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;

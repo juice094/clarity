@@ -10,12 +10,12 @@ use channels::{
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_llm::LlmFactory;
 use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
 use clarity_core::memory::{
     LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker,
 };
 use clarity_core::registry::ToolRegistry;
+use clarity_llm::LlmFactory;
 use std::path::PathBuf;
 
 /// 从环境变量加载渠道配置
@@ -152,13 +152,11 @@ You are a methodological query assistant. When answering:
     // 注入 SubagentOrchestrator（SubagentManager）
     let subagent_ctx = clarity_dir.join("subagent_context");
     let _ = tokio::fs::create_dir_all(&subagent_ctx).await;
-    let orchestrator = Arc::new(
-        clarity_subagents::SubagentManager::new(
-            agent.registry().clone(),
-            &clarity_dir,
-            &subagent_ctx,
-        )
-    );
+    let orchestrator = Arc::new(clarity_subagents::SubagentManager::new(
+        agent.registry().clone(),
+        &clarity_dir,
+        &subagent_ctx,
+    ));
     agent = agent.with_orchestrator(orchestrator);
 
     // 设置 MemoryCompiler callback（OpenHanako 四级编译管道）

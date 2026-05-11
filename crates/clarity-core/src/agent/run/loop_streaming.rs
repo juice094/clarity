@@ -11,8 +11,8 @@ use crate::agent::run::loop_trait::{
 };
 use crate::agent::Agent;
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, LlmResponse, Message};
 use crate::types::ToolCall;
+use clarity_llm::api::{LlmProvider, LlmResponse, Message};
 use clarity_wire::{DraftEvent, WireMessage};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

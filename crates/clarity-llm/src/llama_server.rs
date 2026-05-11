@@ -31,9 +31,9 @@
 //! preferable.
 
 use super::{OpenAiCompatibleLlm, StreamDelta};
-use clarity_contract::AgentError;
 use crate::api::{LlmProvider, LlmResponse, Message};
 use async_trait::async_trait;
+use clarity_contract::AgentError;
 use serde_json::Value;
 
 /// Provider that talks to a local llama.cpp server instance.
