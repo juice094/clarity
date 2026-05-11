@@ -50,6 +50,7 @@
 | S4-β | **Widget Extraction Replication** | ✅ Complete | `widgets/theme_card.rs` 抽取自 `interface_tab.rs:203-256`；painter.rect_filled + 2 处 painter.rect_stroke 完全消除；5 个单元测试；**panel-level allocate+Sense::click 反模式清零 (4→0)** |
 | S3.1 | **Settings Truth Audit** | ✅ Complete | 发现"3 源"实际是 **2 真相 + 1 镜像**；TRUTH A/B 不自动同步是 3 个真实 bug 根因；修订 S3 路线图（4d 而非 5d） |
 | S3.2 | **Settings Commit Centralization** | ✅ Complete | 4 处重复 sync 代码 → 3 个 helper（`commit_settings`/`apply_approval_mode_to_runtime`/`trigger_llm_reload`）；纯重构零行为变更 |
+| Anthropic | **Anthropic Managed Agents 架构映射** | ✅ Complete | 基于 Kimi share 对话深入对比；ADR-008 Draft 起草；架构定位文档新增 §五-A 章节；累计 +638 行架构决议（mapping + ADR + positioning） |
 
 ---
 
@@ -57,6 +58,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Anthropic Managed Agents 架构映射 | `docs/notes/2026-05-11-anthropic-managed-agents-mapping.md` + ADR-008 Draft | 2026-05-11 |
 | Workspace lib + bin tests (post S3.2) | 826 lib + 116 bin = 942 passed, 0 failed, 7 ignored | 2026-05-11 |
 | S3.1 settings truth audit | `docs/notes/2026-05-11-S3-settings-truth-audit.md`（修订诊断方向） | 2026-05-11 |
 | S3.2 commit centralization | 4 处重复 sync → 3 helpers; 纯重构 | 2026-05-11 |

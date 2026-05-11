@@ -50,10 +50,28 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-> ⚠️ **并行会话协调（2026-05-11）**：前端设计相关调整正在**其他会话**进行中。
+> ⚠️ **并行会话协调（2026-05-11，更新中）**：前端设计相关调整正在**其他会话**进行中。
 > 本会话已暂停 `crates/clarity-egui/src/` 下的代码改动，避免 merge 冲突。
 > 协议层 + 配置层（`clarity-wire` / `clarity-core` / `clarity-llm`）的 S3.3-5
 > 工作待并行前端会话收敛后再启动。
+>
+> ⚠️ **当前 CI 风险**：工作树含未提交的并行 session 中间状态（`clarity-core/src/lib.rs` 引用未完成的 `ui/` 模块 → 编译失败）。
+> 本会话 commit 历史（直到 `cef03f78`）**独立编译通过**，CI 失败概率取决于并行 session 是否在 push 前自我收敛。
+> 详情见 `docs/notes/2026-05-11-parallel-session-coordination.md` + `docs/notes/2026-05-11-session-handoff-final.md`。
+
+**Sprint Anthropic-Mapping — 架构镜子对照（已完成 ✅，2026-05-11，commit `cef03f78`）**
+
+> 基于用户分享的 Kimi share 对话（Anthropic Managed Agents 架构剖析）+ B 站视频。
+
+- **数据基础**: `docs/notes/2026-05-11-anthropic-managed-agents-mapping.md`（253 行 Kimi 对话归档）
+- **定位文档更新**: `docs/architecture-positioning.md §五-A`（新增 6 子节，与 Anthropic 关系阐明）
+- **架构决议草案**: `docs/adr/ADR-008-brain-hands-session-decoupling.md`（283 行 Draft）
+- **核心结论**: Clarity 与 Anthropic 哲学上 80% 共识，因定位差异走不同实现路径；Anthropic 不是竞品，是架构镜子
+- **三处实质差距识别**:
+  - A: Agent 有状态 vs Brain 无状态 → M1 Wake/Suspend 抽象（中期）
+  - B: 同进程执行 vs Sandbox 隔离 → M2 ToolExecutor trait（中期，**不强制容器化**）
+  - C: messages = context vs Event Log 独立 → M3 Session V2 模型（长期，依赖 ADR-007）
+- **Hard Veto 清单**: 5 项明确拒绝照搬（API 兼容/无状态 Brain/Docker/Session-hour 计费/FDE cloud runtime）
 
 **Sprint S3 — Settings 单源化（进行中 🟡 S3.1/S3.2 完成，2026-05-11）**
 
