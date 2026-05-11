@@ -32,7 +32,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         // Dark card
         let dark_bg = Theme::dark().bg;
         let dark_text = Theme::dark().text;
-        if theme_card(
+        if crate::widgets::theme_card(
             ui,
             card_w,
             card_h,
@@ -42,7 +42,9 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             "Deep black canvas",
             is_dark,
             &theme,
-        ) {
+        )
+        .clicked()
+        {
             set_theme(app, "dark");
         }
         ui.add_space(theme.space_8);
@@ -50,7 +52,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         // Light card
         let light_bg = Theme::light().bg;
         let light_text = Theme::light().text;
-        if theme_card(
+        if crate::widgets::theme_card(
             ui,
             card_w,
             card_h,
@@ -60,7 +62,9 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             "Cool off-white",
             is_light,
             &theme,
-        ) {
+        )
+        .clicked()
+        {
             set_theme(app, "light");
         }
     });
@@ -198,59 +202,3 @@ fn set_theme(app: &mut App, name: &str) {
     app.auto_save_settings();
 }
 
-/// Theme preview card. Shows the theme's real background + text colors.
-#[allow(clippy::too_many_arguments)]
-fn theme_card(
-    ui: &mut egui::Ui,
-    width: f32,
-    height: f32,
-    card_bg: egui::Color32,
-    card_text: egui::Color32,
-    name: &str,
-    desc: &str,
-    active: bool,
-    theme: &Theme,
-) -> bool {
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
-
-    // Card background with theme's real colors
-    let cr = egui::CornerRadius::same(theme.radius_md as u8);
-    ui.painter().rect_filled(rect, cr, card_bg);
-
-    // Active ring
-    if active {
-        ui.painter().rect_stroke(
-            rect,
-            cr,
-            egui::Stroke::new(2.0_f32, theme.accent),
-            egui::StrokeKind::Inside,
-        );
-    } else {
-        ui.painter().rect_stroke(
-            rect,
-            cr,
-            egui::Stroke::new(1.0_f32, theme.border),
-            egui::StrokeKind::Inside,
-        );
-    }
-
-    // Content
-    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect.shrink(10.0)), |ui| {
-        ui.vertical_centered(|ui| {
-            ui.add_space(4.0);
-            ui.label(
-                egui::RichText::new(name)
-                    .font(theme.font(theme.text_base))
-                    .color(card_text)
-                    .strong(),
-            );
-            ui.label(
-                egui::RichText::new(desc)
-                    .font(theme.font(theme.text_xs))
-                    .color(card_text.gamma_multiply(0.6)),
-            );
-        });
-    });
-
-    resp.clicked()
-}

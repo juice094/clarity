@@ -8,6 +8,7 @@ pub mod sidebar_card;
 pub mod status_capsule;
 pub mod status_dot;
 pub mod tab_button;
+pub mod theme_card;
 pub mod toggle;
 pub mod window_control;
 
@@ -21,5 +22,6 @@ pub use sidebar_card::sidebar_card;
 pub use status_capsule::status_capsule;
 pub use status_dot::status_dot;
 pub use tab_button::tab_button;
+pub use theme_card::theme_card;
 // pub use toggle::toggle; // not yet used in UI
 pub use window_control::window_control_button;
