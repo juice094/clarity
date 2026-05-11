@@ -58,6 +58,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
             let resp = ui.add_sized(
                 egui::vec2(edit_w, 28.0),
                 egui::TextEdit::singleline(&mut buf)
+                    .id(ui.id().with("rename"))
                     .font(egui::FontId::proportional(
                         app.ui_store.theme.text_md,
                     ))
