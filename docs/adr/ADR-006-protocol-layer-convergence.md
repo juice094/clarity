@@ -273,11 +273,14 @@ pub enum WireMessage { ... NewEvent { ... } }
 
 ADR 落地完成的判据：
 
-- [x] **Phase A 完成**：本 PR 合并 + `cargo build --workspace` 通过 + deprecation warnings 可见
-- [ ] **Phase B 完成**：grep 确认 EventBus / ViewCommand 在 producer 端零调用
-- [ ] **Phase C 完成**：`clarity-wire` 测试数下降到 ~ 25 个，且 100% 覆盖生产路径
-- [ ] **Phase D 完成**：（按需，无硬截止）
-- [ ] **Phase E 启动**：ADR-007 草案立项
+- [x] **Phase A 完成**：本 PR 合并 + `cargo build --workspace` 通过 + deprecation warnings 可见 (2026-05-11, commit `c8e71fdb`)
+- [x] **Phase B 完成**：grep 确认 EventBus / sync_to_wire 在 producer 端零调用 → 已删除 (2026-05-11, commit `dd07b42f`)
+- [x] **Phase C 完成**：`clarity-wire` 测试数下降到 14（远低于 ~25 目标），且 100% 覆盖生产路径 (2026-05-11, commits `1c15621a` Phase C.1 + `2867c0a5` Phase C.2)
+  - 总删除 +12 / -802 = **-790 行死代码**
+  - 测试基线 955 → 932（删除 23 个覆盖死代码的测试）
+  - `cargo clippy --workspace --lib --bins --tests -- -D warnings`: PASS
+- [ ] **Phase D 完成**：（按需，无硬截止）— 启动条件：egui 内 SettingsViewModel 激活时
+- [ ] **Phase E 启动**：ADR-007 草案立项（Turn ID 注入 WireMessage）
 
 ---
 
