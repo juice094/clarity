@@ -462,7 +462,7 @@ impl TaskStore {
 fn now_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock before 1970")
         .as_secs()
 }
 
