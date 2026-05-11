@@ -6,8 +6,8 @@ resolver = "2"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
-authors = ["Clarity Team"]
-license = "MIT"
+authors = ["juice094 and contributors"]
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/juice094/clarity"
 
 [workspace.dependencies]
