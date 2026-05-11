@@ -169,3 +169,41 @@ where
 }
 
 impl<T: Tool + Sized + 'static> IntoSharedTool for T {}
+
+// ============================================================================
+// ToolRegistry trait (uplifted from clarity-core to break subagents↔core cycle)
+// ============================================================================
+
+use crate::error::{AgentError, ToolResult};
+
+/// Abstract interface for tool registries.
+///
+/// Implemented by `clarity_core::registry::ToolRegistry` and by lightweight
+/// filtered views (e.g. `FilteredToolRegistry` in `clarity-subagents`).
+#[async_trait]
+pub trait ToolRegistry: Send + Sync {
+    /// Look up a tool by name.
+    fn get(&self, name: &str) -> Result<Option<SharedTool>, AgentError>;
+
+    /// Execute a tool with the given arguments and context.
+    async fn execute(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+        ctx: ToolContext,
+    ) -> ToolResult<serde_json::Value>;
+
+    /// List all registered tool names.
+    fn list(&self) -> Result<Vec<String>, AgentError>;
+
+    /// Check whether a tool name is registered.
+    fn contains(&self, name: &str) -> Result<bool, AgentError>;
+
+    /// Number of registered tools.
+    fn len(&self) -> Result<usize, AgentError>;
+
+    /// Convenience: `len() == 0`.
+    fn is_empty(&self) -> Result<bool, AgentError> {
+        Ok(self.len()? == 0)
+    }
+}

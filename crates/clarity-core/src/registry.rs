@@ -455,6 +455,38 @@ impl Default for ToolRegistry {
 
 use serde_json::json;
 
+// ============================================================================
+// ToolRegistry trait bridge (ADR-005 Phase C)
+// ============================================================================
+
+#[async_trait::async_trait]
+impl clarity_contract::tool::ToolRegistry for ToolRegistry {
+    fn get(&self, name: &str) -> Result<Option<SharedTool>, AgentError> {
+        self.get(name)
+    }
+
+    async fn execute(
+        &self,
+        name: &str,
+        args: serde_json::Value,
+        ctx: ToolContext,
+    ) -> ToolResult<serde_json::Value> {
+        self.execute(name, args, ctx).await
+    }
+
+    fn list(&self) -> Result<Vec<String>, AgentError> {
+        self.list_tools()
+    }
+
+    fn contains(&self, name: &str) -> Result<bool, AgentError> {
+        self.contains(name)
+    }
+
+    fn len(&self) -> Result<usize, AgentError> {
+        self.len()
+    }
+}
+
 #[cfg(test)]
 pub fn mock_registry_with_tools(tools: Vec<Box<dyn Tool>>) -> ToolRegistry {
     let reg = ToolRegistry::new();
