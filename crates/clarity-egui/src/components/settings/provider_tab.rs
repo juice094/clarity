@@ -63,58 +63,20 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
             for p in &all {
                 let is_active = p.id == current;
                 let id = p.id.clone();
-                let h = 36.0;
-
-                let (rect, resp) = ui
-                    .allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::click());
-
                 let has_key = !p.api_key_ref.is_empty() && p.resolve_api_key().is_some();
-                let text_color = if is_active { theme.accent } else { theme.text };
 
-                let bg = if is_active || resp.hovered() {
-                    theme.surface_strong
-                } else {
-                    theme.surface
-                };
-
-                let cr = egui::CornerRadius::same(theme.radius_sm as u8);
-                ui.painter().rect_filled(rect, cr, bg);
-
-                if is_active {
-                    let bar = egui::Rect::from_min_max(
-                        rect.min,
-                        egui::pos2(rect.min.x + 2.0, rect.max.y),
-                    );
-                    ui.painter()
-                        .rect_filled(bar, egui::CornerRadius::ZERO, theme.accent);
-                }
-
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(rect.shrink2(egui::vec2(6.0, 0.0))),
-                    |ui| {
-                        ui.horizontal(|ui| {
-                            ui.set_min_height(h);
-                            crate::widgets::status_dot(ui, has_key, &theme);
-                            ui.add_space(8.0);
-                            ui.label(
-                                egui::RichText::new(p.display())
-                                    .font(theme.font(theme.text_base))
-                                    .color(text_color),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if !p.models.is_empty() {
-                                        ui.label(
-                                            egui::RichText::new(format!("{}", p.models.len()))
-                                                .font(theme.font(theme.text_xs))
-                                                .color(theme.text_muted),
-                                        );
-                                    }
-                                },
-                            );
-                        });
-                    },
+                // S4-α (2026-05-11): extracted to widgets/provider_row.rs.
+                // The previous inline implementation used `allocate_exact_size +
+                // Sense::click()` plus two `painter.rect_filled` calls. Both
+                // painter calls are gone; the widget uses `Frame::fill` +
+                // `Frame::stroke` for backgrounds and active accent.
+                let resp = crate::widgets::provider_row(
+                    ui,
+                    &theme,
+                    p.display(),
+                    has_key,
+                    p.models.len(),
+                    is_active,
                 );
 
                 if resp.clicked() && !is_active {
