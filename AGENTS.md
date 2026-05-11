@@ -47,6 +47,23 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint S4-β — Widget Extraction Replication（已完成 ✅，2026-05-11，commit `4db5b395`）**
+
+> 承接 S4-α 验证的方法论，机械复制到 interface_tab.rs theme picker。
+
+- **POC 目标**: `components/settings/interface_tab.rs:203-256` 内联 `theme_card` 函数
+- **抽取**: `widgets/theme_card.rs` (新 228 行，含 5 个行为单元测试)
+- **真正进步**:
+  - 3 处 painter 调用完全消除（rect_filled + rect_stroke × 2 → Frame::fill + Frame::stroke）
+  - 函数签名从 `-> bool` 改为 `-> Response`（更通用）
+- **panel-level 反模式清零**: allocate+Sense::click 在 panels/components: 4 → **0** ✅
+- **测试基线**: 937 → 942（+5 theme_card 测试）
+- **验证假设 (二次复制)**:
+  - H1 反模式可机械翻译: ✅ 与 S4-α 完全同模式，0 偏差
+  - H2 widget 函数可单元测试: ✅ `run_in_frame` helper 直接复用
+  - H3 3 工作日内可控完成: ✅ 单 commit 完成（远低于预算）
+- **剩余反模式**: dashboard.rs:207 + chat/avatar.rs:10 + about_tab.rs:12-17 + gantt.rs (合法装饰)
+
 **Sprint S4-α — Widget Extraction POC（已完成 ✅，2026-05-11，commit `69cf941f`）**
 
 > 验证"反模式可机械翻译 + widget 可单测 + 3 工作日可控"三个方法论假设。

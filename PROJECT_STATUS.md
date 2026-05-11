@@ -2,10 +2,10 @@
 
 > Last updated: 2026-05-11
 > Branch: `main`
-> Test baseline: **826 passed lib + 111 passed bin = 937 (workspace), 0 failed, 7 ignored**
+> Test baseline: **826 passed lib + 116 passed bin = 942 (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 > Active ADR: **ADR-006 Protocol Layer Convergence** — Phase A/B/C complete; Phase D pending
-> Active Sprint: **S4-α complete** (widget extraction POC validated)
+> Active Sprint: **S4-α/β complete** (panel-level 反模式清零)
 
 ---
 
@@ -44,6 +44,7 @@
 | 41 | **UI 审计修复与视觉精调** | ✅ Complete | CJK 子集字体 297KB；错误气泡增强；侧边栏信息架构重构；Phosphor 图标系统 |
 | 43+ | **Protocol Convergence + Engineering Discipline** | 🟢 A/B/C Complete | `docs/CODE-CHANGE-PRINCIPLES.md` 七条原则强制生效；ADR-006 Phase A/B/C 完成 (-792 行死代码，含 Gen-2 协议+view 通道；新 clippy `-D warnings` 通过；测试基线 955 → 932) |
 | S4-α | **Widget Extraction POC** | ✅ Complete | `widgets/provider_row.rs` 抽取自 `provider_tab.rs:62-118`；2 处 painter.rect_filled 替换为 Frame::fill+stroke；5 个单元测试覆盖；H1/H2/H3 三个方法论假设全部成立 |
+| S4-β | **Widget Extraction Replication** | ✅ Complete | `widgets/theme_card.rs` 抽取自 `interface_tab.rs:203-256`；painter.rect_filled + 2 处 painter.rect_stroke 完全消除；5 个单元测试；**panel-level allocate+Sense::click 反模式清零 (4→0)** |
 
 ---
 
@@ -51,6 +52,8 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib + bin tests (post S4-β) | 826 lib + 116 bin = 942 passed, 0 failed, 7 ignored | 2026-05-11 |
+| S4-β panel-level 反模式清零 | allocate+Sense::click 在 panels/components: 0 | 2026-05-11 |
 | Workspace lib + bin tests (post S4-α) | 826 lib + 111 bin = 937 passed, 0 failed, 7 ignored | 2026-05-11 |
 | S4-α widget extraction | provider_row.rs +5 tests passing; 2 painter calls eliminated | 2026-05-11 |
 | Workspace lib + bin tests (post C.2) | 826 lib + 106 bin = 932 passed, 0 failed, 7 ignored | 2026-05-11 |
