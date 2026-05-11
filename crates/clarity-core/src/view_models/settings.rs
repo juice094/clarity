@@ -1,3 +1,17 @@
+//! Settings ViewModel.
+//!
+//! **ADR-006 status (2026-05-11)**: `sync_to_wire()` is deprecated and scheduled
+//! for removal in 0.4.0. `commands() / apply_user_action()` will be migrated
+//! to a new `clarity-frontend-ir` crate during Phase D — see
+//! `docs/adr/ADR-006-protocol-layer-convergence.md`.
+//!
+//! File-level `#![allow(deprecated)]` is applied so the ViewModel keeps
+//! compiling cleanly while the migration is staged. External callers
+//! (clarity-egui, clarity-tui) see deprecation notices via per-item
+//! `#[deprecated]` attributes.
+
+#![allow(deprecated)]
+
 use clarity_wire::{ButtonStyle, TextRole, UserAction, ViewCommand};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -309,6 +323,14 @@ impl SettingsViewModel {
     }
 
     /// Broadcast the current command tree to all wire consumers.
+    ///
+    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0. The wire
+    /// view channel has no subscribers in production. See
+    /// `docs/adr/ADR-006-protocol-layer-convergence.md`.
+    #[deprecated(
+        since = "0.3.1",
+        note = "ADR-006: view channel removed in 0.4.0; no consumers in production"
+    )]
     pub fn sync_to_wire(&self, wire: &clarity_wire::Wire) {
         let commands = self.commands();
         wire.soul_side().send_view(commands);

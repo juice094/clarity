@@ -1,3 +1,16 @@
+//! Declarative UI command renderer for `clarity-tui`.
+//!
+//! **ADR-006 status (2026-05-11)**: All `clarity_wire::View*` types are
+//! deprecated. This module is scheduled for migration to
+//! `clarity-frontend-ir` in Phase D. The file-level `#![allow(deprecated)]`
+//! suppresses the deprecation noise during the grace period; external
+//! callers (e.g. `commands.rs`) still see the deprecation when invoking
+//! `render_view_commands`.
+//!
+//! See `docs/adr/ADR-006-protocol-layer-convergence.md`.
+
+#![allow(deprecated)]
+
 use clarity_wire::{ButtonStyle, UserAction, ViewCommand};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},

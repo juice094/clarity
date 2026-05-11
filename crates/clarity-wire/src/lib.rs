@@ -124,6 +124,7 @@ pub enum WireMessage {
 }
 
 pub mod event;
+#[allow(deprecated)]
 pub use event::{Event, EventBus, EventMsg};
 
 impl WireMessage {
@@ -174,6 +175,10 @@ pub struct Wire {
     /// Sender for merged messages.
     merged_sender: broadcast::Sender<WireMessage>,
     /// Sender for declarative UI commands.
+    ///
+    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0. See
+    /// `docs/adr/ADR-006-protocol-layer-convergence.md`.
+    #[allow(deprecated)]
     view_sender: broadcast::Sender<Vec<ViewCommand>>,
     /// The soul side handle.
     soul_side: WireSoulSide,
@@ -272,11 +277,19 @@ impl Wire {
     /// # Examples
     ///
     /// ```
+    /// # #[allow(deprecated)]
+    /// # {
     /// use clarity_wire::Wire;
     ///
     /// let wire = Wire::new();
     /// let mut ui_view = wire.ui_view_side();
+    /// # }
     /// ```
+    #[deprecated(
+        since = "0.3.1",
+        note = "ADR-006: view channel removed in 0.4.0; use ui_side() with WireMessage"
+    )]
+    #[allow(deprecated)]
     pub fn ui_view_side(&self) -> WireUIViewSide {
         WireUIViewSide {
             receiver: self.view_sender.subscribe(),
@@ -305,6 +318,7 @@ impl Wire {
     }
 
     /// Returns the number of active receivers on the view channel.
+    #[deprecated(since = "0.3.1", note = "ADR-006: view channel removed in 0.4.0")]
     pub fn view_receiver_count(&self) -> usize {
         self.view_sender.receiver_count()
     }
@@ -337,6 +351,9 @@ pub struct WireSoulSide {
     raw_sender: broadcast::Sender<WireMessage>,
     merged_sender: broadcast::Sender<WireMessage>,
     /// Sender for declarative UI commands.
+    ///
+    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0.
+    #[allow(deprecated)]
     view_sender: broadcast::Sender<Vec<ViewCommand>>,
     /// Buffer for accumulating mergeable messages (protected by mutex for interior mutability).
     merge_buffer: Arc<Mutex<Option<WireMessage>>>,
@@ -432,6 +449,8 @@ impl WireSoulSide {
     /// # Examples
     ///
     /// ```
+    /// # #[allow(deprecated)]
+    /// # {
     /// use clarity_wire::{Wire, ViewCommand, TextRole};
     ///
     /// let wire = Wire::new();
@@ -440,7 +459,13 @@ impl WireSoulSide {
     /// soul.send_view(vec![
     ///     ViewCommand::Text { content: "Hello".into(), role: TextRole::Body, size: 14.0 },
     /// ]);
+    /// # }
     /// ```
+    #[deprecated(
+        since = "0.3.1",
+        note = "ADR-006: view channel removed in 0.4.0; use send() with WireMessage"
+    )]
+    #[allow(deprecated)]
     pub fn send_view(&self, commands: Vec<ViewCommand>) {
         trace!("Sending view commands: {:?}", commands);
         if let Err(e) = self.view_sender.send(commands) {
@@ -545,10 +570,16 @@ impl WireUISide {
 ///
 /// This handle allows receiving `ViewCommand` sequences from the wire.
 /// Create multiple UI view sides to broadcast commands to multiple consumers.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: view channel removed in 0.4.0; use WireUISide with WireMessage"
+)]
+#[allow(deprecated)]
 pub struct WireUIViewSide {
     receiver: broadcast::Receiver<Vec<ViewCommand>>,
 }
 
+#[allow(deprecated)]
 impl WireUIViewSide {
     /// Receives a view command batch from the wire.
     ///
@@ -636,10 +667,23 @@ impl WireUIViewSide {
 }
 
 // ============================================================================
-// Protocol-Driven UI Layer (Phase 2 Pilot)
+// Protocol-Driven UI Layer (Phase 2 Pilot) — DEPRECATED by ADR-006
 // ============================================================================
+//
+// These types were introduced as a declarative-UI protocol pilot. ADR-006
+// (2026-05-11) accepted the convergence to a single transport contract
+// (`WireMessage`) and these types are scheduled for removal in 0.4.0.
+//
+// Replacement: keep declarative-UI logic INTERNAL to the frontend crate
+// (`clarity-egui::view`). Do not cross-process protocols here.
+//
+// See: docs/adr/ADR-006-protocol-layer-convergence.md
 
 /// Semantic text role — frontend maps to theme-specific styling.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: move to clarity-egui::view as internal IR"
+)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TextRole {
@@ -649,6 +693,10 @@ pub enum TextRole {
 }
 
 /// Semantic button style — frontend maps to theme-specific coloring.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: move to clarity-egui::view as internal IR"
+)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ButtonStyle {
@@ -659,6 +707,11 @@ pub enum ButtonStyle {
 
 /// Declarative UI commands produced by a ViewModel.
 /// The frontend translates these into native draw calls.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: declarative UI IR belongs in frontend crate, not wire"
+)]
+#[allow(deprecated)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ViewCommand {
@@ -701,6 +754,10 @@ pub enum ViewCommand {
 }
 
 /// User interaction events captured by the frontend and sent to the ViewModel.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: move to clarity-egui::view as internal IR"
+)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UserAction {
@@ -711,6 +768,13 @@ pub enum UserAction {
 
 #[cfg(test)]
 mod tests {
+    // ADR-006: this test module contains coverage for protocol items scheduled
+    // for removal (Event*/ViewCommand*/UserAction*/view_*). The deprecation
+    // warnings are suppressed module-wide so the test suite keeps building
+    // cleanly during Phase A. Phase C will delete the corresponding tests
+    // together with the types.
+    #![allow(deprecated)]
+
     use super::*;
     use tokio::time::{timeout, Duration};
 

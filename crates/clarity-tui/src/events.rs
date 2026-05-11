@@ -53,6 +53,11 @@ pub enum Event {
         total_tokens: u32,
     },
     /// Declarative UI command batch from the wire view channel.
+    ///
+    /// **Deprecated by ADR-006**: this variant will be removed when the
+    /// view channel is deleted (Phase B). See
+    /// `docs/adr/ADR-006-protocol-layer-convergence.md`.
+    #[allow(deprecated)]
     ViewUpdate(Vec<clarity_wire::ViewCommand>),
 }
 

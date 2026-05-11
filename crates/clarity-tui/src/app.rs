@@ -125,6 +125,10 @@ pub struct App {
     /// Whether the TUI is in settings display mode.
     pub settings_mode: bool,
     /// Cached view commands received from the wire view channel.
+    ///
+    /// **Deprecated by ADR-006**: scheduled for migration to
+    /// `clarity-frontend-ir` in Phase D.
+    #[allow(deprecated)]
     pub cached_view_commands: Vec<clarity_wire::ViewCommand>,
 }
 
@@ -211,6 +215,9 @@ impl App {
         let wire = std::sync::Arc::new(clarity_wire::Wire::new());
         let agent = (*self.agent).clone().with_wire(wire.clone());
         spawn_wire_adapter(wire.ui_side(false), tx.clone());
+        // ADR-006: view channel scheduled for removal in 0.4.0; tui will
+        // migrate to local SettingsViewModel::commands() in Phase D.
+        #[allow(deprecated)]
         crate::wire_adapter::spawn_wire_view_adapter(wire.ui_view_side(), tx);
         let (controller, controller_tx) = AgentController::new_with_sender(agent);
         tokio::spawn(controller.run());

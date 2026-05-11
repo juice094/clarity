@@ -156,8 +156,14 @@ async fn handle_chat_with_wire(
         }
     });
 
+    // ADR-006: the wire view channel is deprecated. This task subscribes
+    // but the channel is currently empty (no producer in the workspace),
+    // so it blocks indefinitely without affecting behavior. Phase B will
+    // delete this block alongside the channel itself.
+    #[allow(deprecated)]
     let mut ui_view_side = wire.ui_view_side();
     let merge_tx_view = merge_tx;
+    #[allow(deprecated)]
     let view_task = tokio::spawn(async move {
         while let Some(commands) = ui_view_side.recv().await {
             let resp = WsResponse::ViewCommands { commands };
@@ -254,6 +260,8 @@ pub enum WsResponse {
         messages: Vec<ChatMessage>,
     },
     ViewCommands {
+        /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0.
+        #[allow(deprecated)]
         commands: Vec<clarity_wire::ViewCommand>,
     },
     Error {

@@ -312,6 +312,11 @@ impl Agent {
     }
 
     /// Set the event bus for structured event output (builder pattern)
+    #[deprecated(
+        since = "0.3.1",
+        note = "ADR-006: EventBus removed in favor of Wire broadcast. See docs/adr/ADR-006-protocol-layer-convergence.md"
+    )]
+    #[allow(deprecated)]
     pub fn with_event_bus(mut self, bus: clarity_wire::EventBus) -> Self {
         self.event_bus = Some(bus);
         self
@@ -320,6 +325,7 @@ impl Agent {
     /// Send a wire message if wire is configured.
     /// Also bridges to the event bus if configured.
     pub(crate) fn send_wire_message(&self, msg: WireMessage) {
+        #[allow(deprecated)]
         if let Some(ref bus) = self.event_bus {
             bus.emit(clarity_wire::Event::from(msg.clone()));
         }

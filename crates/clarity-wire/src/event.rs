@@ -1,3 +1,15 @@
+//! Event-driven output model — **DEPRECATED by ADR-006** (2026-05-11).
+//!
+//! This entire module is scheduled for removal in 0.4.0. See
+//! `docs/adr/ADR-006-protocol-layer-convergence.md` for the rationale.
+//!
+//! Suppress internal deprecation warnings module-wide so this file builds
+//! cleanly during the deprecation grace period. External callers will still
+//! see the deprecation notice via the public `#[deprecated]` attributes on
+//! [`Event`], [`EventMsg`], and [`EventBus`].
+
+#![allow(deprecated)]
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,12 +26,17 @@ fn next_event_id() -> String {
 ///
 /// Inspired by Codex's `Event { id, msg }` protocol. UI renders events,
 /// not raw wire messages.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: removed in favor of WireMessage broadcast. See docs/adr/ADR-006-protocol-layer-convergence.md"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Event {
     pub id: String,
     pub msg: EventMsg,
 }
 
+#[allow(deprecated)]
 impl Event {
     /// Creates a new `Event` with an auto-generated sequential ID.
     pub fn new(msg: EventMsg) -> Self {
@@ -30,6 +47,7 @@ impl Event {
     }
 }
 
+#[allow(deprecated)]
 impl From<crate::WireMessage> for Event {
     fn from(msg: crate::WireMessage) -> Self {
         Self::new(msg.into())
@@ -40,6 +58,10 @@ impl From<crate::WireMessage> for Event {
 ///
 /// Mirrors all variants of [`WireMessage`](crate::WireMessage) so that
 /// `WireMessage` can be losslessly converted into the event protocol.
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: removed in favor of WireMessage. See docs/adr/ADR-006-protocol-layer-convergence.md"
+)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EventMsg {
@@ -89,6 +111,7 @@ pub enum EventMsg {
     },
 }
 
+#[allow(deprecated)]
 impl From<crate::WireMessage> for EventMsg {
     fn from(msg: crate::WireMessage) -> Self {
         match msg {
@@ -137,11 +160,16 @@ use tokio::sync::broadcast;
 /// Broadcast channel wrapper for emitting Events.
 ///
 /// Soul-side producer. UI/front-end subscribes via the paired [`broadcast::Receiver`].
+#[deprecated(
+    since = "0.3.1",
+    note = "ADR-006: removed in favor of Wire broadcast. See docs/adr/ADR-006-protocol-layer-convergence.md"
+)]
 #[derive(Clone, Debug)]
 pub struct EventBus {
     tx: broadcast::Sender<Event>,
 }
 
+#[allow(deprecated)]
 impl EventBus {
     /// Create a new bus with the given buffer capacity.
     /// Returns `(bus, receiver)` — receiver can be cloned for multiple consumers.
@@ -157,6 +185,7 @@ impl EventBus {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::WireMessage;
