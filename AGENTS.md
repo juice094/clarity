@@ -1,4 +1,4 @@
-<!-- DOC-CONTRACT: 本文件维护 Agent 开发所需的运行上下文、环境变量、架构耦合警告和代码风格。不维护功能清单、竞品对比或历史变更——这些参见 README.md / ARCHITECTURE.md / CHANGELOG.md。 -->
+<!-- DOC-CONTRACT: 本文件维护 Agent 开发所需的运行上下文、环境变量、架构耦合警告和代码风格。不维护功能清单、竞品对比或历史变更——这些参见 README.md / docs/ARCHITECTURE.md / docs/architecture-positioning.md / CHANGELOG.md。 -->
 
 # Agent Guidance for Project Clarity
 
