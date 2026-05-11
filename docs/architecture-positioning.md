@@ -123,6 +123,108 @@ ZeroClaw 从"待融合对象"降级为"架构对照组"。
 
 ---
 
+## 五-A、与 Anthropic Managed Agents 的关系
+
+> **更新背景（2026-05-11）**：用户分享了 Anthropic Managed Agents 架构剖析（Kimi share + 视频）。
+> 详细映射分析见 [`notes/2026-05-11-anthropic-managed-agents-mapping.md`](notes/2026-05-11-anthropic-managed-agents-mapping.md)。
+
+### 5A.1 定位关系
+
+| 维度 | Anthropic Managed Agents | Clarity |
+|------|--------------------------|---------|
+| 部署形态 | Cloud-managed 托管运行时 | Local-first 单二进制守护进程 |
+| 商业模型 | $0.08/session-hour + tokens | 本地免费 |
+| LLM 绑定 | Anthropic Claude（managed-agents-2026-04-01 beta） | LLM 中立（OpenAI / Claude / Kimi / DeepSeek / Local GGUF） |
+| 沙箱模型 | 每会话独立容器，凭证 Vault 代理 | 同进程 + Approval mode + path validation |
+| 适用场景 | 企业级长任务，FDE 工程师交付现场 | 个人 / 小团队本地 Agent 基础设施 |
+| 共享哲学 | Brain / Hands / Session 三层解耦 + Session 单源真相 | ✅ ADR-006 已对齐 wire 协议单源真相 |
+
+**Anthropic Managed Agents 不是 Clarity 的竞品**，而是**架构镜子**：在不同部署约束（cloud-managed vs local-first）下，两者走出**相似但具体实现差异巨大**的路径。
+
+### 5A.2 三层解耦理念映射
+
+```
+Anthropic 模型              Clarity 当前              一致度
+────────────────            ──────────────            ──────
+Harness（Brain，无状态） ←→ Agent（含状态）           ⚠️ 部分一致
+Sandbox（Hands，容器隔离）←→ ToolRegistry（同进程）   ❌ 物理隔离差距大
+Session（事件日志单源）   ←→ SessionStore + messages  ⚠️ messages = context
+```
+
+**Clarity 已对齐**：
+- Session 持久化（SQLite + FTS5）
+- Vault 等价物（`${env:VAR}` + TokenStore + RedactingWriter）
+- Memory Store（clarity_memory 4 级 compaction）
+- Sub-agents（SubagentOrchestrator + Team coordinator）
+- MCP 三协议
+- Agent Skills (markdown + YAML)
+- 审批系统（ApprovalMode 4 种 — 实际比 Anthropic 更精细）
+
+**Clarity 实质差距**：
+- ❌ 无容器沙箱（与 OpenClaw 同类安全风险）
+- ⚠️ Agent 有状态（无 wake/suspend 抽象）
+- ⚠️ messages 直接是 context（未分离事件日志和 context window）
+
+### 5A.3 借鉴决议（不照搬清单）
+
+**不应该借鉴**（违反 Clarity 定位）：
+
+| 项 | 拒绝理由 |
+|----|----------|
+| Anthropic API 兼容（managed-agents-2026-04-01） | LLM 中立原则 |
+| 完全无状态 Brain（Harness 风格） | 违反长进程单二进制定位 |
+| Docker / 容器沙箱 | 违反"无运行时依赖"定位 |
+| Session-hour 计费 | 本地免费定位 |
+| FDE cloud runtime | 非技术架构问题 |
+
+**应该借鉴**（哲学层面 — 已 / 待落实）：
+
+| 项 | 状态 | 实施路径 |
+|----|------|---------|
+| Session 作为单源真相 | ✅ ADR-006 已对齐 wire 协议 | ADR-006 Phase A/B/C 完成 |
+| Brain / Hands 物理解耦概念 | 🟡 部分（Agent 与 ToolRegistry 已分层但同进程） | M2: 抽象 `ToolExecutor` trait，留沙箱后端扩展点 |
+| Wake/Suspend 抽象 | ⏸ 待立项 | M1: 抽象 `Wake/Suspend` 接口，允许 Agent 从 SessionStore 完全重建 |
+| Event Log 独立于 context window | ⏸ 待立项 | M3: Session 拆分 `events` + `compacted_context` |
+
+### 5A.4 与 OpenClaw 的对照启示
+
+Kimi 引用学术分析（arxiv 2603.12644v1 "A Case Study of OpenClaw"）指出 OpenClaw 存在 **Prompt Injection** 和 **RCE** 风险。
+
+**Clarity 架构上同样暴露这类风险**，但已部分缓解：
+- Path traversal protection
+- MCP command validation (`validate_mcp_command`)
+- Approval mode 4 种（含 Interactive 强制人工确认）
+- `<tool_result>` XML 边界符（Prompt Injection 防御）
+- TLS 纯 Rust（消除 OpenSSL 攻击面）
+- Log credential redaction（`RedactingWriter`）
+
+**安全模型差距评估**：Clarity 在**软件层防御**上已超过 OpenClaw 基线，但在**物理隔离**上仍是同进程模式。
+
+**长期方向**：M2 抽象 `ToolExecutor` trait 可为未来可选的 wasm-sandbox / nsjail-rust 后端铺路，但**不强制要求**。
+
+### 5A.5 FDE（Forward Deployed Engineer）澄清
+
+**FDE = Anthropic 招聘的工程师职位**（不是 Frontend-Driven Engineering）：
+- 嵌入客户现场推动 AI 落地
+- 交付 MCP servers / sub-agents / agent skills
+- 类似 Palantir 的 FDE 模式
+
+**与 Clarity 的潜在关系**：
+- Clarity 可作为 FDE 工程师的**本地 Agent 基础设施**（不依赖 Anthropic cloud）
+- 提供 MCP / Skills / Sub-agents 等同等能力，但 LLM 提供方可自选
+- 适合**对接 Anthropic 生态但不被绑定**的企业场景
+
+### 5A.6 Hybrid UI = Anthropic 解耦哲学的本地实现
+
+Clarity 的 **Hybrid UI（egui GUI + tui TUI 共享后端）** 与 Anthropic 的 **Harness 无状态可被任意进程 wake** 哲学异曲同工：
+
+- Anthropic: Brain 单一可重启 / Hands 可换沙箱 / Session 持久
+- Clarity: 后端单一 / 前端多态（GUI/TUI） / Session 持久
+
+**后端统一，前端多态 ≈ Brain 单一，Hands 可换**
+
+---
+
 ## 六、演进路线图（阶段性，非 Sprint 维度）
 
 > 与 `docs/ROADMAP.md` 的关系：本节给出 **运行时形态** 的阶段演化；ROADMAP 给出 **产品交付** 的版本节奏。
