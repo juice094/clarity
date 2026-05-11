@@ -10,21 +10,35 @@ Thank you for considering a contribution. This document is the single source of 
 
 ```
 crates/
-├── clarity-core      # Agent loop, LLM providers, tools, memory, MCP, subagents
-│   └── Rule: NO dependencies on any frontend or network crate.
-├── clarity-memory    # BM25 + vector hybrid search, chunking, four-level compilation
-├── clarity-gateway   # Axum HTTP server, Web UI, session store, channel integrations
-├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack, pure Rust
-├── clarity-tui       # ratatui terminal interface
-├── clarity-claw      # System-tray background monitor (tao + tray-icon)
-├── clarity-wire      # UI↔Agent event bus (SPMC, cross-module pub/sub)
-└── clarity-headless  # Headless CLI for scripts/CI
+├── clarity-contract   # Shared trait/types contract: LlmProvider, Tool,
+│                      # AgentError, FederationMessage, CapabilityToken.
+│                      # Rule: ZERO internal dependencies.
+├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand channel.
+├── clarity-memory     # BM25 + vector hybrid search, chunking, compaction.
+├── clarity-mcp        # MCP client — stdio / SSE / HTTP / WebSocket transports.
+├── clarity-llm        # LLM provider abstraction + built-in providers + Candle GGUF.
+├── clarity-tools      # Built-in tool library (file / shell / web / devkit / …).
+├── clarity-subagents  # Sub-agent executor + parallel scheduler.
+├── clarity-core       # Agent loop (ReAct/Plan), Approval, Skill, MCP integration.
+│                      # Rule: NO dependencies on any frontend or network crate.
+├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store.
+├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack, pure Rust.
+├── clarity-tui        # ratatui terminal interface.
+├── clarity-claw       # System-tray background monitor (tao + tray-icon).
+└── clarity-headless   # Headless CLI for scripts / CI.
 ```
 
-**Dependency direction**: `clarity-core` ← `clarity-memory` / `clarity-wire` ← all frontends (`gateway`, `egui`, `tui`, `claw`, `headless`).
+**Dependency direction**
+
+```
+contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, tui, claw, headless}
+                                                   ↑
+                                            subagents (consumes core)
+```
 
 **Forbidden patterns**:
 - `clarity-core` importing `eframe`/`egui` or `axum` — **never**.
+- `clarity-contract` importing any other internal crate — **never**.
 - Frontend crates importing each other — use `clarity-wire` for cross-frontend communication.
 - Blocking I/O in async contexts — use `tokio::task::spawn_blocking`.
 

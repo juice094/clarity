@@ -23,18 +23,22 @@ Clarity orchestrates LLMs, tools, and sub-agents across TUI, desktop GUI, web ID
 
 ```
 crates/
-├── clarity-core      # Agent loop, tools, memory, MCP, subagents
-├── clarity-memory    # BM25 + vector hybrid search, chunking
-├── clarity-gateway   # Axum HTTP server, Web UI, session store
-├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
-# clarity-tauri     # Archived — moved to external backup (see CHANGELOG)
-├── clarity-tui       # ratatui terminal interface
-├── clarity-claw      # System-tray background monitor
-├── clarity-wire      # UI↔Agent event bus
-└── clarity-headless  # Headless CLI for scripts/CI
+├── clarity-contract   # Shared trait/types contract (zero internal deps)
+├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand channel
+├── clarity-memory     # BM25 + vector hybrid search, chunking, compaction
+├── clarity-mcp        # MCP client (stdio / SSE / HTTP / WebSocket)
+├── clarity-llm        # LLM provider abstraction + 6 built-ins + Candle GGUF
+├── clarity-tools      # Built-in tool library (file/shell/web/devkit)
+├── clarity-subagents  # Sub-agent executor + parallel scheduler
+├── clarity-core       # Agent loop, Approval, Skill, MCP integration
+├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store
+├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack
+├── clarity-tui        # ratatui terminal interface
+├── clarity-claw       # System-tray background monitor
+└── clarity-headless   # Headless CLI for scripts/CI
 ```
 
-**Invariant**: `clarity-core` has zero dependencies on any frontend crate.
+**Invariant**: `clarity-core` has zero dependencies on any frontend or network crate. `clarity-contract` has zero internal deps. Frontends never import each other — they cross-talk through `clarity-wire`.
 
 ## Quick Start
 

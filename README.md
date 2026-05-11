@@ -128,19 +128,38 @@ cargo run -p clarity-egui
 
 ```
 crates/
-├── clarity-contract  # Core contract types (ToolCall, FunctionCall) — PoC for downstream decoupling
-├── clarity-core      # Agent loop, tools, memory, MCP, subagents
-├── clarity-memory    # BM25 + vector hybrid search, chunking, compilation
-├── clarity-gateway   # Axum HTTP server, Web UI, session store
-├── clarity-egui      # Desktop GUI (eframe/egui) — primary UI stack
-# clarity-tauri     # Archived — moved to external backup (see CHANGELOG)
-├── clarity-tui       # ratatui terminal interface
-├── clarity-claw      # System-tray background monitor
-├── clarity-wire      # UI↔Agent event bus (SPMC) + ViewCommand protocol channel
-└── clarity-headless  # Headless CLI for scripts/CI
+├── clarity-contract   # Shared contract types: LlmProvider/Tool/AgentError traits,
+│                      # FederationMessage, CapabilityToken — zero internal deps.
+├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand protocol channel.
+├── clarity-memory     # BM25 + vector hybrid search, chunking, four-level compaction.
+├── clarity-mcp        # MCP client — stdio / SSE / HTTP / WebSocket transports.
+├── clarity-llm        # LLM provider abstraction + 6 built-in providers + Candle GGUF.
+├── clarity-tools      # Built-in tool library (file/shell/web/devkit/…).
+├── clarity-subagents  # Sub-agent executor + parallel scheduler.
+├── clarity-core       # Agent loop (ReAct/Plan), Approval, Skill, MCP integration.
+├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store.
+├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack.
+├── clarity-tui        # ratatui terminal interface.
+├── clarity-claw       # System-tray background monitor.
+└── clarity-headless   # Headless CLI for scripts / CI.
+# clarity-tauri        # Archived — moved to external backup (see CHANGELOG).
 ```
 
-**Key invariant**: `clarity-core` has zero dependencies on any frontend or network crate. All frontends consume the core through a uniform API. This is not accidental — it is the architectural boundary that keeps the project maintainable by a single developer.
+**Dependency direction**
+
+```
+contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, tui, claw, headless}
+                                                   ↑
+                                            subagents (consumes core)
+```
+
+**Key invariants**
+
+- `clarity-core` has zero dependencies on any frontend or network crate.
+- `clarity-contract` has zero internal dependencies; everyone else builds on it.
+- Frontend crates never import each other — cross-frontend communication goes through `clarity-wire`.
+
+This is not accidental — it is the architectural boundary that keeps the project maintainable by a single developer.
 
 ---
 

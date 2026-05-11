@@ -76,19 +76,38 @@ cargo run -p clarity-egui
 
 ```
 crates/
-├── clarity-core      # 智能体循环、工具、记忆、MCP、子代理
-├── clarity-memory    # BM25 + 向量混合搜索、分块、编译
-├── clarity-gateway   # Axum HTTP 服务器、Web UI、会话存储
-├── clarity-egui      # 桌面 GUI（eframe/egui）—— 主 UI 栈
-├── clarity-tui       # ratatui 终端界面
-├── clarity-claw      # 系统托盘后台监控
-├── clarity-wire      # UI↔Agent 事件总线（SPMC）
-└── clarity-headless  # 脚本/CI 用无头 CLI
+├── clarity-contract   # 共享契约：LlmProvider/Tool/AgentError trait、
+│                      # FederationMessage、CapabilityToken —— 零内部依赖。
+├── clarity-wire       # UI ↔ Agent 事件总线（SPMC）+ ViewCommand 协议通道。
+├── clarity-memory     # BM25 + 向量混合搜索、分块、四级压缩管线。
+├── clarity-mcp        # MCP 客户端 —— stdio / SSE / HTTP / WebSocket 四种 transport。
+├── clarity-llm        # LLM provider 抽象 + 6 个内置 provider + Candle GGUF。
+├── clarity-tools      # 内置工具库（file/shell/web/devkit 等）。
+├── clarity-subagents  # 子代理执行器 + 并行调度器。
+├── clarity-core       # 智能体循环（ReAct/Plan）、审批、Skill、MCP 整合。
+├── clarity-gateway    # Axum HTTP/WebSocket 服务器、Web UI、会话存储。
+├── clarity-egui       # 桌面 GUI（eframe/egui）—— 主 UI 栈。
+├── clarity-tui        # ratatui 终端界面。
+├── clarity-claw       # 系统托盘后台守护进程。
+└── clarity-headless   # 脚本 / CI 用 Headless CLI。
+# clarity-tauri        # 已归档 —— 移至外部备份，详见 CHANGELOG。
 ```
 
-> `clarity-tauri`（Tauri 2 + React 前端）已归档并移出仓库。详见 [CHANGELOG](CHANGELOG.md)。
+**依赖方向**
 
-**关键不变量**：`clarity-core` 对任何前端或网络 crate 零依赖。所有前端通过统一 API 消费核心。这不是偶然 —— 它是让项目可由单人维护的架构边界。
+```
+contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, tui, claw, headless}
+                                                    ↑
+                                            subagents（消费 core）
+```
+
+**关键不变量**
+
+- `clarity-core` 对任何前端或网络 crate **零依赖**。
+- `clarity-contract` 无任何内部依赖，是其他所有 crate 的底座。
+- 前端 crate 之间**不直接互相依赖**，跨前端通信通过 `clarity-wire`。
+
+这不是偶然 —— 它是让项目可由单人维护的架构边界。
 
 ---
 
