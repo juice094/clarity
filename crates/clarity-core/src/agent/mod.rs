@@ -39,7 +39,7 @@ pub use crate::types::{Plan, PlanResult, PlanStep};
 mod prompt;
 mod run;
 mod turn_context;
-pub use executor::AgentExecutor;
+pub use clarity_contract::subagent::AgentExecutor;
 
 #[cfg(test)]
 mod tests;

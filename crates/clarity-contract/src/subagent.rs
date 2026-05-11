@@ -945,3 +945,19 @@ pub trait SubagentOrchestrator: Send + Sync {
     /// Execute an agent team collaboratively.
     async fn run_team(&self, team: AgentTeam) -> Result<TeamResult, SubagentError>;
 }
+
+// ============================================================================
+// AgentExecutor trait (migrated from clarity-core to break subagents↔agent cycle)
+// ============================================================================
+
+/// Minimal trait for anything that can execute an agent turn.
+///
+/// Extracted from `clarity-core::agent::executor` so that `clarity-subagents`
+/// can depend on the trait without pulling in the concrete `Agent` type.
+#[async_trait]
+pub trait AgentExecutor: Send + Sync {
+    /// Run a single turn with the given user query.
+    async fn run_turn(&self, query: &str) -> Result<String, AgentError>;
+    /// Return the number of messages exchanged in the last turn.
+    fn last_turn_message_count(&self) -> usize;
+}

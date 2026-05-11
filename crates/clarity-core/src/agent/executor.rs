@@ -1,32 +1,16 @@
 //! P1-2: Agent executor trait abstraction.
 //!
-//! Extracts the minimal surface that `subagents::runner` needs from `Agent`,
-//! breaking the `subagents↔agent` circular dependency at the type level.
+//! The `AgentExecutor` trait has been uplifted to `clarity-contract::subagent`
+//! (see ADR-005) so that `clarity-subagents` can depend on the trait without
+//! pulling in the concrete `Agent` type.
 //!
-//! PoC scope (Week 4):
-//! - Only `run()` is abstracted; builder methods (`with_llm`, etc.) remain on
-//!   the concrete `Agent` type.
-//! - `subagents::runner::execute_agent` now takes `&dyn AgentExecutor` instead
-//!   of `&Agent`, proving the abstraction works end-to-end.
-//!
-//! Risk: The trait surface is intentionally minimal.  If `subagents` starts
-//! calling other `Agent` methods (e.g. `run_streaming`), the trait must grow.
-//! Future work:
-//! - Abstract `with_llm`, `with_approval_runtime`, `with_approval_mode` into
-//!   a separate `AgentBuilder` trait if `subagents` ever needs to construct
-//!   agents generically.
+//! This module now only provides the `Agent` -> `AgentExecutor` bridge impl.
+//! Future work: abstract `with_llm`, `with_approval_runtime`,
+//! `with_approval_mode` into a separate `AgentBuilder` trait.
 
 use crate::agent::Agent;
+use clarity_contract::subagent::AgentExecutor;
 use crate::error::AgentError;
-
-/// Minimal trait for anything that can execute an agent turn.
-#[async_trait::async_trait]
-pub trait AgentExecutor: Send + Sync {
-    /// Run a single turn with the given user query.
-    async fn run_turn(&self, query: &str) -> Result<String, AgentError>;
-    /// Return the number of messages exchanged in the last turn.
-    fn last_turn_message_count(&self) -> usize;
-}
 
 #[async_trait::async_trait]
 impl AgentExecutor for Agent {

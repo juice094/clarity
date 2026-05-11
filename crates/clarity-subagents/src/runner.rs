@@ -16,9 +16,11 @@ use clarity_contract::subagent::{
     AgentTypeDefinition, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, RunSpec,
     SubagentError, SubagentProgressEvent, SubagentResult, SubagentStatus,
 };
-use clarity_core::agent::{Agent, AgentExecutor};
-use clarity_core::approval::{ApprovalMode, ApprovalRuntime};
-use clarity_core::error::AgentError;
+use clarity_contract::subagent::AgentExecutor;
+use clarity_core::agent::Agent;
+use clarity_contract::ApprovalMode;
+use clarity_contract::error::AgentError;
+use clarity_core::approval::ApprovalRuntime;
 use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::{LlmProvider, Message};
 use clarity_llm::{build_provider_from_registry, ModelRegistry};
