@@ -52,7 +52,7 @@ contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, 
 |------|---------|---------|
 | Rust | 1.94+ | Core language |
 | Git | any | Version control |
-| Node.js | 20+ | Gateway Web UI build (optional) |
+| ~~Node.js~~ | ~~20+~~ | ~~Gateway Web UI build~~ — **deprecated**. Tauri frontend archived; Gateway serves pre-built static assets. Node.js no longer required. |
 
 ### One-Time Setup
 
@@ -62,7 +62,7 @@ git clone https://github.com/juice094/clarity.git
 cd clarity
 
 # 2. Verify Rust toolchain
-rustc --version  # should be 1.85+
+rustc --version  # should be 1.94+ (matches MSRV in CI; Cargo.toml rust-version = 1.85)
 
 # 3. Verify everything compiles
 cargo check --workspace
