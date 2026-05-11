@@ -47,6 +47,21 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint S4-α — Widget Extraction POC（已完成 ✅，2026-05-11，commit `69cf941f`）**
+
+> 验证"反模式可机械翻译 + widget 可单测 + 3 工作日可控"三个方法论假设。
+
+- **POC 目标**: `components/settings/provider_tab.rs:62-118` 教科书反模式（allocate_exact_size + painter.rect_filled × 2 + Sense::click）
+- **抽取**: `widgets/provider_row.rs` (新 197 行，含 5 个行为单元测试)
+- **真正进步**: 2 处 `painter.rect_filled` 完全消除，替换为 `Frame::fill + Frame::stroke`
+- **panel-level 反模式总数**: 5 → 3（interface_tab.rs:214 + sidebar.rs:159 + chat/avatar.rs 仍待处理）
+- **测试基线**: 932 → 937（+5 provider_row 测试）
+- **验证三个假设**：
+  - H1 反模式可机械翻译为 idiomatic egui: ✅ Frame::fill 取代 painter.rect_filled
+  - H2 widget 函数可单元测试: ✅ 5 个测试覆盖关键行为（`egui::Context::run` 合成上下文，零额外依赖）
+  - H3 3 工作日内可控完成: ✅ 单 session 完成
+- **测试基础设施决议**: 暂不引入 `egui_kittest` 依赖；纯单元测试已足够；snapshot 测试推迟到 S6 阶段
+
 **Sprint 43+ — Protocol Convergence + Engineering Discipline（进行中 🟢 A/B/C 完成，2026-05-11）**
 
 > 承接前序架构审计（`docs/CODE-CHANGE-PRINCIPLES.md` + `docs/adr/ADR-006-protocol-layer-convergence.md`）。

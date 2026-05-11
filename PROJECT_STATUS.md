@@ -2,9 +2,10 @@
 
 > Last updated: 2026-05-11
 > Branch: `main`
-> Test baseline: **826 passed lib + 106 passed bin = 932 (workspace), 0 failed, 7 ignored**
+> Test baseline: **826 passed lib + 111 passed bin = 937 (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 > Active ADR: **ADR-006 Protocol Layer Convergence** — Phase A/B/C complete; Phase D pending
+> Active Sprint: **S4-α complete** (widget extraction POC validated)
 
 ---
 
@@ -42,6 +43,7 @@
 | 40 | **Runtime Robustness + Integration Tests** | ✅ Complete | parking_lot 迁移（~154 锁 unwrap 消除）；MCP end-to-end 集成测试；Dependabot 跟进 |
 | 41 | **UI 审计修复与视觉精调** | ✅ Complete | CJK 子集字体 297KB；错误气泡增强；侧边栏信息架构重构；Phosphor 图标系统 |
 | 43+ | **Protocol Convergence + Engineering Discipline** | 🟢 A/B/C Complete | `docs/CODE-CHANGE-PRINCIPLES.md` 七条原则强制生效；ADR-006 Phase A/B/C 完成 (-792 行死代码，含 Gen-2 协议+view 通道；新 clippy `-D warnings` 通过；测试基线 955 → 932) |
+| S4-α | **Widget Extraction POC** | ✅ Complete | `widgets/provider_row.rs` 抽取自 `provider_tab.rs:62-118`；2 处 painter.rect_filled 替换为 Frame::fill+stroke；5 个单元测试覆盖；H1/H2/H3 三个方法论假设全部成立 |
 
 ---
 
@@ -49,6 +51,8 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib + bin tests (post S4-α) | 826 lib + 111 bin = 937 passed, 0 failed, 7 ignored | 2026-05-11 |
+| S4-α widget extraction | provider_row.rs +5 tests passing; 2 painter calls eliminated | 2026-05-11 |
 | Workspace lib + bin tests (post C.2) | 826 lib + 106 bin = 932 passed, 0 failed, 7 ignored | 2026-05-11 |
 | Strict clippy (post C.2) | `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS | 2026-05-11 |
 | ADR-006 Phase A | `#[deprecated]` markers added; zero functional change | 2026-05-11 |
