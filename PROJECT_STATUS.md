@@ -1,9 +1,10 @@
 # Clarity Project Status
 
-> Last updated: 2026-05-10
+> Last updated: 2026-05-11
 > Branch: `main`
-> Test baseline: **849 passed (workspace), 0 failed, 7 ignored**
+> Test baseline: **849 passed lib + 106 passed bin = 955 (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
+> Active ADR: **ADR-006 Protocol Layer Convergence** — Phase A complete; Phase B-E pending
 
 ---
 
@@ -40,6 +41,7 @@
 | 39 | **Runtime Stability + Backlog** | ✅ Complete | `TaskStore` panic 消除；TODO/FIXME 清理；`ParallelExecutor` cancel token |
 | 40 | **Runtime Robustness + Integration Tests** | ✅ Complete | parking_lot 迁移（~154 锁 unwrap 消除）；MCP end-to-end 集成测试；Dependabot 跟进 |
 | 41 | **UI 审计修复与视觉精调** | ✅ Complete | CJK 子集字体 297KB；错误气泡增强；侧边栏信息架构重构；Phosphor 图标系统 |
+| 43+ | **Protocol Convergence + Engineering Discipline** | 🟡 Phase A | `docs/CODE-CHANGE-PRINCIPLES.md` 七条原则强制生效；ADR-006 Phase A 完成（Gen-2/Gen-3 协议层标记 `#[deprecated]`，零功能变更，clippy `-D warnings` 通过） |
 
 ---
 
@@ -47,6 +49,9 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib + bin tests | 849 lib + 106 bin = 955 passed, 0 failed, 7 ignored | 2026-05-11 |
+| Strict clippy | `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS | 2026-05-11 |
+| ADR-006 Phase A | `#[deprecated]` markers added; zero functional change | 2026-05-11 |
 | Workspace lib tests | 849 passed, 0 failed, 7 ignored | 2026-05-10 |
 | Workspace lib tests | 551 passed (clarity-core), 6 ignored | 2026-05-06 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |

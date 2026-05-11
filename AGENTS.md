@@ -47,6 +47,24 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+**Sprint 43+ — Protocol Convergence + Engineering Discipline（进行中 🟡，2026-05-11）**
+
+> 承接前序架构审计（`docs/CODE-CHANGE-PRINCIPLES.md` + `docs/adr/ADR-006-protocol-layer-convergence.md`）。
+> 修复 egui 前端 / 协议层逻辑扭曲，目标：单源真相 + 单向迁移 + 协议层瘦身。
+
+- **基线**: `docs/CODE-CHANGE-PRINCIPLES.md` 七条原则 (P1~P7) **强制生效**；ADR-006 接受
+- **ADR-006 Phase A 已落地** (2026-05-11)：
+  - `Event` / `EventMsg` / `EventBus` (Gen-2) → `#[deprecated]`
+  - `TextRole` / `ButtonStyle` / `ViewCommand` / `UserAction` (Gen-3 types) → `#[deprecated]`
+  - `Wire::ui_view_side` / `view_receiver_count` / `WireSoulSide::send_view` / `WireUIViewSide` → `#[deprecated]`
+  - `Agent::with_event_bus` / `SettingsViewModel::sync_to_wire` → `#[deprecated]`
+  - 下游消费者 (tui/gateway/core) 加 `#[allow(deprecated)]` 临时豁免
+- **校正发现**：初版本 ADR 声称 `ViewCommand` 零消费者；实际 `clarity-tui::protocol_renderer` + `clarity-gateway::ws` 均订阅（gateway 转发到 WebSocket，但无 producer → 永久空转）。Phase D 改为抽出 `clarity-frontend-ir` crate
+- **验证**: `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS；`cargo test --workspace --lib` 849 passed / 0 failed / 7 ignored；binary tests 106 passed
+- **Pending**: Phase B (删除 producer 调用)、Phase C (删除类型本身)、Phase D (frontend IR 重定位)、Phase E (Turn ID，待 ADR-007)
+
+> **新 PR 必须自查**：`docs/CODE-CHANGE-PRINCIPLES.md` §9 PR 审查 Checklist。任一 P1~P7 失败 = Request Changes。
+
 **Sprint 39 — Runtime Stability + Engineering Hygiene + Backlog（已完成 ✅，2026-05-07）**
 
 > 承接 Sprint 38-C，执行计划 `~/.kimi/plans/warpath-jubilee-forge.md`（A+B+C 合并）。
