@@ -328,9 +328,6 @@ where
             } => {
                 app.handle_usage(prompt_tokens, completion_tokens, total_tokens);
             }
-            events::Event::ViewUpdate(commands) => {
-                app.cached_view_commands = commands;
-            }
         }
     }
 

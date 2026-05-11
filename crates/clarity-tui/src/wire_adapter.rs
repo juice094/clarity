@@ -1,10 +1,10 @@
 //! Wire ↔ TUI event adapter.
 //!
-//! Note: imports `WireUIViewSide` which is deprecated by ADR-006; this is
-//! kept under `#[allow(deprecated)]` until Phase B removes the view channel.
+//! ADR-006 Phase C.2 (2026-05-11): view channel adapter removed.
+//! Only WireMessage broadcast remains; ViewCommand is now populated
+//! directly by `SettingsViewModel::commands()` (see `commands.rs`).
 
-#[allow(deprecated)]
-use clarity_wire::{WireMessage, WireUISide, WireUIViewSide};
+use clarity_wire::{WireMessage, WireUISide};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::events::{Event, ToolCallInfo, ToolStatus};
@@ -57,21 +57,6 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
                 if event_tx.send(ev).is_err() {
                     break;
                 }
-            }
-        }
-    });
-}
-
-/// Spawn a background task that reads from a Wire UI view side and forwards
-/// `Vec<ViewCommand>` as `Event::ViewUpdate` on the existing MPSC channel.
-///
-/// **Deprecated by ADR-006**: view channel removed in 0.4.0.
-#[allow(deprecated)]
-pub fn spawn_wire_view_adapter(mut ui_view_side: WireUIViewSide, event_tx: UnboundedSender<Event>) {
-    tokio::spawn(async move {
-        while let Some(commands) = ui_view_side.recv().await {
-            if event_tx.send(Event::ViewUpdate(commands)).is_err() {
-                break;
             }
         }
     });

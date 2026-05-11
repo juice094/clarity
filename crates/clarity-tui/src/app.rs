@@ -214,11 +214,7 @@ impl App {
         self.event_tx = Some(tx.clone());
         let wire = std::sync::Arc::new(clarity_wire::Wire::new());
         let agent = (*self.agent).clone().with_wire(wire.clone());
-        spawn_wire_adapter(wire.ui_side(false), tx.clone());
-        // ADR-006: view channel scheduled for removal in 0.4.0; tui will
-        // migrate to local SettingsViewModel::commands() in Phase D.
-        #[allow(deprecated)]
-        crate::wire_adapter::spawn_wire_view_adapter(wire.ui_view_side(), tx);
+        spawn_wire_adapter(wire.ui_side(false), tx);
         let (controller, controller_tx) = AgentController::new_with_sender(agent);
         tokio::spawn(controller.run());
         self.controller_tx = Some(controller_tx);

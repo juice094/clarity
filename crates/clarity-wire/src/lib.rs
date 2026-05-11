@@ -153,10 +153,9 @@ impl WireMessage {
 
 /// The main Wire struct that manages communication channels.
 ///
-/// `Wire` maintains three broadcast channels:
+/// `Wire` maintains two broadcast channels:
 /// - `raw_sender`: Unprocessed messages as they are produced
 /// - `merged_sender`: Messages with consecutive ContentParts merged for efficiency
-/// - `view_sender`: Declarative UI commands (ViewCommand) for protocol-driven frontends
 ///
 /// # Example
 ///
@@ -173,12 +172,6 @@ pub struct Wire {
     raw_sender: broadcast::Sender<WireMessage>,
     /// Sender for merged messages.
     merged_sender: broadcast::Sender<WireMessage>,
-    /// Sender for declarative UI commands.
-    ///
-    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0. See
-    /// `docs/adr/ADR-006-protocol-layer-convergence.md`.
-    #[allow(deprecated)]
-    view_sender: broadcast::Sender<Vec<ViewCommand>>,
     /// The soul side handle.
     soul_side: WireSoulSide,
 }
@@ -213,19 +206,16 @@ impl Wire {
     pub fn with_capacity(capacity: usize) -> Self {
         let (raw_sender, _) = broadcast::channel(capacity);
         let (merged_sender, _) = broadcast::channel(capacity);
-        let (view_sender, _) = broadcast::channel(capacity);
 
         let soul_side = WireSoulSide {
             raw_sender: raw_sender.clone(),
             merged_sender: merged_sender.clone(),
-            view_sender: view_sender.clone(),
             merge_buffer: Arc::new(Mutex::new(None)),
         };
 
         Self {
             raw_sender,
             merged_sender,
-            view_sender,
             soul_side,
         }
     }
@@ -271,30 +261,6 @@ impl Wire {
         WireUISide { receiver }
     }
 
-    /// Creates a UI view side for receiving declarative UI commands.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[allow(deprecated)]
-    /// # {
-    /// use clarity_wire::Wire;
-    ///
-    /// let wire = Wire::new();
-    /// let mut ui_view = wire.ui_view_side();
-    /// # }
-    /// ```
-    #[deprecated(
-        since = "0.3.1",
-        note = "ADR-006: view channel removed in 0.4.0; use ui_side() with WireMessage"
-    )]
-    #[allow(deprecated)]
-    pub fn ui_view_side(&self) -> WireUIViewSide {
-        WireUIViewSide {
-            receiver: self.view_sender.subscribe(),
-        }
-    }
-
     /// Shuts down the wire, closing all channels.
     ///
     /// This method flushes any pending merged messages and drops all senders,
@@ -314,12 +280,6 @@ impl Wire {
         self.soul_side.flush();
         // Channels are automatically closed when all senders are dropped.
         // The senders in soul_side will be dropped when Wire is dropped.
-    }
-
-    /// Returns the number of active receivers on the view channel.
-    #[deprecated(since = "0.3.1", note = "ADR-006: view channel removed in 0.4.0")]
-    pub fn view_receiver_count(&self) -> usize {
-        self.view_sender.receiver_count()
     }
 
     /// Returns the number of active receivers on the raw channel.
@@ -349,11 +309,6 @@ impl Default for Wire {
 pub struct WireSoulSide {
     raw_sender: broadcast::Sender<WireMessage>,
     merged_sender: broadcast::Sender<WireMessage>,
-    /// Sender for declarative UI commands.
-    ///
-    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0.
-    #[allow(deprecated)]
-    view_sender: broadcast::Sender<Vec<ViewCommand>>,
     /// Buffer for accumulating mergeable messages (protected by mutex for interior mutability).
     merge_buffer: Arc<Mutex<Option<WireMessage>>>,
 }
@@ -436,39 +391,6 @@ impl WireSoulSide {
             if let Err(e) = self.merged_sender.send(buffer) {
                 warn!("Failed to send merged message, no receivers: {}", e);
             }
-        }
-    }
-
-    /// Sends declarative UI commands through the view channel.
-    ///
-    /// # Arguments
-    ///
-    /// * `commands` - The view commands to broadcast to all UI view consumers.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[allow(deprecated)]
-    /// # {
-    /// use clarity_wire::{Wire, ViewCommand, TextRole};
-    ///
-    /// let wire = Wire::new();
-    /// let soul = wire.soul_side();
-    ///
-    /// soul.send_view(vec![
-    ///     ViewCommand::Text { content: "Hello".into(), role: TextRole::Body, size: 14.0 },
-    /// ]);
-    /// # }
-    /// ```
-    #[deprecated(
-        since = "0.3.1",
-        note = "ADR-006: view channel removed in 0.4.0; use send() with WireMessage"
-    )]
-    #[allow(deprecated)]
-    pub fn send_view(&self, commands: Vec<ViewCommand>) {
-        trace!("Sending view commands: {:?}", commands);
-        if let Err(e) = self.view_sender.send(commands) {
-            warn!("Failed to send view commands, no receivers: {}", e);
         }
     }
 }
@@ -565,105 +487,10 @@ impl WireUISide {
     }
 }
 
-/// The UI view side of the Wire - used for consuming declarative UI commands.
-///
-/// This handle allows receiving `ViewCommand` sequences from the wire.
-/// Create multiple UI view sides to broadcast commands to multiple consumers.
-#[deprecated(
-    since = "0.3.1",
-    note = "ADR-006: view channel removed in 0.4.0; use WireUISide with WireMessage"
-)]
-#[allow(deprecated)]
-pub struct WireUIViewSide {
-    receiver: broadcast::Receiver<Vec<ViewCommand>>,
-}
-
-#[allow(deprecated)]
-impl WireUIViewSide {
-    /// Receives a view command batch from the wire.
-    ///
-    /// Returns `Some(Vec<ViewCommand>)` on success, or `None` if the channel
-    /// is closed (all senders have been dropped).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use clarity_wire::{Wire, ViewCommand, TextRole};
-    ///
-    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-    /// let wire = Wire::new();
-    /// let soul = wire.soul_side();
-    /// let mut ui_view = wire.ui_view_side();
-    ///
-    /// soul.send_view(vec![
-    ///     ViewCommand::Text { content: "Hello".into(), role: TextRole::Body, size: 14.0 },
-    /// ]);
-    ///
-    /// if let Some(cmds) = ui_view.recv().await {
-    ///     assert_eq!(cmds.len(), 1);
-    /// }
-    /// # });
-    /// ```
-    pub async fn recv(&mut self) -> Option<Vec<ViewCommand>> {
-        loop {
-            match self.receiver.recv().await {
-                Ok(commands) => {
-                    trace!("Received view commands: {:?}", commands);
-                    return Some(commands);
-                }
-                Err(broadcast::error::RecvError::Closed) => {
-                    debug!("Wire view channel closed");
-                    return None;
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    error!("UI view receiver lagged, skipped {} messages", n);
-                    continue;
-                }
-            }
-        }
-    }
-
-    /// Attempts to receive view commands without blocking.
-    ///
-    /// Returns `Some(Vec<ViewCommand>)` if available, `None` if empty or closed.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use clarity_wire::{Wire, ViewCommand, TextRole};
-    ///
-    /// let wire = Wire::new();
-    /// let soul = wire.soul_side();
-    /// let mut ui_view = wire.ui_view_side();
-    ///
-    /// // Initially empty
-    /// assert!(ui_view.try_recv().is_none());
-    ///
-    /// soul.send_view(vec![
-    ///     ViewCommand::Text { content: "Hello".into(), role: TextRole::Body, size: 14.0 },
-    /// ]);
-    ///
-    /// // Now available
-    /// assert!(ui_view.try_recv().is_some());
-    /// ```
-    pub fn try_recv(&mut self) -> Option<Vec<ViewCommand>> {
-        match self.receiver.try_recv() {
-            Ok(commands) => {
-                trace!("Received view commands (non-blocking): {:?}", commands);
-                Some(commands)
-            }
-            Err(broadcast::error::TryRecvError::Empty) => None,
-            Err(broadcast::error::TryRecvError::Closed) => {
-                debug!("Wire view channel closed");
-                None
-            }
-            Err(broadcast::error::TryRecvError::Lagged(n)) => {
-                error!("UI view receiver lagged, skipped {} messages", n);
-                None
-            }
-        }
-    }
-}
+// ============================================================================
+// ADR-006 Phase C.2 (2026-05-11): WireUIViewSide removed alongside the view
+// channel. WireMessage is the sole soul→ui transport contract.
+// ============================================================================
 
 // ============================================================================
 // Protocol-Driven UI Layer (Phase 2 Pilot) — DEPRECATED by ADR-006
@@ -1074,82 +901,6 @@ mod tests {
             let decoded: UserAction = serde_json::from_str(&json).unwrap();
             assert_eq!(action, decoded);
         }
-    }
-
-    #[tokio::test]
-    async fn test_view_channel_basic() {
-        let wire = Wire::new();
-        let soul = wire.soul_side();
-        let mut ui_view = wire.ui_view_side();
-
-        let commands = vec![ViewCommand::Text {
-            content: "Hello".into(),
-            role: TextRole::Body,
-            size: 14.0,
-        }];
-        soul.send_view(commands.clone());
-
-        let received = ui_view.recv().await.expect("should receive view commands");
-        assert_eq!(received, commands);
-    }
-
-    #[tokio::test]
-    async fn test_view_channel_broadcast() {
-        let wire = Wire::new();
-        let soul = wire.soul_side();
-        let mut ui1 = wire.ui_view_side();
-        let mut ui2 = wire.ui_view_side();
-        let mut ui3 = wire.ui_view_side();
-
-        let commands = vec![
-            ViewCommand::Space { height: 8.0 },
-            ViewCommand::Button {
-                id: "ok".into(),
-                label: "OK".into(),
-                style: ButtonStyle::Primary,
-                min_width: 60.0,
-                min_height: 28.0,
-            },
-        ];
-        soul.send_view(commands.clone());
-
-        let msg1 = ui1.recv().await.expect("ui1 should receive");
-        let msg2 = ui2.recv().await.expect("ui2 should receive");
-        let msg3 = ui3.recv().await.expect("ui3 should receive");
-
-        assert_eq!(msg1, commands);
-        assert_eq!(msg2, commands);
-        assert_eq!(msg3, commands);
-    }
-
-    #[test]
-    fn test_view_channel_try_recv() {
-        let wire = Wire::new();
-        let soul = wire.soul_side();
-        let mut ui_view = wire.ui_view_side();
-
-        // Should be empty initially
-        assert!(ui_view.try_recv().is_none());
-
-        let commands = vec![ViewCommand::Space { height: 4.0 }];
-        soul.send_view(commands.clone());
-
-        assert!(ui_view.try_recv().is_some());
-
-        // Should be empty again
-        assert!(ui_view.try_recv().is_none());
-    }
-
-    #[test]
-    fn test_view_receiver_count() {
-        let wire = Wire::new();
-        assert_eq!(wire.view_receiver_count(), 0);
-
-        let _ui1 = wire.ui_view_side();
-        assert_eq!(wire.view_receiver_count(), 1);
-
-        let _ui2 = wire.ui_view_side();
-        assert_eq!(wire.view_receiver_count(), 2);
     }
 
     #[test]
