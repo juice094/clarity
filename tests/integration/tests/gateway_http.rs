@@ -30,8 +30,8 @@ async fn test_api_router() -> Router {
         .allow_headers(Any);
 
     Router::new()
-        .route("/health", get(handlers::health_check))
-        .route("/v1/chat/completions", post(handlers::chat_completions))
+        .route("/health", get(handlers::chat::health_check))
+        .route("/v1/chat/completions", post(handlers::chat::chat_completions))
         .route("/ws", get(ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

@@ -61,10 +61,11 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         actions.push(ShortcutAction::NewSession);
     }
 
-    if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
-        if !app.chat_store.input.trim().is_empty() && !app.chat_store.is_loading {
-            actions.push(ShortcutAction::SendMessage);
-        }
+    if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
+        && !app.chat_store.input.trim().is_empty()
+        && !app.chat_store.is_loading
+    {
+        actions.push(ShortcutAction::SendMessage);
     }
 
     if ctx.input(|i| i.key_pressed(egui::Key::K) && i.modifiers.ctrl) {
@@ -106,21 +107,10 @@ fn is_modal_open(app: &App) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    /// Helper: build a minimal App for shortcut testing.
-    fn test_app() -> App {
-        // We cannot easily construct a full App without egui context,
-        // but `is_modal_open` only touches store flags.
-        // For a unit test we would need a test-harness; keep the test
-        // surface small and rely on integration tests for the hot path.
-        panic!("Use integration tests in tests/egui_shortcuts.rs");
-    }
-
     #[test]
     fn test_is_modal_open_approval_blocks() {
         // Placeholder: real test needs App construction helper.
         // This documents the expected behaviour.
-        assert!(true);
+        // TODO: implement once App test-harness is available.
     }
 }

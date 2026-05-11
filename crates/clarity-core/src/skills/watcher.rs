@@ -22,8 +22,8 @@ impl SkillWatcher {
     /// Start watching the given directories and reload the registry on changes.
     ///
     /// * `registry` – clone of the registry to reload.
-    /// * `paths`    – directories to watch (typically user-level and project-level
-    ///                `.clarity/skills/`).
+    /// * `paths` – directories to watch (typically user-level and project-level
+    ///   `.clarity/skills/`).
     ///
     /// Returns `Some(SkillWatcher)` on success, or `None` if the watcher could
     /// not be initialised.

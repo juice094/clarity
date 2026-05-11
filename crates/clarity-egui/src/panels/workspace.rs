@@ -198,8 +198,8 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                 app.ui_store.preview_item = None;
             }
 
-            if !is_web {
-                if ui
+            if !is_web
+                && ui
                     .add(
                         egui::Button::new(
                             egui::RichText::new(crate::theme::ICON_CHECK)
@@ -212,7 +212,7 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     )
                     .on_hover_text("Save & git add")
                     .clicked()
-                {
+            {
                     if let crate::ui::types::PreviewItem::File { content, path, .. } =
                         app.ui_store.preview_item.as_ref().unwrap()
                     {
@@ -237,7 +237,6 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                         }
                     }
                 }
-            }
         });
     });
     ui.add_space(4.0);

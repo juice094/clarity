@@ -45,7 +45,7 @@ impl CircuitBreaker {
                     .last_failure
                     .lock()
                     .unwrap()
-                    .map_or(false, |t| t.elapsed() >= self.recovery_timeout);
+                    .is_some_and(|t| t.elapsed() >= self.recovery_timeout);
                 if should_try {
                     *state = CircuitState::HalfOpen;
                     true

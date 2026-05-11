@@ -269,8 +269,8 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                             .color(theme.text),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if step.status == PlanStepStatus::Failed {
-                            if ui
+                        if step.status == PlanStepStatus::Failed
+                            && ui
                                 .add_sized(
                                     egui::vec2(48.0, 22.0),
                                     egui::Button::new(
@@ -281,12 +281,11 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                                     .fill(theme.surface),
                                 )
                                 .clicked()
-                            {
-                                retry_step_id = Some(step.id.clone());
-                            }
+                        {
+                            retry_step_id = Some(step.id.clone());
                         }
-                        if step.status == PlanStepStatus::Pending {
-                            if ui
+                        if step.status == PlanStepStatus::Pending
+                            && ui
                                 .add_sized(
                                     egui::vec2(48.0, 22.0),
                                     egui::Button::new(
@@ -300,8 +299,7 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                             {
                                 skip_step_id = Some(step.id.clone());
                             }
-                        }
-                    });
+                        });
                 });
                 ui.horizontal(|ui| {
                     ui.add_space(theme.space_20);

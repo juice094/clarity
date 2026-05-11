@@ -1,7 +1,9 @@
+#![allow(dead_code)]
+
 use async_trait::async_trait;
 use clarity_core::agent::{LlmProvider, LlmResponse, Message, ToolCall};
 use clarity_core::error::AgentError;
-use clarity_core::llm::StreamDelta;
+use clarity_core::agent::StreamDelta;
 use parking_lot::Mutex;
 use serde_json::Value;
 

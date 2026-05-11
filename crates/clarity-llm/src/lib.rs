@@ -23,6 +23,9 @@ pub mod runtime;
 pub mod sse;
 pub mod tool_payload;
 
+/// Version of the clarity-llm crate
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use kalosm::{KalosmConfig, KalosmProvider};
@@ -1336,6 +1339,3 @@ mod tests {
         assert!(json.get("prompt_cache_key").is_none());
     }
 }
-
-/// Version of the clarity-llm crate
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
