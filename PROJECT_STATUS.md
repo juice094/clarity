@@ -51,11 +51,6 @@
 | Workspace lib tests | 551 passed (clarity-core), 6 ignored | 2026-05-06 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
-| Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
-| Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
-| EXE runtime dependency scan | Pure system DLLs + UCRT only | 2026-04-26 |
-| EXE launch test | `clarity-tauri.exe` starts (GUI blocking) | 2026-04-26 |
-| Frontend npm build | `npm run build` succeeds (75 modules) | 2026-04-26 |
 | CI workflow syntax | YAML valid, `working-directory` set | 2026-04-26 |
 | egui dev build | `cargo run -p clarity-egui` starts | 2026-05-01 |
 | egui clippy | 1 warning (Locale::label unused) | 2026-05-01 |
@@ -73,6 +68,18 @@
 | Release perf (gateway memory) | peak 21 MB / avg 21 MB | 2026-05-08 |
 | Task panel output viewing | `Output` button for terminal tasks + async `get_result_opt()` + result modal | 2026-05-08 |
 | Subagent output viewing | `Output` button for completed subagents + live `output_lines` modal | 2026-05-08 |
+
+### Archived — Legacy `clarity-tauri` Stack (2026-04-26)
+
+`clarity-tauri` 已于 Sprint 7 归档并移出仓库。以下记录保留仅作历史追溯，不再维护或重复验证。
+
+| Item | Evidence | Date |
+|------|----------|------|
+| Tauri dev build | `cargo tauri dev` starts | 2026-04-26 |
+| Tauri release build | `.msi` + `.exe` produced | 2026-04-26 |
+| EXE runtime dependency scan (Tauri) | Pure system DLLs + UCRT only | 2026-04-26 |
+| EXE launch test (Tauri) | `clarity-tauri.exe` starts (GUI blocking) | 2026-04-26 |
+| Frontend npm build (Tauri) | `npm run build` succeeds (75 modules) | 2026-04-26 |
 
 ---
 
@@ -188,10 +195,10 @@
 | U1 | **纯净Windows环境安装** — 在无Rust/Node/WebView2的VM上安装MSI并运行 | 🔴 High | 无本地VM | Windows Sandbox 或 GitHub Actions `windows-latest` runner E2E 测试 |
 | U2 | **CI端到端验证** — push tag后GitHub Actions完整构建→签名→Release | 🔴 High | 需push测试tag | Push `v0.2.1-test.1` tag 触发 workflow，验证 artifact 产出 |
 | U3 | **代码签名效果** — 自签名证书在Defender/SmartScreen下的实际表现 | 🟡 Medium | 需U2完成 | 下载CI产出的.exe，检查属性→数字签名页 |
-| U4 | **自动更新检查** — Tauri updater检测新版本并提示下载 | 🟡 Medium | 需U2完成 | 发布测试tag后，运行旧版本看是否提示更新 |
+| U4 | ~~**自动更新检查** — Tauri updater检测新版本~~ | 🗄️ Archived | `clarity-tauri` 已归档（Sprint 7） | 不再验证。egui 无内置自动更新；未来如需可通过 GitHub Release API 自行实现 |
 | U5 | **FTUE实际GUI流程** — OnboardingModal在打包应用中的显示、关闭、设置跳转 | 🟡 Medium | 需U1完成 | 人工在VM中完成首次安装→启动→配置→对话 |
 | U6 | **模型下载引导** — 用户从Onboarding到下载.gguf到完成首次对话 | 🟡 Medium | T_KALOSM_REAL阻塞 | 云端Provider作为默认路径，本地模型作为进阶选项 |
-| U7 | **WebView2缺失环境** — Win10未预装WebView2时的自动下载行为 | 🟡 Medium | 无Win10 VM | 文档说明；依赖Tauri内置的WebView2引导 |
+| U7 | ~~**WebView2缺失环境** — Win10未预装WebView2时的自动下载~~ | 🗄️ Archived | `clarity-tauri` 已归档（Sprint 7） | 不再验证。egui 基于 glow 原生 OpenGL，无 WebView2 依赖 |
 | U8 | **NSIS便携版运行** — `.exe` 直接运行（非安装） | 🟢 Low | 无 | 双击验证即可 |
 | U9 | **egui 纯净环境运行** — 无 WebView2 依赖的 egui 单二进制在裸机运行 | 🟡 Medium | 无 | egui 无 WebView2 依赖，但需验证字体/渲染在裸机表现 |
 
@@ -208,7 +215,7 @@
 
 ## Known Limitations (Documented, Not Blockers)
 
-1. **WebView2 Dependency（仅 Tauri）** — Windows 11预装；Windows 10可能需自动下载（Tauri处理）。egui 无此依赖。
+1. ~~**WebView2 Dependency（仅 legacy Tauri）**~~ — `clarity-tauri` 已归档（Sprint 7）。egui 基于 glow 原生 OpenGL，无 WebView2 依赖。
 2. **CUDA Optional** — `cuda` feature flag控制，非必需
 3. **Self-Signed Certificate** — 无商业证书，SmartScreen可能拦截，文档已说明
 4. **Discord/Telegram Channels** — 因CVE禁用，Slack可用
@@ -225,8 +232,8 @@
 **方案A的核心约束已扩展**：**"任意Windows用户可在3分钟内从GitHub Release下载并运行Clarity（egui 版本）"**。
 
 当前状态：
-- ✅ 构建产物已生成（MSI/NSIS）— Tauri 侧
-- ✅ egui 侧可 `cargo run` 直接运行，无 WebView2 依赖
+- ✅ ~~构建产物已生成（MSI/NSIS）— Tauri 侧~~（Sprint 7 已归档，归 egui 侧继续验证）
+- ✅ egui 可 `cargo run` 直接运行，无 WebView2 依赖
 - ✅ 代码已修复并推送（clippy 零警告）
 - ❌ 未在真实/纯净环境中验证安装包
 - ❌ CI未实际触发验证
