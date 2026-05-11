@@ -321,20 +321,6 @@ impl SettingsViewModel {
             _ => {}
         }
     }
-
-    /// Broadcast the current command tree to all wire consumers.
-    ///
-    /// **Deprecated by ADR-006**: scheduled for removal in 0.4.0. The wire
-    /// view channel has no subscribers in production. See
-    /// `docs/adr/ADR-006-protocol-layer-convergence.md`.
-    #[deprecated(
-        since = "0.3.1",
-        note = "ADR-006: view channel removed in 0.4.0; no consumers in production"
-    )]
-    pub fn sync_to_wire(&self, wire: &clarity_wire::Wire) {
-        let commands = self.commands();
-        wire.soul_side().send_view(commands);
-    }
 }
 
 // ============================================================================

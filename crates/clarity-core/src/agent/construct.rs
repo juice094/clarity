@@ -43,7 +43,6 @@ impl Agent {
             registry,
             config: config.clone(),
             wire: None,
-            event_bus: None,
             approval_runtime: None,
             compaction_config: CompactionConfig::default(),
             max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
@@ -311,24 +310,11 @@ impl Agent {
         self
     }
 
-    /// Set the event bus for structured event output (builder pattern)
-    #[deprecated(
-        since = "0.3.1",
-        note = "ADR-006: EventBus removed in favor of Wire broadcast. See docs/adr/ADR-006-protocol-layer-convergence.md"
-    )]
-    #[allow(deprecated)]
-    pub fn with_event_bus(mut self, bus: clarity_wire::EventBus) -> Self {
-        self.event_bus = Some(bus);
-        self
-    }
-
     /// Send a wire message if wire is configured.
-    /// Also bridges to the event bus if configured.
+    ///
+    /// ADR-006 Phase B (2026-05-11): EventBus bridge removed. WireMessage
+    /// is the single source of truth for soul→ui events.
     pub(crate) fn send_wire_message(&self, msg: WireMessage) {
-        #[allow(deprecated)]
-        if let Some(ref bus) = self.event_bus {
-            bus.emit(clarity_wire::Event::from(msg.clone()));
-        }
         if let Some(ref wire) = self.wire {
             wire.soul_side().send(msg);
         }
