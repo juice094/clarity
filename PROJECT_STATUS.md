@@ -5,7 +5,10 @@
 > Test baseline: **826 passed lib + 116 passed bin = 942 (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 > Active ADR: **ADR-006 Protocol Layer Convergence** — Phase A/B/C complete; Phase D pending
-> Active Sprint: **S4-α/β complete** (panel-level 反模式清零)
+> Active Sprint: **S3.1/S3.2 complete**（settings 审计 + 集中提交点）
+>
+> ⚠️ **并行会话协调（2026-05-11）**：前端设计相关调整正在**其他会话**进行中。
+> 本会话已暂停 `crates/clarity-egui/src/` 下的代码改动。S3.3-5 待协调后启动。
 
 ---
 
@@ -45,6 +48,8 @@
 | 43+ | **Protocol Convergence + Engineering Discipline** | 🟢 A/B/C Complete | `docs/CODE-CHANGE-PRINCIPLES.md` 七条原则强制生效；ADR-006 Phase A/B/C 完成 (-792 行死代码，含 Gen-2 协议+view 通道；新 clippy `-D warnings` 通过；测试基线 955 → 932) |
 | S4-α | **Widget Extraction POC** | ✅ Complete | `widgets/provider_row.rs` 抽取自 `provider_tab.rs:62-118`；2 处 painter.rect_filled 替换为 Frame::fill+stroke；5 个单元测试覆盖；H1/H2/H3 三个方法论假设全部成立 |
 | S4-β | **Widget Extraction Replication** | ✅ Complete | `widgets/theme_card.rs` 抽取自 `interface_tab.rs:203-256`；painter.rect_filled + 2 处 painter.rect_stroke 完全消除；5 个单元测试；**panel-level allocate+Sense::click 反模式清零 (4→0)** |
+| S3.1 | **Settings Truth Audit** | ✅ Complete | 发现"3 源"实际是 **2 真相 + 1 镜像**；TRUTH A/B 不自动同步是 3 个真实 bug 根因；修订 S3 路线图（4d 而非 5d） |
+| S3.2 | **Settings Commit Centralization** | ✅ Complete | 4 处重复 sync 代码 → 3 个 helper（`commit_settings`/`apply_approval_mode_to_runtime`/`trigger_llm_reload`）；纯重构零行为变更 |
 
 ---
 
@@ -52,6 +57,10 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
+| Workspace lib + bin tests (post S3.2) | 826 lib + 116 bin = 942 passed, 0 failed, 7 ignored | 2026-05-11 |
+| S3.1 settings truth audit | `docs/notes/2026-05-11-S3-settings-truth-audit.md`（修订诊断方向） | 2026-05-11 |
+| S3.2 commit centralization | 4 处重复 sync → 3 helpers; 纯重构 | 2026-05-11 |
+| Hybrid UI 认知修正 | `docs/notes/...-retrospective.md §9` + `PROJECT_STATUS.md §Current Stack Positioning` | 2026-05-11 |
 | Workspace lib + bin tests (post S4-β) | 826 lib + 116 bin = 942 passed, 0 failed, 7 ignored | 2026-05-11 |
 | S4-β panel-level 反模式清零 | allocate+Sense::click 在 panels/components: 0 | 2026-05-11 |
 | Workspace lib + bin tests (post S4-α) | 826 lib + 111 bin = 937 passed, 0 failed, 7 ignored | 2026-05-11 |

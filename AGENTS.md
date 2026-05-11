@@ -50,6 +50,26 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
+> ⚠️ **并行会话协调（2026-05-11）**：前端设计相关调整正在**其他会话**进行中。
+> 本会话已暂停 `crates/clarity-egui/src/` 下的代码改动，避免 merge 冲突。
+> 协议层 + 配置层（`clarity-wire` / `clarity-core` / `clarity-llm`）的 S3.3-5
+> 工作待并行前端会话收敛后再启动。
+
+**Sprint S3 — Settings 单源化（进行中 🟡 S3.1/S3.2 完成，2026-05-11）**
+
+> 修复 settings_edit ↔ cached_settings ↔ ACTIVE_CONFIG 三源真相，
+> 核心目标：让 RuntimeProviderConfig 派生自 settings（修复 profile 切换不 reload LLM bug）。
+
+- **S3.1 审计** (commit `75d26148`)：发现"3 源真相"实际是 **2 真相 + 1 镜像**；
+  TRUTH A (settings_edit/cached_settings) 与 TRUTH B (ACTIVE_CONFIG) 不自动同步，仅 Apply 按钮触发；
+  这是 3 个真实 bug 的根因（profile 切换 / Apply 后再改 / Onboarding 状态混淆）
+- **S3.2 集中提交点** (commit `a6698528`)：把 4 处重复 sync 代码合并为 3 个 helper
+  (`commit_settings` / `apply_approval_mode_to_runtime` / `trigger_llm_reload`)；零行为变更，纯重构
+- **Pending (本会话暂停)**：
+  - S3.3 RuntimeProviderConfig 派生自 Settings (核心 bug 修复)
+  - S3.4 删除 ACTIVE_CONFIG 全局可变态
+  - S3.5 SettingsViewModel 去留决议
+
 **Sprint S4-β — Widget Extraction Replication（已完成 ✅，2026-05-11，commit `4db5b395`）**
 
 > 承接 S4-α 验证的方法论，机械复制到 interface_tab.rs theme picker。
