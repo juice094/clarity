@@ -1,8 +1,8 @@
 # Clarity Project Status
 
-> Last updated: 2026-05-08
+> Last updated: 2026-05-10
 > Branch: `main`
-> Test baseline: **830 passed (workspace), 0 failed, 7 ignored**
+> Test baseline: **849 passed (workspace), 0 failed, 7 ignored**
 > Clippy: **0 warnings** (`-D warnings`)
 
 ---
@@ -31,6 +31,15 @@
 | 16 | **契约层扩展 (Phase 0)** | ✅ Complete | `LlmProvider`/`Tool`/`AgentError`/`CapabilityToken` 提取到 `clarity-contract`，新增联邦原语 |
 | 17 | **安全硬化 (P0 双项)** | ✅ Complete | Log 层 credential 脱敏 (`RedactingWriter`) + LLM prompt injection 防御 (`<tool_result>` XML 边界符) |
 | 17.5 | **egui 全局快捷键 MVP** | ✅ Complete | `shortcuts` 模块集中化：Ctrl+N/Enter/K/Shift+P/Period/Shift+T；Enter 发送增加焦点守卫 |
+| 18–20 | **架构解耦 + 工具止血 + UI 零边框** | ✅ Complete | `TurnContext` / `AgentLoop` trait / `ToolPayloadAdapter`；`list_cron`/`task_create`/`ChannelSendTool` 注册；Thinking Log 持久化；零边框清理 |
+| 35 | **子代理预算可视化 + 会话快照** | ✅ Complete | `SubagentStore` 磁盘持久化 + JSON 导出/导入 + `rfd` 对话框 |
+| 36 | **Cron/Team UI + 子代理状态** | ✅ Complete | Cron 调度/Team 协调面板本地 mock；`SubagentStore` JSON save/load |
+| 36.5 | **UI 指示器迁移 + 死代码清理** | ✅ Complete | Agent/Gateway 状态点迁移至标题栏；dead code 清理；rapid-Enter debounce 修复 |
+| 36.6 | **Cron 侧边栏迁移 + Markdown 表格** | ✅ Complete | Cron 从独立 SidePanel 迁入 sidebar 可折叠 section；自研 `RenderBlock::Table` |
+| 38-C | **CI Pipeline Hardening** | ✅ Complete | 7-job CI 全绿；跨平台 lint 差异修复；`libxdo` 链接修复 |
+| 39 | **Runtime Stability + Backlog** | ✅ Complete | `TaskStore` panic 消除；TODO/FIXME 清理；`ParallelExecutor` cancel token |
+| 40 | **Runtime Robustness + Integration Tests** | ✅ Complete | parking_lot 迁移（~154 锁 unwrap 消除）；MCP end-to-end 集成测试；Dependabot 跟进 |
+| 41 | **UI 审计修复与视觉精调** | ✅ Complete | CJK 子集字体 297KB；错误气泡增强；侧边栏信息架构重构；Phosphor 图标系统 |
 
 ---
 
@@ -38,7 +47,7 @@
 
 | Item | Evidence | Date |
 |------|----------|------|
-| Workspace lib tests | 830 passed, 0 failed, 7 ignored | 2026-05-08 |
+| Workspace lib tests | 849 passed, 0 failed, 7 ignored | 2026-05-10 |
 | Workspace lib tests | 551 passed (clarity-core), 6 ignored | 2026-05-06 |
 | Workspace lib tests | 577 passed, 6 ignored | 2026-04-30 |
 | Clippy zero warnings | `-D warnings` clean | 2026-04-30 |
