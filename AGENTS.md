@@ -11,8 +11,11 @@ cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
 cargo run -p clarity-gateway           # run Gateway (needs API key)
 
-# Desktop GUI (egui — primary UI stack, zero Node.js / WebView deps)
+# Desktop GUI mode (egui — Hybrid UI 的 GUI 腿，与 clarity-tui 同等一线)
 cargo run -p clarity-egui
+
+# Terminal mode (TUI — Hybrid UI 的 TUI 腿，远程/SSH 优选)
+cargo run -p clarity-tui
 
 # egui with CUDA acceleration (optional; CPU mode by default)
 # Requires CUDA Toolkit + MSVC.  Use same NVCC_CCBIN setup as below.

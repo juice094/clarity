@@ -19,7 +19,7 @@
 | 4 | FTUE闭环 | ✅ Complete | `SettingsPanel` 保存后自动触发 `reload_llm` |
 | 5 | 冷却验证 | ✅ Complete | 测试524 passed, Clippy零警告 |
 | 6 | 可用性急救 | ✅ Complete | GUI API key 输入框 + `LlmFactory::create_with_key` — Clarity 真正可用 |
-| 7 | UI 栈迁移 | ✅ Complete | `clarity-egui` 替代 `clarity-tauri` 成为主力 GUI 栈 |
+| 7 | UI 栈迁移 | ✅ Complete | `clarity-egui` 替代 `clarity-tauri` 成为 GUI 模式前端（Hybrid UI 的 GUI 腿） |
 | 8 | egui 硬化 | ✅ Complete | Pretext Phase 1：settings 修复、Mutex 替换、`App::update()` 550→64 行拆分、onboarding 模型下载 |
 | 9 | **服务商支持硬化** | ✅ Complete | Provider Schema 化、环境变量注入、Settings 增量保存、API Key 引用语法 `${env:VAR}` |
 | 10 | **协议先行解锁** | ✅ Complete | AgentProfile TOML、LlmFactory 冻结、CapabilityRegistry、egui 冒烟测试 |
@@ -100,11 +100,24 @@
 
 ## Current Stack Positioning
 
-**主力 GUI 栈**：`clarity-egui`（egui 0.31 + glow backend）
-**废弃归档**：`clarity-tauri`（Tauri 2 + React/Vite）— 代码保留，新功能不追加
-**活跃后端**：`clarity-core` / `clarity-gateway` / `clarity-memory` / `clarity-wire`
-**契约层**：`clarity-contract` — 联邦类型共享，打破 core 单块依赖
-**维护模式**：`clarity-tui` / `clarity-claw` / `clarity-headless`
+**Hybrid UI 架构（2026-05-11 修正认知）**：Clarity 是典型的"GUI × TUI 混血"应用，
+两种前端**同等一线**，共享后端，前端多态：
+
+| 前端 | 形态 | 适用场景 |
+|------|------|---------|
+| `clarity-egui` | GUI mode（egui 0.31 + glow backend） | 本地工作站：鼠标、多栏、富文本、虚拟列表、CJK 字体 |
+| `clarity-tui` | TUI mode（ratatui + crossterm） | 远程/SSH/轻量：键盘流、低占用、Shell 生态无缝衔接 |
+
+**共享底座**：`clarity-core` / `clarity-gateway` / `clarity-memory` / `clarity-wire` / `clarity-contract`
+
+**辅助栈**：`clarity-claw`（tray monitor） / `clarity-headless`（CLI / CI 脚本场景）
+
+**已归档**：`clarity-tauri`（Tauri 2 + React/Vite，Sprint 7 后停止追加新功能）
+
+> **重要纠正**：本节早期版本曾把 tui 框架为"维护模式 / secondary"，违反了 Hybrid UI
+> 的设计本质。tui 与 egui 是同一产品在不同环境下的两种"皮肤"——不是主备关系。
+> 后端统一、前端多态是核心架构原则。任何只服务于单一前端的协议层都应当被审视
+> （如 ADR-006 §1.3 校正发现 `ViewCommand` 同时被 tui+egui+gateway 真实消费）。
 
 ### 前后端功能 Parity（关键差距）
 
@@ -310,6 +323,7 @@ cargo fmt --all -- --check               # 格式检查
 
 ```bash
 cargo audit                              # 无高危漏洞
-cargo run -p clarity-egui               # 本地运行验证（egui 为主力栈）
+cargo run -p clarity-egui               # 本地运行验证（Hybrid UI: GUI 模式）
+cargo run -p clarity-tui                # 本地运行验证（Hybrid UI: TUI 模式）
 # 以上 + U1-U5, U9 验证通过
 ```

@@ -136,4 +136,30 @@ febe6cc1  (baseline)
 
 ---
 
+## 9. 会话中期补丁：Hybrid UI 认知修正（2026-05-11）
+
+> 本回顾文档初版含有隐性偏见：把 clarity-tui 框架为"边缘消费者"或"维护模式"。
+> 用户在 S3.2 commit 后指出 Clarity 实际是 **Hybrid UI（GUI × TUI 混血）** 架构，
+> egui 与 tui **同等一线**，共享后端，前端多态。
+
+### 影响修正
+
+- 凡早期文档中"维护模式 clarity-tui" / "主力 GUI 栈 clarity-egui" / "secondary tui"
+  均已修订（详见 `PROJECT_STATUS.md §Current Stack Positioning`）。
+- ADR-006 §1.3 校正（"ViewCommand 真有 tui 消费者"）实际上**就是 Hybrid UI 架构的
+  明证**——而非"幸运地避免了破坏 tui"。
+- Phase D（抽出 `clarity-frontend-ir` crate 供 egui + tui 共享）的优先级因此
+  **上升**——这不是可选优化，而是 Hybrid UI 的核心基础设施。
+
+### 后续 session 注意事项
+
+任何只服务于单一前端的协议层 / 数据结构都应当被审视：
+- 是因为该功能本质上是 GUI/TUI 独有（合理）；
+- 还是因为视野局限而错过了 Hybrid UI 复用机会（应当修正）。
+
+S4-α/β 的 widget 抽取是 egui-only 工作，这本身是合理的（widget 是 GUI 独有概念），
+但**等价的 tui 反模式扫描**也应作为后续工作的一部分（待立项）。
+
+---
+
 End of retrospective.
