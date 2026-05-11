@@ -123,9 +123,8 @@ pub enum WireMessage {
     },
 }
 
-pub mod event;
-#[allow(deprecated)]
-pub use event::{Event, EventBus, EventMsg};
+// ADR-006 Phase C.1 (2026-05-11): event.rs / Event / EventBus / EventMsg
+// removed. WireMessage broadcast is the single soul→ui contract.
 
 impl WireMessage {
     /// Returns true if this message type is mergeable with subsequent messages.
