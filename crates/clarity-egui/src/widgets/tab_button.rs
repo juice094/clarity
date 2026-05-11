@@ -20,6 +20,7 @@ pub fn tab_button(
     width: f32,
 ) -> TabResponse {
     let mut close_clicked = false;
+    let mut close_rect = egui::Rect::NOTHING;
 
     let inner = ui.allocate_ui(egui::vec2(width, 28.0), |ui| {
         let tab_rect = ui.max_rect();
@@ -40,7 +41,8 @@ pub fn tab_button(
             ui.add_space(4.0);
 
             // Label: let egui handle truncation (stable, no threshold jitter).
-            let label_w = (ui.available_width() - 18.0 - 4.0).max(10.0);
+            let spacing = ui.spacing().item_spacing.x;
+            let label_w = (ui.available_width() - 18.0 - spacing - 4.0).max(10.0);
             ui.add_sized(
                 egui::vec2(label_w, 28.0),
                 egui::Label::new(
@@ -66,9 +68,10 @@ pub fn tab_button(
                         .color(close_color),
                 )
                 .fill(egui::Color32::TRANSPARENT)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                .corner_radius(egui::CornerRadius::same(theme.radius_sm.round() as u8))
                 .frame(false),
             );
+            close_rect = close_resp.rect;
             if close_resp.clicked() && close_visible {
                 close_clicked = true;
             }
@@ -82,9 +85,17 @@ pub fn tab_button(
             );
             ui.painter().rect_filled(line_rect, egui::CornerRadius::ZERO, theme.accent);
         }
+
+        // Tab body click: exclude close button area to prevent event contention.
+        let body_rect = if close_rect.is_positive() {
+            tab_rect.with_max_x(close_rect.min.x)
+        } else {
+            tab_rect
+        };
+        ui.interact(body_rect, ui.id().with("body"), egui::Sense::click())
     });
 
-    let response = inner.response.interact(egui::Sense::click());
+    let response = inner.inner;
     let double_clicked = response.double_clicked();
 
     TabResponse {

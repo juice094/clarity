@@ -54,8 +54,9 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         if editing {
             // Inline rename TextEdit
             let mut buf = app.ui_store.editing_title.clone();
+            let edit_w = tab_width.clamp(80.0, 180.0);
             let resp = ui.add_sized(
-                egui::vec2(120.0, 28.0),
+                egui::vec2(edit_w, 28.0),
                 egui::TextEdit::singleline(&mut buf)
                     .font(egui::FontId::proportional(
                         app.ui_store.theme.text_md,
@@ -63,7 +64,10 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                     .margin(egui::vec2(6.0, 4.0)),
             );
             app.ui_store.editing_title = buf;
-            if resp.lost_focus() {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                app.ui_store.editing_session_id = None;
+                app.ui_store.editing_title.clear();
+            } else if resp.lost_focus() {
                 rename_commit =
                     Some((id.clone(), app.ui_store.editing_title.clone()));
             }
@@ -147,7 +151,9 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
                     .remove(&next_id)
                     .unwrap_or_default();
             } else {
-                app.new_session();
+                app.session_store.active_session_id.clear();
+                app.chat_store.input.clear();
+                app.chat_store.tool_calls.clear();
             }
         }
     }
@@ -188,11 +194,10 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     // Separator removed: active tab now "connects" to content area
     // via matching bg color and square bottom corners.
 
-    let banner_text = app.ui_store.network_banner.clone();
-    if let Some(banner) = banner_text {
+    if let Some(banner) = app.ui_store.network_banner.clone() {
         ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new(&banner)
+                egui::RichText::new(banner)
                     .size(app.ui_store.theme.text_sm)
                     .color(app.ui_store.theme.status_busy),
             );

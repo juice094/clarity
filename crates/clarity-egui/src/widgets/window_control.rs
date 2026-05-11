@@ -14,23 +14,20 @@ pub fn window_control_button(
     normal_icon_color: egui::Color32,
 ) -> egui::Response {
     let desired_size = egui::vec2(36.0, 36.0);
-    let response = ui.allocate_response(desired_size, egui::Sense::click());
-    let hovered = response.hovered();
+    let (_id, rect) = ui.allocate_space(desired_size);
+    let hovered = ui.rect_contains_pointer(rect);
     let fill = if hovered { hover_fill } else { egui::Color32::TRANSPARENT };
     let color = if hovered { hover_icon_color } else { normal_icon_color };
 
-    // Return the *button's* response so hover state is fully synchronized
-    // with the widget we actually draw.
     ui.put(
-        response.rect,
+        rect,
         egui::Button::new(
             egui::RichText::new(icon)
                 .font(theme.font_icon(14.0))
                 .color(color),
         )
         .fill(fill)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .min_size(desired_size)
+        .corner_radius(egui::CornerRadius::same(theme.radius_sm.round() as u8))
         .frame(false),
     )
 }
