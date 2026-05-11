@@ -1,7 +1,7 @@
 # Clarity — Personal AI Standard Runtime
 
 [![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-purple.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange?logo=rust)](https://www.rust-lang.org)
 
 > **Local-first AI Agent runtime in Rust.**  
@@ -73,4 +73,6 @@ cargo clippy --workspace --lib --bins --tests -- -D warnings
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0 (or later)](LICENSE) — Copyright (c) 2026 juice094 and contributors.
+
+See the top-level [`README.md`](README.md) §License for the network-copyleft details.

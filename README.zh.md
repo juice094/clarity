@@ -7,7 +7,7 @@
 ReAct/Plan 智能体 · MCP 生态 · BM25+向量记忆 · 多入口（TUI/桌面/网页/托盘/无头）
 
 [![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-purple.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 
 [English](README.en.md) | 中文
@@ -128,7 +128,13 @@ cargo run -p clarity-claw
 
 ## 许可证
 
-[MIT](LICENSE) — Copyright (c) 2026 juice094 and contributors.
+[GNU Affero General Public License v3.0（或更高版本）](LICENSE) — Copyright (c) 2026 juice094 and contributors.
+
+- 可自由用于个人、教育、研究用途。
+- **网络 copyleft**：若以网络服务形式（如自托管 `clarity-gateway` 作为 SaaS）提供修改版本，**必须**以 AGPL-3.0 向服务的所有用户公开修改后的源代码。
+- 不得在没有显式许可的情况下将本项目或其衍生品重新授权为闭源或更宽松的协议。
+
+完整法律措辞与商业授权细节见英文版 [`README.md`](README.md) §License。
 
 ---
 
