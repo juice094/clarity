@@ -21,3 +21,6 @@ tasks/
 
 experiments/**/target/
 
+
+# Claude Code local config
+.claude/

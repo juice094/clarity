@@ -64,6 +64,7 @@ pub(crate) mod server;
 pub mod skills;
 pub mod tools;
 pub mod types;
+pub mod ui;
 pub mod view_models;
 
 // Re-export core types

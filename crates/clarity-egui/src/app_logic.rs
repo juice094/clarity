@@ -385,6 +385,8 @@ impl App {
             tray_quit_requested: false,
             last_tray_status: None,
             last_frame_width: None,
+            command_palette: crate::widgets::command_palette::CommandPalette::new(),
+            view_state: clarity_core::ui::ViewState::new(),
         };
         app.refresh_tasks();
         app

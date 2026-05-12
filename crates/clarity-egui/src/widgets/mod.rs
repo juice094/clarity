@@ -1,5 +1,6 @@
 pub mod badge;
 pub mod card;
+pub mod command_palette;
 pub mod icon_button;
 pub mod interactive_row;
 pub mod provider_row;
