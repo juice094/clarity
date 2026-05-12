@@ -80,10 +80,16 @@ command palette actually executes commands.
 
 ---
 
-## 3. Phase 1 — Grid for Chrome ⏳ (~5h, 1 session)
+## 3. Phase 1 — Grid for Chrome ✅ (S2, ~3.8h actual vs ~5h budget, 1 session)
 
-> **Goal**: Eliminate every `estimated_*_w` hardcoded value in chrome regions
-> by adopting declarative constraint-driven layout.
+> **Completed 2026-05-12** — see `docs/plans/2026-05-12-S2-session-archive.md`.
+> Phase scope expanded mid-session to include icon font migration
+> (originally Phase 0.5 epilogue): ADR-010 superseded ADR-009 to adopt
+> `lucide-icons` over `egui-phosphor`. 5 commits total. Tests 66/66.
+
+> **Goal (achieved)**: Eliminated `estimated_right_w: 450/280` hardcoded
+> heuristic from `render_titlebar`. Three-zone declarative StripBuilder
+> layout now drives chrome.
 
 ### 3.1 Scope
 
