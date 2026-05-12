@@ -1,7 +1,7 @@
 # Pretext UI Evolution Plan — Grid, Lines, State, and Claude-Borrowed Composition
 
 > **Date**: 2026-05-12 (revised after Kimi K2.6 strategic review and 6-axis design audit)
-> **Status**: Phase 0 ✅ · Phase 0.5 audit ✅ · P0 blockers ⏳ · Phase 1-3 planned
+> **Status**: Phase 0 ✅ · Phase 0.5 ✅ (audit + 5 P0 blockers, S1 done) · Phase 1-3 planned
 > **Owner**: juice094 + Clarity Agent
 > **Theory anchor**: `docs/architecture/pretext-ui-theory.md`
 > **Audit anchor**: `docs/audits/2026-05-12-ui-design-audit.md`
@@ -55,11 +55,13 @@ CommandPalette accessible via Ctrl+Shift+P; 5 traps codified, 3 patterns shipped
 
 ---
 
-## 2. Phase 0.5 — Foundation Hardening ⏳ (~4h, 1 session)
+## 2. Phase 0.5 — Foundation Hardening ✅ (S1, ~4h, 1 session)
+
+**Status**: Completed 2026-05-12. Commits `2df427e7` → `6eb23dae` (5 atomic commits).
 
 > **Goal**: Land the 5 P0 blockers from the design audit before any new
 > architectural work begins.
-> **Gate**: Phase 1 cannot start until all 5 items merge.
+> **Gate**: Phase 1 cannot start until all 5 items merge. ✅ Gate cleared.
 
 | ID | Item | Effort | Acceptance |
 |----|------|--------|-----------|
