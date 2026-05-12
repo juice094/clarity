@@ -211,6 +211,7 @@ impl App {
                             theme.text_base,
                             &theme,
                         )
+                        .on_hover_text("Expand sidebar")
                         .clicked()
                         {
                             self.ui_store.sidebar_collapsed = false;
@@ -290,7 +291,8 @@ impl App {
                         theme.danger.linear_multiply(0.25),
                         egui::Color32::WHITE,
                         theme.text_dim,
-                    );
+                    )
+                    .on_hover_text("Close window");
                     if close_resp.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                     }
@@ -308,7 +310,8 @@ impl App {
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
-                    );
+                    )
+                    .on_hover_text(if is_maximized { "Restore window" } else { "Maximize window" });
                     if max_resp.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
@@ -321,7 +324,8 @@ impl App {
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
-                    );
+                    )
+                    .on_hover_text("Minimize to taskbar");
                     if min_resp.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     }
@@ -337,7 +341,8 @@ impl App {
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
-                    );
+                    )
+                    .on_hover_text("Open Settings (Esc to close)");
                     if settings_resp.clicked() {
                         self.view_state.main = clarity_core::ui::AppView::Settings;
                     }
