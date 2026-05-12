@@ -9,6 +9,7 @@
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1–§6.
 
 use eframe::egui;
+use egui_extras::{Size, StripBuilder};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -183,89 +184,105 @@ impl App {
             .show(ctx, |ui| {
                 ui.set_min_height(theme.size_titlebar);
 
-                // Single horizontal row:
-                // [toggle?] [title] [sessions] [tabs] [elastic drag] [status] [settings] [buttons]
-                // ── TitleBar three-zone layout ──
-                // LEFT  : sidebar toggle + Brand
-                // CENTER: session tabs + elastic drag filler
-                // RIGHT : window controls + status capsules
+                // ── TitleBar three-zone layout via egui_extras::StripBuilder ──
+                //   LEFT  : sidebar toggle (when collapsed) + brand
+                //   CENTER: session tabs + model indicator + elastic drag filler
+                //   RIGHT : window controls + status capsules
                 //
-                // Architecture: ui.horizontal (LTR) + estimated_right_w reserve.
-                // We no longer use horizontal_centered (double-pass trap) or
-                // ui.min_rect().width() in RTL (always returns full width).
+                // RULE 6 (EGUI_LAYOUT.md): chrome must use StripBuilder for
+                // declarative zone allocation. Replaces the previous imperative
+                // `ui.horizontal + estimated_right_w` heuristic (S2.P1.2 / P1.3).
                 let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
                 let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                let right_w = if show_status_labels {
+                    theme.titlebar_right_w_full
+                } else {
+                    theme.titlebar_right_w_compact
+                };
 
-                // Empirical width of the right section (buttons + capsules).
-                // 4×36 + 8 + 36 + 4 + 2×status ≈ 280–450 depending on labels.
-                let estimated_right_w: f32 = if show_status_labels { 450.0 } else { 280.0 };
-
-                ui.horizontal(|ui| {
-                    ui.set_min_height(theme.size_titlebar);
-
-                    // ── LEFT zone ──
-                    if self.ui_store.sidebar_collapsed {
-                        if crate::widgets::icon_button_toolbar(
-                            ui,
-                            crate::theme::ICON_LIST,
-                            theme.text_base,
-                            &theme,
-                        )
-                        .on_hover_text("Expand sidebar")
-                        .clicked()
-                        {
-                            self.ui_store.sidebar_collapsed = false;
-                        }
-                        ui.add_space(8.0);
-                    }
-                    ui.label(
-                        egui::RichText::new("Clarity")
-                            .size(theme.text_base)
-                            .color(theme.text_strong),
-                    );
-                    ui.add_space(8.0);
-
-                    // ── CENTER zone: tabs + model + drag filler ──
-                    let center_w = (ui.available_width() - estimated_right_w).max(40.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(center_w, theme.size_titlebar),
-                        egui::Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            crate::panels::chat::header::render_session_tabs(self, ui);
-
-                            // Model context indicator (Pretext UI mid-zone)
-                            let model_name = self.settings_store.settings_edit.model.trim();
-                            if !model_name.is_empty() {
-                                ui.add_space(8.0);
+                StripBuilder::new(ui)
+                    .size(Size::exact(theme.titlebar_left_w))
+                    .size(Size::remainder().at_least(40.0))
+                    .size(Size::exact(right_w))
+                    .horizontal(|mut strip| {
+                        // ── LEFT zone: sidebar toggle + brand ──
+                        strip.cell(|ui| {
+                            ui.set_min_height(theme.size_titlebar);
+                            ui.horizontal_centered(|ui| {
+                                if self.ui_store.sidebar_collapsed {
+                                    if crate::widgets::icon_button_toolbar(
+                                        ui,
+                                        crate::theme::ICON_LIST,
+                                        theme.text_base,
+                                        &theme,
+                                    )
+                                    .on_hover_text("Expand sidebar")
+                                    .clicked()
+                                    {
+                                        self.ui_store.sidebar_collapsed = false;
+                                    }
+                                    ui.add_space(8.0);
+                                }
                                 ui.label(
-                                    egui::RichText::new(model_name)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_muted),
+                                    egui::RichText::new("Clarity")
+                                        .size(theme.text_base)
+                                        .color(theme.text_strong),
                                 );
-                            }
+                            });
+                        });
 
-                            // Drag filler: occupies all remaining space inside CENTER
-                            let drag_w = ui.available_width().max(20.0);
-                            let (_, drag_resp) = ui.allocate_exact_size(
-                                egui::vec2(drag_w, theme.size_titlebar),
-                                egui::Sense::click_and_drag(),
+                        // ── CENTER zone: tabs + model + drag filler ──
+                        strip.cell(|ui| {
+                            ui.set_min_height(theme.size_titlebar);
+                            ui.horizontal_centered(|ui| {
+                                crate::panels::chat::header::render_session_tabs(self, ui);
+
+                                // Model context indicator (Pretext UI mid-zone)
+                                let model_name =
+                                    self.settings_store.settings_edit.model.trim();
+                                if !model_name.is_empty() {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        egui::RichText::new(model_name)
+                                            .size(theme.text_xs)
+                                            .color(theme.text_muted),
+                                    );
+                                }
+
+                                // Drag filler: occupies all remaining space inside CENTER
+                                let drag_w = ui.available_width().max(20.0);
+                                let (_, drag_resp) = ui.allocate_exact_size(
+                                    egui::vec2(drag_w, theme.size_titlebar),
+                                    egui::Sense::click_and_drag(),
+                                );
+                                if drag_resp.drag_started_by(egui::PointerButton::Primary) {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                                }
+                                if drag_resp.double_clicked() {
+                                    ctx.send_viewport_cmd(
+                                        egui::ViewportCommand::Maximized(!is_maximized),
+                                    );
+                                }
+                            });
+                        });
+
+                        // ── RIGHT zone: window controls + status capsules ──
+                        strip.cell(|ui| {
+                            ui.set_min_height(theme.size_titlebar);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    self.render_titlebar_right(
+                                        ui,
+                                        ctx,
+                                        show_status_labels,
+                                        is_maximized,
+                                        &theme,
+                                    );
+                                },
                             );
-                            if drag_resp.drag_started_by(egui::PointerButton::Primary) {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                            }
-                            if drag_resp.double_clicked() {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
-                                    !is_maximized,
-                                ));
-                            }
-                        },
-                    );
-
-                    // ── RIGHT zone ──
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        self.render_titlebar_right(ui, ctx, show_status_labels, is_maximized, &theme);
+                        });
                     });
-                });
             });
     }
 

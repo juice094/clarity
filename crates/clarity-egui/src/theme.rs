@@ -184,6 +184,12 @@ pub struct Theme {
     pub palette_w: f32,
     /// Command palette scroll-area max height.
     pub palette_max_h: f32,
+    /// Titlebar LEFT zone width (sidebar toggle when collapsed + brand).
+    pub titlebar_left_w: f32,
+    /// Titlebar RIGHT zone width when status labels are visible (>= breakpoint_compact).
+    pub titlebar_right_w_full: f32,
+    /// Titlebar RIGHT zone width when status labels are hidden (< breakpoint_compact).
+    pub titlebar_right_w_compact: f32,
 
     // --- Responsive breakpoints ---
     pub breakpoint_compact: f32,
@@ -351,6 +357,9 @@ impl Theme {
             modal_offset_y: 40.0,
             palette_w: 520.0,
             palette_max_h: 320.0,
+            titlebar_left_w: 130.0,
+            titlebar_right_w_full: 450.0,
+            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints
             breakpoint_compact: 768.0,
@@ -510,6 +519,9 @@ impl Theme {
             modal_offset_y: 40.0,
             palette_w: 520.0,
             palette_max_h: 320.0,
+            titlebar_left_w: 130.0,
+            titlebar_right_w_full: 450.0,
+            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,
@@ -658,6 +670,9 @@ impl Theme {
             modal_offset_y: 40.0,
             palette_w: 520.0,
             palette_max_h: 320.0,
+            titlebar_left_w: 130.0,
+            titlebar_right_w_full: 450.0,
+            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,
