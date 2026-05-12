@@ -1,5 +1,5 @@
 use crate::ui::types::ToastLevel;
-use crate::{App, SIDEBAR_WIDTH};
+use crate::App;
 
 fn format_thousands(n: u32) -> String {
     let s = n.to_string();
@@ -19,7 +19,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
     }
     let frame_fill = app.ui_store.theme.bg;
     egui::SidePanel::left("sidebar")
-        .default_width(SIDEBAR_WIDTH)
+        .default_width(app.ui_store.theme.size_sidebar)
         .min_width(220.0)
         .max_width(360.0)
         .resizable(true)
@@ -260,7 +260,6 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     // Helper for clickable sidebar rows
                     let clickable_row =
                         |ui: &mut egui::Ui,
-                         id: egui::Id,
                          label: &str,
                          count: Option<usize>,
                          is_open: &mut bool| {
@@ -277,7 +276,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             let text_color = if *is_open { theme.text } else { theme.text_dim };
 
                             let resp =
-                                crate::widgets::interactive_row(ui, id, *is_open, &theme, |ui| {
+                                crate::widgets::interactive_row(ui, *is_open, &theme, |ui| {
                                     ui.horizontal(|ui| {
                                         ui.add_space(8.0);
                                         ui.label(
@@ -445,9 +444,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── Teams ──
                     let team_count = app.team_store.teams.len();
-                    clickable_row(
-                        ui,
-                        ui.id().with("teams_row"),
+                    clickable_row(ui,
                         "Teams",
                         Some(team_count),
                         &mut app.team_store.team_panel_open,
@@ -463,9 +460,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     group_header(ui, "ANALYTICS");
 
                     // ── Dashboard ──
-                    clickable_row(
-                        ui,
-                        ui.id().with("dashboard_row"),
+                    clickable_row(ui,
                         "Dashboard",
                         None,
                         &mut app.ui_store.dashboard_panel_open,
@@ -474,9 +469,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // ── Plan Timeline ──
-                    clickable_row(
-                        ui,
-                        ui.id().with("plan_timeline_row"),
+                    clickable_row(ui,
                         "Plan Timeline",
                         None,
                         &mut app.ui_store.gantt_panel_open,

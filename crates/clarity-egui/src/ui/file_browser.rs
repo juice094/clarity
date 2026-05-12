@@ -125,7 +125,6 @@ pub fn render_file_tree(
 
             let resp = crate::widgets::interactive_row(
                 ui,
-                ui.id().with(&full_path),
                 is_selected,
                 theme,
                 |ui| {
