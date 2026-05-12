@@ -106,6 +106,16 @@ pub fn provider_row(
             });
     });
 
+    // Focus ring (P0.5.E.1).
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(theme.radius_sm as u8),
+            egui::Stroke::new(2.0, theme.focus_ring),
+            egui::StrokeKind::Inside,
+        );
+    }
+
     response
 }
 

@@ -89,6 +89,16 @@ pub fn tab_button(
     let response = inner.response.interact(egui::Sense::click());
     let double_clicked = response.double_clicked();
 
+    // Focus ring (P0.5.E.1) — visible when Tab navigation reaches this tab.
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            response.rect,
+            egui::CornerRadius::same(theme.radius_sm as u8),
+            egui::Stroke::new(2.0, theme.focus_ring),
+            egui::StrokeKind::Inside,
+        );
+    }
+
     TabResponse {
         response,
         close_clicked,

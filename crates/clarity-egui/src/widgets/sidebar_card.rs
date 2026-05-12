@@ -105,5 +105,15 @@ pub fn sidebar_card(
             });
     });
 
+    // Focus ring (P0.5.E.1): visible when Tab navigation reaches this widget.
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(theme.radius_md as u8),
+            egui::Stroke::new(2.0, theme.focus_ring),
+            egui::StrokeKind::Inside,
+        );
+    }
+
     response
 }

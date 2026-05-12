@@ -76,5 +76,15 @@ pub fn status_capsule(
             });
     });
 
+    // Focus ring (P0.5.E.1) — only when clickable and Tab-focused.
+    if is_clickable && response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(theme.radius_sm as u8),
+            egui::Stroke::new(2.0, theme.focus_ring),
+            egui::StrokeKind::Inside,
+        );
+    }
+
     response
 }
