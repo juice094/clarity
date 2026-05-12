@@ -1,8 +1,8 @@
 # ADR-009: Icon Font Strategy — Standardize on `egui-phosphor` Crate
 
-- Status: Accepted
+- Status: **Superseded by [ADR-010](ADR-010-lucide-icons-adoption.md)** (Decision item 2 reversed; user preference for Lucide aesthetic plus verified `lucide-icons` crate viability shifted the decision from Phosphor to Lucide)
 - Deciders: juice094
-- Date: 2026-05-12
+- Date: 2026-05-12 (original); 2026-05-12 (superseded same day)
 
 ## Context
 

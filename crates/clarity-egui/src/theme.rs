@@ -1,35 +1,38 @@
 use eframe::egui;
 
 // ============================================================================
-// Phosphor Icons — Regular (unicode mapped from embedded Phosphor.ttf)
+// Lucide Icons — codepoints from `lucide-icons` crate (see ADR-010).
+// `ICON_*` constants kept as `&str` for backward compatibility with 123 call
+// sites. New code should prefer `lucide_icons::Icon::*` directly for type
+// safety and IDE autocomplete.
 // ============================================================================
-pub const ICON_SEND: &str = "\u{E394}";
-pub const ICON_SETTINGS: &str = "\u{E270}";
-pub const ICON_PLAY: &str = "\u{E3D0}";
-pub const ICON_STOP: &str = "\u{E46C}";
-pub const ICON_HOURGLASS: &str = "\u{E2B2}";
-pub const ICON_CHECK: &str = "\u{E182}";
-pub const ICON_X: &str = "\u{E4F6}";
-pub const ICON_WARNING: &str = "\u{E4E0}";
-pub const ICON_PAPERCLIP: &str = "\u{E39A}";
-pub const ICON_LIST: &str = "\u{E2F0}";
-pub const ICON_ARROW_LEFT: &str = "\u{E058}";
-pub const ICON_PROHIBIT: &str = "\u{E3DE}";
-pub const ICON_COPY: &str = "\u{E1CA}";
-pub const ICON_EDIT: &str = "\u{E3AE}";
-pub const ICON_REFRESH: &str = "\u{E19E}";
-pub const ICON_EXPORT: &str = "\u{E524}";
-pub const ICON_IMPORT: &str = "\u{E52A}";
-pub const ICON_CHAT: &str = "\u{E15C}";
-pub const ICON_BOOK: &str = "\u{E0E2}";
-pub const ICON_WRENCH: &str = "\u{E5D4}";
-pub const ICON_PUZZLE: &str = "\u{E596}";
-pub const ICON_PLUG: &str = "\u{E946}";
-pub const ICON_CARET_DOWN: &str = "\u{E136}";
-pub const ICON_CARET_RIGHT: &str = "\u{E13A}";
-pub const ICON_MINUS: &str = "\u{E4A2}";
-pub const ICON_SQUARE: &str = "\u{E5B4}";
-pub const ICON_CIRCLE: &str = "\u{E184}";
+pub const ICON_SEND: &str = "\u{e152}";       // Lucide: Send
+pub const ICON_SETTINGS: &str = "\u{e154}";   // Lucide: Settings
+pub const ICON_PLAY: &str = "\u{e13c}";       // Lucide: Play
+pub const ICON_STOP: &str = "\u{e083}";       // Lucide: CircleStop (circle with square)
+pub const ICON_HOURGLASS: &str = "\u{e296}";  // Lucide: Hourglass
+pub const ICON_CHECK: &str = "\u{e06c}";      // Lucide: Check
+pub const ICON_X: &str = "\u{e1b2}";          // Lucide: X
+pub const ICON_WARNING: &str = "\u{e193}";    // Lucide: AlertTriangle
+pub const ICON_PAPERCLIP: &str = "\u{e12d}";  // Lucide: Paperclip
+pub const ICON_LIST: &str = "\u{e106}";       // Lucide: List
+pub const ICON_ARROW_LEFT: &str = "\u{e048}"; // Lucide: ArrowLeft
+pub const ICON_PROHIBIT: &str = "\u{e051}";   // Lucide: Ban
+pub const ICON_COPY: &str = "\u{e09e}";       // Lucide: Copy
+pub const ICON_EDIT: &str = "\u{e1f9}";       // Lucide: Pencil
+pub const ICON_REFRESH: &str = "\u{e145}";    // Lucide: RefreshCw
+pub const ICON_EXPORT: &str = "\u{e19e}";     // Lucide: Upload
+pub const ICON_IMPORT: &str = "\u{e0b2}";     // Lucide: Download
+pub const ICON_CHAT: &str = "\u{e117}";       // Lucide: MessageSquare
+pub const ICON_BOOK: &str = "\u{e05e}";       // Lucide: Book
+pub const ICON_WRENCH: &str = "\u{e1b1}";     // Lucide: Wrench
+pub const ICON_PUZZLE: &str = "\u{e29c}";     // Lucide: Puzzle
+pub const ICON_PLUG: &str = "\u{e37f}";       // Lucide: Plug
+pub const ICON_CARET_DOWN: &str = "\u{e06d}"; // Lucide: ChevronDown
+pub const ICON_CARET_RIGHT: &str = "\u{e06f}";// Lucide: ChevronRight
+pub const ICON_MINUS: &str = "\u{e11c}";      // Lucide: Minus
+pub const ICON_SQUARE: &str = "\u{e167}";     // Lucide: Square
+pub const ICON_CIRCLE: &str = "\u{e076}";     // Lucide: Circle
 
 // ============================================================================
 // Design Token System — Phase A Foundation
@@ -796,7 +799,7 @@ impl Theme {
         self
     }
 
-    /// Icon font at the given semantic size token (requires Phosphor icon font registered).
+    /// Icon font at the given semantic size token (requires Lucide icon font registered via `lucide-icons` crate; see ADR-010).
     pub fn font_icon(&self, size: f32) -> egui::FontId {
         egui::FontId::new(size, egui::FontFamily::Name("icons".into()))
     }
@@ -904,11 +907,11 @@ pub fn setup_fonts(ctx: &egui::Context) {
     }
 
     // ------------------------------------------------------------------
-    // 4. Phosphor — icon font
+    // 4. Lucide — icon font (via `lucide-icons` crate; see ADR-010)
     // ------------------------------------------------------------------
     fonts.font_data.insert(
-        "phosphor".into(),
-        egui::FontData::from_static(include_bytes!("../assets/fonts/Phosphor.ttf")).into(),
+        "lucide".into(),
+        egui::FontData::from_static(lucide_icons::LUCIDE_FONT_BYTES).into(),
     );
 
     // ------------------------------------------------------------------
@@ -936,7 +939,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
         .families
         .entry(egui::FontFamily::Name("icons".into()))
         .or_default()
-        .push("phosphor".into());
+        .push("lucide".into());
 
     ctx.set_fonts(fonts);
 }

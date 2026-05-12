@@ -11,6 +11,7 @@ description = "Clarity Desktop GUI powered by egui — replaces Tauri"
 [dependencies]
 eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "x11"] }
 egui = "0.31"
+lucide-icons = "1.14"  # Lucide icon font (framework-agnostic LUCIDE_FONT_BYTES + Icon enum); see ADR-010.
 
 serde = { workspace = true }
 serde_json = { workspace = true }
