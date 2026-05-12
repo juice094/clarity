@@ -42,8 +42,7 @@ use ui::types::*;
 // Clarity egui Desktop — Phase A: Design System Foundation
 // ============================================================================
 
-const SIDEBAR_WIDTH: f32 = 240.0;
-const TITLEBAR_HEIGHT: f32 = 36.0;
+// (layout constants moved to Theme tokens)
 
 pub(crate) struct App {
     // === Core Runtime ===
@@ -77,6 +76,10 @@ pub(crate) struct App {
     pub(crate) last_tray_status: Option<crate::services::tray::TrayIconStatus>,
     /// Last frame's screen width for responsive breakpoint detection.
     last_frame_width: Option<f32>,
+    /// Pretext UI command palette (Ctrl+Shift+P).
+    pub(crate) command_palette: crate::widgets::command_palette::CommandPalette,
+    /// Pretext UI unified view state (replaces boolean flag hell).
+    pub(crate) view_state: clarity_core::ui::ViewState,
 }
 
 mod app_logic;
@@ -170,7 +173,7 @@ impl App {
         let theme = self.ui_store.theme.clone();
 
         egui::TopBottomPanel::top("titlebar")
-            .min_height(TITLEBAR_HEIGHT)
+            .min_height(theme.size_titlebar)
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg)
@@ -178,27 +181,27 @@ impl App {
                     .inner_margin(egui::Margin::symmetric(8, 0)),
             )
             .show(ctx, |ui| {
-                ui.set_min_height(TITLEBAR_HEIGHT);
+                ui.set_min_height(theme.size_titlebar);
 
                 // Single horizontal row:
                 // [toggle?] [title] [sessions] [tabs] [elastic drag] [status] [settings] [buttons]
-                // ── Titlebar three-zone layout ──
+                // ── TitleBar three-zone layout ──
                 // LEFT  : sidebar toggle + Brand
-                // CENTER: session tabs + elastic drag filler (bounded)
+                // CENTER: session tabs + elastic drag filler
                 // RIGHT : window controls + status capsules
                 //
-                // We pre-compute the right-section footprint so the center zone
-                // never encroaches on it, eliminating overlap / truncation.
-                let show_status_labels = ctx.screen_rect().width() >= 720.0;
-                let right_section_w = {
-                    let btn_w = 36.0_f32;
-                    let capsule_w = if show_status_labels { 60.0 } else { 24.0 };
-                    // 4 buttons + 8px sep + 2 capsules + 4px inner gap
-                    btn_w * 4.0 + 8.0 + capsule_w * 2.0 + 4.0
-                };
+                // Architecture: ui.horizontal (LTR) + estimated_right_w reserve.
+                // We no longer use horizontal_centered (double-pass trap) or
+                // ui.min_rect().width() in RTL (always returns full width).
+                let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
+                let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
 
-                ui.horizontal_centered(|ui| {
-                    ui.set_min_height(TITLEBAR_HEIGHT);
+                // Empirical width of the right section (buttons + capsules).
+                // 4×36 + 8 + 36 + 4 + 2×status ≈ 280–450 depending on labels.
+                let estimated_right_w: f32 = if show_status_labels { 450.0 } else { 280.0 };
+
+                ui.horizontal(|ui| {
+                    ui.set_min_height(theme.size_titlebar);
 
                     // ── LEFT zone ──
                     if self.ui_store.sidebar_collapsed {
@@ -215,30 +218,41 @@ impl App {
                         ui.add_space(8.0);
                     }
                     ui.label(
-                        egui::RichText::new("Clarify")
+                        egui::RichText::new("Clarity")
                             .size(theme.text_base)
                             .color(theme.text_strong),
                     );
                     ui.add_space(8.0);
 
-                    // ── CENTER zone: tabs + drag filler ──
-                    let center_w = (ui.available_width() - right_section_w).max(40.0);
+                    // ── CENTER zone: tabs + model + drag filler ──
+                    let center_w = (ui.available_width() - estimated_right_w).max(40.0);
                     ui.allocate_ui_with_layout(
-                        egui::vec2(center_w, TITLEBAR_HEIGHT),
+                        egui::vec2(center_w, theme.size_titlebar),
                         egui::Layout::left_to_right(egui::Align::Center),
                         |ui| {
                             crate::panels::chat::header::render_session_tabs(self, ui);
+
+                            // Model context indicator (Pretext UI mid-zone)
+                            let model_name = self.settings_store.settings_edit.model.trim();
+                            if !model_name.is_empty() {
+                                ui.add_space(8.0);
+                                ui.label(
+                                    egui::RichText::new(model_name)
+                                        .size(theme.text_xs)
+                                        .color(theme.text_muted),
+                                );
+                            }
+
+                            // Drag filler: occupies all remaining space inside CENTER
                             let drag_w = ui.available_width().max(20.0);
                             let (_, drag_resp) = ui.allocate_exact_size(
-                                egui::vec2(drag_w, TITLEBAR_HEIGHT),
+                                egui::vec2(drag_w, theme.size_titlebar),
                                 egui::Sense::click_and_drag(),
                             );
                             if drag_resp.drag_started_by(egui::PointerButton::Primary) {
                                 ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                             }
                             if drag_resp.double_clicked() {
-                                let is_maximized =
-                                    ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
                                     !is_maximized,
                                 ));
@@ -248,153 +262,165 @@ impl App {
 
                     // ── RIGHT zone ──
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        // Close
-                        let close_resp = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_X,
-                            &theme,
-                            theme.danger.linear_multiply(0.25),
-                            egui::Color32::WHITE,
-                            theme.text_dim,
-                        );
-                        if close_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                        }
-
-                        // Maximize / Restore
-                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        let max_icon = if is_maximized {
-                            crate::theme::ICON_COPY
-                        } else {
-                            crate::theme::ICON_SQUARE
-                        };
-                        let max_resp = crate::widgets::window_control_button(
-                            ui,
-                            max_icon,
-                            &theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text_dim,
-                        );
-                        if max_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                        }
-
-                        // Minimize
-                        let min_resp = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_MINUS,
-                            &theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text_dim,
-                        );
-                        if min_resp.clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                        }
-
-                        // Separator between system buttons and indicators
-                        ui.add_space(8.0);
-
-                        // Settings button
-                        let settings_resp = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_SETTINGS,
-                            &theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text_dim,
-                        );
-                        if settings_resp.clicked() {
-                            self.settings_store.settings_open = true;
-                        }
-
-                        // Connection status capsule (label hidden on narrow windows)
-                        let (conn_label, conn_color) = match self.chat_store.agent_status {
-                            AgentStatus::Online => ("Online", theme.status_online),
-                            AgentStatus::Busy => ("Busy", theme.status_busy),
-                            AgentStatus::Offline | AgentStatus::Unconfigured => {
-                                ("断开", theme.status_offline)
-                            }
-                        };
-                        let conn_resp = crate::widgets::status_capsule(
-                            ui,
-                            conn_color,
-                            if show_status_labels { conn_label } else { "" },
-                            conn_color,
-                            false,
-                            &theme,
-                        );
-                        if conn_resp.hovered() {
-                            let _ = conn_resp.on_hover_text("Agent connection status");
-                        }
-                        ui.add_space(4.0);
-
-                        // Gateway capsule (clickable)
-                        let gw_dot_color = match self.chat_store.gateway_status {
-                            crate::ui::types::GatewayStatus::Online => theme.status_online,
-                            crate::ui::types::GatewayStatus::Offline => theme.status_offline,
-                            crate::ui::types::GatewayStatus::Checking => theme.status_busy,
-                        };
-                        let gw_resp = crate::widgets::status_capsule(
-                            ui,
-                            gw_dot_color,
-                            if show_status_labels { "Gateway" } else { "" },
-                            theme.text_muted,
-                            true,
-                            &theme,
-                        );
-                        let gw_resp = if gw_resp.hovered() {
-                            gw_resp.on_hover_text("Click to start/stop Gateway")
-                        } else {
-                            gw_resp
-                        };
-                        if gw_resp.clicked() {
-                            match self.chat_store.gateway_status {
-                                crate::ui::types::GatewayStatus::Online => {
-                                    if let Some(ref gm) = self.gateway_manager {
-                                        match gm.stop() {
-                                            Ok(_) => self.push_toast(
-                                                "Gateway stopping...".to_string(),
-                                                crate::ui::types::ToastLevel::Info,
-                                            ),
-                                            Err(e) => self.push_toast(
-                                                format!("Gateway stop failed: {}", e),
-                                                crate::ui::types::ToastLevel::Error,
-                                            ),
-                                        }
-                                    } else {
-                                        self.push_toast(
-                                            "Gateway manager not available".to_string(),
-                                            crate::ui::types::ToastLevel::Warn,
-                                        );
-                                    }
-                                }
-                                _ => {
-                                    if let Some(ref gm) = self.gateway_manager {
-                                        match gm.start_if_needed() {
-                                            Ok(_) => self.push_toast(
-                                                "Gateway starting...".to_string(),
-                                                crate::ui::types::ToastLevel::Info,
-                                            ),
-                                            Err(e) => self.push_toast(
-                                                format!("Gateway start failed: {}", e),
-                                                crate::ui::types::ToastLevel::Error,
-                                            ),
-                                        }
-                                    } else {
-                                        self.push_toast(
-                                            "Gateway manager not available".to_string(),
-                                            crate::ui::types::ToastLevel::Warn,
-                                        );
-                                    }
-                                }
-                            }
-                        }
+                        self.render_titlebar_right(ui, ctx, show_status_labels, is_maximized, &theme);
                     });
                 });
             });
+    }
+
+    /// Render the right section of the titlebar (window controls + status capsules).
+    /// Returns the actual width consumed in right-to-left layout.
+    fn render_titlebar_right(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        show_status_labels: bool,
+        is_maximized: bool,
+        theme: &crate::theme::Theme,
+    ) -> f32 {
+        // In RTL, cursor.max.x shrinks leftward as widgets are placed.
+        // Width = start_max_x - end_max_x.
+        let start_max_x = ui.cursor().max.x;
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    // Close
+                    let close_resp = crate::widgets::window_control_button(
+                        ui,
+                        crate::theme::ICON_X,
+                        &theme,
+                        theme.danger.linear_multiply(0.25),
+                        egui::Color32::WHITE,
+                        theme.text_dim,
+                    );
+                    if close_resp.clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                    }
+
+                    // Maximize / Restore
+                    let max_icon = if is_maximized {
+                        crate::theme::ICON_COPY
+                    } else {
+                        crate::theme::ICON_SQUARE
+                    };
+                    let max_resp = crate::widgets::window_control_button(
+                        ui,
+                        max_icon,
+                        &theme,
+                        theme.overlay_medium,
+                        theme.text,
+                        theme.text_dim,
+                    );
+                    if max_resp.clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+                    }
+
+                    // Minimize
+                    let min_resp = crate::widgets::window_control_button(
+                        ui,
+                        crate::theme::ICON_MINUS,
+                        &theme,
+                        theme.overlay_medium,
+                        theme.text,
+                        theme.text_dim,
+                    );
+                    if min_resp.clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+
+                    // Separator between system buttons and indicators
+                    ui.add_space(8.0);
+
+                    // Settings button
+                    let settings_resp = crate::widgets::window_control_button(
+                        ui,
+                        crate::theme::ICON_SETTINGS,
+                        &theme,
+                        theme.overlay_medium,
+                        theme.text,
+                        theme.text_dim,
+                    );
+                    if settings_resp.clicked() {
+                        self.view_state.main = clarity_core::ui::AppView::Settings;
+                    }
+
+                    // Connection status capsule (label hidden on narrow windows)
+                    let (conn_label, conn_color) = match self.chat_store.agent_status {
+                        AgentStatus::Online => ("Online", theme.status_online),
+                        AgentStatus::Busy => ("Busy", theme.status_busy),
+                        AgentStatus::Offline | AgentStatus::Unconfigured => {
+                            ("断开", theme.status_offline)
+                        }
+                    };
+                    let conn_resp = crate::widgets::status_capsule(
+                        ui,
+                        conn_color,
+                        if show_status_labels { conn_label } else { "" },
+                        conn_color,
+                        false,
+                        &theme,
+                    );
+                    conn_resp.on_hover_text("Agent connection status");
+                    ui.add_space(4.0);
+
+                    // Gateway capsule (clickable)
+                    let gw_dot_color = match self.chat_store.gateway_status {
+                        crate::ui::types::GatewayStatus::Online => theme.status_online,
+                        crate::ui::types::GatewayStatus::Offline => theme.status_offline,
+                        crate::ui::types::GatewayStatus::Checking => theme.status_busy,
+                    };
+                    let gw_resp = crate::widgets::status_capsule(
+                        ui,
+                        gw_dot_color,
+                        if show_status_labels { "Gateway" } else { "" },
+                        theme.text_muted,
+                        true,
+                        &theme,
+                    )
+                    .on_hover_text("Click to start/stop Gateway");
+                    if gw_resp.clicked() {
+                        match self.chat_store.gateway_status {
+                            crate::ui::types::GatewayStatus::Online => {
+                                if let Some(ref gm) = self.gateway_manager {
+                                    match gm.stop() {
+                                        Ok(_) => self.push_toast(
+                                            "Gateway stopping...".to_string(),
+                                            crate::ui::types::ToastLevel::Info,
+                                        ),
+                                        Err(e) => self.push_toast(
+                                            format!("Gateway stop failed: {}", e),
+                                            crate::ui::types::ToastLevel::Error,
+                                        ),
+                                    }
+                                } else {
+                                    self.push_toast(
+                                        "Gateway manager not available".to_string(),
+                                        crate::ui::types::ToastLevel::Warn,
+                                    );
+                                }
+                            }
+                            _ => {
+                                if let Some(ref gm) = self.gateway_manager {
+                                    match gm.start_if_needed() {
+                                        Ok(_) => self.push_toast(
+                                            "Gateway starting...".to_string(),
+                                            crate::ui::types::ToastLevel::Info,
+                                        ),
+                                        Err(e) => self.push_toast(
+                                            format!("Gateway start failed: {}", e),
+                                            crate::ui::types::ToastLevel::Error,
+                                        ),
+                                    }
+                                } else {
+                                    self.push_toast(
+                                        "Gateway manager not available".to_string(),
+                                        crate::ui::types::ToastLevel::Warn,
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+        // RTL layout: cursor.max.x moved leftward; consumed width = start - end.
+        start_max_x - ui.cursor().max.x
     }
 
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
@@ -409,7 +435,7 @@ impl App {
 
         if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
             // Do not trigger edge resize inside the titlebar area; it conflicts with drag-to-move.
-            if pos.y < screen_rect.min.y + TITLEBAR_HEIGHT + edge {
+            if pos.y < screen_rect.min.y + self.ui_store.theme.size_titlebar + edge {
                 return;
             }
 
@@ -606,8 +632,8 @@ impl eframe::App for App {
                 shortcuts::ShortcutAction::CloseModal => {
                     if self.team_store.create_modal_open {
                         self.team_store.create_modal_open = false;
-                    } else if self.settings_store.settings_open {
-                        self.settings_store.settings_open = false;
+                    } else if self.view_state.main != clarity_core::ui::AppView::Chat {
+                        self.view_state.main = clarity_core::ui::AppView::Chat;
                     } else if self.ui_store.skill_panel_open {
                         self.ui_store.skill_panel_open = false;
                     } else if self.team_store.team_panel_open {
@@ -647,14 +673,18 @@ impl eframe::App for App {
                     self.ui_store.focus_input_requested = true;
                 }
                 shortcuts::ShortcutAction::ToggleCommandPalette => {
-                    // Placeholder: command palette skeleton
-                    self.push_toast(
-                        "Command Palette (Ctrl+Shift+P) — coming in v0.3.2".to_string(),
-                        crate::ui::types::ToastLevel::Info,
-                    );
+                    self.command_palette.open = true;
+                    self.command_palette.query.clear();
+                    self.command_palette.selected = 0;
                 }
                 shortcuts::ShortcutAction::ToggleDashboardPanel => {
-                    self.ui_store.dashboard_panel_open = !self.ui_store.dashboard_panel_open;
+                    self.view_state.main = if self.view_state.main
+                        == clarity_core::ui::AppView::Dashboard
+                    {
+                        clarity_core::ui::AppView::Chat
+                    } else {
+                        clarity_core::ui::AppView::Dashboard
+                    };
                 }
             }
         }
@@ -718,12 +748,12 @@ impl eframe::App for App {
         if let Some(last_width) = self.last_frame_width {
             // One-way collapse: only trigger when window becomes narrower.
             // Do NOT auto-restore on widen to avoid fighting user intent.
-            if last_width >= 1100.0 && current_width < 1100.0 {
+            if last_width >= self.ui_store.theme.breakpoint_medium && current_width < self.ui_store.theme.breakpoint_medium {
                 self.ui_store.dashboard_panel_open = false;
                 self.team_store.team_panel_open = false;
                 self.task_store.task_panel_open = false;
             }
-            if last_width >= 768.0 && current_width < 768.0 {
+            if last_width >= self.ui_store.theme.breakpoint_compact && current_width < self.ui_store.theme.breakpoint_compact {
                 self.ui_store.sidebar_collapsed = true;
             }
         }
@@ -735,27 +765,26 @@ impl eframe::App for App {
         let sidebar_w = if self.ui_store.sidebar_collapsed {
             36.0
         } else {
-            220.0
+            self.ui_store.theme.size_sidebar
         };
-        let workspace_w = 280.0; // always present
+        let workspace_w = self.ui_store.theme.size_workspace; // always present
         let dashboard_w = if self.ui_store.dashboard_panel_open {
-            240.0
+            self.ui_store.theme.size_panel_right
         } else {
             0.0
         };
         let team_w = if self.team_store.team_panel_open {
-            240.0
+            self.ui_store.theme.size_panel_right
         } else {
             0.0
         };
         let task_w = if self.task_store.task_panel_open {
-            240.0
+            self.ui_store.theme.size_panel_right
         } else {
             0.0
         };
         let content_w = current_width - sidebar_w - workspace_w - dashboard_w - team_w - task_w;
-        const CONTENT_MIN: f32 = 480.0;
-        if content_w < CONTENT_MIN {
+        if content_w < self.ui_store.theme.content_min_width {
             // Priority: dashboard → team → task (sidebar handled by 768px breakpoint)
             if self.ui_store.dashboard_panel_open {
                 self.ui_store.dashboard_panel_open = false;
@@ -770,15 +799,47 @@ impl eframe::App for App {
             self.ui_store.theme.apply(style);
         });
 
+        // Sync legacy boolean flags with ViewState (compatibility layer).
+        // This ensures render_* methods that still check their private booleans
+        // stay consistent with the unified view state machine.
+        self.settings_store.settings_open =
+            self.view_state.main == clarity_core::ui::AppView::Settings;
+        self.ui_store.dashboard_panel_open =
+            self.view_state.main == clarity_core::ui::AppView::Dashboard;
+        self.ui_store.gantt_panel_open =
+            self.view_state.main == clarity_core::ui::AppView::Gantt;
+
+        // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
         self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
-        self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
-        self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
+
+        // ── Main view (mutually exclusive) ──
+        match self.view_state.main {
+            clarity_core::ui::AppView::Chat => {
+                self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
+            }
+            clarity_core::ui::AppView::Settings => {
+                self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
+            }
+            clarity_core::ui::AppView::Dashboard => {
+                self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
+            }
+            clarity_core::ui::AppView::Gantt => {
+                self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
+            }
+            clarity_core::ui::AppView::TaskBoard => {
+                // TODO: task board main view
+            }
+        }
+
+        // ── Overlay panels ──
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
         self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
+
+        // ── Modals (top-most, blocking) ──
         self.render_safe(ctx, "cron_create", |app, ctx| {
             app.render_cron_create_modal(ctx)
         });
@@ -795,8 +856,6 @@ impl eframe::App for App {
         self.render_safe(ctx, "team_create", |app, ctx| {
             app.render_team_create_modal(ctx)
         });
-        self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
-        self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
         self.render_safe(ctx, "kimi_login", |app, ctx| {
             crate::components::login_modal::render_oauth_login_modal(
                 app,
@@ -810,6 +869,13 @@ impl eframe::App for App {
         self.render_safe(ctx, "resize", |app, ctx| {
             app.handle_window_resize(ctx);
         });
+
+        // Command Palette (top-most layer)
+        if self.command_palette.open {
+            let commands = clarity_core::ui::commands::built_in::all();
+            let theme = self.ui_store.theme.clone();
+            self.command_palette.show(ctx, &theme, &commands);
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
