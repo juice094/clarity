@@ -63,6 +63,9 @@ This document exists because the codebase previously mixed three incompatible la
 - Text containers
 - Interactive rows or cards
 - Any widget that contains text or child widgets
+- **Never** use `allocate_exact_size` for a widget that is immediately followed by `ui.put`
+  of an interactive `Button`/`Label` on the same rect — this creates overlapping interact
+  regions and causes the outer Response to become permanently blind to input.
 
 **Rationale:** `allocate_exact_size` reserves space but does not lay out children. If you need to place text or nested widgets inside the reserved area, use `Frame` + inner layout or a built-in widget.
 
@@ -306,7 +309,7 @@ For every PR touching `crates/clarity-egui/src/**/*.rs`, the reviewer must verif
 - [ ] **RULE 1** — No `Button::new("")` + `painter` overlay sequences exist.
 - [ ] **RULE 2** — No `painter.text()` or `painter.rect_filled()` used for UI widget content/backgrounds in panel code.
 - [ ] **RULE 3** — No `ui.interact(raw_rect, ...)` calls remain; all interaction uses built-in widgets or `Frame::show(...).response`.
-- [ ] **RULE 4** — `allocate_exact_size` is used only for spacers, drag handles, or widgets in `widgets/` with tests.
+- [ ] **RULE 4** — `allocate_exact_size` is used only for spacers, drag handles, or widgets in `widgets/` with tests. Never paired with `ui.put` of an interactive widget on the same rect.
 - [ ] **RULE 5** — No hardcoded pixel values `> 8.0` for spacing, sizing, or positioning; all constants route through `theme` tokens.
 - [ ] **Decision Tree** — Each new widget category maps to the correct primitive (Button / SelectableLabel / Frame / painter / spacer).
 - [ ] **Theme Consistency** — New colors or sizes are added to `theme.rs` if no existing token covers the need.
@@ -324,3 +327,46 @@ For every PR touching `crates/clarity-egui/src/**/*.rs`, the reviewer must verif
 - `ui.horizontal(|ui| { ... })` and `ui.vertical(|ui| { ... })` are the primary layout primitives.
 - `ui.with_layout(Layout::right_to_left(Align::Center), |ui| { ... })` for toolbar alignment.
 - `SelectableLabel::new(selected, text)` is the canonical choice for toggle rows and tabs.
+
+---
+
+## Appendix: Production-Verified Traps (2026-05-12)
+
+Discovered during the TitleBar regression that required **four** consecutive fixes on `window_control_button`. These are now banned by verdict.
+
+### Trap 1 — RTL `min_rect` Never Shrinks
+`ui.min_rect().width()` inside `right_to_left` always returns the full available width, not the placed-widget total. `expand_to_include_rect` only contracts `min_rect.min.x`; the `max.x` is pinned to `max_rect.max.x` for the entire RTL traversal.
+
+**Use instead**: `cursor.max.x` delta, or an empirical `estimated_right_w`.
+
+### Trap 2 — `ui.put` Cursor Backtrack
+`allocate_space(36×36) + ui.put(Button)` net-advances the cursor by only ~14 px (content width), not 36 px. `ui.put` calls `advance_cursor_after_rect(child.min_rect())` using the Button's tight content rect, not the reserved 36 px. In RTL successive buttons overlap.
+
+**Use instead**: Pattern A — `allocate_space` + `new_child(Sense::click)` + `Frame::inner_margin` + `Label`. No `ui.put`.
+
+### Trap 3 — Double Interact Registration
+`allocate_exact_size(Sense::click)` + `ui.put(Button)` on same rect → Button's later-registered interact swallows all events. Outer Response permanently blind.
+
+**Use instead**: One Sense per rect.
+
+### Trap 4 — `horizontal_centered` Double Execution
+The closure runs twice (measuring pass + render pass). Every `ctx.input`, `state.mutate`, auto-id consumption fires twice. For three-zone layouts (LEFT / CENTER / RIGHT) the measuring pass also poisons the cursor.
+
+**Use instead**: Plain `ui.horizontal` + `estimated_right_w` reserve. See `render_titlebar` in `main.rs`.
+
+### Trap 5 — `new_child` Layout Decoupling
+`new_child` ignores parent layout direction. Inside an RTL parent, the child defaults to LTR. A 14 px icon paints at `child.max_rect.min.x` (the *left* of the 36 px area), causing visible offset.
+
+**Use instead**: `Frame::inner_margin(Margin::symmetric(11, 11))` for precise centering. Layout-direction-independent.
+
+---
+
+## Canonical Implementations
+
+| Pattern | File | Use Case |
+|---------|------|----------|
+| A (Chrome Button) | `widgets/window_control.rs` | Fixed-size icon button with custom hover |
+| B (Drag Handle) | `main.rs` drag filler in CENTER zone | Window drag, splitter |
+| C (Spacer) | `ui.add_space(theme.space_*)` | Layout gap |
+
+See `~/.config/agents/skills/egui-layout-canons/SKILL.md` for the full skill protocol.
