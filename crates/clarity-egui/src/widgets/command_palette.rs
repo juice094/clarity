@@ -50,7 +50,7 @@ impl CommandPalette {
             .title_bar(false)
             .resizable(false)
             .collapsible(false)
-            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 40.0))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, theme.modal_offset_y))
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg_elevated)
@@ -59,7 +59,7 @@ impl CommandPalette {
                     .inner_margin(egui::Margin::symmetric(0, theme.space_12 as i8)),
             )
             .show(ctx, |ui| {
-                ui.set_width(520.0);
+                ui.set_width(theme.palette_w);
 
                 // ── Input ──
                 let input_resp = ui.add(
@@ -76,7 +76,7 @@ impl CommandPalette {
                 ui.separator();
 
                 // ── List ──
-                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(theme.palette_max_h).show(ui, |ui| {
                     for (idx, cmd) in filtered.iter().enumerate() {
                         let is_selected = idx == self.selected;
                         let row_bg = if is_selected {

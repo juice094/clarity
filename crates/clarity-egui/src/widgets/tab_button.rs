@@ -21,7 +21,7 @@ pub fn tab_button(
 ) -> TabResponse {
     let mut close_clicked = false;
 
-    let inner = ui.allocate_ui(egui::vec2(width, 28.0), |ui| {
+    let inner = ui.allocate_ui(egui::vec2(width, theme.size_tab_h), |ui| {
         let tab_rect = ui.max_rect();
         let tab_hovered = ui.rect_contains_pointer(tab_rect);
 
@@ -43,7 +43,7 @@ pub fn tab_button(
             let spacing = ui.spacing().item_spacing.x;
             let label_w = (ui.available_width() - 18.0 - spacing - 4.0).max(10.0);
             ui.add_sized(
-                egui::vec2(label_w, 28.0),
+                egui::vec2(label_w, theme.size_tab_h),
                 egui::Label::new(
                     egui::RichText::new(title)
                         .size(theme.text_md)
@@ -60,7 +60,7 @@ pub fn tab_button(
                 egui::Color32::TRANSPARENT
             };
             let close_resp = ui.add_sized(
-                egui::vec2(18.0, 28.0),
+                egui::vec2(18.0, theme.size_tab_h),
                 egui::Button::new(
                     egui::RichText::new(crate::theme::ICON_X)
                         .font(theme.font_icon(theme.text_xs))

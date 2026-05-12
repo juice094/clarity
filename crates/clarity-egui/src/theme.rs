@@ -160,6 +160,28 @@ pub struct Theme {
     pub size_input: f32,
     pub content_min_width: f32,
 
+    // --- Chrome dimensions (P0.5.F.1 tokenization) ---
+    /// Default window inner width on first launch.
+    pub window_default_w: f32,
+    /// Default window inner height on first launch.
+    pub window_default_h: f32,
+    /// Minimum allowed window inner width.
+    pub window_min_w: f32,
+    /// Minimum allowed window inner height.
+    pub window_min_h: f32,
+    /// Edge resize zone padding (px from window border).
+    pub window_edge_zone: f32,
+    /// Sidebar width when collapsed.
+    pub size_sidebar_collapsed: f32,
+    /// Session tab strip height.
+    pub size_tab_h: f32,
+    /// Modal vertical offset from top of viewport (palette anchor).
+    pub modal_offset_y: f32,
+    /// Command palette modal width.
+    pub palette_w: f32,
+    /// Command palette scroll-area max height.
+    pub palette_max_h: f32,
+
     // --- Responsive breakpoints ---
     pub breakpoint_compact: f32,
     pub breakpoint_medium: f32,
@@ -315,6 +337,18 @@ impl Theme {
             size_input: 72.0,
             content_min_width: 480.0,
 
+            // Chrome dimensions (P0.5.F.1)
+            window_default_w: 900.0,
+            window_default_h: 700.0,
+            window_min_w: 900.0,
+            window_min_h: 600.0,
+            window_edge_zone: 10.0,
+            size_sidebar_collapsed: 36.0,
+            size_tab_h: 28.0,
+            modal_offset_y: 40.0,
+            palette_w: 520.0,
+            palette_max_h: 320.0,
+
             // Responsive breakpoints
             breakpoint_compact: 768.0,
             breakpoint_medium: 1100.0,
@@ -462,6 +496,18 @@ impl Theme {
             size_input: 72.0,
             content_min_width: 480.0,
 
+            // Chrome dimensions (P0.5.F.1, shared)
+            window_default_w: 900.0,
+            window_default_h: 700.0,
+            window_min_w: 900.0,
+            window_min_h: 600.0,
+            window_edge_zone: 10.0,
+            size_sidebar_collapsed: 36.0,
+            size_tab_h: 28.0,
+            modal_offset_y: 40.0,
+            palette_w: 520.0,
+            palette_max_h: 320.0,
+
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,
             breakpoint_medium: 1100.0,
@@ -597,6 +643,18 @@ impl Theme {
             size_statusbar: 24.0,
             size_input: 72.0,
             content_min_width: 480.0,
+
+            // Chrome dimensions (P0.5.F.1, shared)
+            window_default_w: 900.0,
+            window_default_h: 700.0,
+            window_min_w: 900.0,
+            window_min_h: 600.0,
+            window_edge_zone: 10.0,
+            size_sidebar_collapsed: 36.0,
+            size_tab_h: 28.0,
+            modal_offset_y: 40.0,
+            palette_w: 520.0,
+            palette_max_h: 320.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,

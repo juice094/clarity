@@ -425,7 +425,7 @@ impl App {
 
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
         let screen_rect = ctx.screen_rect();
-        let edge = 10.0;
+        let edge = self.ui_store.theme.window_edge_zone;
 
         // Skip resize when maximized; it may not work properly and conflicts with restore logic.
         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
@@ -763,7 +763,7 @@ impl eframe::App for App {
         // This catches cases where user manually resized side panels narrower
         // than the window-width breakpoints above.
         let sidebar_w = if self.ui_store.sidebar_collapsed {
-            36.0
+            self.ui_store.theme.size_sidebar_collapsed
         } else {
             self.ui_store.theme.size_sidebar
         };
@@ -911,10 +911,13 @@ fn main() -> eframe::Result {
     }));
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 700.0])
-            .with_min_inner_size([900.0, 600.0])
-            .with_decorations(false),
+        viewport: {
+            let theme_defaults = crate::theme::Theme::default();
+            egui::ViewportBuilder::default()
+                .with_inner_size([theme_defaults.window_default_w, theme_defaults.window_default_h])
+                .with_min_inner_size([theme_defaults.window_min_w, theme_defaults.window_min_h])
+                .with_decorations(false)
+        },
         ..Default::default()
     };
 
