@@ -1,7 +1,8 @@
 # Clarity 项目现状报告
 
-> 版本：v0.3.2 | 日期：2026-05-10 | `main` @ `5dc1fe23` | 基于实机测试与代码审计  
-> 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`PROJECT_STATUS.md`](../PROJECT_STATUS.md)
+> 版本：v0.3.2 | 日期：2026-05-12 | `main` @ `ace50782` | 基于实机测试与代码审计
+> 关联文档：[`ENGINEERING_PLAN.md`](ENGINEERING_PLAN.md) · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)
+> Pretext UI 演进：S1 (Phase 0.5) + S2 (Phase 1) 已完成 — 详见 [`plans/2026-05-12-S1-session-archive.md`](plans/2026-05-12-S1-session-archive.md) · [`plans/2026-05-12-S2-session-archive.md`](plans/2026-05-12-S2-session-archive.md)
 
 ---
 
@@ -27,7 +28,7 @@
 - `clarity-contract`: 41+ tests passed
 - `clarity-mcp`: 31 tests passed
 - `clarity-integration-tests`: **12 个集成测试（core_wire ×2 / gateway_http ×7 / memory_persistence ×1 / mcp_end_to_end ×2）**
-- `clarity-egui`: **32 tests — 核心逻辑已覆盖（app_state/settings/theme），UI 渲染仍无测试**
+- `clarity-egui`: **66 tests — S2 闭环基线（S1 P0.5 焦点环 +4 / shortcut command_id +1，S2 P1 StripBuilder 重构无新增）；图标管道从 Phosphor 迁移至 Lucide（ADR-010）**
 
 **前端测试**：31 passed / 11 test files（smoke + interaction）— Tauri 侧归档前数据
 

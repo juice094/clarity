@@ -148,7 +148,8 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
 | Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
 | `clarity-tauri` 冻结 | ⏸️ 冻结 | 停止新功能开发，仅维护现有代码至 egui 主控成熟 |
-| Pretext 排版引擎 | ❌ 已否决 | 重型移植工程，不入主 repo 路线图；可作为个人探索项目 |
+| Pretext 排版引擎（重型 TeX 移植） | ❌ 已否决 | 重型移植工程，不入主 repo 路线图；可作为个人探索项目 |
+| Pretext UI 设计哲学（轻型采纳） | ✅ 已采纳 | 见 [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)：S1+S2 已完成 Phase 0.5+1（图标即字符、Chrome StripBuilder），不重做布局引擎 |
 
 ---
 
