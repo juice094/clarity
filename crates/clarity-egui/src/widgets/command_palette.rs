@@ -9,10 +9,17 @@ pub use clarity_core::ui::CommandItem;
 /// with a real fuzzy-searchable command surface.
 ///
 /// # Layout
-/// - Width 520px, max height 400px, anchored CENTER_TOP + 40px offset.
+/// - Width `theme.palette_w`, max scroll height `theme.palette_max_h`,
+///   anchored CENTER_TOP + `theme.modal_offset_y`.
 /// - Single-line input with `>` prefix semantics.
 /// - List rows: icon + name (left) + shortcut (right, monospace).
 /// - Selection via ↑/↓, execution via Enter, dismiss via Esc.
+///
+/// # Dispatch (P0.5.C.2)
+/// `show()` returns `Some(command_id)` when the user activates a command via
+/// click or Enter. The caller (`App::update`) is expected to forward that id
+/// to [`App::dispatch_command`](crate::App::dispatch_command), which is the
+/// single source of truth for both keyboard shortcuts and the palette.
 pub struct CommandPalette {
     pub open: bool,
     pub query: String,
@@ -29,16 +36,20 @@ impl CommandPalette {
     }
 
     /// Render the palette. Sets `self.open = false` when the user dismisses it.
+    ///
+    /// Returns `Some(command_id)` when the user activates a command (click or
+    /// Enter). The caller must dispatch that id via `App::dispatch_command`.
     pub fn show(
         &mut self,
         ctx: &egui::Context,
         theme: &Theme,
         commands: &[CommandItem],
-    ) {
+    ) -> Option<String> {
         if !self.open {
-            return;
+            return None;
         }
         let mut keep_open = true;
+        let mut activated: Option<String> = None;
         let filtered = self.filter(commands);
 
         // Clamp selection when filter results change.
@@ -117,10 +128,11 @@ impl CommandPalette {
                                     );
                                 });
                             })
-                            .response;
+                            .response
+                            .interact(egui::Sense::click());
 
                         if row_resp.clicked() {
-                            self.execute(cmd);
+                            activated = Some(cmd.id.clone());
                             keep_open = false;
                         }
                     }
@@ -139,7 +151,7 @@ impl CommandPalette {
                 }
                 if ui.input(|i| i.key_pressed(egui::Key::Enter)) && !filtered.is_empty() {
                     if let Some(cmd) = filtered.get(self.selected) {
-                        self.execute(cmd);
+                        activated = Some(cmd.id.clone());
                         keep_open = false;
                     }
                 }
@@ -149,6 +161,7 @@ impl CommandPalette {
             });
 
         self.open = keep_open;
+        activated
     }
 
     fn filter<'a>(
@@ -163,10 +176,5 @@ impl CommandPalette {
             .iter()
             .filter(|cmd| cmd.name.to_lowercase().contains(&q))
             .collect()
-    }
-
-    fn execute(&mut self, cmd: &CommandItem) {
-        // Phase 1 stub: log to tracing. Phase 2 wires to actual actions via action router.
-        tracing::info!("CommandPalette execute: {} ({})", cmd.id, cmd.name);
     }
 }

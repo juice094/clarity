@@ -915,7 +915,11 @@ impl eframe::App for App {
         if self.command_palette.open {
             let commands = clarity_core::ui::commands::built_in::all();
             let theme = self.ui_store.theme.clone();
-            self.command_palette.show(ctx, &theme, &commands);
+            // P0.5.C.2: palette returns the activated command id (if any),
+            // which we forward to the unified dispatcher.
+            if let Some(cmd_id) = self.command_palette.show(ctx, &theme, &commands) {
+                self.dispatch_command(&cmd_id);
+            }
         }
     }
 
