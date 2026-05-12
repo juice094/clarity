@@ -1,14 +1,15 @@
 # clarity-egui Layout Specification
 
-> **Version:** 1.0  
-> **Scope:** All `.rs` files in `crates/clarity-egui/src`  
+> **Version:** 1.1
+> **Scope:** All `.rs` files in `crates/clarity-egui/src`
 > **Status:** Mandatory — P0 compliance required for all PRs
+> **Changelog v1.1 (2026-05-12 / S2.P1.5+P1.7):** added RULE 6 (chrome uses StripBuilder) and RULE 7 (icons are glyphs).
 
 This document exists because the codebase previously mixed three incompatible layout systems (responsive egui, `allocate_exact_size`, and raw `painter`), producing 47+ hardcoded coordinate offsets, broken theme propagation, and unmaintainable UI code. These rules are non-negotiable.
 
 ---
 
-## 1. The 5 Iron Rules
+## 1. The 7 Iron Rules
 
 ### RULE 1: Ghost Button Prohibition
 
@@ -86,6 +87,69 @@ This document exists because the codebase previously mixed three incompatible la
 | Animation duration | `theme.duration_*` |
 
 **Rationale:** If a value is not in `theme.rs`, the theme system is broken. Adding new hardcoded coordinates guarantees theme changes will produce misaligned UI.
+
+---
+
+### RULE 6: Chrome Must Use `StripBuilder` (no `estimated_*` heuristics)
+
+**Forbidden in chrome (titlebar, statusbar, modal frames, sidebar headers):**
+- Computing `let estimated_*: f32 = if cond { ... } else { ... }` to reserve space for a sibling zone.
+- Calling `ui.available_width() - <magic number>` to size a center zone.
+- `ui.allocate_ui_with_layout(vec2(computed_w, h), ...)` followed by `ui.with_layout(RTL, ...)` siblings.
+
+**Required for chrome:**
+```rust
+use egui_extras::{Size, StripBuilder};
+
+StripBuilder::new(ui)
+    .size(Size::exact(theme.titlebar_left_w))            // LEFT
+    .size(Size::remainder().at_least(40.0))              // CENTER
+    .size(Size::exact(theme.titlebar_right_w_full))      // RIGHT
+    .horizontal(|mut strip| {
+        strip.cell(|ui| { /* left content */ });
+        strip.cell(|ui| { /* center content (tabs + drag filler) */ });
+        strip.cell(|ui| { /* right content (RTL layout inside) */ });
+    });
+```
+
+**Rationale:** Chrome regions are predictable in structure (LEFT exact / CENTER fill / RIGHT exact). Computing zone widths arithmetically from `available_width()` minus heuristics produces traps like `estimated_right_w: 450/280` (S1 audit blocker P0.5.E.4). `StripBuilder` makes the layout declarative, the widths come from theme tokens, and the CENTER zone naturally adapts to window resize.
+
+**Scope:** Applies to TopBottomPanel chrome (`render_titlebar`, future `render_status_bar`), modal frame layouts, sidebar headers. Does **not** apply to content panels (chat history, settings forms) — those use idiomatic `ui.vertical / ui.horizontal` because their structure is content-driven, not declared.
+
+**Token tie-in:** Chrome dimension tokens live in `Theme` (e.g., `titlebar_left_w`, `titlebar_right_w_full`, `titlebar_right_w_compact`, `palette_w`, `palette_max_h`). New chrome regions must add tokens; inline magic numbers are forbidden per RULE 5.
+
+**See also:**
+- Canonical implementation: `crates/clarity-egui/src/main.rs::render_titlebar` (post S2.P1.2 refactor).
+- PoC reference: `crates/clarity-egui/examples/strip_titlebar.rs`.
+- Audit context: `docs/audits/2026-05-12-ui-design-audit.md` §G (P0.5.E.4 estimated_right_w trap).
+
+---
+
+### RULE 7: Icons Are Glyphs — Not Bitmaps, Not SVG Meshes
+
+**Required:** Every icon used in the UI is a Unicode codepoint rendered through the standard font pipeline (`egui::FontFamily::Name("icons")`), identical to text rendering — same `FontId`, same kerning, same `text_color()`, same baseline alignment, same focus-ring story.
+
+**Allowed icon sources** (in priority order):
+1. **`lucide_icons::Icon::*`** — type-safe enum (1706 glyphs), preferred for new code (ADR-010).
+2. **`crate::theme::ICON_*`** — `&'static str` constants (backward-compatible API surface for the 27 existing call sites; codepoints are the underlying `Icon::*.unicode()` values).
+3. **Plain Unicode chars** (e.g., `'\u{2630}'` for hamburger menu) — only for cases not covered by Lucide.
+
+**Forbidden:**
+- SVG rasterization at runtime (`resvg` + `egui::ColorImage`) for icon use cases. Reason: bypasses font cache, doubles GPU texture binds, breaks `text_color()` inheritance.
+- Per-icon mesh tessellation (`epaint::Mesh` with hand-authored vertices). Reason: violates the icons-are-glyphs principle and produces brittle position math.
+- Embedding multiple icon fonts for visual variety. Reason: every additional font is a 500-800 KB binary tax and a parallel codepoint namespace.
+- Inline hex codepoints in widget code (`ui.label("\u{e154}")`). Reason: hides intent at the call site; use `theme::ICON_SETTINGS` or `Icon::Settings.unicode()`.
+
+**Rationale:** The Pretext UI thesis (see `docs/architecture/pretext-ui-theory.md`) treats icons and text characters as co-equal `inline glyph` boxes — both occupy an `advance_width`, both inherit `text_color`, both participate in `RichText` layout. Treating an icon as anything other than a glyph re-introduces a parallel layout system, which RULE 1-5 already forbid for text.
+
+**TUI fallback contract (Phase 3 / S7):** Every Lucide codepoint used in chrome or content must have a registered Unicode fallback for ratatui rendering (`IconFallbackTable: IconId -> char`). Lucide's Private Use Area codepoints (`\u{e000}` ~ `\u{f8ff}`) are not portable across terminals; the fallback uses standard Unicode (e.g., `IconId::Settings -> '⚙'` U+2699).
+
+**Sub-pixel quality note:** Lucide's 1.5 px stroke at 12-14 px font sizes (`text_xs` / `text_sm`) may render with anti-aliased gray pixels. If observed in production, mitigate via `egui::pixels_per_point` upscaling rather than switching off the font pipeline.
+
+**See also:**
+- ADR-010: Lucide adoption decision and codepoint mapping table.
+- `crates/clarity-egui/src/theme.rs`: 27 `ICON_*` constants with Lucide-variant comments.
+- `crates/clarity-egui/src/theme.rs::Theme::font_icon`: helper returning `FontId` for icon font.
 
 ---
 
