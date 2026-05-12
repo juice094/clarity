@@ -1,9 +1,10 @@
 # Pretext UI Evolution Plan — Grid for Chrome, Lines for Content
 
 > **Date**: 2026-05-12
-> **Status**: Phase 0 ✅ completed, Phase 1-3 planned
+> **Status**: Phase 0 ✅ completed, Phase 0.5 audit ✅, P0 blockers ⏳, Phase 1-3 planned
 > **Owner**: juice094 + Clarity Agent
 > **Skill**: `~/.config/agents/skills/egui-layout-canons/SKILL.md`
+> **Audit**: `docs/audits/2026-05-12-ui-design-audit.md` (5 P0 blockers, 4h)
 
 ---
 
@@ -51,10 +52,35 @@ diagnostic protocol, PR checklist.
 
 ---
 
+## 1.5. Phase 0.5 — Design Audit Gate ✅ (audit) / ⏳ (fixes)
+
+> **Output**: `docs/audits/2026-05-12-ui-design-audit.md`
+> **Verdict**: PASSES with 5 P0 blockers identified
+> **Effort**: 4h for blockers, 1 session
+
+Five prerequisites must land **before** Phase 1.1 (`egui_extras` adoption):
+
+| ID | Item | Section | Effort |
+|----|------|---------|--------|
+| P0.5.F.1 | Add 8 chrome dimension tokens to `theme.rs` | F | 30min |
+| P0.5.C.1 | Unify `ShortcutAction` ↔ `CommandItem` via shared `CommandId` | C | 1h |
+| P0.5.C.2 | Wire `CommandPalette::execute()` to real `CommandRouter` | C | 1h |
+| P0.5.E.1 | Add focus ring to 5 widgets that bypass it | E | 1h |
+| P0.5.E.3 | `.on_hover_text()` on every TitleBar chrome button | E | 15min |
+
+**Rationale**: tokens are required for `Size::exact(theme.*)` declarations in
+StripBuilder; the command router becomes the routing target for Phase 2 keyboard
+navigation; focus ring is a Phase 2 prerequisite for `j/k` row selection.
+
+See audit §G for priority matrix and §6 for revised effort estimate (45h total).
+
+---
+
 ## 2. Phase 1 — Grid for Chrome (StripBuilder)
 
 > **Goal**: Eliminate every `estimated_*_w` hardcoded value in chrome regions
 > by adopting declarative constraint-driven layout.
+> **Gate**: Phase 0.5 P0 blockers (5 items) must all merge before P1.1.
 
 ### 2.1 Scope
 
