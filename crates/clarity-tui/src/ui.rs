@@ -51,7 +51,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         Span::styled(
             " Clarity",
             Style::default()
-                .fg(Color::Rgb(200, 200, 220))
+                .fg(Color::Rgb(232, 234, 239))
                 .add_modifier(Modifier::BOLD),
         ),
     ]))
@@ -80,6 +80,11 @@ pub fn draw(f: &mut Frame, app: &App) {
     ]))
     .alignment(Alignment::Right);
 
+    // StatusBar background (aligns with GUI bg_elevated)
+    let status_bg = Block::default()
+        .style(Style::default().bg(Color::Rgb(17, 19, 24)));
+    f.render_widget(status_bg, chunks[0]);
+
     f.render_widget(left, header_chunks[0]);
     f.render_widget(center, header_chunks[1]);
     f.render_widget(right, header_chunks[2]);
@@ -107,8 +112,8 @@ pub fn draw(f: &mut Frame, app: &App) {
         let block = Block::default()
             .title(" Settings ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Rgb(100, 180, 255)))
-            .style(Style::default().bg(Color::Rgb(30, 30, 40)));
+            .border_style(Style::default().fg(Color::Rgb(40, 40, 45)))
+            .style(Style::default().bg(Color::Rgb(17, 19, 24)));
         let inner = block.inner(settings_area);
         f.render_widget(block, settings_area);
         protocol_renderer::render_view_commands(f, inner, &app.cached_view_commands);

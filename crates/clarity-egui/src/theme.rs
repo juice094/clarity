@@ -150,6 +150,20 @@ pub struct Theme {
     pub duration_fast: f32,
     pub duration_normal: f32,
     pub duration_slow: f32,
+
+    // --- Layout dimensions (Pretext UI token system) ---
+    pub size_titlebar: f32,
+    pub size_sidebar: f32,
+    pub size_workspace: f32,
+    pub size_panel_right: f32,
+    pub size_statusbar: f32,
+    pub size_input: f32,
+    pub content_min_width: f32,
+
+    // --- Responsive breakpoints ---
+    pub breakpoint_compact: f32,
+    pub breakpoint_medium: f32,
+    pub breakpoint_wide: f32,
 }
 
 impl Default for Theme {
@@ -291,6 +305,20 @@ impl Theme {
             duration_fast: 0.10,
             duration_normal: 0.18,
             duration_slow: 0.30,
+
+            // Layout dimensions
+            size_titlebar: 36.0,
+            size_sidebar: 220.0,
+            size_workspace: 280.0,
+            size_panel_right: 240.0,
+            size_statusbar: 24.0,
+            size_input: 72.0,
+            content_min_width: 480.0,
+
+            // Responsive breakpoints
+            breakpoint_compact: 768.0,
+            breakpoint_medium: 1100.0,
+            breakpoint_wide: 1400.0,
         }
     }
 
@@ -424,6 +452,20 @@ impl Theme {
             duration_fast: 0.10,
             duration_normal: 0.18,
             duration_slow: 0.30,
+
+            // Layout dimensions (shared across dark/oled)
+            size_titlebar: 36.0,
+            size_sidebar: 220.0,
+            size_workspace: 280.0,
+            size_panel_right: 240.0,
+            size_statusbar: 24.0,
+            size_input: 72.0,
+            content_min_width: 480.0,
+
+            // Responsive breakpoints (shared)
+            breakpoint_compact: 768.0,
+            breakpoint_medium: 1100.0,
+            breakpoint_wide: 1400.0,
         }
     }
 
@@ -546,6 +588,20 @@ impl Theme {
             duration_fast: 0.10,
             duration_normal: 0.18,
             duration_slow: 0.30,
+
+            // Layout dimensions (shared)
+            size_titlebar: 36.0,
+            size_sidebar: 220.0,
+            size_workspace: 280.0,
+            size_panel_right: 240.0,
+            size_statusbar: 24.0,
+            size_input: 72.0,
+            content_min_width: 480.0,
+
+            // Responsive breakpoints (shared)
+            breakpoint_compact: 768.0,
+            breakpoint_medium: 1100.0,
+            breakpoint_wide: 1400.0,
         }
     }
 
