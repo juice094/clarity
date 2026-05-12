@@ -4,8 +4,15 @@
 //! raw egui input events to semantic [`ShortcutAction`]s.  The caller
 //! (`App::update`) is responsible for applying the actions so that
 //! shortcut handling stays decoupled from business logic.
+//!
+//! Since P0.5.C.1, every [`ShortcutAction`] also carries a stable
+//! [`command_id`](ShortcutAction::command_id) string from
+//! `clarity_core::ui::ids`. This is the shared key between the keyboard
+//! shortcut layer and the [`CommandPalette`](crate::widgets::CommandPalette)
+//! — both route through `App::dispatch_command(&str)`.
 
 use crate::App;
+use clarity_core::ui::ids;
 
 /// Semantic actions produced by the global shortcut layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +35,25 @@ pub enum ShortcutAction {
     ToggleCommandPalette,
     /// Toggle the dashboard metrics side-panel.
     ToggleDashboardPanel,
+}
+
+impl ShortcutAction {
+    /// Stable kebab-case identifier shared with the CommandPalette.
+    ///
+    /// All values resolve to constants in [`clarity_core::ui::ids`].
+    pub fn command_id(&self) -> &'static str {
+        match self {
+            ShortcutAction::NewSession => ids::NEW_SESSION,
+            ShortcutAction::StopGeneration => ids::STOP_GENERATION,
+            ShortcutAction::SendMessage => ids::SEND_MESSAGE,
+            ShortcutAction::CloseModal => ids::CLOSE_MODAL,
+            ShortcutAction::ToggleSkillPanel => ids::TOGGLE_SKILL_PANEL,
+            ShortcutAction::ToggleTeamPanel => ids::TOGGLE_TEAM_PANEL,
+            ShortcutAction::FocusInput => ids::FOCUS_INPUT,
+            ShortcutAction::ToggleCommandPalette => ids::TOGGLE_COMMAND_PALETTE,
+            ShortcutAction::ToggleDashboardPanel => ids::TOGGLE_DASHBOARD,
+        }
+    }
 }
 
 /// Collect global shortcut actions for the current frame.
@@ -107,10 +133,56 @@ fn is_modal_open(app: &App) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use clarity_core::ui::ids;
+
     #[test]
     fn test_is_modal_open_approval_blocks() {
         // Placeholder: real test needs App construction helper.
         // This documents the expected behaviour.
         // TODO: implement once App test-harness is available.
+    }
+
+    /// Every [`ShortcutAction`] variant must resolve to a non-empty,
+    /// kebab-case command id matching a constant in
+    /// [`clarity_core::ui::ids`]. This guards against typo drift between
+    /// the shortcut layer and the command palette.
+    #[test]
+    fn shortcut_action_command_id_matches_ids_module() {
+        let all = [
+            (ShortcutAction::NewSession, ids::NEW_SESSION),
+            (ShortcutAction::StopGeneration, ids::STOP_GENERATION),
+            (ShortcutAction::SendMessage, ids::SEND_MESSAGE),
+            (ShortcutAction::CloseModal, ids::CLOSE_MODAL),
+            (ShortcutAction::ToggleSkillPanel, ids::TOGGLE_SKILL_PANEL),
+            (ShortcutAction::ToggleTeamPanel, ids::TOGGLE_TEAM_PANEL),
+            (ShortcutAction::FocusInput, ids::FOCUS_INPUT),
+            (
+                ShortcutAction::ToggleCommandPalette,
+                ids::TOGGLE_COMMAND_PALETTE,
+            ),
+            (ShortcutAction::ToggleDashboardPanel, ids::TOGGLE_DASHBOARD),
+        ];
+        for (action, expected) in all {
+            assert_eq!(
+                action.command_id(),
+                expected,
+                "ShortcutAction::{:?} should resolve to ids::{}",
+                action,
+                expected
+            );
+            assert!(
+                !action.command_id().is_empty(),
+                "command_id must be non-empty"
+            );
+            assert!(
+                action
+                    .command_id()
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c == '-'),
+                "command_id must be kebab-case: {}",
+                action.command_id()
+            );
+        }
     }
 }

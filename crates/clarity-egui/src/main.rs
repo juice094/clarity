@@ -502,6 +502,98 @@ impl App {
         }
     }
 
+    /// Unified command dispatcher (P0.5.C.1).
+    ///
+    /// Both the keyboard shortcut layer (`ShortcutAction::command_id()`) and
+    /// the `CommandPalette` route through this method. Adding a new command
+    /// means: (1) add a string constant in `clarity_core::ui::ids`,
+    /// (2) match it here, (3) optionally bind a shortcut in `shortcuts/mod.rs`,
+    /// (4) optionally surface in `built_in::all()`.
+    ///
+    /// Returns `true` when the command id is recognised.
+    fn dispatch_command(&mut self, cmd_id: &str) -> bool {
+        use clarity_core::ui::ids;
+        match cmd_id {
+            ids::CLOSE_MODAL => {
+                if self.team_store.create_modal_open {
+                    self.team_store.create_modal_open = false;
+                } else if self.view_state.main != clarity_core::ui::AppView::Chat {
+                    self.view_state.main = clarity_core::ui::AppView::Chat;
+                } else if self.ui_store.skill_panel_open {
+                    self.ui_store.skill_panel_open = false;
+                } else if self.team_store.team_panel_open {
+                    self.team_store.team_panel_open = false;
+                }
+                if self.cron_store.create_modal_open {
+                    self.cron_store.create_modal_open = false;
+                }
+                if self.snapshot_store.modal_open {
+                    self.snapshot_store.modal_open = false;
+                }
+                if self.task_store.task_create_modal_open {
+                    self.task_store.task_create_modal_open = false;
+                }
+                true
+            }
+            ids::NEW_SESSION => {
+                if !self.chat_store.is_loading {
+                    self.new_session();
+                }
+                true
+            }
+            ids::STOP_GENERATION => {
+                self.stop();
+                true
+            }
+            ids::SEND_MESSAGE => {
+                if !self.chat_store.input.trim().is_empty() && !self.chat_store.is_loading {
+                    self.chat_store.stick_to_bottom = true;
+                    self.send();
+                }
+                true
+            }
+            ids::TOGGLE_SKILL_PANEL => {
+                self.ui_store.skill_panel_open = !self.ui_store.skill_panel_open;
+                true
+            }
+            ids::TOGGLE_TEAM_PANEL => {
+                self.team_store.team_panel_open = !self.team_store.team_panel_open;
+                true
+            }
+            ids::FOCUS_INPUT => {
+                self.ui_store.focus_input_requested = true;
+                true
+            }
+            ids::TOGGLE_COMMAND_PALETTE => {
+                self.command_palette.open = true;
+                self.command_palette.query.clear();
+                self.command_palette.selected = 0;
+                true
+            }
+            ids::TOGGLE_DASHBOARD => {
+                self.view_state.main =
+                    if self.view_state.main == clarity_core::ui::AppView::Dashboard {
+                        clarity_core::ui::AppView::Chat
+                    } else {
+                        clarity_core::ui::AppView::Dashboard
+                    };
+                true
+            }
+            ids::TOGGLE_SIDEBAR => {
+                self.ui_store.sidebar_collapsed = !self.ui_store.sidebar_collapsed;
+                true
+            }
+            ids::OPEN_SETTINGS => {
+                self.view_state.main = clarity_core::ui::AppView::Settings;
+                true
+            }
+            other => {
+                tracing::warn!("dispatch_command: unknown command id '{}'", other);
+                false
+            }
+        }
+    }
+
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
         components::settings::render_settings_panel(self, ctx);
     }
@@ -631,67 +723,11 @@ impl eframe::App for App {
             }
         }
 
-        // ── Global keyboard shortcuts ──
+        // ── Global keyboard shortcuts (P0.5.C.1: unified dispatch) ──
+        // All shortcut actions and CommandPalette entries route through
+        // App::dispatch_command(&str) using ids from clarity_core::ui::ids.
         for action in shortcuts::collect_actions(ctx, self) {
-            match action {
-                shortcuts::ShortcutAction::CloseModal => {
-                    if self.team_store.create_modal_open {
-                        self.team_store.create_modal_open = false;
-                    } else if self.view_state.main != clarity_core::ui::AppView::Chat {
-                        self.view_state.main = clarity_core::ui::AppView::Chat;
-                    } else if self.ui_store.skill_panel_open {
-                        self.ui_store.skill_panel_open = false;
-                    } else if self.team_store.team_panel_open {
-                        self.team_store.team_panel_open = false;
-                    }
-                    if self.cron_store.create_modal_open {
-                        self.cron_store.create_modal_open = false;
-                    }
-                    if self.snapshot_store.modal_open {
-                        self.snapshot_store.modal_open = false;
-                    }
-                    if self.task_store.task_create_modal_open {
-                        self.task_store.task_create_modal_open = false;
-                    }
-                }
-                shortcuts::ShortcutAction::NewSession => {
-                    if !self.chat_store.is_loading {
-                        self.new_session();
-                    }
-                }
-                shortcuts::ShortcutAction::StopGeneration => {
-                    self.stop();
-                }
-                shortcuts::ShortcutAction::SendMessage => {
-                    if !self.chat_store.input.trim().is_empty() && !self.chat_store.is_loading {
-                        self.chat_store.stick_to_bottom = true;
-                        self.send();
-                    }
-                }
-                shortcuts::ShortcutAction::ToggleSkillPanel => {
-                    self.ui_store.skill_panel_open = !self.ui_store.skill_panel_open;
-                }
-                shortcuts::ShortcutAction::ToggleTeamPanel => {
-                    self.team_store.team_panel_open = !self.team_store.team_panel_open;
-                }
-                shortcuts::ShortcutAction::FocusInput => {
-                    self.ui_store.focus_input_requested = true;
-                }
-                shortcuts::ShortcutAction::ToggleCommandPalette => {
-                    self.command_palette.open = true;
-                    self.command_palette.query.clear();
-                    self.command_palette.selected = 0;
-                }
-                shortcuts::ShortcutAction::ToggleDashboardPanel => {
-                    self.view_state.main = if self.view_state.main
-                        == clarity_core::ui::AppView::Dashboard
-                    {
-                        clarity_core::ui::AppView::Chat
-                    } else {
-                        clarity_core::ui::AppView::Dashboard
-                    };
-                }
-            }
+            self.dispatch_command(action.command_id());
         }
 
         // Refresh task list periodically when panel is open

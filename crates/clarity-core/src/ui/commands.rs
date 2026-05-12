@@ -59,48 +59,93 @@ pub mod prefix {
     pub const HELP: &str = "?";
 }
 
+/// 命令 ID 常量 — kebab-case 字符串字面量，shortcut 与 palette 共用此清单。
+///
+/// 引入时机：P0.5.C.1 — 统一 ShortcutAction 与 CommandItem 的标识符来源。
+/// Phase 0.5 之前，shortcut enum 与 palette built_in 各自维护字符串字面量，
+/// 出现 6 处不匹配。此清单消除分歧。
+pub mod ids {
+    // ── Session / Turn ──
+    pub const NEW_SESSION: &str = "new-session";
+    pub const STOP_GENERATION: &str = "stop-generation";
+    pub const SEND_MESSAGE: &str = "send-message";
+
+    // ── Modal / View ──
+    pub const CLOSE_MODAL: &str = "close-modal";
+    pub const OPEN_SETTINGS: &str = "open-settings";
+
+    // ── Panels ──
+    pub const TOGGLE_SIDEBAR: &str = "toggle-sidebar";
+    pub const TOGGLE_SKILL_PANEL: &str = "toggle-skill-panel";
+    pub const TOGGLE_TEAM_PANEL: &str = "toggle-team-panel";
+    pub const TOGGLE_DASHBOARD: &str = "toggle-dashboard";
+
+    // ── Input / Palette ──
+    pub const FOCUS_INPUT: &str = "focus-input";
+    pub const TOGGLE_COMMAND_PALETTE: &str = "toggle-command-palette";
+}
+
 /// 预置的常用命令常量 — 避免两端硬编码重复。
 pub mod built_in {
     use super::*;
 
     pub fn new_session() -> CommandItem {
-        CommandItem::new("new-session", "New Session", CommandScope::Global)
+        CommandItem::new(ids::NEW_SESSION, "New Session", CommandScope::Global)
             .with_shortcut("Ctrl+N")
     }
 
     pub fn stop_generation() -> CommandItem {
-        CommandItem::new("stop-generation", "Stop Generation", CommandScope::Global)
-            .with_shortcut("Ctrl+Shift+S")
+        CommandItem::new(ids::STOP_GENERATION, "Stop Generation", CommandScope::Global)
+            .with_shortcut("Ctrl+C")
+    }
+
+    pub fn send_message() -> CommandItem {
+        CommandItem::new(ids::SEND_MESSAGE, "Send Message", CommandScope::Global)
+            .with_shortcut("Ctrl+Enter")
     }
 
     pub fn toggle_sidebar() -> CommandItem {
-        CommandItem::new("toggle-sidebar", "Toggle Sidebar", CommandScope::Global)
+        CommandItem::new(ids::TOGGLE_SIDEBAR, "Toggle Sidebar", CommandScope::Global)
             .with_shortcut("Ctrl+B")
     }
 
     pub fn focus_input() -> CommandItem {
-        CommandItem::new("focus-input", "Focus Input", CommandScope::Global)
-            .with_shortcut("Ctrl+Shift+F")
+        CommandItem::new(ids::FOCUS_INPUT, "Focus Input", CommandScope::Global)
+            .with_shortcut("Ctrl+K")
     }
 
     pub fn open_settings() -> CommandItem {
-        CommandItem::new("open-settings", "Settings", CommandScope::Global)
+        CommandItem::new(ids::OPEN_SETTINGS, "Settings", CommandScope::Global)
+            .with_shortcut("Esc")
+    }
+
+    pub fn close_modal() -> CommandItem {
+        CommandItem::new(ids::CLOSE_MODAL, "Close Modal / Return to Chat", CommandScope::Global)
             .with_shortcut("Esc")
     }
 
     pub fn toggle_skill_panel() -> CommandItem {
-        CommandItem::new("toggle-skill-panel", "Toggle Skill Panel", CommandScope::Global)
-            .with_shortcut("Ctrl+Shift+L")
+        CommandItem::new(ids::TOGGLE_SKILL_PANEL, "Toggle Skill Panel", CommandScope::Global)
+            .with_shortcut("Ctrl+.")
     }
 
     pub fn toggle_team_panel() -> CommandItem {
-        CommandItem::new("toggle-team-panel", "Toggle Team Panel", CommandScope::Global)
+        CommandItem::new(ids::TOGGLE_TEAM_PANEL, "Toggle Team Panel", CommandScope::Global)
             .with_shortcut("Ctrl+Shift+T")
     }
 
     pub fn toggle_dashboard() -> CommandItem {
-        CommandItem::new("toggle-dashboard", "Toggle Dashboard", CommandScope::Global)
+        CommandItem::new(ids::TOGGLE_DASHBOARD, "Toggle Dashboard", CommandScope::Global)
             .with_shortcut("Ctrl+Shift+D")
+    }
+
+    pub fn toggle_command_palette() -> CommandItem {
+        CommandItem::new(
+            ids::TOGGLE_COMMAND_PALETTE,
+            "Toggle Command Palette",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+Shift+P")
     }
 
     /// 返回所有内置命令列表。
@@ -108,12 +153,15 @@ pub mod built_in {
         vec![
             new_session(),
             stop_generation(),
+            send_message(),
+            close_modal(),
+            open_settings(),
             toggle_sidebar(),
             focus_input(),
-            open_settings(),
             toggle_skill_panel(),
             toggle_team_panel(),
             toggle_dashboard(),
+            toggle_command_palette(),
         ]
     }
 }
