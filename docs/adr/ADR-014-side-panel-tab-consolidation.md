@@ -106,6 +106,28 @@ After this ADR, the right-side UI surface has exactly two categories:
 
 There is **no** third category ("floating panel"). What was previously believed to be floating (`Skill` / `Mcp`) is a Modal.
 
+### Decision 4: Legacy "floating windows" are transition artifacts, not a third category
+
+A secondary discovery during P1.5.3 exploration (2026-05-13) revealed that five `ModalType` variants — `TaskCreate`, `TaskView`, `TeamCreate`, `CronCreate`, `SubAgentView` — are **not true modals**. They are implemented as `egui::Window::new().anchor(CENTER_CENTER)` **without a full-screen scrim**, meaning they do **not** block background input and can theoretically coexist with each other or with true modals.
+
+These "floating windows" are **MVP-era temporary UI** — features that had no dedicated panel space in the old layout, so they were crammed into pop-up windows. Under the Pretext UI / D-form-factor direction (ADR-011), they are **not a permanent third category**; they will be absorbed into the right-side Tab content as sub-views:
+
+| Legacy floating window | Future home (right-side Tab) |
+|---|---|
+| TaskCreate / TaskView | **Task Tab** — inline create / detail views |
+| TeamCreate | **Team Tab** — inline create view |
+| CronCreate | **Dashboard Tab** — scheduling sub-page |
+| SubAgentView | **SubAgentProgress Tab** or Dashboard widget |
+
+**Therefore**:
+
+1. These five variants remain in `ModalType` for the moment (to avoid breaking P1.5.1 commit `682b303c` tests), but they are **not migrated** into `view_state.modal` during S3.
+2. They continue to be controlled by their legacy boolean flags until S6–S8, when the D-form-factor refactor provides them a proper Tab home.
+3. `view_state.modal` is reserved for **true blocking modals** (`Approval`, `Snapshot`, `Login`, `Skill`, `Mcp`, `AddProvider`, `KimiCodeLogin`).
+4. P1.5.3 (modal booleans → `ModalType`) is **skipped** — there are no true modal booleans left to migrate.
+
+This decision aligns with the user's observation: *"弹窗可能是旧设计的相关产物，新设计为侧边栏"*.
+
 ## Consequences
 
 ### Positive
