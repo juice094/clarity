@@ -7,4 +7,6 @@ pub mod commands;
 pub mod view_state;
 
 pub use commands::{ids, CommandItem, CommandScope};
-pub use view_state::{AppView, ModalType, SidePanel, ViewState};
+pub use view_state::{
+    AppView, FocusScope, ModalType, PanelExpansion, PanelKind, SidePanel, TurnState, ViewState,
+};
