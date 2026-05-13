@@ -8,6 +8,7 @@
 > **ADR anchors (2026-05-13)**:
 > - `docs/adr/ADR-011-workspace-architecture.md` (workspace = openclaw bootstrap + multi-instance extension)
 > - `docs/adr/ADR-012-renderline-enum-design.md` (13 variants covering 30 line patterns)
+> - `docs/adr/ADR-013-keyboard-shortcuts-claudecode-inspired.md` (focus-aware routing + ClaudeCode-derived bindings)
 > **Skill**: `~/.config/agents/skills/egui-layout-canons/SKILL.md`
 
 ---
@@ -350,7 +351,7 @@ Three tabs:
    - `_shared/` (cross-instance shared)
    - `<role>/` shared (this role's shared folder)
    - `<role>/<instance>/workdir/` (this session's private workdir)
-   Four operation buttons: `[Refresh] [Save] [Download] [Close]`. **`Save` is wired as a global Ctrl+S router** that writes back the focused file (local fs for local preview; SSH transport when SSH tab is the source).
+   Four operation buttons: `[Refresh] [Save] [Download] [Close]`. **`Ctrl+S` is focus-scoped per ADR-013** — active only when the Workspace tab has focus (no global router). Save writes back the file currently in preview to local fs.
 3. **Settings** — sub-items: Chat Channel / Settings / Version / Data Backup / Help / **Cluster** (v0.5+ placeholder per ADR-011).
 
 #### Status bar (bottom — replaces left-panel Equipment region)
@@ -374,15 +375,16 @@ Floating panels emerge from the status bar on click, dismissed on click-outside 
 - [ ] **P3B.3** Cluster indicator: top-bar device dots reading from `workspaces/_cluster/peers.yaml` (placeholder data pre-v0.5; UI element ships now) (30min)
 - [ ] **P3B.4** Sticky notes left-panel region: 5 note types reading from `workspaces/<role>/<instance>/notes/`; create / edit / delete / cross-instance send via filesystem operations (2h)
 - [ ] **P3B.5** Center `⤢ Expand` for `BlockSlot`: any long Plan / Tool / Doc line can occupy center; Esc returns (45min)
-- [ ] **P3B.6** Right-panel Workspace three-tier file tree + 4 operation buttons; `Save` wired as global Ctrl+S router (1h)
+- [ ] **P3B.6** Right-panel Workspace three-tier file tree + 4 operation buttons; `Ctrl+S` is focus-scoped to Workspace tab only (ADR-013) (1h)
 - [ ] **P3B.7** Bottom Status Bar equipment region (`🎯 📋 🔌` with click-to-expand floating panels) (45min)
+- [ ] **P3B.8** Keyboard shortcut scaffolding per ADR-013: `ShortcutRegistry::resolve(key, focus_scope)` + 14 ClaudeCode-adopted bindings + 9 focus-scoped bindings + 6 Clarity-specific extensions; `?` help overlay generates from registry (1.5h)
 
 #### Acceptance Criteria (revised)
 
 - Persona switcher enumerates `workspaces/<role>/` and changes app context atomically
 - Sessions under different personas are visibly isolated (no cross-persona session leak in the session tabs)
 - Cross-instance mention from `engineer/pc1-001` to `knowledge/pc1-001` appears in target's left-panel `💬 @Mention` region within 2 seconds (file-system event)
-- `Save` triggered by Ctrl+S writes the focused file back to disk regardless of which tab is focused (local fs or SSH transport)
+- `Ctrl+S` triggered while Workspace tab has focus saves the previewed file to local fs; pressing `Ctrl+S` while chat / other tabs have focus is a no-op (ADR-013)
 - `BlockSlot` expand and Esc return preserve scroll position in the underlying line stream
 - Right-panel `Workspace` tab shows the three-tier view exactly per ADR-011 §Workspace Layout
 
@@ -429,7 +431,7 @@ Floating panels emerge from the status bar on click, dismissed on click-outside 
 | 1.5 | None (refactor) | Per-category migration, atomic commits |
 | 2 | New scrolling, j/k nav | `line-mode` feature flag; old `RenderBlock` path remains 2 releases |
 | 3A | TUI feature parity | TUI was already alpha; no compat needed |
-| 3B | New affordances (slash, artifacts, memory, project, cursor) | Each behind feature flag during alpha |
+| 3B | New affordances (info architecture revision: persona / orchestrate / cluster / notes / equipment status bar / shortcut extensions) | Each behind feature flag during alpha |
 
 ### 7.2 Performance Targets
 
@@ -450,18 +452,19 @@ Each phase produces:
 
 ## 8. Session-Level Schedule
 
-| Session | Phase | Hours | Deliverable |
-|---------|-------|-------|-------------|
-| S1 | 0.5 | 4h | 5 P0 commits + audit closure |
-| S2 | 1 | 5h | StripBuilder TitleBar + RULE 6 in EGUI_LAYOUT.md |
-| S3 | 1.5 | 6h | 33 booleans collapsed; bridge layer removed |
-| S4 | 2A | 6h | RenderLine + markdown_to_lines + tests |
-| S5 | 2B | 6h | Renderer + virtual scroll + j/k navigation |
-| S6 | 2C | 6h | ChatArea + Sidebar + Workspace migration |
-| S7 | 3A | 6h | TUI wired to ViewState + RenderLine; snapshot tests |
-| S8 | 3B | 6h | 5 Claude-inspired affordances |
-| S9 | 3C | 4h | Architecture docs + benchmarks + closure |
-| **Total** | | **49h** | 9 sessions |
+| Session | Phase | Hours | Status | Deliverable |
+|---------|-------|-------|--------|-------------|
+| S1 | 0.5 | 4h | ✅ Done | 5 P0 commits + audit closure |
+| S2 | 1 | 5h | ✅ Done | StripBuilder TitleBar + RULE 6 in EGUI_LAYOUT.md |
+| Pre-S3 | Hygiene | 1h | ⏳ Next | devbase tests `#[ignore]` + `cargo audit` reverify |
+| S3 | 1.5 | **7.5h** | ⏳ Queued | 33 booleans collapsed; bridge layer removed; **focus state enum + `ShortcutRegistry::resolve()` skeleton (ADR-013)** |
+| S4 | 2A | 6h | ⏳ Queued | `RenderLine` 13-variant enum (ADR-012) + `markdown_to_lines` + 13 variant tests |
+| S5 | 2B | 6h | ⏳ Queued | Renderer + virtual scroll + j/k navigation (focus-scoped per ADR-013) |
+| S6 | 2C | 6h | ⏳ Queued | ChatArea + Sidebar + Workspace 3-tier (ADR-011) + `Ctrl+S` focus-scoped (ADR-013) |
+| S7 | 3A | 6h | ⏳ Queued | TUI wired to ViewState + RenderLine; snapshot tests; binding parity per ADR-013 |
+| S8 | 3B | 6h | ⏳ Queued | Information architecture revision (top bar persona switcher / left-panel notes / Workspace 3-tier / Equipment status bar / Clarity-specific `Ctrl+Shift+O/C/M` extensions) |
+| S9 | 3C | 4h | ⏳ Queued | Architecture docs + benchmarks + closure |
+| **Total** | | **51.5h** | 2/9 done (9h) | Remaining ≈ 42.5h |
 
 ---
 
@@ -498,6 +501,8 @@ These resolve during Phase 2A as we build the actual data model.
 | 2026-05-13 | Sticky notes have 5 types stored at `workspaces/<role>/<instance>/notes/` (Option a, private + mentions inbox/outbox) | ADR-011 + dialogue |
 | 2026-05-13 | Filesystem = Agent evolution substrate (formalized) | Theory §9 |
 | 2026-05-13 | Error Budgeting (Donaldson/NASA/Google SRE) = methodology foundation (formalized) | Theory §10 |
+| 2026-05-13 | `Ctrl+S` revised from global router to **focus-scoped** (Workspace tab only) | ADR-013 |
+| 2026-05-13 | Keyboard shortcuts: deeply reference ClaudeCode (14 direct adoptions + 6 GUI-adapted + 9 focus-scoped + 6 Clarity-specific extensions) | ADR-013 |
 
 ---
 

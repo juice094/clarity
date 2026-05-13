@@ -234,6 +234,7 @@ This is what we will **not** do, despite ecosystem pressure:
 | 2026-05-13 | Error Budgeting (Donaldson / NASA / Google SRE) is the methodology foundation | §10 |
 | 2026-05-13 | openclaw bootstrap files are 100% adopted; multi-instance layered on top | ADR-011 |
 | 2026-05-13 | RenderLine has 13 enum variants absorbing 30 line patterns via LineRole | ADR-012 |
+| 2026-05-13 | Keyboard shortcuts: focus-aware routing; deep ClaudeCode-inspired bindings | ADR-013 |
 
 ---
 
