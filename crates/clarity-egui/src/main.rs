@@ -867,7 +867,7 @@ impl eframe::App for App {
         self.ui_store.gantt_panel_open =
             self.view_state.main == clarity_core::ui::AppView::Gantt;
 
-        // Reverse-direction sync (P1.5.5/P1.5.6 — pre-bridge-reversal):
+        // Reverse-direction sync (P1.5.5/P1.5.6/P1.5.4 — pre-bridge-reversal):
         // legacy booleans are still the authoritative writers for these fields,
         // so we mirror them into ViewState every frame so that any
         // ViewState-aware reader sees up-to-date state. P1.5.2-4 will reverse
@@ -888,6 +888,32 @@ impl eframe::App for App {
             self.ui_store.workspace_plan_expanded,
             self.ui_store.workspace_plan_manually_collapsed,
         );
+        // P1.5.4 (ADR-014): mirror three right-panel booleans into the
+        // unified single-tab `view_state.right`. Priority Task > Team > Dashboard.
+        // skill_panel_open / mcp_panel_open are now Modal-class (ADR-014) and
+        // are handled below in the modal mirror, not here.
+        self.view_state.right = clarity_core::ui::SidePanel::from_legacy_right_panel(
+            self.ui_store.dashboard_panel_open,
+            self.team_store.team_panel_open,
+            self.task_store.task_panel_open,
+        );
+        // P1.5.4 (ADR-014): Skill / Mcp are modal types now. Other modal
+        // booleans (settings, approval, snapshot, ...) will be wired in P1.5.3.
+        // For now we only fold these two; the union with P1.5.3 sources comes later.
+        if let Some(m) = clarity_core::ui::ModalType::from_legacy_skill_mcp(
+            self.ui_store.skill_panel_open,
+            self.mcp_store.mcp_panel_open,
+        ) {
+            self.view_state.modal = Some(m);
+        } else if matches!(
+            self.view_state.modal,
+            Some(clarity_core::ui::ModalType::Skill)
+                | Some(clarity_core::ui::ModalType::Mcp)
+        ) {
+            // Mirror clears: if we previously set Skill/Mcp via this path and
+            // the booleans went false, clear the modal so we don't leak state.
+            self.view_state.modal = None;
+        }
 
         // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));

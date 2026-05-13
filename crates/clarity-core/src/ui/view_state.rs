@@ -43,9 +43,13 @@ pub enum AppView {
 /// Side panel type — supports left/right overlays in GUI; TUI achieves the
 /// same via modal switching.
 ///
-/// Extended in P1.5.1 (2026-05-13) to cover the 9 panel-open booleans
-/// found in the audit. Existing variants (`Sidebar`, `Workspace`, `Team`,
-/// `Task`) are preserved.
+/// Extended in P1.5.1 (2026-05-13) and revised in P1.5.4 per ADR-014:
+/// - `Dashboard` added (was missed in P1.5.1).
+/// - `Skill` / `Mcp` removed (relocated to `ModalType` — they are full-screen
+///   scrim modals, not side panels).
+///
+/// All variants are mutually exclusive when assigned to `view_state.right`,
+/// reflecting the single-tab consolidation decision from ADR-014.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SidePanel {
@@ -57,20 +61,52 @@ pub enum SidePanel {
     Team,
     /// Task details panel.
     Task,
-    /// Skill management panel (P1.5.1 addition).
-    Skill,
-    /// MCP server configuration panel (P1.5.1 addition).
-    Mcp,
+    /// Dashboard aggregate view (P1.5.4 addition; was previously `dashboard_panel_open` boolean).
+    Dashboard,
     /// File preview drawer (P1.5.1 addition).
     PreviewDrawer,
     /// Sub-agent progress floating panel (P1.5.1 addition).
     SubAgentProgress,
 }
 
+impl SidePanel {
+    /// Derive the right-anchored business panel from the three legacy
+    /// boolean flags (`dashboard_panel_open`, `team_panel_open`,
+    /// `task_panel_open`).
+    ///
+    /// **Priority order** (most-important-when-multiple-true wins; mirrors
+    /// the *inverse* of the responsive-collapse order in `main.rs:847-852`):
+    ///
+    /// 1. `Task` — user's active task detail; highest semantic priority.
+    /// 2. `Team` — team management; secondary.
+    /// 3. `Dashboard` — aggregate view; lowest (first to yield on narrow screens).
+    /// 4. `None` — all three false.
+    ///
+    /// After ADR-014, multi-true input is a transitional state during
+    /// migration only; once `view_state.right` becomes the authoritative
+    /// writer (P1.5.2 bridge reversal), at most one boolean will ever be true.
+    pub fn from_legacy_right_panel(
+        dashboard: bool,
+        team: bool,
+        task: bool,
+    ) -> Option<Self> {
+        if task {
+            Some(Self::Task)
+        } else if team {
+            Some(Self::Team)
+        } else if dashboard {
+            Some(Self::Dashboard)
+        } else {
+            None
+        }
+    }
+}
+
 /// Blocking modal type — top layer that receives exclusive input.
 ///
-/// Extended in P1.5.1 (2026-05-13) to cover the 9 modal-open booleans
-/// found in the audit. Existing variants are preserved.
+/// Extended in P1.5.1 (2026-05-13) and revised in P1.5.4 per ADR-014:
+/// - `Skill` / `Mcp` added (relocated from `SidePanel` — these panels use a
+///   full-screen scrim + outside-click-close + Esc-close, i.e., modal behavior).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModalType {
@@ -94,6 +130,34 @@ pub enum ModalType {
     AddProvider,
     /// Kimi Code login (P1.5.1 addition).
     KimiCodeLogin,
+    /// Skill management modal (P1.5.4 relocation from SidePanel per ADR-014).
+    Skill,
+    /// MCP server configuration modal (P1.5.4 relocation from SidePanel per ADR-014).
+    Mcp,
+}
+
+impl ModalType {
+    /// Derive `ModalType` from the two legacy boolean flags
+    /// (`skill_panel_open`, `mcp_panel_open`) that controlled the
+    /// modals previously misclassified as side panels (see ADR-014).
+    ///
+    /// **Priority**: `Skill` wins over `Mcp` if both are true (shouldn't
+    /// happen in practice — the underlying scrim layers would stack).
+    /// Returns `None` if both are false.
+    ///
+    /// This helper is the read-only side of the pre-bridge-reversal
+    /// mirror; it does *not* compose with the other modal booleans
+    /// (e.g. `settings_open`) because those are migrated separately in
+    /// P1.5.3.
+    pub fn from_legacy_skill_mcp(skill: bool, mcp: bool) -> Option<Self> {
+        if skill {
+            Some(Self::Skill)
+        } else if mcp {
+            Some(Self::Mcp)
+        } else {
+            None
+        }
+    }
 }
 
 /// Agent turn lifecycle state — replaces the four legacy workflow booleans
@@ -391,8 +455,8 @@ mod tests {
         assert_eq!(vs.left, None);
         // Toggling a different panel replaces.
         vs.toggle_left(SidePanel::Sidebar);
-        vs.toggle_left(SidePanel::Skill);
-        assert_eq!(vs.left, Some(SidePanel::Skill));
+        vs.toggle_left(SidePanel::Dashboard);
+        assert_eq!(vs.left, Some(SidePanel::Dashboard));
     }
 
     #[test]
@@ -469,8 +533,7 @@ mod tests {
             SidePanel::Workspace,
             SidePanel::Team,
             SidePanel::Task,
-            SidePanel::Skill,
-            SidePanel::Mcp,
+            SidePanel::Dashboard,
             SidePanel::PreviewDrawer,
             SidePanel::SubAgentProgress,
         ] {
@@ -493,6 +556,8 @@ mod tests {
             ModalType::SubAgentView,
             ModalType::AddProvider,
             ModalType::KimiCodeLogin,
+            ModalType::Skill,
+            ModalType::Mcp,
         ] {
             let s = serde_json::to_string(&modal).unwrap();
             let deserialized: ModalType = serde_json::from_str(&s).unwrap();
@@ -663,5 +728,96 @@ mod tests {
         assert!(exp.subagents);
         assert!(exp.workspace_plan);
         assert!(exp.workspace_plan_manually_collapsed);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // P1.5.4c — SidePanel::from_legacy_right_panel priority tests (ADR-014)
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn side_panel_from_legacy_all_false_is_none() {
+        assert_eq!(SidePanel::from_legacy_right_panel(false, false, false), None);
+    }
+
+    #[test]
+    fn side_panel_from_legacy_dashboard_only() {
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(true, false, false),
+            Some(SidePanel::Dashboard)
+        );
+    }
+
+    #[test]
+    fn side_panel_from_legacy_team_only() {
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(false, true, false),
+            Some(SidePanel::Team)
+        );
+    }
+
+    #[test]
+    fn side_panel_from_legacy_task_only() {
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(false, false, true),
+            Some(SidePanel::Task)
+        );
+    }
+
+    #[test]
+    fn side_panel_priority_task_over_team() {
+        // Multi-true transitional state: task wins (highest semantic priority).
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(false, true, true),
+            Some(SidePanel::Task)
+        );
+    }
+
+    #[test]
+    fn side_panel_priority_team_over_dashboard() {
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(true, true, false),
+            Some(SidePanel::Team)
+        );
+    }
+
+    #[test]
+    fn side_panel_priority_task_over_all() {
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(true, true, true),
+            Some(SidePanel::Task)
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // P1.5.4c — ModalType::from_legacy_skill_mcp tests (ADR-014)
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn modal_type_from_legacy_skill_mcp_all_false_is_none() {
+        assert_eq!(ModalType::from_legacy_skill_mcp(false, false), None);
+    }
+
+    #[test]
+    fn modal_type_from_legacy_skill_only() {
+        assert_eq!(
+            ModalType::from_legacy_skill_mcp(true, false),
+            Some(ModalType::Skill)
+        );
+    }
+
+    #[test]
+    fn modal_type_from_legacy_mcp_only() {
+        assert_eq!(
+            ModalType::from_legacy_skill_mcp(false, true),
+            Some(ModalType::Mcp)
+        );
+    }
+
+    #[test]
+    fn modal_type_from_legacy_skill_priority_over_mcp() {
+        assert_eq!(
+            ModalType::from_legacy_skill_mcp(true, true),
+            Some(ModalType::Skill)
+        );
     }
 }
