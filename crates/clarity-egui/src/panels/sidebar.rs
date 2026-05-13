@@ -191,7 +191,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 );
                             }
                             if mcp_resp.clicked() {
-                                app.mcp_store.mcp_panel_open = !app.mcp_store.mcp_panel_open;
+                                if matches!(
+                                    app.view_state.modal,
+                                    Some(clarity_core::ui::ModalType::Mcp)
+                                ) {
+                                    app.view_state.close_modal();
+                                } else {
+                                    app.view_state.open_modal(clarity_core::ui::ModalType::Mcp);
+                                }
                             }
 
                             // Skills
@@ -202,7 +209,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 &app.ui_store.theme,
                             );
                             if skills_resp.clicked() {
-                                app.ui_store.skill_panel_open = true;
+                                app.view_state.open_modal(clarity_core::ui::ModalType::Skill);
                             }
 
                             // Locale toggle
@@ -444,11 +451,17 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── Teams ──
                     let team_count = app.team_store.teams.len();
-                    clickable_row(ui,
-                        "Teams",
-                        Some(team_count),
-                        &mut app.team_store.team_panel_open,
+                    let mut team_open = matches!(
+                        app.view_state.right,
+                        Some(clarity_core::ui::SidePanel::Team)
                     );
+                    clickable_row(ui, "Teams", Some(team_count), &mut team_open);
+                    if team_open != matches!(
+                        app.view_state.right,
+                        Some(clarity_core::ui::SidePanel::Team)
+                    ) {
+                        app.view_state.toggle_right(clarity_core::ui::SidePanel::Team);
+                    }
 
                     ui.add_space(app.ui_store.theme.space_16);
 
@@ -460,11 +473,20 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     group_header(ui, "ANALYTICS");
 
                     // ── Dashboard ──
-                    clickable_row(ui,
-                        "Dashboard",
-                        None,
-                        &mut app.ui_store.dashboard_panel_open,
-                    );
+                    let mut dashboard_open = app.view_state.main
+                        == clarity_core::ui::AppView::Dashboard;
+                    clickable_row(ui, "Dashboard", None, &mut dashboard_open);
+                    if dashboard_open
+                        != (app.view_state.main == clarity_core::ui::AppView::Dashboard)
+                    {
+                        app.view_state.main = if app.view_state.main
+                            == clarity_core::ui::AppView::Dashboard
+                        {
+                            clarity_core::ui::AppView::Chat
+                        } else {
+                            clarity_core::ui::AppView::Dashboard
+                        };
+                    }
 
                     ui.add_space(app.ui_store.theme.space_16);
 

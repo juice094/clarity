@@ -1,14 +1,14 @@
 use crate::App;
 
 pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.ui_store.skill_panel_open {
+    if !matches!(app.view_state.modal, Some(clarity_core::ui::ModalType::Skill)) {
         return;
     }
 
     let skills = app.state.agent.list_skills();
     let active_ids = app.state.agent.skill_active_ids();
 
-    let mut open = app.ui_store.skill_panel_open;
+    let mut open = true;
     let mut close_requested = false;
     let screen = ctx.screen_rect();
 
@@ -62,7 +62,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
                         )
                         .clicked()
                     {
-                        app.ui_store.skill_panel_open = false;
+                        app.view_state.close_modal();
                     }
                     if ui
                         .button(
@@ -186,5 +186,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
             }
         });
 
-    app.ui_store.skill_panel_open = open && !close_requested;
+    if !open || close_requested {
+        app.view_state.close_modal();
+    }
 }

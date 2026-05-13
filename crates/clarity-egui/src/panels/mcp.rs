@@ -1,7 +1,7 @@
 use crate::App;
 
 pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.mcp_store.mcp_panel_open {
+    if !matches!(app.view_state.modal, Some(clarity_core::ui::ModalType::Mcp)) {
         return;
     }
     // Safety: if a previous panic left mcp_config as None, reload from disk.
@@ -12,7 +12,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     let mut save_clicked = false;
     let mut cancel_clicked = false;
     let mut create_clicked = false;
-    let mut open = app.mcp_store.mcp_panel_open;
+    let mut open = true;
     let mut close_requested = false;
     let screen = ctx.screen_rect();
 
@@ -123,7 +123,9 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
             }
         });
 
-    app.mcp_store.mcp_panel_open = open && !close_requested;
+    if !open || close_requested {
+        app.view_state.close_modal();
+    }
 
     if save_clicked {
         if let Some(ref mut config) = config_opt {
@@ -145,7 +147,7 @@ pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     if cancel_clicked {
         config_opt = crate::ui::mcp_panel::load_mcp_config();
         app.mcp_store.mcp_changed = false;
-        app.mcp_store.mcp_panel_open = false;
+        app.view_state.close_modal();
     }
     if create_clicked {
         config_opt = Some(clarity_core::mcp::config::McpConfig::default());
