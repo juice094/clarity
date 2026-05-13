@@ -544,11 +544,7 @@ impl App {
                 } else if matches!(
                     self.view_state.right,
                     Some(clarity_core::ui::SidePanel::Team)
-                ) {
-                    self.view_state.right = None;
-                } else if matches!(
-                    self.view_state.right,
-                    Some(clarity_core::ui::SidePanel::Task)
+                        | Some(clarity_core::ui::SidePanel::Task)
                 ) {
                     self.view_state.right = None;
                 }
@@ -861,15 +857,11 @@ impl eframe::App for App {
         };
         let content_w = current_width - sidebar_w - workspace_w - dashboard_w - team_w - task_w;
         if content_w < self.ui_store.theme.content_min_width {
-            // Priority: team → task (dashboard is AppView, not right panel)
+            // Collapse Team or Task right panel if open (dashboard is AppView, not right panel).
             if matches!(
                 self.view_state.right,
                 Some(clarity_core::ui::SidePanel::Team)
-            ) {
-                self.view_state.right = None;
-            } else if matches!(
-                self.view_state.right,
-                Some(clarity_core::ui::SidePanel::Task)
+                    | Some(clarity_core::ui::SidePanel::Task)
             ) {
                 self.view_state.right = None;
             }

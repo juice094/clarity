@@ -111,6 +111,8 @@ pub struct SettingsStore {
 // ============================================================================
 
 pub struct TaskStore {
+    /// Deprecated (P1.5.4d): right panel state now lives in `view_state.right`.
+    /// Kept as read-only mirror for render methods not yet migrated.
     pub task_panel_open: bool,
     pub tasks: Vec<clarity_core::background::TaskInfo>,
     pub last_task_refresh: Instant,
@@ -148,6 +150,8 @@ pub struct Team {
 }
 
 pub struct TeamStore {
+    /// Deprecated (P1.5.4d): right panel state now lives in `view_state.right`.
+    /// Kept as read-only mirror for render methods not yet migrated.
     pub team_panel_open: bool,
     pub teams: Vec<Team>,
     pub create_modal_open: bool,
@@ -212,7 +216,8 @@ pub struct UiStore {
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,
-    /// Skill panel open state.
+    /// Deprecated (P1.5.4d): modal state now lives in `view_state.modal`.
+    /// Kept as read-only mirror for render methods not yet migrated.
     pub skill_panel_open: bool,
     /// Tools section expanded in left sidebar.
     pub tools_expanded: bool,
@@ -261,6 +266,8 @@ pub struct SubAgentStore {
 // ============================================================================
 
 pub struct McpStore {
+    /// Deprecated (P1.5.4d): modal state now lives in `view_state.modal`.
+    /// Kept as read-only mirror for render methods not yet migrated.
     pub mcp_panel_open: bool,
     pub mcp_config: Option<clarity_core::mcp::config::McpConfig>,
     pub mcp_changed: bool,
