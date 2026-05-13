@@ -304,7 +304,7 @@ impl App {
                     let close_resp = crate::widgets::window_control_button(
                         ui,
                         crate::theme::ICON_X,
-                        &theme,
+                        theme,
                         theme.danger.linear_multiply(0.25),
                         egui::Color32::WHITE,
                         theme.text_dim,
@@ -323,7 +323,7 @@ impl App {
                     let max_resp = crate::widgets::window_control_button(
                         ui,
                         max_icon,
-                        &theme,
+                        theme,
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
@@ -337,7 +337,7 @@ impl App {
                     let min_resp = crate::widgets::window_control_button(
                         ui,
                         crate::theme::ICON_MINUS,
-                        &theme,
+                        theme,
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
@@ -354,7 +354,7 @@ impl App {
                     let settings_resp = crate::widgets::window_control_button(
                         ui,
                         crate::theme::ICON_SETTINGS,
-                        &theme,
+                        theme,
                         theme.overlay_medium,
                         theme.text,
                         theme.text_dim,
@@ -378,7 +378,7 @@ impl App {
                         if show_status_labels { conn_label } else { "" },
                         conn_color,
                         false,
-                        &theme,
+                        theme,
                     );
                     conn_resp.on_hover_text("Agent connection status");
                     ui.add_space(4.0);
@@ -395,7 +395,7 @@ impl App {
                         if show_status_labels { "Gateway" } else { "" },
                         theme.text_muted,
                         true,
-                        &theme,
+                        theme,
                     )
                     .on_hover_text("Click to start/stop Gateway");
                     if gw_resp.clicked() {

@@ -139,15 +139,11 @@ impl CommandPalette {
                 });
 
                 // ── Keyboard navigation ──
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                    if !filtered.is_empty() {
-                        self.selected = (self.selected + 1) % filtered.len();
-                    }
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !filtered.is_empty() {
+                    self.selected = (self.selected + 1) % filtered.len();
                 }
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                    if !filtered.is_empty() {
-                        self.selected = self.selected.saturating_sub(1);
-                    }
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) && !filtered.is_empty() {
+                    self.selected = self.selected.saturating_sub(1);
                 }
                 if ui.input(|i| i.key_pressed(egui::Key::Enter)) && !filtered.is_empty() {
                     if let Some(cmd) = filtered.get(self.selected) {
