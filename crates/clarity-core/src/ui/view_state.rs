@@ -117,6 +117,40 @@ pub enum TurnState {
     Restoring,
 }
 
+impl TurnState {
+    /// Derive `TurnState` from the four legacy boolean flags scattered across
+    /// `ChatStore` and `SnapshotStore`.
+    ///
+    /// **Priority order** (most-urgent UI-display wins, highest priority first):
+    ///
+    /// 1. `Stopping` — user requested stop; communicate user intent.
+    /// 2. `Compacting` — special phase, distinct UI cue desired.
+    /// 3. `Loading` — regular generation.
+    /// 4. `Restoring` — separate from agent turns; lowest non-idle priority.
+    /// 5. `Idle` — all false.
+    ///
+    /// This priority matters when multiple booleans are set simultaneously
+    /// (which is a transitional state during stop/restore handoffs).
+    pub fn from_legacy(
+        is_loading: bool,
+        compacting: bool,
+        stopping: bool,
+        restoring: bool,
+    ) -> Self {
+        if stopping {
+            Self::Stopping
+        } else if compacting {
+            Self::Compacting
+        } else if is_loading {
+            Self::Loading
+        } else if restoring {
+            Self::Restoring
+        } else {
+            Self::Idle
+        }
+    }
+}
+
 /// Collapse/expand state for in-panel regions — replaces the seven legacy
 /// expansion booleans found in the audit.
 ///
@@ -149,6 +183,33 @@ pub struct PanelExpansion {
     /// Sticky flag preventing auto-expansion of workspace plan.
     #[serde(default)]
     pub workspace_plan_manually_collapsed: bool,
+}
+
+impl PanelExpansion {
+    /// Construct `PanelExpansion` from the seven legacy boolean flags
+    /// scattered across `UiStore` and `CronStore`.
+    ///
+    /// This is a direct 1-to-1 mapping; no priority resolution required
+    /// since these flags are semantically independent.
+    pub fn from_legacy_flags(
+        cron: bool,
+        web_tabs: bool,
+        thinking_log: bool,
+        tools: bool,
+        subagents: bool,
+        workspace_plan: bool,
+        workspace_plan_manually_collapsed: bool,
+    ) -> Self {
+        Self {
+            cron,
+            web_tabs,
+            thinking_log,
+            tools,
+            subagents,
+            workspace_plan,
+            workspace_plan_manually_collapsed,
+        }
+    }
 }
 
 /// Physical panel identifier — used by [`FocusScope::Panel`] to discriminate
@@ -469,5 +530,138 @@ mod tests {
         let json = serde_json::to_string(&fs).unwrap();
         let restored: FocusScope = serde_json::from_str(&json).unwrap();
         assert_eq!(fs, restored);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // P1.5.5 — TurnState::from_legacy priority tests
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn turn_state_from_legacy_all_false_is_idle() {
+        assert_eq!(
+            TurnState::from_legacy(false, false, false, false),
+            TurnState::Idle
+        );
+    }
+
+    #[test]
+    fn turn_state_from_legacy_loading_only() {
+        assert_eq!(
+            TurnState::from_legacy(true, false, false, false),
+            TurnState::Loading
+        );
+    }
+
+    #[test]
+    fn turn_state_from_legacy_compacting_only() {
+        assert_eq!(
+            TurnState::from_legacy(false, true, false, false),
+            TurnState::Compacting
+        );
+    }
+
+    #[test]
+    fn turn_state_from_legacy_stopping_only() {
+        assert_eq!(
+            TurnState::from_legacy(false, false, true, false),
+            TurnState::Stopping
+        );
+    }
+
+    #[test]
+    fn turn_state_from_legacy_restoring_only() {
+        assert_eq!(
+            TurnState::from_legacy(false, false, false, true),
+            TurnState::Restoring
+        );
+    }
+
+    #[test]
+    fn turn_state_priority_stopping_over_loading() {
+        // During user-initiated stop, is_loading may still be true until
+        // async cleanup completes. Stopping should win the UI display.
+        assert_eq!(
+            TurnState::from_legacy(true, false, true, false),
+            TurnState::Stopping
+        );
+    }
+
+    #[test]
+    fn turn_state_priority_stopping_over_compacting() {
+        assert_eq!(
+            TurnState::from_legacy(false, true, true, false),
+            TurnState::Stopping
+        );
+    }
+
+    #[test]
+    fn turn_state_priority_compacting_over_loading() {
+        // If both is_loading and compacting are true, compacting wins (special phase).
+        assert_eq!(
+            TurnState::from_legacy(true, true, false, false),
+            TurnState::Compacting
+        );
+    }
+
+    #[test]
+    fn turn_state_priority_loading_over_restoring() {
+        // Loading + restoring is an unusual state; loading wins.
+        assert_eq!(
+            TurnState::from_legacy(true, false, false, true),
+            TurnState::Loading
+        );
+    }
+
+    #[test]
+    fn turn_state_priority_all_true_yields_stopping() {
+        // Worst-case state: all four booleans true. Stopping (highest priority) wins.
+        assert_eq!(
+            TurnState::from_legacy(true, true, true, true),
+            TurnState::Stopping
+        );
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // P1.5.6 — PanelExpansion::from_legacy_flags
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn panel_expansion_from_legacy_all_false() {
+        let exp = PanelExpansion::from_legacy_flags(
+            false, false, false, false, false, false, false,
+        );
+        assert_eq!(exp, PanelExpansion::default());
+    }
+
+    #[test]
+    fn panel_expansion_from_legacy_one_to_one_mapping() {
+        let exp = PanelExpansion::from_legacy_flags(
+            true,  // cron
+            false, // web_tabs
+            true,  // thinking_log
+            false, // tools
+            true,  // subagents
+            false, // workspace_plan
+            true,  // workspace_plan_manually_collapsed
+        );
+        assert!(exp.cron);
+        assert!(!exp.web_tabs);
+        assert!(exp.thinking_log);
+        assert!(!exp.tools);
+        assert!(exp.subagents);
+        assert!(!exp.workspace_plan);
+        assert!(exp.workspace_plan_manually_collapsed);
+    }
+
+    #[test]
+    fn panel_expansion_from_legacy_all_true() {
+        let exp = PanelExpansion::from_legacy_flags(true, true, true, true, true, true, true);
+        assert!(exp.cron);
+        assert!(exp.web_tabs);
+        assert!(exp.thinking_log);
+        assert!(exp.tools);
+        assert!(exp.subagents);
+        assert!(exp.workspace_plan);
+        assert!(exp.workspace_plan_manually_collapsed);
     }
 }

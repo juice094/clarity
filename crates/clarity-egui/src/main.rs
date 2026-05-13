@@ -867,6 +867,28 @@ impl eframe::App for App {
         self.ui_store.gantt_panel_open =
             self.view_state.main == clarity_core::ui::AppView::Gantt;
 
+        // Reverse-direction sync (P1.5.5/P1.5.6 — pre-bridge-reversal):
+        // legacy booleans are still the authoritative writers for these fields,
+        // so we mirror them into ViewState every frame so that any
+        // ViewState-aware reader sees up-to-date state. P1.5.2-4 will reverse
+        // the direction so ViewState becomes the truth and these booleans
+        // become the mirrors.
+        self.view_state.turn = clarity_core::ui::TurnState::from_legacy(
+            self.chat_store.is_loading,
+            self.chat_store.compacting,
+            self.chat_store.stopping,
+            self.snapshot_store.restoring,
+        );
+        self.view_state.expansions = clarity_core::ui::PanelExpansion::from_legacy_flags(
+            self.cron_store.cron_expanded,
+            self.ui_store.web_tabs_expanded,
+            self.ui_store.thinking_log_expanded,
+            self.ui_store.tools_expanded,
+            self.ui_store.subagents_expanded,
+            self.ui_store.workspace_plan_expanded,
+            self.ui_store.workspace_plan_manually_collapsed,
+        );
+
         // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
