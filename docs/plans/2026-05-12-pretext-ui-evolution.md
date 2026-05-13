@@ -1,10 +1,13 @@
-# Pretext UI Evolution Plan — Grid, Lines, State, and Claude-Borrowed Composition
+# Pretext UI Evolution Plan — Grid, Lines, State, and Filesystem-Substrate Composition
 
-> **Date**: 2026-05-12 (revised after Kimi K2.6 strategic review and 6-axis design audit)
-> **Status**: Phase 0 ✅ · Phase 0.5 ✅ (audit + 5 P0 blockers, S1 done) · Phase 1-3 planned
+> **Date**: 2026-05-12 (revised 2026-05-13 after information-architecture dialogue)
+> **Status**: Phase 0 ✅ · Phase 0.5 ✅ (S1) · Phase 1 ✅ (S2) · Phase 1.5-3 planned
 > **Owner**: juice094 + Clarity Agent
-> **Theory anchor**: `docs/architecture/pretext-ui-theory.md`
+> **Theory anchor**: `docs/architecture/pretext-ui-theory.md` (§1-§8 + §9 Filesystem-Substrate + §10 Error Budgeting)
 > **Audit anchor**: `docs/audits/2026-05-12-ui-design-audit.md`
+> **ADR anchors (2026-05-13)**:
+> - `docs/adr/ADR-011-workspace-architecture.md` (workspace = openclaw bootstrap + multi-instance extension)
+> - `docs/adr/ADR-012-renderline-enum-design.md` (13 variants covering 30 line patterns)
 > **Skill**: `~/.config/agents/skills/egui-layout-canons/SKILL.md`
 
 ---
@@ -220,28 +223,60 @@ Inventory from `docs/audits/2026-05-12-ui-design-audit.md` §B.2:
 
 ### 5.4 Data Model
 
+**Locked by ADR-012 (2026-05-13)**: 13 enum variants absorbing 30 line patterns via `LineRole` parameterization.
+
 ```rust
-// In clarity-core/src/ui/render_line.rs (new)
+// clarity-core/src/ui/render_line.rs (new)
 pub enum RenderLine {
     Text { spans: Vec<Span>, role: LineRole, indent: u8 },
-    CodeLine { lang: SmolStr, content: SmolStr, line_no: Option<u32> },
+    CodeLine { lang: SmolStr, content: SmolStr, line_no: Option<u32>, diff: DiffKind },
     ToolCallHeader { name: SmolStr, status: ToolStatus, expanded: bool },
     ToolCallArg { key: SmolStr, value: SmolStr },
+    Thinking { content: SmolStr, collapsed: bool },          // ClaudeCode-borrowed
+    ApprovalPrompt { options: Vec<ApprovalOption> },         // ClaudeCode-borrowed
+    StatusLine { kind: StatusKind, content: SmolStr, transient: bool },  // spinner / progress
+    ArtifactRef { artifact_id: ArtifactId, summary: SmolStr },
+    CrossInstanceRef {                                       // Clarity-specific
+        target_instance: InstanceId,
+        target_session: Option<SessionId>,
+        message: SmolStr,
+    },
+    SlashCompletion { command: SmolStr, description: SmolStr },
+    StreamingCursor,                                          // ClaudeCode-borrowed
     Divider,
     Empty,
-    BlockSlot { block_id: BlockId, line_count: u8 },
+    BlockSlot { block_id: BlockId, line_count: u8 },         // fallback for tables / images / full-screen Plan
 }
 
 pub enum LineRole {
-    UserMessage,
-    AgentMessage,
-    SystemMessage,
-    ErrorMessage,
-    Heading(u8),
+    UserMessage, AgentMessage, SystemMessage, ErrorMessage,
+    Heading(u8),                    // 1..=6
     Quote,
-    ListItem(u8),
+    UnorderedListItem(u8),
+    OrderedListItem { num: u32, indent: u8 },
+    Mention,                        // @instance / @user
+    FileRef,                        // @path/to/file
+    Status, Warning, Note,
+    TokenUsage, ContextCompaction,
+    Sandbox,                        // openclaw-compat
+}
+
+pub enum DiffKind { Normal, Added, Removed, Context }
+
+pub enum StatusKind {
+    Spinner,
+    Progress { current: u32, total: u32 },
+    Network, Compaction, ModelSwitch,
+}
+
+pub enum ApprovalOption {
+    Yes, YesAndRemember,
+    No { reason_required: bool },
+    Custom(SmolStr),
 }
 ```
+
+Full pattern-to-variant mapping table: see `docs/adr/ADR-012-renderline-enum-design.md` §Pattern Coverage Map.
 
 ### 5.5 Acceptance Criteria
 
@@ -274,32 +309,82 @@ pub enum LineRole {
 - [ ] **P3A.3** Snapshot tests: same fixture renders to GUI + TUI; assert
       text content matches (1h)
 
-### 6.2 Phase 3B — Claude-Inspired Composition (~6h)
+### 6.2 Phase 3B — Information Architecture Revision (~6h)
 
-This is the deep Claude borrow. Each item maps a Claude affordance to our
-Pretext primitives while keeping egui's pixel-decoration advantages.
+**Revised 2026-05-13** after user dialogue locked the right-panel form factor to **D (Tab switcher)** rather than Claude's persistent Artifacts panel. Phase 3B is no longer "5 Claude-inspired affordances" — it is **Clarity's own information architecture**, with selective ClaudeCode borrowing routed into RenderLine variants (ADR-012).
 
-- [ ] **P3B.1** **Slash commands** in input panel (1h)
-      - Detect `/` prefix in `InputPanel`
-      - Open contextual dropdown showing matching `CommandItem`s from
-        `CommandRouter`
-      - Both GUI (dropdown) and TUI (autocomplete) render same source
-- [ ] **P3B.2** **Artifacts panel** (2h)
-      - Extend `Workspace` SidePanel with an `Artifact` type
-      - Detect long code blocks in chat → "Open as artifact" affordance
-      - Persistent across messages, with version history
-      - GUI gets syntax highlighting; TUI gets monospace
-- [ ] **P3B.3** **Project context display** in TitleBar CENTER zone (1h)
-      - Show: `<workspace>/<branch> · <dirty count> staged`
-      - Updates on filesystem watch events
-      - TUI shows same in dedicated status line
-- [ ] **P3B.4** **Memory affordances** per message (1h)
-      - Pin/unpin via right-click (GUI) or `m` key (TUI)
-      - Persisted via existing snapshot system
-      - Visual indicator: pin icon (GUI) / `[pinned]` prefix (TUI)
-- [ ] **P3B.5** **Streaming cursor** in agent messages (1h)
-      - Word-by-word append with trailing cursor character
-      - Smooth in GUI (animated opacity), discrete in TUI
+The full new information architecture is documented in `docs/adr/ADR-011-workspace-architecture.md` (workspace) and `docs/adr/ADR-012-renderline-enum-design.md` (line model). This phase implements the UI surface for those decisions.
+
+#### Top bar (revised)
+
+- **Persona switcher** (left): current `<role>` dropdown, replaces simple session-tab cluster as the primary identity selector.
+- **Session tabs** (middle): under the selected persona; `+` button creates a new session within the active persona.
+- **Cross-session badge** (`[审批 N]` / `[Orchestrate ⤢]`): floating dashboard overlaying the chat area at 60% width when invoked; shows the current persona's session dependency graph (active/blocked/queued, cross-session outputs).
+- **Cluster indicator** (right): per-device dots (`💻 ●` / `📱 ○`) — placeholder pre-v0.5; clicking opens Settings → Cluster.
+
+#### Left panel (revised)
+
+Kept lightweight per user direction "左栏只保持一个". Three vertically stacked regions:
+
+1. **Sessions** (current persona's session list, current behavior).
+2. **Pinned** (cross-session pinned messages, unchanged).
+3. **Notes (tabbit-precursor)** — 5 note types per ADR-012 `LineRole::Mention` / `FileRef` and per ADR-011 `workspaces/<role>/<instance>/notes/`:
+   - `☐ ToDo`
+   - `✏️ Draft`
+   - `🔗 Links`
+   - `✎ Sketch`
+   - `💬 @Mention` (cross-instance)
+
+Each note is a file at `workspaces/<role>/<instance>/notes/<kind>/<id>.{md,svg,json}` per ADR-011. Cross-instance mentions write to `notes/mentions/outbox/` and the target instance reads from its `notes/mentions/inbox/`.
+
+#### Center panel (Z-form factor — locked 2026-05-13)
+
+Default: ClaudeCode-style line stream rendered from `Vec<RenderLine>` (ADR-012). On-demand: long Plan / Tool / Doc content can `⤢ Expand` to occupy the center panel via `BlockSlot`. `Esc` returns to the line stream. This is the **Z scheme** (default flow + on-demand full-screen) chosen over the X (always flow) and Y (mode switcher) alternatives.
+
+#### Right panel (Tab D form factor — locked 2026-05-13)
+
+Three tabs:
+
+1. **SSH** — terminal tab (placeholder pre-v0.5; integration deferred).
+2. **Workspace** — three-tier file view per ADR-011:
+   - `_shared/` (cross-instance shared)
+   - `<role>/` shared (this role's shared folder)
+   - `<role>/<instance>/workdir/` (this session's private workdir)
+   Four operation buttons: `[Refresh] [Save] [Download] [Close]`. **`Save` is wired as a global Ctrl+S router** that writes back the focused file (local fs for local preview; SSH transport when SSH tab is the source).
+3. **Settings** — sub-items: Chat Channel / Settings / Version / Data Backup / Help / **Cluster** (v0.5+ placeholder per ADR-011).
+
+#### Status bar (bottom — replaces left-panel Equipment region)
+
+Per the 2026-05-13 revision (do not place the equipment region in the left panel):
+
+```
+●MCP ●Local LLM ●Gateway │ 🎯3 📋2/5 🔌4 │ context: 47K/200K  ⏵⏵
+```
+
+- `🎯N` — active Skill count (click to expand floating panel listing skill files from `workspaces/<role>/<instance>/skills/`)
+- `📋N/M` — Plan progress (click to expand floating plan tree)
+- `🔌N` — connected MCP server count (click to expand)
+
+Floating panels emerge from the status bar on click, dismissed on click-outside or Esc. They do NOT occupy persistent screen real estate.
+
+#### Tasks
+
+- [ ] **P3B.1** Top-bar persona switcher: dropdown sourced from `workspaces/<role>/` directory enumeration; switching changes the entire app context (active session tabs, active workspace, active skills) (1h)
+- [ ] **P3B.2** Orchestrate dashboard: floating panel showing current persona's session dependency graph; sessions read from `~/.clarity/agents/<instanceId>/sessions/`; dependencies inferred from `workspaces/_shared/cross-refs/` (1h)
+- [ ] **P3B.3** Cluster indicator: top-bar device dots reading from `workspaces/_cluster/peers.yaml` (placeholder data pre-v0.5; UI element ships now) (30min)
+- [ ] **P3B.4** Sticky notes left-panel region: 5 note types reading from `workspaces/<role>/<instance>/notes/`; create / edit / delete / cross-instance send via filesystem operations (2h)
+- [ ] **P3B.5** Center `⤢ Expand` for `BlockSlot`: any long Plan / Tool / Doc line can occupy center; Esc returns (45min)
+- [ ] **P3B.6** Right-panel Workspace three-tier file tree + 4 operation buttons; `Save` wired as global Ctrl+S router (1h)
+- [ ] **P3B.7** Bottom Status Bar equipment region (`🎯 📋 🔌` with click-to-expand floating panels) (45min)
+
+#### Acceptance Criteria (revised)
+
+- Persona switcher enumerates `workspaces/<role>/` and changes app context atomically
+- Sessions under different personas are visibly isolated (no cross-persona session leak in the session tabs)
+- Cross-instance mention from `engineer/pc1-001` to `knowledge/pc1-001` appears in target's left-panel `💬 @Mention` region within 2 seconds (file-system event)
+- `Save` triggered by Ctrl+S writes the focused file back to disk regardless of which tab is focused (local fs or SSH transport)
+- `BlockSlot` expand and Esc return preserve scroll position in the underlying line stream
+- Right-panel `Workspace` tab shows the three-tier view exactly per ADR-011 §Workspace Layout
 
 ### 6.3 Phase 3C — Documentation and Closure (~4h)
 
@@ -403,6 +488,16 @@ These resolve during Phase 2A as we build the actual data model.
 | 2026-05-12 | TUI and GUI share `clarity-core::ui::RenderLine` | Theory §2 Dimension 1 |
 | 2026-05-12 | Keep `RenderBlock` as fallback during Phase 2 | Theory §5 (BlockSlot graceful degradation) |
 | 2026-05-12 | Phase 3B borrows Claude affordances; egui keeps pixel decoration distinct | User direction + theory §4 |
+| 2026-05-13 | Right panel = D form factor (Tab: SSH / Workspace / Settings); supersedes Phase 3B "Artifacts panel" item | User dialogue 2026-05-13 |
+| 2026-05-13 | Center panel = Z form factor (default line stream + on-demand `BlockSlot` full-screen) | User dialogue 2026-05-13 |
+| 2026-05-13 | Workspace contract = openclaw 7 bootstrap files in full (Option a) | ADR-011 |
+| 2026-05-13 | Workspace naming = role-nested `workspaces/<role>/<machine>-<n>/` (Option B) | ADR-011 |
+| 2026-05-13 | `RenderLine` = 13 enum variants covering 30 line patterns | ADR-012 |
+| 2026-05-13 | "Equipment region" (Skill/Plan/MCP load + assign) lives in bottom Status Bar, not left panel | User dialogue 2026-05-13 |
+| 2026-05-13 | Left panel kept lightweight: Sessions + Pinned + Notes only | User direction "左栏只保持一个" |
+| 2026-05-13 | Sticky notes have 5 types stored at `workspaces/<role>/<instance>/notes/` (Option a, private + mentions inbox/outbox) | ADR-011 + dialogue |
+| 2026-05-13 | Filesystem = Agent evolution substrate (formalized) | Theory §9 |
+| 2026-05-13 | Error Budgeting (Donaldson/NASA/Google SRE) = methodology foundation (formalized) | Theory §10 |
 
 ---
 
