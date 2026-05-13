@@ -2,11 +2,20 @@
 //!
 //! Validates that devbase v0.2.3 correctly filters tools when
 //! DEVBASE_MCP_TOOL_TIERS=stable,beta is set via McpClientBuilder::env().
+//!
+//! **All tests in this file are #[ignore]'d (2026-05-13 hygiene pass)**:
+//! they require an external `devbase.exe` binary at a hardcoded path
+//! (`C:\Users\22414\Desktop\devbase\target\release\devbase.exe`) which is
+//! not part of the Clarity workspace. The tests are integration-style
+//! environmental verifications, not unit tests. Run manually with
+//! `cargo test -p clarity-core --test devbase_mcp_tier_verify -- --ignored`
+//! after building the devbase project at the expected path.
 
 use clarity_core::mcp::{McpClient, McpClientBuilder};
 
 const DEVBASE_EXE: &str = r"C:\Users\22414\Desktop\devbase\target\release\devbase.exe";
 
+#[ignore = "requires external devbase.exe at hardcoded path; see file-level docstring"]
 #[tokio::test]
 async fn test_devbase_tool_tier_filtering() {
     // 1. Build client with tier env
@@ -93,6 +102,7 @@ async fn test_devbase_tool_tier_filtering() {
     client.disconnect().await.ok();
 }
 
+#[ignore = "requires external devbase.exe at hardcoded path; see file-level docstring"]
 #[tokio::test]
 async fn test_devbase_all_tools_without_filter() {
     // Control test: without tier filter, all 19 tools should be exposed
@@ -117,6 +127,7 @@ async fn test_devbase_all_tools_without_filter() {
     client.disconnect().await.ok();
 }
 
+#[ignore = "requires external devbase.exe at hardcoded path; see file-level docstring"]
 #[tokio::test]
 async fn test_devbase_stable_only() {
     // Narrow filter: stable only = 5 tools
