@@ -201,6 +201,7 @@ impl App {
         let web_tabs = settings_edit.web_tabs.clone();
         let font_scale = settings_edit.font_scale.unwrap_or(1.0);
         let content_width = settings_edit.content_width.unwrap_or(720.0);
+        let input_style = settings_edit.input_style.clone();
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -267,6 +268,8 @@ impl App {
                 editing_message_idx: None,
                 edit_buffer: String::new(),
                 last_snapshot: None,
+                input_history: Vec::new(),
+                input_history_idx: None,
             },
             settings_store: crate::stores::SettingsStore {
                 settings_open: false,
@@ -343,6 +346,10 @@ impl App {
                 gantt_panel_open: false,
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
+                input_style: match input_style.as_deref() {
+                    Some("tui") => crate::stores::InputStyle::Tui,
+                    _ => crate::stores::InputStyle::Gui,
+                },
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],

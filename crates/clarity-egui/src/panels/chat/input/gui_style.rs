@@ -1,7 +1,8 @@
 use crate::components::input;
 use crate::App;
 
-pub fn render_input(app: &mut App, ui: &mut egui::Ui) {
+/// Render the traditional GUI-style input bar: rounded card with send/stop button.
+pub fn render_gui_input(app: &mut App, ui: &mut egui::Ui) {
     // Snapshot hint bar (non-intrusive, above input)
     if let Some(ref snap) = app.chat_store.last_snapshot {
         let theme = &app.ui_store.theme;

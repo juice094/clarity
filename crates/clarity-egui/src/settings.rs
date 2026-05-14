@@ -43,6 +43,8 @@ pub struct GuiSettings {
     #[serde(default)]
     pub content_width: Option<f32>,
     #[serde(default)]
+    pub input_style: Option<String>,
+    #[serde(default)]
     pub web_tabs: Vec<WebTab>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
@@ -211,6 +213,7 @@ impl Default for GuiSettings {
             active_profile: None,
             font_scale: None,
             content_width: None,
+            input_style: Some("gui".into()),
             web_tabs: Vec::new(),
             profiles: HashMap::new(),
         }

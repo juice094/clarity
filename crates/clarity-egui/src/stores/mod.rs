@@ -65,6 +65,10 @@ pub struct ChatStore {
     pub edit_buffer: String,
     /// Snapshot created by the most recently completed agent turn.
     pub last_snapshot: Option<clarity_core::agent::snapshot::SnapshotInfo>,
+    /// Input history for ↑↓ recall (TUI-style input box Phase 1).
+    pub input_history: Vec<String>,
+    /// Cursor into `input_history`. None = editing current draft.
+    pub input_history_idx: Option<usize>,
 }
 
 // ============================================================================
@@ -246,6 +250,22 @@ pub struct UiStore {
     pub line_cursor_selected: Option<usize>,
     /// S7 Phase 2D: total flat line count last frame (used to clamp cursor).
     pub line_cursor_total_lines: usize,
+    /// Input box visual style. Gui = current rounded card; Tui = double-line + ❯ prompt.
+    pub input_style: InputStyle,
+}
+
+/// Visual style for the chat input bar.
+///
+/// `Tui` style is keyboard-first: no send button, no card background, just
+/// two thin horizontal rules and a `❯` prompt. Inspired by Claude Code's
+/// terminal UI.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InputStyle {
+    /// Rounded card with explicit send button (current default).
+    #[default]
+    Gui,
+    /// Minimal double-line + ❯ prompt, fully keyboard-controlled.
+    Tui,
 }
 
 // ============================================================================

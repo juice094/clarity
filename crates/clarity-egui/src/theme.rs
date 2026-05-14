@@ -261,7 +261,9 @@ impl Theme {
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
             focus_glow: rgba(91, 141, 239, 0.20),
-            selection: rgba(91, 141, 239, 0.45),
+            // Selection: slate-grey background for low-intrusion highlighting
+            // (matches border colour family at higher opacity; replaces prior bright-blue)
+            selection: rgba(55, 58, 75, 0.72),
 
             // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.50),
@@ -423,7 +425,9 @@ impl Theme {
             // Focus: blue glow
             focus_ring: rgba(91, 141, 239, 0.60),
             focus_glow: rgba(91, 141, 239, 0.20),
-            selection: rgba(91, 141, 239, 0.45),
+            // Selection: slate-grey background for low-intrusion highlighting
+            // (matches border colour family at higher opacity; replaces prior bright-blue)
+            selection: rgba(55, 58, 75, 0.72),
 
             // Overlay: scrim + depth layers
             overlay: hex_alpha("#000000", 0.60),
