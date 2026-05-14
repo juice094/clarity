@@ -33,9 +33,19 @@ pub fn message_bubble(
     if msg.is_error {
         error_bubble(ui, msg, theme, msg_idx, retry_idx, switch_model)
     } else {
-        match msg.role {
-            Role::User => user_bubble(ui, msg, theme),
-            Role::Agent => agent_message(ui, msg, theme, show_header),
+        #[cfg(feature = "line-mode")]
+        {
+            match msg.role {
+                Role::User => line_mode_user(ui, msg, theme),
+                Role::Agent => line_mode_agent(ui, msg, theme, show_header),
+            }
+        }
+        #[cfg(not(feature = "line-mode"))]
+        {
+            match msg.role {
+                Role::User => user_bubble(ui, msg, theme),
+                Role::Agent => agent_message(ui, msg, theme, show_header),
+            }
         }
     }
 }
@@ -455,6 +465,80 @@ fn error_bubble(
 }
 
 // ============================================================================
+// Line-mode renderers (S6 Phase 2C)
+// ============================================================================
+
+#[cfg(feature = "line-mode")]
+fn line_mode_agent(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
+    let start_y = ui.cursor().min.y;
+
+    if show_header {
+        ui.horizontal(|ui| {
+            crate::components::chat::avatar::avatar(ui, "A", theme);
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new("Agent")
+                    .size(theme.text_xs)
+                    .color(theme.text_dim),
+            );
+        });
+        ui.add_space(theme.space_4);
+    }
+
+    let max_width = (ui.available_width() - 32.0).max(120.0);
+    egui::Frame::new()
+        .fill(theme.surface)
+        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+        .stroke(egui::Stroke::NONE)
+        .shadow(egui::Shadow::NONE)
+        .inner_margin(egui::Margin::symmetric(16, 12))
+        .show(ui, |ui| {
+            ui.set_max_width(max_width);
+            crate::ui::line_renderer::render_lines(
+                ui,
+                &msg.lines,
+                theme,
+                0.0,
+                1_000_000.0,
+                None,
+            );
+        });
+    ui.add_space(theme.space_16);
+    ui.cursor().min.y - start_y
+}
+
+#[cfg(feature = "line-mode")]
+fn line_mode_user(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    let start_y = ui.cursor().min.y;
+    let max_width = (ui.available_width() * 0.72).max(280.0);
+
+    ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+        ui.set_max_width(max_width);
+        egui::Frame::new()
+            .fill(theme.user_bubble)
+            .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
+            .stroke(egui::Stroke::NONE)
+            .shadow(egui::Shadow::NONE)
+            .inner_margin(egui::Margin::symmetric(18, 14))
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                    ui.set_min_width(48.0);
+                    crate::ui::line_renderer::render_lines(
+                        ui,
+                        &msg.lines,
+                        theme,
+                        0.0,
+                        1_000_000.0,
+                        None,
+                    );
+                });
+            });
+    });
+    ui.add_space(theme.space_16);
+    ui.cursor().min.y - start_y
+}
+
+// ============================================================================
 // Tool call bubble
 // ============================================================================
 
@@ -535,46 +619,58 @@ pub fn estimate_height(
     content_max_width: f32,
     theme: &crate::theme::Theme,
 ) -> f32 {
-    use crate::ui::types::RenderBlock;
-    let mut height = 28.0; // bubble padding + trailing space_8
-
-    // Approximate chars per line based on available width and base font size.
-    // Average glyph width ≈ text_base * 0.65 (mix of Latin and CJK).
-    let chars_per_line = ((content_max_width / (theme.text_base * 0.65)).max(20.0)) as usize;
-    let line_height = theme.text_base * 1.5; // ~18px when text_base=12.0
-
-    for block in &msg.parsed {
-        match block {
-            RenderBlock::Paragraph(spans) => {
-                let chars: usize = spans
-                    .iter()
-                    .map(|s| match s {
-                        crate::ui::types::InlineSpan::Text(t)
-                        | crate::ui::types::InlineSpan::Bold(t)
-                        | crate::ui::types::InlineSpan::Code(t) => t.len(),
-                        crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
-                    })
-                    .sum();
-                let lines = (chars / chars_per_line).max(1);
-                height += lines as f32 * line_height;
-            }
-            RenderBlock::Heading(_, _) => height += theme.text_lg + theme.space_8,
-            RenderBlock::CodeBlock { code, .. } => {
-                let lines = code.lines().count().max(1);
-                height += lines as f32 * (theme.text_sm + theme.space_4) + 30.0;
-            }
-            RenderBlock::ListItem(_) => height += line_height + theme.space_4,
-            RenderBlock::Blockquote(_) => height += line_height + theme.space_4,
-            RenderBlock::HorizontalRule => height += theme.space_12,
-            RenderBlock::Table { rows, .. } => {
-                height += line_height + theme.space_8; // header row
-                height += rows.len() as f32 * (line_height + theme.space_4);
-                height += theme.space_8; // padding
-            }
-        }
-        height += theme.space_4; // inter-block spacing
+    #[cfg(feature = "line-mode")]
+    {
+        let _ = content_max_width;
+        let line_h = crate::ui::line_renderer::LINE_HEIGHT;
+        let lines_h = msg.lines.len() as f32 * line_h;
+        // Padding for bubble frame + trailing space.
+        return lines_h + theme.space_16 + theme.space_8;
     }
-    height
+
+    #[cfg(not(feature = "line-mode"))]
+    {
+        use crate::ui::types::RenderBlock;
+        let mut height = 28.0; // bubble padding + trailing space_8
+
+        // Approximate chars per line based on available width and base font size.
+        // Average glyph width ≈ text_base * 0.65 (mix of Latin and CJK).
+        let chars_per_line = ((content_max_width / (theme.text_base * 0.65)).max(20.0)) as usize;
+        let line_height = theme.text_base * 1.5; // ~18px when text_base=12.0
+
+        for block in &msg.parsed {
+            match block {
+                RenderBlock::Paragraph(spans) => {
+                    let chars: usize = spans
+                        .iter()
+                        .map(|s| match s {
+                            crate::ui::types::InlineSpan::Text(t)
+                            | crate::ui::types::InlineSpan::Bold(t)
+                            | crate::ui::types::InlineSpan::Code(t) => t.len(),
+                            crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
+                        })
+                        .sum();
+                    let lines = (chars / chars_per_line).max(1);
+                    height += lines as f32 * line_height;
+                }
+                RenderBlock::Heading(_, _) => height += theme.text_lg + theme.space_8,
+                RenderBlock::CodeBlock { code, .. } => {
+                    let lines = code.lines().count().max(1);
+                    height += lines as f32 * (theme.text_sm + theme.space_4) + 30.0;
+                }
+                RenderBlock::ListItem(_) => height += line_height + theme.space_4,
+                RenderBlock::Blockquote(_) => height += line_height + theme.space_4,
+                RenderBlock::HorizontalRule => height += theme.space_12,
+                RenderBlock::Table { rows, .. } => {
+                    height += line_height + theme.space_8; // header row
+                    height += rows.len() as f32 * (line_height + theme.space_4);
+                    height += theme.space_8; // padding
+                }
+            }
+            height += theme.space_4; // inter-block spacing
+        }
+        height
+    }
 }
 
 /// Truncate a string to at most `max_chars` characters, appending "…" if truncated.

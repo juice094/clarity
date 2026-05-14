@@ -45,6 +45,7 @@ pub fn load_sessions() -> Vec<Session> {
                                     parsed: vec![],
                                     cached_height: None,
                                     is_error: false,
+                                    lines: Vec::new(),
                                 };
                                 msg.prepare();
                                 msg
@@ -159,6 +160,7 @@ pub fn import_session(path: &std::path::Path) -> Result<Session, String> {
                 parsed: vec![],
                 cached_height: None,
                 is_error: false,
+                lines: Vec::new(),
             };
             msg.prepare();
             msg

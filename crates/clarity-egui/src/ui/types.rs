@@ -265,6 +265,9 @@ pub struct Message {
     pub cached_height: Option<f32>,
     /// Semantic flag: true for system/error messages that need distinct styling.
     pub is_error: bool,
+    /// S6 Phase-2C line-atoms representation (parallel to `parsed`).
+    /// Populated by `prepare()` via `markdown_to_lines`.
+    pub lines: Vec<clarity_core::ui::RenderLine>,
 }
 
 impl Message {
@@ -274,6 +277,17 @@ impl Message {
             self.content = Self::blocks_to_markdown(&self.blocks);
         }
         self.parsed = crate::ui::markdown::parse_markdown(&self.content);
+        self.lines = clarity_core::ui::markdown_to_lines(&self.content);
+        // Map default AgentMessage → UserMessage for user-authored content.
+        if self.role == Role::User {
+            for line in &mut self.lines {
+                if let clarity_core::ui::RenderLine::Text { ref mut role, .. } = line {
+                    if *role == clarity_core::ui::LineRole::AgentMessage {
+                        *role = clarity_core::ui::LineRole::UserMessage;
+                    }
+                }
+            }
+        }
         // Invalidate height cache when content changes.
         self.cached_height = None;
     }

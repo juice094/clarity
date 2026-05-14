@@ -43,6 +43,10 @@ clarity-wire = { path = "../clarity-wire" }
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 
+[features]
+default = []
+line-mode = []
+
 [[bin]]
 name = "clarity-egui"
 path = "src/main.rs"

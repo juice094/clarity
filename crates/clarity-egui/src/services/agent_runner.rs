@@ -50,6 +50,7 @@ impl App {
                 parsed: vec![],
                 cached_height: None,
                 is_error: false,
+                lines: Vec::new(),
             };
             msg.prepare();
             session.messages.push(msg);

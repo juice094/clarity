@@ -268,6 +268,9 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
     let mut heading_level: u8;
     let mut role_stack: Vec<LineRole> = Vec::new();
     let mut current_role = LineRole::AgentMessage;
+    let mut in_table = false;
+    let mut table_rows = 0usize;
+    let mut in_image = false;
 
     let flush_with_role = |buf: &mut String, out: &mut Vec<RenderLine>, role: LineRole, indent: u8| {
         if !buf.trim().is_empty() {
@@ -357,6 +360,32 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
                 flush_with_role(&mut current_text, &mut lines, current_role, 0);
                 current_role = role_stack.pop().unwrap_or(LineRole::AgentMessage);
             }
+            Event::Start(Tag::Table(_)) => {
+                flush_with_role(&mut current_text, &mut lines, current_role, 0);
+                in_table = true;
+                table_rows = 0;
+            }
+            Event::End(TagEnd::TableRow) if in_table => {
+                table_rows += 1;
+            }
+            Event::End(TagEnd::Table) => {
+                in_table = false;
+                lines.push(RenderLine::BlockSlot {
+                    block_id: "table".into(),
+                    line_count: table_rows.max(1) as u8,
+                });
+            }
+            Event::Start(Tag::Image { .. }) => {
+                flush_with_role(&mut current_text, &mut lines, current_role, 0);
+                in_image = true;
+            }
+            Event::End(TagEnd::Image) => {
+                in_image = false;
+                lines.push(RenderLine::BlockSlot {
+                    block_id: "image".into(),
+                    line_count: 3,
+                });
+            }
             Event::Start(Tag::Paragraph) => {
                 // Paragraphs are the default; no role change needed.
             }
@@ -368,11 +397,13 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
                     for line in t.split('\n') {
                         code_lines.push(line.to_string());
                     }
+                } else if in_table || in_image {
+                    // Swallow content inside unsupported block-level slots.
                 } else {
                     current_text.push_str(&t);
                 }
             }
-            Event::SoftBreak | Event::HardBreak if !in_code_block => {
+            Event::SoftBreak | Event::HardBreak if !in_code_block && !in_table && !in_image => {
                 flush_with_role(&mut current_text, &mut lines, current_role, 0);
             }
             Event::Rule => {

@@ -54,6 +54,7 @@ pub fn on_error(app: &mut crate::App, msg: String) {
             parsed: vec![],
             cached_height: None,
             is_error: true,
+            lines: Vec::new(),
         };
         m.prepare();
         session.messages.push(m);
@@ -82,6 +83,7 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
             parsed: vec![],
             cached_height: None,
             is_error: false,
+            lines: Vec::new(),
         };
         session.messages.push(msg);
     }
@@ -123,6 +125,7 @@ pub fn on_tool_start(
             parsed: vec![],
             cached_height: None,
             is_error: false,
+            lines: Vec::new(),
         };
         session.messages.push(msg);
     }
@@ -225,6 +228,7 @@ pub fn on_tool_result(
             parsed: vec![],
             cached_height: None,
             is_error: false,
+            lines: Vec::new(),
         };
         session.messages.push(msg);
     }

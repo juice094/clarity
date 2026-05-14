@@ -295,6 +295,53 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                                 .frame(false),
                         );
                     } else {
+                        #[cfg(feature = "line-mode")]
+                        {
+                            let lines = clarity_core::ui::markdown_to_lines(content);
+                            crate::ui::line_renderer::render_lines(
+                                ui,
+                                &lines,
+                                theme,
+                                0.0,
+                                1_000_000.0,
+                                None,
+                            );
+                        }
+                        #[cfg(not(feature = "line-mode"))]
+                        {
+                            egui::ScrollArea::vertical()
+                                .id_salt(ui.id().with("preview_scroll"))
+                                .auto_shrink([false; 2])
+                                .scroll_bar_visibility(
+                                    egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                                )
+                                .show(ui, |ui| {
+                                    let parsed = crate::ui::markdown::parse_markdown(content);
+                                    crate::ui::markdown::render_blocks(
+                                        ui,
+                                        &parsed,
+                                        theme,
+                                        theme.chat_text,
+                                    );
+                                });
+                        }
+                    }
+                }
+                crate::ui::types::PreviewItem::WebPage { content, .. } => {
+                    #[cfg(feature = "line-mode")]
+                    {
+                        let lines = clarity_core::ui::markdown_to_lines(content);
+                        crate::ui::line_renderer::render_lines(
+                            ui,
+                            &lines,
+                            theme,
+                            0.0,
+                            1_000_000.0,
+                            None,
+                        );
+                    }
+                    #[cfg(not(feature = "line-mode"))]
+                    {
                         egui::ScrollArea::vertical()
                             .id_salt(ui.id().with("preview_scroll"))
                             .auto_shrink([false; 2])
@@ -303,26 +350,9 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                             )
                             .show(ui, |ui| {
                                 let parsed = crate::ui::markdown::parse_markdown(content);
-                                crate::ui::markdown::render_blocks(
-                                    ui,
-                                    &parsed,
-                                    theme,
-                                    theme.chat_text,
-                                );
+                                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
                             });
                     }
-                }
-                crate::ui::types::PreviewItem::WebPage { content, .. } => {
-                    egui::ScrollArea::vertical()
-                        .id_salt(ui.id().with("preview_scroll"))
-                        .auto_shrink([false; 2])
-                        .scroll_bar_visibility(
-                            egui::containers::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                        )
-                        .show(ui, |ui| {
-                            let parsed = crate::ui::markdown::parse_markdown(content);
-                            crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
-                        });
                 }
             });
     }
