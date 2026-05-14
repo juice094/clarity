@@ -30,8 +30,12 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
         let alpha = ease_out_cubic(fade);
 
         let screen = ctx.screen_rect();
+        let max_toasts = ((screen.height() - 40.0) / 56.0).max(1.0) as usize;
+        if i >= max_toasts {
+            continue;
+        }
         let x = screen.max.x - 320.0;
-        let y = 20.0 + i as f32 * 56.0;
+        let y = (20.0 + i as f32 * 56.0).min(screen.max.y - 60.0);
         egui::Area::new(egui::Id::new(("toast", i)))
             .fixed_pos(egui::pos2(x, y))
             .show(ctx, |ui| {

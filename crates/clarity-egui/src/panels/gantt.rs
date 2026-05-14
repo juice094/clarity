@@ -13,8 +13,12 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
 
     let theme = app.ui_store.theme.clone();
 
+    let screen = ctx.screen_rect();
+    let default_w = 600.0_f32.min(screen.width() * 0.85);
+    let default_h = 400.0_f32.min(screen.height() * 0.8);
     egui::Window::new("Plan Timeline")
-        .default_size([600.0, 400.0])
+        .default_size([default_w, default_h])
+        .max_size([screen.width() * 0.95, screen.height() * 0.9])
         .resizable(true)
         .collapsible(false)
         .frame(

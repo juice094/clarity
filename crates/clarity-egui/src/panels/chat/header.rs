@@ -33,6 +33,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     };
     let total_available = (ui.available_width() - reserved_for_plus - total_spacing).max(0.0);
     const TAB_MIN: f32 = 48.0;
+    const TAB_HARD_MIN: f32 = 48.0;
     const TAB_MAX: f32 = 180.0;
     let raw_width = if tab_count == 0 {
         0.0
@@ -43,7 +44,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     // rather than clamping — this prevents the tab bar from overflowing
     // its allocated zone and being visually truncated.
     let tab_width = if raw_width < TAB_MIN {
-        raw_width.max(28.0)
+        raw_width.max(TAB_HARD_MIN)
     } else {
         raw_width.clamp(TAB_MIN, TAB_MAX)
     };
@@ -57,7 +58,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
             let resp = ui.add_sized(
                 egui::vec2(edit_w, 28.0),
                 egui::TextEdit::singleline(&mut buf)
-                    .id(ui.id().with("rename"))
+                    .id(ui.id().with(("rename", id)))
                     .font(egui::FontId::proportional(app.ui_store.theme.text_md))
                     .margin(egui::vec2(6.0, 4.0)),
             );

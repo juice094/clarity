@@ -23,7 +23,8 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
         "Subagent Output".to_string()
     };
 
-    egui::Window::new(title)
+    egui::Window::new(&title)
+        .id(egui::Id::new(("subagent_view", &agent_id)))
         .collapsible(false)
         .resizable(true)
         .min_width(480.0)

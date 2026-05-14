@@ -45,6 +45,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     // ── Top toolbar: collapse + global controls ──
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
+                        let toolbar_avail = ui.available_width();
+                        let compact = toolbar_avail < 200.0;
+
                         // Collapse sidebar (left)
                         if ui
                             .add(
@@ -219,42 +222,46 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 app.view_state.open_modal(clarity_core::ui::ModalType::Skill);
                             }
 
-                            // Locale toggle
-                            let locale_label = match app.ui_store.locale {
-                                crate::i18n::Locale::EnUS => "EN",
-                                crate::i18n::Locale::ZhCN => "中",
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(locale_label)
-                                            .size(app.ui_store.theme.text_xs)
-                                            .color(app.ui_store.theme.text_dim)
-                                            .monospace(),
-                                    )
-                                    .fill(egui::Color32::TRANSPARENT)
-                                    .corner_radius(
-                                        egui::CornerRadius::same(
-                                            app.ui_store.theme.radius_sm as u8,
+                            // Locale toggle (hidden in compact mode)
+                            if !compact {
+                                let locale_label = match app.ui_store.locale {
+                                    crate::i18n::Locale::EnUS => "EN",
+                                    crate::i18n::Locale::ZhCN => "中",
+                                };
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new(locale_label)
+                                                .size(app.ui_store.theme.text_xs)
+                                                .color(app.ui_store.theme.text_dim)
+                                                .monospace(),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .corner_radius(
+                                            egui::CornerRadius::same(
+                                                app.ui_store.theme.radius_sm as u8,
+                                            ),
                                         ),
-                                    ),
-                                )
-                                .clicked()
+                                    )
+                                    .clicked()
                             {
                                 app.ui_store.locale = match app.ui_store.locale {
                                     crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
                                     crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
                                 };
                             }
+                            }
 
-                            // Token usage (compact)
-                            if let Some((_, _, t)) = app.chat_store.last_usage {
-                                ui.label(
-                                    egui::RichText::new(format!("{}∑", format_thousands(t)))
-                                        .size(app.ui_store.theme.text_xs)
-                                        .color(app.ui_store.theme.text_dim)
-                                        .monospace(),
-                                );
+                            // Token usage (hidden in compact mode)
+                            if !compact {
+                                if let Some((_, _, t)) = app.chat_store.last_usage {
+                                    ui.label(
+                                        egui::RichText::new(format!("{}∑", format_thousands(t)))
+                                            .size(app.ui_store.theme.text_xs)
+                                            .color(app.ui_store.theme.text_dim)
+                                            .monospace(),
+                                    );
+                                }
                             }
                         });
                     });
