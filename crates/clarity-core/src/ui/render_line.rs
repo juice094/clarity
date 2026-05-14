@@ -400,6 +400,106 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
 }
 
 // ============================================================================
+// Virtual scrolling + keyboard navigation (frontend-agnostic)
+// ============================================================================
+
+/// Viewport geometry for virtual scrolling.
+///
+/// Frontends supply `scroll_offset` (pixels from top) and `viewport_height`
+/// (pixels visible) each frame; `line_height` is a theme token (e.g. 18 px).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineViewport {
+    pub line_height: f32,
+    pub scroll_offset: f32,
+    pub viewport_height: f32,
+}
+
+impl LineViewport {
+    pub fn new(line_height: f32, scroll_offset: f32, viewport_height: f32) -> Self {
+        Self {
+            line_height,
+            scroll_offset,
+            viewport_height,
+        }
+    }
+
+    /// Returns the half-open index range `[start, end)` of lines that are
+    /// (partially or fully) visible given the current scroll state.
+    ///
+    /// The range is clamped to `[0, total_lines)`.
+    pub fn visible_range(&self, total_lines: usize) -> (usize, usize) {
+        if total_lines == 0 {
+            return (0, 0);
+        }
+        let start = (self.scroll_offset / self.line_height).floor() as usize;
+        let visible_count = (self.viewport_height / self.line_height).ceil() as usize;
+        // +1 for partial line at bottom, +1 overscan to reduce pop-in.
+        let end = (start + visible_count + 2).min(total_lines);
+        (start.min(total_lines), end)
+    }
+
+    /// Pixel Y coordinate of the top of `line_index` relative to the scroll origin.
+    pub fn y_for_line(&self, line_index: usize) -> f32 {
+        line_index as f32 * self.line_height
+    }
+}
+
+/// Keyboard-navigable cursor over a `Vec<RenderLine>`.
+///
+/// Owned by the frontend (egui / TUI) and updated in response to `KeyEvent`s
+/// resolved through `ShortcutRegistry` (ADR-013).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineCursor {
+    /// `None` = no line selected (navigation dormant).
+    pub selected: Option<usize>,
+    pub total: usize,
+}
+
+impl LineCursor {
+    pub fn new(total: usize) -> Self {
+        Self { selected: None, total }
+    }
+
+    /// Move down one line (`j`).
+    pub fn move_down(&mut self) {
+        self.selected = Some(self.selected.map_or(0, |s| (s + 1).min(self.total.saturating_sub(1))));
+    }
+
+    /// Move up one line (`k`).
+    pub fn move_up(&mut self) {
+        self.selected = Some(self.selected.map_or(0, |s| s.saturating_sub(1)));
+    }
+
+    /// Jump to top (`g` / `gg`).
+    pub fn move_top(&mut self) {
+        self.selected = Some(0);
+    }
+
+    /// Jump to bottom (`G`).
+    pub fn move_bottom(&mut self) {
+        self.selected = Some(self.total.saturating_sub(1));
+    }
+
+    /// Activate the current line (`Enter`).
+    /// Returns `Some(line_index)` if a line is selected, `None` otherwise.
+    pub fn activate(&self) -> Option<usize> {
+        self.selected
+    }
+
+    /// Clear selection (`Esc`).
+    pub fn clear(&mut self) {
+        self.selected = None;
+    }
+
+    /// Ensure the selected index is within bounds after the line list changes.
+    pub fn clamp(&mut self) {
+        if let Some(s) = self.selected {
+            self.selected = Some(s.min(self.total.saturating_sub(1)));
+        }
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -597,5 +697,111 @@ Final words."#;
         let s2 = Span::styled("bold", SpanStyle::Bold);
         assert_eq!(s2.text, "bold");
         assert_eq!(s2.style, SpanStyle::Bold);
+    }
+
+    // ── Virtual scrolling ──
+
+    #[test]
+    fn viewport_visible_range_basic() {
+        let vp = LineViewport::new(20.0, 0.0, 100.0);
+        assert_eq!(vp.visible_range(10), (0, 7)); // 100/20=5 + 2 overscan
+    }
+
+    #[test]
+    fn viewport_visible_range_scrolled() {
+        let vp = LineViewport::new(20.0, 150.0, 100.0);
+        // scroll_offset 150 / line_height 20 = 7.5 → start 7
+        assert_eq!(vp.visible_range(20), (7, 14));
+    }
+
+    #[test]
+    fn viewport_visible_range_clamped_at_end() {
+        let vp = LineViewport::new(20.0, 500.0, 100.0);
+        assert_eq!(vp.visible_range(10), (10, 10)); // empty, clamped
+    }
+
+    #[test]
+    fn viewport_visible_range_empty_list() {
+        let vp = LineViewport::new(20.0, 0.0, 100.0);
+        assert_eq!(vp.visible_range(0), (0, 0));
+    }
+
+    #[test]
+    fn viewport_y_for_line() {
+        let vp = LineViewport::new(20.0, 0.0, 100.0);
+        assert_eq!(vp.y_for_line(0), 0.0);
+        assert_eq!(vp.y_for_line(5), 100.0);
+    }
+
+    // ── Line cursor ──
+
+    #[test]
+    fn cursor_starts_unselected() {
+        let c = LineCursor::new(100);
+        assert_eq!(c.selected, None);
+    }
+
+    #[test]
+    fn cursor_move_down_from_none_selects_first() {
+        let mut c = LineCursor::new(100);
+        c.move_down();
+        assert_eq!(c.selected, Some(0));
+    }
+
+    #[test]
+    fn cursor_move_down_stops_at_bottom() {
+        let mut c = LineCursor::new(5);
+        c.move_bottom();
+        c.move_down();
+        assert_eq!(c.selected, Some(4));
+    }
+
+    #[test]
+    fn cursor_move_up_from_none_selects_first() {
+        let mut c = LineCursor::new(100);
+        c.move_up();
+        assert_eq!(c.selected, Some(0));
+    }
+
+    #[test]
+    fn cursor_move_up_stops_at_top() {
+        let mut c = LineCursor::new(5);
+        c.move_top();
+        c.move_up();
+        assert_eq!(c.selected, Some(0));
+    }
+
+    #[test]
+    fn cursor_move_top_and_bottom() {
+        let mut c = LineCursor::new(100);
+        c.move_bottom();
+        assert_eq!(c.selected, Some(99));
+        c.move_top();
+        assert_eq!(c.selected, Some(0));
+    }
+
+    #[test]
+    fn cursor_activate_returns_selected() {
+        let mut c = LineCursor::new(100);
+        assert_eq!(c.activate(), None);
+        c.move_down();
+        assert_eq!(c.activate(), Some(0));
+    }
+
+    #[test]
+    fn cursor_clear_resets() {
+        let mut c = LineCursor::new(100);
+        c.move_bottom();
+        c.clear();
+        assert_eq!(c.selected, None);
+    }
+
+    #[test]
+    fn cursor_clamp_when_list_shrinks() {
+        let mut c = LineCursor::new(100);
+        c.move_bottom(); // 99
+        c.total = 5;
+        c.clamp();
+        assert_eq!(c.selected, Some(4));
     }
 }
