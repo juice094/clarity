@@ -4,9 +4,11 @@
 //! 命令体系和面板语义。任何前端特有的渲染细节不应出现在此模块中。
 
 pub mod commands;
+pub mod shortcut;
 pub mod view_state;
 
 pub use commands::{ids, CommandItem, CommandScope};
+pub use shortcut::{KeyEvent, ShortcutBinding, ShortcutRegistry};
 pub use view_state::{
     AppView, FocusScope, ModalType, PanelExpansion, PanelKind, SidePanel, TurnState, ViewState,
 };

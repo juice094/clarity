@@ -321,6 +321,52 @@ pub enum FocusScope {
     Os,
 }
 
+impl FocusScope {
+    /// Specificity rank for conflict resolution (higher = more specific).
+    ///
+    /// Hierarchy per ADR-013: Widget(5) > Panel(4) > Modal(3) > App(2) > Os(1).
+    pub fn specificity(&self) -> u8 {
+        match self {
+            FocusScope::Widget => 5,
+            FocusScope::Panel(_) => 4,
+            FocusScope::Modal(_) => 3,
+            FocusScope::App => 2,
+            FocusScope::Os => 1,
+        }
+    }
+
+    /// Returns true if a binding defined for `self` may fire when the current
+    /// keyboard focus is `focus`.
+    ///
+    /// Rules per ADR-013 §7 Conflict Resolution:
+    /// - Exact match always works.
+    /// - Os bindings fire only at Os focus.
+    /// - App bindings fire at App focus and any more-specific focus.
+    /// - Modal bindings fire at Modal focus and Widget focus inside a modal.
+    /// - Panel bindings fire at Panel focus and Widget focus inside a panel.
+    /// - Widget bindings fire only at Widget focus.
+    pub fn is_compatible_with(&self, focus: &FocusScope) -> bool {
+        use FocusScope::*;
+        match (self, focus) {
+            // Exact match (includes Panel/Modal variant equality).
+            (a, b) if a == b => true,
+            // Os-level bindings are exclusive to Os focus.
+            (Os, Os) => true,
+            // App-level global shortcuts available everywhere except Os-only.
+            (App, App | Modal(_) | Panel(_) | Widget) => true,
+            // Modal shortcuts available inside the *same* modal type or its child widgets.
+            (Modal(mt1), Modal(mt2)) => mt1 == mt2,
+            (Modal(_), Widget) => true, // skeleton: assume widget is inside the modal
+            // Panel shortcuts available inside the *same* panel kind or its child widgets.
+            (Panel(pk1), Panel(pk2)) => pk1 == pk2,
+            (Panel(_), Widget) => true, // skeleton: assume widget is inside the panel
+            // Widget shortcuts are widget-exclusive.
+            (Widget, Widget) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Unified view state — single source of truth shared by GUI and TUI.
 ///
 /// ## Composition rules
@@ -819,5 +865,153 @@ mod tests {
             ModalType::from_legacy_skill_mcp(true, true),
             Some(ModalType::Skill)
         );
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // P1.5.7 — Illegal-state reachability tests
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// Exhaustive coverage of all 16 input combinations to `TurnState::from_legacy`.
+    /// Every tuple maps deterministically to a single variant via the priority ladder.
+    #[test]
+    fn turn_state_from_legacy_exhaustive() {
+        let cases: [((bool, bool, bool, bool), TurnState); 16] = [
+            // 0 true → Idle
+            ((false, false, false, false), TurnState::Idle),
+            // 1 true → direct mapping
+            ((true, false, false, false), TurnState::Loading),
+            ((false, true, false, false), TurnState::Compacting),
+            ((false, false, true, false), TurnState::Stopping),
+            ((false, false, false, true), TurnState::Restoring),
+            // 2 true → priority resolution
+            ((true, true, false, false), TurnState::Compacting),   // compacting > loading
+            ((true, false, true, false), TurnState::Stopping),     // stopping > loading
+            ((true, false, false, true), TurnState::Loading),      // loading > restoring
+            ((false, true, true, false), TurnState::Stopping),     // stopping > compacting
+            ((false, true, false, true), TurnState::Compacting),   // compacting > restoring
+            ((false, false, true, true), TurnState::Stopping),     // stopping > restoring
+            // 3 true → top priority wins
+            ((true, true, true, false), TurnState::Stopping),      // stopping > compacting > loading
+            ((true, true, false, true), TurnState::Compacting),    // compacting > loading > restoring
+            ((true, false, true, true), TurnState::Stopping),      // stopping > loading > restoring
+            ((false, true, true, true), TurnState::Stopping),      // stopping > compacting > restoring
+            // 4 true → stopping highest
+            ((true, true, true, true), TurnState::Stopping),
+        ];
+
+        for ((loading, compacting, stopping, restoring), expected) in cases {
+            let actual = TurnState::from_legacy(loading, compacting, stopping, restoring);
+            assert_eq!(
+                actual, expected,
+                "from_legacy({loading}, {compacting}, {stopping}, {restoring}) expected {expected:?} but got {actual:?}"
+            );
+        }
+    }
+
+    /// TurnState is an enum — by Rust type-system construction it is impossible
+    /// to hold two variants simultaneously. This test documents that invariant.
+    #[test]
+    fn turn_state_is_mutually_exclusive_by_type() {
+        // If TurnState were a struct with boolean flags, this would be a real risk.
+        // Because it is an enum, the compiler rejects:
+        //   let t = TurnState::Loading;
+        //   t = TurnState::Compacting; // overwrite, not coexist
+        // This test exists as executable documentation of the type-level guarantee.
+        let states = [
+            TurnState::Idle,
+            TurnState::Loading,
+            TurnState::Compacting,
+            TurnState::Stopping,
+            TurnState::Restoring,
+        ];
+        // All 5 variants are pairwise distinct.
+        for (i, a) in states.iter().enumerate() {
+            for (j, b) in states.iter().enumerate() {
+                if i == j {
+                    assert_eq!(a, b);
+                } else {
+                    assert_ne!(a, b, "TurnState variants must be mutually exclusive");
+                }
+            }
+        }
+    }
+
+    /// ViewState operations must maintain structural invariants:
+    /// - at most one modal
+    /// - at most one left panel
+    /// - at most one right panel
+    /// - turn is always exactly one variant
+    #[test]
+    fn view_state_structural_invariants() {
+        let mut vs = ViewState::new();
+
+        // Invariant: modal is Option — open overwrites, never stacks.
+        vs.open_modal(ModalType::Approval);
+        assert_eq!(vs.modal, Some(ModalType::Approval));
+        vs.open_modal(ModalType::Skill);
+        assert_eq!(vs.modal, Some(ModalType::Skill), "Modal must be single-valued; opening a second overwrites");
+
+        // Invariant: right panel is Option — toggle replaces.
+        vs.toggle_right(SidePanel::Task);
+        assert_eq!(vs.right, Some(SidePanel::Task));
+        vs.toggle_right(SidePanel::Team);
+        assert_eq!(vs.right, Some(SidePanel::Team), "Right panel must be single-valued");
+
+        // Invariant: left panel is Option — toggle replaces.
+        vs.toggle_left(SidePanel::Sidebar);
+        assert_eq!(vs.left, Some(SidePanel::Sidebar));
+        vs.toggle_left(SidePanel::Workspace);
+        assert_eq!(vs.left, Some(SidePanel::Workspace), "Left panel must be single-valued");
+
+        // Invariant: turn is never ambiguous.
+        vs.turn = TurnState::Loading;
+        assert!(vs.is_turn_active());
+        vs.turn = TurnState::Idle;
+        assert!(!vs.is_turn_active());
+        // It is impossible for vs.turn to simultaneously be Loading and Compacting
+        // because TurnState is an enum.
+    }
+
+    /// Illegal focus transitions: when a modal is open, focus_panel is a no-op.
+    /// When modal closes, focus returns to App (caller must restore specific panel).
+    #[test]
+    fn focus_modal_blocks_panel_focus_invariant() {
+        let mut vs = ViewState::new();
+
+        vs.focus_panel(PanelKind::ChatStream);
+        assert_eq!(vs.focus, FocusScope::Panel(PanelKind::ChatStream));
+
+        vs.open_modal(ModalType::Approval);
+        assert!(matches!(vs.focus, FocusScope::Modal(_)));
+
+        // Attempting to focus a panel while modal is open must not change focus.
+        vs.focus_panel(PanelKind::RightWorkspace);
+        assert_eq!(vs.focus, FocusScope::Modal(ModalType::Approval));
+
+        vs.close_modal();
+        assert_eq!(vs.focus, FocusScope::App);
+    }
+
+    /// Illegal side-panel placement: SidePanel variants are not typed by left/right
+    /// at the enum level, but the ViewState API (toggle_left / toggle_right) enforces
+    /// that at most one panel occupies each physical side.
+    #[test]
+    fn side_panel_physical_exclusivity() {
+        let mut vs = ViewState::new();
+
+        // Left side can hold any SidePanel variant, but only one at a time.
+        vs.toggle_left(SidePanel::Sidebar);
+        vs.toggle_left(SidePanel::Workspace);
+        assert_eq!(vs.left, Some(SidePanel::Workspace));
+        assert!(vs.right.is_none());
+
+        // Right side is independent.
+        vs.toggle_right(SidePanel::Task);
+        assert_eq!(vs.right, Some(SidePanel::Task));
+
+        // Clearing left does not affect right.
+        vs.toggle_left(SidePanel::Workspace); // toggles off
+        assert!(vs.left.is_none());
+        assert_eq!(vs.right, Some(SidePanel::Task));
     }
 }
