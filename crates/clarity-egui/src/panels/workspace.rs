@@ -29,11 +29,11 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
 
     egui::SidePanel::right("workspace_panel")
         .default_width(280.0)
-        .min_width(200.0)
-        .max_width(480.0)
+        .min_width(180.0)
+        .max_width(400.0)
         .resizable(true)
         .frame(
-            egui::Frame::new()
+            egui::Frame::side_top_panel(&ctx.style())
                 .fill(bg)
                 .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
@@ -157,25 +157,17 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
 
     // ── Drawer header ──
     ui.horizontal(|ui| {
-        if is_web {
-            let (globe_rect, _) =
-                ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
-            if ui.is_rect_visible(globe_rect) {
-                crate::ui::icons::paint_globe(
-                    &ui.painter_at(globe_rect),
-                    globe_rect.center(),
-                    theme.text,
-                );
-            }
-            ui.add_space(4.0);
+        let icon = if is_web {
+            crate::theme::ICON_GLOBE
         } else {
-            ui.label(
-                egui::RichText::new(crate::theme::ICON_PAPERCLIP)
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.text),
-            );
-            ui.add_space(4.0);
-        }
+            crate::theme::ICON_FILE
+        };
+        ui.label(
+            egui::RichText::new(icon)
+                .font(theme.font_icon(theme.text_sm))
+                .color(theme.text),
+        );
+        ui.add_space(4.0);
         ui.label(
             egui::RichText::new(&title)
                 .size(theme.text_sm)

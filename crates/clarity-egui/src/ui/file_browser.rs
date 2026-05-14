@@ -128,48 +128,16 @@ pub fn render_file_tree(
                 is_selected,
                 theme,
                 |ui| {
-                    if is_selected {
-                        let accent_bar = egui::Rect::from_min_max(
-                            egui::pos2(ui.min_rect().min.x, ui.min_rect().min.y + 2.0),
-                            egui::pos2(ui.min_rect().min.x + 3.0, ui.min_rect().max.y - 2.0),
-                        );
-                        ui.painter().rect_filled(
-                            accent_bar,
-                            egui::CornerRadius::same(2),
-                            theme.accent,
-                        );
-                    }
                     ui.horizontal(|ui| {
                         ui.add_space(indent);
 
-                        // Icon (decorative painter — allowed per RULE 2)
+                        // Icon: Lucide File (unified with global icon system)
                         let icon_size = if compact { 10.0 } else { 14.0 };
-                        let icon_resp = ui.allocate_exact_size(
-                            egui::vec2(icon_size, icon_size),
-                            egui::Sense::hover(),
+                        ui.label(
+                            egui::RichText::new(crate::theme::ICON_FILE)
+                                .font(theme.font_icon(icon_size))
+                                .color(text_color),
                         );
-                        let icon_rect = icon_resp.1.rect;
-                        if ui.is_rect_visible(icon_rect) {
-                            let painter = ui.painter_at(icon_rect);
-                            crate::ui::icons::paint_file(&painter, icon_rect, text_color);
-                            if let Some(ext) = full_path.extension().and_then(|e| e.to_str()) {
-                                let badge = match ext {
-                                    "rs" => Some("R"),
-                                    "md" => Some("M"),
-                                    "toml" => Some("≡"),
-                                    _ => None,
-                                };
-                                if let Some(b) = badge {
-                                    crate::ui::icons::paint_file_badge(
-                                        &painter,
-                                        icon_rect,
-                                        b,
-                                        text_color,
-                                        if compact { 5.0 } else { 6.0 },
-                                    );
-                                }
-                            }
-                        }
 
                         ui.add_space(4.0);
 

@@ -6,7 +6,7 @@ use clarity_core::background::TaskStatus;
 pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::right("task_panel")
         .default_width(280.0)
-        .min_width(200.0)
+        .min_width(180.0)
         .max_width(400.0)
         .resizable(true)
         .frame(

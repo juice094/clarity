@@ -11,7 +11,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
 
     egui::SidePanel::right("dashboard_panel")
         .default_width(280.0)
-        .min_width(240.0)
+        .min_width(180.0)
         .max_width(400.0)
         .resizable(true)
         .frame(

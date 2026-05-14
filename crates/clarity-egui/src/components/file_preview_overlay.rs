@@ -99,9 +99,9 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     let icon = if is_web {
-                                        "🌐"
+                                        crate::theme::ICON_GLOBE
                                     } else {
-                                        crate::theme::ICON_PAPERCLIP
+                                        crate::theme::ICON_FILE
                                     };
                                     ui.label(
                                         egui::RichText::new(icon)
@@ -135,7 +135,11 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                             }
 
                                             // Fullscreen toggle
-                                            let fs_icon = if is_fullscreen { "⤡" } else { "⤢" };
+                                            let fs_icon = if is_fullscreen {
+                                                crate::theme::ICON_MINIMIZE
+                                            } else {
+                                                crate::theme::ICON_MAXIMIZE
+                                            };
                                             if ui
                                                 .add(
                                                     egui::Button::new(

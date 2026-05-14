@@ -32,6 +32,10 @@ pub const ICON_CARET_RIGHT: &str = "\u{e06f}";// Lucide: ChevronRight
 pub const ICON_MINUS: &str = "\u{e11c}";      // Lucide: Minus
 pub const ICON_SQUARE: &str = "\u{e167}";     // Lucide: Square
 pub const ICON_CIRCLE: &str = "\u{e076}";     // Lucide: Circle
+pub const ICON_FILE: &str = "\u{e0d9}";       // Lucide: File
+pub const ICON_GLOBE: &str = "\u{e0e8}";      // Lucide: Globe
+pub const ICON_MAXIMIZE: &str = "\u{e112}";   // Lucide: Maximize
+pub const ICON_MINIMIZE: &str = "\u{e11a}";   // Lucide: Minimize
 
 // ============================================================================
 // Design Token System — Phase A Foundation
