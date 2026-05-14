@@ -238,10 +238,13 @@ impl App {
                                     }
                                     ui.add_space(8.0);
                                 }
-                                ui.label(
-                                    egui::RichText::new("Clarity")
-                                        .size(theme.text_base)
-                                        .color(theme.text_strong),
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new("Clarity")
+                                            .size(theme.text_base)
+                                            .color(theme.text_strong),
+                                    )
+                                    .sense(egui::Sense::empty()),
                                 );
                             });
                         });
@@ -259,10 +262,13 @@ impl App {
                                     self.settings_store.settings_edit.model.trim();
                                 if !model_name.is_empty() {
                                     ui.add_space(8.0);
-                                    ui.label(
-                                        egui::RichText::new(model_name)
-                                            .size(theme.text_xs)
-                                            .color(theme.text_muted),
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(model_name)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_muted),
+                                        )
+                                        .sense(egui::Sense::empty()),
                                     );
                                 }
                             });
