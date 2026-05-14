@@ -40,17 +40,22 @@ pub fn tab_button(
             ui.add_space(4.0);
 
             // Label: let egui handle truncation (stable, no threshold jitter).
+            // Sense::empty() prevents the label hitbox from leaking outside the tab
+            // and blocking adjacent widgets (official egui pattern for non-interactive text).
             let spacing = ui.spacing().item_spacing.x;
-            let label_w = (ui.available_width() - 18.0 - spacing - 4.0).max(10.0);
-            ui.add_sized(
-                egui::vec2(label_w, theme.size_tab_h),
-                egui::Label::new(
-                    egui::RichText::new(title)
-                        .size(theme.text_md)
-                        .color(text_color),
-                )
-                .truncate(),
-            );
+            let label_w = (ui.available_width() - 18.0 - spacing - 4.0).max(0.0);
+            if label_w > 0.0 {
+                ui.add_sized(
+                    egui::vec2(label_w, theme.size_tab_h),
+                    egui::Label::new(
+                        egui::RichText::new(title)
+                            .size(theme.text_md)
+                            .color(text_color),
+                    )
+                    .truncate()
+                    .sense(egui::Sense::empty()),
+                );
+            }
 
             // Close button: always present in layout, visible only on hover.
             let close_visible = tab_hovered;

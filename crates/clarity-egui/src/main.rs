@@ -258,18 +258,25 @@ impl App {
                                 crate::panels::chat::header::render_session_tabs(self, ui);
 
                                 // Model context indicator (Pretext UI mid-zone)
+                                // 仅当剩余空间充足时才渲染，防止与 RIGHT zone 按钮溢出重叠。
                                 let model_name =
                                     self.settings_store.settings_edit.model.trim();
                                 if !model_name.is_empty() {
-                                    ui.add_space(8.0);
-                                    ui.add(
-                                        egui::Label::new(
-                                            egui::RichText::new(model_name)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_muted),
-                                        )
-                                        .sense(egui::Sense::empty()),
-                                    );
+                                    let remaining = ui.available_width();
+                                    if remaining >= 60.0 {
+                                        ui.add_space(8.0);
+                                        let label_w = remaining.min(120.0);
+                                        ui.add_sized(
+                                            egui::vec2(label_w, theme.size_titlebar),
+                                            egui::Label::new(
+                                                egui::RichText::new(model_name)
+                                                    .size(theme.text_xs)
+                                                    .color(theme.text_muted),
+                                            )
+                                            .truncate()
+                                            .sense(egui::Sense::empty()),
+                                        );
+                                    }
                                 }
                             });
                         });
