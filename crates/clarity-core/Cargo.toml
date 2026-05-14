@@ -41,6 +41,8 @@ sha2 = "0.10"
 base64 = "0.22"
 parking_lot = "0.12"
 notify = "6"
+pulldown-cmark = "0.13"
+smol_str = { version = "0.3", features = ["serde"] }
 
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }
