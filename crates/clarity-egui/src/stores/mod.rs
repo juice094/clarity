@@ -250,22 +250,9 @@ pub struct UiStore {
     pub line_cursor_selected: Option<usize>,
     /// S7 Phase 2D: total flat line count last frame (used to clamp cursor).
     pub line_cursor_total_lines: usize,
-    /// Input box visual style. Gui = current rounded card; Tui = double-line + ❯ prompt.
-    pub input_style: InputStyle,
-}
-
-/// Visual style for the chat input bar.
-///
-/// `Tui` style is keyboard-first: no send button, no card background, just
-/// two thin horizontal rules and a `❯` prompt. Inspired by Claude Code's
-/// terminal UI.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum InputStyle {
-    /// Rounded card with explicit send button (current default).
-    #[default]
-    Gui,
-    /// Minimal double-line + ❯ prompt, fully keyboard-controlled.
-    Tui,
+    /// Measured width of the titlebar right zone (window controls + capsules).
+    /// Updated each frame by `render_titlebar_right` to eliminate hard-coded magic numbers.
+    pub titlebar_right_width: f32,
 }
 
 // ============================================================================

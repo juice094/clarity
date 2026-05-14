@@ -9,7 +9,6 @@ use eframe::egui;
 pub const ICON_SEND: &str = "\u{e152}";       // Lucide: Send
 pub const ICON_SETTINGS: &str = "\u{e154}";   // Lucide: Settings
 pub const ICON_PLAY: &str = "\u{e13c}";       // Lucide: Play
-pub const ICON_STOP: &str = "\u{e083}";       // Lucide: CircleStop (circle with square)
 pub const ICON_HOURGLASS: &str = "\u{e296}";  // Lucide: Hourglass
 pub const ICON_CHECK: &str = "\u{e06c}";      // Lucide: Check
 pub const ICON_X: &str = "\u{e1b2}";          // Lucide: X
@@ -186,10 +185,6 @@ pub struct Theme {
     pub palette_max_h: f32,
     /// Titlebar LEFT zone width (sidebar toggle when collapsed + brand).
     pub titlebar_left_w: f32,
-    /// Titlebar RIGHT zone width when status labels are visible (>= breakpoint_compact).
-    pub titlebar_right_w_full: f32,
-    /// Titlebar RIGHT zone width when status labels are hidden (< breakpoint_compact).
-    pub titlebar_right_w_compact: f32,
 
     // --- Responsive breakpoints ---
     pub breakpoint_compact: f32,
@@ -360,8 +355,6 @@ impl Theme {
             palette_w: 520.0,
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
-            titlebar_right_w_full: 450.0,
-            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints
             breakpoint_compact: 768.0,
@@ -524,8 +517,6 @@ impl Theme {
             palette_w: 520.0,
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
-            titlebar_right_w_full: 450.0,
-            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,
@@ -675,8 +666,6 @@ impl Theme {
             palette_w: 520.0,
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
-            titlebar_right_w_full: 450.0,
-            titlebar_right_w_compact: 280.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,

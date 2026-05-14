@@ -18,10 +18,16 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let frame_fill = app.ui_store.theme.bg;
-    egui::SidePanel::left("sidebar")
-        .default_width(app.ui_store.theme.size_sidebar)
-        .min_width(220.0)
-        .max_width(360.0)
+    let default_w = app
+        .settings_store
+        .settings_edit
+        .sidebar_width
+        .unwrap_or(app.ui_store.theme.size_sidebar);
+
+    let panel = egui::SidePanel::left("sidebar")
+        .default_width(default_w)
+        .min_width(180.0)
+        .max_width(400.0)
         .resizable(true)
         .frame(
             egui::Frame::new()
@@ -500,4 +506,13 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     // Workspace has moved to the right-side panel (Sprint 34 refactor).
                 });
         });
+
+    let actual_w = panel.response.rect.width();
+    let stored_w = app.settings_store.settings_edit.sidebar_width.unwrap_or(0.0);
+    if (actual_w - stored_w).abs() > 1.0 {
+        app.settings_store.settings_edit.sidebar_width = Some(actual_w);
+        if ctx.input(|i| i.pointer.any_released()) {
+            let _ = app.settings_store.settings_edit.save();
+        }
+    }
 }

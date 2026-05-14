@@ -12,39 +12,21 @@ pub use self::message_list::render_message_list;
 /// Must be called BEFORE CentralPanel so egui reserves space correctly.
 pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
     let theme = &app.ui_store.theme;
-    let max_w = app.ui_store.content_max_width;
     egui::TopBottomPanel::bottom("input_panel")
         .max_height(200.0)
         .frame(
             egui::Frame::new()
                 .fill(theme.bg)
-                .inner_margin(egui::Margin::symmetric(
-                    theme.space_20 as i8,
-                    theme.space_12 as i8,
-                )),
+                .inner_margin(egui::Margin::same(0)),
         )
         .show(ctx, |ui| {
-            let available = ui.available_width();
-            let content_w = available.min(max_w);
-            let side_pad = ((available - content_w) / 2.0).max(0.0);
-            let rect = ui.available_rect_before_wrap();
-            let centered_rect = egui::Rect::from_min_max(
-                egui::pos2(rect.min.x + side_pad, rect.min.y),
-                egui::pos2(rect.min.x + side_pad + content_w, rect.max.y),
-            );
-            ui.allocate_new_ui(
-                egui::UiBuilder::new()
-                    .max_rect(centered_rect)
-                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
-                |ui| {
-                    render_input(app, ui);
-                },
-            );
+            with_centered_content(ui, app.ui_store.content_max_width, |ui| {
+                render_input(app, ui);
+            });
         });
 }
 
 pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
-    let max_w = app.ui_store.content_max_width;
     egui::CentralPanel::default()
         .frame(
             egui::Frame::central_panel(&ctx.style())
@@ -58,26 +40,29 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             // Hard minimum to prevent layout collapse when side panels are wide.
             ui.set_min_size(egui::vec2(360.0, 200.0));
             // Header uses the full CentralPanel width (not constrained by content_max_width).
-            // This gives the tab bar maximum breathing room; overflow is handled by
-            // ScrollArea::horizontal inside render_header.
             render_header(app, ui);
 
-            let available = ui.available_width();
-            let content_w = available.min(max_w);
-            let side_pad = ((available - content_w) / 2.0).max(0.0);
-            let rect = ui.available_rect_before_wrap();
-            let centered_rect = egui::Rect::from_min_max(
-                egui::pos2(rect.min.x + side_pad, rect.min.y),
-                egui::pos2(rect.min.x + side_pad + content_w, rect.max.y),
-            );
-            ui.allocate_new_ui(
-                egui::UiBuilder::new()
-                    .max_rect(centered_rect)
-                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
-                |ui| {
-                    // Message list owns the single ScrollArea
-                    render_message_list(app, ui);
-                },
-            );
+            with_centered_content(ui, app.ui_store.content_max_width, |ui| {
+                render_message_list(app, ui);
+            });
         });
+}
+
+/// Constrain content to `max_w` centered inside the available area.
+/// Eliminates duplicated side-pad math across chat panels.
+fn with_centered_content(ui: &mut egui::Ui, max_w: f32, add_contents: impl FnOnce(&mut egui::Ui)) {
+    let available = ui.available_width();
+    let content_w = available.min(max_w);
+    let side_pad = ((available - content_w) / 2.0).max(0.0);
+    let rect = ui.available_rect_before_wrap();
+    let centered_rect = egui::Rect::from_min_max(
+        egui::pos2(rect.min.x + side_pad, rect.min.y),
+        egui::pos2(rect.min.x + side_pad + content_w, rect.max.y),
+    );
+    ui.allocate_new_ui(
+        egui::UiBuilder::new()
+            .max_rect(centered_rect)
+            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+        add_contents,
+    );
 }

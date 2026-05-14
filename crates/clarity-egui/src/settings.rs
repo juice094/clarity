@@ -43,7 +43,7 @@ pub struct GuiSettings {
     #[serde(default)]
     pub content_width: Option<f32>,
     #[serde(default)]
-    pub input_style: Option<String>,
+    pub sidebar_width: Option<f32>,
     #[serde(default)]
     pub web_tabs: Vec<WebTab>,
     #[serde(skip)]
@@ -213,7 +213,7 @@ impl Default for GuiSettings {
             active_profile: None,
             font_scale: None,
             content_width: None,
-            input_style: Some("gui".into()),
+            sidebar_width: None,
             web_tabs: Vec::new(),
             profiles: HashMap::new(),
         }

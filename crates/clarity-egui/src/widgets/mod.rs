@@ -13,7 +13,7 @@ pub mod theme_card;
 pub mod toggle;
 pub mod window_control;
 
-pub use icon_button::icon_button;
+// pub use icon_button::icon_button; // unused — prefer icon_button_toolbar
 // pub use icon_button::icon_button_primary; // restored via git history if needed
 pub use icon_button::icon_button_toolbar;
 pub use interactive_row::interactive_row;

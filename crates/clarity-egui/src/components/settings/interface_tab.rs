@@ -189,54 +189,6 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             app.ui_store.locale = crate::i18n::Locale::ZhCN;
         }
     });
-    ui.add_space(theme.space_16);
-
-    // ── Input Style ──
-    ui.label(
-        egui::RichText::new(app.t("Input Style"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
-    ui.horizontal(|ui| {
-        let is_gui = matches!(app.ui_store.input_style, crate::stores::InputStyle::Gui);
-        let is_tui = matches!(app.ui_store.input_style, crate::stores::InputStyle::Tui);
-        if ui
-            .add(
-                egui::Button::new(egui::RichText::new("GUI").size(theme.text_sm))
-                    .fill(if is_gui { theme.accent } else { theme.surface })
-                    .stroke(if is_gui {
-                        egui::Stroke::NONE
-                    } else {
-                        egui::Stroke::new(1.0_f32, theme.border)
-                    })
-                    .corner_radius(theme.radius_sm as u8),
-            )
-            .clicked()
-        {
-            app.ui_store.input_style = crate::stores::InputStyle::Gui;
-            app.settings_store.settings_edit.input_style = Some("gui".into());
-            app.auto_save_settings();
-        }
-        if ui
-            .add(
-                egui::Button::new(egui::RichText::new("TUI").size(theme.text_sm))
-                    .fill(if is_tui { theme.accent } else { theme.surface })
-                    .stroke(if is_tui {
-                        egui::Stroke::NONE
-                    } else {
-                        egui::Stroke::new(1.0_f32, theme.border)
-                    })
-                    .corner_radius(theme.radius_sm as u8),
-            )
-            .clicked()
-        {
-            app.ui_store.input_style = crate::stores::InputStyle::Tui;
-            app.settings_store.settings_edit.input_style = Some("tui".into());
-            app.auto_save_settings();
-        }
-    });
 }
 
 fn set_theme(app: &mut App, name: &str) {

@@ -194,11 +194,7 @@ impl App {
                 // `ui.horizontal + estimated_right_w` heuristic (S2.P1.2 / P1.3).
                 let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
                 let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                let right_w = if show_status_labels {
-                    theme.titlebar_right_w_full
-                } else {
-                    theme.titlebar_right_w_compact
-                };
+                let right_w = self.ui_store.titlebar_right_width.max(180.0);
 
                 StripBuilder::new(ui)
                     .size(Size::exact(theme.titlebar_left_w))
@@ -442,7 +438,9 @@ impl App {
                     }
 
         // RTL layout: cursor.max.x moved leftward; consumed width = start - end.
-        start_max_x - ui.cursor().max.x
+        let measured = start_max_x - ui.cursor().max.x;
+        self.ui_store.titlebar_right_width = measured;
+        measured
     }
 
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
