@@ -38,7 +38,7 @@ pub fn window_control_button(
     let fill = if hovered {
         hover_fill
     } else {
-        theme.overlay_subtle
+        egui::Color32::TRANSPARENT
     };
     let color = if hovered {
         hover_icon_color

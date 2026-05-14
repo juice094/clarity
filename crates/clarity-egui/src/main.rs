@@ -333,7 +333,7 @@ impl App {
                         theme,
                         theme.overlay_medium,
                         theme.text,
-                        theme.text_dim,
+                        theme.text,
                     )
                     .on_hover_text(if is_maximized { "Restore window" } else { "Maximize window" });
                     if max_resp.clicked() {
@@ -347,7 +347,7 @@ impl App {
                         theme,
                         theme.overlay_medium,
                         theme.text,
-                        theme.text_dim,
+                        theme.text,
                     )
                     .on_hover_text("Minimize to taskbar");
                     if min_resp.clicked() {
@@ -365,7 +365,7 @@ impl App {
                             theme,
                             theme.overlay_medium,
                             theme.text,
-                            theme.text_dim,
+                            theme.text,
                         )
                         .on_hover_text("Open Settings (Esc to close)");
                         if settings_resp.clicked() {
