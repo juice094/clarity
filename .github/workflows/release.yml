@@ -64,13 +64,6 @@ jobs:
             exit 1
           }
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: clarity-windows
-          path: |
-            target/release/clarity-egui.exe
-
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
