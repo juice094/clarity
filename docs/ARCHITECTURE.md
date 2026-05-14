@@ -1,6 +1,7 @@
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-04-26
+> Code-accurate architecture reference | Last updated: 2026-05-14
+> Reflects S3 Phase 1.5 state-machine migration (ADR-011/012/013/014) + egui as sole UI stack
 
 ---
 
@@ -25,10 +26,12 @@
 │ Desktop  │  Web     │    TUI       │           Headless / CLI           │
 │ (GUI)    │  (IDE)   │  (Terminal)  │           (Scripts/CI)             │
 │          │          │              │                                    │
-│• Tauri 2 │• Axum   │• ratatui    │• `clarity-headless`               │
-│• React 18│• SSE/WS │• crossterm  │• `--prompt` / `--file`            │
-│• Single │• static │• commands   │• `--output json/markdown`         │
-│  process │  files  │  /plan etc.  │• `--provider local` (GGUF)        │
+│• egui   │• Axum   │• ratatui    │• `clarity-headless`               │
+│  0.31    │• SSE/WS │• crossterm  │• `--prompt` / `--file`            │
+│• eframe │• static │• commands   │• `--output json/markdown`         │
+│  0.31    │  files  │  /plan etc.  │• `--provider local` (GGUF)        │
+│• Tauri 2 │          │              │                                    │
+│  archived│          │              │                                    │
 └─────┬────┴────┬─────┴──────┬───────┴────────────┬───────────────────────┘
       │         │            │                    │
       └─────────┴────────────┴────────────────────┘
@@ -76,8 +79,8 @@
 | `pub fn` doc coverage | ~92% | ≥90% |
 | clippy warnings | 0 | 0 |
 | `unsafe` count | 1 | 0 new |
-| Rust tests passed | 515 / 0 failed | 100% |
-| Frontend tests passed | 30 / 0 failed | 100% |
+| Rust tests passed | 849 / 0 failed | 100% |
+| `clarity-egui` tests | 0 / 66 smoke | baseline pending Phase 2 |
 | `cargo doc` warnings | 0 | 0 |
 
 ### 2.1 Crate Dependency Graph
@@ -88,7 +91,7 @@ clarity-core
     └── clarity-wire   (SPMC event bus)
 
 clarity-gateway ──→ clarity-core
-clarity-tauri ────→ clarity-core + clarity-wire
+clarity-egui  ────→ clarity-core + clarity-wire
 clarity-tui ──────→ clarity-core + clarity-wire
 clarity-claw ─────→ clarity-core
 clarity-headless ─→ clarity-core
@@ -97,7 +100,7 @@ clarity-headless ─→ clarity-core
 **Reusability rating**:
 - `clarity-wire` / `clarity-memory`: **A+** — minimal deps, clean interfaces, ready for crates.io
 - `clarity-core`: **B** — strong trait boundaries (`LlmProvider`, `Tool`, `MemoryStore`) but 27k lines and high `unwrap()` density (~1,069) limit downstream reliability
-- Application crates (`gateway`, `tauri`, `tui`, `claw`, `headless`): **D** — thin shells, not intended as libraries
+- Application crates (`gateway`, `egui`, `tui`, `claw`, `headless`): **D** — thin shells, not intended as libraries
 
 **Invariant**: `clarity-core` has **zero** dependencies on any frontend or network crate.
 
@@ -109,7 +112,7 @@ clarity-headless ─→ clarity-core
 | `clarity-memory` | ~2,800 | 79+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
 | `clarity-wire` | ~400 | 8 | `WireMessage`, `WireBroadcaster` |
 | `clarity-gateway` | ~3,200 | 43+ | `AppState`, `PersistentSessionStore`, API handlers |
-| `clarity-tauri` | ~1,500 + frontend | — | Tauri commands, `LspManager`, `ComputerUse` bridge |
+| `clarity-egui` | ~4,200 | 66+ | egui app, `ViewState`, panels, widgets, theme, `RenderBlock`→`RenderLine` bridge |
 | `clarity-tui` | ~1,800 | 6+ | `App`, `ui()`, command registry |
 | `clarity-claw` | ~600 | 6+ | Tray monitor, `notify` watcher |
 | `clarity-headless` | ~380 | 10+ | CLI args, `build_provider()` |
@@ -203,6 +206,35 @@ Tasks survive TUI/Web closure. `claw` monitors `.clarity/tasks/` via `notify` + 
 - `SharedMemoryTicker` — Session-isolated memory ticker with compile callback
 - `MemoryCompiler` — Four-level pipeline: today → week → longterm → facts
 
+### 3.7 UI State Machine (`src/ui/view_state.rs`)
+
+> Introduced in S3 Phase 1.5. Replaces 33+ legacy boolean flags with typed enum aggregates.
+
+```rust
+pub struct ViewState {
+    pub main: AppView,                    // Chat | Dashboard
+    pub left: Option<SidePanel>,          // Sidebar | Workspace
+    pub right: Option<SidePanel>,         // Team | Task | Dashboard (mutually exclusive)
+    pub modal: Option<ModalType>,         // Approval | Snapshot | Skill | Mcp | ...
+    pub turn: TurnState,                  // Idle | Loading | Compacting | Stopping | Restoring
+    pub expansion: PanelExpansion,        // per-panel collapse states
+}
+```
+
+**Enums**:
+- `SidePanel` — 7 variants: `Sidebar`, `Workspace`, `Team`, `Task`, `Dashboard`, `PreviewDrawer`, `SubAgentProgress`
+- `ModalType` — 12 variants: `Approval`, `Snapshot`, `Login`, `TaskCreate`, `TaskView`, `TeamCreate`, `CronCreate`, `SubAgentView`, `AddProvider`, `KimiCodeLogin`, `Skill`, `Mcp`
+- `TurnState` — 5 variants with priority: `Stopping` > `Compacting` > `Loading` > `Restoring` > `Idle`
+- `AppView` — `Chat`, `Dashboard`
+- `PanelExpansion` — struct bundling 9 `*_expanded` booleans
+
+**Bridge pattern (S3 P1.5.4d)**:
+- Forward sync: `view_state` → legacy store booleans (`team_panel_open`, `task_panel_open`, etc.)
+- Legacy bools are read-only mirrors; all write-side authority lives in `ViewState`
+- Final removal of legacy fields scheduled for P1.5.2 (bridge reversal reversal)
+
+**Key ADRs**: ADR-014 (right-panel Tab consolidation + Skill/Mcp relocation), ADR-013 (focus-aware shortcut routing).
+
 ---
 
 ## 4. Gateway Architecture (clarity-gateway)
@@ -237,40 +269,46 @@ Tasks survive TUI/Web closure. `claw` monitors `.clarity/tasks/` via `notify` + 
 
 ---
 
-## 5. Desktop GUI (clarity-tauri)
+## 5. Desktop GUI (clarity-egui)
 
 ### 5.1 Architecture
 
-**Single-process**: Tauri 2 frontend directly embeds the Rust core. No separate server process.
+**Single-process, immediate-mode**: egui 0.31 + eframe 0.31. No JavaScript runtime; Rust core and UI share memory space.
 
 ```
-Tauri Commands ──→ clarity-core Agent
-    ├── agent_run_streaming    # SSE-style events (agent:chunk/done/error)
-    ├── list_tasks / cancel_task
-    ├── computer_screenshot / click / type / scroll
-    ├── lsp_start / send / recv / stop / list
-    ├── file_tree / file_read / file_write
-    └── settings_load / settings_save
+clarity-egui App ──→ clarity-core Agent (same process)
+    ├── Chat Panel (virtual list + streaming)
+    ├── Session Sidebar (category tree + web tabs + thinking log)
+    ├── Workspace Panel (file tree + preview drawer)
+    ├── Right Panel (Tab D: Team / Task / Dashboard)
+    ├── Settings Panel (provider + local model + approval)
+    ├── Command Palette (Ctrl+Shift+P)
+    └── Modal stack (Approval / Snapshot / Skill / MCP / ...)
 ```
 
-### 5.2 Frontend Components
+State is managed through `ViewState` (see §9) with a forward-sync bridge to legacy store booleans during the S3 transition.
 
-| Component | Status | Backend |
-|-----------|--------|---------|
-| Chat Panel | ✅ | `agent_run_streaming` |
-| Session Sidebar | ✅ | JSON file persistence |
-| Task Panel | ✅ | Polling + `list_tasks` |
-| Settings Panel | ✅ | JSON file persistence |
-| File Browser | ✅ | `file_tree` |
-| Diff Viewer | ✅ | Frontend-only (React) |
-| Computer Use Panel | ✅ | Python bridge (`computer_bridge.py`) |
-| LSP Panel | ✅ | `lsp_manager.rs` |
+### 5.2 Frontend Panels
+
+| Panel | Status | State Owner |
+|-----------|--------|-------------|
+| Chat Area | ✅ | `ChatStore` + `SessionStore` |
+| Session Sidebar | ✅ | `SessionStore` |
+| Workspace (file tree) | ✅ | `UiStore` + fs |
+| Right Panel (Tab D) | ✅ | `ViewState.right: Option<SidePanel>` |
+| Settings | ✅ | `SettingsStore` + `GuiSettings` |
+| Skill Modal | ✅ | `ViewState.modal: Option<ModalType::Skill>` |
+| MCP Modal | ✅ | `ViewState.modal: Option<ModalType::Mcp>` |
+| Approval Modal | ✅ | `ViewState.modal: Option<ModalType::Approval>` |
+| Plan Timeline | ✅ | `UiStore` |
+| Command Palette | ✅ | `CommandPalette` widget |
 
 ### 5.3 Theme System
 
-- CSS variables dual-theme (`:root` dark + `[data-theme="light"]`)
-- `window.matchMedia("prefers-color-scheme: dark")` for Auto mode
-- SettingsPanel Cancel restores DOM theme to last saved value
+- Rust-native `Theme` struct with 40+ tokens (color / spacing / typography / radius / shadow)
+- Dark / Light / Auto (follows OS via `window.theme()`)
+- Icon font: `lucide-icons` crate (ADR-010); all icons are glyphs, not image assets
+- Glassmorphism surfaces via `Frame::new().fill(Color32::from_white_alpha(...))`
 
 ---
 
@@ -279,7 +317,7 @@ Tauri Commands ──→ clarity-core Agent
 ### 6.1 Chat Completion (Streaming)
 
 ```
-User Input → Gateway/TUI/Tauri → Agent::run_streaming()
+User Input → Gateway/TUI/egui → Agent::run_streaming()
     → LlmProvider::stream()
     → SSE deltas (content / reasoning / tool_calls)
     → If tool call: Approval check → ToolRegistry::execute()
@@ -424,16 +462,25 @@ cargo clippy --workspace --lib --bins --tests -- -D warnings
 cargo audit
 
 # Run entry points
+cargo run -p clarity-egui
 cargo run -p clarity-gateway
 cargo run -p clarity-tui
 cargo run -p clarity-claw
 cargo run -p clarity-headless -- --prompt "Hello" --provider local
 
-# Desktop GUI
-cd crates/clarity-tauri/frontend && npm run build
-cargo tauri dev
+# Desktop GUI (egui — sole stack; Tauri archived)
+cargo run -p clarity-egui
 ```
 
 ---
 
 *This document is the single source of truth for Clarity architecture. If you modify crate boundaries, module structures, or key types, update this file.*
+
+---
+
+## Update Log
+
+| Date | Change | Trigger |
+|------|--------|---------|
+| 2026-04-26 | Initial version | v0.3.0 release audit |
+| 2026-05-14 | Tauri → egui as sole UI stack; added §3.7 `ViewState`; updated test counts; deprecated Tauri build commands | S3 Phase 1.5 state-machine migration (ADR-014) |
