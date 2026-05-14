@@ -341,6 +341,8 @@ impl App {
                 workspace_plan_manually_collapsed: false,
                 dashboard_panel_open: false,
                 gantt_panel_open: false,
+                line_cursor_selected: None,
+                line_cursor_total_lines: 0,
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],

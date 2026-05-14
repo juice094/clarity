@@ -35,6 +35,20 @@ pub enum ShortcutAction {
     ToggleCommandPalette,
     /// Toggle the dashboard metrics side-panel.
     ToggleDashboardPanel,
+    /// Line-mode: move cursor down one line (`j`).
+    #[allow(dead_code)] // only constructed when line-mode feature is enabled
+    NavigateDown,
+    /// Line-mode: move cursor up one line (`k`).
+    #[allow(dead_code)]
+    NavigateUp,
+    /// Line-mode: jump to first line (`g`).
+    #[allow(dead_code)]
+    NavigateTop,
+    /// Line-mode: jump to last line (`G`).
+    #[allow(dead_code)]
+    NavigateBottom,
+    /// Line-mode: copy selected line text (`y` or `Ctrl+C`).
+    CopyLine,
 }
 
 impl ShortcutAction {
@@ -52,6 +66,11 @@ impl ShortcutAction {
             ShortcutAction::FocusInput => ids::FOCUS_INPUT,
             ShortcutAction::ToggleCommandPalette => ids::TOGGLE_COMMAND_PALETTE,
             ShortcutAction::ToggleDashboardPanel => ids::TOGGLE_DASHBOARD,
+            ShortcutAction::NavigateDown => ids::NAVIGATE_DOWN,
+            ShortcutAction::NavigateUp => ids::NAVIGATE_UP,
+            ShortcutAction::NavigateTop => ids::NAVIGATE_TOP,
+            ShortcutAction::NavigateBottom => ids::NAVIGATE_BOTTOM,
+            ShortcutAction::CopyLine => ids::COPY_LINE,
         }
     }
 }
@@ -112,6 +131,34 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.key_pressed(egui::Key::D) && i.modifiers.ctrl && i.modifiers.shift) {
         actions.push(ShortcutAction::ToggleDashboardPanel);
+    }
+
+    // ── Line-mode navigation (S7 Phase 2D) ──
+    #[cfg(feature = "line-mode")]
+    {
+        let chat_focused = matches!(
+            app.view_state.focus,
+            clarity_core::ui::view_state::FocusScope::Panel(
+                clarity_core::ui::view_state::PanelKind::ChatStream
+            )
+        );
+        if chat_focused && !app.chat_store.is_loading {
+            if ctx.input(|i| i.key_pressed(egui::Key::J)) {
+                actions.push(ShortcutAction::NavigateDown);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::K)) {
+                actions.push(ShortcutAction::NavigateUp);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::G) && !i.modifiers.shift) {
+                actions.push(ShortcutAction::NavigateTop);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::G) && i.modifiers.shift) {
+                actions.push(ShortcutAction::NavigateBottom);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Y)) {
+                actions.push(ShortcutAction::CopyLine);
+            }
+        }
     }
 
     actions

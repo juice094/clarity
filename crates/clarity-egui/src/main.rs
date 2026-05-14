@@ -618,11 +618,66 @@ impl App {
                 self.view_state.main = clarity_core::ui::AppView::Settings;
                 true
             }
+            ids::NAVIGATE_DOWN => {
+                self.navigate_line(1);
+                true
+            }
+            ids::NAVIGATE_UP => {
+                self.navigate_line(-1);
+                true
+            }
+            ids::NAVIGATE_TOP => {
+                self.ui_store.line_cursor_selected = Some(0);
+                true
+            }
+            ids::NAVIGATE_BOTTOM => {
+                let total = self.ui_store.line_cursor_total_lines;
+                if total > 0 {
+                    self.ui_store.line_cursor_selected = Some(total.saturating_sub(1));
+                }
+                true
+            }
+            ids::COPY_LINE => {
+                // Actual copy is handled in App::update() where egui::Context is available.
+                true
+            }
             other => {
                 tracing::warn!("dispatch_command: unknown command id '{}'", other);
                 false
             }
         }
+    }
+
+    /// S7 Phase 2D: navigate line cursor by `delta` lines (-1 = up, +1 = down).
+    fn navigate_line(&mut self, delta: isize) {
+        let total = self.ui_store.line_cursor_total_lines;
+        if total == 0 {
+            return;
+        }
+        let current = self.ui_store.line_cursor_selected.unwrap_or(0);
+        let new_idx = if delta > 0 {
+            (current + delta as usize).min(total.saturating_sub(1))
+        } else {
+            current.saturating_sub((-delta) as usize)
+        };
+        self.ui_store.line_cursor_selected = Some(new_idx);
+    }
+
+    /// S7 Phase 2D: return the text of the currently selected line (if any).
+    fn selected_line_text(&self) -> Option<String> {
+        let global_idx = self.ui_store.line_cursor_selected?;
+        let active_id = self.session_store.active_session_id.clone();
+        let session = self.session_store.sessions.iter().find(|s| s.id == active_id)?;
+        let mut acc = 0;
+        for msg in &session.messages {
+            let msg_lines = msg.lines.len();
+            if global_idx >= acc && global_idx < acc + msg_lines {
+                let local_idx = global_idx - acc;
+                return msg.lines.get(local_idx).map(render_line_text);
+            }
+            acc += msg_lines;
+        }
+        None
     }
 
     fn render_settings_panel(&mut self, ctx: &egui::Context) {
@@ -758,7 +813,14 @@ impl eframe::App for App {
         // All shortcut actions and CommandPalette entries route through
         // App::dispatch_command(&str) using ids from clarity_core::ui::ids.
         for action in shortcuts::collect_actions(ctx, self) {
-            self.dispatch_command(action.command_id());
+            if action == shortcuts::ShortcutAction::CopyLine {
+                if let Some(text) = self.selected_line_text() {
+                    ctx.copy_text(text);
+                    self.push_toast("Copied to clipboard", ToastLevel::Info);
+                }
+            } else {
+                self.dispatch_command(action.command_id());
+            }
         }
 
         // Refresh task list periodically when panel is open
@@ -1068,4 +1130,44 @@ fn main() -> eframe::Result {
             Ok(Box::new(App::new(cc, gateway_manager, tray_manager)))
         }),
     )
+}
+
+/// S7 Phase 2D: extract plain text from a RenderLine for copy-to-clipboard.
+fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
+    use clarity_core::ui::RenderLine;
+    match line {
+        RenderLine::Text { spans, .. } => spans.iter().map(|s| s.text.as_str()).collect(),
+        RenderLine::CodeLine { content, .. } => content.to_string(),
+        RenderLine::ToolCallHeader { name, .. } => format!("🔧 {name}"),
+        RenderLine::ToolCallArg { key, value } => format!("{key}: {value}"),
+        RenderLine::Thinking { content, .. } => content.to_string(),
+        RenderLine::ApprovalPrompt { options } => options
+            .iter()
+            .map(|o| format!("{:?}", o))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        RenderLine::StatusLine { content, .. } => content.to_string(),
+        RenderLine::ArtifactRef { artifact_id, summary } => {
+            format!("{artifact_id} — {summary}")
+        }
+        RenderLine::CrossInstanceRef {
+            target_instance,
+            message,
+            ..
+        } => {
+            format!("@{target_instance} — {message}")
+        }
+        RenderLine::SlashCompletion { command, description } => {
+            format!("/{command}  {description}")
+        }
+        RenderLine::StreamingCursor => "▌".to_string(),
+        RenderLine::Divider => "───".to_string(),
+        RenderLine::Empty => String::new(),
+        RenderLine::BlockSlot {
+            block_id,
+            line_count,
+        } => {
+            format!("⤢ Block {block_id} ({line_count} lines)")
+        }
+    }
 }

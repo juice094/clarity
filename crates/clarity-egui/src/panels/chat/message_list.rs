@@ -26,6 +26,10 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let mut configure_clicked = false;
     let agent_turn_style = app.ui_store.agent_turn_style;
     let agent_turn_glass = app.ui_store.agent_turn_glass;
+    #[cfg(feature = "line-mode")]
+    let line_cursor_selected = app.ui_store.line_cursor_selected;
+    #[cfg(not(feature = "line-mode"))]
+    let line_cursor_selected: Option<usize> = None;
 
     // Pre-calculate content height to avoid stick-to-bottom when messages are short
     let total_estimated: f32 = if let Some(session) = app
@@ -128,6 +132,20 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                 .iter_mut()
                 .find(|s| s.id == active_id)
             {
+                #[cfg(feature = "line-mode")]
+                let msg_line_offsets: Vec<usize> = {
+                    let mut v = Vec::with_capacity(session.messages.len());
+                    let mut acc = 0;
+                    for msg in &session.messages {
+                        v.push(acc);
+                        acc += msg.lines.len();
+                    }
+                    app.ui_store.line_cursor_total_lines = acc;
+                    v
+                };
+                #[cfg(not(feature = "line-mode"))]
+                let msg_line_offsets: Vec<usize> = Vec::new();
+
                 if session.messages.is_empty() && !is_loading {
                     ui.vertical_centered(|ui| {
                         let empty_state_offset = (ui.available_height() / 3.0).max(60.0);
@@ -247,6 +265,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 }
                                 h
                             } else {
+                                let sel = line_cursor_selected.and_then(|g| {
+                                    let start = msg_line_offsets[unit.start];
+                                    let end = start + session.messages[unit.start].lines.len();
+                                    if g >= start && g < end { Some(g - start) } else { None }
+                                });
                                 ui::render::message_bubble(
                                     ui,
                                     &session.messages[unit.start],
@@ -255,6 +278,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                     unit.start,
                                     &mut pending.retry_error_idx,
                                     &mut pending.switch_model,
+                                    sel,
                                 )
                             };
                             session.messages[unit.start].cached_height = Some(bubble_h);
@@ -429,6 +453,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         ui.allocate_space(egui::vec2(ui.available_width(), top));
                     }
 
+                    #[allow(clippy::needless_range_loop)]
                     for i in start_idx..end_idx {
                         if session.messages[i].content.trim().is_empty() {
                             continue;
@@ -450,6 +475,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             }
                             h
                         } else {
+                            let sel = line_cursor_selected.and_then(|g| {
+                                let start = msg_line_offsets[i];
+                                let end = start + session.messages[i].lines.len();
+                                if g >= start && g < end { Some(g - start) } else { None }
+                            });
                             ui::render::message_bubble(
                                 ui,
                                 &session.messages[i],
@@ -458,6 +488,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 i,
                                 &mut pending.retry_error_idx,
                                 &mut pending.switch_model,
+                                sel,
                             )
                         };
                         session.messages[i].cached_height = Some(bubble_h);

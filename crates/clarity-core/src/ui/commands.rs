@@ -83,6 +83,13 @@ pub mod ids {
     // ── Input / Palette ──
     pub const FOCUS_INPUT: &str = "focus-input";
     pub const TOGGLE_COMMAND_PALETTE: &str = "toggle-command-palette";
+
+    // ── Line-mode navigation (S7 Phase 2D) ──
+    pub const NAVIGATE_DOWN: &str = "navigate-down";
+    pub const NAVIGATE_UP: &str = "navigate-up";
+    pub const NAVIGATE_TOP: &str = "navigate-top";
+    pub const NAVIGATE_BOTTOM: &str = "navigate-bottom";
+    pub const COPY_LINE: &str = "copy-line";
 }
 
 /// 预置的常用命令常量 — 避免两端硬编码重复。

@@ -242,6 +242,10 @@ pub struct UiStore {
     pub dashboard_panel_open: bool,
     /// Whether the Plan Timeline Gantt chart window is open.
     pub gantt_panel_open: bool,
+    /// S7 Phase 2D: global selected line index in the flat line stream (line-mode only).
+    pub line_cursor_selected: Option<usize>,
+    /// S7 Phase 2D: total flat line count last frame (used to clamp cursor).
+    pub line_cursor_total_lines: usize,
 }
 
 // ============================================================================

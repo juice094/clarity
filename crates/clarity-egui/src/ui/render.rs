@@ -7,6 +7,8 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §1.2, §2.1.
 
+#![allow(dead_code)] // line-mode feature toggles which functions are active
+
 use crate::theme::Theme;
 use crate::ui::types::{ContentBlock, Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus};
 
@@ -21,6 +23,7 @@ use crate::ui::types::{ContentBlock, Message, RenderBlock, Role, ToolCallInfo, T
 /// - `user_bubble()` for user messages (right-aligned glass card)
 /// - `agent_message()` for agent messages (Swiss plain text OR glass card)
 /// - `error_bubble()` for error messages (left-aligned glass card)
+#[allow(clippy::too_many_arguments)]
 pub fn message_bubble(
     ui: &mut egui::Ui,
     msg: &Message,
@@ -29,6 +32,7 @@ pub fn message_bubble(
     msg_idx: usize,
     retry_idx: &mut Option<usize>,
     switch_model: &mut bool,
+    selected_idx: Option<usize>,
 ) -> f32 {
     if msg.is_error {
         error_bubble(ui, msg, theme, msg_idx, retry_idx, switch_model)
@@ -36,12 +40,13 @@ pub fn message_bubble(
         #[cfg(feature = "line-mode")]
         {
             match msg.role {
-                Role::User => line_mode_user(ui, msg, theme),
-                Role::Agent => line_mode_agent(ui, msg, theme, show_header),
+                Role::User => line_mode_user(ui, msg, theme, selected_idx),
+                Role::Agent => line_mode_agent(ui, msg, theme, show_header, selected_idx),
             }
         }
         #[cfg(not(feature = "line-mode"))]
         {
+            let _ = selected_idx;
             match msg.role {
                 Role::User => user_bubble(ui, msg, theme),
                 Role::Agent => agent_message(ui, msg, theme, show_header),
@@ -469,7 +474,13 @@ fn error_bubble(
 // ============================================================================
 
 #[cfg(feature = "line-mode")]
-fn line_mode_agent(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
+fn line_mode_agent(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    show_header: bool,
+    selected_idx: Option<usize>,
+) -> f32 {
     let start_y = ui.cursor().min.y;
 
     if show_header {
@@ -500,7 +511,7 @@ fn line_mode_agent(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header:
                 theme,
                 0.0,
                 1_000_000.0,
-                None,
+                selected_idx,
             );
         });
     ui.add_space(theme.space_16);
@@ -508,7 +519,12 @@ fn line_mode_agent(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header:
 }
 
 #[cfg(feature = "line-mode")]
-fn line_mode_user(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+fn line_mode_user(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    selected_idx: Option<usize>,
+) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 
@@ -529,7 +545,7 @@ fn line_mode_user(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                         theme,
                         0.0,
                         1_000_000.0,
-                        None,
+                        selected_idx,
                     );
                 });
             });
