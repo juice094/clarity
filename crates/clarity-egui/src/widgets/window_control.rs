@@ -30,6 +30,8 @@ pub fn window_control_button(
 
     // 1. Reserve 36×36 in the parent's flow. RTL-safe.
     let (_id, rect) = ui.allocate_space(desired_size);
+    // Clip to parent bounds to prevent hitbox overflow when parent is narrower than 36 px.
+    let rect = rect.intersect(ui.max_rect());
 
     // 2. Hover state before paint.
     let hovered = ui.rect_contains_pointer(rect);

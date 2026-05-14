@@ -198,9 +198,15 @@ impl App {
                 // 溢出保护：RIGHT zone 不得超过当前可用宽度的 45%，防止挤压 CENTER
                 let max_right = ui.available_width() * 0.45;
                 let right_w = right_w.min(max_right.max(180.0));
+                // LEFT zone 动态化：sidebar 折叠时需要 toggle + brand，否则仅 brand
+                let left_w = if self.ui_store.sidebar_collapsed {
+                    theme.titlebar_left_w
+                } else {
+                    68.0
+                };
 
                 StripBuilder::new(ui)
-                    .size(Size::exact(theme.titlebar_left_w))
+                    .size(Size::exact(left_w))
                     .size(Size::remainder().at_least(40.0))
                     .size(Size::exact(right_w))
                     .horizontal(|mut strip| {
@@ -299,10 +305,12 @@ impl App {
         // Width = start_max_x - end_max_x.
         let start_max_x = ui.cursor().max.x;
         let available_w = ui.available_width();
-        // 溢出保护：当 RIGHT zone 宽度不足时，强制隐藏状态标签文字
-        let show_labels = show_status_labels && available_w >= 160.0;
+        // 严格优先级：空间不足时从低优先级开始隐藏，确保 close/max/min/settings 始终可见
+        let show_labels = show_status_labels && available_w >= 240.0;
+        let show_capsules = available_w >= 160.0;
+        let show_settings = available_w >= 120.0;
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    // Close
+                    // Close (P0 — never hide)
                     let close_resp = crate::widgets::window_control_button(
                         ui,
                         crate::theme::ICON_X,
@@ -316,7 +324,7 @@ impl App {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
                     }
 
-                    // Maximize / Restore
+                    // Maximize / Restore (P0)
                     let max_icon = if is_maximized {
                         crate::theme::ICON_COPY
                     } else {
@@ -335,7 +343,7 @@ impl App {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
 
-                    // Minimize
+                    // Minimize (P0)
                     let min_resp = crate::widgets::window_control_button(
                         ui,
                         crate::theme::ICON_MINUS,
@@ -349,95 +357,99 @@ impl App {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     }
 
-                    // Separator between system buttons and indicators
-                    ui.add_space(8.0);
+                    if show_settings {
+                        // Separator between system buttons and indicators
+                        ui.add_space(8.0);
 
-                    // Settings button
-                    let settings_resp = crate::widgets::window_control_button(
-                        ui,
-                        crate::theme::ICON_SETTINGS,
-                        theme,
-                        theme.overlay_medium,
-                        theme.text,
-                        theme.text_dim,
-                    )
-                    .on_hover_text("Open Settings (Esc to close)");
-                    if settings_resp.clicked() {
-                        self.view_state.main = clarity_core::ui::AppView::Settings;
+                        // Settings button (P1)
+                        let settings_resp = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_SETTINGS,
+                            theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            theme.text_dim,
+                        )
+                        .on_hover_text("Open Settings (Esc to close)");
+                        if settings_resp.clicked() {
+                            self.view_state.main = clarity_core::ui::AppView::Settings;
+                        }
                     }
 
-                    // Connection status capsule (label hidden on narrow windows)
-                    let (conn_label, conn_color) = match self.chat_store.agent_status {
-                        AgentStatus::Online => ("Online", theme.status_online),
-                        AgentStatus::Busy => ("Busy", theme.status_busy),
-                        AgentStatus::Offline | AgentStatus::Unconfigured => {
-                            ("断开", theme.status_offline)
-                        }
-                    };
-                    let conn_resp = crate::widgets::status_capsule(
-                        ui,
-                        conn_color,
-                        if show_labels { conn_label } else { "" },
-                        conn_color,
-                        false,
-                        theme,
-                    );
-                    conn_resp.on_hover_text("Agent connection status");
-                    ui.add_space(4.0);
-
-                    // Gateway capsule (clickable)
-                    let gw_dot_color = match self.chat_store.gateway_status {
-                        crate::ui::types::GatewayStatus::Online => theme.status_online,
-                        crate::ui::types::GatewayStatus::Offline => theme.status_offline,
-                        crate::ui::types::GatewayStatus::Checking => theme.status_busy,
-                    };
-                    let gw_resp = crate::widgets::status_capsule(
-                        ui,
-                        gw_dot_color,
-                        if show_labels { "Gateway" } else { "" },
-                        theme.text_muted,
-                        true,
-                        theme,
-                    )
-                    .on_hover_text("Click to start/stop Gateway");
-                    if gw_resp.clicked() {
-                        match self.chat_store.gateway_status {
-                            crate::ui::types::GatewayStatus::Online => {
-                                if let Some(ref gm) = self.gateway_manager {
-                                    match gm.stop() {
-                                        Ok(_) => self.push_toast(
-                                            "Gateway stopping...".to_string(),
-                                            crate::ui::types::ToastLevel::Info,
-                                        ),
-                                        Err(e) => self.push_toast(
-                                            format!("Gateway stop failed: {}", e),
-                                            crate::ui::types::ToastLevel::Error,
-                                        ),
-                                    }
-                                } else {
-                                    self.push_toast(
-                                        "Gateway manager not available".to_string(),
-                                        crate::ui::types::ToastLevel::Warn,
-                                    );
-                                }
+                    if show_capsules {
+                        // Connection status capsule (P2)
+                        let (conn_label, conn_color) = match self.chat_store.agent_status {
+                            AgentStatus::Online => ("Online", theme.status_online),
+                            AgentStatus::Busy => ("Busy", theme.status_busy),
+                            AgentStatus::Offline | AgentStatus::Unconfigured => {
+                                ("断开", theme.status_offline)
                             }
-                            _ => {
-                                if let Some(ref gm) = self.gateway_manager {
-                                    match gm.start_if_needed() {
-                                        Ok(_) => self.push_toast(
-                                            "Gateway starting...".to_string(),
-                                            crate::ui::types::ToastLevel::Info,
-                                        ),
-                                        Err(e) => self.push_toast(
-                                            format!("Gateway start failed: {}", e),
-                                            crate::ui::types::ToastLevel::Error,
-                                        ),
+                        };
+                        let conn_resp = crate::widgets::status_capsule(
+                            ui,
+                            conn_color,
+                            if show_labels { conn_label } else { "" },
+                            conn_color,
+                            false,
+                            theme,
+                        );
+                        conn_resp.on_hover_text("Agent connection status");
+                        ui.add_space(4.0);
+
+                        // Gateway capsule (P2)
+                        let gw_dot_color = match self.chat_store.gateway_status {
+                            crate::ui::types::GatewayStatus::Online => theme.status_online,
+                            crate::ui::types::GatewayStatus::Offline => theme.status_offline,
+                            crate::ui::types::GatewayStatus::Checking => theme.status_busy,
+                        };
+                        let gw_resp = crate::widgets::status_capsule(
+                            ui,
+                            gw_dot_color,
+                            if show_labels { "Gateway" } else { "" },
+                            theme.text_muted,
+                            true,
+                            theme,
+                        )
+                        .on_hover_text("Click to start/stop Gateway");
+                        if gw_resp.clicked() {
+                            match self.chat_store.gateway_status {
+                                crate::ui::types::GatewayStatus::Online => {
+                                    if let Some(ref gm) = self.gateway_manager {
+                                        match gm.stop() {
+                                            Ok(_) => self.push_toast(
+                                                "Gateway stopping...".to_string(),
+                                                crate::ui::types::ToastLevel::Info,
+                                            ),
+                                            Err(e) => self.push_toast(
+                                                format!("Gateway stop failed: {}", e),
+                                                crate::ui::types::ToastLevel::Error,
+                                            ),
+                                        }
+                                    } else {
+                                        self.push_toast(
+                                            "Gateway manager not available".to_string(),
+                                            crate::ui::types::ToastLevel::Warn,
+                                        );
                                     }
-                                } else {
-                                    self.push_toast(
-                                        "Gateway manager not available".to_string(),
-                                        crate::ui::types::ToastLevel::Warn,
-                                    );
+                                }
+                                _ => {
+                                    if let Some(ref gm) = self.gateway_manager {
+                                        match gm.start_if_needed() {
+                                            Ok(_) => self.push_toast(
+                                                "Gateway starting...".to_string(),
+                                                crate::ui::types::ToastLevel::Info,
+                                            ),
+                                            Err(e) => self.push_toast(
+                                                format!("Gateway start failed: {}", e),
+                                                crate::ui::types::ToastLevel::Error,
+                                            ),
+                                        }
+                                    } else {
+                                        self.push_toast(
+                                            "Gateway manager not available".to_string(),
+                                            crate::ui::types::ToastLevel::Warn,
+                                        );
+                                    }
                                 }
                             }
                         }
