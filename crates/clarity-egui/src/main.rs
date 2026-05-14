@@ -195,6 +195,9 @@ impl App {
                 let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
                 let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                 let right_w = self.ui_store.titlebar_right_width.max(180.0);
+                // 溢出保护：RIGHT zone 不得超过当前可用宽度的 45%，防止挤压 CENTER
+                let max_right = ui.available_width() * 0.45;
+                let right_w = right_w.min(max_right.max(180.0));
 
                 StripBuilder::new(ui)
                     .size(Size::exact(theme.titlebar_left_w))
@@ -295,6 +298,9 @@ impl App {
         // In RTL, cursor.max.x shrinks leftward as widgets are placed.
         // Width = start_max_x - end_max_x.
         let start_max_x = ui.cursor().max.x;
+        let available_w = ui.available_width();
+        // 溢出保护：当 RIGHT zone 宽度不足时，强制隐藏状态标签文字
+        let show_labels = show_status_labels && available_w >= 160.0;
                     ui.spacing_mut().item_spacing.x = 0.0;
                     // Close
                     let close_resp = crate::widgets::window_control_button(
@@ -371,7 +377,7 @@ impl App {
                     let conn_resp = crate::widgets::status_capsule(
                         ui,
                         conn_color,
-                        if show_status_labels { conn_label } else { "" },
+                        if show_labels { conn_label } else { "" },
                         conn_color,
                         false,
                         theme,
@@ -388,7 +394,7 @@ impl App {
                     let gw_resp = crate::widgets::status_capsule(
                         ui,
                         gw_dot_color,
-                        if show_status_labels { "Gateway" } else { "" },
+                        if show_labels { "Gateway" } else { "" },
                         theme.text_muted,
                         true,
                         theme,

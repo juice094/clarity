@@ -30,8 +30,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         .max_width(400.0)
         .resizable(true)
         .frame(
-            egui::Frame::new()
+            egui::Frame::side_top_panel(&ctx.style())
                 .fill(frame_fill)
+                .stroke(egui::Stroke::NONE)
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
@@ -163,7 +164,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .map_or(0, |c| c.servers.len());
                             let mcp_btn_w = if mcp_count > 0 { 36.0 } else { 20.0 };
                             let (mcp_rect, mcp_resp) = ui.allocate_exact_size(
-                                egui::vec2(mcp_btn_w, 20.0),
+                                egui::vec2(mcp_btn_w, 28.0),
                                 egui::Sense::click(),
                             );
                             if ui.is_rect_visible(mcp_rect) {
