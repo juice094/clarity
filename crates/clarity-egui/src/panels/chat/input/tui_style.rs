@@ -36,8 +36,18 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     let mut text_response: Option<egui::Response> = None;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
+        // Shell context prompt: "cwd branch" in muted small text, then ❯ icon
+        let mut prompt_width = 0.0;
+        if !app.ui_store.shell_prompt.is_empty() {
+            let ctx_label = ui.label(
+                egui::RichText::new(&app.ui_store.shell_prompt)
+                    .size(theme.text_sm)
+                    .color(theme.text_dim),
+            );
+            prompt_width += ctx_label.rect.width() + ui.spacing().item_spacing.x;
+        }
         let prompt = ui.label(egui::RichText::new("❯").font(theme.font_icon(theme.text_base)).color(theme.accent));
-        let prompt_width = prompt.rect.width();
+        prompt_width += prompt.rect.width();
 
         if app.chat_store.is_loading {
             let spinner = ui.label(egui::RichText::new("◐").font(theme.font_icon(theme.text_sm)).color(theme.status_busy));
@@ -103,7 +113,7 @@ fn tui_hint(app: &App) -> String {
 fn micro_hint(app: &App, response: &egui::Response) -> String {
     if app.chat_store.is_loading { return "Ctrl+C Stop".to_string(); }
     if !response.has_focus() && app.chat_store.input.is_empty() { return "Ctrl+K focus · ? help".to_string(); }
-    if response.has_focus() && app.chat_store.input.is_empty() { return "Ctrl+Enter Send · Shift+↑ History · /coder".to_string(); }
+    if response.has_focus() && app.chat_store.input.is_empty() { return "Ctrl+Enter Send · Shift+↑ History · /coder · !cmd".to_string(); }
     if response.has_focus() && !app.chat_store.input.is_empty() { return "Ctrl+Enter Send".to_string(); }
     String::new()
 }
@@ -117,6 +127,15 @@ fn handle_tui_keys(app: &mut App, ui: &egui::Ui, response: &egui::Response, prev
     if enter_pressed && !shift && !ime_commit {
         while app.chat_store.input.ends_with('\n') { app.chat_store.input.pop(); }
         if app.chat_store.input == *prev_input && !app.chat_store.input.trim().is_empty() && !app.chat_store.is_loading {
+            let trimmed = app.chat_store.input.trim().to_string();
+            if let Some(cmd) = trimmed.strip_prefix('!') {
+                let cmd = cmd.trim().to_string();
+                if !cmd.is_empty() {
+                    app.chat_store.input.clear();
+                    app.execute_shell_direct(cmd);
+                    return;
+                }
+            }
             push_input_history(app);
             app.chat_store.stick_to_bottom = true;
             app.send();

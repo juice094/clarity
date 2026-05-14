@@ -253,6 +253,9 @@ pub struct UiStore {
     /// Measured width of the titlebar right zone (window controls + capsules).
     /// Updated each frame by `render_titlebar_right` to eliminate hard-coded magic numbers.
     pub titlebar_right_width: f32,
+    /// Cached shell prompt prefix: "cwd branch" (e.g. "clarity main").
+    /// Refreshed periodically by App::refresh_shell_prompt.
+    pub shell_prompt: String,
 }
 
 // ============================================================================

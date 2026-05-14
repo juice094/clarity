@@ -7,6 +7,71 @@ use crate::ui::types::*;
 use crate::App;
 
 impl App {
+    /// Execute a shell command directly (!cmd), bypassing the LLM entirely.
+    pub(crate) fn execute_shell_direct(&mut self, cmd: String) {
+        let tx = self.ui_tx.clone();
+        let working_dir = self.state.agent.config().working_dir.clone();
+
+        // Add the command as a user message immediately.
+        if let Some(session) = self.session_store.active_session_mut() {
+            let mut msg = Message {
+                role: Role::User,
+                content: format!("!{}", cmd),
+                blocks: vec![],
+                timestamp: Instant::now(),
+                parsed: vec![],
+                cached_height: None,
+                is_error: false,
+                lines: Vec::new(),
+            };
+            msg.prepare();
+            session.messages.push(msg);
+            session.updated_at = crate::session::now_millis();
+        }
+        self.save_current_session();
+        self.chat_store.stick_to_bottom = true;
+
+        self.runtime.spawn(async move {
+            let (shell, arg) = if cfg!(target_os = "windows") {
+                ("powershell", "-Command")
+            } else {
+                ("bash", "-c")
+            };
+
+            let result = tokio::process::Command::new(shell)
+                .arg(arg)
+                .arg(&cmd)
+                .current_dir(&working_dir)
+                .output()
+                .await;
+
+            match result {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+                    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+                    let exit_code = output.status.code().unwrap_or(-1);
+                    let combined = if stderr.is_empty() {
+                        stdout
+                    } else {
+                        format!("{}\n[stderr]\n{}", stdout, stderr)
+                    };
+                    let _ = tx.send(UiEvent::ShellResult {
+                        command: cmd,
+                        output: combined,
+                        exit_code,
+                    });
+                }
+                Err(e) => {
+                    let _ = tx.send(UiEvent::ShellResult {
+                        command: cmd,
+                        output: format!("Failed to execute: {}", e),
+                        exit_code: -1,
+                    });
+                }
+            }
+        });
+    }
+
     pub(crate) fn send(&mut self) {
         let text = self.chat_store.input.trim().to_string();
         if text.is_empty() && self.chat_store.attachments.is_empty() {

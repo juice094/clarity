@@ -775,6 +775,11 @@ impl eframe::App for App {
             self.ui_store.last_fps_time = now;
         }
 
+        // Refresh shell prompt (~1 Hz) to track cwd / git branch changes.
+        if self.ui_store.frame_count % 60 == 0 {
+            self.refresh_shell_prompt();
+        }
+
         self.process_events();
 
         // Poll MCP config for external changes (hot-reload).

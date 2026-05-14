@@ -6,7 +6,7 @@ pub mod system;
 pub mod task;
 pub mod team;
 
-use crate::ui::types::UiEvent;
+use crate::ui::types::{ContentBlock, Message, Role, UiEvent};
 use crate::App;
 
 pub fn process_events(app: &mut App) {
@@ -239,6 +239,40 @@ pub fn process_events(app: &mut App) {
                 if app.task_store.viewing_task_id.as_ref() == Some(&task_id) {
                     app.task_store.viewing_task_result = Some(result);
                 }
+            }
+            UiEvent::ShellResult {
+                command,
+                output,
+                exit_code,
+            } => {
+                let exit_marker = if exit_code == 0 {
+                    format!("Exit: {}", exit_code)
+                } else {
+                    format!("Exit: {} ❌", exit_code)
+                };
+                let content = format!(
+                    "▶ {}\n```\n{}\n```\n_{}_",
+                    command,
+                    output.trim_end(),
+                    exit_marker
+                );
+                if let Some(session) = app.session_store.active_session_mut() {
+                    let mut msg = Message {
+                        role: Role::Agent,
+                        content: content.clone(),
+                        blocks: vec![ContentBlock::Text { text: content }],
+                        timestamp: std::time::Instant::now(),
+                        parsed: vec![],
+                        cached_height: None,
+                        is_error: exit_code != 0,
+                        lines: Vec::new(),
+                    };
+                    msg.prepare();
+                    session.messages.push(msg);
+                    session.updated_at = crate::session::now_millis();
+                }
+                app.save_current_session();
+                app.chat_store.stick_to_bottom = true;
             }
         }
     }

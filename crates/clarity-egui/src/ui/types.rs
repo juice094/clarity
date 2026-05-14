@@ -152,6 +152,12 @@ pub enum UiEvent {
         task_id: String,
         result: clarity_core::background::TaskResult,
     },
+    /// Direct shell execution (!cmd) completed.
+    ShellResult {
+        command: String,
+        output: String,
+        exit_code: i32,
+    },
 }
 
 /// Progress summary for a parallel batch of subagents.

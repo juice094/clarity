@@ -346,6 +346,7 @@ impl App {
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
                 titlebar_right_width: 260.0,
+                shell_prompt: String::new(),
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
@@ -399,6 +400,36 @@ impl App {
 
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, level: ToastLevel) {
         crate::handlers::system::push_toast(&mut self.ui_store, message, level);
+    }
+
+    /// Refresh the cached shell prompt (cwd + git branch).
+    /// Called periodically from App::update to avoid IO on every frame.
+    pub(crate) fn refresh_shell_prompt(&mut self) {
+        let cwd = std::env::current_dir()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_default();
+        let branch = Self::detect_git_branch().unwrap_or_default();
+        let prompt = if branch.is_empty() {
+            cwd
+        } else {
+            format!("{} {}", cwd, branch)
+        };
+        self.ui_store.shell_prompt = prompt;
+    }
+
+    /// Detect current git branch by reading .git/HEAD (no subprocess spawn).
+    fn detect_git_branch() -> Option<String> {
+        let head = std::fs::read_to_string(".git/HEAD").ok()?;
+        let line = head.trim();
+        if let Some(prefix) = line.strip_prefix("ref: refs/heads/") {
+            return Some(prefix.to_string());
+        }
+        // Detached HEAD: show abbreviated hash
+        if line.len() >= 7 {
+            return Some(line[..7].to_string());
+        }
+        None
     }
 
     /// Poll mcp.json for external changes and hot-reload if modified.
