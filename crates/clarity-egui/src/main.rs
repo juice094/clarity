@@ -174,7 +174,7 @@ impl App {
         let theme = self.ui_store.theme.clone();
 
         egui::TopBottomPanel::top("titlebar")
-            .min_height(theme.size_titlebar)
+            .exact_height(theme.size_titlebar)
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg)
@@ -182,18 +182,28 @@ impl App {
                     .inner_margin(egui::Margin::symmetric(8, 0)),
             )
             .show(ctx, |ui| {
-                ui.set_min_height(theme.size_titlebar);
+                let titlebar_rect = ui.max_rect();
+
+                // Fix 3 (官方范式): 整个 titlebar 作为拖拽热区，先注册后覆盖。
+                // 按钮在后续代码中渲染，其交互会自动覆盖同一 rect 上的拖拽。
+                let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                let drag_resp = ui.interact(
+                    titlebar_rect,
+                    ui.id().with("titlebar_drag"),
+                    egui::Sense::click_and_drag(),
+                );
+                if drag_resp.drag_started_by(egui::PointerButton::Primary) {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+                if drag_resp.double_clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+                }
 
                 // ── TitleBar three-zone layout via egui_extras::StripBuilder ──
                 //   LEFT  : sidebar toggle (when collapsed) + brand
-                //   CENTER: session tabs + model indicator + elastic drag filler
+                //   CENTER: session tabs + model indicator (drag handled globally above)
                 //   RIGHT : window controls + status capsules
-                //
-                // RULE 6 (EGUI_LAYOUT.md): chrome must use StripBuilder for
-                // declarative zone allocation. Replaces the previous imperative
-                // `ui.horizontal + estimated_right_w` heuristic (S2.P1.2 / P1.3).
                 let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
-                let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                 let right_w = self.ui_store.titlebar_right_width.max(180.0);
                 // 溢出保护：RIGHT zone 不得超过当前可用宽度的 45%，防止挤压 CENTER
                 let max_right = ui.available_width() * 0.45;
@@ -236,7 +246,9 @@ impl App {
                             });
                         });
 
-                        // ── CENTER zone: tabs + model + drag filler ──
+                        // ── CENTER zone: tabs + model ──
+                        // Drag 已由 titlebar 全局 interact 处理，不再需要在 CENTER
+                        // 内部放置 drag filler，避免与 RIGHT zone 按钮产生 hitbox 重叠。
                         strip.cell(|ui| {
                             ui.set_min_height(theme.size_titlebar);
                             ui.horizontal_centered(|ui| {
@@ -251,21 +263,6 @@ impl App {
                                         egui::RichText::new(model_name)
                                             .size(theme.text_xs)
                                             .color(theme.text_muted),
-                                    );
-                                }
-
-                                // Drag filler: occupies all remaining space inside CENTER
-                                let drag_w = ui.available_width().max(20.0);
-                                let (_, drag_resp) = ui.allocate_exact_size(
-                                    egui::vec2(drag_w, theme.size_titlebar),
-                                    egui::Sense::click_and_drag(),
-                                );
-                                if drag_resp.drag_started_by(egui::PointerButton::Primary) {
-                                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                                }
-                                if drag_resp.double_clicked() {
-                                    ctx.send_viewport_cmd(
-                                        egui::ViewportCommand::Maximized(!is_maximized),
                                     );
                                 }
                             });
@@ -317,7 +314,7 @@ impl App {
                         theme,
                         theme.danger.linear_multiply(0.25),
                         egui::Color32::WHITE,
-                        theme.text_dim,
+                        theme.text,
                     )
                     .on_hover_text("Close window");
                     if close_resp.clicked() {

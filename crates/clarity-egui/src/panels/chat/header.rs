@@ -43,11 +43,16 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     // When space is too tight even for TAB_MIN, shrink proportionally
     // rather than clamping — this prevents the tab bar from overflowing
     // its allocated zone and being visually truncated.
-    let tab_width = if raw_width < TAB_MIN {
+    let mut tab_width = if raw_width < TAB_MIN {
         raw_width.max(TAB_HARD_MIN)
     } else {
         raw_width.clamp(TAB_MIN, TAB_MAX)
     };
+    // Fix 2: 防溢出 — 确保所有 tab + spacing 不超过可用空间
+    let actual_total = tab_width * tab_count as f32 + total_spacing;
+    if actual_total > total_available && tab_count > 0 {
+        tab_width = ((total_available - total_spacing) / tab_count as f32).max(4.0);
+    }
 
     for (id, title, is_active, _category) in &category_sessions {
         let editing = app.ui_store.editing_session_id.as_ref() == Some(id);
