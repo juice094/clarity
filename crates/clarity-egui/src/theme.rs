@@ -13,7 +13,6 @@ pub const ICON_HOURGLASS: &str = "\u{e296}";  // Lucide: Hourglass
 pub const ICON_CHECK: &str = "\u{e06c}";      // Lucide: Check
 pub const ICON_X: &str = "\u{e1b2}";          // Lucide: X
 pub const ICON_WARNING: &str = "\u{e193}";    // Lucide: AlertTriangle
-pub const ICON_PAPERCLIP: &str = "\u{e12d}";  // Lucide: Paperclip
 pub const ICON_LIST: &str = "\u{e106}";       // Lucide: List
 pub const ICON_ARROW_LEFT: &str = "\u{e048}"; // Lucide: ArrowLeft
 pub const ICON_PROHIBIT: &str = "\u{e051}";   // Lucide: Ban
