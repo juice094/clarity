@@ -1,7 +1,7 @@
 # Clarity Architecture
 
 > Code-accurate architecture reference | Last updated: 2026-05-14
-> Reflects S3 Phase 1.5 state-machine migration (ADR-011/012/013/014) + egui as sole UI stack
+> Reflects S3-S7 completion: ViewState state machine + RenderLine pipeline + line-mode feature + focus-aware shortcuts (ADR-011/012/013/014)
 
 ---
 
@@ -80,7 +80,7 @@
 | clippy warnings | 0 | 0 |
 | `unsafe` count | 1 | 0 new |
 | Rust tests passed | 849 / 0 failed | 100% |
-| `clarity-egui` tests | 0 / 66 smoke | baseline pending Phase 2 |
+| `clarity-egui` tests | 66 / 0 failed | Phase 2 baseline injected |
 | `cargo doc` warnings | 0 | 0 |
 
 ### 2.1 Crate Dependency Graph
@@ -235,6 +235,8 @@ pub struct ViewState {
 
 **Key ADRs**: ADR-014 (right-panel Tab consolidation + Skill/Mcp relocation), ADR-013 (focus-aware shortcut routing).
 
+**Detailed docs**: `docs/architecture/viewstate-migration.md` | `docs/architecture/shortcut-focus-routing.md`
+
 ---
 
 ## 4. Gateway Architecture (clarity-gateway)
@@ -309,6 +311,25 @@ State is managed through `ViewState` (see §9) with a forward-sync bridge to leg
 - Dark / Light / Auto (follows OS via `window.theme()`)
 - Icon font: `lucide-icons` crate (ADR-010); all icons are glyphs, not image assets
 - Glassmorphism surfaces via `Frame::new().fill(Color32::from_white_alpha(...))`
+
+### 5.4 RenderLine Pipeline (S4-S7)
+
+**Dual-track rendering** controlled by `line-mode` Cargo feature:
+
+```
+line-mode OFF: Message::parsed → Vec<RenderBlock> → message_bubble() → per-message card
+line-mode ON:  Message::lines  → Vec<RenderLine>  → render_lines() → row-atoms
+```
+
+**13-variant `RenderLine` enum** (ADR-012): `Text`, `CodeLine`, `ToolCallHeader`, `ToolCallArg`, `Thinking`, `ApprovalPrompt`, `StatusLine`, `ArtifactRef`, `CrossInstanceRef`, `SlashCompletion`, `StreamingCursor`, `Divider`, `Empty`, `BlockSlot`.
+
+**Virtual scrolling**: `LineViewport::visible_range(scroll_offset, viewport_height, line_height)` computes a half-open `[start, end)` index range; egui `render_lines()` skips invisible rows to maintain 60 fps at 10K lines.
+
+**Keyboard navigation** (S7): `LineCursor` with j/k/g/G bindings; focus-scoped via `FocusScope::Panel(ChatStream)`.
+
+**Escape hatch**: `RenderLine::BlockSlot` delegates un-line-atomisable blocks (tables, images) to the legacy `RenderBlock` pipeline.
+
+**Detailed docs**: `docs/architecture/renderline-pipeline.md` | `docs/architecture/ui-axis.md`
 
 ---
 

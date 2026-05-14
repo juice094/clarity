@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release binaries: 5 targets (headless / gateway / egui / tui / claw).
 - **WebSocket MCP Transport** — `clarity-mcp` crate 新增 `WebSocketMcpClient`，`McpTransport` enum 新增 `WebSocket { url, headers, timeout_seconds }` 变体。双向 JSON-RPC over WebSocket，pending-map + oneshot 请求-响应关联模式（与 `SseMcpClient` 同构）。`McpClientBuilder::websocket()` + `WebSocketClientBuilder` 完整 builder 链。配置文件 `transport = "websocket"` 自动识别。
 
+- **S3 — S7: Pretext UI 演进与状态机重构（2026-05-12 ~ 2026-05-14）**
+  - **S3 Phase 1.5: ViewState 状态机** — 用 `ViewState` 聚合替换 50+ 独立布尔标志。`main` / `left` / `right` / `modal` / `turn` / `expansions` / `focus` 七字段。ADR-014：右侧面板单 Tab 互斥（Team/Task/Dashboard）；Skill/Mcp 重分类为 `ModalType`。非法状态测试覆盖 `TurnState` 16 种组合。
+  - **S4 Phase 2A: RenderLine 13-variant** — 前端无关的行原子枚举：`Text`, `CodeLine`, `ToolCallHeader`, `ToolCallArg`, `Thinking`, `ApprovalPrompt`, `StatusLine`, `ArtifactRef`, `CrossInstanceRef`, `SlashCompletion`, `StreamingCursor`, `Divider`, `Empty`, `BlockSlot`。`markdown_to_lines()` 使用 pulldown-cmark 事件流 + `role_stack` 嵌套上下文跟踪。
+  - **S5 Phase 2B: 虚拟滚动 + 行渲染骨架** — `LineViewport::visible_range()` 计算半开索引范围；`LineCursor` 支持 j/k/g/G/Esc 导航；egui `line_renderer.rs` 实现 `render_lines()` 带 clip rect culling 和选中高亮。
+  - **S6 Phase 2C: 三面板行级迁移** — `clarity-egui` 新增 `line-mode` feature flag。`Message` 结构体添加 `lines: Vec<RenderLine>`，`prepare()` 自动填充。ChatArea / Workspace 预览抽屉在 `line-mode` 下使用 `render_lines` 渲染。`BlockSlot` 为 Table/Image 提供逃生舱。
+  - **S7 Phase 2D: 行级导航落地** — 焦点感知快捷键：`j/k/g/G` 在 `FocusScope::Panel(ChatStream)` 下驱动 `LineCursor`。`y` 复制选中行文本到剪贴板。全局行偏移表将 `line_cursor_selected` 映射为消息级局部 `selected_idx`。
+  - **文档**: 4 份架构笔记 — `renderline-pipeline.md`, `shortcut-focus-routing.md`, `viewstate-migration.md`, `ui-axis.md`。
+
 ## [0.3.2] — 2026-05-03
 
 ### Added
