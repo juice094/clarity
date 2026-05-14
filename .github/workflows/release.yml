@@ -71,10 +71,58 @@ jobs:
           path: |
             target/release/clarity-egui.exe
 
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-windows
+          path: target/release/clarity-egui.exe
+
+  release-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build egui release binary
+        run: cargo build --release -p clarity-egui
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-linux
+          path: target/release/clarity-egui
+
+  create-release:
+    needs: [release-windows, release-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clarity-windows
+          path: artifacts/windows
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clarity-linux
+          path: artifacts/linux
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/release/clarity-egui.exe
+            artifacts/windows/clarity-egui.exe
+            artifacts/linux/clarity-egui
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
