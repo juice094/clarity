@@ -50,6 +50,7 @@ pub mod compaction;
 pub mod config;
 pub(crate) mod daemon;
 pub use clarity_tools::diff;
+pub mod endpoint;
 pub mod error;
 pub mod hooks;
 pub mod logging;

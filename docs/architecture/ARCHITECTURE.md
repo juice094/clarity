@@ -103,6 +103,25 @@ cursor-based text flow).
 
 📄 Deep dive: [`ui-axis.md`](ui-axis.md)
 
+### 2.6 Endpoint Abstraction — `EndpointDescriptor`
+
+A unified contract for **any addressable endpoint** in the Clarity ecosystem:
+in-process personas (Gray / Analyst / Programmer), browser-mediated AI sites
+(ChatGPT / Claude / Gemini / DeepSeek — OpenTeam-Core), and frontend adapters
+(GUI / TUI / Headless).
+
+📄 Decision record: [`../adr/ADR-015-endpoint-descriptor-abstraction.md`](../adr/ADR-015-endpoint-descriptor-abstraction.md)
+📄 Source: `crates/clarity-core/src/endpoint.rs`
+
+Why this exists: every switcher widget (Persona switcher in the GUI Top Bar,
+Site selector in OpenTeam-Core) needs the same conceptual shape — id + display
+metadata + capabilities + dispatch kind. Sharing one descriptor eliminates
+triplicated UI code and divergent serde schemas.
+
+Capability flags (`Chat | Coding | Analysis | Browse | Vision | ToolUse | Planning`)
+drive UX gating: when the active endpoint lacks `Browse`, the browser panel
+auto-disables.
+
 ---
 
 ## 3. Architecture Decision Records (ADRs)
@@ -124,6 +143,7 @@ All major decisions are recorded under `../adr/`. Active ADRs:
 | 012 | `RenderLine` enum design (13 variants) | Accepted |
 | 013 | Keyboard shortcuts (ClaudeCode-inspired) | Accepted |
 | 014 | Side panel tab consolidation (Tab D) | Accepted |
+| 015 | `EndpointDescriptor` abstraction (Persona/Site/Frontend unified) | Accepted |
 
 ---
 
