@@ -3,6 +3,7 @@ pub mod card;
 pub mod command_palette;
 pub mod icon_button;
 pub mod interactive_row;
+pub mod persona_switcher;
 pub mod provider_row;
 pub mod settings_row;
 pub mod sidebar_card;
@@ -17,6 +18,9 @@ pub mod window_control;
 // pub use icon_button::icon_button_primary; // restored via git history if needed
 pub use icon_button::icon_button_toolbar;
 pub use interactive_row::interactive_row;
+pub use persona_switcher::persona_switcher;
+// `PersonaSwitcherResponse` is accessed via the fully-qualified path inside
+// `main::render_persona_switcher`; not re-exported here to avoid unused warnings.
 pub use provider_row::provider_row;
 // pub use settings_row::settings_row; // not yet integrated into tabs
 pub use sidebar_card::sidebar_card;

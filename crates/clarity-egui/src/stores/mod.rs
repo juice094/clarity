@@ -256,6 +256,15 @@ pub struct UiStore {
     /// Cached shell prompt prefix: "cwd branch" (e.g. "clarity main").
     /// Refreshed periodically by App::refresh_shell_prompt.
     pub shell_prompt: String,
+    /// S8 P3B.1: registry of all Clarity personas (Gray / Analyst / Programmer + future).
+    /// Sourced from `clarity_core::endpoint::default_clarity_personas()` at startup.
+    /// Read-only at runtime; mutation requires reloading.
+    pub endpoint_registry: clarity_core::endpoint::EndpointRegistry,
+    /// S8 P3B.1: currently active persona id (e.g. "gray", "analyst", "programmer").
+    /// Persisted via `GuiSettings.active_persona_id` and surfaced in the titlebar.
+    pub active_persona_id: String,
+    /// S8 P3B.1: whether the persona switcher popup is open (titlebar dropdown state).
+    pub persona_switcher_open: bool,
 }
 
 // ============================================================================

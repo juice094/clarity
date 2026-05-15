@@ -46,6 +46,10 @@ pub struct GuiSettings {
     pub sidebar_width: Option<f32>,
     #[serde(default)]
     pub web_tabs: Vec<WebTab>,
+    /// S8 P3B.1: persisted active persona id (e.g. "gray", "analyst", "programmer").
+    /// Maps to `clarity_core::endpoint::EndpointDescriptor.id`.
+    #[serde(default)]
+    pub active_persona_id: Option<String>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -215,6 +219,7 @@ impl Default for GuiSettings {
             content_width: None,
             sidebar_width: None,
             web_tabs: Vec::new(),
+            active_persona_id: None,
             profiles: HashMap::new(),
         }
     }

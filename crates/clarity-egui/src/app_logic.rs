@@ -201,6 +201,10 @@ impl App {
         let web_tabs = settings_edit.web_tabs.clone();
         let font_scale = settings_edit.font_scale.unwrap_or(1.0);
         let content_width = settings_edit.content_width.unwrap_or(720.0);
+        let active_persona_id = settings_edit
+            .active_persona_id
+            .clone()
+            .unwrap_or_else(|| "gray".to_string());
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -347,6 +351,9 @@ impl App {
                 line_cursor_total_lines: 0,
                 titlebar_right_width: 260.0,
                 shell_prompt: String::new(),
+                endpoint_registry: clarity_core::endpoint::default_clarity_personas(),
+                active_persona_id,
+                persona_switcher_open: false,
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],

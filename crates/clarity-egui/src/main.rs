@@ -255,6 +255,10 @@ impl App {
                         strip.cell(|ui| {
                             ui.set_min_height(theme.size_titlebar);
                             ui.horizontal_centered(|ui| {
+                                // S8 P3B.1: Persona switcher pill (Top Bar per ADR-014).
+                                self.render_persona_switcher(ui, &theme);
+                                ui.add_space(theme.space_8);
+
                                 crate::panels::chat::header::render_session_tabs(self, ui);
 
                                 // Model context indicator (Pretext UI mid-zone)
@@ -299,6 +303,44 @@ impl App {
                         });
                     });
             });
+    }
+
+    /// S8 P3B.1: Render the persona switcher pill in the titlebar's CENTER
+    /// zone (left edge, before session tabs). Mutates `ui_store.active_persona_id`
+    /// on selection and persists to `settings_edit.active_persona_id`.
+    fn render_persona_switcher(&mut self, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+        let resp = crate::widgets::persona_switcher(
+            ui,
+            theme,
+            &self.ui_store.endpoint_registry,
+            &self.ui_store.active_persona_id,
+            self.ui_store.persona_switcher_open,
+        );
+        if resp.toggle_clicked {
+            self.ui_store.persona_switcher_open = !self.ui_store.persona_switcher_open;
+        }
+        if let Some(new_id) = resp.selected {
+            if new_id != self.ui_store.active_persona_id {
+                self.ui_store.active_persona_id = new_id.clone();
+                self.settings_store.settings_edit.active_persona_id = Some(new_id.clone());
+                if let Err(e) = self.settings_store.settings_edit.save() {
+                    tracing::warn!("failed to persist active_persona_id: {}", e);
+                }
+                let descriptor_name = self
+                    .ui_store
+                    .endpoint_registry
+                    .get(&new_id)
+                    .map(|d| d.display_name.as_str().to_string())
+                    .unwrap_or_else(|| new_id.clone());
+                self.push_toast(
+                    format!("Switched persona: {}", descriptor_name),
+                    crate::ui::types::ToastLevel::Info,
+                );
+            }
+        }
+        if resp.close_requested {
+            self.ui_store.persona_switcher_open = false;
+        }
     }
 
     /// Render the right section of the titlebar (window controls + status capsules).
