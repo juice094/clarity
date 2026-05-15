@@ -1,4 +1,6 @@
 use crate::app::{Message, MessageType};
+use clarity_core::ui::markdown_to_lines;
+use clarity_tui::render_line::render_line_to_ratatui;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -6,8 +8,6 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
-
-use super::markdown::render_markdown;
 
 /// 聊天区域组件
 pub struct ChatPane<'a> {
@@ -116,16 +116,19 @@ impl<'a> Widget for ChatPane<'a> {
                         time,
                     ]));
 
-                    let md_lines = render_markdown(
-                        &msg.content,
-                        Style::default().fg(Color::Rgb(210, 230, 220)),
-                    );
-                    for md_line in md_lines {
+                    // S7 Phase 3A: route Assistant markdown through the shared
+                    // clarity_core RenderLine pipeline instead of the local
+                    // widgets/markdown.rs parser. GUI and TUI now consume the
+                    // same intermediate representation.
+                    let render_lines = markdown_to_lines(&msg.content);
+                    let agent_base = Style::default().fg(Color::Rgb(210, 230, 220));
+                    for rl in &render_lines {
+                        let rata_line = render_line_to_ratatui(rl, agent_base);
                         let mut spans = vec![Span::styled(
                             "  ▎ ",
                             Style::default().fg(Color::Rgb(80, 180, 140)),
                         )];
-                        spans.extend(md_line.spans);
+                        spans.extend(rata_line.spans);
                         lines.push(Line::from(spans));
                     }
 
