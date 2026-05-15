@@ -1,8 +1,10 @@
 # Clarity 后续开发主计划书
 
-> **Date**: 2026-05-14 | **Status**: S3 进行中 | **Owner**: juice094 + Clarity Agent
+> **Date**: 2026-05-15 (revised) | **Status**: S7 Phase 3A 已闭环；准备 S8 | **Owner**: juice094 + Clarity Agent
 > **Single source of truth**: 本文件整合 `pretext-ui-evolution.md` + `ROADMAP.md` + `FUTURE_DIRECTION.md` + `ENGINEERING_PLAN.md`
-> **基线 commit**: `9103362f` on `main` | 所有前置 ADR: 011/012/013/014
+> **基线 commit**: `edbb615f` on `main` | 所有前置 ADR: 011/012/013/014
+
+> **2026-05-15 修订说明**: 经代码实证审计，S3/S4/S5/S6 的核心基础设施在 master-schedule 起草时（2026-05-14）已实际完成，本次修订将其状态标记为 ✅，并将焦点转移到 S7/S8。
 
 ---
 
@@ -10,14 +12,17 @@
 
 | 维度 | 状态 |
 |------|------|
-| 版本 | v0.3.2（未 tag，HEAD `9103362f`） |
-| Rust 测试 | 849 passed / 0 failed / 7 ignored |
+| 版本 | v0.3.3（已发布，含 Windows + Linux 双平台） |
+| Rust 测试 | 全绿（含 19 个 S7 新增 parity gate） |
 | Clippy | 零 warning（`-D warnings`） |
-| `clarity-egui` 测试 | 0（已知债务，Phase 2 注入基线） |
+| `clarity-egui` 主要测试 | RenderLine pipeline 已接入；ChatArea line-mode flag 切换完成 |
 | 主力 UI 栈 | egui 0.31（Tauri 已归档） |
-| 状态机 | `ViewState` 已上线，bridge reversal 完成（P1.5.4d） |
+| 状态机 | `ViewState` 已上线，bridge reversal 完成（P1.5.4d）|
+| ShortcutRegistry | 焦点感知路由实现 + 12 tests pass |
 | 右侧栏 | Tab D 形式（Team / Task / Dashboard 互斥） |
-| Skill/MCP | 已重分类为 `ModalType`（真正模态） |
+| Skill/MCP | 已重分类为 `ModalType`（真正模态）|
+| RenderLine | 13-variant enum + markdown_to_lines + line_renderer + GUI/TUI 双端接入 |
+| TUI parity | render_line_to_ratatui + 12 snapshot tests + plain_text parity gate |
 
 ---
 
@@ -29,44 +34,42 @@
 |---------|-------|------|------|------|----------|
 | S1 | 0.5 | 5 P0 阻塞项（token、focus ring、palette 执行） | 4h | ✅ | 审计闭环 |
 | S2 | 1 | StripBuilder TitleBar + Lucide 迁移 | 5h | ✅ | RULE 6/7 |
-| **S3** | **1.5** | **状态机迁移 + bridge reversal + 非法状态测试** | **~8h** | **🔄** | **ViewState 权威化** |
-| S4 | 2A | `RenderLine` 13-variant（ADR-012） | 6h | ⏸️ | markdown→lines |
-| S5 | 2B | 行渲染器 + 虚拟滚动 + j/k 导航 | 6h | ⏸️ | 10K msg @ 60fps |
-| S6 | 2C | ChatArea + Sidebar + Workspace 三栏 | 6h | ⏸️ | `line-mode` flag |
-| S7 | 3A | TUI parity + snapshot 测试 | 6h | ⏸️ | GUI/TUI 同 fixture |
+| S3 | 1.5 | 状态机迁移 + bridge reversal + 非法状态测试 | ~8h | ✅ | ViewState 权威化 + 44 tests |
+| S4 | 2A | `RenderLine` 13-variant（ADR-012） | 6h | ✅ | markdown→lines + 28 tests |
+| S5 | 2B | 行渲染器 + 虚拟滚动 + j/k 导航 | 6h | ✅ | line_renderer.rs + cursor logic |
+| S6 | 2C | ChatArea + Sidebar + Workspace 三栏 | 6h | ✅ | `line-mode` flag + Message::lines |
+| **S7** | **3A** | **TUI parity + snapshot 测试** | **6h** | **✅** | **render_line_to_ratatui + 19 parity gates** |
 | S8 | 3B | 信息架构重构（persona/notes/equipment/快捷键） | 6h | ⏸️ | ADR-011/013 落地 |
 | S9 | 3C | 文档 + 性能基准 + 闭环 | 4h | ⏸️ | 4 份架构笔记 |
 
-**已完成**: 9h | **剩余**: ~42.5h
+**已完成**: 47h | **剩余**: ~10h
 
 ### 2.2 Release 维度（版本里程碑）
 
 ```
-2026-05 ── v0.3.2+    S3 闭环 + S4 启动
-    │                   ├─ P1.5.7 非法状态测试
-    │                   ├─ P1.5.8 ARCHITECTURE.md 状态机章节
-    │                   ├─ P1.5.9 ShortcutRegistry 骨架
-    │                   └─ S4: RenderLine 13-variant 实现
+2026-05-15 ── v0.3.3 已发布     S3/S4/S5/S6/S7 核心基础设施全部就绪
+    │                            ├─ RenderLine + line_renderer
+    │                            ├─ ChatArea line-mode 切换完成
+    │                            ├─ TUI parity（19 gates）
+    │                            └─ Windows + Linux 双平台二进制
     │
-2026-06 ── v0.4.0-beta  S5+S6 完成（RenderLine 上线 + 三栏工作台）
-    │                   ├─ 虚拟滚动 + j/k 导航
-    │                   ├─ ChatArea / Sidebar / Workspace 迁移
-    │                   └─ 性能优化：10K 消息 60fps 验证
+2026-05 末 ── v0.3.4 候选       S8 信息架构（如范围允许）
     │
-2026-07 ── v0.5.0-beta  集群语义验证（FUTURE_DIRECTION Phase C）
-    │                   ├─ Hub-Worker 调度器
-    │                   ├─ AgentPool + 多窗口
-    │                   ├─ IPC 回环（TCP 127.0.0.1）
-    │                   └─ Wire 跨 Agent 消息扩展
+2026-06 ── v0.4.0-beta          S9 闭环 + 性能基准 + Phase A 基础设施
+    │                            ├─ WebSocket MCP 传输
+    │                            ├─ Gateway↔BTM 集成
+    │                            ├─ Worker 池自动扩缩容
+    │                            └─ 性能验证：10K 消息 60fps
     │
-2026-08 ── v0.6.0-rc   Sandbox + Plugin SDK
-2026-09 ── v0.7.0-rc   Bridge + Voice + Canvas
-2026-10 ── v1.0.0      稳定版发布
+2026-07 ── v0.5.0-beta          集群语义验证（FUTURE_DIRECTION Phase C）
+2026-08 ── v0.6.0-rc            Sandbox + Plugin SDK
+2026-09 ── v0.7.0-rc            Bridge + Voice + Canvas
+2026-10 ── v1.0.0               稳定版发布
 ```
 
 ---
 
-## 3. S3 剩余任务（当前阻塞点）
+## 3. S8 工作（当前阻塞点）
 
 | ID | 任务 | 预估 | 验收标准 |
 |----|------|------|----------|
