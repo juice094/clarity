@@ -189,6 +189,30 @@ pub struct Theme {
     /// Titlebar LEFT zone width (sidebar toggle when collapsed + brand).
     pub titlebar_left_w: f32,
 
+    // --- Widget micro-dimensions (P0.5.F.2 tokenization) ---
+    /// File-tree indent per depth level (full mode).
+    pub size_tree_indent: f32,
+    /// File-tree indent per depth level (compact mode).
+    pub size_tree_indent_compact: f32,
+    /// File icon size in file browser (full mode).
+    pub size_file_icon: f32,
+    /// File icon size in file browser (compact mode).
+    pub size_file_icon_compact: f32,
+    /// MCP status button width when servers are connected.
+    pub size_mcp_btn_w: f32,
+    /// MCP status button width when no servers are configured.
+    pub size_mcp_btn_w_compact: f32,
+    /// New-tab [+] button reserved width in tab strip.
+    pub size_new_tab_btn_w: f32,
+    /// Minimum session tab width.
+    pub size_tab_min_w: f32,
+    /// Maximum session tab width.
+    pub size_tab_max_w: f32,
+    /// Tab close button width.
+    pub size_close_btn_w: f32,
+    /// Active tab accent underline height.
+    pub size_accent_line_h: f32,
+
     // --- Responsive breakpoints ---
     pub breakpoint_compact: f32,
     pub breakpoint_medium: f32,
@@ -359,6 +383,19 @@ impl Theme {
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
 
+            // Widget micro-dimensions (P0.5.F.2)
+            size_tree_indent: 16.0,
+            size_tree_indent_compact: 4.0,
+            size_file_icon: 14.0,
+            size_file_icon_compact: 10.0,
+            size_mcp_btn_w: 36.0,
+            size_mcp_btn_w_compact: 20.0,
+            size_new_tab_btn_w: 28.0,
+            size_tab_min_w: 48.0,
+            size_tab_max_w: 180.0,
+            size_close_btn_w: 18.0,
+            size_accent_line_h: 1.0,
+
             // Responsive breakpoints
             breakpoint_compact: 768.0,
             breakpoint_medium: 1100.0,
@@ -521,6 +558,19 @@ impl Theme {
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
 
+            // Widget micro-dimensions (P0.5.F.2, shared)
+            size_tree_indent: 16.0,
+            size_tree_indent_compact: 4.0,
+            size_file_icon: 14.0,
+            size_file_icon_compact: 10.0,
+            size_mcp_btn_w: 36.0,
+            size_mcp_btn_w_compact: 20.0,
+            size_new_tab_btn_w: 28.0,
+            size_tab_min_w: 48.0,
+            size_tab_max_w: 180.0,
+            size_close_btn_w: 18.0,
+            size_accent_line_h: 1.0,
+
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,
             breakpoint_medium: 1100.0,
@@ -669,6 +719,19 @@ impl Theme {
             palette_w: 520.0,
             palette_max_h: 320.0,
             titlebar_left_w: 130.0,
+
+            // Widget micro-dimensions (P0.5.F.2, shared)
+            size_tree_indent: 16.0,
+            size_tree_indent_compact: 4.0,
+            size_file_icon: 14.0,
+            size_file_icon_compact: 10.0,
+            size_mcp_btn_w: 36.0,
+            size_mcp_btn_w_compact: 20.0,
+            size_new_tab_btn_w: 28.0,
+            size_tab_min_w: 48.0,
+            size_tab_max_w: 180.0,
+            size_close_btn_w: 18.0,
+            size_accent_line_h: 1.0,
 
             // Responsive breakpoints (shared)
             breakpoint_compact: 768.0,

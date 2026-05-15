@@ -165,7 +165,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 .mcp_config
                                 .as_ref()
                                 .map_or(0, |c| c.servers.len());
-                            let mcp_btn_w = if mcp_count > 0 { 36.0 } else { 20.0 };
+                            let mcp_btn_w = if mcp_count > 0 {
+                                theme.size_mcp_btn_w
+                            } else {
+                                theme.size_mcp_btn_w_compact
+                            };
                             let (mcp_rect, mcp_resp) = ui.allocate_exact_size(
                                 egui::vec2(mcp_btn_w, 28.0),
                                 egui::Sense::click(),

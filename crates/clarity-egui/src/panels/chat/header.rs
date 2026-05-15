@@ -18,12 +18,13 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         })
         .collect();
 
-    ui.spacing_mut().item_spacing.x = 4.0;
+    let theme = &app.ui_store.theme;
+    ui.spacing_mut().item_spacing.x = theme.space_4;
     let mut rename_commit: Option<(String, String)> = None;
     let mut tab_to_close: Option<String> = None;
 
     // Browser-style auto-width tabs
-    let reserved_for_plus: f32 = 28.0;
+    let reserved_for_plus: f32 = theme.size_new_tab_btn_w;
     let tab_count = category_sessions.len();
     let spacing = ui.spacing().item_spacing.x;
     let total_spacing = if tab_count > 1 {
@@ -32,26 +33,26 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
         0.0
     };
     let total_available = (ui.available_width() - reserved_for_plus - total_spacing).max(0.0);
-    const TAB_MIN: f32 = 48.0;
-    const TAB_HARD_MIN: f32 = 48.0;
-    const TAB_MAX: f32 = 180.0;
+    let tab_min = theme.size_tab_min_w;
+    let tab_hard_min = theme.size_tab_min_w;
+    let tab_max = theme.size_tab_max_w;
     let raw_width = if tab_count == 0 {
         0.0
     } else {
         total_available / tab_count as f32
     };
-    // When space is too tight even for TAB_MIN, shrink proportionally
+    // When space is too tight even for tab_min, shrink proportionally
     // rather than clamping — this prevents the tab bar from overflowing
     // its allocated zone and being visually truncated.
-    let mut tab_width = if raw_width < TAB_MIN {
-        raw_width.max(TAB_HARD_MIN)
+    let mut tab_width = if raw_width < tab_min {
+        raw_width.max(tab_hard_min)
     } else {
-        raw_width.clamp(TAB_MIN, TAB_MAX)
+        raw_width.clamp(tab_min, tab_max)
     };
     // Fix 2: 防溢出 — 确保所有 tab + spacing 不超过可用空间
     let actual_total = tab_width * tab_count as f32 + total_spacing;
     if actual_total > total_available && tab_count > 0 {
-        tab_width = ((total_available - total_spacing) / tab_count as f32).max(4.0);
+        tab_width = ((total_available - total_spacing) / tab_count as f32).max(theme.space_4);
     }
 
     for (id, title, is_active, _category) in &category_sessions {

@@ -87,7 +87,7 @@ pub fn render_file_tree(
             .id_salt(header_id)
             .default_open(depth < 1);
             let resp = header.show(ui, |ui| {
-                ui.spacing_mut().indent = 16.0;
+                ui.spacing_mut().indent = theme.size_tree_indent;
                 render_file_tree(
                     ui,
                     &full_path,
@@ -118,9 +118,9 @@ pub fn render_file_tree(
                 theme.text_dim
             };
             let indent = if compact {
-                4.0
+                theme.size_tree_indent_compact
             } else {
-                8.0 * depth as f32 + 12.0
+                theme.space_8 * depth as f32 + theme.space_12
             };
 
             let resp = crate::widgets::interactive_row(
@@ -132,7 +132,11 @@ pub fn render_file_tree(
                         ui.add_space(indent);
 
                         // Icon: Lucide File (unified with global icon system)
-                        let icon_size = if compact { 10.0 } else { 14.0 };
+                        let icon_size = if compact {
+                            theme.size_file_icon_compact
+                        } else {
+                            theme.size_file_icon
+                        };
                         ui.label(
                             egui::RichText::new(crate::theme::ICON_FILE)
                                 .font(theme.font_icon(icon_size))

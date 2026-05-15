@@ -37,13 +37,13 @@ pub fn tab_button(
         // Close column is always allocated (18 px) so hover-in/out never
         // shifts the label.
         ui.horizontal(|ui| {
-            ui.add_space(4.0);
+            ui.add_space(theme.space_4);
 
             // Label: let egui handle truncation (stable, no threshold jitter).
             // Sense::empty() prevents the label hitbox from leaking outside the tab
             // and blocking adjacent widgets (official egui pattern for non-interactive text).
             let spacing = ui.spacing().item_spacing.x;
-            let label_w = (ui.available_width() - 18.0 - spacing - 4.0).max(0.0);
+            let label_w = (ui.available_width() - theme.size_close_btn_w - spacing - theme.space_4).max(0.0);
             if label_w > 0.0 {
                 ui.add_sized(
                     egui::vec2(label_w, theme.size_tab_h),
@@ -65,7 +65,7 @@ pub fn tab_button(
                 egui::Color32::TRANSPARENT
             };
             let close_resp = ui.add_sized(
-                egui::vec2(18.0, theme.size_tab_h),
+                egui::vec2(theme.size_close_btn_w, theme.size_tab_h),
                 egui::Button::new(
                     egui::RichText::new(crate::theme::ICON_X)
                         .font(theme.font_icon(theme.text_xs))
@@ -80,10 +80,10 @@ pub fn tab_button(
             }
         });
 
-        // Active tab: 1px accent line at the bottom (full width).
+        // Active tab: accent line at the bottom (full width).
         if is_active {
             let line_rect = egui::Rect::from_min_max(
-                egui::pos2(tab_rect.min.x, tab_rect.max.y - 1.0),
+                egui::pos2(tab_rect.min.x, tab_rect.max.y - theme.size_accent_line_h),
                 egui::pos2(tab_rect.max.x, tab_rect.max.y),
             );
             ui.painter()
