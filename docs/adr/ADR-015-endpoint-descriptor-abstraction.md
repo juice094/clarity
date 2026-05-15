@@ -9,7 +9,7 @@
 
 Three distinct subsystems are growing concurrently:
 
-1. **Clarity Personas** (S8 P3B.1): Gray, Analyst, Programmer — each binds an LLM
+1. **Clarity Personas** (S8 P3B.1): Kin, Analyst, Programmer — each binds an LLM
    provider + system prompt + capability set. The UI needs a switcher.
 
 2. **OpenTeam-Core Sites** (Phase 2, separate repo): ChatGPT, Claude, Gemini,

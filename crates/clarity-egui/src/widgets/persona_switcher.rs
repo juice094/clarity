@@ -1,18 +1,18 @@
 //! Persona switcher pill — S8 P3B.1.
 //!
 //! A compact titlebar control that surfaces the currently active Clarity
-//! persona (Gray / Analyst / Programmer / …) and lets the user swap it
+//! persona (Kin / Analyst / Programmer / …) and lets the user swap it
 //! via a popup dropdown.
 //!
 //! ## Visual model
 //!
 //! ```text
 //! ┌───────────────────┐
-//! │ G  Gray        ▾ │   ← pill button, accent-tinted when popup open
+//! │ K  Kin        ▾ │   ← pill button, accent-tinted when popup open
 //! └───────────────────┘
 //!         ▼ click expands
 //! ┌─────────────────────────────────────────┐
-//! │ G  Gray                                 │
+//! │ K  Kin                              │
 //! │    Default reasoner — balanced …       │   ← active (highlighted)
 //! ├─────────────────────────────────────────┤
 //! │ A  Analyst                              │
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn first_letter_uppercases_lowercase_input() {
-        assert_eq!(first_letter("gray"), "G");
+        assert_eq!(first_letter("kin"), "K");
         assert_eq!(first_letter("analyst"), "A");
         assert_eq!(first_letter(""), "?");
     }
@@ -386,8 +386,8 @@ mod tests {
 
     #[test]
     fn truncate_returns_input_when_it_fits() {
-        let s = truncate("Gray", 200.0, 14.0);
-        assert_eq!(s, "Gray");
+        let s = truncate("Kin", 200.0, 14.0);
+        assert_eq!(s, "Kin");
     }
 
     #[test]

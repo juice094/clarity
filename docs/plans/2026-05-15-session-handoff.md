@@ -60,7 +60,7 @@ P3B.4 Notes Sidebar 或 P3B.8 快捷键扩展。
 - `EndpointCapability`（7 变体：Chat/Coding/Analysis/Browse/Vision/ToolUse/Planning）
 - `EndpointKind`（5 变体：LocalLlm/RemoteLlm/BrowserSite/Frontend/McpTool）
 - `EndpointRegistry`（LIFO 注册中心）
-- `default_clarity_personas()` → Gray/Analyst/Programmer
+- `default_clarity_personas()` → Kin/Analyst/Programmer
 - `EndpointDescriptor::browser_site()` → OpenTeam 端点工厂
 
 **ADR**：[`docs/adr/ADR-015-endpoint-descriptor-abstraction.md`](../adr/ADR-015-endpoint-descriptor-abstraction.md)

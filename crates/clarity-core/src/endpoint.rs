@@ -4,7 +4,7 @@
 //! Clarity ecosystem. An endpoint is anything that owns identity + capabilities
 //! + a dispatch surface:
 //!
-//! - **Personas** (Clarity): "Gray" reasoner, "Analyst" data persona, "Programmer"
+//! - **Personas** (Clarity): "Kin" reasoner, "Analyst" data persona, "Programmer"
 //!   coder persona. Each binds to a specific LLM provider + system prompt.
 //! - **AI Sites** (OpenTeam-Core, future): ChatGPT / Claude / Gemini / DeepSeek.
 //!   Each binds to a CDP-injection script + DOM selector set.
@@ -74,9 +74,9 @@ pub struct EndpointDescriptor {
     /// Schema version for migration safety.
     #[serde(default = "default_schema_version")]
     pub schema_version: u8,
-    /// Stable kebab-case identifier (e.g. `"gray"`, `"chatgpt"`).
+    /// Stable kebab-case identifier (e.g. `"kin"`, `"chatgpt"`).
     pub id: SmolStr,
-    /// Human-friendly display name (e.g. `"Gray"`, `"ChatGPT"`).
+    /// Human-friendly display name (e.g. `"Kin"`, `"ChatGPT"`).
     pub display_name: SmolStr,
     /// One-line description for tooltips / switcher menus.
     pub description: SmolStr,
@@ -193,7 +193,7 @@ impl EndpointRegistry {
     }
 }
 
-/// Build the default Clarity persona set (Gray / Analyst / Programmer).
+/// Build the default Clarity persona set (Kin / Analyst / Programmer).
 ///
 /// This is the minimum viable registry for S8 P3B.1 Top Bar Persona switcher.
 /// Future personas may be added by external configuration without touching
@@ -203,8 +203,8 @@ pub fn default_clarity_personas() -> EndpointRegistry {
 
     reg.register(EndpointDescriptor {
         schema_version: ENDPOINT_SCHEMA_VERSION,
-        id: "gray".into(),
-        display_name: "Gray".into(),
+        id: "kin".into(),
+        display_name: "Kin".into(),
         description: "Default reasoner — balanced general-purpose persona.".into(),
         kind: EndpointKind::LocalLlm,
         capabilities: vec![
@@ -261,7 +261,7 @@ mod tests {
     fn default_personas_has_three_entries() {
         let reg = default_clarity_personas();
         assert_eq!(reg.len(), 3);
-        assert!(reg.get("gray").is_some());
+        assert!(reg.get("kin").is_some());
         assert!(reg.get("analyst").is_some());
         assert!(reg.get("programmer").is_some());
     }

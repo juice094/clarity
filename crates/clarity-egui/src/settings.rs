@@ -46,7 +46,7 @@ pub struct GuiSettings {
     pub sidebar_width: Option<f32>,
     #[serde(default)]
     pub web_tabs: Vec<WebTab>,
-    /// S8 P3B.1: persisted active persona id (e.g. "gray", "analyst", "programmer").
+    /// S8 P3B.1: persisted active persona id (e.g. "kin", "analyst", "programmer").
     /// Maps to `clarity_core::endpoint::EndpointDescriptor.id`.
     #[serde(default)]
     pub active_persona_id: Option<String>,

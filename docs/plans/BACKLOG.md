@@ -178,11 +178,11 @@
 | 事项 | 优先级 | 说明 |
 |------|--------|------|
 | AgentInstance + AgentPool | P1 | 包装 `AgentController`，支持多实例并发 |
-| Identity 路由 | P1 | `Gray/Kimi/Analyst/Programmer` 等身份 + 按任务路由 |
+| Identity 路由 | P1 | `Kin/Kimi/Analyst/Programmer` 等身份 + 按任务路由 |
 | Wire 协议扩展（跨 Agent 消息） | P1 | `AgentMessage { from, to, payload }` + `AgentStateSnapshot` |
 | IPC 传输层 | P1 | `Transport::Ipc`（TCP 回环 + UDS + Named Pipe） |
 | 多窗口状态模型 | P1 | `AppState.agent` → `Arc<RwLock<AgentPool>>` |
-| 存在论锚点硬绑定 | P2 | `AgentPool::default_instance` 固定指向 `Identity::Gray` |
+| 存在论锚点硬绑定 | P2 | `AgentPool::default_instance` 固定指向 `Identity::Kin` |
 
 ### Phase D：跨设备验证 — Syncthing-Rust（4–6 周）
 

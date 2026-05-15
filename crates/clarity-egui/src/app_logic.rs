@@ -204,7 +204,7 @@ impl App {
         let active_persona_id = settings_edit
             .active_persona_id
             .clone()
-            .unwrap_or_else(|| "gray".to_string());
+            .unwrap_or_else(|| "kin".to_string());
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),

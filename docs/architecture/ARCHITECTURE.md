@@ -106,7 +106,7 @@ cursor-based text flow).
 ### 2.6 Endpoint Abstraction — `EndpointDescriptor`
 
 A unified contract for **any addressable endpoint** in the Clarity ecosystem:
-in-process personas (Gray / Analyst / Programmer), browser-mediated AI sites
+in-process personas (Kin / Analyst / Programmer), browser-mediated AI sites
 (ChatGPT / Claude / Gemini / DeepSeek — OpenTeam-Core), and frontend adapters
 (GUI / TUI / Headless).
 
