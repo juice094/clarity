@@ -242,6 +242,56 @@ pub type BlockId = SmolStr;
 // Markdown → Lines converter
 // ============================================================================
 
+/// Extract plain text content from a `RenderLine`, ignoring all styling.
+///
+/// This is the canonical "plain text projection" used for:
+/// - GUI/TUI parity tests (both frontends must agree on textual content)
+/// - Copy-to-clipboard operations
+/// - Search indexing
+///
+/// Decorative glyphs (icons, prefixes) are excluded so callers receive only
+/// the semantic payload.
+pub fn render_line_plain_text(line: &RenderLine) -> String {
+    match line {
+        RenderLine::Text { spans, .. } => spans.iter().map(|s| s.text.as_str()).collect(),
+        RenderLine::CodeLine { content, .. } => content.to_string(),
+        RenderLine::ToolCallHeader { name, .. } => name.to_string(),
+        RenderLine::ToolCallArg { key, value } => format!("{}: {}", key, value),
+        RenderLine::Thinking { content, .. } => content.to_string(),
+        RenderLine::ApprovalPrompt { options } => options
+            .iter()
+            .map(|opt| match opt {
+                ApprovalOption::Yes => "Yes".to_string(),
+                ApprovalOption::YesAndRemember => "Yes & remember".to_string(),
+                ApprovalOption::No { .. } => "No".to_string(),
+                ApprovalOption::Custom(s) => s.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+        RenderLine::StatusLine { content, .. } => content.to_string(),
+        RenderLine::ArtifactRef { artifact_id, summary } => {
+            format!("{} {}", artifact_id, summary)
+        }
+        RenderLine::CrossInstanceRef {
+            target_instance,
+            target_session,
+            message,
+        } => match target_session {
+            Some(s) => format!("{} ({}) {}", target_instance, s, message),
+            None => format!("{} {}", target_instance, message),
+        },
+        RenderLine::SlashCompletion { command, description } => {
+            format!("/{} {}", command, description)
+        }
+        RenderLine::StreamingCursor => String::new(),
+        RenderLine::Divider => String::new(),
+        RenderLine::Empty => String::new(),
+        RenderLine::BlockSlot { block_id, line_count } => {
+            format!("[Block {} - {} lines]", block_id, line_count)
+        }
+    }
+}
+
 /// Convert a markdown string into a sequence of `RenderLine`s.
 ///
 /// This is a **lossy** conversion in one direction: tables and images degrade
@@ -834,5 +884,84 @@ Final words."#;
         c.total = 5;
         c.clamp();
         assert_eq!(c.selected, Some(4));
+    }
+
+    // ====================================================================
+    // S7 Phase 3A — plain_text projection tests (GUI/TUI parity contract)
+    // ====================================================================
+
+    #[test]
+    fn plain_text_empty_variant() {
+        assert_eq!(render_line_plain_text(&RenderLine::Empty), "");
+        assert_eq!(render_line_plain_text(&RenderLine::Divider), "");
+        assert_eq!(render_line_plain_text(&RenderLine::StreamingCursor), "");
+    }
+
+    #[test]
+    fn plain_text_text_concatenates_spans() {
+        let line = RenderLine::Text {
+            spans: vec![Span::plain("Hello, "), Span::plain("world")],
+            role: LineRole::AgentMessage,
+            indent: 0,
+        };
+        assert_eq!(render_line_plain_text(&line), "Hello, world");
+    }
+
+    #[test]
+    fn plain_text_code_line_returns_content() {
+        let line = RenderLine::CodeLine {
+            lang: "rust".into(),
+            content: "let x = 1;".into(),
+            line_no: Some(1),
+            diff: DiffKind::Normal,
+        };
+        assert_eq!(render_line_plain_text(&line), "let x = 1;");
+    }
+
+    #[test]
+    fn plain_text_tool_call_header_returns_name() {
+        let line = RenderLine::ToolCallHeader {
+            name: "shell".into(),
+            status: ToolStatus::Running,
+            expanded: true,
+        };
+        assert_eq!(render_line_plain_text(&line), "shell");
+    }
+
+    #[test]
+    fn plain_text_thinking_returns_content() {
+        let line = RenderLine::Thinking {
+            content: "Analyzing the request...".into(),
+            collapsed: false,
+        };
+        assert_eq!(render_line_plain_text(&line), "Analyzing the request...");
+    }
+
+    #[test]
+    fn plain_text_block_slot_contains_id_and_count() {
+        let line = RenderLine::BlockSlot {
+            block_id: "tbl-1".into(),
+            line_count: 5,
+        };
+        let text = render_line_plain_text(&line);
+        assert!(text.contains("tbl-1"));
+        assert!(text.contains("5"));
+    }
+
+    #[test]
+    fn plain_text_roundtrip_via_markdown_to_lines() {
+        // GUI/TUI parity contract: markdown_to_lines() must produce lines
+        // whose plain_text preserves all semantic content from the input.
+        let md = "# Hello\n\nworld\n\n- alpha\n- beta";
+        let lines = markdown_to_lines(md);
+        let joined: String = lines
+            .iter()
+            .map(render_line_plain_text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("Hello"));
+        assert!(joined.contains("world"));
+        assert!(joined.contains("alpha"));
+        assert!(joined.contains("beta"));
     }
 }

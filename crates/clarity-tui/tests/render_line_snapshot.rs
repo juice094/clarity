@@ -124,3 +124,43 @@ fn two_paragraphs_separated() {
     assert!(texts[0].contains("First"));
     assert!(texts[1].contains("Second"));
 }
+
+// ============================================================================
+// GUI/TUI parity contract — TUI ratatui output must contain the same semantic
+// text that `render_line_plain_text()` (the canonical projection) produces.
+// Both frontends agree on content; only styling and decorative glyphs differ.
+// ============================================================================
+
+#[test]
+fn parity_with_plain_text_projection_for_canonical_documents() {
+    use clarity_core::ui::render_line_plain_text;
+
+    let fixtures = [
+        "# Heading",
+        "Plain paragraph.",
+        "- list item",
+        "1. ordered",
+        "> blockquote",
+        "```\ncode\n```",
+        "# A\n\nB\n\n- C",
+    ];
+
+    for md in fixtures {
+        let lines = markdown_to_lines(md);
+        for line in &lines {
+            let plain = render_line_plain_text(line);
+            if plain.is_empty() {
+                continue; // Empty/Divider/StreamingCursor — TUI may render decoration only.
+            }
+            let rata_text =
+                line_to_plain(&render_line_to_ratatui(line, Style::default()));
+            assert!(
+                rata_text.contains(&plain),
+                "PARITY VIOLATION for fixture {:?}:\n  plain_text: {:?}\n  ratatui:    {:?}",
+                md,
+                plain,
+                rata_text
+            );
+        }
+    }
+}
