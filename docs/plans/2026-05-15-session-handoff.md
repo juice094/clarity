@@ -1,25 +1,27 @@
-# Clarity Session Handoff — 2026-05-15
+# Clarity Session Handoff — 2026-05-15 (EOD)
 
 > **Purpose**: Quick context recovery after compaction. Read this first.
-> **HEAD**: `6af64b89` on `main` (pushed to `origin/main`)
-> **Last working session**: 2026-05-15, "S7 闭环 + EndpointDescriptor 架构融合"
+> **HEAD**: `7f78de59` on `main` (pushed to `origin/main`)
+> **Last working session**: 2026-05-15, "S7 闭环 + EndpointDescriptor + S8 P3B.1 + Identity 审计"
 > **Active session ids**: `clarity-2026-05-15-plan` (主), `openteam-re-2026-05-15` (合并)
+> **Companion**: [`reports/2026-05-15-eod.md`](../../reports/2026-05-15-eod.md) — 本日完整 EOD 报告
 
 ---
 
 ## 1. 当前真实相位（与 master-schedule 对账）
 
 ```
-S1 ✅  S2 ✅  S3 ✅  S4 ✅  S5 ✅  S6 ✅  S7 ✅  [S8 待启动]  S9
+S1 ✅  S2 ✅  S3 ✅  S4 ✅  S5 ✅  S6 ✅  S7 ✅  S8 P3B.1 ✅ [S8 余项进行中]  S9
 ```
 
 **关键事实修正**：2026-05-14 master-schedule 起草时低估了进度。本日代码实证审计后，
 S3-S7 的核心基础设施全部在 `main` 中存在并测试通过。`docs/plans/2026-05-14-master-schedule.md`
-已于本次会话修订。
+已于本次会话修订。**S8 P3B.1 Persona Switcher 于本日 EOD 闭环**，下个 P0 候选为
+P3B.4 Notes Sidebar 或 P3B.8 快捷键扩展。
 
 ---
 
-## 2. 本日交付（6 个提交，按时间顺序）
+## 2. 本日交付（8 个提交，按时间顺序）
 
 | Commit | 主旨 |
 |--------|------|
@@ -29,6 +31,8 @@ S3-S7 的核心基础设施全部在 `main` 中存在并测试通过。`docs/pla
 | `edbb615f` | feat(core): `render_line_plain_text` 公共 API + 19 个 GUI/TUI parity gate |
 | `9f5a7f4a` | docs: ARCHITECTURE.md 主索引 + master-schedule 修订 |
 | `6af64b89` | feat(core): EndpointDescriptor 抽象（ADR-015）+ Clarity↔OpenTeam 共享契约 |
+| `ed2f09f8` | docs(handoff): pre-compaction anchor |
+| `7f78de59` | **feat(egui): S8 P3B.1 Persona Switcher UI integration**（474 LOC + 6 tests） |
 
 ---
 
@@ -45,6 +49,7 @@ S3-S7 的核心基础设施全部在 `main` 中存在并测试通过。`docs/pla
 | **ShortcutRegistry** | `clarity_core::ui::shortcut` | 焦点感知路由 + 12 tests + 默认骨架 |
 | **theme token 系统** | `clarity_egui::theme` | 40+ 语义 token（含 11 个新 widget 维度） |
 | **EndpointDescriptor**（本日新增） | `clarity_core::endpoint` | 统一端点契约 + 6 tests + ADR-015 |
+| **PersonaSwitcher**（**本日 EOD 新增**） | `clarity_egui::widgets::persona_switcher` | 407 LOC + 6 tests + titlebar 集成 |
 
 ### 3.2 新建桥梁：EndpointDescriptor
 
@@ -64,22 +69,26 @@ S3-S7 的核心基础设施全部在 `main` 中存在并测试通过。`docs/pla
 
 ## 4. 待办优先级（下次会话开始）
 
-### P0 — S8 P3B.1 Persona Switcher UI 集成
-**推荐作为下次会话首项任务**
+### ✅ ~~P0 — S8 P3B.1 Persona Switcher UI 集成~~（本日 EOD 闭环）
 
-- 工作量：2-3h
-- 触及文件：
-  - `crates/clarity-egui/src/stores/mod.rs` → UiStore 添加 `endpoint_registry` + `active_persona_id`
-  - `crates/clarity-egui/src/widgets/persona_switcher.rs` → 新建组件
-  - `crates/clarity-egui/src/panels/sidebar.rs` 或 `main.rs`（titlebar）→ 集成调用点
-- 验收：可视化切换 Gray/Analyst/Programmer，选择持久化到 settings
+完成于 commit `7f78de59`。详见 [`reports/2026-05-15-eod.md`](../../reports/2026-05-15-eod.md) §2。
 
-### P1 — S8 P3B.4 Notes Sidebar Section
+实际触及：6 文件 / 474 LOC / 6 单测全绿
+- ✅ `crates/clarity-egui/src/stores/mod.rs` → UiStore.endpoint_registry/active_persona_id/persona_switcher_open
+- ✅ `crates/clarity-egui/src/widgets/persona_switcher.rs` → 新建（407 LOC）
+- ✅ `crates/clarity-egui/src/main.rs` → titlebar CENTER 集成（render_persona_switcher）
+- ✅ `crates/clarity-egui/src/settings.rs` → 持久化字段 + Default
+- ✅ `crates/clarity-egui/src/app_logic.rs` → load 时填充 UiStore
+- ✅ `crates/clarity-egui/src/widgets/mod.rs` → 公开 re-export
+
+### P0 — S8 P3B.4 Notes Sidebar Section（候选首位）
+
 - 工作量：2h
 - 复用 `EndpointRegistry` 模式实现 `NoteRegistry`
 - 5 种 sticky note（基于 ADR-011）
+- 验收：左侧栏可创建/编辑/删除 note，TOML 持久化
 
-### P1 — S8 P3B.8 29 快捷键绑定扩展
+### P0 — S8 P3B.8 29 快捷键绑定扩展（候选第二）
 - 工作量：1.5h
 - 基于 `ShortcutRegistry::with_defaults()` 已有 12 项骨架扩展
 - `?` overlay 帮助面板
@@ -215,9 +224,9 @@ cargo fmt --all -- --check
 
 **推荐路径（深度优先 + 桥梁验证）**：
 ```
-下次会话：S8 P3B.1 Persona Switcher UI（验证 EndpointDescriptor）
+本日 EOD: S8 P3B.1 Persona Switcher UI ✅（验证 EndpointDescriptor 端到端可用）
    ↓
-下下次会话：S8 P3B.4 Notes + P3B.8 快捷键扩展
+下次会话: S8 P3B.4 Notes + P3B.8 快捷键扩展
    ↓
 v0.3.4 候选 + OpenTeam Phase 2 启动
    ↓

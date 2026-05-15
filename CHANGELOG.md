@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **S7 Phase 2D: 行级导航落地** — 焦点感知快捷键：`j/k/g/G` 在 `FocusScope::Panel(ChatStream)` 下驱动 `LineCursor`。`y` 复制选中行文本到剪贴板。全局行偏移表将 `line_cursor_selected` 映射为消息级局部 `selected_idx`。
   - **文档**: 4 份架构笔记 — `renderline-pipeline.md`, `shortcut-focus-routing.md`, `viewstate-migration.md`, `ui-axis.md`。
 
+- **S8 P3B.1: Persona Switcher UI 集成（2026-05-15 EOD）**
+  - **EndpointDescriptor 抽象（ADR-015）** — `clarity_core::endpoint` 新模块（520 LOC + 6 tests）：`EndpointDescriptor` schema-versioned 类型；`EndpointCapability`（7 变体：Chat/Coding/Analysis/Browse/Vision/ToolUse/Planning）；`EndpointKind`（5 变体：LocalLlm/RemoteLlm/BrowserSite/Frontend/McpTool）；`EndpointRegistry` LIFO 注册中心；`default_clarity_personas()` 返回 Gray/Analyst/Programmer 三联（实现自 `FUTURE_DIRECTION.md` L166 Identity 枚举锚点）；`EndpointDescriptor::browser_site()` 工厂为 OpenTeam 提供契约。
+  - **Persona Switcher widget** — `clarity_egui::widgets::persona_switcher`（407 LOC + 6 tests）：titlebar StripBuilder CENTER 栏的紧凑 pill（PILL_HEIGHT=26 / PILL_MIN_WIDTH=96 / PILL_MAX_WIDTH=160），点击展开 `egui::Area` popup（POPUP_WIDTH=280 / ROW_HEIGHT=44, `Order::Foreground + fixed_pos` 突破 titlebar clip rect）。设计决策：不消费 `descriptor.icon`（Lucide 名映射延后），用 `first_letter + accent` 圆点即可。三种关闭路径：再次点击 pill / 点击外部 / Escape。
+  - **状态外置** — open/close 状态写入 `UiStore.persona_switcher_open` 而非组件局部 state，便于未来 `Ctrl+P` 等程序化触发。`active_persona_id: Option<String>` 持久化到 `gui-settings.json`（`#[serde(default)]`）。
+  - **端到端链路**：`settings.rs → app_logic.rs (默认 "gray") → UiStore → main.rs::render_persona_switcher → widgets::persona_switcher → SettingsStore.save() → %APPDATA%/clarity/gui-settings.json`。切换时弹出 toast `"Switched persona: {name}"`。
+  - **触及文件**：6 文件 / 474 LOC / 6 单测全绿（`first_letter_uppercases_lowercase_input` / `parse_accent_accepts_six_digit_hex_with_hash` / `parse_accent_rejects_malformed_input` / `truncate_returns_input_when_it_fits` / `truncate_adds_ellipsis_when_too_long` / `truncate_returns_empty_for_zero_width`）。
+  - **Identity 协议审计** — 应用户质询，已完整审计 `Gray/Analyst/Programmer` 三联来源。结论：Gray = `FUTURE_DIRECTION.md` L166 Identity 枚举首位锚点，硬绑定本地 LLM + 离线必须在场（`AgentPool::default_instance`）；首次定义于 commit `99856fa2`（比 `endpoint.rs` 早一个文档 commit）。详见 `reports/2026-05-15-eod.md` §3。
+
 ## [0.3.2] — 2026-05-03
 
 ### Added
