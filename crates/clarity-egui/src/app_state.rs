@@ -442,4 +442,44 @@ mod tests {
         assert_eq!(settings.provider, "openai");
         assert_eq!(settings.model, "gpt-4o");
     }
+
+    #[test]
+    fn test_apply_profile_overlay_partial_fields() {
+        use crate::settings::AgentProfile;
+        let mut settings = GuiSettings {
+            provider: "openai".into(),
+            model: "gpt-4o".into(),
+            approval_mode: "interactive".into(),
+            api_key: Some("sk-old".into()),
+            local_model_path: None,
+            active_profile: Some("minimal".into()),
+            ..Default::default()
+        };
+        settings.profiles.insert(
+            "minimal".into(),
+            AgentProfile {
+                provider: "anthropic".into(),
+                model: "claude-sonnet-4".into(),
+                approval_mode: "interactive".into(),
+                api_key: None,
+                local_model_path: None,
+            },
+        );
+        apply_profile_overlay(&mut settings);
+        assert_eq!(settings.provider, "anthropic");
+        assert_eq!(settings.model, "claude-sonnet-4");
+        // Partial overlay: fields not present in profile remain unchanged.
+        assert_eq!(settings.api_key, Some("sk-old".into()));
+    }
+
+    #[test]
+    fn test_binding_matches_with_local_path() {
+        let binding = Some(LlmBinding {
+            provider: "local".to_string(),
+            local_model_path: "/models/qwen.gguf".to_string(),
+        });
+        assert!(binding_matches(&binding, "local", "/models/qwen.gguf"));
+        assert!(!binding_matches(&binding, "local", "/models/deepseek.gguf"));
+        assert!(!binding_matches(&binding, "ollama", "/models/qwen.gguf"));
+    }
 }
