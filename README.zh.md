@@ -115,7 +115,7 @@ contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, 
 
 ```bash
 # 运行完整验证套件（CI 执行的）
-cargo test --workspace --lib                          # 849 测试，0 失败，7 忽略
+cargo test --workspace --lib                          # 927 测试，0 失败，7 忽略
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零警告
 cargo fmt --all -- --check
 cargo doc --no-deps                                   # 零文档警告

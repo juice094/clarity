@@ -132,7 +132,7 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - **ADR-006 Phase C.2 已落地** (`2867c0a5`, 2026-05-11)：删除 Wire view 通道 + 下游死订阅者 (gateway view_task + tui spawn_wire_view_adapter + 4 个 view 测试，-309 行)
 - **累计死代码删除**: ~790 行 / 测试基线 955 → 932（删除 23 个覆盖死代码的测试）
 - **校正发现**：初版本 ADR 声称 `ViewCommand` 零消费者；实际 `clarity-tui::protocol_renderer` + `clarity-gateway::ws` 均订阅（已分别清理）
-- **当前验证**: `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS；`cargo test --workspace --lib` 826 passed / 0 failed / 7 ignored；binary tests 106 passed
+- **当前验证**: `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS；`cargo test --workspace --lib` 927 passed / 0 failed / 7 ignored；binary tests 待更新
 - **Pending**: Phase D (frontend IR 重定位，启动条件：SettingsViewModel 激活)、Phase E (Turn ID 注入 WireMessage，待 ADR-007 独立决议)
 
 > **新 PR 必须自查**：`docs/CODE-CHANGE-PRINCIPLES.md` §9 PR 审查 Checklist。任一 P1~P7 失败 = Request Changes。

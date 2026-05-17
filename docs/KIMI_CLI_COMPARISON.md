@@ -52,7 +52,7 @@
 |----------|---------|----------|----------|
 | **Agent 核心** | ✅ ReAct 循环 | ✅ Soul 系统 | ⭐⭐⭐ 高 |
 | **子代理系统** | ✅ 完整实现（含 Runner） | ✅ 完整实现 | ⭐⭐⭐⭐⭐ 极高 |
-| **后台任务** | 🔄 骨架已实现，待集成活化 | ✅ BackgroundTaskManager | ⭐⭐⭐⭐⭐ 极高 |
+| **后台任务** | ✅ Cron + Task 已闭环（Gateway/local 双路径），Team 持久化启动同步待修复 | ✅ BackgroundTaskManager | ⭐⭐⭐⭐⭐ 极高 |
 | **Wire 通信** | ✅ clarity-wire | ✅ wire 模块 | ⭐⭐⭐ 中 |
 | **审批系统** | ✅ 三种模式 | ✅ ApprovalRuntime | ⭐⭐⭐ 中 |
 | **上下文压缩** | ✅ SimpleCompaction | ✅ compaction | ⭐⭐ 低（思路相似）|

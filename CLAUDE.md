@@ -15,7 +15,7 @@ Clarity is a Rust-native personal AI runtime (Layer 3 infrastructure). 13 crates
 ## Quality Gates (Every Commit)
 
 ```bash
-cargo test --workspace --lib          # 849 passed / 0 failed / 7 ignored
+cargo test --workspace --lib          # 927 passed / 0 failed / 7 ignored
 cargo clippy --workspace --lib --bins --tests -- -D warnings  # zero warnings
 cargo fmt --all -- --check            # zero diffs
 cargo audit                           # zero high/critical

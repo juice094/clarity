@@ -11,7 +11,7 @@
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace` | ✅ 零错误 |
-| **单元测试** | **999 passed, 0 failed, 7 ignored** | ✅ 全绿 |
+| **单元测试** | **927 passed, 0 failed, 7 ignored** | ✅ 全绿 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` + [`THREAT_MODEL.md`](THREAT_MODEL.md) | ✅ Dependabot #22/#23 已修复；STRIDE 威胁模型 16 条已建档，6 项未缓解风险已排期 |
 | **代码规模** | ~130 个 Rust 源文件 | 持续增长 |
@@ -111,7 +111,7 @@
 ✅ 文件浏览器 — 工作目录树 + 点击预览
 ✅ 工具调用可视化 — Running/Done 状态气泡 + 参数/结果摘要
 ✅ Compaction Banner — 压缩状态提示条
-✅ 后台任务面板 — 只读列表，3秒轮询刷新
+✅ 后台任务面板 — Cron/创建/列表/取消/启用，Gateway + local 双路径
 ✅ MCP 配置面板 — 服务器列表、启用/禁用、保存到 mcp.json
 ✅ 网络状态 Banner + Toast — 离线探测、fallback 提示
 ✅ 消息队列 — Streaming 时自动排队，完成后自动发送
@@ -152,7 +152,7 @@
 | 模型下载 GUI | ❌ (非 core 职责) | ❌ | ❌ | ❌ | ❌ |
 | 日志面板 | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-**最大差距**：egui 仍缺少 core 已实现的**后台任务创建/取消**、**子代理进度面板**、**团队协调 UI**、**Cron 调度**。审批、Plan、Skill、Token 已在 Sprint 12 补齐。
+**最大差距**：egui 仍缺少 core 已实现的**子代理进度面板**、**团队协调 UI**（Team 持久化启动同步待修复）。后台任务、Cron 调度、审批、Plan、Skill、Token 已在 Sprint 12 补齐。
 
 ### 2.7 Sprint 9 — 服务商支持硬化（2026-04-29）
 
@@ -189,7 +189,7 @@
 ### I3. egui 交互型功能缺口（P2）
 
 **状态**: Sprint 12（2026-04-28）已补齐审批弹窗、Plan 可视化、Skill UI、Token 用量显示。
-**剩余缺口**: 子代理进度面板、后台任务创建/取消、Cron 调度 UI、团队协调 UI、模型下载 GUI、日志面板。
+**剩余缺口**: 子代理进度面板、Team 持久化启动同步、TaskBoard 视图渲染、模型下载 GUI、日志面板。后台任务创建/取消、Cron 调度 UI 已闭环。
 
 ---
 
