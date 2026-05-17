@@ -381,6 +381,10 @@ impl App {
                 downloading_auto: false,
                 cancel_token: None,
             },
+            // TODO(S3.3-convergence): load persisted teams on startup via
+            // clarity_tools::team::load_teams_sync() once parallel session pause
+            // is lifted.  Teams created in a previous run are currently invisible
+            // after restart.
             team_store: crate::stores::TeamStore {
                 team_panel_open: false,
                 teams: vec![],

@@ -63,6 +63,48 @@ impl TeamConfig {
     }
 }
 
+/// Load all team configs from a directory synchronously.
+///
+/// Skips unreadable or non-JSON entries. Used by frontend store initialization
+/// to hydrate `TeamStore` from disk on app startup.
+pub fn load_teams_from_dir(dir: impl AsRef<Path>) -> Vec<TeamConfig> {
+    let dir = dir.as_ref();
+    if !dir.exists() {
+        return Vec::new();
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+    let mut teams = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let config: TeamConfig = match serde_json::from_str(&content) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        teams.push(config);
+    }
+    teams
+}
+
+/// Load all persisted team configs synchronously from the default teams directory.
+///
+/// Convenience wrapper around [`load_teams_from_dir`] using [`teams_dir`].
+pub fn load_teams_sync() -> Vec<TeamConfig> {
+    match teams_dir() {
+        Ok(dir) => load_teams_from_dir(dir),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Tool for creating a new agent team configuration
 pub struct TeamCreateTool;
 
@@ -387,5 +429,51 @@ mod tests {
             .await
             .unwrap();
         assert!(del_result["success"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn test_load_teams_from_dir_filters_and_skips_gracefully() {
+        let tmp = std::env::temp_dir().join(format!("clarity-test-teams-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Valid team file
+        let valid = TeamConfig {
+            name: "alpha".into(),
+            goal: "Do things".into(),
+            members: vec![TeamMemberConfig {
+                name: "m1".into(),
+                description: "d1".into(),
+                agent_type: "default".into(),
+            }],
+            max_concurrency: 2,
+            timeout_secs: 60,
+        };
+        std::fs::write(
+            tmp.join("alpha.json"),
+            serde_json::to_string_pretty(&valid).unwrap(),
+        )
+        .unwrap();
+
+        // Non-JSON file — should be ignored
+        std::fs::write(tmp.join("readme.txt"), "not json").unwrap();
+
+        // Invalid JSON content — should be skipped silently
+        std::fs::write(tmp.join("broken.json"), "{ bad").unwrap();
+
+        let loaded = load_teams_from_dir(&tmp);
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "alpha");
+        assert_eq!(loaded[0].members.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_load_teams_from_dir_missing_dir_returns_empty() {
+        let ghost = std::env::temp_dir().join("clarity-ghost-teams-dir-9999");
+        let _ = std::fs::remove_dir_all(&ghost);
+        let loaded = load_teams_from_dir(&ghost);
+        assert!(loaded.is_empty());
     }
 }
