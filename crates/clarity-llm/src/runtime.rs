@@ -1,16 +1,19 @@
 //! Runtime Provider Configuration
 //!
-//! In-process cache for the currently active LLM provider configuration.
-//! Set by the egui settings panel, consumed by `ensure_llm`.
+//! Provides pure functions for constructing LLM providers from an explicit
+//! [`RuntimeProviderConfig`]. The legacy global mutable cache (`ACTIVE_CONFIG`)
+//! is retained for backward compatibility during the S3.3 → S3.4 migration,
+//! but new code should derive `RuntimeProviderConfig` from settings and pass
+//! it directly to [`build_provider`].
 //!
-//! ## Architecture
+//! ## Architecture (target state — S3.4)
 //!
 //! ```text
 //! egui (settings UI)                    core (runtime)
 //! ┌─────────────────┐                  ┌──────────────────┐
-//! │ Provider Panel  │── set_provider_config() ──▶│ OnceLock cache    │
-//! │ Test Connection │── test_connection() ──────▶│ reqwest HTTP      │
-//! │ Refresh Models  │── list_models() ──────────▶│ GET /v1/models    │
+//! │ Provider Panel  │── derive config ──▶│ RuntimeProviderConfig
+//! │ Test Connection │── test_connection() │  (value, no cache) │
+//! │ Refresh Models  │── list_models() ────│                  │
 //! └─────────────────┘                  └──────────────────┘
 //!                                             │
 //!                                             ▼
@@ -29,10 +32,11 @@ use crate::api::LlmProvider;
 use crate::{AnthropicLlm, LlamaServerProvider, OllamaProvider, OpenAiCompatibleLlm};
 use clarity_contract::AgentError;
 
-/// Runtime provider configuration set by the frontend settings panel.
+/// Runtime provider configuration.
 ///
-/// Once written, this acts as the primary source of truth for `ensure_llm`,
-/// bypassing the static `ModelRegistry` until `clear_provider_config()` is called.
+/// A value type representing the resolved parameters for a single LLM provider.
+/// In the target architecture (S3.4) this is derived from frontend settings on
+/// every `ensure_llm` call rather than cached globally.
 #[derive(Debug, Clone)]
 pub struct RuntimeProviderConfig {
     /// Human-readable identifier (e.g. "my-custom-openai").
@@ -57,7 +61,8 @@ use parking_lot::Mutex;
 
 static ACTIVE_CONFIG: Mutex<Option<RuntimeProviderConfig>> = Mutex::new(None);
 
-/// Write the active provider config into the runtime cache.
+/// DEPRECATED — S3.3 migration: derive `RuntimeProviderConfig` from settings
+/// and pass it directly to [`build_provider`] instead of caching globally.
 pub fn set_provider_config(cfg: RuntimeProviderConfig) {
     let mut guard = ACTIVE_CONFIG.lock();
     let provider_id = cfg.provider_id.clone();
@@ -65,12 +70,12 @@ pub fn set_provider_config(cfg: RuntimeProviderConfig) {
     tracing::info!("RuntimeProviderConfig set: provider_id={}", provider_id);
 }
 
-/// Get a reference to the active runtime config, if one is set.
+/// DEPRECATED — S3.3 migration: use explicit `RuntimeProviderConfig` values.
 pub fn get_active_config() -> Option<RuntimeProviderConfig> {
     ACTIVE_CONFIG.lock().clone()
 }
 
-/// Clear the active runtime config.
+/// DEPRECATED — S3.3 migration: clear the cached config. Will be removed in S3.4.
 pub fn clear_provider_config() {
     *ACTIVE_CONFIG.lock() = None;
     tracing::info!("RuntimeProviderConfig cleared");
@@ -80,7 +85,8 @@ pub fn clear_provider_config() {
 
 /// Build an `LlmProvider` from the currently active runtime config.
 ///
-/// Returns `Err` if no config has been set, or if the `api_format` is unknown.
+/// DEPRECATED — S3.3 migration: derive `RuntimeProviderConfig` from settings
+/// and call [`build_provider`] directly. Will be removed in S3.4.
 pub async fn build_from_active_config() -> Result<Box<dyn LlmProvider>, AgentError> {
     let cfg = ACTIVE_CONFIG
         .lock()
@@ -89,7 +95,13 @@ pub async fn build_from_active_config() -> Result<Box<dyn LlmProvider>, AgentErr
     build_provider(&cfg).await
 }
 
-async fn build_provider(cfg: &RuntimeProviderConfig) -> Result<Box<dyn LlmProvider>, AgentError> {
+/// Build an `LlmProvider` from an explicit [`RuntimeProviderConfig`].
+///
+/// This is the preferred entry point for S3.3+. The caller derives the config
+/// from frontend settings and passes it directly — no global cache involved.
+pub async fn build_provider(
+    cfg: &RuntimeProviderConfig,
+) -> Result<Box<dyn LlmProvider>, AgentError> {
     match cfg.api_format.as_str() {
         "openai_chat" => {
             let llm = OpenAiCompatibleLlm::new(&cfg.api_key, &cfg.base_url, &cfg.model);
