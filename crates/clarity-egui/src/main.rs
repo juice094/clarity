@@ -807,6 +807,10 @@ impl App {
         panels::gantt::render_gantt_panel(self, ctx);
     }
 
+    fn render_task_board(&mut self, ctx: &egui::Context) {
+        panels::task_board::render_task_board(self, ctx);
+    }
+
     fn render_cron_create_modal(&mut self, ctx: &egui::Context) {
         panels::cron_create::render_cron_create_modal(self, ctx);
     }
@@ -1085,7 +1089,7 @@ impl eframe::App for App {
                 self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
             }
             clarity_core::ui::AppView::TaskBoard => {
-                // TODO: task board main view
+                self.render_safe(ctx, "task_board", |app, ctx| app.render_task_board(ctx));
             }
         }
 
