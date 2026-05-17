@@ -89,7 +89,13 @@ cargo run -p clarity-egui
 - 🔄 **Sprint 37**：`prompt_cache_key` 策略层（SHA-256 稳定 hash + provider 内部可变性）、LSP stdio 客户端、进程级成本旁路通道
 - 🔄 J7/J8：Flow 节点扩展（InvokeSkill / PredictCheckpoint）+ SubagentManager 集成（设计完成，编码待开始）
 - 🔄 J10：A/B 验证数据集收集（Phase 1 baseline，≥20 条轨迹）
-- 🔄 egui 后端缺口：Team 持久化启动同步（`TeamStore` 未从磁盘加载已保存 teams）；TaskBoard 视图渲染未实现（`AppView::TaskBoard` 缺 panel）。Cron/Task 后台任务已闭环。
+- 🔄 **Sprint 37**：`prompt_cache_key` 策略层（SHA-256 稳定 hash + provider 内部可变性）、LSP stdio 客户端、进程级成本旁路通道
+- 🔄 J7/J8：Flow 节点扩展（InvokeSkill / PredictCheckpoint）+ SubagentManager 集成（设计完成，编码待开始）
+- 🔄 J10：A/B 验证数据集收集（Phase 1 baseline，≥20 条轨迹）
+- ✅ Team 持久化启动同步（`App::new()` 从磁盘加载 `TeamStore`）
+- ✅ TaskBoard 全屏主视图占位实现（`AppView::TaskBoard` 已接入）
+- ⏸️ 多窗口进程隔离、IPC 传输层（TCP/UDS/Named Pipe）
+- ⏸️ 层级信息注入总线、可视化工作流（D2/Mermaid）
 - ⏸️ 多窗口进程隔离、IPC 传输层（TCP/UDS/Named Pipe）
 - ⏸️ 层级信息注入总线、可视化工作流（D2/Mermaid）
 

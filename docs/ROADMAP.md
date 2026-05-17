@@ -101,6 +101,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 协议层 | 状态 | 说明 |
 |--------|------|------|
 | `clarity-wire`（UI↔Agent EventBus） | ✅ 成熟 | SPMC 广播 + ViewCommand 协议通道，三前端统一消费 |
+| Turn ID 注入 WireMessage | 📋 已设计 | ADR-007 已批准；Phase A（Wire+Core）待实施，Phase B（前端存储）待并行 session 收敛后 |
 | MCP 传输 | ✅ 成熟 | stdio / SSE / HTTP 三种，注册表管理，工具发现 |
 | Gateway HTTP API | ✅ 成熟 | Axum + session store + REST handlers |
 | Local LLM KV Cache | ✅ 已交付 | Sprint 28：`LocalGgufProvider` LCP-based 跨 turn KV 复用 + static prompt hash 失效机制 |
@@ -145,6 +146,7 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 | 债务项 | 状态 | 处理策略 |
 |--------|------|---------|
 | cargo audit warnings | ⚠️ 待确认 | 需重新运行 `cargo audit` 确认当前警告来源；`.cargo/audit.toml` 已配置忽略规则 |
+| S3.3 Settings 单源化 | 🔄 进行中 | llm 层已改造（`build_provider` 公开，`ACTIVE_CONFIG` 标 DEPRECATED）；egui 层 `provider_tab.rs` 仍写全局缓存，阻塞于并行 session 暂停协议 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
 | Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
 | `clarity-tauri` 冻结 | ⏸️ 冻结 | 停止新功能开发，仅维护现有代码至 egui 主控成熟 |
