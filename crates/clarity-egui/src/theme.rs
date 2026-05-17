@@ -6,35 +6,35 @@ use eframe::egui;
 // sites. New code should prefer `lucide_icons::Icon::*` directly for type
 // safety and IDE autocomplete.
 // ============================================================================
-pub const ICON_SEND: &str = "\u{e152}";       // Lucide: Send
-pub const ICON_SETTINGS: &str = "\u{e154}";   // Lucide: Settings
-pub const ICON_PLAY: &str = "\u{e13c}";       // Lucide: Play
-pub const ICON_HOURGLASS: &str = "\u{e296}";  // Lucide: Hourglass
-pub const ICON_CHECK: &str = "\u{e06c}";      // Lucide: Check
-pub const ICON_X: &str = "\u{e1b2}";          // Lucide: X
-pub const ICON_WARNING: &str = "\u{e193}";    // Lucide: AlertTriangle
-pub const ICON_LIST: &str = "\u{e106}";       // Lucide: List
+pub const ICON_SEND: &str = "\u{e152}"; // Lucide: Send
+pub const ICON_SETTINGS: &str = "\u{e154}"; // Lucide: Settings
+pub const ICON_PLAY: &str = "\u{e13c}"; // Lucide: Play
+pub const ICON_HOURGLASS: &str = "\u{e296}"; // Lucide: Hourglass
+pub const ICON_CHECK: &str = "\u{e06c}"; // Lucide: Check
+pub const ICON_X: &str = "\u{e1b2}"; // Lucide: X
+pub const ICON_WARNING: &str = "\u{e193}"; // Lucide: AlertTriangle
+pub const ICON_LIST: &str = "\u{e106}"; // Lucide: List
 pub const ICON_ARROW_LEFT: &str = "\u{e048}"; // Lucide: ArrowLeft
-pub const ICON_PROHIBIT: &str = "\u{e051}";   // Lucide: Ban
-pub const ICON_COPY: &str = "\u{e09e}";       // Lucide: Copy
-pub const ICON_EDIT: &str = "\u{e1f9}";       // Lucide: Pencil
-pub const ICON_REFRESH: &str = "\u{e145}";    // Lucide: RefreshCw
-pub const ICON_EXPORT: &str = "\u{e19e}";     // Lucide: Upload
-pub const ICON_IMPORT: &str = "\u{e0b2}";     // Lucide: Download
-pub const ICON_CHAT: &str = "\u{e117}";       // Lucide: MessageSquare
-pub const ICON_BOOK: &str = "\u{e05e}";       // Lucide: Book
-pub const ICON_WRENCH: &str = "\u{e1b1}";     // Lucide: Wrench
-pub const ICON_PUZZLE: &str = "\u{e29c}";     // Lucide: Puzzle
-pub const ICON_PLUG: &str = "\u{e37f}";       // Lucide: Plug
+pub const ICON_PROHIBIT: &str = "\u{e051}"; // Lucide: Ban
+pub const ICON_COPY: &str = "\u{e09e}"; // Lucide: Copy
+pub const ICON_EDIT: &str = "\u{e1f9}"; // Lucide: Pencil
+pub const ICON_REFRESH: &str = "\u{e145}"; // Lucide: RefreshCw
+pub const ICON_EXPORT: &str = "\u{e19e}"; // Lucide: Upload
+pub const ICON_IMPORT: &str = "\u{e0b2}"; // Lucide: Download
+pub const ICON_CHAT: &str = "\u{e117}"; // Lucide: MessageSquare
+pub const ICON_BOOK: &str = "\u{e05e}"; // Lucide: Book
+pub const ICON_WRENCH: &str = "\u{e1b1}"; // Lucide: Wrench
+pub const ICON_PUZZLE: &str = "\u{e29c}"; // Lucide: Puzzle
+pub const ICON_PLUG: &str = "\u{e37f}"; // Lucide: Plug
 pub const ICON_CARET_DOWN: &str = "\u{e06d}"; // Lucide: ChevronDown
-pub const ICON_CARET_RIGHT: &str = "\u{e06f}";// Lucide: ChevronRight
-pub const ICON_MINUS: &str = "\u{e11c}";      // Lucide: Minus
-pub const ICON_SQUARE: &str = "\u{e167}";     // Lucide: Square
-pub const ICON_CIRCLE: &str = "\u{e076}";     // Lucide: Circle
-pub const ICON_FILE: &str = "\u{e0d9}";       // Lucide: File
-pub const ICON_GLOBE: &str = "\u{e0e8}";      // Lucide: Globe
-pub const ICON_MAXIMIZE: &str = "\u{e112}";   // Lucide: Maximize
-pub const ICON_MINIMIZE: &str = "\u{e11a}";   // Lucide: Minimize
+pub const ICON_CARET_RIGHT: &str = "\u{e06f}"; // Lucide: ChevronRight
+pub const ICON_MINUS: &str = "\u{e11c}"; // Lucide: Minus
+pub const ICON_SQUARE: &str = "\u{e167}"; // Lucide: Square
+pub const ICON_CIRCLE: &str = "\u{e076}"; // Lucide: Circle
+pub const ICON_FILE: &str = "\u{e0d9}"; // Lucide: File
+pub const ICON_GLOBE: &str = "\u{e0e8}"; // Lucide: Globe
+pub const ICON_MAXIMIZE: &str = "\u{e112}"; // Lucide: Maximize
+pub const ICON_MINIMIZE: &str = "\u{e11a}"; // Lucide: Minimize
 
 // ============================================================================
 // Design Token System — Phase A Foundation

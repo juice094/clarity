@@ -263,8 +263,7 @@ impl App {
 
                                 // Model context indicator (Pretext UI mid-zone)
                                 // 仅当剩余空间充足时才渲染，防止与 RIGHT zone 按钮溢出重叠。
-                                let model_name =
-                                    self.settings_store.settings_edit.model.trim();
+                                let model_name = self.settings_store.settings_edit.model.trim();
                                 if !model_name.is_empty() {
                                     let remaining = ui.available_width();
                                     if remaining >= 60.0 {
@@ -361,151 +360,153 @@ impl App {
         let show_labels = show_status_labels && available_w >= 240.0;
         let show_capsules = available_w >= 160.0;
         let show_settings = available_w >= 120.0;
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    // Close (P0 — never hide)
-                    let close_resp = crate::widgets::window_control_button(
-                        ui,
-                        crate::theme::ICON_X,
-                        theme,
-                        theme.danger.linear_multiply(0.25),
-                        egui::Color32::WHITE,
-                        theme.text,
-                    )
-                    .on_hover_text("Close window");
-                    if close_resp.clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                    }
+        ui.spacing_mut().item_spacing.x = 0.0;
+        // Close (P0 — never hide)
+        let close_resp = crate::widgets::window_control_button(
+            ui,
+            crate::theme::ICON_X,
+            theme,
+            theme.danger.linear_multiply(0.25),
+            egui::Color32::WHITE,
+            theme.text,
+        )
+        .on_hover_text("Close window");
+        if close_resp.clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
 
-                    // Maximize / Restore (P0)
-                    let max_icon = if is_maximized {
-                        crate::theme::ICON_COPY
-                    } else {
-                        crate::theme::ICON_SQUARE
-                    };
-                    let max_resp = crate::widgets::window_control_button(
-                        ui,
-                        max_icon,
-                        theme,
-                        theme.overlay_medium,
-                        theme.text,
-                        theme.text,
-                    )
-                    .on_hover_text(if is_maximized { "Restore window" } else { "Maximize window" });
-                    if max_resp.clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-                    }
+        // Maximize / Restore (P0)
+        let max_icon = if is_maximized {
+            crate::theme::ICON_COPY
+        } else {
+            crate::theme::ICON_SQUARE
+        };
+        let max_resp = crate::widgets::window_control_button(
+            ui,
+            max_icon,
+            theme,
+            theme.overlay_medium,
+            theme.text,
+            theme.text,
+        )
+        .on_hover_text(if is_maximized {
+            "Restore window"
+        } else {
+            "Maximize window"
+        });
+        if max_resp.clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+        }
 
-                    // Minimize (P0)
-                    let min_resp = crate::widgets::window_control_button(
-                        ui,
-                        crate::theme::ICON_MINUS,
-                        theme,
-                        theme.overlay_medium,
-                        theme.text,
-                        theme.text,
-                    )
-                    .on_hover_text("Minimize to taskbar");
-                    if min_resp.clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                    }
+        // Minimize (P0)
+        let min_resp = crate::widgets::window_control_button(
+            ui,
+            crate::theme::ICON_MINUS,
+            theme,
+            theme.overlay_medium,
+            theme.text,
+            theme.text,
+        )
+        .on_hover_text("Minimize to taskbar");
+        if min_resp.clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
 
-                    if show_settings {
-                        // Separator between system buttons and indicators
-                        ui.add_space(8.0);
+        if show_settings {
+            // Separator between system buttons and indicators
+            ui.add_space(8.0);
 
-                        // Settings button (P1)
-                        let settings_resp = crate::widgets::window_control_button(
-                            ui,
-                            crate::theme::ICON_SETTINGS,
-                            theme,
-                            theme.overlay_medium,
-                            theme.text,
-                            theme.text,
-                        )
-                        .on_hover_text("Open Settings (Esc to close)");
-                        if settings_resp.clicked() {
-                            self.view_state.main = clarity_core::ui::AppView::Settings;
+            // Settings button (P1)
+            let settings_resp = crate::widgets::window_control_button(
+                ui,
+                crate::theme::ICON_SETTINGS,
+                theme,
+                theme.overlay_medium,
+                theme.text,
+                theme.text,
+            )
+            .on_hover_text("Open Settings (Esc to close)");
+            if settings_resp.clicked() {
+                self.view_state.main = clarity_core::ui::AppView::Settings;
+            }
+        }
+
+        if show_capsules {
+            // Connection status capsule (P2)
+            let (conn_label, conn_color) = match self.chat_store.agent_status {
+                AgentStatus::Online => ("Online", theme.status_online),
+                AgentStatus::Busy => ("Busy", theme.status_busy),
+                AgentStatus::Offline | AgentStatus::Unconfigured => ("断开", theme.status_offline),
+            };
+            let conn_resp = crate::widgets::status_capsule(
+                ui,
+                conn_color,
+                if show_labels { conn_label } else { "" },
+                conn_color,
+                false,
+                theme,
+            );
+            conn_resp.on_hover_text("Agent connection status");
+            ui.add_space(4.0);
+
+            // Gateway capsule (P2)
+            let gw_dot_color = match self.chat_store.gateway_status {
+                crate::ui::types::GatewayStatus::Online => theme.status_online,
+                crate::ui::types::GatewayStatus::Offline => theme.status_offline,
+                crate::ui::types::GatewayStatus::Checking => theme.status_busy,
+            };
+            let gw_resp = crate::widgets::status_capsule(
+                ui,
+                gw_dot_color,
+                if show_labels { "Gateway" } else { "" },
+                theme.text_muted,
+                true,
+                theme,
+            )
+            .on_hover_text("Click to start/stop Gateway");
+            if gw_resp.clicked() {
+                match self.chat_store.gateway_status {
+                    crate::ui::types::GatewayStatus::Online => {
+                        if let Some(ref gm) = self.gateway_manager {
+                            match gm.stop() {
+                                Ok(_) => self.push_toast(
+                                    "Gateway stopping...".to_string(),
+                                    crate::ui::types::ToastLevel::Info,
+                                ),
+                                Err(e) => self.push_toast(
+                                    format!("Gateway stop failed: {}", e),
+                                    crate::ui::types::ToastLevel::Error,
+                                ),
+                            }
+                        } else {
+                            self.push_toast(
+                                "Gateway manager not available".to_string(),
+                                crate::ui::types::ToastLevel::Warn,
+                            );
                         }
                     }
-
-                    if show_capsules {
-                        // Connection status capsule (P2)
-                        let (conn_label, conn_color) = match self.chat_store.agent_status {
-                            AgentStatus::Online => ("Online", theme.status_online),
-                            AgentStatus::Busy => ("Busy", theme.status_busy),
-                            AgentStatus::Offline | AgentStatus::Unconfigured => {
-                                ("断开", theme.status_offline)
+                    _ => {
+                        if let Some(ref gm) = self.gateway_manager {
+                            match gm.start_if_needed() {
+                                Ok(_) => self.push_toast(
+                                    "Gateway starting...".to_string(),
+                                    crate::ui::types::ToastLevel::Info,
+                                ),
+                                Err(e) => self.push_toast(
+                                    format!("Gateway start failed: {}", e),
+                                    crate::ui::types::ToastLevel::Error,
+                                ),
                             }
-                        };
-                        let conn_resp = crate::widgets::status_capsule(
-                            ui,
-                            conn_color,
-                            if show_labels { conn_label } else { "" },
-                            conn_color,
-                            false,
-                            theme,
-                        );
-                        conn_resp.on_hover_text("Agent connection status");
-                        ui.add_space(4.0);
-
-                        // Gateway capsule (P2)
-                        let gw_dot_color = match self.chat_store.gateway_status {
-                            crate::ui::types::GatewayStatus::Online => theme.status_online,
-                            crate::ui::types::GatewayStatus::Offline => theme.status_offline,
-                            crate::ui::types::GatewayStatus::Checking => theme.status_busy,
-                        };
-                        let gw_resp = crate::widgets::status_capsule(
-                            ui,
-                            gw_dot_color,
-                            if show_labels { "Gateway" } else { "" },
-                            theme.text_muted,
-                            true,
-                            theme,
-                        )
-                        .on_hover_text("Click to start/stop Gateway");
-                        if gw_resp.clicked() {
-                            match self.chat_store.gateway_status {
-                                crate::ui::types::GatewayStatus::Online => {
-                                    if let Some(ref gm) = self.gateway_manager {
-                                        match gm.stop() {
-                                            Ok(_) => self.push_toast(
-                                                "Gateway stopping...".to_string(),
-                                                crate::ui::types::ToastLevel::Info,
-                                            ),
-                                            Err(e) => self.push_toast(
-                                                format!("Gateway stop failed: {}", e),
-                                                crate::ui::types::ToastLevel::Error,
-                                            ),
-                                        }
-                                    } else {
-                                        self.push_toast(
-                                            "Gateway manager not available".to_string(),
-                                            crate::ui::types::ToastLevel::Warn,
-                                        );
-                                    }
-                                }
-                                _ => {
-                                    if let Some(ref gm) = self.gateway_manager {
-                                        match gm.start_if_needed() {
-                                            Ok(_) => self.push_toast(
-                                                "Gateway starting...".to_string(),
-                                                crate::ui::types::ToastLevel::Info,
-                                            ),
-                                            Err(e) => self.push_toast(
-                                                format!("Gateway start failed: {}", e),
-                                                crate::ui::types::ToastLevel::Error,
-                                            ),
-                                        }
-                                    } else {
-                                        self.push_toast(
-                                            "Gateway manager not available".to_string(),
-                                            crate::ui::types::ToastLevel::Warn,
-                                        );
-                                    }
-                                }
-                            }
+                        } else {
+                            self.push_toast(
+                                "Gateway manager not available".to_string(),
+                                crate::ui::types::ToastLevel::Warn,
+                            );
                         }
                     }
+                }
+            }
+        }
 
         // RTL layout: cursor.max.x moved leftward; consumed width = start - end.
         let measured = start_max_x - ui.cursor().max.x;
@@ -651,12 +652,14 @@ impl App {
                 ) {
                     self.view_state.close_modal();
                 } else {
-                    self.view_state.open_modal(clarity_core::ui::ModalType::Skill);
+                    self.view_state
+                        .open_modal(clarity_core::ui::ModalType::Skill);
                 }
                 true
             }
             ids::TOGGLE_TEAM_PANEL => {
-                self.view_state.toggle_right(clarity_core::ui::SidePanel::Team);
+                self.view_state
+                    .toggle_right(clarity_core::ui::SidePanel::Team);
                 true
             }
             ids::FOCUS_INPUT => {
@@ -735,7 +738,11 @@ impl App {
     fn selected_line_text(&self) -> Option<String> {
         let global_idx = self.ui_store.line_cursor_selected?;
         let active_id = self.session_store.active_session_id.clone();
-        let session = self.session_store.sessions.iter().find(|s| s.id == active_id)?;
+        let session = self
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == active_id)?;
         let mut acc = 0;
         for msg in &session.messages {
             let msg_lines = msg.lines.len();
@@ -955,12 +962,16 @@ impl eframe::App for App {
         if let Some(last_width) = self.last_frame_width {
             // One-way collapse: only trigger when window becomes narrower.
             // Do NOT auto-restore on widen to avoid fighting user intent.
-            if last_width >= self.ui_store.theme.breakpoint_medium && current_width < self.ui_store.theme.breakpoint_medium {
+            if last_width >= self.ui_store.theme.breakpoint_medium
+                && current_width < self.ui_store.theme.breakpoint_medium
+            {
                 // Dashboard is controlled by view_state.main (AppView), not right panel.
                 // Team / Task right panels are collapsed via view_state.right.
                 self.view_state.right = None;
             }
-            if last_width >= self.ui_store.theme.breakpoint_compact && current_width < self.ui_store.theme.breakpoint_compact {
+            if last_width >= self.ui_store.theme.breakpoint_compact
+                && current_width < self.ui_store.theme.breakpoint_compact
+            {
                 self.ui_store.sidebar_collapsed = true;
             }
         }
@@ -995,8 +1006,7 @@ impl eframe::App for App {
             // Collapse Team or Task right panel if open (dashboard is AppView, not right panel).
             if matches!(
                 self.view_state.right,
-                Some(clarity_core::ui::SidePanel::Team)
-                    | Some(clarity_core::ui::SidePanel::Task)
+                Some(clarity_core::ui::SidePanel::Team) | Some(clarity_core::ui::SidePanel::Task)
             ) {
                 self.view_state.right = None;
             }
@@ -1013,8 +1023,7 @@ impl eframe::App for App {
             self.view_state.main == clarity_core::ui::AppView::Settings;
         self.ui_store.dashboard_panel_open =
             self.view_state.main == clarity_core::ui::AppView::Dashboard;
-        self.ui_store.gantt_panel_open =
-            self.view_state.main == clarity_core::ui::AppView::Gantt;
+        self.ui_store.gantt_panel_open = self.view_state.main == clarity_core::ui::AppView::Gantt;
 
         // Forward-direction sync (P1.5.4 bridge reversal — ADR-014):
         // ViewState is the authoritative source for side-panel and modal state.
@@ -1164,7 +1173,10 @@ fn main() -> eframe::Result {
         viewport: {
             let theme_defaults = crate::theme::Theme::default();
             egui::ViewportBuilder::default()
-                .with_inner_size([theme_defaults.window_default_w, theme_defaults.window_default_h])
+                .with_inner_size([
+                    theme_defaults.window_default_w,
+                    theme_defaults.window_default_h,
+                ])
                 .with_min_inner_size([theme_defaults.window_min_w, theme_defaults.window_min_h])
                 .with_decorations(false)
         },
@@ -1220,7 +1232,10 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
             .collect::<Vec<_>>()
             .join(" | "),
         RenderLine::StatusLine { content, .. } => content.to_string(),
-        RenderLine::ArtifactRef { artifact_id, summary } => {
+        RenderLine::ArtifactRef {
+            artifact_id,
+            summary,
+        } => {
             format!("{artifact_id} — {summary}")
         }
         RenderLine::CrossInstanceRef {
@@ -1230,7 +1245,10 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
         } => {
             format!("@{target_instance} — {message}")
         }
-        RenderLine::SlashCompletion { command, description } => {
+        RenderLine::SlashCompletion {
+            command,
+            description,
+        } => {
             format!("/{command}  {description}")
         }
         RenderLine::StreamingCursor => "▌".to_string(),

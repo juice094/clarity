@@ -10,8 +10,8 @@ pub mod view_state;
 
 pub use commands::{ids, CommandItem, CommandScope};
 pub use render_line::{
-    ApprovalOption, ArtifactId, BlockId, DiffKind, InstanceId, LineRole, RenderLine, SessionId,
-    Span, SpanStyle, StatusKind, ToolStatus, markdown_to_lines, render_line_plain_text,
+    markdown_to_lines, render_line_plain_text, ApprovalOption, ArtifactId, BlockId, DiffKind,
+    InstanceId, LineRole, RenderLine, SessionId, Span, SpanStyle, StatusKind, ToolStatus,
 };
 pub use shortcut::{KeyEvent, ShortcutBinding, ShortcutRegistry};
 pub use view_state::{

@@ -304,21 +304,6 @@ pub(crate) async fn build_system_prompt_split(
 }
 
 impl Agent {
-    /// Build the system prompt and append relevant memories if available.
-    ///
-    /// **Deprecated in favor of `build_system_prompt_split`:** this method
-    /// flattens static and dynamic content into a single string, which
-    /// prevents prefix caching. Use `build_system_prompt_split` for new code.
-    #[allow(dead_code)]
-    pub(crate) async fn build_system_prompt_with_memory(&self, query: &str) -> String {
-        let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
-        if dynamic_prompt.is_empty() {
-            static_prompt
-        } else {
-            format!("{}\n\n{}", static_prompt, dynamic_prompt)
-        }
-    }
-
     /// Build message list from query, computing static-prompt hash and invalidating provider cache.
     pub(crate) async fn build_messages_with_cache(
         &self,

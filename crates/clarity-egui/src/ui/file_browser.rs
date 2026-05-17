@@ -123,43 +123,38 @@ pub fn render_file_tree(
                 theme.space_8 * depth as f32 + theme.space_12
             };
 
-            let resp = crate::widgets::interactive_row(
-                ui,
-                is_selected,
-                theme,
-                |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add_space(indent);
+            let resp = crate::widgets::interactive_row(ui, is_selected, theme, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add_space(indent);
 
-                        // Icon: Lucide File (unified with global icon system)
-                        let icon_size = if compact {
-                            theme.size_file_icon_compact
-                        } else {
-                            theme.size_file_icon
-                        };
-                        ui.label(
-                            egui::RichText::new(crate::theme::ICON_FILE)
-                                .font(theme.font_icon(icon_size))
-                                .color(text_color),
-                        );
+                    // Icon: Lucide File (unified with global icon system)
+                    let icon_size = if compact {
+                        theme.size_file_icon_compact
+                    } else {
+                        theme.size_file_icon
+                    };
+                    ui.label(
+                        egui::RichText::new(crate::theme::ICON_FILE)
+                            .font(theme.font_icon(icon_size))
+                            .color(text_color),
+                    );
 
-                        ui.add_space(4.0);
+                    ui.add_space(4.0);
 
-                        // Filename
-                        let label = if compact {
-                            let prefix: String = name.chars().take(5).collect();
-                            prefix
-                        } else {
-                            name.clone()
-                        };
-                        ui.label(
-                            egui::RichText::new(label)
-                                .size(theme.text_sm)
-                                .color(text_color),
-                        );
-                    });
-                },
-            );
+                    // Filename
+                    let label = if compact {
+                        let prefix: String = name.chars().take(5).collect();
+                        prefix
+                    } else {
+                        name.clone()
+                    };
+                    ui.label(
+                        egui::RichText::new(label)
+                            .size(theme.text_sm)
+                            .color(text_color),
+                    );
+                });
+            });
             if resp.response.clicked() {
                 on_file_click(&full_path);
             }

@@ -10,9 +10,7 @@
 
 #![allow(dead_code)] // Skeleton: wired into ChatPane in a follow-up commit.
 
-use clarity_core::ui::render_line::{
-    DiffKind, LineRole, RenderLine, Span, StatusKind, ToolStatus,
-};
+use clarity_core::ui::render_line::{DiffKind, LineRole, RenderLine, Span, StatusKind, ToolStatus};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span as RataSpan, Text},
@@ -24,34 +22,43 @@ use ratatui::{
 /// colours and modifiers as needed.
 pub fn render_line_to_ratatui(line: &RenderLine, theme_base: Style) -> Line<'static> {
     match line {
-        RenderLine::Text { spans, role, indent } => {
-            render_text_line(spans, *role, *indent, theme_base)
-        }
-        RenderLine::CodeLine { lang, content, line_no, diff } => {
-            render_code_line(lang, content, *line_no, *diff)
-        }
-        RenderLine::ToolCallHeader { name, status, expanded } => {
-            render_tool_header(name, *status, *expanded)
-        }
+        RenderLine::Text {
+            spans,
+            role,
+            indent,
+        } => render_text_line(spans, *role, *indent, theme_base),
+        RenderLine::CodeLine {
+            lang,
+            content,
+            line_no,
+            diff,
+        } => render_code_line(lang, content, *line_no, *diff),
+        RenderLine::ToolCallHeader {
+            name,
+            status,
+            expanded,
+        } => render_tool_header(name, *status, *expanded),
         RenderLine::ToolCallArg { key, value } => render_tool_arg(key, value),
         RenderLine::Thinking { content, collapsed } => render_thinking(content, *collapsed),
         RenderLine::ApprovalPrompt { options } => render_approval(options),
-        RenderLine::StatusLine { kind, content, transient } => {
-            render_status(*kind, content, *transient)
-        }
-        RenderLine::ArtifactRef { artifact_id, summary } => {
-            render_artifact(artifact_id, summary)
-        }
-        RenderLine::CrossInstanceRef { target_instance, target_session, message } => {
-            render_cross_instance(
-                target_instance,
-                target_session.as_deref(),
-                message,
-            )
-        }
-        RenderLine::SlashCompletion { command, description } => {
-            render_slash(command, description)
-        }
+        RenderLine::StatusLine {
+            kind,
+            content,
+            transient,
+        } => render_status(*kind, content, *transient),
+        RenderLine::ArtifactRef {
+            artifact_id,
+            summary,
+        } => render_artifact(artifact_id, summary),
+        RenderLine::CrossInstanceRef {
+            target_instance,
+            target_session,
+            message,
+        } => render_cross_instance(target_instance, target_session.as_deref(), message),
+        RenderLine::SlashCompletion {
+            command,
+            description,
+        } => render_slash(command, description),
         RenderLine::StreamingCursor => Line::from(RataSpan::styled(
             "\u{258C}".to_string(),
             Style::default().fg(Color::Rgb(150, 200, 255)),
@@ -61,7 +68,10 @@ pub fn render_line_to_ratatui(line: &RenderLine, theme_base: Style) -> Line<'sta
             Style::default().fg(Color::Rgb(80, 80, 100)),
         )),
         RenderLine::Empty => Line::from(""),
-        RenderLine::BlockSlot { block_id, line_count } => Line::from(RataSpan::styled(
+        RenderLine::BlockSlot {
+            block_id,
+            line_count,
+        } => Line::from(RataSpan::styled(
             format!("[Block {} - {} lines]", block_id, line_count),
             Style::default()
                 .add_modifier(Modifier::BOLD)
@@ -81,12 +91,7 @@ pub fn render_lines_to_text(lines: &[RenderLine], theme_base: Style) -> Text<'st
 
 // ===== Variant-specific renderers =========================================
 
-fn render_text_line(
-    spans: &[Span],
-    role: LineRole,
-    indent: u8,
-    base: Style,
-) -> Line<'static> {
+fn render_text_line(spans: &[Span], role: LineRole, indent: u8, base: Style) -> Line<'static> {
     let mut rata_spans: Vec<RataSpan<'static>> = Vec::with_capacity(spans.len() + 1);
     if indent > 0 {
         rata_spans.push(RataSpan::from(" ".repeat((indent as usize) * 2)));
@@ -175,9 +180,7 @@ fn render_thinking(content: &str, collapsed: bool) -> Line<'static> {
     ])
 }
 
-fn render_approval(
-    options: &[clarity_core::ui::render_line::ApprovalOption],
-) -> Line<'static> {
+fn render_approval(options: &[clarity_core::ui::render_line::ApprovalOption]) -> Line<'static> {
     use clarity_core::ui::render_line::ApprovalOption;
     let mut parts: Vec<RataSpan<'static>> = vec![RataSpan::styled(
         "Approval required: ".to_string(),
@@ -318,9 +321,7 @@ fn span_to_ratatui(span: &Span, role: LineRole, base: Style) -> RataSpan<'static
         LineRole::Warning => RataSpan::styled(text, base.fg(Color::Rgb(220, 200, 100))),
         LineRole::Note => RataSpan::styled(text, base.fg(Color::Rgb(180, 200, 140))),
         LineRole::TokenUsage => RataSpan::styled(text, base.fg(Color::Rgb(120, 120, 140))),
-        LineRole::ContextCompaction => {
-            RataSpan::styled(text, base.fg(Color::Rgb(220, 200, 100)))
-        }
+        LineRole::ContextCompaction => RataSpan::styled(text, base.fg(Color::Rgb(220, 200, 100))),
         LineRole::Sandbox => RataSpan::styled(text, base.fg(Color::Rgb(220, 180, 100))),
     }
 }

@@ -82,7 +82,11 @@ pub fn render_lines(
 /// Render a single `RenderLine`.
 fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected: bool) {
     match line {
-        RenderLine::Text { spans, role, indent } => {
+        RenderLine::Text {
+            spans,
+            role,
+            indent,
+        } => {
             render_text_line(ui, spans, *role, *indent, theme, is_selected);
         }
         RenderLine::CodeLine {
@@ -153,7 +157,10 @@ fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected:
         } => {
             render_status_line(ui, *kind, content, *transient, theme);
         }
-        RenderLine::ArtifactRef { artifact_id, summary } => {
+        RenderLine::ArtifactRef {
+            artifact_id,
+            summary,
+        } => {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(crate::theme::ICON_SQUARE)
@@ -191,7 +198,10 @@ fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected:
                 );
             });
         }
-        RenderLine::SlashCompletion { command, description } => {
+        RenderLine::SlashCompletion {
+            command,
+            description,
+        } => {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!("/{}  ", command))
@@ -220,7 +230,10 @@ fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected:
             // Preserve vertical spacing.
             ui.add_space(LINE_HEIGHT);
         }
-        RenderLine::BlockSlot { block_id, line_count } => {
+        RenderLine::BlockSlot {
+            block_id,
+            line_count,
+        } => {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!(
@@ -263,19 +276,17 @@ fn render_text_line(
         // Role prefix icons / bullets.
         match role {
             LineRole::UnorderedListItem(_) => {
-                ui.label(
-                    egui::RichText::new("• ").size(size).color(color),
-                );
+                ui.label(egui::RichText::new("• ").size(size).color(color));
             }
             LineRole::OrderedListItem { num, .. } => {
                 ui.label(
-                    egui::RichText::new(format!("{}. ", num)).size(size).color(color),
+                    egui::RichText::new(format!("{}. ", num))
+                        .size(size)
+                        .color(color),
                 );
             }
             LineRole::Quote => {
-                ui.label(
-                    egui::RichText::new("| ").size(size).color(theme.text_dim),
-                );
+                ui.label(egui::RichText::new("| ").size(size).color(theme.text_dim));
             }
             _ => {}
         }
@@ -404,7 +415,12 @@ fn render_status_line(
     };
     let alpha = if transient { 0.6 } else { 1.0 };
     let color = theme.text_muted;
-    let fg = egui::Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (color.a() as f32 * alpha) as u8);
+    let fg = egui::Color32::from_rgba_premultiplied(
+        color.r(),
+        color.g(),
+        color.b(),
+        (color.a() as f32 * alpha) as u8,
+    );
 
     ui.horizontal(|ui| {
         ui.label(
@@ -412,11 +428,7 @@ fn render_status_line(
                 .font(theme.font_icon(theme.text_sm))
                 .color(fg),
         );
-        ui.label(
-            egui::RichText::new(content)
-                .size(theme.text_sm)
-                .color(fg),
-        );
+        ui.label(egui::RichText::new(content).size(theme.text_sm).color(fg));
         if let StatusKind::Progress { current, total } = kind {
             ui.label(
                 egui::RichText::new(format!(" {}/{}", current, total))
@@ -458,7 +470,9 @@ fn role_style(role: LineRole, theme: &Theme) -> (egui::Color32, f32, bool) {
         LineRole::Status => (theme.status_online, theme.text_sm, false),
         LineRole::Warning => (theme.warn, theme.text_sm, false),
         LineRole::Note => (theme.text_muted, theme.text_sm, false),
-        LineRole::TokenUsage | LineRole::ContextCompaction => (theme.text_dim, theme.text_sm, false),
+        LineRole::TokenUsage | LineRole::ContextCompaction => {
+            (theme.text_dim, theme.text_sm, false)
+        }
         LineRole::Sandbox => (theme.text_muted, theme.text_sm, false),
     }
 }

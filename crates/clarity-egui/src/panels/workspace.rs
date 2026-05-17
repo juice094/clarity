@@ -205,30 +205,30 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     .on_hover_text("Save & git add")
                     .clicked()
             {
-                    if let crate::ui::types::PreviewItem::File { content, path, .. } =
-                        app.ui_store.preview_item.as_ref().unwrap()
-                    {
-                        let work_dir = app.state.agent.config().working_dir.clone();
-                        match std::fs::write(path, content) {
-                            Ok(_) => {
-                                let _ = std::process::Command::new("git")
-                                    .args(["add", path])
-                                    .current_dir(&work_dir)
-                                    .status();
-                                app.push_toast(
-                                    format!("Saved {}", path),
-                                    crate::ui::types::ToastLevel::Info,
-                                );
-                            }
-                            Err(e) => {
-                                app.push_toast(
-                                    format!("Save failed: {}", e),
-                                    crate::ui::types::ToastLevel::Error,
-                                );
-                            }
+                if let crate::ui::types::PreviewItem::File { content, path, .. } =
+                    app.ui_store.preview_item.as_ref().unwrap()
+                {
+                    let work_dir = app.state.agent.config().working_dir.clone();
+                    match std::fs::write(path, content) {
+                        Ok(_) => {
+                            let _ = std::process::Command::new("git")
+                                .args(["add", path])
+                                .current_dir(&work_dir)
+                                .status();
+                            app.push_toast(
+                                format!("Saved {}", path),
+                                crate::ui::types::ToastLevel::Info,
+                            );
+                        }
+                        Err(e) => {
+                            app.push_toast(
+                                format!("Save failed: {}", e),
+                                crate::ui::types::ToastLevel::Error,
+                            );
                         }
                     }
                 }
+            }
         });
     });
     ui.add_space(4.0);

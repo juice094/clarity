@@ -296,10 +296,10 @@ fn render_plan_tracker(app: &mut App, ui: &mut egui::Ui) {
                                     .fill(theme.surface),
                                 )
                                 .clicked()
-                            {
-                                skip_step_id = Some(step.id.clone());
-                            }
-                        });
+                        {
+                            skip_step_id = Some(step.id.clone());
+                        }
+                    });
                 });
                 ui.horizontal(|ui| {
                     ui.add_space(theme.space_20);

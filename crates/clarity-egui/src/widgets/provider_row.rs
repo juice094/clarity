@@ -91,16 +91,13 @@ pub fn provider_row(
                             .color(text_color),
                     );
                     if model_count > 0 {
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                ui.label(
-                                    egui::RichText::new(format!("{}", model_count))
-                                        .font(theme.font(theme.text_xs))
-                                        .color(theme.text_muted),
-                                );
-                            },
-                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(format!("{}", model_count))
+                                    .font(theme.font(theme.text_xs))
+                                    .color(theme.text_muted),
+                            );
+                        });
                     }
                 });
             });

@@ -152,8 +152,7 @@ fn parity_with_plain_text_projection_for_canonical_documents() {
             if plain.is_empty() {
                 continue; // Empty/Divider/StreamingCursor — TUI may render decoration only.
             }
-            let rata_text =
-                line_to_plain(&render_line_to_ratatui(line, Style::default()));
+            let rata_text = line_to_plain(&render_line_to_ratatui(line, Style::default()));
             assert!(
                 rata_text.contains(&plain),
                 "PARITY VIOLATION for fixture {:?}:\n  plain_text: {:?}\n  ratatui:    {:?}",

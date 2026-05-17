@@ -4,12 +4,7 @@
 //! persona configuration parsing (TOML).
 //!
 //! NOTE: This module is currently inactive and kept for future integration.
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code)]
 
 pub mod domain;
 pub mod types;
-
-pub use domain::{
-    parse_domain_persona, BasePersona, DomainPersonaConfig, DomainToolSchema, SystemPromptConfig,
-};
-pub use types::PersonalityConfig;

@@ -85,11 +85,7 @@ impl SidePanel {
     /// After ADR-014, multi-true input is a transitional state during
     /// migration only; once `view_state.right` becomes the authoritative
     /// writer (P1.5.2 bridge reversal), at most one boolean will ever be true.
-    pub fn from_legacy_right_panel(
-        dashboard: bool,
-        team: bool,
-        task: bool,
-    ) -> Option<Self> {
+    pub fn from_legacy_right_panel(dashboard: bool, team: bool, task: bool) -> Option<Self> {
         if task {
             Some(Self::Task)
         } else if team {
@@ -414,12 +410,20 @@ impl ViewState {
 
     /// Toggle left panel (mutually exclusive: only one left panel at a time).
     pub fn toggle_left(&mut self, panel: SidePanel) {
-        self.left = if self.left == Some(panel) { None } else { Some(panel) };
+        self.left = if self.left == Some(panel) {
+            None
+        } else {
+            Some(panel)
+        };
     }
 
     /// Toggle right panel (mutually exclusive: only one right panel at a time).
     pub fn toggle_right(&mut self, panel: SidePanel) {
-        self.right = if self.right == Some(panel) { None } else { Some(panel) };
+        self.right = if self.right == Some(panel) {
+            None
+        } else {
+            Some(panel)
+        };
     }
 
     /// Open a modal. The modal takes input focus until closed.
@@ -738,9 +742,8 @@ mod tests {
 
     #[test]
     fn panel_expansion_from_legacy_all_false() {
-        let exp = PanelExpansion::from_legacy_flags(
-            false, false, false, false, false, false, false,
-        );
+        let exp =
+            PanelExpansion::from_legacy_flags(false, false, false, false, false, false, false);
         assert_eq!(exp, PanelExpansion::default());
     }
 
@@ -782,7 +785,10 @@ mod tests {
 
     #[test]
     fn side_panel_from_legacy_all_false_is_none() {
-        assert_eq!(SidePanel::from_legacy_right_panel(false, false, false), None);
+        assert_eq!(
+            SidePanel::from_legacy_right_panel(false, false, false),
+            None
+        );
     }
 
     #[test]
@@ -884,17 +890,17 @@ mod tests {
             ((false, false, true, false), TurnState::Stopping),
             ((false, false, false, true), TurnState::Restoring),
             // 2 true → priority resolution
-            ((true, true, false, false), TurnState::Compacting),   // compacting > loading
-            ((true, false, true, false), TurnState::Stopping),     // stopping > loading
-            ((true, false, false, true), TurnState::Loading),      // loading > restoring
-            ((false, true, true, false), TurnState::Stopping),     // stopping > compacting
-            ((false, true, false, true), TurnState::Compacting),   // compacting > restoring
-            ((false, false, true, true), TurnState::Stopping),     // stopping > restoring
+            ((true, true, false, false), TurnState::Compacting), // compacting > loading
+            ((true, false, true, false), TurnState::Stopping),   // stopping > loading
+            ((true, false, false, true), TurnState::Loading),    // loading > restoring
+            ((false, true, true, false), TurnState::Stopping),   // stopping > compacting
+            ((false, true, false, true), TurnState::Compacting), // compacting > restoring
+            ((false, false, true, true), TurnState::Stopping),   // stopping > restoring
             // 3 true → top priority wins
-            ((true, true, true, false), TurnState::Stopping),      // stopping > compacting > loading
-            ((true, true, false, true), TurnState::Compacting),    // compacting > loading > restoring
-            ((true, false, true, true), TurnState::Stopping),      // stopping > loading > restoring
-            ((false, true, true, true), TurnState::Stopping),      // stopping > compacting > restoring
+            ((true, true, true, false), TurnState::Stopping), // stopping > compacting > loading
+            ((true, true, false, true), TurnState::Compacting), // compacting > loading > restoring
+            ((true, false, true, true), TurnState::Stopping), // stopping > loading > restoring
+            ((false, true, true, true), TurnState::Stopping), // stopping > compacting > restoring
             // 4 true → stopping highest
             ((true, true, true, true), TurnState::Stopping),
         ];
@@ -949,19 +955,31 @@ mod tests {
         vs.open_modal(ModalType::Approval);
         assert_eq!(vs.modal, Some(ModalType::Approval));
         vs.open_modal(ModalType::Skill);
-        assert_eq!(vs.modal, Some(ModalType::Skill), "Modal must be single-valued; opening a second overwrites");
+        assert_eq!(
+            vs.modal,
+            Some(ModalType::Skill),
+            "Modal must be single-valued; opening a second overwrites"
+        );
 
         // Invariant: right panel is Option — toggle replaces.
         vs.toggle_right(SidePanel::Task);
         assert_eq!(vs.right, Some(SidePanel::Task));
         vs.toggle_right(SidePanel::Team);
-        assert_eq!(vs.right, Some(SidePanel::Team), "Right panel must be single-valued");
+        assert_eq!(
+            vs.right,
+            Some(SidePanel::Team),
+            "Right panel must be single-valued"
+        );
 
         // Invariant: left panel is Option — toggle replaces.
         vs.toggle_left(SidePanel::Sidebar);
         assert_eq!(vs.left, Some(SidePanel::Sidebar));
         vs.toggle_left(SidePanel::Workspace);
-        assert_eq!(vs.left, Some(SidePanel::Workspace), "Left panel must be single-valued");
+        assert_eq!(
+            vs.left,
+            Some(SidePanel::Workspace),
+            "Left panel must be single-valued"
+        );
 
         // Invariant: turn is never ambiguous.
         vs.turn = TurnState::Loading;

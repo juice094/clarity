@@ -657,9 +657,8 @@ impl App {
     /// Propagate the current `settings_edit.approval_mode` to the agent and
     /// the mode-aware approval runtime. Idempotent.
     pub(crate) fn apply_approval_mode_to_runtime(&self) {
-        let mode = crate::app_state::parse_approval_mode(
-            &self.settings_store.settings_edit.approval_mode,
-        );
+        let mode =
+            crate::app_state::parse_approval_mode(&self.settings_store.settings_edit.approval_mode);
         self.state.agent.set_approval_mode(mode);
         self.state.mode_aware_approval_runtime.set_mode(mode);
     }

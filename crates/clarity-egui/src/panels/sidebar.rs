@@ -223,7 +223,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 &app.ui_store.theme,
                             );
                             if skills_resp.clicked() {
-                                app.view_state.open_modal(clarity_core::ui::ModalType::Skill);
+                                app.view_state
+                                    .open_modal(clarity_core::ui::ModalType::Skill);
                             }
 
                             // Locale toggle (hidden in compact mode)
@@ -248,12 +249,12 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                         ),
                                     )
                                     .clicked()
-                            {
-                                app.ui_store.locale = match app.ui_store.locale {
-                                    crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
-                                    crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
-                                };
-                            }
+                                {
+                                    app.ui_store.locale = match app.ui_store.locale {
+                                        crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
+                                        crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
+                                    };
+                                }
                             }
 
                             // Token usage (hidden in compact mode)
@@ -474,11 +475,14 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         Some(clarity_core::ui::SidePanel::Team)
                     );
                     clickable_row(ui, "Teams", Some(team_count), &mut team_open);
-                    if team_open != matches!(
-                        app.view_state.right,
-                        Some(clarity_core::ui::SidePanel::Team)
-                    ) {
-                        app.view_state.toggle_right(clarity_core::ui::SidePanel::Team);
+                    if team_open
+                        != matches!(
+                            app.view_state.right,
+                            Some(clarity_core::ui::SidePanel::Team)
+                        )
+                    {
+                        app.view_state
+                            .toggle_right(clarity_core::ui::SidePanel::Team);
                     }
 
                     ui.add_space(app.ui_store.theme.space_16);
@@ -491,25 +495,25 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     group_header(ui, "ANALYTICS");
 
                     // ── Dashboard ──
-                    let mut dashboard_open = app.view_state.main
-                        == clarity_core::ui::AppView::Dashboard;
+                    let mut dashboard_open =
+                        app.view_state.main == clarity_core::ui::AppView::Dashboard;
                     clickable_row(ui, "Dashboard", None, &mut dashboard_open);
                     if dashboard_open
                         != (app.view_state.main == clarity_core::ui::AppView::Dashboard)
                     {
-                        app.view_state.main = if app.view_state.main
-                            == clarity_core::ui::AppView::Dashboard
-                        {
-                            clarity_core::ui::AppView::Chat
-                        } else {
-                            clarity_core::ui::AppView::Dashboard
-                        };
+                        app.view_state.main =
+                            if app.view_state.main == clarity_core::ui::AppView::Dashboard {
+                                clarity_core::ui::AppView::Chat
+                            } else {
+                                clarity_core::ui::AppView::Dashboard
+                            };
                     }
 
                     ui.add_space(app.ui_store.theme.space_16);
 
                     // ── Plan Timeline ──
-                    clickable_row(ui,
+                    clickable_row(
+                        ui,
                         "Plan Timeline",
                         None,
                         &mut app.ui_store.gantt_panel_open,
@@ -520,7 +524,11 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
         });
 
     let actual_w = panel.response.rect.width();
-    let stored_w = app.settings_store.settings_edit.sidebar_width.unwrap_or(0.0);
+    let stored_w = app
+        .settings_store
+        .settings_edit
+        .sidebar_width
+        .unwrap_or(0.0);
     if (actual_w - stored_w).abs() > 1.0 {
         app.settings_store.settings_edit.sidebar_width = Some(actual_w);
         if ctx.input(|i| i.pointer.any_released()) {

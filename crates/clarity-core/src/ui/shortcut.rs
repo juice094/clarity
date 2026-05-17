@@ -136,7 +136,11 @@ impl ShortcutRegistry {
         let mut reg = Self::new();
 
         // App-level global shortcuts (ADR-013 §2 direct adoption)
-        reg.register(KeyEvent::new("p").with_ctrl().with_shift(), App, "toggle-command-palette");
+        reg.register(
+            KeyEvent::new("p").with_ctrl().with_shift(),
+            App,
+            "toggle-command-palette",
+        );
         reg.register(KeyEvent::new("n").with_ctrl(), App, "new-session");
         reg.register(KeyEvent::new("c").with_ctrl(), App, "cancel-input");
         reg.register(KeyEvent::new("q").with_ctrl(), Os, "quit");
@@ -159,17 +163,17 @@ impl ShortcutRegistry {
         );
 
         // Modal-level bindings (ADR-013 §2)
-        reg.register(KeyEvent::new("esc"), Modal(ModalType::Approval), "close-modal");
+        reg.register(
+            KeyEvent::new("esc"),
+            Modal(ModalType::Approval),
+            "close-modal",
+        );
         reg.register(
             KeyEvent::new("1"),
             Modal(ModalType::Approval),
             "approve-yes",
         );
-        reg.register(
-            KeyEvent::new("2"),
-            Modal(ModalType::Approval),
-            "approve-no",
-        );
+        reg.register(KeyEvent::new("2"), Modal(ModalType::Approval), "approve-no");
 
         // Widget-level binding (ADR-013 §2)
         reg.register(KeyEvent::new("tab"), Widget, "cycle-approval-options");

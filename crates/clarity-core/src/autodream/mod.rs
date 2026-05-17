@@ -5,7 +5,7 @@
 //! `clarity_memory::MemoryCompiler` for the actual consolidation work.
 //!
 //! NOTE: This module is currently inactive and kept for future integration.
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code)]
 //!
 //! # Example
 //!

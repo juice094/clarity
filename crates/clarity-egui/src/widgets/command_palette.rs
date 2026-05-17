@@ -61,7 +61,10 @@ impl CommandPalette {
             .title_bar(false)
             .resizable(false)
             .collapsible(false)
-            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, theme.modal_offset_y))
+            .anchor(
+                egui::Align2::CENTER_TOP,
+                egui::vec2(0.0, theme.modal_offset_y),
+            )
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg_elevated)
@@ -87,56 +90,65 @@ impl CommandPalette {
                 ui.separator();
 
                 // ── List ──
-                egui::ScrollArea::vertical().max_height(theme.palette_max_h).show(ui, |ui| {
-                    for (idx, cmd) in filtered.iter().enumerate() {
-                        let is_selected = idx == self.selected;
-                        let row_bg = if is_selected {
-                            theme.bg_hover
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        };
+                egui::ScrollArea::vertical()
+                    .max_height(theme.palette_max_h)
+                    .show(ui, |ui| {
+                        for (idx, cmd) in filtered.iter().enumerate() {
+                            let is_selected = idx == self.selected;
+                            let row_bg = if is_selected {
+                                theme.bg_hover
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
 
-                        let row_resp = egui::Frame::new()
-                            .fill(row_bg)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                            .inner_margin(egui::Margin::symmetric(theme.space_12 as i8, theme.space_8 as i8))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("›")
-                                            .font(theme.font_icon(theme.text_sm))
-                                            .color(if is_selected { theme.accent } else { theme.text_dim }),
-                                    );
-                                    ui.add_space(theme.space_8);
-                                    ui.label(
-                                        egui::RichText::new(cmd.name.as_str())
-                                            .color(theme.text)
-                                            .size(theme.text_base),
-                                    );
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if let Some(ref sc) = cmd.shortcut {
-                                                ui.label(
-                                                    egui::RichText::new(sc.as_str())
-                                                        .color(theme.text_muted)
-                                                        .size(theme.text_xs)
-                                                        .monospace(),
-                                                );
-                                            }
-                                        },
-                                    );
-                                });
-                            })
-                            .response
-                            .interact(egui::Sense::click());
+                            let row_resp = egui::Frame::new()
+                                .fill(row_bg)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .inner_margin(egui::Margin::symmetric(
+                                    theme.space_12 as i8,
+                                    theme.space_8 as i8,
+                                ))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("›")
+                                                .font(theme.font_icon(theme.text_sm))
+                                                .color(if is_selected {
+                                                    theme.accent
+                                                } else {
+                                                    theme.text_dim
+                                                }),
+                                        );
+                                        ui.add_space(theme.space_8);
+                                        ui.label(
+                                            egui::RichText::new(cmd.name.as_str())
+                                                .color(theme.text)
+                                                .size(theme.text_base),
+                                        );
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if let Some(ref sc) = cmd.shortcut {
+                                                    ui.label(
+                                                        egui::RichText::new(sc.as_str())
+                                                            .color(theme.text_muted)
+                                                            .size(theme.text_xs)
+                                                            .monospace(),
+                                                    );
+                                                }
+                                            },
+                                        );
+                                    });
+                                })
+                                .response
+                                .interact(egui::Sense::click());
 
-                        if row_resp.clicked() {
-                            activated = Some(cmd.id.clone());
-                            keep_open = false;
+                            if row_resp.clicked() {
+                                activated = Some(cmd.id.clone());
+                                keep_open = false;
+                            }
                         }
-                    }
-                });
+                    });
 
                 // ── Keyboard navigation ──
                 if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !filtered.is_empty() {
@@ -160,10 +172,7 @@ impl CommandPalette {
         activated
     }
 
-    fn filter<'a>(
-        &self,
-        commands: &'a [CommandItem],
-    ) -> Vec<&'a CommandItem> {
+    fn filter<'a>(&self, commands: &'a [CommandItem]) -> Vec<&'a CommandItem> {
         let q = self.query.to_lowercase();
         if q.is_empty() {
             return commands.iter().collect();

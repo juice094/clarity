@@ -17,11 +17,7 @@ pub struct CommandItem {
 }
 
 impl CommandItem {
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        scope: CommandScope,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, scope: CommandScope) -> Self {
         Self {
             id: id.into(),
             name: name.into(),
@@ -102,8 +98,12 @@ pub mod built_in {
     }
 
     pub fn stop_generation() -> CommandItem {
-        CommandItem::new(ids::STOP_GENERATION, "Stop Generation", CommandScope::Global)
-            .with_shortcut("Ctrl+C")
+        CommandItem::new(
+            ids::STOP_GENERATION,
+            "Stop Generation",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+C")
     }
 
     pub fn send_message() -> CommandItem {
@@ -122,28 +122,43 @@ pub mod built_in {
     }
 
     pub fn open_settings() -> CommandItem {
-        CommandItem::new(ids::OPEN_SETTINGS, "Settings", CommandScope::Global)
-            .with_shortcut("Esc")
+        CommandItem::new(ids::OPEN_SETTINGS, "Settings", CommandScope::Global).with_shortcut("Esc")
     }
 
     pub fn close_modal() -> CommandItem {
-        CommandItem::new(ids::CLOSE_MODAL, "Close Modal / Return to Chat", CommandScope::Global)
-            .with_shortcut("Esc")
+        CommandItem::new(
+            ids::CLOSE_MODAL,
+            "Close Modal / Return to Chat",
+            CommandScope::Global,
+        )
+        .with_shortcut("Esc")
     }
 
     pub fn toggle_skill_panel() -> CommandItem {
-        CommandItem::new(ids::TOGGLE_SKILL_PANEL, "Toggle Skill Panel", CommandScope::Global)
-            .with_shortcut("Ctrl+.")
+        CommandItem::new(
+            ids::TOGGLE_SKILL_PANEL,
+            "Toggle Skill Panel",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+.")
     }
 
     pub fn toggle_team_panel() -> CommandItem {
-        CommandItem::new(ids::TOGGLE_TEAM_PANEL, "Toggle Team Panel", CommandScope::Global)
-            .with_shortcut("Ctrl+Shift+T")
+        CommandItem::new(
+            ids::TOGGLE_TEAM_PANEL,
+            "Toggle Team Panel",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+Shift+T")
     }
 
     pub fn toggle_dashboard() -> CommandItem {
-        CommandItem::new(ids::TOGGLE_DASHBOARD, "Toggle Dashboard", CommandScope::Global)
-            .with_shortcut("Ctrl+Shift+D")
+        CommandItem::new(
+            ids::TOGGLE_DASHBOARD,
+            "Toggle Dashboard",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+Shift+D")
     }
 
     pub fn toggle_command_palette() -> CommandItem {

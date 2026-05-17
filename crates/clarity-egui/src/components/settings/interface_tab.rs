@@ -201,4 +201,3 @@ fn set_theme(app: &mut App, name: &str) {
     };
     app.auto_save_settings();
 }
-

@@ -1,7 +1,10 @@
 use crate::App;
 
 pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
-    if !matches!(app.view_state.modal, Some(clarity_core::ui::ModalType::Skill)) {
+    if !matches!(
+        app.view_state.modal,
+        Some(clarity_core::ui::ModalType::Skill)
+    ) {
         return;
     }
 

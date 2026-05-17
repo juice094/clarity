@@ -9,8 +9,8 @@
 //! `with_approval_mode` into a separate `AgentBuilder` trait.
 
 use crate::agent::Agent;
-use clarity_contract::subagent::AgentExecutor;
 use crate::error::AgentError;
+use clarity_contract::subagent::AgentExecutor;
 
 #[async_trait::async_trait]
 impl AgentExecutor for Agent {

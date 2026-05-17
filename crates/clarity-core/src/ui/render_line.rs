@@ -48,21 +48,13 @@ pub enum RenderLine {
     },
 
     /// A single argument row inside an expanded tool call.
-    ToolCallArg {
-        key: SmolStr,
-        value: SmolStr,
-    },
+    ToolCallArg { key: SmolStr, value: SmolStr },
 
     /// Collapsible thinking / reasoning block (ClaudeCode-borrowed).
-    Thinking {
-        content: SmolStr,
-        collapsed: bool,
-    },
+    Thinking { content: SmolStr, collapsed: bool },
 
     /// Interactive approval prompt with options.
-    ApprovalPrompt {
-        options: Vec<ApprovalOption>,
-    },
+    ApprovalPrompt { options: Vec<ApprovalOption> },
 
     /// Transient or persistent status indicator (spinner, progress, network).
     StatusLine {
@@ -101,10 +93,7 @@ pub enum RenderLine {
 
     /// Escape hatch for blocks that cannot be line-atomised (tables, images, Plan).
     /// The frontend delegates to the existing `RenderBlock` pipeline.
-    BlockSlot {
-        block_id: BlockId,
-        line_count: u8,
-    },
+    BlockSlot { block_id: BlockId, line_count: u8 },
 }
 
 /// Inline text span with a semantic style tag.
@@ -269,7 +258,10 @@ pub fn render_line_plain_text(line: &RenderLine) -> String {
             .collect::<Vec<_>>()
             .join(" "),
         RenderLine::StatusLine { content, .. } => content.to_string(),
-        RenderLine::ArtifactRef { artifact_id, summary } => {
+        RenderLine::ArtifactRef {
+            artifact_id,
+            summary,
+        } => {
             format!("{} {}", artifact_id, summary)
         }
         RenderLine::CrossInstanceRef {
@@ -280,13 +272,19 @@ pub fn render_line_plain_text(line: &RenderLine) -> String {
             Some(s) => format!("{} ({}) {}", target_instance, s, message),
             None => format!("{} {}", target_instance, message),
         },
-        RenderLine::SlashCompletion { command, description } => {
+        RenderLine::SlashCompletion {
+            command,
+            description,
+        } => {
             format!("/{} {}", command, description)
         }
         RenderLine::StreamingCursor => String::new(),
         RenderLine::Divider => String::new(),
         RenderLine::Empty => String::new(),
-        RenderLine::BlockSlot { block_id, line_count } => {
+        RenderLine::BlockSlot {
+            block_id,
+            line_count,
+        } => {
             format!("[Block {} - {} lines]", block_id, line_count)
         }
     }
@@ -322,18 +320,19 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
     let mut table_rows = 0usize;
     let mut in_image = false;
 
-    let flush_with_role = |buf: &mut String, out: &mut Vec<RenderLine>, role: LineRole, indent: u8| {
-        if !buf.trim().is_empty() {
-            out.push(RenderLine::Text {
-                spans: vec![Span::plain(std::mem::take(buf))],
-                role,
-                indent,
-            });
-        } else if !buf.is_empty() {
-            out.push(RenderLine::Empty);
-        }
-        buf.clear();
-    };
+    let flush_with_role =
+        |buf: &mut String, out: &mut Vec<RenderLine>, role: LineRole, indent: u8| {
+            if !buf.trim().is_empty() {
+                out.push(RenderLine::Text {
+                    spans: vec![Span::plain(std::mem::take(buf))],
+                    role,
+                    indent,
+                });
+            } else if !buf.is_empty() {
+                out.push(RenderLine::Empty);
+            }
+            buf.clear();
+        };
 
     let parser = Parser::new(md);
     for event in parser {
@@ -538,12 +537,18 @@ pub struct LineCursor {
 
 impl LineCursor {
     pub fn new(total: usize) -> Self {
-        Self { selected: None, total }
+        Self {
+            selected: None,
+            total,
+        }
     }
 
     /// Move down one line (`j`).
     pub fn move_down(&mut self) {
-        self.selected = Some(self.selected.map_or(0, |s| (s + 1).min(self.total.saturating_sub(1))));
+        self.selected = Some(
+            self.selected
+                .map_or(0, |s| (s + 1).min(self.total.saturating_sub(1))),
+        );
     }
 
     /// Move up one line (`k`).
@@ -601,7 +606,9 @@ mod tests {
     fn plain_paragraph() {
         let lines = markdown_to_lines("Hello world");
         assert_eq!(lines.len(), 1);
-        assert!(matches!(&lines[0], RenderLine::Text { role: LineRole::AgentMessage, spans, .. } if spans.len() == 1));
+        assert!(
+            matches!(&lines[0], RenderLine::Text { role: LineRole::AgentMessage, spans, .. } if spans.len() == 1)
+        );
     }
 
     #[test]
@@ -632,7 +639,13 @@ mod tests {
         let lines = markdown_to_lines(md);
         assert_eq!(lines.len(), 3);
         for line in &lines {
-            assert!(matches!(line, RenderLine::Text { role: LineRole::UnorderedListItem(0), .. }));
+            assert!(matches!(
+                line,
+                RenderLine::Text {
+                    role: LineRole::UnorderedListItem(0),
+                    ..
+                }
+            ));
         }
     }
 
@@ -654,12 +667,16 @@ mod tests {
         let md = "```rust\nlet x = 1;\nlet y = 2;\n```";
         let lines = markdown_to_lines(md);
         assert_eq!(lines.len(), 2);
-        assert!(matches!(&lines[0], RenderLine::CodeLine { lang, content, line_no: Some(1), .. }
-            if lang == "rust" && content == "let x = 1;"
-        ));
-        assert!(matches!(&lines[1], RenderLine::CodeLine { lang, content, line_no: Some(2), .. }
-            if lang == "rust" && content == "let y = 2;"
-        ));
+        assert!(
+            matches!(&lines[0], RenderLine::CodeLine { lang, content, line_no: Some(1), .. }
+                if lang == "rust" && content == "let x = 1;"
+            )
+        );
+        assert!(
+            matches!(&lines[1], RenderLine::CodeLine { lang, content, line_no: Some(2), .. }
+                if lang == "rust" && content == "let y = 2;"
+            )
+        );
     }
 
     #[test]
@@ -667,9 +684,11 @@ mod tests {
         let md = "```\nplain text\n```";
         let lines = markdown_to_lines(md);
         assert_eq!(lines.len(), 1);
-        assert!(matches!(&lines[0], RenderLine::CodeLine { lang, content, .. }
-            if lang.is_empty() && content == "plain text"
-        ));
+        assert!(
+            matches!(&lines[0], RenderLine::CodeLine { lang, content, .. }
+                if lang.is_empty() && content == "plain text"
+            )
+        );
     }
 
     #[test]
@@ -677,7 +696,13 @@ mod tests {
         let md = "> quoted text";
         let lines = markdown_to_lines(md);
         assert_eq!(lines.len(), 1);
-        assert!(matches!(&lines[0], RenderLine::Text { role: LineRole::Quote, .. }));
+        assert!(matches!(
+            &lines[0],
+            RenderLine::Text {
+                role: LineRole::Quote,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -707,11 +732,37 @@ Final words."#;
 
         // Spot-check structural expectations without asserting exact counts
         // (pulldown-cmark event ordering may introduce minor Empty lines).
-        assert!(lines.iter().any(|l| matches!(l, RenderLine::Text { role: LineRole::Heading(1), .. })));
-        assert!(lines.iter().any(|l| matches!(l, RenderLine::CodeLine { lang, .. } if lang == "python")));
-        assert!(lines.iter().any(|l| matches!(l, RenderLine::Text { role: LineRole::UnorderedListItem(0), .. })));
-        assert!(lines.iter().any(|l| matches!(l, RenderLine::Text { role: LineRole::Quote, .. })));
-        assert!(lines.iter().any(|l| matches!(l, RenderLine::Text { role: LineRole::AgentMessage, .. })));
+        assert!(lines.iter().any(|l| matches!(
+            l,
+            RenderLine::Text {
+                role: LineRole::Heading(1),
+                ..
+            }
+        )));
+        assert!(lines
+            .iter()
+            .any(|l| matches!(l, RenderLine::CodeLine { lang, .. } if lang == "python")));
+        assert!(lines.iter().any(|l| matches!(
+            l,
+            RenderLine::Text {
+                role: LineRole::UnorderedListItem(0),
+                ..
+            }
+        )));
+        assert!(lines.iter().any(|l| matches!(
+            l,
+            RenderLine::Text {
+                role: LineRole::Quote,
+                ..
+            }
+        )));
+        assert!(lines.iter().any(|l| matches!(
+            l,
+            RenderLine::Text {
+                role: LineRole::AgentMessage,
+                ..
+            }
+        )));
     }
 
     // ── Variant constructors ──
@@ -738,11 +789,16 @@ Final words."#;
             RenderLine::ApprovalPrompt {
                 options: vec![
                     ApprovalOption::Yes,
-                    ApprovalOption::No { reason_required: false },
+                    ApprovalOption::No {
+                        reason_required: false,
+                    },
                 ],
             },
             RenderLine::StatusLine {
-                kind: StatusKind::Progress { current: 3, total: 10 },
+                kind: StatusKind::Progress {
+                    current: 3,
+                    total: 10,
+                },
                 content: "Indexing...".into(),
                 transient: true,
             },

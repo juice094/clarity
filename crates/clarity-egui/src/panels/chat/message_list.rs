@@ -268,7 +268,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 let sel = line_cursor_selected.and_then(|g| {
                                     let start = msg_line_offsets[unit.start];
                                     let end = start + session.messages[unit.start].lines.len();
-                                    if g >= start && g < end { Some(g - start) } else { None }
+                                    if g >= start && g < end {
+                                        Some(g - start)
+                                    } else {
+                                        None
+                                    }
                                 });
                                 ui::render::message_bubble(
                                     ui,
@@ -478,7 +482,11 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             let sel = line_cursor_selected.and_then(|g| {
                                 let start = msg_line_offsets[i];
                                 let end = start + session.messages[i].lines.len();
-                                if g >= start && g < end { Some(g - start) } else { None }
+                                if g >= start && g < end {
+                                    Some(g - start)
+                                } else {
+                                    None
+                                }
                             });
                             ui::render::message_bubble(
                                 ui,

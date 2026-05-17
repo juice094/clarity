@@ -43,7 +43,8 @@ pub fn tab_button(
             // Sense::empty() prevents the label hitbox from leaking outside the tab
             // and blocking adjacent widgets (official egui pattern for non-interactive text).
             let spacing = ui.spacing().item_spacing.x;
-            let label_w = (ui.available_width() - theme.size_close_btn_w - spacing - theme.space_4).max(0.0);
+            let label_w =
+                (ui.available_width() - theme.size_close_btn_w - spacing - theme.space_4).max(0.0);
             if label_w > 0.0 {
                 ui.add_sized(
                     egui::vec2(label_w, theme.size_tab_h),

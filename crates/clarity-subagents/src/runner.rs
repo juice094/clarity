@@ -12,14 +12,14 @@
 // returns the concrete `Agent` so that caller-side builder methods work.
 use crate::builder::SubagentBuilder;
 use crate::store::SubagentStore;
+use clarity_contract::error::AgentError;
+use clarity_contract::subagent::AgentExecutor;
 use clarity_contract::subagent::{
     AgentTypeDefinition, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, RunSpec,
     SubagentError, SubagentProgressEvent, SubagentResult, SubagentStatus,
 };
-use clarity_contract::subagent::AgentExecutor;
-use clarity_core::agent::Agent;
 use clarity_contract::ApprovalMode;
-use clarity_contract::error::AgentError;
+use clarity_core::agent::Agent;
 use clarity_core::approval::ApprovalRuntime;
 use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::{LlmProvider, Message};

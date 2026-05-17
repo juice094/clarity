@@ -103,25 +103,22 @@ fn render_titlebar(ui: &mut egui::Ui, ctx: &egui::Context) {
             // ── RIGHT zone (window controls + status) ──
             strip.cell(|ui| {
                 ui.set_min_height(TITLEBAR_HEIGHT);
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        ui.add_space(4.0);
-                        if ui.button("\u{2715}").on_hover_text("Close").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if ui.button("\u{2610}").on_hover_text("Maximize").clicked() {
-                            // toggle maximize (no-op in PoC)
-                        }
-                        if ui.button("\u{2014}").on_hover_text("Minimize").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                        ui.add_space(8.0);
-                        ui.label("\u{25CF}  Gateway");
-                        ui.add_space(8.0);
-                        ui.label("\u{25CF}  3 sessions");
-                    },
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(4.0);
+                    if ui.button("\u{2715}").on_hover_text("Close").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    if ui.button("\u{2610}").on_hover_text("Maximize").clicked() {
+                        // toggle maximize (no-op in PoC)
+                    }
+                    if ui.button("\u{2014}").on_hover_text("Minimize").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+                    ui.add_space(8.0);
+                    ui.label("\u{25CF}  Gateway");
+                    ui.add_space(8.0);
+                    ui.label("\u{25CF}  3 sessions");
+                });
             });
         });
 }

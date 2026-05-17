@@ -81,8 +81,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     .alignment(Alignment::Right);
 
     // StatusBar background (aligns with GUI bg_elevated)
-    let status_bg = Block::default()
-        .style(Style::default().bg(Color::Rgb(17, 19, 24)));
+    let status_bg = Block::default().style(Style::default().bg(Color::Rgb(17, 19, 24)));
     f.render_widget(status_bg, chunks[0]);
 
     f.render_widget(left, header_chunks[0]);
