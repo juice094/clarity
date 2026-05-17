@@ -381,19 +381,36 @@ impl App {
                 downloading_auto: false,
                 cancel_token: None,
             },
-            // TODO(S3.3-convergence): load persisted teams on startup via
-            // clarity_tools::team::load_teams_sync() once parallel session pause
-            // is lifted.  Teams created in a previous run are currently invisible
-            // after restart.
-            team_store: crate::stores::TeamStore {
-                team_panel_open: false,
-                teams: vec![],
-                create_modal_open: false,
-                create_name: String::new(),
-                create_goal: String::new(),
-                create_members: vec![],
-                create_max_concurrency: 4,
-                create_timeout_secs: 300,
+            team_store: {
+                let persisted = clarity_tools::team::load_teams_sync();
+                let teams = persisted
+                    .into_iter()
+                    .map(|tc| crate::stores::Team {
+                        name: tc.name,
+                        goal: tc.goal,
+                        members: tc
+                            .members
+                            .into_iter()
+                            .map(|m| crate::stores::TeamMember {
+                                name: m.name,
+                                description: m.description,
+                                agent_type: m.agent_type,
+                            })
+                            .collect(),
+                        max_concurrency: tc.max_concurrency,
+                        timeout_secs: tc.timeout_secs,
+                    })
+                    .collect();
+                crate::stores::TeamStore {
+                    team_panel_open: false,
+                    teams,
+                    create_modal_open: false,
+                    create_name: String::new(),
+                    create_goal: String::new(),
+                    create_members: vec![],
+                    create_max_concurrency: 4,
+                    create_timeout_secs: 300,
+                }
             },
             snapshot_store: crate::stores::SnapshotStore::default(),
             gateway_manager,

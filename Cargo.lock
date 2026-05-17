@@ -1041,6 +1041,7 @@ dependencies = [
  "clarity-llm",
  "clarity-memory",
  "clarity-subagents",
+ "clarity-tools",
  "clarity-wire",
  "dirs 5.0.1",
  "eframe",
