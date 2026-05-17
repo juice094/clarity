@@ -64,11 +64,33 @@ jobs:
             exit 1
           }
 
-      - name: Upload Windows artifact
+      - name: Install cargo-wix
+        run: cargo install cargo-wix
+
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          cargo wix -p clarity-egui --no-build --output target/release/clarity-egui.msi
+          if (Test-Path "target/release/clarity-egui.msi") {
+            Write-Output "MSI built successfully"
+            $size = (Get-Item "target/release/clarity-egui.msi").Length / 1MB
+            Write-Output "MSI size: $([math]::Round($size, 2)) MB"
+          } else {
+            Write-Error "MSI build failed"
+            exit 1
+          }
+
+      - name: Upload Windows binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: clarity-windows
           path: target/release/clarity-egui.exe
+
+      - name: Upload Windows MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-windows-msi
+          path: target/release/clarity-egui.msi
 
   release-linux:
     runs-on: ubuntu-latest
@@ -99,10 +121,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download Windows artifact
+      - name: Download Windows binary artifact
         uses: actions/download-artifact@v4
         with:
           name: clarity-windows
+          path: artifacts/windows
+
+      - name: Download Windows MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clarity-windows-msi
           path: artifacts/windows
 
       - name: Download Linux artifact
@@ -116,6 +144,7 @@ jobs:
         with:
           files: |
             artifacts/windows/clarity-egui.exe
+            artifacts/windows/clarity-egui.msi
             artifacts/linux/clarity-egui
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
