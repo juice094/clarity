@@ -1,6 +1,6 @@
 //! Tracing subscriber helpers with automatic credential redaction.
 //!
-//! All functions in this module initialise a [`tracing_subscriber::fmt`]
+//! All functions in this module initialise a `tracing_subscriber::fmt`
 //! subscriber that writes to **stderr** and scrubs API keys, tokens,
 //! passwords and other secrets before they reach the log stream.
 //!

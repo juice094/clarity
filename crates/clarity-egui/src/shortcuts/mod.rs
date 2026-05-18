@@ -8,7 +8,7 @@
 //! Since P0.5.C.1, every [`ShortcutAction`] also carries a stable
 //! [`command_id`](ShortcutAction::command_id) string from
 //! `clarity_core::ui::ids`. This is the shared key between the keyboard
-//! shortcut layer and the [`CommandPalette`](crate::widgets::CommandPalette)
+//! shortcut layer and the `CommandPalette` (see [`crate::widgets::command_palette`])
 //! — both route through `App::dispatch_command(&str)`.
 
 use crate::App;

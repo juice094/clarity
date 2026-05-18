@@ -97,7 +97,7 @@ pub fn load_teams_from_dir(dir: impl AsRef<Path>) -> Vec<TeamConfig> {
 
 /// Load all persisted team configs synchronously from the default teams directory.
 ///
-/// Convenience wrapper around [`load_teams_from_dir`] using [`teams_dir`].
+/// Convenience wrapper around [`load_teams_from_dir`] using the default teams directory.
 pub fn load_teams_sync() -> Vec<TeamConfig> {
     match teams_dir() {
         Ok(dir) => load_teams_from_dir(dir),

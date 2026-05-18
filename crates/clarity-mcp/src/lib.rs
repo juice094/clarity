@@ -374,7 +374,7 @@ fn scrub_credentials(text: &str) -> String {
 /// Process an MCP tool call result, extracting text content and detecting
 /// application-level errors in JSON payloads.
 ///
-/// This logic was extracted from [`McpToolAdapter::execute`] so it can be
+/// This logic was extracted from the MCP tool adapter execution flow so it can be
 /// unit-tested without spinning up a real MCP server.
 pub fn process_mcp_tool_result(result: ToolCallResult) -> ToolResult<Value> {
     let mut texts = Vec::new();

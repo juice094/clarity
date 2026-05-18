@@ -9,7 +9,7 @@ pub struct TabResponse {
 
 /// Browser-style tab widget with hover-reveal close button.
 ///
-/// Uses egui's built-in [`Label::truncate`] for text culling instead of
+/// Uses egui's built-in `Label::truncate()` for text culling instead of
 /// manual width estimation, eliminating the frame-to-frame jitter caused by
 /// threshold-based truncation logic.
 pub fn tab_button(
