@@ -316,7 +316,9 @@ impl Agent {
     /// is the single source of truth for soul→ui events.
     pub(crate) fn send_wire_message(&self, msg: WireMessage) {
         if let Some(ref wire) = self.wire {
-            wire.soul_side().send(msg);
+            if let Err(e) = wire.soul_side().send(msg) {
+                tracing::warn!("Failed to send wire message (no receivers): {}", e);
+            }
         }
     }
 

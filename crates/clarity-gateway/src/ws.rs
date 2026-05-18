@@ -45,7 +45,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         message: "Connected to Clarity Gateway".to_string(),
     };
     if let Ok(msg) = serde_json::to_string(&welcome) {
-        let _ = sender.send(WsMessage::Text(msg)).await;
+        if let Err(e) = sender.send(WsMessage::Text(msg)).await {
+            warn!("Failed to send welcome message: {}", e);
+        }
     }
 
     // 处理消息循环
@@ -84,7 +86,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                             error: format!("Invalid request: {}", e),
                         };
                         if let Ok(json) = serde_json::to_string(&error) {
-                            let _ = sender.send(WsMessage::Text(json)).await;
+                            if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                                warn!("Failed to send error response: {}", e);
+                                break;
+                            }
                         }
                     }
                 }
@@ -184,7 +189,9 @@ async fn handle_chat_with_wire(
                 error: format!("Agent execution error: {}", e),
             };
             if let Ok(json) = serde_json::to_string(&error) {
-                let _ = sender.send(WsMessage::Text(json)).await;
+                if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                    warn!("Failed to send agent error: {}", e);
+                }
             }
         }
         Err(e) => {
@@ -193,7 +200,9 @@ async fn handle_chat_with_wire(
                 error: format!("Agent task panicked: {}", e),
             };
             if let Ok(json) = serde_json::to_string(&error) {
-                let _ = sender.send(WsMessage::Text(json)).await;
+                if let Err(e) = sender.send(WsMessage::Text(json)).await {
+                    warn!("Failed to send panic error: {}", e);
+                }
             }
         }
     }

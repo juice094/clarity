@@ -248,7 +248,7 @@ async fn test_tui_wire_to_gateway_websocket() {
         while let Some(Ok(msg)) = ws_rx.next().await {
             if let Message::Text(text) = msg {
                 if let Ok(wire_msg) = serde_json::from_str::<WireMessage>(&text) {
-                    soul.send(wire_msg);
+                    let _ = soul.send(wire_msg);
                 }
             }
         }

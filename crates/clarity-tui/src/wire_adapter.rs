@@ -74,7 +74,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         spawn_wire_adapter(wire.ui_side(false), tx);
 
-        wire.soul_side().send(WireMessage::ContentPart {
+        let _ = wire.soul_side().send(WireMessage::ContentPart {
             text: "hello".to_string(),
         });
 
@@ -88,7 +88,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         spawn_wire_adapter(wire.ui_side(false), tx);
 
-        wire.soul_side().send(WireMessage::ToolCall {
+        let _ = wire.soul_side().send(WireMessage::ToolCall {
             id: "1".to_string(),
             name: "read_file".to_string(),
             arguments: serde_json::json!({"path": "/tmp"}),
@@ -104,7 +104,7 @@ mod tests {
             _ => panic!("expected ToolCall event"),
         }
 
-        wire.soul_side().send(WireMessage::ToolResult {
+        let _ = wire.soul_side().send(WireMessage::ToolResult {
             id: "1".to_string(),
             result: "ok".to_string(),
         });
@@ -125,7 +125,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         spawn_wire_adapter(wire.ui_side(false), tx);
 
-        wire.soul_side().send(WireMessage::TurnEnd);
+        let _ = wire.soul_side().send(WireMessage::TurnEnd);
 
         let ev: Event = rx.recv().await.unwrap();
         assert!(matches!(ev, Event::ResponseComplete));
@@ -137,10 +137,10 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         spawn_wire_adapter(wire.ui_side(false), tx);
 
-        wire.soul_side().send(WireMessage::ContentPart {
+        let _ = wire.soul_side().send(WireMessage::ContentPart {
             text: String::new(),
         });
-        wire.soul_side().send(WireMessage::TurnEnd);
+        let _ = wire.soul_side().send(WireMessage::TurnEnd);
 
         // Should only receive TurnEnd, empty ContentPart is filtered
         let ev: Event = rx.recv().await.unwrap();

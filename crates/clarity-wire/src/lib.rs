@@ -23,7 +23,9 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, trace, warn};
 
 /// Default capacity for broadcast channels.
-const DEFAULT_CHANNEL_CAPACITY: usize = 1024;
+/// B1: Increased from 1024 to 8192 to reduce RecvError::Lagged frequency
+/// under high-throughput streaming scenarios.
+const DEFAULT_CHANNEL_CAPACITY: usize = 8192;
 
 /// Streaming draft lifecycle event.
 /// Used by the UI to distinguish between loading states and actual content.
@@ -277,7 +279,7 @@ impl Wire {
     /// ```
     pub fn shutdown(&self) {
         debug!("Shutting down wire");
-        self.soul_side.flush();
+        let _ = self.soul_side.flush();
         // Channels are automatically closed when all senders are dropped.
         // The senders in soul_side will be dropped when Wire is dropped.
     }
@@ -336,13 +338,37 @@ impl WireSoulSide {
     ///     user_input: "Hello".to_string(),
     /// });
     /// ```
-    pub fn send(&self, msg: WireMessage) {
+    /// Sends a message through the wire.
+    ///
+    /// The message is sent to the raw channel immediately. For the merged
+    /// channel, mergeable messages (ContentPart) are buffered and flushed
+    /// when a non-mergeable message is sent or `flush()` is called.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(receiver_count)` on success, or `Err(SendError)` if there are
+    /// no active receivers.  Note: `broadcast::Sender::send` only fails when
+    /// *all* receivers have been dropped; if at least one receiver is alive
+    /// the message is delivered even if some receivers lag.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when there are zero active receivers.  Callers should
+    /// decide whether to log, retry, or abort.
+    pub fn send(
+        &self,
+        msg: WireMessage,
+    ) -> Result<usize, broadcast::error::SendError<WireMessage>> {
         trace!("Sending wire message: {:?}", msg);
 
         // Always send to raw channel immediately.
-        if let Err(e) = self.raw_sender.send(msg.clone()) {
-            warn!("Failed to send raw message, no receivers: {}", e);
-        }
+        let raw_count = match self.raw_sender.send(msg.clone()) {
+            Ok(n) => n,
+            Err(e) => {
+                warn!("Failed to send raw message, no receivers: {}", e);
+                return Err(e);
+            }
+        };
 
         // Handle merging for the merged channel.
         let mut merge_buffer = self.merge_buffer.lock();
@@ -351,7 +377,7 @@ impl WireSoulSide {
                 if !buffer.try_merge(&msg) {
                     // Cannot merge, flush buffer first.
                     drop(merge_buffer);
-                    self.flush();
+                    let _ = self.flush();
                     *self.merge_buffer.lock() = Some(msg);
                 }
             } else {
@@ -360,11 +386,14 @@ impl WireSoulSide {
         } else {
             // Non-mergeable message: flush any pending buffer first.
             drop(merge_buffer);
-            self.flush();
+            let _ = self.flush();
             if let Err(e) = self.merged_sender.send(msg) {
                 warn!("Failed to send merged message, no receivers: {}", e);
+                // Merged channel failure is non-fatal; raw channel already succeeded.
             }
         }
+
+        Ok(raw_count)
     }
 
     /// Flushes any buffered mergeable messages.
@@ -385,12 +414,24 @@ impl WireSoulSide {
     /// soul.send(WireMessage::ContentPart { text: "world".to_string() });
     /// soul.flush(); // Sends the merged "Hello world" message
     /// ```
-    pub fn flush(&self) {
+    /// Flushes any buffered mergeable messages.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(receiver_count)` if a buffered message was sent, `Ok(0)` if the
+    /// buffer was empty, or `Err(SendError)` if there are no receivers.
+    pub fn flush(&self) -> Result<usize, broadcast::error::SendError<WireMessage>> {
         if let Some(buffer) = self.merge_buffer.lock().take() {
             debug!("Flushing merged message: {:?}", buffer);
-            if let Err(e) = self.merged_sender.send(buffer) {
-                warn!("Failed to send merged message, no receivers: {}", e);
+            match self.merged_sender.send(buffer) {
+                Ok(n) => Ok(n),
+                Err(e) => {
+                    warn!("Failed to send merged message, no receivers: {}", e);
+                    Err(e)
+                }
             }
+        } else {
+            Ok(0)
         }
     }
 }
@@ -612,7 +653,7 @@ mod tests {
         let mut ui = wire.ui_side(false);
 
         // Send a message
-        soul.send(WireMessage::TurnBegin {
+        let _ = soul.send(WireMessage::TurnBegin {
             user_input: "Hello, world!".to_string(),
         });
 
@@ -640,7 +681,7 @@ mod tests {
         let mut ui3 = wire.ui_side(false);
 
         // Send a message
-        soul.send(WireMessage::StatusUpdate {
+        let _ = soul.send(WireMessage::StatusUpdate {
             message: "Test broadcast".to_string(),
         });
 
@@ -661,10 +702,10 @@ mod tests {
         let mut ui = wire.ui_side(false);
 
         // Send some messages
-        soul.send(WireMessage::StepBegin {
+        let _ = soul.send(WireMessage::StepBegin {
             tool_name: "test_tool".to_string(),
         });
-        soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd);
 
         // Shutdown (flushes buffers)
         wire.shutdown();
@@ -694,19 +735,19 @@ mod tests {
         let mut ui_merged = wire.ui_side(true);
 
         // Send interleaved messages
-        soul.send(WireMessage::TurnBegin {
+        let _ = soul.send(WireMessage::TurnBegin {
             user_input: "Hi".to_string(),
         });
-        soul.send(WireMessage::ContentPart {
+        let _ = soul.send(WireMessage::ContentPart {
             text: "Hello ".to_string(),
         });
-        soul.send(WireMessage::ContentPart {
+        let _ = soul.send(WireMessage::ContentPart {
             text: "world".to_string(),
         });
-        soul.send(WireMessage::ContentPart {
+        let _ = soul.send(WireMessage::ContentPart {
             text: "!".to_string(),
         });
-        soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd);
 
         // Raw channel: should receive all 5 messages
         let mut raw_count = 0;
@@ -756,8 +797,8 @@ mod tests {
             result: "File contents here".to_string(),
         };
 
-        soul.send(tool_call.clone());
-        soul.send(tool_result.clone());
+        let _ = soul.send(tool_call.clone());
+        let _ = soul.send(tool_result.clone());
 
         assert_eq!(ui.recv().await.unwrap(), tool_call);
         assert_eq!(ui.recv().await.unwrap(), tool_result);
@@ -774,7 +815,7 @@ mod tests {
         assert!(ui.try_recv().is_none());
 
         // Send and receive
-        soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd);
         assert!(ui.try_recv().is_some());
 
         // Should be empty again
@@ -788,7 +829,7 @@ mod tests {
         let soul = wire.soul_side();
         let mut ui = wire.ui_side(false);
 
-        soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd);
 
         // Use try_recv since we're in a sync test
         assert!(ui.try_recv().is_some());
@@ -802,15 +843,15 @@ mod tests {
         let mut ui = wire.ui_side(true); // merged channel
 
         // Send only mergeable messages
-        soul.send(WireMessage::ContentPart {
+        let _ = soul.send(WireMessage::ContentPart {
             text: "A".to_string(),
         });
-        soul.send(WireMessage::ContentPart {
+        let _ = soul.send(WireMessage::ContentPart {
             text: "B".to_string(),
         });
 
         // Flush to send the merged message
-        soul.flush();
+        let _ = soul.flush();
 
         let msg = ui.recv().await.expect("should receive after flush");
         assert_eq!(
