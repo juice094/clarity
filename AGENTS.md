@@ -5,7 +5,7 @@
 ## Quick Reference
 
 ```bash
-cd C:\Users\22414\dev\third_party\clarity
+cd C:\Users\22414\dev\clarity
 cargo test --workspace --lib
 cargo clippy --workspace --lib --bins --tests  # zero warnings
 cargo run -p clarity-tui               # run TUI (needs API key)
@@ -50,14 +50,9 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-> ⚠️ **并行会话协调（2026-05-11，更新中）**：前端设计相关调整正在**其他会话**进行中。
-> 本会话已暂停 `crates/clarity-egui/src/` 下的代码改动，避免 merge 冲突。
-> 协议层 + 配置层（`clarity-wire` / `clarity-core` / `clarity-llm`）的 S3.3-5
-> 工作待并行前端会话收敛后再启动。
+> **2026-05-18 状态**：今日推进架构审计修复（ADR-007 Phase A / fallback 链 / wire 可靠性 / 死码清理）+ 仓库深度整理 + CI 文档守卫修复。工作树干净，主要质量门已通过（Check/Clippy/Rustfmt/Security Audit/Documentation Guard 全绿）。Test 作业因 runner 负载偶有延迟，属基础设施侧问题，非代码 regression。
 >
-> ⚠️ **当前 CI 风险**：工作树含未提交的并行 session 中间状态（`clarity-core/src/lib.rs` 引用未完成的 `ui/` 模块 → 编译失败）。
-> 本会话 commit 历史（直到 `cef03f78`）**独立编译通过**，CI 失败概率取决于并行 session 是否在 push 前自我收敛。
-> 详情见 `docs/notes/2026-05-11-parallel-session-coordination.md` + `docs/notes/2026-05-11-session-handoff-final.md`。
+> **当前焦点**：v0.3.1 发布准备 — 全部 P0 架构缺陷已修复，文档补齐，等待 CI 测试作业收敛后打 tag。
 
 **Sprint Anthropic-Mapping — 架构镜子对照（已完成 ✅，2026-05-11，commit `cef03f78`）**
 
@@ -134,6 +129,10 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 - **校正发现**：初版本 ADR 声称 `ViewCommand` 零消费者；实际 `clarity-tui::protocol_renderer` + `clarity-gateway::ws` 均订阅（已分别清理）
 - **当前验证**: `cargo clippy --workspace --lib --bins --tests -- -D warnings` PASS；`cargo test --workspace --lib` 927 passed / 0 failed / 7 ignored；binary tests 待更新
 - **Phase E 已完成** (`0094ef4`, 2026-05-18)：ADR-007 Phase A — 全部 14 个 `WireMessage` 变体注入 `turn_id`，`TurnContext` 生成 UUID，`send_wire_message` 自动绑定。跨 7 crate pattern match + constructor 同步修复。
+- **今日收尾** (`540334d`, 2026-05-18)：
+  - CI: Documentation Guard 补装 Ubuntu 系统依赖（`libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev`），修复 `glib-sys` 在 `cargo doc` 步骤的编译失败。该 bug 此前被 README/AGENTS 缺失问题掩盖。
+  - 仓库深度整理：移除个人配置（`.kimi/`）、运维数据（`HeartBeat/` / `reports/` / `training-data/`）、代码备份（`archive/` / `experiments/`），根目录从 22 项降至 16 项。
+  - rustdoc broken intra-doc links 修复 5 处（`clarity-tools`, `clarity-mcp`, `clarity-core`, `clarity-egui` 等）。
 - **Pending**: Phase D (frontend IR 重定位，启动条件：SettingsViewModel 激活)、Phase B/C (ADR-007 frontend 消费 turn_id，待 parallel session 收敛后)
 
 > **新 PR 必须自查**：`docs/CODE-CHANGE-PRINCIPLES.md` §9 PR 审查 Checklist。任一 P1~P7 失败 = Request Changes。

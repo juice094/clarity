@@ -29,12 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test baseline: `cargo test --workspace --lib` = 830 passed / 0 failed / 7 ignored.
 - Release binaries: 5 targets (headless / gateway / egui / tui / claw).
 - **WebSocket MCP Transport** — `clarity-mcp` crate 新增 `WebSocketMcpClient`，`McpTransport` enum 新增 `WebSocket { url, headers, timeout_seconds }` 变体。双向 JSON-RPC over WebSocket，pending-map + oneshot 请求-响应关联模式（与 `SseMcpClient` 同构）。`McpClientBuilder::websocket()` + `WebSocketClientBuilder` 完整 builder 链。配置文件 `transport = "websocket"` 自动识别。
+- **CI: Documentation Guard 系统依赖修复** (`540334d`, 2026-05-18) — `doc-guard` job 此前缺少 Ubuntu 系统依赖安装步骤（`libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev`），导致 `cargo doc --workspace --no-deps` 在编译 `glib-sys v0.18.1` 时因找不到 `glib-2.0.pc` 而失败（exit 101）。该缺陷此前被 README/AGENTS 缺失问题掩盖，从未到达 `cargo doc` 步骤。
 
 - **架构审计修复 + ADR-007 Phase A（2026-05-18）**
   - **P0: ensure_llm fallback chain 修复** — `llm_loader.rs` 的 `ProviderSelection::Fallback` 变体此前忽略 `fallback` 字段，离线时仍尝试云 provider 导致必然失败；现优先加载 preferred，失败时自动 fallback 到 local 或备用云 provider。`app_state.rs` 增加 post-failure catch，加载失败后自动降级到 `LocalOnly`。
   - **P0: Wire 消息可靠性** — `DEFAULT_CHANNEL_CAPACITY` 从 1024 增至 8192，降低 `RecvError::Lagged` 触发频率；`WireSoulSide::send` 返回 `Result<usize, SendError>` 替代 `()`，消除静默丢弃；`ws.rs` 中 4 处 `let _ = sender.send(...)` 改为显式错误处理。
   - **P1: ADR-007 Phase A — Turn ID 注入 WireMessage** — 全部 14 个 `WireMessage` 变体添加 `#[serde(default)] turn_id: String`；`TurnContext` 新增 `turn_id` 字段；`Agent::begin_turn()` 生成 UUID v4；`send_wire_message` 通过 `with_turn_id()` 自动注入。跨 7 个 crate 同步更新 pattern match 和 test constructor。
   - **P1: 死码清理** — 删除 `PromptComponent::OfflineNotice` 变体及关联方法 `with_offline_notice()`、`build()` 中的 match arm（共 -23 行）。该组件自离线检测改为 policy-based 后已失去消费者。
+  - **P1: 仓库深度整理** — 移除个人配置（`.kimi/`）、运维数据（`HeartBeat/` / `reports/` / `training-data/`）、历史代码备份（`archive/` / `experiments/`），根目录从 22 个顶层项精简至 16 个。`.gitignore` 新增 `.kimi/` 与 `CLAUDE.md`，防止未来泄漏。
 
 - **S3 — S7: Pretext UI 演进与状态机重构（2026-05-12 ~ 2026-05-14）**
   - **S3 Phase 1.5: ViewState 状态机** — 用 `ViewState` 聚合替换 50+ 独立布尔标志。`main` / `left` / `right` / `modal` / `turn` / `expansions` / `focus` 七字段。ADR-014：右侧面板单 Tab 互斥（Team/Task/Dashboard）；Skill/Mcp 重分类为 `ModalType`。非法状态测试覆盖 `TurnState` 16 种组合。
