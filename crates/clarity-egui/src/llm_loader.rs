@@ -17,11 +17,7 @@ pub async fn load_llm(
     settings: &GuiSettings,
 ) -> Result<(Arc<dyn clarity_llm::LlmProvider>, Option<LlmBinding>), crate::error::EguiError> {
     match selection {
-        ProviderSelection::Preferred { provider }
-        | ProviderSelection::Fallback {
-            preferred: provider,
-            ..
-        } => {
+        ProviderSelection::Preferred { provider } => {
             let llm = try_load_cloud(&provider, settings).await?;
             Ok((
                 llm,
@@ -31,6 +27,42 @@ pub async fn load_llm(
                 }),
             ))
         }
+        ProviderSelection::Fallback {
+            preferred,
+            fallback,
+            reason,
+        } => match try_load_cloud(&preferred, settings).await {
+            Ok(llm) => Ok((
+                llm,
+                Some(LlmBinding {
+                    provider: preferred,
+                    local_model_path: String::new(),
+                }),
+            )),
+            Err(_e) => {
+                tracing::warn!(
+                    "Preferred provider '{}' failed (reason: {}), falling back to '{}'",
+                    preferred,
+                    reason,
+                    fallback
+                );
+                if fallback == "local" {
+                    try_load_local(settings)
+                        .await
+                        .map(|(llm, binding)| (llm, Some(binding)))
+                } else {
+                    try_load_cloud(&fallback, settings).await.map(|llm| {
+                        (
+                            llm,
+                            Some(LlmBinding {
+                                provider: fallback,
+                                local_model_path: String::new(),
+                            }),
+                        )
+                    })
+                }
+            }
+        },
         ProviderSelection::LocalOnly { .. } => {
             let (llm, binding) = try_load_local(settings).await?;
             Ok((llm, Some(binding)))
@@ -149,5 +181,65 @@ async fn try_load_cloud(
                 )))
             }
         }
+    }
+}
+
+// ============================================================================
+// Unit tests — fallback chain behaviour
+// ============================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_fallback_to_local_on_cloud_failure() {
+        let settings = GuiSettings {
+            provider: "nonexistent_cloud_42".into(),
+            model: String::new(),
+            api_key: None,
+            local_model_path: None,
+            ..Default::default()
+        };
+        let selection = ProviderSelection::Fallback {
+            preferred: "nonexistent_cloud_42".into(),
+            fallback: "local".into(),
+            reason: "test fallback".into(),
+        };
+        let result = load_llm(selection, &settings).await;
+        assert!(
+            result.is_err(),
+            "Expected both preferred and fallback to fail"
+        );
+        let err_msg = match result {
+            Err(e) => format!("{}", e),
+            Ok(_) => panic!("Expected error"),
+        };
+        // The fallback path to local should have been attempted.
+        assert!(
+            err_msg.contains("local") || err_msg.contains("No local model"),
+            "Expected fallback to local to be attempted, got: {}",
+            err_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fallback_to_another_cloud_on_failure() {
+        let settings = GuiSettings {
+            provider: "nonexistent_cloud_42".into(),
+            model: String::new(),
+            api_key: None,
+            local_model_path: None,
+            ..Default::default()
+        };
+        let selection = ProviderSelection::Fallback {
+            preferred: "nonexistent_cloud_42".into(),
+            fallback: "nonexistent_cloud_99".into(),
+            reason: "test fallback".into(),
+        };
+        let result = load_llm(selection, &settings).await;
+        assert!(
+            result.is_err(),
+            "Expected both preferred and fallback cloud providers to fail"
+        );
     }
 }

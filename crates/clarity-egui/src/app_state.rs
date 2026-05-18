@@ -274,8 +274,28 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     // Layer 1 — Policy: pure function decides which provider to load.
     let selection = resolve_provider(&desired_provider, network_available, &current_binding);
 
-    // Layer 2 — Loader: async instantiation, no fallback logic here.
-    let (llm, binding) = load_llm(selection, &settings).await?;
+    // Layer 2 — Loader: async instantiation, with post-failure fallback.
+    let (llm, binding) = match load_llm(selection, &settings).await {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(
+                "Primary LLM load failed (desired={}): {}, attempting local fallback",
+                desired_provider,
+                e
+            );
+            let fallback_selection = crate::llm_policy::ProviderSelection::LocalOnly {
+                path: String::new(),
+            };
+            load_llm(fallback_selection, &settings)
+                .await
+                .map_err(|e2| {
+                    crate::error::EguiError::LlmLoad(format!(
+                        "Primary provider '{}' failed: {}; local fallback also failed: {}",
+                        desired_provider, e, e2
+                    ))
+                })?
+        }
+    };
 
     // Layer 3 — Binder: attach to Agent.
     bind_llm(
