@@ -19,9 +19,6 @@ pub enum PromptComponent {
     Skills(Vec<String>),
     /// Approval-mode behavioural notice.
     ApprovalNotice(ApprovalMode),
-    /// Offline-mode notice.
-    #[allow(dead_code)]
-    OfflineNotice,
     /// Git repository context (branch, status, recent commits).
     GitContext(String),
     /// Active files currently being operated on.
@@ -74,12 +71,6 @@ impl SystemPromptBuilder {
 
     pub fn with_approval_mode(mut self, mode: ApprovalMode) -> Self {
         self.components.push(PromptComponent::ApprovalNotice(mode));
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_offline_notice(mut self) -> Self {
-        self.components.push(PromptComponent::OfflineNotice);
         self
     }
 
@@ -143,12 +134,6 @@ impl SystemPromptBuilder {
                         }
                     };
                     sections.push(format!("## Approval Mode\n{}", notice));
-                }
-                PromptComponent::OfflineNotice => {
-                    sections.push(
-                        "## Network Status\nYou are currently offline. Only local tools are available."
-                            .to_string(),
-                    );
                 }
                 PromptComponent::GitContext(ctx) => {
                     sections.push(format!("## Git Context\n{}", ctx));
@@ -225,12 +210,6 @@ impl SystemPromptBuilder {
                         }
                     };
                     static_parts.push(format!("## Approval Mode\n{}", notice));
-                }
-                PromptComponent::OfflineNotice => {
-                    static_parts.push(
-                        "## Network Status\nYou are currently offline. Only local tools are available."
-                            .to_string(),
-                    );
                 }
                 PromptComponent::GitContext(ctx) => {
                     dynamic_parts.push(format!("## Git Context\n{}", ctx));
@@ -533,15 +512,6 @@ mod tests {
             .with_approval_mode(ApprovalMode::Smart)
             .build();
         assert!(prompt.contains("Smart mode"));
-    }
-
-    #[test]
-    fn test_builder_offline_notice() {
-        let prompt = SystemPromptBuilder::new()
-            .with_base("Base.")
-            .with_offline_notice()
-            .build();
-        assert!(prompt.contains("offline"));
     }
 
     #[test]
