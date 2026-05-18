@@ -24,3 +24,9 @@ experiments/**/target/
 
 # Claude Code local config
 .claude/
+
+# Kimi AI local config
+.kimi/
+
+# Personal AI assistant instruction files
+CLAUDE.md

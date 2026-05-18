@@ -1,9 +1,0 @@
-[workspace]
-
-[package]
-name = "egui-streaming-text-proto"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-fontdue = "0.9"
