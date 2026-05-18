@@ -78,6 +78,9 @@ cargo run -p clarity-egui
 - ✅ **后台任务 UI**：Cron Jobs 可折叠 sidebar section（创建/列表/删除/启用开关）、Team 协调面板
 - ✅ **Markdown 渲染**：代码块高亮 + 表格渲染（`RenderBlock::Table` + `egui::Grid`，零外部依赖）
 - ✅ **运行时健康**：Gateway 状态指示器（实时轮询）、面板级 panic 隔离（`render_safe` + `catch_unwind`）、rapid-Enter debounce + session-delete draft race 修复
+- ✅ **Turn ID 追踪**：ADR-007 Phase A — 全部 14 个 `WireMessage` 变体携带 `turn_id`，`Agent::begin_turn()` 生成 UUID，跨 turn 消息边界显式化
+- ✅ **LLM Fallback 链**：离线时自动 fallback 到本地模型，云 provider 失败时自动降级
+- ✅ **Wire 消息可靠性**：broadcast capacity 8192 + `send()` 返回 `Result` + 显式错误处理，消除静默丢消息
 - ✅ **CJK 字体子集化**：NotoSansSC-subset.ttf 精确裁剪至 297KB（477 codepoints），消除字重回退
 - ✅ **错误气泡增强**：Retry / Switch Model 动作按钮 + 50% 红色玻璃背景 + danger 描边
 - ✅ **侧边栏信息架构**：ROLES / LIVE / WORKSPACE / ANALYTICS 分组导航 + clickable_row 交互模式

@@ -1,6 +1,6 @@
 # ADR-007: Turn Identifier Injection into `WireMessage`
 
-> Status: Proposed  
+> Status: Accepted — Phase A implemented (2026-05-18)  
 > Date: 2026-05-17  
 > Deciders: juice094 + Agent (architect layer)  
 > Affects: `clarity-wire`, `clarity-core`, `clarity-egui`, `clarity-tui`, `clarity-gateway`  
@@ -231,16 +231,17 @@ Rules:
 
 ## 7. Implementation Checklist
 
-- [ ] `clarity-wire`: add `turn_id: String` to all `WireMessage` variants + serde default
-- [ ] `clarity-wire`: update unit tests (roundtrip, merging, broadcast)
-- [ ] `clarity-core`: add `turn_id` to `TurnContext`
-- [ ] `clarity-core`: generate UUID in `Agent::run` / `run_streaming` / `execute_plan_mode`
-- [ ] `clarity-core`: thread `turn_id` through all `send_wire_message` calls
-- [ ] `clarity-core`: update agent tests
-- [ ] `clarity-egui`: thread `turn_id` through `agent_runner.rs`
+- [x] `clarity-wire`: add `turn_id: String` to all `WireMessage` variants + serde default
+- [x] `clarity-wire`: update unit tests (roundtrip, merging, broadcast)
+- [x] `clarity-core`: add `turn_id` to `TurnContext`
+- [x] `clarity-core`: generate UUID in `Agent::begin_turn`
+- [x] `clarity-core`: thread `turn_id` through all `send_wire_message` calls
+- [x] `clarity-core`: update agent tests
+- [x] `clarity-egui`: thread `turn_id` through `agent_runner.rs`
 - [ ] `clarity-egui`: add `turn_id` to `Message` / session persistence (Phase B)
-- [ ] `clarity-tui`: thread `turn_id` through `protocol_renderer.rs`
-- [ ] `clarity-gateway`: verify WebSocket JSON carries `turn_id`
+- [x] `clarity-tui`: thread `turn_id` through `wire_adapter.rs`
+- [x] `clarity-gateway`: verify WebSocket JSON carries `turn_id`
+- [x] `clarity-claw`: update tray notification patterns
 - [ ] Remove `#[serde(default)]` once all consumers updated (Phase C)
 
 ---

@@ -101,7 +101,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 协议层 | 状态 | 说明 |
 |--------|------|------|
 | `clarity-wire`（UI↔Agent EventBus） | ✅ 成熟 | SPMC 广播 + ViewCommand 协议通道，三前端统一消费 |
-| Turn ID 注入 WireMessage | 📋 已设计 | ADR-007 已批准；Phase A（Wire+Core）待实施，Phase B（前端存储）待并行 session 收敛后 |
+| Turn ID 注入 WireMessage | ✅ Phase A 完成 | ADR-007 已落地；Phase A（Wire+Core backend）已完成；Phase B（前端存储/聚合）待并行 session 收敛后 |
 | MCP 传输 | ✅ 成熟 | stdio / SSE / HTTP 三种，注册表管理，工具发现 |
 | Gateway HTTP API | ✅ 成熟 | Axum + session store + REST handlers |
 | Local LLM KV Cache | ✅ 已交付 | Sprint 28：`LocalGgufProvider` LCP-based 跨 turn KV 复用 + static prompt hash 失效机制 |
