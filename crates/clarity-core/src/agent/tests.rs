@@ -392,21 +392,23 @@ async fn test_agent_run_with_wire() {
         .await
         .expect("timeout waiting for TurnBegin")
         .expect("channel closed");
-    assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "test query"));
+    assert!(matches!(msg, WireMessage::TurnBegin { user_input, .. } if user_input == "test query"));
 
     // Verify ContentPart is received
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
         .await
         .expect("timeout waiting for ContentPart")
         .expect("channel closed");
-    assert!(matches!(msg, WireMessage::ContentPart { text } if text == "This is a mock response"));
+    assert!(
+        matches!(msg, WireMessage::ContentPart { text, .. } if text == "This is a mock response")
+    );
 
     // Verify TurnEnd is received
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
         .await
         .expect("timeout waiting for TurnEnd")
         .expect("channel closed");
-    assert!(matches!(msg, WireMessage::TurnEnd));
+    assert!(matches!(msg, WireMessage::TurnEnd { .. }));
 
     // Wait for agent to complete
     let result = timeout(Duration::from_millis(1000), handle)
@@ -452,7 +454,9 @@ async fn test_agent_run_streaming_with_wire() {
         .await
         .expect("timeout waiting for TurnBegin")
         .expect("channel closed");
-    assert!(matches!(msg, WireMessage::TurnBegin { user_input } if user_input == "streaming test"));
+    assert!(
+        matches!(msg, WireMessage::TurnBegin { user_input, .. } if user_input == "streaming test")
+    );
 
     // Verify DraftEvent::Progress is received (loading indicator)
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
@@ -463,7 +467,8 @@ async fn test_agent_run_streaming_with_wire() {
         matches!(
             msg,
             WireMessage::DraftEvent {
-                event: DraftEvent::Progress { .. }
+                event: DraftEvent::Progress { .. },
+                ..
             }
         ),
         "Expected DraftEvent::Progress, got {:?}",
@@ -479,7 +484,8 @@ async fn test_agent_run_streaming_with_wire() {
         matches!(
             msg,
             WireMessage::DraftEvent {
-                event: DraftEvent::Clear
+                event: DraftEvent::Clear,
+                ..
             }
         ),
         "Expected DraftEvent::Clear, got {:?}",
@@ -493,13 +499,15 @@ async fn test_agent_run_streaming_with_wire() {
             Ok(Some(msg)) => match msg {
                 WireMessage::DraftEvent {
                     event: DraftEvent::Content { text },
+                    ..
                 } if !text.is_empty() => {
                     content_received = true;
                 }
                 WireMessage::DraftEvent {
                     event: DraftEvent::Content { .. },
+                    ..
                 } => {}
-                WireMessage::TurnEnd => break,
+                WireMessage::TurnEnd { .. } => break,
                 _ => {}
             },
             Ok(None) => break,

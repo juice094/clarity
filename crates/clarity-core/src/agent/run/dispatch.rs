@@ -29,7 +29,9 @@ impl Agent {
         let mut did_compact = false;
         if let Some(ref service) = self.compaction_service {
             if service.needs_compaction(messages) {
-                self.send_wire_message(WireMessage::CompactionBegin);
+                self.send_wire_message(WireMessage::CompactionBegin {
+                    turn_id: String::new(),
+                });
                 did_compact = true;
             }
             if let Err(e) = service.maybe_compact(messages, llm).await {
@@ -38,7 +40,9 @@ impl Agent {
         }
         if self.should_compact(messages).await {
             if !did_compact {
-                self.send_wire_message(WireMessage::CompactionBegin);
+                self.send_wire_message(WireMessage::CompactionBegin {
+                    turn_id: String::new(),
+                });
                 did_compact = true;
             }
             match self.compact_messages(messages).await {
@@ -56,7 +60,9 @@ impl Agent {
             }
         }
         if did_compact {
-            self.send_wire_message(WireMessage::CompactionEnd);
+            self.send_wire_message(WireMessage::CompactionEnd {
+                turn_id: String::new(),
+            });
         }
     }
 
@@ -120,12 +126,14 @@ impl Agent {
 
             tool_names.push(tc.function.name.clone());
             self.send_wire_message(WireMessage::StepBegin {
+                turn_id: String::new(),
                 tool_name: tc.function.name.clone(),
             });
 
             let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
                 .unwrap_or_else(|_| serde_json::json!({}));
             self.send_wire_message(WireMessage::ToolCall {
+                turn_id: String::new(),
                 id: tc.id.clone(),
                 name: tc.function.name.clone(),
                 arguments: args,
@@ -174,6 +182,7 @@ impl Agent {
             let result_content = result_value.to_string();
 
             self.send_wire_message(WireMessage::ToolResult {
+                turn_id: String::new(),
                 id: tool_call.id.clone(),
                 result: result_content.clone(),
             });

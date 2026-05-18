@@ -161,9 +161,9 @@ pub fn run() -> anyhow::Result<()> {
             let _ = notify_proxy.send_event(UserEvent::WireMsg(msg.clone()));
 
             let body = match &msg {
-                WireMessage::StatusUpdate { message } => Some(message.clone()),
-                WireMessage::ContentPart { text } => Some(text.clone()),
-                WireMessage::TurnBegin { user_input } => Some(format!("You: {}", user_input)),
+                WireMessage::StatusUpdate { message, .. } => Some(message.clone()),
+                WireMessage::ContentPart { text, .. } => Some(text.clone()),
+                WireMessage::TurnBegin { user_input, .. } => Some(format!("You: {}", user_input)),
                 _ => None,
             };
 
@@ -399,8 +399,8 @@ pub fn run() -> anyhow::Result<()> {
                 }
                 UserEvent::WireMsg(msg) => {
                     if let Some(text) = match msg {
-                        WireMessage::ContentPart { text } => Some(text.clone()),
-                        WireMessage::TurnBegin { user_input } => {
+                        WireMessage::ContentPart { text, .. } => Some(text.clone()),
+                        WireMessage::TurnBegin { user_input, .. } => {
                             Some(format!("You: {}", user_input))
                         }
                         _ => None,

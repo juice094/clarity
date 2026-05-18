@@ -364,34 +364,38 @@ impl App {
                             id,
                             name,
                             arguments,
+                            ..
                         } => Some(UiEvent::ToolStart {
                             id,
                             name,
                             arguments,
                         }),
-                        clarity_wire::WireMessage::ToolResult { id, result } => {
+                        clarity_wire::WireMessage::ToolResult { id, result, .. } => {
                             Some(UiEvent::ToolResult { id, result })
                         }
-                        clarity_wire::WireMessage::StepBegin { tool_name } => {
+                        clarity_wire::WireMessage::StepBegin { tool_name, .. } => {
                             Some(UiEvent::StepBegin { tool_name })
                         }
-                        clarity_wire::WireMessage::CompactionBegin => {
+                        clarity_wire::WireMessage::CompactionBegin { .. } => {
                             Some(UiEvent::CompactionBegin)
                         }
-                        clarity_wire::WireMessage::CompactionEnd => Some(UiEvent::CompactionEnd),
-                        clarity_wire::WireMessage::PlanStepBegin { step_id, tool_name } => {
-                            Some(UiEvent::PlanStepBegin { step_id, tool_name })
+                        clarity_wire::WireMessage::CompactionEnd { .. } => {
+                            Some(UiEvent::CompactionEnd)
                         }
-                        clarity_wire::WireMessage::PlanStepEnd { step_id, success } => {
-                            Some(UiEvent::PlanStepEnd { step_id, success })
-                        }
-                        clarity_wire::WireMessage::PlanStepSkipped { step_id } => {
+                        clarity_wire::WireMessage::PlanStepBegin {
+                            step_id, tool_name, ..
+                        } => Some(UiEvent::PlanStepBegin { step_id, tool_name }),
+                        clarity_wire::WireMessage::PlanStepEnd {
+                            step_id, success, ..
+                        } => Some(UiEvent::PlanStepEnd { step_id, success }),
+                        clarity_wire::WireMessage::PlanStepSkipped { step_id, .. } => {
                             Some(UiEvent::PlanStepSkipped { step_id })
                         }
                         clarity_wire::WireMessage::Usage {
                             prompt_tokens,
                             completion_tokens,
                             total_tokens,
+                            ..
                         } => Some(UiEvent::Usage {
                             prompt_tokens,
                             completion_tokens,

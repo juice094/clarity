@@ -316,6 +316,14 @@ impl Agent {
     /// is the single source of truth for soul→ui events.
     pub(crate) fn send_wire_message(&self, msg: WireMessage) {
         if let Some(ref wire) = self.wire {
+            let msg = {
+                let inner = self.inner.read();
+                if let Some(ref ctx) = inner.turn_context {
+                    msg.with_turn_id(&ctx.turn_id)
+                } else {
+                    msg
+                }
+            };
             if let Err(e) = wire.soul_side().send(msg) {
                 tracing::warn!("Failed to send wire message (no receivers): {}", e);
             }
@@ -710,7 +718,9 @@ impl Agent {
                 inner.state = AgentState::Running {
                     cancel_token: token.clone(),
                 };
+                let turn_id = uuid::Uuid::new_v4().to_string();
                 inner.turn_context = Some(super::turn_context::TurnContext::new(
+                    turn_id,
                     inner.active_skill.clone(),
                     3,
                 ));
@@ -766,12 +776,15 @@ impl Agent {
         })?;
 
         self.send_wire_message(WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: format!("parallel execution ({} tasks)", specs.len()),
         });
 
         let result = orchestrator.run_parallel(specs, config, progress).await;
 
-        self.send_wire_message(WireMessage::TurnEnd);
+        self.send_wire_message(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         result
     }

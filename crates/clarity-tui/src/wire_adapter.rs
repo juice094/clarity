@@ -15,36 +15,38 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
     tokio::spawn(async move {
         while let Some(msg) = ui_side.recv().await {
             let event = match msg {
-                WireMessage::ContentPart { text } if !text.is_empty() => {
+                WireMessage::ContentPart { text, .. } if !text.is_empty() => {
                     Some(Event::StreamResponse(text))
                 }
                 WireMessage::ToolCall {
                     id: _,
                     name,
                     arguments,
+                    ..
                 } => Some(Event::ToolCall(ToolCallInfo {
                     name,
                     params: arguments.to_string(),
                     status: ToolStatus::Running,
                 })),
-                WireMessage::ToolResult { id: _, result } => {
+                WireMessage::ToolResult { id: _, result, .. } => {
                     Some(Event::ToolResult(ToolCallInfo {
                         name: "result".to_string(),
                         params: result,
                         status: ToolStatus::Success,
                     }))
                 }
-                WireMessage::StepBegin { tool_name } => Some(Event::ToolCall(ToolCallInfo {
+                WireMessage::StepBegin { tool_name, .. } => Some(Event::ToolCall(ToolCallInfo {
                     name: tool_name,
                     params: String::new(),
                     status: ToolStatus::Running,
                 })),
-                WireMessage::StatusUpdate { message } => Some(Event::StreamResponse(message)),
-                WireMessage::TurnEnd => Some(Event::ResponseComplete),
+                WireMessage::StatusUpdate { message, .. } => Some(Event::StreamResponse(message)),
+                WireMessage::TurnEnd { .. } => Some(Event::ResponseComplete),
                 WireMessage::Usage {
                     prompt_tokens,
                     completion_tokens,
                     total_tokens,
+                    ..
                 } => Some(Event::Usage {
                     prompt_tokens,
                     completion_tokens,
@@ -75,6 +77,7 @@ mod tests {
         spawn_wire_adapter(wire.ui_side(false), tx);
 
         let _ = wire.soul_side().send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "hello".to_string(),
         });
 
@@ -89,6 +92,7 @@ mod tests {
         spawn_wire_adapter(wire.ui_side(false), tx);
 
         let _ = wire.soul_side().send(WireMessage::ToolCall {
+            turn_id: String::new(),
             id: "1".to_string(),
             name: "read_file".to_string(),
             arguments: serde_json::json!({"path": "/tmp"}),
@@ -105,6 +109,7 @@ mod tests {
         }
 
         let _ = wire.soul_side().send(WireMessage::ToolResult {
+            turn_id: String::new(),
             id: "1".to_string(),
             result: "ok".to_string(),
         });
@@ -125,7 +130,9 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         spawn_wire_adapter(wire.ui_side(false), tx);
 
-        let _ = wire.soul_side().send(WireMessage::TurnEnd);
+        let _ = wire.soul_side().send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         let ev: Event = rx.recv().await.unwrap();
         assert!(matches!(ev, Event::ResponseComplete));
@@ -138,9 +145,12 @@ mod tests {
         spawn_wire_adapter(wire.ui_side(false), tx);
 
         let _ = wire.soul_side().send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: String::new(),
         });
-        let _ = wire.soul_side().send(WireMessage::TurnEnd);
+        let _ = wire.soul_side().send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         // Should only receive TurnEnd, empty ContentPart is filtered
         let ev: Event = rx.recv().await.unwrap();

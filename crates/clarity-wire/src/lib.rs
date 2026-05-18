@@ -49,24 +49,39 @@ pub enum DraftEvent {
 pub enum WireMessage {
     /// Start of a new conversation turn with user input.
     TurnBegin {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
         /// The user's input text.
         user_input: String,
     },
 
     /// Start of a tool execution step.
     StepBegin {
+        #[serde(default)]
+        turn_id: String,
         /// Name of the tool being executed.
         tool_name: String,
     },
 
     /// A content part (text chunk from the model).
-    ContentPart { text: String },
+    ContentPart {
+        #[serde(default)]
+        turn_id: String,
+        text: String,
+    },
 
     /// Streaming draft lifecycle event (replaces simple ContentPart for streaming).
-    DraftEvent { event: DraftEvent },
+    DraftEvent {
+        #[serde(default)]
+        turn_id: String,
+        event: DraftEvent,
+    },
 
     /// A tool call initiated by the model.
     ToolCall {
+        #[serde(default)]
+        turn_id: String,
         /// Unique identifier for this tool call.
         id: String,
         /// Name of the tool being called.
@@ -77,6 +92,8 @@ pub enum WireMessage {
 
     /// Result returned from a tool execution.
     ToolResult {
+        #[serde(default)]
+        turn_id: String,
         /// Identifier matching the original ToolCall.
         id: String,
         /// The result content (usually JSON string).
@@ -84,26 +101,43 @@ pub enum WireMessage {
     },
 
     /// End of the current conversation turn.
-    TurnEnd,
+    TurnEnd {
+        #[serde(default)]
+        turn_id: String,
+    },
 
     /// Token usage report for the session.
     Usage {
+        #[serde(default)]
+        turn_id: String,
         prompt_tokens: u32,
         completion_tokens: u32,
         total_tokens: u32,
     },
 
     /// Status update message (for UI feedback).
-    StatusUpdate { message: String },
+    StatusUpdate {
+        #[serde(default)]
+        turn_id: String,
+        message: String,
+    },
 
     /// Conversation history compaction has started.
-    CompactionBegin,
+    CompactionBegin {
+        #[serde(default)]
+        turn_id: String,
+    },
 
     /// Conversation history compaction has finished.
-    CompactionEnd,
+    CompactionEnd {
+        #[serde(default)]
+        turn_id: String,
+    },
 
     /// Start of a plan step execution.
     PlanStepBegin {
+        #[serde(default)]
+        turn_id: String,
         /// Identifier of the step (matches PlanStep.id).
         step_id: String,
         /// Name of the tool being executed.
@@ -112,6 +146,8 @@ pub enum WireMessage {
 
     /// End of a plan step execution.
     PlanStepEnd {
+        #[serde(default)]
+        turn_id: String,
         /// Identifier of the step.
         step_id: String,
         /// Whether the step succeeded.
@@ -120,6 +156,8 @@ pub enum WireMessage {
 
     /// A plan step was skipped by user request.
     PlanStepSkipped {
+        #[serde(default)]
+        turn_id: String,
         /// Identifier of the skipped step.
         step_id: String,
     },
@@ -129,6 +167,31 @@ pub enum WireMessage {
 // removed. WireMessage broadcast is the single soul→ui contract.
 
 impl WireMessage {
+    /// Set the turn identifier on this message.
+    ///
+    /// Every WireMessage variant carries a `turn_id`; this helper centralises
+    /// the update so callers do not need to match on the enum themselves.
+    pub fn with_turn_id(mut self, turn_id: impl Into<String>) -> Self {
+        let turn_id = turn_id.into();
+        match &mut self {
+            WireMessage::TurnBegin { turn_id: t, .. } => *t = turn_id,
+            WireMessage::StepBegin { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ContentPart { turn_id: t, .. } => *t = turn_id,
+            WireMessage::DraftEvent { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ToolCall { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ToolResult { turn_id: t, .. } => *t = turn_id,
+            WireMessage::TurnEnd { turn_id: t } => *t = turn_id,
+            WireMessage::Usage { turn_id: t, .. } => *t = turn_id,
+            WireMessage::StatusUpdate { turn_id: t, .. } => *t = turn_id,
+            WireMessage::CompactionBegin { turn_id: t } => *t = turn_id,
+            WireMessage::CompactionEnd { turn_id: t } => *t = turn_id,
+            WireMessage::PlanStepBegin { turn_id: t, .. } => *t = turn_id,
+            WireMessage::PlanStepEnd { turn_id: t, .. } => *t = turn_id,
+            WireMessage::PlanStepSkipped { turn_id: t, .. } => *t = turn_id,
+        }
+        self
+    }
+
     /// Returns true if this message type is mergeable with subsequent messages.
     ///
     /// Currently, only `ContentPart` messages can be merged.
@@ -142,8 +205,12 @@ impl WireMessage {
     fn try_merge(&mut self, other: &Self) -> bool {
         match (self, other) {
             (
-                WireMessage::ContentPart { text: self_text },
-                WireMessage::ContentPart { text: other_text },
+                WireMessage::ContentPart {
+                    text: self_text, ..
+                },
+                WireMessage::ContentPart {
+                    text: other_text, ..
+                },
             ) => {
                 self_text.push_str(other_text);
                 true
@@ -460,10 +527,10 @@ impl WireUISide {
     /// let soul = wire.soul_side();
     /// let mut ui = wire.ui_side(false);
     ///
-    /// soul.send(WireMessage::TurnEnd);
+    /// soul.send(WireMessage::TurnEnd { .. });
     ///
     /// if let Some(msg) = ui.recv().await {
-    ///     assert!(matches!(msg, WireMessage::TurnEnd));
+    ///     assert!(matches!(msg, WireMessage::TurnEnd { .. }));
     /// }
     /// # });
     /// ```
@@ -504,7 +571,7 @@ impl WireUISide {
     /// // Initially empty
     /// assert!(ui.try_recv().is_none());
     ///
-    /// soul.send(WireMessage::TurnEnd);
+    /// soul.send(WireMessage::TurnEnd { .. });
     ///
     /// // Now available
     /// assert!(ui.try_recv().is_some());
@@ -654,6 +721,7 @@ mod tests {
 
         // Send a message
         let _ = soul.send(WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: "Hello, world!".to_string(),
         });
 
@@ -665,7 +733,7 @@ mod tests {
 
         assert!(matches!(
             msg,
-            WireMessage::TurnBegin { user_input } if user_input == "Hello, world!"
+            WireMessage::TurnBegin { user_input, .. } if user_input == "Hello, world!"
         ));
     }
 
@@ -682,6 +750,7 @@ mod tests {
 
         // Send a message
         let _ = soul.send(WireMessage::StatusUpdate {
+            turn_id: String::new(),
             message: "Test broadcast".to_string(),
         });
 
@@ -703,9 +772,12 @@ mod tests {
 
         // Send some messages
         let _ = soul.send(WireMessage::StepBegin {
+            turn_id: String::new(),
             tool_name: "test_tool".to_string(),
         });
-        let _ = soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         // Shutdown (flushes buffers)
         wire.shutdown();
@@ -736,23 +808,29 @@ mod tests {
 
         // Send interleaved messages
         let _ = soul.send(WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: "Hi".to_string(),
         });
         let _ = soul.send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "Hello ".to_string(),
         });
         let _ = soul.send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "world".to_string(),
         });
         let _ = soul.send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "!".to_string(),
         });
-        let _ = soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         // Raw channel: should receive all 5 messages
         let mut raw_count = 0;
         while let Some(msg) = ui_raw.recv().await {
-            if matches!(msg, WireMessage::TurnEnd) {
+            if matches!(msg, WireMessage::TurnEnd { .. }) {
                 raw_count += 1;
                 break;
             }
@@ -771,12 +849,13 @@ mod tests {
         assert_eq!(
             msg2,
             WireMessage::ContentPart {
+                turn_id: String::new(),
                 text: "Hello world!".to_string(),
             }
         );
 
         let msg3 = ui_merged.recv().await.expect("should receive TurnEnd");
-        assert!(matches!(msg3, WireMessage::TurnEnd));
+        assert!(matches!(msg3, WireMessage::TurnEnd { .. }));
     }
 
     /// Test ToolCall and ToolResult messages.
@@ -787,12 +866,14 @@ mod tests {
         let mut ui = wire.ui_side(false);
 
         let tool_call = WireMessage::ToolCall {
+            turn_id: String::new(),
             id: "call_123".to_string(),
             name: "read_file".to_string(),
             arguments: serde_json::json!({"path": "/tmp/test.txt"}),
         };
 
         let tool_result = WireMessage::ToolResult {
+            turn_id: String::new(),
             id: "call_123".to_string(),
             result: "File contents here".to_string(),
         };
@@ -815,7 +896,9 @@ mod tests {
         assert!(ui.try_recv().is_none());
 
         // Send and receive
-        let _ = soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         assert!(ui.try_recv().is_some());
 
         // Should be empty again
@@ -829,7 +912,9 @@ mod tests {
         let soul = wire.soul_side();
         let mut ui = wire.ui_side(false);
 
-        let _ = soul.send(WireMessage::TurnEnd);
+        let _ = soul.send(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
 
         // Use try_recv since we're in a sync test
         assert!(ui.try_recv().is_some());
@@ -844,9 +929,11 @@ mod tests {
 
         // Send only mergeable messages
         let _ = soul.send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "A".to_string(),
         });
         let _ = soul.send(WireMessage::ContentPart {
+            turn_id: String::new(),
             text: "B".to_string(),
         });
 
@@ -857,6 +944,7 @@ mod tests {
         assert_eq!(
             msg,
             WireMessage::ContentPart {
+                turn_id: String::new(),
                 text: "AB".to_string()
             }
         );
@@ -964,6 +1052,7 @@ mod tests {
     #[test]
     fn test_wire_message_draft_event_serde_roundtrip() {
         let msg = WireMessage::DraftEvent {
+            turn_id: String::new(),
             event: DraftEvent::Content {
                 text: "chunk".to_string(),
             },

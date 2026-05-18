@@ -96,6 +96,7 @@ impl AgentLoop for SyncLoop {
 
     async fn handle_final_response(&mut self, agent: &Agent, response: &str, _iteration: usize) {
         agent.send_wire_message(clarity_wire::WireMessage::ContentPart {
+            turn_id: String::new(),
             text: response.to_string(),
         });
     }

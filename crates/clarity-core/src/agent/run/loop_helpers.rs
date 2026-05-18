@@ -164,8 +164,11 @@ impl Agent {
         if let Some(ref hooks) = self.hook_registry {
             response = hooks.run_pre_delivery(&response, tier).await?;
         }
-        self.send_wire_message(WireMessage::TurnEnd);
+        self.send_wire_message(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         self.send_wire_message(WireMessage::Usage {
+            turn_id: String::new(),
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,

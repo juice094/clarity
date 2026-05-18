@@ -41,7 +41,8 @@ async fn test_core_wire_basic_flow() {
         .assert_received_content("This is a mock response")
         .await;
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::TurnEnd)),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::TurnEnd { .. })),
         "Expected TurnEnd in {:?}",
         msgs
     );
@@ -99,7 +100,7 @@ async fn test_core_wire_tool_flow() {
     // Verify StepBegin for bash
     assert!(
         msgs.iter()
-            .any(|m| matches!(m, WireMessage::StepBegin { tool_name } if tool_name == "bash")),
+            .any(|m| matches!(m, WireMessage::StepBegin { tool_name, .. } if tool_name == "bash")),
         "Expected StepBegin for bash in {:?}",
         msgs
     );
@@ -126,7 +127,8 @@ async fn test_core_wire_tool_flow() {
 
     // Verify TurnEnd
     assert!(
-        msgs.iter().any(|m| matches!(m, WireMessage::TurnEnd)),
+        msgs.iter()
+            .any(|m| matches!(m, WireMessage::TurnEnd { .. })),
         "Expected TurnEnd in {:?}",
         msgs
     );

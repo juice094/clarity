@@ -123,6 +123,7 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
 
         if !result.response_content.is_empty() {
             agent.send_wire_message(clarity_wire::WireMessage::ContentPart {
+                turn_id: String::new(),
                 text: result.response_content.clone(),
             });
         }

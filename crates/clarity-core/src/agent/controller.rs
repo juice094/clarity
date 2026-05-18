@@ -115,15 +115,16 @@ impl AgentController {
                         id,
                         name,
                         arguments,
+                        ..
                     } => Some(ControllerEvent::ToolCallStart {
                         id,
                         name,
                         arguments,
                     }),
-                    clarity_wire::WireMessage::ToolResult { id, result } => {
+                    clarity_wire::WireMessage::ToolResult { id, result, .. } => {
                         Some(ControllerEvent::ToolResult { id, result })
                     }
-                    clarity_wire::WireMessage::StepBegin { tool_name } => {
+                    clarity_wire::WireMessage::StepBegin { tool_name, .. } => {
                         Some(ControllerEvent::StepBegin { tool_name })
                     }
                     _ => None,

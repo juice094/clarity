@@ -37,6 +37,7 @@ impl Agent {
 
         info!("Starting agent loop for query: {}", query.as_ref());
         self.send_wire_message(WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: query.as_ref().to_string(),
         });
         let (final_response, completed, tool_names) = self

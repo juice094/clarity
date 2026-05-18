@@ -8,6 +8,8 @@ use super::loop_detector::LoopDetector;
 use std::collections::HashMap;
 
 pub(crate) struct TurnContext {
+    /// Unique identifier for the current turn (ADR-007).
+    pub turn_id: String,
     pub session_usage: TokenUsage,
     pub snapshotted_skill: Option<String>,
     pub recoverable_failure_counts: HashMap<String, u32>,
@@ -15,8 +17,9 @@ pub(crate) struct TurnContext {
 }
 
 impl TurnContext {
-    pub fn new(active_skill: Option<String>, max_repetitions: usize) -> Self {
+    pub fn new(turn_id: String, active_skill: Option<String>, max_repetitions: usize) -> Self {
         Self {
+            turn_id,
             session_usage: TokenUsage {
                 prompt_tokens: 0,
                 completion_tokens: 0,

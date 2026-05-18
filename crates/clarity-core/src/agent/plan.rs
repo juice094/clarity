@@ -150,6 +150,7 @@ Rules:
         self.maybe_snapshot_pre_turn().await;
 
         self.send_wire_message(clarity_wire::WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: format!("Execute plan: {}", plan.title),
         });
 
@@ -172,7 +173,9 @@ Rules:
             *guard = None;
         }
 
-        self.send_wire_message(clarity_wire::WireMessage::TurnEnd);
+        self.send_wire_message(clarity_wire::WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         self.maybe_snapshot_post_turn().await;
         self.finish_turn();
         Ok(controller.results())
@@ -190,6 +193,7 @@ Rules:
         if let Some(ref mut controller) = *guard {
             controller.skip_step(step_id)?;
             self.send_wire_message(clarity_wire::WireMessage::PlanStepSkipped {
+                turn_id: String::new(),
                 step_id: step_id.to_string(),
             });
             Ok(())
@@ -217,16 +221,20 @@ Rules:
     pub async fn execute_plan_mode(&self, query: &str) -> Result<String, AgentError> {
         let plan = self.plan(query).await?;
         self.send_wire_message(clarity_wire::WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: query.to_string(),
         });
         if !plan.is_empty() {
             self.send_wire_message(clarity_wire::WireMessage::ContentPart {
+                turn_id: String::new(),
                 text: format!("📋 Executing plan: {}\n{}", plan.title, plan.to_markdown()),
             });
         }
         let results = self.execute_plan(&plan).await?;
         let final_response = crate::agent::run::format_plan_results(&results);
-        self.send_wire_message(clarity_wire::WireMessage::TurnEnd);
+        self.send_wire_message(clarity_wire::WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         Ok(final_response)
     }
 
@@ -399,6 +407,7 @@ impl PlanExecutionController {
         self.current_idx = idx;
 
         agent.send_wire_message(clarity_wire::WireMessage::PlanStepBegin {
+            turn_id: String::new(),
             step_id: step.id.clone(),
             tool_name: step.tool_name.clone(),
         });
@@ -418,6 +427,7 @@ impl PlanExecutionController {
         };
 
         agent.send_wire_message(clarity_wire::WireMessage::PlanStepEnd {
+            turn_id: String::new(),
             step_id: step.id.clone(),
             success,
         });

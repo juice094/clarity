@@ -32,7 +32,7 @@ impl MockConsumer {
     pub async fn assert_received_content(&self, expected: &str) {
         let msgs = self.messages().await;
         let found = msgs.iter().any(|m| match m {
-            WireMessage::ContentPart { text } => text.contains(expected),
+            WireMessage::ContentPart { text, .. } => text.contains(expected),
             _ => false,
         });
         assert!(

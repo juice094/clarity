@@ -37,13 +37,17 @@ where
         if let Some(ref service) = agent.compaction_service {
             let needs = service.needs_compaction(messages);
             if needs {
-                agent.send_wire_message(WireMessage::CompactionBegin);
+                agent.send_wire_message(WireMessage::CompactionBegin {
+                    turn_id: String::new(),
+                });
             }
             if let Err(e) = service.maybe_compact(messages, llm.as_ref()).await {
                 warn!("Compaction failed: {}", e);
             }
             if needs {
-                agent.send_wire_message(WireMessage::CompactionEnd);
+                agent.send_wire_message(WireMessage::CompactionEnd {
+                    turn_id: String::new(),
+                });
             }
         }
     }
@@ -68,6 +72,7 @@ where
             Ok(mut stream_rx) => {
                 prompt_tokens = pre_stream_prompt_tokens;
                 agent.send_wire_message(WireMessage::DraftEvent {
+                    turn_id: String::new(),
                     event: DraftEvent::Progress {
                         text: "thinking...".to_string(),
                     },
@@ -84,11 +89,13 @@ where
                                 (self.on_chunk)(&content);
                                 if !draft_cleared {
                                     agent.send_wire_message(WireMessage::DraftEvent {
+                                        turn_id: String::new(),
                                         event: DraftEvent::Clear,
                                     });
                                     draft_cleared = true;
                                 }
                                 agent.send_wire_message(WireMessage::DraftEvent {
+                                    turn_id: String::new(),
                                     event: DraftEvent::Content { text: content },
                                 });
                             }
@@ -105,6 +112,7 @@ where
                 }
                 if !draft_cleared && !tool_calls.is_empty() {
                     agent.send_wire_message(WireMessage::DraftEvent {
+                        turn_id: String::new(),
                         event: DraftEvent::Clear,
                     });
                 }
@@ -181,6 +189,7 @@ where
                 let chunk = c.to_string();
                 (self.on_chunk)(&chunk);
                 agent.send_wire_message(WireMessage::ContentPart {
+                    turn_id: String::new(),
                     text: chunk.clone(),
                 });
             }
@@ -213,6 +222,7 @@ where
                 let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
                 (self.on_chunk)(&error_text);
                 agent.send_wire_message(WireMessage::ContentPart {
+                    turn_id: String::new(),
                     text: error_text.clone(),
                 });
                 DispatchOutcome::Break {
@@ -253,6 +263,7 @@ impl Agent {
                 let chunk = c.to_string();
                 (loop_impl.on_chunk)(&chunk);
                 self.send_wire_message(WireMessage::ContentPart {
+                    turn_id: String::new(),
                     text: chunk.clone(),
                 });
             }
@@ -292,6 +303,7 @@ impl Agent {
         info!("Starting streaming agent turn for query: {}", query_hint);
 
         self.send_wire_message(WireMessage::TurnBegin {
+            turn_id: String::new(),
             user_input: query_hint.to_string(),
         });
 
@@ -311,8 +323,11 @@ impl Agent {
         let (final_response, completed) = loop_result?;
 
         // Teardown
-        self.send_wire_message(WireMessage::TurnEnd);
+        self.send_wire_message(WireMessage::TurnEnd {
+            turn_id: String::new(),
+        });
         self.send_wire_message(WireMessage::Usage {
+            turn_id: String::new(),
             prompt_tokens: usage.prompt_tokens,
             completion_tokens: usage.completion_tokens,
             total_tokens: usage.total_tokens,
