@@ -1,3 +1,10 @@
+---
+title: Pretext 深度解构 — 实现解剖、问题诊断、原理验证、思想扩展
+category: Reference
+date: 2026-05-16
+tags: [reference]
+---
+
 # Pretext 深度解构 — 实现解剖、问题诊断、原理验证、思想扩展
 
 > 来源：用户深度分析，2026-04-27

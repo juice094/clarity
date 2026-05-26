@@ -1,3 +1,10 @@
+---
+title: Clarity 架构地图 · 总览
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity 架构地图 · 总览
 
 > 北极星：替代 Kimi CLI（MVP）

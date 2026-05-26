@@ -1,3 +1,10 @@
+---
+title: Clarity 核心目的与真实需求
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity 核心目的与真实需求
 
 > 状态：已确认（juice094）  

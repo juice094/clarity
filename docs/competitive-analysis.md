@@ -1,3 +1,10 @@
+---
+title: Clarity 竞品分析报告
+category: Document
+date: 2026-05-16
+tags: [document]
+---
+
 # Clarity 竞品分析报告
 
 > 分析范围：`C:\Users\22414\dev\third_party` 36 个开源项目

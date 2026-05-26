@@ -1,3 +1,9 @@
+---
+title: ADR-008: Brain/Hands/Session 三层解耦对 Clarity 的启示
+category: ADR
+tags: [adr]
+---
+
 # ADR-008: Brain/Hands/Session 三层解耦对 Clarity 的启示
 
 > Status: **Draft / Proposed** （尚未 Accepted，等待 ADR-006 落实经验沉淀后再决议）

@@ -1,3 +1,10 @@
+---
+title: Skill / MCP / Tool / API 协议关系与 Clarity 概念重构方案
+category: Protocol
+date: 2026-05-16
+tags: [protocol, mcp, tools]
+---
+
 # Skill / MCP / Tool / API 协议关系与 Clarity 概念重构方案
 
 > 分析日期：2026-04-20

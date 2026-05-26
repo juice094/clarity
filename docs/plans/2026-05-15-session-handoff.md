@@ -1,3 +1,10 @@
+---
+title: Clarity Session Handoff — 2026-05-15 (EOD)
+category: Plan
+date: 2026-05-15
+tags: [plan]
+---
+
 # Clarity Session Handoff — 2026-05-15 (EOD)
 
 > **Purpose**: Quick context recovery after compaction. Read this first.

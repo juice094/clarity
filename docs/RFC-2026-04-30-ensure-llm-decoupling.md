@@ -1,3 +1,10 @@
+---
+title: RFC: `ensure_llm` 解耦为三层架构
+category: Document
+date: 2026-04-30
+tags: [document, llm]
+---
+
 # RFC: `ensure_llm` 解耦为三层架构
 
 > **Status**: Draft  

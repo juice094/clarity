@@ -1,3 +1,10 @@
+---
+title: AI 关键决策记录 · Clarity
+category: Protocol
+date: 2026-05-16
+tags: [protocol]
+---
+
 # AI 关键决策记录 · Clarity
 
 > 本文件记录跨 AI 会话的关键架构决策、状态锚点和 Hard Veto 边界。

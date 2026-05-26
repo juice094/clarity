@@ -1,3 +1,10 @@
+---
+title: 架构地图 · 影响层
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构地图 · 影响层
 
 > 用途：改代码前快速确认"改了这里，哪里会炸"

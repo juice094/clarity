@@ -1,3 +1,10 @@
+---
+title: Clarity 项目测试治理框架
+category: Document
+date: 2026-05-16
+tags: [document]
+---
+
 # Clarity 项目测试治理框架
 
 > 原则：**测试通过 = 唯一交付标准**。不接受"代码已写"、"应该能工作"等口头承诺。

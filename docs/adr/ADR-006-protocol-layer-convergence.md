@@ -1,3 +1,9 @@
+---
+title: ADR-006: Protocol Layer Convergence (Triple → Single)
+category: ADR
+tags: [adr, protocol]
+---
+
 # ADR-006: Protocol Layer Convergence (Triple → Single)
 
 > Status: Accepted

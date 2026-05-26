@@ -1,3 +1,9 @@
+---
+title: ADR-012: RenderLine Enum Design — 13 Variants Covering 30 Line Patterns
+category: ADR
+tags: [adr, rendering]
+---
+
 # ADR-012: RenderLine Enum Design — 13 Variants Covering 30 Line Patterns
 
 - Status: Accepted

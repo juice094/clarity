@@ -1,3 +1,10 @@
+---
+title: UI Design Audit — Phase 0.5
+category: Audit
+date: 2026-05-12
+tags: [audit, ui]
+---
+
 # UI Design Audit — Phase 0.5
 
 > **Date**: 2026-05-12

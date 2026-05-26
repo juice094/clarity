@@ -1,3 +1,10 @@
+---
+title: Clarity 工具系统发展路线图
+category: Roadmap
+date: 2026-05-16
+tags: [roadmap]
+---
+
 # Clarity 工具系统发展路线图
 
 > 目标：通过 MCP + 内置工具达到超越 Nanobot 的能力  

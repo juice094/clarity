@@ -1,3 +1,10 @@
+---
+title: 2026-05-11 协议层收敛与工程纪律建立 — 回顾
+category: Note
+date: 2026-05-11
+tags: [note]
+---
+
 # 2026-05-11 协议层收敛与工程纪律建立 — 回顾
 
 > Type: Sprint retrospective + methodology sediment

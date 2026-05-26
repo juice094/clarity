@@ -1,3 +1,10 @@
+---
+title: Clarity 后续开发主计划书
+category: Plan
+date: 2026-05-14
+tags: [plan]
+---
+
 # Clarity 后续开发主计划书
 
 > **Date**: 2026-05-15 (revised) | **Status**: S7 Phase 3A 已闭环；准备 S8 | **Owner**: juice094 + Clarity Agent

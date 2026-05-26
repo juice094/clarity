@@ -1,3 +1,10 @@
+---
+title: Agent State Machine Design
+category: Document
+date: 2026-05-16
+tags: [document, agent]
+---
+
 # Agent State Machine Design
 
 > **Status**: Design document for Wave 3 (E-1 ~ E-4)  

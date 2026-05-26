@@ -1,3 +1,9 @@
+---
+title: ADR-007: Turn Identifier Injection into `WireMessage`
+category: ADR
+tags: [adr, protocol]
+---
+
 # ADR-007: Turn Identifier Injection into `WireMessage`
 
 > Status: Accepted — Phase A implemented (2026-05-18)  

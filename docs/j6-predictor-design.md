@@ -1,3 +1,10 @@
+---
+title: J6 Design: LLM-Augmented Predictor
+category: Design
+date: 2026-05-16
+tags: [design, llm]
+---
+
 # J6 Design: LLM-Augmented Predictor
 
 ## 目标

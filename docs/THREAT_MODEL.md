@@ -1,3 +1,10 @@
+---
+title: Clarity Threat Model
+category: Security
+date: 2026-05-16
+tags: [security]
+---
+
 # Clarity Threat Model
 
 > 版本：v0.3.1+ | 关联：[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`AGENTS.md`](../AGENTS.md)

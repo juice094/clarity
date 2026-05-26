@@ -1,3 +1,9 @@
+---
+title: ADR-003: Extract `clarity-contract` as a Standalone Crate for Trait-Centric Tool Interoperability
+category: ADR
+tags: [adr, tools]
+---
+
 # ADR-003: Extract `clarity-contract` as a Standalone Crate for Trait-Centric Tool Interoperability
 
 - Status: Accepted

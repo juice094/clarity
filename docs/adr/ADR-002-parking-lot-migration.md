@@ -1,3 +1,9 @@
+---
+title: ADR-002: Replace `std::sync::Mutex`/`RwLock` with `parking_lot` Across 6 Crates
+category: ADR
+tags: [adr]
+---
+
 # ADR-002: Replace `std::sync::Mutex`/`RwLock` with `parking_lot` Across 6 Crates
 
 - Status: Accepted

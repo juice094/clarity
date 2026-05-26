@@ -1,3 +1,10 @@
+---
+title: Clarity UI 审计二次分析：美学与工程实用视角
+category: Design
+date: 2026-05-16
+tags: [design, ui]
+---
+
 # Clarity UI 审计二次分析：美学与工程实用视角
 
 > 原始审计：`Clarity_UI_Audit_20260509.md`（基于截图静态分析）

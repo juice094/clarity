@@ -1,3 +1,10 @@
+---
+title: Wave 4: RAG 向量知识库技术调研报告
+category: Document
+date: 2026-05-16
+tags: [document]
+---
+
 # Wave 4: RAG 向量知识库技术调研报告
 
 > 调研日期: 2026-04-15

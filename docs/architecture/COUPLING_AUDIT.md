@@ -1,3 +1,10 @@
+---
+title: 分发与解耦健康度排查报告
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 分发与解耦健康度排查报告
 
 > 生成时间：2026-05-01  

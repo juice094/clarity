@@ -1,3 +1,10 @@
+---
+title: 并行会话协调记录 — 2026-05-11
+category: Note
+date: 2026-05-11
+tags: [note]
+---
+
 # 并行会话协调记录 — 2026-05-11
 
 > Type: Multi-session coordination + handoff state

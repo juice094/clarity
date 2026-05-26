@@ -1,3 +1,9 @@
+---
+title: ADR-011: Workspace Architecture — openclaw Bootstrap + Multi-Instance Extension
+category: ADR
+tags: [adr]
+---
+
 # ADR-011: Workspace Architecture — openclaw Bootstrap + Multi-Instance Extension
 
 - Status: Accepted

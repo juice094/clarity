@@ -1,3 +1,9 @@
+---
+title: ADR-015: EndpointDescriptor Abstraction — Unified Contract for Personas, Sites, and Frontends
+category: ADR
+tags: [adr]
+---
+
 # ADR-015: EndpointDescriptor Abstraction — Unified Contract for Personas, Sites, and Frontends
 
 - Status: Accepted

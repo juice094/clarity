@@ -1,3 +1,10 @@
+---
+title: Project Clarity 渠道集成架构设计
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Project Clarity 渠道集成架构设计
 
 ## 1. 执行摘要

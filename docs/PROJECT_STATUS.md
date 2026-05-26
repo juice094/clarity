@@ -1,3 +1,10 @@
+---
+title: Clarity 项目现状报告
+category: Status
+date: 2026-05-17
+tags: [status]
+---
+
 # Clarity 项目现状报告
 
 > 版本：v0.3.2 → v0.3.4-rc | 日期：2026-05-15 | `main` @ `cb4e9406` | 基于实机测试与代码审计

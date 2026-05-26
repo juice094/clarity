@@ -1,3 +1,10 @@
+---
+title: 风险点与待优化项登记簿
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 风险点与待优化项登记簿
 
 > 性质：人工维护清单。非自动生成，需 PM 定期审计更新。

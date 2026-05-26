@@ -1,3 +1,10 @@
+---
+title: Anthropic Managed Agents x Clarity 架构映射 — 2026-05-11
+category: Note
+date: 2026-05-11
+tags: [note, agent]
+---
+
 # Anthropic Managed Agents x Clarity 架构映射 — 2026-05-11
 
 > Type: Comparative architecture analysis

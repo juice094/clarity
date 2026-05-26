@@ -1,3 +1,10 @@
+---
+title: Git 快照管理 UI 设计草案
+category: UI Design
+date: 2026-05-16
+tags: [ui-design, ui]
+---
+
 # Git 快照管理 UI 设计草案
 
 > 状态：草案 v0.1 | 关联 Sprint：39 (Side-Git Snapshot MVP UI) | 作者：AI Agent (juice094 工作区)

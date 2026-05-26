@@ -1,3 +1,10 @@
+---
+title: Clarity Architecture — Master Index
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity Architecture — Master Index
 
 > **Status**: Living document | **Last revised**: 2026-05-15 (post-S7 Phase 3A)

@@ -1,3 +1,10 @@
+---
+title: Clarity 设计原则 — CLI→GUI 转译与 Agent 工作流可视化
+category: Guide
+date: 2026-05-16
+tags: [guide, agent, ui]
+---
+
 # Clarity 设计原则 — CLI→GUI 转译与 Agent 工作流可视化
 
 > 本文档封装从 Kimi CLI/Claude Code CLI 等终端交互中提取的设计原则，指导 Clarity egui 前端的工程决策。

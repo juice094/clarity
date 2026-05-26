@@ -1,3 +1,10 @@
+---
+title: Kimi 会话架构提取：三角色评估与内核视角
+category: Plan
+date: 2026-05-11
+tags: [plan]
+---
+
 # Kimi 会话架构提取：三角色评估与内核视角
 
 来源：[Kimi 分享链接](https://www.kimi.com/share/19e15484-0e42-8115-8000-00002228a8a1)  

@@ -1,3 +1,10 @@
+---
+title: Clarity Web UI 设计理论参考指南
+category: Design
+date: 2026-05-16
+tags: [design, ui]
+---
+
 # Clarity Web UI 设计理论参考指南
 
 > **美学与实用性并重** —— 本文档梳理了可指导 Clarity Web UI 重构的成熟前端设计理论，每条理论均附带**在 AI 编码工具场景下的具体应用建议**。

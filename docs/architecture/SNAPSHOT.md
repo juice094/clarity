@@ -1,3 +1,10 @@
+---
+title: Clarity 硬事实快照 · 2026-04-30
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity 硬事实快照 · 2026-04-30
 
 > 性质：可验证的代码库状态记录。

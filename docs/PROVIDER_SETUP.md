@@ -1,3 +1,10 @@
+---
+title: Clarity 模型提供商配置速查
+category: Guide
+date: 2026-05-16
+tags: [guide]
+---
+
 # Clarity 模型提供商配置速查
 
 > 快速上手：设置环境变量 → 启动 clarity-egui → Settings Panel 选择 Provider → 开始对话

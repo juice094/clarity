@@ -1,3 +1,10 @@
+---
+title: UI 技术栈选型决策：Tauri 2
+category: Design
+date: 2026-05-16
+tags: [design, tauri, ui]
+---
+
 # UI 技术栈选型决策：Tauri 2
 
 > 日期：2026-04-25 | 决策人：开发团队 | 状态：Approved

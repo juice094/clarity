@@ -1,3 +1,10 @@
+---
+title: Sprint 43 执行计划 — 风险点判断与推进路线
+category: Plan
+date: 2026-05-16
+tags: [plan, sprint]
+---
+
 # Sprint 43 执行计划 — 风险点判断与推进路线
 
 > 生成日期：2026-05-10  

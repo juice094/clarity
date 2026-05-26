@@ -1,3 +1,10 @@
+---
+title: Clarity vs Kimi CLI 快速参考
+category: Design
+date: 2026-05-16
+tags: [design, ui]
+---
+
 # Clarity vs Kimi CLI 快速参考
 
 > 最后更新：2026-05-03

@@ -1,3 +1,10 @@
+---
+title: Pretext UI Theory — Why Clarity Blurs the TUI/GUI Boundary
+category: Architecture
+date: 2026-05-16
+tags: [architecture, ui]
+---
+
 # Pretext UI Theory — Why Clarity Blurs the TUI/GUI Boundary
 
 > **Date**: 2026-05-12

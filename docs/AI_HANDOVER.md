@@ -1,3 +1,10 @@
+---
+title: AI 实例交接手册 · Clarity
+category: Handover
+date: 2026-05-16
+tags: [handover]
+---
+
 # AI 实例交接手册 · Clarity
 
 > 用途：新 AI 会话启动时快速恢复项目上下文。

@@ -1,0 +1,13 @@
+# Obsidian workspace state — do not commit
+workspace.json
+workspaces.json
+graph.json
+
+# Plugins and their data
+plugins/
+
+# Cache and sync state
+cache/
+
+# Community themes (if any)
+themes/

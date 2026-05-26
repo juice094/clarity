@@ -1,3 +1,10 @@
+---
+title: 2026-05-11 主会话最终移交文档
+category: Note
+date: 2026-05-11
+tags: [note]
+---
+
 # 2026-05-11 主会话最终移交文档
 
 > Type: Session handoff + CI readiness summary

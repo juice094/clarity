@@ -1,3 +1,10 @@
+---
+title: Clarity Roadmap
+category: Roadmap
+date: 2026-05-18
+tags: [roadmap, planning]
+---
+
 # Clarity Roadmap
 
 > 策略：本地优先 + 零依赖 + 开源  

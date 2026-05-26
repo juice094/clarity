@@ -1,3 +1,9 @@
+---
+title: ADR-005: Subagent ↔ Core Decoupling (P0 Continuation)
+category: ADR
+tags: [adr, agent]
+---
+
 # ADR-005: Subagent ↔ Core Decoupling (P0 Continuation)
 
 > Status: In Progress  

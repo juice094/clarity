@@ -1,3 +1,10 @@
+---
+title: Agent OS 愿景备忘录
+category: Vision
+date: 2026-05-16
+tags: [vision, agent]
+---
+
 # Agent OS 愿景备忘录
 
 > 性质：用户原始需求 + 架构映射分析。非已执行决策，非 Roadmap 承诺。

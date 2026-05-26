@@ -1,3 +1,10 @@
+---
+title: 会话摘要 · 2026-04-30
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 会话摘要 · 2026-04-30
 
 > 性质：元认知记录。非架构决策，非 Roadmap。

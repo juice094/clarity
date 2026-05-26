@@ -1,3 +1,10 @@
+---
+title: 架构地图 · 能力孤岛索引
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构地图 · 能力孤岛索引
 
 > 用途：防止"已有能力被重复实现"

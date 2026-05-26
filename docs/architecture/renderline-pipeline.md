@@ -1,3 +1,10 @@
+---
+title: RenderLine Pipeline — ADR-012 Implementation Notes
+category: Architecture
+date: 2026-05-16
+tags: [architecture, rendering]
+---
+
 # RenderLine Pipeline — ADR-012 Implementation Notes
 
 > **Scope**: S4 Phase 2A → S6 Phase 2C | **Status**: Complete | **Owner**: juice094

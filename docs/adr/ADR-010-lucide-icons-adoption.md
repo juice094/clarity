@@ -1,3 +1,9 @@
+---
+title: ADR-010: Adopt `lucide-icons` Crate — Supersede ADR-009 Phosphor Decision
+category: ADR
+tags: [adr]
+---
+
 # ADR-010: Adopt `lucide-icons` Crate — Supersede ADR-009 Phosphor Decision
 
 - Status: Accepted (supersedes the Decision section of ADR-009)

@@ -1,3 +1,10 @@
+---
+title: clarity-egui 美学与信息论研究 · 主题一视角
+category: Research
+date: 2026-05-16
+tags: [research, egui, ui]
+---
+
 # clarity-egui 美学与信息论研究 · 主题一视角
 
 > 研究目标：为层级化多 Agent OS 的 GUI 层提供美学与信息论层面的设计依据。

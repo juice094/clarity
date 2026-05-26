@@ -1,3 +1,10 @@
+---
+title: Pretext UI Evolution Plan — Grid, Lines, State, and Filesystem-Substrate Composition
+category: Plan
+date: 2026-05-12
+tags: [plan, ui, planning]
+---
+
 # Pretext UI Evolution Plan — Grid, Lines, State, and Filesystem-Substrate Composition
 
 > **Date**: 2026-05-12 (revised 2026-05-13 after information-architecture dialogue)

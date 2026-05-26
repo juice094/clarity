@@ -1,3 +1,10 @@
+---
+title: J7/J8 Design: Flow Extension + SubagentManager Integration
+category: Design
+date: 2026-05-16
+tags: [design, agent]
+---
+
 # J7/J8 Design: Flow Extension + SubagentManager Integration
 
 ## J7: Flow 节点扩展

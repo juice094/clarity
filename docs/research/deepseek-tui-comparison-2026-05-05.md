@@ -1,3 +1,10 @@
+---
+title: DeepSeek-TUI → Clarity 技术借鉴分析
+category: Research
+date: 2026-05-05
+tags: [research, ui]
+---
+
 # DeepSeek-TUI → Clarity 技术借鉴分析
 
 > 分析日期：2026-05-05  

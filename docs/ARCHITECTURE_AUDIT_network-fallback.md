@@ -1,3 +1,10 @@
+---
+title: 架构审计：网络探测 → Provider Fallback 设计缺陷
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构审计：网络探测 → Provider Fallback 设计缺陷
 
 > 触发事件：中国网络环境下 `1.1.1.1:443` 探测超时 → `ensure_llm` 强制切 local → local 模型加载失败

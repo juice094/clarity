@@ -1,3 +1,10 @@
+---
+title: 架构地图 · 契约层
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构地图 · 契约层
 
 > 用途：改接口前确认契约边界，避免 breaking change 扩散

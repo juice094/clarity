@@ -1,3 +1,10 @@
+---
+title: S3.1 Settings 真相源审计 — 2026-05-11
+category: Note
+date: 2026-05-11
+tags: [note]
+---
+
 # S3.1 Settings 真相源审计 — 2026-05-11
 
 > Type: Pre-refactor audit (S3.1 deliverable)

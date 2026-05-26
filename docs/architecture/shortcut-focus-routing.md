@@ -1,3 +1,10 @@
+---
+title: Shortcut Focus Routing — ADR-013 Implementation Notes
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Shortcut Focus Routing — ADR-013 Implementation Notes
 
 > **Scope**: S3 P1.5.9 → S7 Phase 2D | **Status**: Core complete, TUI pending | **Owner**: juice094

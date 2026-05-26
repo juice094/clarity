@@ -1,3 +1,9 @@
+---
+title: ADR-013: Keyboard Shortcuts — ClaudeCode-Inspired with Focus-Aware Routing
+category: ADR
+tags: [adr]
+---
+
 # ADR-013: Keyboard Shortcuts — ClaudeCode-Inspired with Focus-Aware Routing
 
 - Status: Accepted

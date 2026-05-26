@@ -1,3 +1,10 @@
+---
+title: 架构地图 · 拓扑层
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构地图 · 拓扑层
 
 > 用途：确认模块边界、上下游关系、拆包可行性

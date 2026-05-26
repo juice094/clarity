@@ -1,3 +1,10 @@
+---
+title: Clarity 营养吸收计划 —— 风险确认报告
+category: Security
+date: 2026-05-16
+tags: [security]
+---
+
 # Clarity 营养吸收计划 —— 风险确认报告
 
 > 分析日期：2026-04-15 | 更新：2026-04-23（标记 S1/S2 已修复）

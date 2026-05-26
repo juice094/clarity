@@ -1,3 +1,10 @@
+---
+title: Clarity 架构定位文档（项目关系 + 边界）
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity 架构定位文档（项目关系 + 边界）
 
 > **目的**：固化 Clarity 在 Kimi CLI / ZeroClaw / OpenClaw / devbase 等周边项目中的层级、角色与禁用项。

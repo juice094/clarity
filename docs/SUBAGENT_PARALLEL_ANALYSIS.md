@@ -1,3 +1,10 @@
+---
+title: 子代理并行执行分析
+category: Document
+date: 2026-05-16
+tags: [document, agent]
+---
+
 # 子代理并行执行分析
 
 > 分析日期：2026-04-04

@@ -1,3 +1,10 @@
+---
+title: 架构地图 · 验证层
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # 架构地图 · 验证层
 
 > 用途：改完代码后知道跑什么命令验证，崩了知道回滚到哪

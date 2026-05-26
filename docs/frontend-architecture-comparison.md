@@ -1,3 +1,10 @@
+---
+title: 前端架构对比：Clarity-egui vs OpenHanako
+category: Architecture
+date: 2026-05-16
+tags: [architecture, egui, ui]
+---
+
 # 前端架构对比：Clarity-egui vs OpenHanako
 
 > 范围：代码组织结构、状态管理、关注点分离、错误处理

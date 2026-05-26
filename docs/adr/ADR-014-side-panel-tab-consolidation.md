@@ -1,3 +1,9 @@
+---
+title: ADR-014: Right Side-Panel Consolidation — From Multi-Drawer to Single Tab
+category: ADR
+tags: [adr]
+---
+
 # ADR-014: Right Side-Panel Consolidation — From Multi-Drawer to Single Tab
 
 - Status: Accepted

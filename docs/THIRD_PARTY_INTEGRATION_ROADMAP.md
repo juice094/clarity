@@ -1,3 +1,10 @@
+---
+title: Third-Party Integration Roadmap
+category: Roadmap
+date: 2026-05-16
+tags: [roadmap, planning]
+---
+
 # Third-Party Integration Roadmap
 
 > 本文档描述 Clarity 与外部项目的关系、集成计划及决策依据。

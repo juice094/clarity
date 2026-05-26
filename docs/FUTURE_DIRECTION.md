@@ -1,3 +1,10 @@
+---
+title: Clarity Future Direction — Technical Roadmap v0.3.0 → v0.5.0
+category: Strategy
+date: 2026-05-16
+tags: [strategy, planning]
+---
+
 # Clarity Future Direction — Technical Roadmap v0.3.0 → v0.5.0
 
 > **来源**：本文档由 Kimi plan 模式生成，plan 原文见 `docs/plans/2026-04-26-cluster-as-single-node.md`。

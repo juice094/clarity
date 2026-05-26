@@ -1,3 +1,10 @@
+---
+title: UI Axis — Grid-vs-Cursor Classification & Dual-Track Rendering
+category: Architecture
+date: 2026-05-16
+tags: [architecture, ui, rendering]
+---
+
 # UI Axis — Grid-vs-Cursor Classification & Dual-Track Rendering
 
 > **Scope**: S3-S7 架构总览 | **Status**: S3-S7 Complete, S8 TUI pending | **Owner**: juice094

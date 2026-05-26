@@ -1,3 +1,10 @@
+---
+title: Sprint 43：egui 布局架构重构 — 项目规划书
+category: Plan
+date: 2026-05-16
+tags: [plan, egui, ui, sprint]
+---
+
 # Sprint 43：egui 布局架构重构 — 项目规划书
 
 > **文档状态**：草案 → 待审批  

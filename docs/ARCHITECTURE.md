@@ -1,3 +1,10 @@
+---
+title: Clarity Architecture
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # Clarity Architecture
 
 > Code-accurate architecture reference | Last updated: 2026-05-14

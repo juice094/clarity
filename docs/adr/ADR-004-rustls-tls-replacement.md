@@ -1,3 +1,9 @@
+---
+title: ADR-004: Replace `native-tls` with `rustls-tls` Across All Crates
+category: ADR
+tags: [adr]
+---
+
 # ADR-004: Replace `native-tls` with `rustls-tls` Across All Crates
 
 - Status: Accepted

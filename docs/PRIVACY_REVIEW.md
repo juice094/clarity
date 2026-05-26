@@ -1,3 +1,10 @@
+---
+title: Privacy Review Guideline — Clarity Engineering
+category: Document
+date: 2026-05-16
+tags: [document, ui]
+---
+
 # Privacy Review Guideline — Clarity Engineering
 
 > Version: 2026-05-15  

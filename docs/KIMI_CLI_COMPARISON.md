@@ -1,3 +1,10 @@
+---
+title: Clarity vs Kimi CLI 横向对比分析
+category: Document
+date: 2026-05-17
+tags: [document]
+---
+
 # Clarity vs Kimi CLI 横向对比分析
 
 > 分析日期：2026-04-04

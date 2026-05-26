@@ -1,3 +1,9 @@
+---
+title: ADR-001: Deprecate `clarity-tauri` and Make `clarity-egui` the Sole Primary Desktop Stack
+category: ADR
+tags: [adr, egui, tauri, ui]
+---
+
 # ADR-001: Deprecate `clarity-tauri` and Make `clarity-egui` the Sole Primary Desktop Stack
 
 - Status: Accepted

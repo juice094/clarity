@@ -1,3 +1,10 @@
+---
+title: ViewState Migration — From Boolean Hell to Typed State Machine
+category: Architecture
+date: 2026-05-16
+tags: [architecture]
+---
+
 # ViewState Migration — From Boolean Hell to Typed State Machine
 
 > **Scope**: S3 Phase 1.5 | **Status**: Complete | **Owner**: juice094

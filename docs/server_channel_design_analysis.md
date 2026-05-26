@@ -1,3 +1,10 @@
+---
+title: Server 模块 + Channel Adapter 工程分析
+category: Design
+date: 2026-05-16
+tags: [design]
+---
+
 # Server 模块 + Channel Adapter 工程分析
 
 > 日期：2026-04-24 | 分析依据：实机代码审计 + 竞品逆向 + 工程理论

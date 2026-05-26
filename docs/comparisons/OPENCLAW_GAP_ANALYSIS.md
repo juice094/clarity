@@ -1,3 +1,10 @@
+---
+title: Clarity vs OpenClaw — 功能替代可行性分析
+category: Comparison
+date: 2026-05-16
+tags: [comparison]
+---
+
 # Clarity vs OpenClaw — 功能替代可行性分析
 
 > 日期：2026-04-23 | 版本：clarity v0.1.1 | openclaw (third_party 最新)

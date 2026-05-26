@@ -1,3 +1,10 @@
+---
+title: MCP 集成使用文档
+category: Guide
+date: 2026-05-16
+tags: [guide, mcp, ui]
+---
+
 # MCP 集成使用文档
 
 > Model Context Protocol (MCP) 让 Clarity 能够连接无限的外部工具生态

@@ -1,3 +1,10 @@
+---
+title: Clarity 运维与部署指南
+category: Status
+date: 2026-05-16
+tags: [status]
+---
+
 # Clarity 运维与部署指南
 
 > 版本：v0.3.1+ | 关联文档：[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`ROADMAP.md`](ROADMAP.md)

@@ -1,3 +1,10 @@
+---
+title: Clarity 现代化全面分析报告
+category: Document
+date: 2026-05-16
+tags: [document]
+---
+
 # Clarity 现代化全面分析报告
 
 > 接管日期: 2026-04-20

@@ -1,3 +1,10 @@
+---
+title: Clarity 工程方法论速查
+category: Document
+date: 2026-05-16
+tags: [document]
+---
+
 # Clarity 工程方法论速查
 
 > 来源：从 `execution-plan-v2.md` 提取的理论框架，去除了已过时的具体执行内容。  

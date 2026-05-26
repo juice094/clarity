@@ -1,3 +1,10 @@
+---
+title: Clarity v0.2.0 Release Notes
+category: Release
+date: 2026-05-16
+tags: [release]
+---
+
 # Clarity v0.2.0 Release Notes
 
 > **Release Date**: 2026-04-20

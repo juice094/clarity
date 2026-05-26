@@ -1,3 +1,10 @@
+---
+title: Plan 功能面板 — 设计草案
+category: UI Design
+date: 2026-05-16
+tags: [ui-design, planning]
+---
+
 # Plan 功能面板 — 设计草案
 
 > 基于子代理只读分析生成 | 状态：草案 v0.1 | 关联 Sprint：39
