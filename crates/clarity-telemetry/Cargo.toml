@@ -1,0 +1,46 @@
+[package]
+name = "clarity-telemetry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unified telemetry foundation for Clarity — wide events, metrics, traces, and config audit."
+
+[features]
+default = ["sqlite", "tracing-integration"]
+sqlite = ["dep:rusqlite"]
+greptime = ["dep:reqwest", "dep:urlencoding"]
+tracing-integration = ["dep:tracing-subscriber"]
+
+[dependencies]
+clarity-contract = { path = "../clarity-contract" }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+tracing = { workspace = true }
+
+# SQLite backend (feature-gated)
+rusqlite = { version = "0.34", features = ["bundled-full", "chrono", "uuid"], optional = true }
+
+# GreptimeDB HTTP backend (feature-gated)
+reqwest = { version = "0.12", features = ["json"], optional = true }
+urlencoding = { version = "2.1", optional = true }
+
+# tracing subscriber Layer (feature-gated)
+tracing-subscriber = { workspace = true, features = ["env-filter", "registry"], optional = true }
+
+# Additional deps
+parking_lot = "0.12"
+dirs = "5.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.10"
