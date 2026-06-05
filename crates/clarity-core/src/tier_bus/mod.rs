@@ -167,11 +167,11 @@ impl TierBus {
         payload: DirectivePayload,
         priority: Priority,
     ) -> bool {
-        // Verify sender is the registered parent.
-        if let Some(parent) = self.parent_of(to) {
-            if parent != from {
-                return false;
-            }
+        // Verify sender is the registered parent — fail closed.
+        // Reject if no parent is registered OR the sender doesn't match.
+        match self.parent_of(to) {
+            Some(parent) if parent == from => {}
+            _ => return false,
         }
 
         let msg = TierMessage::ParentDirective {
@@ -302,6 +302,14 @@ mod tests {
         assert!(!bus.send_directive(
             "impostor",
             "child",
+            DirectivePayload::default(),
+            Priority::Normal
+        ));
+
+        // No parent registered → rejected (fail-closed).
+        assert!(!bus.send_directive(
+            "anyone",
+            "orphan",
             DirectivePayload::default(),
             Priority::Normal
         ));
