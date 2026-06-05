@@ -41,6 +41,7 @@
 //! ```
 
 pub mod activity;
+pub mod adaptive;
 pub mod agent;
 pub mod approval;
 pub(crate) mod autodream;
