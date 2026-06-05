@@ -7,8 +7,8 @@ tags: [architecture]
 
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-05-14
-> Reflects S3-S7 completion: ViewState state machine + RenderLine pipeline + line-mode feature + focus-aware shortcuts (ADR-011/012/013/014)
+> Code-accurate architecture reference | Last updated: 2026-06-05
+> Reflects Phase 0-3 delivery: Telemetry + Adaptive + Session V2 + Agent OS (14 crates, 27 core modules)
 
 ---
 
@@ -16,7 +16,7 @@ tags: [architecture]
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 8 independent crates; `clarity-core` is a 27k-line god crate pending decomposition |
+| **Single Responsibility** | 14 independent crates; `clarity-core` is a ~30k-line god crate pending decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -55,6 +55,8 @@ tags: [architecture]
           ┌─────────────┴─────────────┐
           │       clarity-core        │
           │  • Agent (ReAct / Plan)   │
+          │  • Adaptive (ModelRouter) │
+          │  • Soul / TierBus / Hub   │
           │  • ToolRegistry           │
           │  • LLM Providers          │
           │  • MCP Client (stdio/SSE) │
@@ -65,17 +67,17 @@ tags: [architecture]
           │  • CompactionService      │
           └─────────────┬─────────────┘
                         │
-          ┌─────────────┴─────────────┐
-          │       Storage Layer       │
-          ├──────────┬────────────────┤
-          │clarity-  │  clarity-memory│
-          │memory    │  (if separate) │
-          │          │                │
-          │• SQLite  │  • BM25 search │
-          │• FTS5    │  • Vector index│
-          │• BM25    │  • Chunking    │
-          │• File    │  • Compilation │
-          └──────────┴────────────────┘
+          ┌─────────────┴─────────────────────┐
+          │          Storage Layer            │
+          ├──────────┬──────────┬─────────────┤
+          │clarity-  │clarity-  │  clarity-   │
+          │memory    │telemetry │  memory     │
+          │          │          │  (legacy)   │
+          │• SQLite  │• WideEvt│  • BM25      │
+          │• SessionV2• SQLite  │  • Vector    │
+          │• FTS5    │• Greptime│  • Chunking  │
+          │• BM25    │  (opt)  │  • Compile   │
+          └──────────┴──────────┴─────────────┘
 ```
 
 ### 2.1a Code Health Metrics (v0.3.0 baseline)
@@ -115,11 +117,12 @@ clarity-headless ─→ clarity-core
 
 | Crate | Lines (~) | Tests | Key Types |
 |-------|-----------|-------|-----------|
-| `clarity-core` | ~27,000 | 381+ | `Agent`, `ToolRegistry`, `LlmProvider`, `McpManager`, `BackgroundTaskManager` |
-| `clarity-memory` | ~2,800 | 79+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
+| `clarity-core` | ~30,000 | 400+ | `Agent`, `ToolRegistry`, `LlmProvider`, `AdaptiveModelRouter`, `SoulManager`, `TierBus`, `HubScheduler` |
+| `clarity-telemetry` | ~1,400 | 8 | `WideEvent`, `EventSink`, `SqliteBackend`, `GreptimeBackend`, `ConfigAudit` |
+| `clarity-memory` | ~3,600 | 86+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler`, `SessionStoreV2` |
 | `clarity-wire` | ~400 | 8 | `WireMessage`, `WireBroadcaster` |
-| `clarity-gateway` | ~3,200 | 43+ | `AppState`, `PersistentSessionStore`, API handlers |
-| `clarity-egui` | ~4,200 | 66+ | egui app, `ViewState`, panels, widgets, theme, `RenderBlock`→`RenderLine` bridge |
+| `clarity-gateway` | ~3,600 | 47+ | `AppState`, `PersistentSessionStore`, API handlers, `GatewayHealthMonitor` |
+| `clarity-egui` | ~4,600 | 66+ | egui app, `ViewState`, panels, widgets, theme, `WindowManager` |
 | `clarity-tui` | ~1,800 | 6+ | `App`, `ui()`, command registry |
 | `clarity-claw` | ~600 | 6+ | Tray monitor, `notify` watcher |
 | `clarity-headless` | ~380 | 10+ | CLI args, `build_provider()` |

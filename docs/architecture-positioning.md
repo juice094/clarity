@@ -10,7 +10,7 @@ tags: [architecture]
 > **目的**：固化 Clarity 在 Kimi CLI / ZeroClaw / OpenClaw / devbase 等周边项目中的层级、角色与禁用项。
 > **维护规则**：任何"项目间关系"或"项目边界"变更后，必须同步更新此文件；纯代码/crate 拓扑变更请改 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 > **生效范围**：`dev/third_party/clarity/` 及其子目录。
-> **上次更新**：2026-05-11（按 §9 架构健康纪律重新整理）。
+> **上次更新**：2026-06-05（Phase 0-3 三层架构交付：Telemetry + Adaptive + Agent OS）。
 
 ---
 
