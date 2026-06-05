@@ -42,4 +42,4 @@ pub mod router;
 pub use compression::{CompressionOptimizer, CompressionParams};
 pub use predictor::{BehaviorPredictor, TaskPattern, WindowedStats};
 pub use profile::{AgentGrowthProfile, InteractionPatterns, MasteryLevel, ToolStats};
-pub use router::{AdaptiveModelRouter, ProviderProfile, RouterError, TaskDescriptor};
+pub use router::{AdaptiveModelRouter, ProviderProfile, RouterError, TaskDescriptor, TaskType};

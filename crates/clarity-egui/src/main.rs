@@ -34,6 +34,7 @@ mod stores;
 mod theme;
 mod ui;
 mod widgets;
+mod window_manager;
 
 use app_state::AppState;
 

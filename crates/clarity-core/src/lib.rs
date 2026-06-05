@@ -54,6 +54,7 @@ pub use clarity_tools::diff;
 pub mod endpoint;
 pub mod error;
 pub mod hooks;
+pub mod hub;
 pub mod logging;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -64,6 +65,8 @@ pub(crate) mod personality;
 pub mod registry;
 pub(crate) mod server;
 pub mod skills;
+pub mod soul;
+pub mod tier_bus;
 pub mod tools;
 pub mod types;
 pub mod ui;
