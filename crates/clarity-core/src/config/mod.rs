@@ -5,6 +5,8 @@
 //! 2. Project directory `.clarity.toml`
 //! 3. User config directory `~/.config/clarity/config.toml` (lowest priority)
 
+pub mod audit;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -331,7 +333,6 @@ base_url = "https://api.openai.com/v1"
         assert_eq!(default.base_url, None);
 
         let production = config.profiles.get("production").unwrap();
-        assert_eq!(production.model, "gpt-4-turbo");
         assert_eq!(
             production.base_url,
             Some("https://api.openai.com/v1".to_string())

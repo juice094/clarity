@@ -67,6 +67,7 @@
 
 pub mod channels;
 pub mod handlers;
+pub mod health;
 pub mod server;
 pub mod session;
 pub mod session_store;

@@ -81,6 +81,8 @@ pub mod embedding;
 pub mod extractor;
 pub mod flashcards;
 pub mod session_store;
+#[cfg(feature = "sqlite")]
+pub mod session_store_v2;
 pub mod store;
 pub mod ticker;
 pub mod types;
