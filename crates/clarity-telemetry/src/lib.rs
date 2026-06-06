@@ -299,7 +299,7 @@ pub type TelemetryResult<T> = Result<T, TelemetryError>;
 // Re-exports
 // ============================================================================
 
-pub use audit::{ConfigAuditLog, ConfigChangeType};
+pub use audit::{ConfigActor, ConfigAuditLog, ConfigChangeType};
 pub use sink::{EventSink, MultiSink, SinkConfig};
 
 #[cfg(feature = "sqlite")]

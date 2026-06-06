@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 clarity-core = { path = "../../crates/clarity-core" }
+clarity-telemetry = { path = "../../crates/clarity-telemetry" }
 clarity-wire = { path = "../../crates/clarity-wire" }
 clarity-memory = { path = "../../crates/clarity-memory" }
 clarity-gateway = { path = "../../crates/clarity-gateway" }

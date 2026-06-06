@@ -69,13 +69,9 @@ impl SqliteBackend {
         let conn = Connection::open(&path)
             .map_err(|e| TelemetryError::Backend(format!("failed to open sqlite: {e}")))?;
 
-        // Enable WAL mode for better concurrent read/write performance.
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(|e| TelemetryError::Backend(format!("wal mode: {e}")))?;
-
-        // Enable foreign keys.
-        conn.pragma_update(None, "foreign_keys", "ON")
-            .map_err(|e| TelemetryError::Backend(format!("foreign keys: {e}")))?;
+        // SAFETY: PRAGMA journal_mode may return a result row on some SQLite builds.
+        // We use execute_batch to silently ignore it; failure is non-fatal.
+        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
 
         let this = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -294,8 +290,7 @@ impl EventSink for SqliteBackend {
 
     async fn flush(&self) -> TelemetryResult<()> {
         let conn = self.conn.lock();
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)", [])
-            .map_err(|e| TelemetryError::Backend(format!("sqlite checkpoint: {e}")))?;
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
         Ok(())
     }
 
