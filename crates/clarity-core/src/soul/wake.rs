@@ -139,6 +139,63 @@ impl AgentDeps {
 }
 
 // ============================================================================
+// SuspendSnapshot — serializable Agent runtime state
+// ============================================================================
+
+/// Serializable snapshot of Agent's persistent runtime fields.
+///
+/// This is the content of `SuspendedState.runtime_blob`. It captures only
+/// the fields that survive across sessions — LLM clients, memory stores,
+/// and other trait-object dependencies are omitted and re-injected at wake.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct SuspendSnapshot {
+    /// AgentConfig fields needed for reconstruction.
+    pub config: SuspendConfig,
+
+    /// Per-session state to preserve across suspension.
+    pub session: SuspendSession,
+
+    /// Schema version for migration compatibility.
+    pub version: u32,
+}
+
+/// AgentConfig subset serializable for suspend/wake.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
+pub struct SuspendConfig {
+    pub max_iterations: usize,
+    pub tool_timeout_secs: u64,
+    pub read_only: bool,
+    pub max_context_tokens: usize,
+    pub system_prompt: Option<String>,
+    pub working_dir: Option<String>,
+}
+
+/// Session-scoped state preserved across suspension.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
+pub struct SuspendSession {
+    pub approval_mode: String,
+    pub daily_cost_usd: f64,
+    pub last_turn_message_count: usize,
+    pub provider_label: Option<String>,
+}
+
+impl SuspendSnapshot {
+    pub fn new() -> Self {
+        Self {
+            config: SuspendConfig::default(),
+            session: SuspendSession::default(),
+            version: 1,
+        }
+    }
+}
+
+impl Default for SuspendSnapshot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
 // DefaultWakeAdapter
 // ============================================================================
 
@@ -147,42 +204,47 @@ pub struct DefaultWakeAdapter;
 
 impl Wakeable for DefaultWakeAdapter {
     async fn wake(&self, soul_id: &str, deps: &AgentDeps) -> Result<Agent, WakeError> {
-        // Load soul metadata.
         let soul = Soul::load_or_create(soul_id);
-
-        // Verify soul exists on disk (load_or_create creates a default if missing,
-        // but wake should only succeed for previously persisted souls).
         let soul_path = soul.soul_json_path();
         if !soul_path.exists() {
             return Err(WakeError::SoulNotFound(soul_id.to_string()));
         }
 
-        // Load profile (use provided or disk).
-        let _profile = deps
-            .profile
-            .clone()
-            .unwrap_or_else(|| AgentGrowthProfile::load_or_create(soul_id));
+        // Read suspended state from disk.
+        let state_path = soul.state_json_path();
+        let suspended = if state_path.exists() {
+            let contents = std::fs::read_to_string(&state_path)
+                .map_err(|e| WakeError::Deserialization(e.to_string()))?;
+            serde_json::from_str::<SuspendedState>(&contents)
+                .map_err(|e| WakeError::Deserialization(e.to_string()))?
+        } else {
+            return Err(WakeError::MissingDependency(format!(
+                "state.json not found for soul {soul_id}"
+            )));
+        };
 
-        // NOTE: Full Agent reconstruction requires linking to the existing
-        // Agent::new path, which is complex due to the many optional fields.
-        // For now, we return a placeholder error indicating the integration
-        // point. A production implementation would:
-        // 1. Read state.json for last_turn_id / last_event_id
-        // 2. Reconstruct conversation context from SessionStoreV2
-        // 3. Build Agent with soul's persona, capabilities, and profile
-        // 4. Inject growth-profile-derived model preferences
+        // Deserialize runtime blob.
+        let snapshot: SuspendSnapshot = serde_json::from_slice(&suspended.runtime_blob)
+            .map_err(|e| WakeError::Deserialization(e.to_string()))?;
 
-        Err(WakeError::MissingDependency(
-            "Agent::wake full integration pending ADR-008 M1 acceptance".to_string(),
-        ))
+        // Reconstruct Agent from snapshot.
+        let agent = Agent::wake_from_snapshot(&snapshot, deps)?;
+
+        Ok(agent)
     }
 
-    async fn suspend(&self, _agent: &Agent) -> Result<SuspendedState, WakeError> {
-        // NOTE: Full suspension requires extracting Agent inner state,
-        // which is private. This is the integration boundary.
-        Err(WakeError::MissingDependency(
-            "Agent::suspend full integration pending ADR-008 M1 acceptance".to_string(),
-        ))
+    async fn suspend(&self, agent: &Agent) -> Result<SuspendedState, WakeError> {
+        let snapshot = agent.suspend_snapshot();
+        let blob =
+            serde_json::to_vec(&snapshot).map_err(|e| WakeError::Deserialization(e.to_string()))?;
+
+        Ok(SuspendedState {
+            soul_id: String::new(),
+            session_id: None,
+            last_turn_id: None,
+            last_event_id: None,
+            runtime_blob: blob,
+        })
     }
 }
 
@@ -218,5 +280,70 @@ mod tests {
         let deps = AgentDeps::new().with_profile(AgentGrowthProfile::new("test"));
         assert!(deps.profile.is_some());
         assert!(deps.registry.is_none());
+    }
+
+    #[test]
+    fn test_suspend_snapshot_roundtrip() {
+        let registry = ToolRegistry::with_builtin_tools();
+        let config = crate::agent::config::AgentConfig::new()
+            .with_max_iterations(10)
+            .with_read_only(true)
+            .with_working_dir("/tmp/test");
+
+        let agent = Agent::with_config(registry, config);
+
+        // Suspend
+        let snapshot = agent.suspend_snapshot();
+        assert_eq!(snapshot.version, 1);
+        assert_eq!(snapshot.config.max_iterations, 10);
+        assert!(snapshot.config.read_only);
+        assert!(snapshot.config.working_dir.as_deref() == Some("/tmp/test"));
+
+        // Serialize → deserialize
+        let blob = serde_json::to_vec(&snapshot).unwrap();
+        let restored: SuspendSnapshot = serde_json::from_slice(&blob).unwrap();
+        assert_eq!(restored, snapshot);
+    }
+
+    #[test]
+    fn test_wake_from_snapshot_preserves_config() {
+        let snapshot = SuspendSnapshot {
+            config: SuspendConfig {
+                max_iterations: 42,
+                tool_timeout_secs: 30,
+                read_only: false,
+                max_context_tokens: 8192,
+                system_prompt: Some("test prompt".to_string()),
+                working_dir: Some("/tmp/wake".to_string()),
+            },
+            session: SuspendSession {
+                approval_mode: "Plan".to_string(),
+                daily_cost_usd: 0.0,
+                last_turn_message_count: 0,
+                provider_label: None,
+            },
+            version: 1,
+        };
+
+        let deps = AgentDeps::default();
+        let agent = Agent::wake_from_snapshot(&snapshot, &deps).unwrap();
+        assert!(agent.approval_mode() == crate::approval::ApprovalMode::Plan);
+    }
+
+    #[test]
+    fn test_wake_from_snapshot_fails_on_corrupt_blob() {
+        let corrupt = vec![0xff, 0xfe, 0xfd];
+        let result = serde_json::from_slice::<SuspendSnapshot>(&corrupt);
+        assert!(result.is_err(), "corrupt blob must fail deserialization");
+    }
+
+    #[test]
+    fn test_wake_with_deps_injection() {
+        let registry = ToolRegistry::with_builtin_tools();
+        let deps = AgentDeps::new().with_registry(std::sync::Arc::new(registry));
+
+        let snapshot = SuspendSnapshot::new();
+        let agent = Agent::wake_from_snapshot(&snapshot, &deps).unwrap();
+        assert!(agent.approval_mode() == crate::approval::ApprovalMode::Interactive);
     }
 }

@@ -788,4 +788,86 @@ impl Agent {
 
         result
     }
+
+    // ================================================================
+    // Wake / Suspend (ADR-008 M1)
+    // ================================================================
+
+    /// Capture the Agent's persistent runtime state into a serializable snapshot.
+    ///
+    /// LLM providers, memory stores, and other trait-object dependencies are
+    /// omitted — they are re-injected at wake time via `AgentDeps`.
+    pub fn suspend_snapshot(&self) -> crate::soul::wake::SuspendSnapshot {
+        use crate::soul::wake::{SuspendConfig, SuspendSession, SuspendSnapshot};
+
+        let inner = self.inner.read();
+        let config = &self.config;
+
+        SuspendSnapshot {
+            config: SuspendConfig {
+                max_iterations: config.max_iterations,
+                tool_timeout_secs: config.tool_timeout_secs,
+                read_only: config.read_only,
+                max_context_tokens: crate::agent::config::DEFAULT_MAX_CONTEXT_TOKENS,
+                system_prompt: if config.system_prompt.is_empty() {
+                    None
+                } else {
+                    Some(config.system_prompt.clone())
+                },
+                working_dir: Some(config.working_dir.display().to_string()),
+            },
+            session: SuspendSession {
+                approval_mode: format!("{:?}", inner.approval_mode),
+                daily_cost_usd: inner.daily_cost_usd,
+                last_turn_message_count: inner.last_turn_message_count,
+                provider_label: inner.provider_label.clone(),
+            },
+            version: 1,
+        }
+    }
+
+    /// Reconstruct an Agent from a suspend snapshot and injected dependencies.
+    ///
+    /// The reconstructed agent is in `AgentState::Idle` — ready to accept
+    /// the next turn. LLM and memory providers must be wired in by the
+    /// caller after wake (e.g. via `ensure_llm` in the egui layer).
+    pub fn wake_from_snapshot(
+        snapshot: &crate::soul::wake::SuspendSnapshot,
+        deps: &crate::soul::wake::AgentDeps,
+    ) -> Result<Self, crate::soul::wake::WakeError> {
+        let registry = deps
+            .registry
+            .clone()
+            .map(|r| (*r).clone())
+            .unwrap_or_else(ToolRegistry::with_builtin_tools);
+
+        // Decode approval mode from debug string.
+        let approval_mode = match snapshot.session.approval_mode.as_str() {
+            s if s.contains("Yolo") => crate::approval::ApprovalMode::Yolo,
+            s if s.contains("Plan") => crate::approval::ApprovalMode::Plan,
+            s if s.contains("Smart") => crate::approval::ApprovalMode::Smart,
+            _ => crate::approval::ApprovalMode::Interactive,
+        };
+
+        let config = AgentConfig::new()
+            .with_max_iterations(snapshot.config.max_iterations)
+            .with_read_only(snapshot.config.read_only)
+            .with_working_dir(
+                snapshot
+                    .config
+                    .working_dir
+                    .clone()
+                    .unwrap_or_else(|| ".".to_string()),
+            );
+
+        let agent = Self::with_config(registry, config).with_approval_mode(approval_mode);
+
+        // Inject skills if provided.
+        if let Some(ref _skills) = deps.skill_registry {
+            // NOTE: SkillRegistry injection is deferred to the caller
+            // (e.g. clarity-egui::ensure_llm will re-discover skills).
+        }
+
+        Ok(agent)
+    }
 }
