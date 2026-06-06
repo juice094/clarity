@@ -238,6 +238,8 @@ pub struct UiStore {
     pub agent_turn_style: bool,
     /// When agent_turn_style is true, use glass card variant instead of CLI style.
     pub agent_turn_glass: bool,
+    /// Toggle Kimi Desktop v3-style conversation rendering.
+    pub kimi_conversation_style: bool,
     /// Workspace panel Plan section expanded.
     pub workspace_plan_expanded: bool,
     /// User manually collapsed Plan section (blocks auto-expand).

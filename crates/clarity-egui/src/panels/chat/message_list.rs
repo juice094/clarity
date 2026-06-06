@@ -26,6 +26,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let mut configure_clicked = false;
     let agent_turn_style = app.ui_store.agent_turn_style;
     let agent_turn_glass = app.ui_store.agent_turn_glass;
+    let kimi_conversation_style = app.ui_store.kimi_conversation_style;
     #[cfg(feature = "line-mode")]
     let line_cursor_selected = app.ui_store.line_cursor_selected;
     #[cfg(not(feature = "line-mode"))]
@@ -179,7 +180,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             configure_clicked = true;
                         }
                     });
-                } else if agent_turn_style {
+                } else if agent_turn_style && !kimi_conversation_style {
                     // --- AgentTurn aggregation mode ---
                     let units = aggregate_turns(&session.messages);
                     if session.turn_heights.len() < units.len() {
@@ -478,6 +479,17 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 pending.cancel_edit = true;
                             }
                             h
+                        } else if kimi_conversation_style {
+                            crate::components::chat::conversation::message_bubble(
+                                ui,
+                                &theme,
+                                &session.messages[i],
+                                i,
+                                is_loading,
+                                &mut pending.copy_content,
+                                &mut pending.edit_idx,
+                                &mut pending.regenerate_idx,
+                            )
                         } else {
                             let sel = line_cursor_selected.and_then(|g| {
                                 let start = msg_line_offsets[i];
@@ -501,7 +513,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         };
                         session.messages[i].cached_height = Some(bubble_h);
 
-                        if !editing {
+                        if !editing && !kimi_conversation_style {
                             if session.messages[i].role == Role::User {
                                 ui.horizontal(|ui| {
                                     if let Some(ts) =

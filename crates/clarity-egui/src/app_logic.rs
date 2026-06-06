@@ -343,6 +343,7 @@ impl App {
                 focus_input_requested: false,
                 agent_turn_style: true,
                 agent_turn_glass: false,
+                kimi_conversation_style: false,
                 workspace_plan_expanded: false,
                 workspace_plan_manually_collapsed: false,
                 dashboard_panel_open: false,
