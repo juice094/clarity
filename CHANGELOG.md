@@ -55,9 +55,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Feature-gated via `telemetry-api` (optional `clarity-telemetry` dep).
   - 4 handler unit tests.
 
+  **Sprint 4.2: ADR-008 M1 Wake/Suspend** (2026-06-06)
+  - `Agent::suspend_snapshot()` — captures AgentInner state as JSON blob.
+  - `Agent::wake_from_snapshot()` — reconstructs Agent from blob + AgentDeps.
+  - `DefaultWakeAdapter` — full disk read/write via `~/.clarity/souls/<id>/state.json`.
+  - 4 unit tests (roundtrip, config preservation, corrupt blob, deps injection).
+
+  **Sprint 4.3: Session V1→V2 Migration** (2026-06-06)
+  - `SessionMigrator` — reads `sessions.db` (V1), writes `sessions_v2.sqlite` (V2).
+  - `dry_run()` for preview; `migrate()` for execution; non-destructive (V1 untouched).
+  - Feature-gated behind `session-migration`.
+  - 4 unit tests.
+
   **Cross-cutting**
   - crate topology: 13 → 14 crates (+`clarity-telemetry`); core modules: 17 → 27.
   - Quality baseline: clippy zero warnings, fmt zero diffs, all tests pass.
+  - 11 commits, ~7,500 LOC, 106 new tests.
 
 - **Security & UX Hardening Sprint（2026-05-05）**
   - **P0: Credential Redaction** — `RedactingWriter<W>` wrapping `std::io::Write` with line-buffered regex scrubbing. 5 patterns: `api[_-]?key`, `token`, `password`, `sk-...`, `AIza...`. All 5 binary crates replace `tracing_subscriber::fmt::init()` with `clarity_core::logging::init()`.

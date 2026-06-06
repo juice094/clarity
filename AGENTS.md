@@ -50,19 +50,21 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-> **2026-06-06 状态**：三层架构 + 集成测试 + Gateway 遥测 API 全部交付。8 commits 跨越 4 Phase + Sprint 4.1，新增 14 号 crate `clarity-telemetry`，core 内部模块从 17 增至 27，~7,000 LOC，99 个新测试（含 16 个集成测试）。clippy/fmt 零警告。
+> **2026-06-06 状态**：三层架构 + Phase 4 全部交付。11 commits，14 crates，~7,500 LOC，106 新测试（含 16 集成测试）。clippy/fmt 零警告。
 >
-> **当前焦点**：v0.4.0 发布准备 — ~~Gateway /v1/metrics REST 端点~~ ✅ 已完成（`bd32ef7`）。未完成：ADR-008 M1 Wake/Suspend 集成、Session V1→V2 迁移工具。
+> **当前焦点**：v0.4.0 发布准备。架构计划 4 Phase + 3 Sprint 全部代码交付。待完成：Gateway 生产路径切换到 Session V2、集成测试覆盖扩展。
 
-**Sprint Phase 0-3 + 4.1 — 三层架构交付 + 集成测试 + Gateway 遥测 API（已完成 ✅，2026-06-05~06，commits `bf3b1f2`..`bd32ef7`）**
+**Sprint Phase 0-3 + 4.1~4.3 — 全栈架构交付（已完成，2026-06-05~06）**
 
 > Phase 0: `clarity-telemetry` crate（WideEvent + SQLite/GreptimeDB/ConfigAudit/tracing Layer）
 > Phase 1: `clarity-core::adaptive`（ModelRouter + CompressionOptimizer + AgentGrowthProfile + BehaviorPredictor）
 > Phase 2: Session V2（SessionStoreV2 + ConfigAudit + GatewayHealthMonitor）
 > Phase 3: Agent OS（Soul/SoulManager + TierBus + HubScheduler + WindowManager）
-> Integration: 16 个测试（telemetry e2e / session-v2 / adaptive loop）
+> Integration: 16 个 e2e 测试（telemetry / session-v2 / adaptive loop）
 > Sprint 4.1: `/v1/metrics` + `/v1/traces` + `/v1/events/recent` REST 端点
-> 详细设计参见 `.claude/plans/dreamy-scribbling-valiant.md`。
+> Sprint 4.2: ADR-008 M1 Wake/Suspend 完整实现（Agent ↔ SuspendSnapshot ）
+> Sprint 4.3: Session V1→V2 迁移工具（SessionMigrator）
+> Commits: `bf3b1f2`..`4bfaaff`（11 个）
 
 **Sprint Anthropic-Mapping — 架构镜子对照（已完成 ✅，2026-05-11，commit `cef03f78`）**
 

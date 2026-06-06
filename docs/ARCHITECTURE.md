@@ -7,8 +7,8 @@ tags: [architecture]
 
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-06-05
-> Reflects Phase 0-3 delivery: Telemetry + Adaptive + Session V2 + Agent OS (14 crates, 27 core modules)
+> Code-accurate architecture reference | Last updated: 2026-06-06
+> Reflects Phase 0-3 + 4.1~4.3 delivery: 14 crates, 27 core modules, 106 new tests
 
 ---
 
