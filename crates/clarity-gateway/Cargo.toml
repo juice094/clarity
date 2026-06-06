@@ -27,6 +27,7 @@ clarity-core = { workspace = true }
 clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory", features = ["sqlite"] }
 clarity-subagents = { path = "../clarity-subagents" }
+clarity-telemetry = { path = "../clarity-telemetry", optional = true }
 clarity-wire = { path = "../clarity-wire" }
 
 # SQLite for persistent session store
@@ -61,4 +62,5 @@ default = ["webhook"]
 discord = []
 telegram = []
 slack = ["dep:slack-morphism"]
+telemetry-api = ["dep:clarity-telemetry"]
 webhook = []

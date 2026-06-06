@@ -7,6 +7,8 @@ pub mod mcp;
 pub mod memory;
 pub mod sessions;
 pub mod tasks;
+#[cfg(feature = "telemetry-api")]
+pub mod telemetry;
 
 /// Trait abstracting the agent operations required by HTTP handlers.
 ///

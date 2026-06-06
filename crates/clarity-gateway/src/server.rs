@@ -144,7 +144,23 @@ pub async fn run(
     });
 
     // 创建 API 服务器 (端口 18790) — 允许外部访问
-    let api_app = create_api_router(state.clone());
+    let api_app = {
+        let app = create_api_router(state.clone());
+        #[cfg(feature = "telemetry-api")]
+        {
+            use axum::routing::get;
+            app.route("/v1/metrics", get(crate::handlers::telemetry::get_metrics))
+                .route("/v1/traces", get(crate::handlers::telemetry::get_traces))
+                .route(
+                    "/v1/events/recent",
+                    get(crate::handlers::telemetry::get_recent_events),
+                )
+        }
+        #[cfg(not(feature = "telemetry-api"))]
+        {
+            app
+        }
+    };
     let api_addr: SocketAddr = "0.0.0.0:18790".parse()?;
 
     // 创建 Admin 服务器 (端口 18800) — 仅限本地回环，降低暴露面
