@@ -11,7 +11,26 @@ pub use self::message_list::render_message_list;
 /// Render input bar fixed to bottom (TopBottomPanel).
 /// Must be called BEFORE CentralPanel so egui reserves space correctly.
 pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
-    let theme = &app.ui_store.theme;
+    let theme = app.ui_store.theme.clone();
+    let max_w = app.ui_store.content_max_width;
+    let kimi_style = app.ui_store.kimi_conversation_style;
+
+    // Extract approval data before entering the closure to avoid borrow conflicts.
+    let approval_data: Option<(String, String, Option<String>, bool, String)> = if kimi_style {
+        app.ui_store.pending_approvals.first().map(|req| {
+            (
+                req.id.clone(),
+                req.tool_call.function.name.clone(),
+                req.description.clone(),
+                req.diff_preview.is_some(),
+                req.tool_call.function.arguments.clone(),
+            )
+        })
+    } else {
+        None
+    };
+    let ui_tx = app.ui_tx.clone();
+
     egui::TopBottomPanel::bottom("input_panel")
         .max_height(200.0)
         .frame(
@@ -20,7 +39,34 @@ pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
                 .inner_margin(egui::Margin::same(0)),
         )
         .show(ctx, |ui| {
-            with_centered_content(ui, app.ui_store.content_max_width, |ui| {
+            with_centered_content(ui, max_w, |ui| {
+                // Kimi-style approval dock rendered above the composer
+                if let Some((id, title, desc, has_diff, args)) = approval_data {
+                    let conv_req = crate::components::chat::conversation::ApprovalRequest {
+                        id,
+                        title: title.clone(),
+                        detail: desc.unwrap_or_else(|| format!("{}({})", title, args)),
+                        badge: if has_diff {
+                            Some("Diff".to_string())
+                        } else {
+                            None
+                        },
+                    };
+                    let (denied, allowed) =
+                        crate::components::chat::conversation::approval_dock(ui, &theme, &conv_req);
+                    if let Some(req_id) = denied {
+                        let _ = ui_tx.send(crate::ui::types::UiEvent::ResolveApproval {
+                            req_id,
+                            response: clarity_core::approval::ApprovalResponse::Reject,
+                        });
+                    }
+                    if let Some(req_id) = allowed {
+                        let _ = ui_tx.send(crate::ui::types::UiEvent::ResolveApproval {
+                            req_id,
+                            response: clarity_core::approval::ApprovalResponse::Approve,
+                        });
+                    }
+                }
                 render_input(app, ui);
             });
         });

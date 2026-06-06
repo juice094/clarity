@@ -4,6 +4,11 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     // Refresh pending approvals each frame from the shared runtime.
     app.ui_store.pending_approvals = app.state.mode_aware_approval_runtime.inner().list_pending();
 
+    // Kimi style renders approval as a dock inside the input panel; skip modal.
+    if app.ui_store.kimi_conversation_style {
+        return;
+    }
+
     let request = match app.ui_store.pending_approvals.first() {
         Some(r) => r.clone(),
         None => return,

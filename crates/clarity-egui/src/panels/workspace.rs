@@ -14,15 +14,83 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let text_xs = theme.text_xs;
     let text_dim = theme.text_dim;
     let space_4 = theme.space_4;
+    let kimi_style = app.ui_store.kimi_conversation_style;
+
+    // Extract plan data into owned strings before the closure to avoid
+    // borrowing `app` across the `SidePanel::show` closure boundary.
+    let (plan_title, plan_step_descs, plan_step_details, plan_step_statuses) = if kimi_style {
+        if let Some(ref tracker) = app.chat_store.plan_tracker {
+            let mut descs = Vec::new();
+            let mut details = Vec::new();
+            let mut statuses = Vec::new();
+            for s in &tracker.steps {
+                descs.push(s.description.clone());
+                details.push(s.tool_name.clone());
+                statuses.push(match s.status {
+                    crate::ui::types::PlanStepStatus::Pending => {
+                        crate::components::chat::conversation::StepStatus::Pending
+                    }
+                    crate::ui::types::PlanStepStatus::Running => {
+                        crate::components::chat::conversation::StepStatus::Running
+                    }
+                    crate::ui::types::PlanStepStatus::Success => {
+                        crate::components::chat::conversation::StepStatus::Done
+                    }
+                    crate::ui::types::PlanStepStatus::Failed => {
+                        crate::components::chat::conversation::StepStatus::Failed
+                    }
+                    crate::ui::types::PlanStepStatus::Skipped => {
+                        crate::components::chat::conversation::StepStatus::Done
+                    }
+                });
+            }
+            (tracker.title.clone(), descs, details, statuses)
+        } else if let Some(ref plan) = app.chat_store.pending_plan {
+            let mut descs = Vec::new();
+            let mut details = Vec::new();
+            let mut statuses = Vec::new();
+            for s in &plan.steps {
+                descs.push(s.description.clone());
+                details.push(s.tool_name.clone());
+                statuses.push(crate::components::chat::conversation::StepStatus::Pending);
+            }
+            (plan.title.clone(), descs, details, statuses)
+        } else {
+            (String::new(), Vec::new(), Vec::new(), Vec::new())
+        }
+    } else {
+        (String::new(), Vec::new(), Vec::new(), Vec::new())
+    };
+    let context_files: Vec<crate::components::chat::conversation::ContextFile> = if kimi_style {
+        app.state
+            .agent
+            .active_file_paths()
+            .iter()
+            .map(|p| {
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| p.to_string_lossy().to_string());
+                crate::components::chat::conversation::ContextFile {
+                    name,
+                    icon: None,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     // Auto-expand plan section when a plan becomes active; auto-fold when plan ends.
     let plan_active =
         app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
-    if plan_active && !app.ui_store.workspace_plan_manually_collapsed {
-        app.ui_store.workspace_plan_expanded = true;
-    } else if !plan_active {
-        app.ui_store.workspace_plan_expanded = false;
-        app.ui_store.workspace_plan_manually_collapsed = false;
+    if !kimi_style {
+        if plan_active && !app.ui_store.workspace_plan_manually_collapsed {
+            app.ui_store.workspace_plan_expanded = true;
+        } else if !plan_active {
+            app.ui_store.workspace_plan_expanded = false;
+            app.ui_store.workspace_plan_manually_collapsed = false;
+        }
     }
 
     let has_preview = app.ui_store.preview_item.is_some() && app.ui_store.preview_drawer_open;
@@ -47,6 +115,30 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
             );
             ui.separator();
             ui.add_space(space_4);
+
+            // Kimi-style knowledge panel (plan + context) above the file tree.
+            if kimi_style && (!plan_step_descs.is_empty() || !context_files.is_empty()) {
+                let steps: Vec<crate::components::chat::conversation::StepItem> = plan_step_descs
+                    .iter()
+                    .zip(plan_step_details.iter())
+                    .zip(plan_step_statuses.iter())
+                    .map(|((d, tool), st)| crate::components::chat::conversation::StepItem {
+                        title: d,
+                        detail: Some(tool),
+                        status: *st,
+                    })
+                    .collect();
+                crate::components::chat::conversation::knowledge_panel(
+                    ui,
+                    &theme,
+                    &plan_title,
+                    &steps,
+                    &context_files,
+                );
+                ui.add_space(space_4);
+                ui.separator();
+                ui.add_space(space_4);
+            }
 
             let work_dir = app.state.agent.config().working_dir.clone();
             let selected_path: Option<String> =
@@ -117,8 +209,8 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                                 );
                             });
 
-                        // Plan section at bottom (only in full-width mode)
-                        if !has_preview {
+                        // Plan section at bottom (only in full-width mode, skip when Kimi style)
+                        if !has_preview && !kimi_style {
                             crate::panels::workspace_plan::render_workspace_plan(app, ui);
                         }
                     },
