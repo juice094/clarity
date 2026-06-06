@@ -64,6 +64,7 @@ pub mod notifications;
 pub(crate) mod personality;
 pub mod registry;
 pub(crate) mod server;
+pub mod session;
 pub mod skills;
 pub mod soul;
 pub mod tier_bus;
