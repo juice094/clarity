@@ -50,7 +50,7 @@ $env:KIMI_API_KEY = "sk-..."
 | **Kimi Code** | `openai_chat` | `https://api.kimi.com/coding/v1` | 同上，Coding 专用 endpoint |
 | **Anthropic** | `anthropic_messages` | `https://api.anthropic.com` | https://docs.anthropic.com/en/api/getting-started |
 | **Ollama** | `ollama` | `http://localhost:11434` | https://github.com/ollama/ollama/blob/main/docs/api.md |
-| **Local GGUF** | `kalosm_local` | — (本地文件) | 使用 Candle 原生推理，无 HTTP |
+| **Local GGUF** | `local` | — (本地文件) | 使用 Candle 原生推理，无 HTTP |
 
 ---
 
@@ -93,8 +93,8 @@ base_url = "http://localhost:11434"
 # ollama 不需要 api_key
 
 [providers.local]
-protocol = "kalosm_local"
-extra = { model_path = "C:\\Users\\22414\\Desktop\\model\\Qwen2.5-7B-Instruct.Q4_K_M.gguf" }
+protocol = "local"
+extra = { model_path = "~/models/Qwen2.5-7B-Instruct.Q4_K_M.gguf" }
 
 # 模型别名定义（UI 下拉框中显示的名称）
 [[models]]

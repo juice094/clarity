@@ -131,7 +131,7 @@ const MODELS = [
     { id: 'openai', name: 'OpenAI', badge: '' },
     { id: 'deepseek', name: 'DeepSeek', badge: '' },
     { id: 'anthropic', name: 'Claude', badge: '' },
-    { id: 'kalosm', name: 'Kalosm (本地)', badge: '本地' },
+    { id: 'local', name: 'Local (GGUF)', badge: '本地' },
 ];
 
 let selectedModel = 'kimi-code';
@@ -269,7 +269,7 @@ async function loadProvidersAndModels() {
             store.models = modelsData.models;
         }
 
-        const providers = ['kimi-code', 'moonshot', 'openai', 'deepseek', 'anthropic', 'kalosm'];
+        const providers = ['kimi-code', 'moonshot', 'openai', 'deepseek', 'anthropic', 'local'];
         const configProvider = document.getElementById('config-provider');
         if (configProvider) {
             configProvider.innerHTML = providers.map(p =>
