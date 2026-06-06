@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Three-layer architecture (Phase 0-3, 2026-06-05)** — 5 commits across 4 phases, ~6,400 LOC, 79 new tests.
+- **Three-layer architecture (Phase 0-3 + Sprint 4.1, 2026-06-05~06)** — 8 commits, ~7,000 LOC, 99 new tests.
 
   **Phase 0: Telemetry Foundation** (`clarity-telemetry` crate)
   - `WideEvent` unified observability model (metrics + logs + traces in one type).
@@ -18,36 +18,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tracing-subscriber` Layer that translates tracing spans/events into WideEvents.
   - `MultiSink` fan-out + `NoOpSink` fallback + `SinkConfig` declarative config.
   - `ConfigAuditLog`: before/after hashes, PID/argv, rollback command, JSONL persistence.
-  - 8 unit tests (WideEvent serde, payload hash, audit conversion, severity mapping).
+  - 8 unit tests.
 
   **Phase 1: Adaptive Agent Engine** (`clarity-core::adaptive`)
   - `AdaptiveModelRouter`: EWMA latency + sliding-window error rate + cost + quality scoring.
-  - Per-task-type weighting: Coding (latency-heavy) / Plan (quality-heavy) / Background (cost-heavy).
-  - `CompressionOptimizer`: token efficiency curve learning, per-pattern defaults (Exploratory/DeepDive/ToolHeavy/Mixed), emergency near-limit override.
-  - `AgentGrowthProfile`: skill mastery, tool effectiveness, model preference evolution, compression outcomes. Auto-saves to `~/.clarity/profiles/<soul_id>.json`.
-  - `BehaviorPredictor`: lightweight time-series forecasting (EWMA + linear trend), token usage prediction, active pattern detection by hour.
-  - 21 unit tests (EWMA math, router exclusion, efficiency curve, pattern matching).
+  - Per-task-type weighting: Coding (latency) / Plan (quality) / Background (cost).
+  - `CompressionOptimizer`: token efficiency curve learning, per-pattern defaults.
+  - `AgentGrowthProfile`: skill mastery, tool effectiveness, model preference evolution.
+  - `BehaviorPredictor`: EWMA + linear trend forecasting, active pattern detection.
+  - 21 unit tests.
 
-  **Phase 2: Session V2 + Config Audit + Gateway Health** (`clarity-memory`, `clarity-core`, `clarity-gateway`)
-  - `SessionStoreV2`: unified SQLite schema (`sessions_v2` + `event_log` + `compacted_context`), append-only event log with integrity hashes, handoff lineage, lifecycle state machine.
-  - `ConfigAudit`: Daimon-inspired immutable config change log (`~/.clarity/logs/config-audit.jsonl`), `hash_content()` / `hash_file()` helpers.
-  - `GatewayHealthMonitor`: independent TCP probe port, consecutive failure counter, circuit breaker, `gateway-restart-intent.json` for external watchdog.
-  - 22 unit tests + 7 Session V2 tests + 4 health tests.
+  **Phase 2: Session V2 + Config Audit + Gateway Health**
+  - `SessionStoreV2`: unified SQLite schema, append-only event log with integrity hashes.
+  - `ConfigAudit`: Daimon-inspired immutable config change log (JSONL).
+  - `GatewayHealthMonitor`: TCP probe port, circuit breaker, restart-intent.json.
+  - 22 unit tests.
 
-  **Phase 3: Agent OS Runtime** (`clarity-core::soul`, `clarity-core::tier_bus`, `clarity-core::hub`, `clarity-egui::window_manager`)
-  - `Soul`: persistent agent identity (`~/.clarity/souls/<id>/soul.json`), `PersonaConfig`, `SoulManager` (activate/suspend/hibernate).
-  - `Wakeable` trait: reconstruct Agent from disk via `AgentDeps` — ADR-008 M1 integration boundary.
-  - `TierBus`: hierarchical communication with inequality rules. `ParentDirective` (parent→child), `PeerAnnouncement` (bulletin board with TTL), `ChildQuery` (child→parent public state).
-  - `HubScheduler`: task dispatch across workers with capability filtering, load-weighted scoring, priority queue, `drain_queue()`.
-  - `WindowManager` (egui Path A): soul-to-window binding, spawn/close/focus, position/size tracking.
-  - Authorization fix: `send_directive` fail-closed (reject when no parent registered).
-  - 16 unit tests (6 Soul + 6 TierBus + 4 Hub).
+  **Phase 3: Agent OS Runtime** (`clarity-core::soul`, `tier_bus`, `hub`, `clarity-egui::window_manager`)
+  - `Soul` + `SoulManager`: persistent agent identity (~/.clarity/souls/).
+  - `Wakeable` trait: ADR-008 M1 integration boundary.
+  - `TierBus`: hierarchical communication with inequality rules (ParentDirective / PeerAnnouncement / ChildQuery).
+  - `HubScheduler`: capability-filtered task dispatch with priority queue.
+  - `WindowManager` (egui Path A): soul-to-window binding.
+  - 16 unit tests.
+
+  **Integration Tests** (2026-06-06)
+  - `telemetry_end_to_end`: WideEvent SQLite roundtrip, batch ordering, payload hash, audit.
+  - `session_v2_migration`: full lifecycle, handoff lineage, cascade delete, 100-turn session.
+  - `adaptive_loop`: latency routing, unhealthy exclusion, quality/cost weighting, compression.
+  - 16 integration tests.
+
+  **Sprint 4.1: Gateway Telemetry API** (2026-06-06)
+  - `GET /v1/metrics?event_type=&metric_key=&window_secs=` — aggregated metric query.
+  - `GET /v1/traces?session_id=&limit=` — events grouped by trace_id.
+  - `GET /v1/events/recent?event_type=&limit=` — recent events as JSON array.
+  - Feature-gated via `telemetry-api` (optional `clarity-telemetry` dep).
+  - 4 handler unit tests.
 
   **Cross-cutting**
-  - `clarity-core::config` extracted from single file to `config/` directory module (backward-compatible).
-  - `clarity-egui` window_manager module registered (Path A single-process multi-window).
-  - crate topology: 13 → 14 crates (+`clarity-telemetry`); core module count: 17 → 27.
-  - Quality baseline sustained: clippy zero warnings, fmt zero diffs, all tests pass.
+  - crate topology: 13 → 14 crates (+`clarity-telemetry`); core modules: 17 → 27.
+  - Quality baseline: clippy zero warnings, fmt zero diffs, all tests pass.
 
 - **Security & UX Hardening Sprint（2026-05-05）**
   - **P0: Credential Redaction** — `RedactingWriter<W>` wrapping `std::io::Write` with line-buffered regex scrubbing. 5 patterns: `api[_-]?key`, `token`, `password`, `sk-...`, `AIza...`. All 5 binary crates replace `tracing_subscriber::fmt::init()` with `clarity_core::logging::init()`.

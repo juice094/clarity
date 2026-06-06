@@ -50,17 +50,19 @@ $env:CLARITY_MCP_ALLOWLIST="C:\tools\mcp-server.exe,C:\tools\"
 
 ## Current Phase
 
-> **2026-06-05 状态**：三层架构（Telemetry → Adaptive → Agent OS）全部交付。5 commits 跨越 4 Phase，新增 14 号 crate `clarity-telemetry`，core 内部模块从 17 增至 27（adaptive / soul / tier_bus / hub），~6,400 LOC，79 个新测试。clippy/fmt 零警告。
+> **2026-06-06 状态**：三层架构 + 集成测试 + Gateway 遥测 API 全部交付。8 commits 跨越 4 Phase + Sprint 4.1，新增 14 号 crate `clarity-telemetry`，core 内部模块从 17 增至 27，~7,000 LOC，99 个新测试（含 16 个集成测试）。clippy/fmt 零警告。
 >
-> **当前焦点**：v0.4.0 发布准备 — 三层架构核心已就位，未完成项为 ADR-008 M1 Wake/Suspend 集成边界、Session V1→V2 迁移工具、Gateway /v1/metrics REST 端点、集成测试覆盖。
+> **当前焦点**：v0.4.0 发布准备 — ~~Gateway /v1/metrics REST 端点~~ ✅ 已完成（`bd32ef7`）。未完成：ADR-008 M1 Wake/Suspend 集成、Session V1→V2 迁移工具。
 
-**Sprint Telemetry-Adaptive-AgentOS — 三层架构交付（已完成 ✅，2026-06-05，commits `bf3b1f2`..`bf4272e`）**
+**Sprint Phase 0-3 + 4.1 — 三层架构交付 + 集成测试 + Gateway 遥测 API（已完成 ✅，2026-06-05~06，commits `bf3b1f2`..`bd32ef7`）**
 
 > Phase 0: `clarity-telemetry` crate（WideEvent + SQLite/GreptimeDB/ConfigAudit/tracing Layer）
 > Phase 1: `clarity-core::adaptive`（ModelRouter + CompressionOptimizer + AgentGrowthProfile + BehaviorPredictor）
 > Phase 2: Session V2（SessionStoreV2 + ConfigAudit + GatewayHealthMonitor）
 > Phase 3: Agent OS（Soul/SoulManager + TierBus + HubScheduler + WindowManager）
-> 详细设计参见 `docs/plans/dreamy-scribbling-valiant.md`。
+> Integration: 16 个测试（telemetry e2e / session-v2 / adaptive loop）
+> Sprint 4.1: `/v1/metrics` + `/v1/traces` + `/v1/events/recent` REST 端点
+> 详细设计参见 `.claude/plans/dreamy-scribbling-valiant.md`。
 
 **Sprint Anthropic-Mapping — 架构镜子对照（已完成 ✅，2026-05-11，commit `cef03f78`）**
 
