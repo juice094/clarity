@@ -356,6 +356,25 @@ impl App {
                 active_persona_id,
                 persona_switcher_open: false,
                 active_project: None,
+                bot_instances: vec![
+                    crate::stores::BotInstance {
+                        id: "gray-cloud".into(),
+                        name: "Gray-Cloud".into(),
+                        device_id: "100.69.11.71".into(),
+                        status: crate::stores::BotStatus::Online,
+                        version: "2026.4.14".into(),
+                        last_backup: "2026-06-06".into(),
+                    },
+                    crate::stores::BotInstance {
+                        id: "gray-desktop".into(),
+                        name: "Gray-Desktop".into(),
+                        device_id: "100.69.11.72".into(),
+                        status: crate::stores::BotStatus::Offline,
+                        version: "2026.4.14".into(),
+                        last_backup: "2026-06-05".into(),
+                    },
+                ],
+                active_bot_id: "gray-cloud".into(),
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],

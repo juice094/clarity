@@ -269,6 +269,28 @@ pub struct UiStore {
     pub persona_switcher_open: bool,
     /// OpenClaw: active project name in Work mode.
     pub active_project: Option<String>,
+    /// OpenClaw: bot instance registry.
+    pub bot_instances: Vec<BotInstance>,
+    /// OpenClaw: currently active bot instance id.
+    pub active_bot_id: String,
+}
+
+/// Bot instance descriptor (OpenClaw — aligned to Kimi Desktop bot management).
+#[derive(Clone, Debug)]
+pub struct BotInstance {
+    pub id: String,
+    pub name: String,
+    pub device_id: String,
+    pub status: BotStatus,
+    pub version: String,
+    pub last_backup: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BotStatus {
+    Online,
+    Offline,
+    Syncing,
 }
 
 // ============================================================================
