@@ -287,6 +287,7 @@ pub struct BotInstance {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum BotStatus {
     Online,
     Offline,
