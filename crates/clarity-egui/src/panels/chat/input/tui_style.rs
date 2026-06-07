@@ -21,24 +21,33 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .map_or(true, |s| s.messages.is_empty() && !app.chat_store.is_loading);
 
     if is_empty_state {
-        let hint = composer_hint(app);
-        let prev_input = app.chat_store.input.clone();
-        let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
-            .hint_text(hint)
-            .margin(egui::vec2(4.0, 4.0))
-            .frame(false);
-        let response = ui.add_sized(
-            egui::vec2(ui.available_width(), 40.0),
-            text_edit,
-        );
-        if app.ui_store.focus_input_requested {
-            response.request_focus();
-            app.ui_store.focus_input_requested = false;
-        }
-        if app.chat_store.input != prev_input {
-            app.ui_store.last_input_modified = std::time::Instant::now();
-        }
-        handle_tui_keys(app, ui, &response, &prev_input);
+        // Empty-state input: subtle rounded bar with border so it doesn't blend into bg
+        let bar_frame = egui::Frame::new()
+            .fill(theme.input_bg)
+            .corner_radius(egui::CornerRadius::same(12))
+            .stroke(egui::Stroke::new(1.0, theme.border))
+            .inner_margin(egui::Margin::symmetric(12, 8));
+        bar_frame.show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            let hint = composer_hint(app);
+            let prev_input = app.chat_store.input.clone();
+            let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
+                .hint_text(hint)
+                .margin(egui::vec2(0.0, 0.0))
+                .frame(false);
+            let response = ui.add_sized(
+                egui::vec2(ui.available_width(), 28.0),
+                text_edit,
+            );
+            if app.ui_store.focus_input_requested {
+                response.request_focus();
+                app.ui_store.focus_input_requested = false;
+            }
+            if app.chat_store.input != prev_input {
+                app.ui_store.last_input_modified = std::time::Instant::now();
+            }
+            handle_tui_keys(app, ui, &response, &prev_input);
+        });
         return;
     }
 

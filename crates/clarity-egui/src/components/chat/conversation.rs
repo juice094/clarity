@@ -292,10 +292,10 @@ fn render_user_row(
         ui.set_max_width(max_width);
 
         let bubble_frame = egui::Frame::new()
-            .fill(theme.surface)
-            .corner_radius(egui::CornerRadius::same(12))
+            .fill(theme.user_bubble)
+            .corner_radius(egui::CornerRadius::same(16))
             .stroke(egui::Stroke::NONE)
-            .inner_margin(egui::Margin::symmetric(16, 12));
+            .inner_margin(egui::Margin::symmetric(18, 14));
 
         let bubble_resp = bubble_frame.show(ui, |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -335,20 +335,20 @@ fn render_assistant_row(
     on_regenerate: &mut Option<usize>,
 ) {
     ui.horizontal(|ui| {
-        let avatar_size = 56.0;
+        let avatar_size = 32.0;
         let (avatar_rect, _avatar_resp) = ui.allocate_exact_size(egui::vec2(avatar_size, avatar_size), egui::Sense::hover());
         let center = avatar_rect.center();
         ui.painter().circle_filled(center, avatar_size * 0.5, theme.accent);
         let label = ui.fonts(|f| {
-            f.layout("K".to_string(), theme.font_bold(theme.text_lg), egui::Color32::WHITE, f32::INFINITY)
+            f.layout("K".to_string(), theme.font_bold(theme.text_sm), egui::Color32::WHITE, f32::INFINITY)
         });
         let label_pos = center - label.rect.size() * 0.5;
         ui.painter().galley(label_pos, label, egui::Color32::WHITE);
 
-        ui.add_space(-12.0);
+        ui.add_space(8.0);
 
         ui.vertical(|ui| {
-            ui.add_space(12.0);
+            ui.add_space(4.0);
             let max_width = ui.available_width();
             ui.set_max_width(max_width);
 
