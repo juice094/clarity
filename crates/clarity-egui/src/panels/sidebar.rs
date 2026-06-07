@@ -223,6 +223,59 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.add_space(app.ui_store.theme.space_12);
 
+                    // ── 历史会话 ──
+                    let category_sessions: Vec<_> = app
+                        .session_store
+                        .sessions
+                        .iter()
+                        .filter(|s| s.category == app.session_store.active_category)
+                        .collect();
+                    if !category_sessions.is_empty() {
+                        group_header(ui, "历史会话");
+                        for session in category_sessions {
+                            let is_active = session.id == app.session_store.active_session_id;
+                            let text_color = if is_active {
+                                theme.text
+                            } else {
+                                theme.text_dim
+                            };
+                            let session_resp = ui.horizontal(|ui| {
+                                ui.add_space(8.0);
+                                let label = if session.title.chars().count() > 20 {
+                                    let t: String = session.title.chars().take(18).collect();
+                                    format!("{}...", t)
+                                } else {
+                                    session.title.clone()
+                                };
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .size(theme.text_sm)
+                                        .color(text_color),
+                                );
+                            });
+                            if session_resp.response.clicked() && !is_active {
+                                app.save_current_session();
+                                let old_id = app.session_store.active_session_id.clone();
+                                if !app.chat_store.input.trim().is_empty() {
+                                    app.session_store
+                                        .drafts
+                                        .insert(old_id, app.chat_store.input.clone());
+                                } else {
+                                    app.session_store.drafts.remove(&old_id);
+                                }
+                                app.session_store.active_session_id = session.id.clone();
+                                app.chat_store.input = app
+                                    .session_store
+                                    .drafts
+                                    .remove(&session.id)
+                                    .unwrap_or_default();
+                                app.chat_store.tool_calls =
+                                    crate::stores::rebuild_tool_calls(&session.messages);
+                            }
+                        }
+                        ui.add_space(app.ui_store.theme.space_12);
+                    }
+
                     // ── 实时 ──
                     group_header(ui, "实时");
 

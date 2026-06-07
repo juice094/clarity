@@ -85,10 +85,10 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             // Hard minimum to prevent layout collapse when side panels are wide.
             ui.set_min_size(egui::vec2(360.0, 200.0));
-            // Header uses the full CentralPanel width (not constrained by content_max_width).
-            render_header(app, ui);
-
+            // Kimi-style: entire chat area (header + messages) constrained to 800px max
+            // and centered, with generous side padding on wide screens.
             with_centered_content(ui, app.ui_store.content_max_width, |ui| {
+                render_header(app, ui);
                 render_message_list(app, ui);
             });
         });

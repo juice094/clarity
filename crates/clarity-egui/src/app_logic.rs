@@ -200,7 +200,7 @@ impl App {
         let settings_edit = GuiSettings::load();
         let web_tabs = settings_edit.web_tabs.clone();
         let font_scale = settings_edit.font_scale.unwrap_or(1.0);
-        let content_width = settings_edit.content_width.unwrap_or(720.0);
+        let content_width = settings_edit.content_width.unwrap_or(800.0);
         let active_persona_id = settings_edit
             .active_persona_id
             .clone()
