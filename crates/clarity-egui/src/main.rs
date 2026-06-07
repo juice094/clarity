@@ -247,6 +247,64 @@ impl App {
                                     )
                                     .sense(egui::Sense::empty()),
                                 );
+                                ui.add_space(theme.space_12);
+
+                                // ── Chat / Work pill toggle (OpenClaw dual-mode) ──
+                                let is_chat = matches!(
+                                    self.view_state.main,
+                                    clarity_core::ui::AppView::Chat
+                                );
+                                let (chat_bg, chat_fg) = if is_chat {
+                                    (theme.surface_strong, theme.text)
+                                } else {
+                                    (theme.bg_hover, theme.text_dim)
+                                };
+                                let (work_bg, work_fg) = if !is_chat {
+                                    (theme.surface_strong, theme.text)
+                                } else {
+                                    (theme.bg_hover, theme.text_dim)
+                                };
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 0.0;
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new("Chat")
+                                                    .size(theme.text_sm)
+                                                    .color(chat_fg),
+                                            )
+                                            .fill(chat_bg)
+                                            .corner_radius(egui::CornerRadius {
+                                                nw: theme.radius_sm as u8,
+                                                ne: 0,
+                                                sw: theme.radius_sm as u8,
+                                                se: 0,
+                                            }),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.view_state.main = clarity_core::ui::AppView::Chat;
+                                    }
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new("Work")
+                                                    .size(theme.text_sm)
+                                                    .color(work_fg),
+                                            )
+                                            .fill(work_bg)
+                                            .corner_radius(egui::CornerRadius {
+                                                nw: 0,
+                                                ne: theme.radius_sm as u8,
+                                                sw: 0,
+                                                se: theme.radius_sm as u8,
+                                            }),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.view_state.main = clarity_core::ui::AppView::Work;
+                                    }
+                                });
                             });
                         });
 
@@ -831,6 +889,10 @@ impl App {
     fn render_snapshot_modal(&mut self, ctx: &egui::Context) {
         panels::snapshot::render_snapshot_modal(self, ctx);
     }
+
+    fn render_work_panel(&mut self, ctx: &egui::Context) {
+        panels::work::render_work_panel(self, ctx);
+    }
 }
 
 impl eframe::App for App {
@@ -1097,6 +1159,9 @@ impl eframe::App for App {
             }
             clarity_core::ui::AppView::TaskBoard => {
                 self.render_safe(ctx, "task_board", |app, ctx| app.render_task_board(ctx));
+            }
+            clarity_core::ui::AppView::Work => {
+                self.render_safe(ctx, "work", |app, ctx| app.render_work_panel(ctx));
             }
         }
 

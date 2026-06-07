@@ -17,5 +17,6 @@ pub mod task_view;
 pub mod team;
 pub mod team_create;
 pub mod toast;
+pub mod work;
 pub mod workspace;
 pub mod workspace_plan;

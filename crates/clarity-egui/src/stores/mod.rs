@@ -267,6 +267,8 @@ pub struct UiStore {
     pub active_persona_id: String,
     /// S8 P3B.1: whether the persona switcher popup is open (titlebar dropdown state).
     pub persona_switcher_open: bool,
+    /// OpenClaw: active project name in Work mode.
+    pub active_project: Option<String>,
 }
 
 // ============================================================================

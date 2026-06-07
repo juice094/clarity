@@ -38,6 +38,9 @@ pub enum AppView {
     Gantt,
     /// Task board (full-screen).
     TaskBoard,
+    /// Work mode — project orchestration, agent clusters, task pipeline.
+    /// OpenClaw-style workspace with multi-project tree and ops panel.
+    Work,
 }
 
 /// Side panel type — supports left/right overlays in GUI; TUI achieves the

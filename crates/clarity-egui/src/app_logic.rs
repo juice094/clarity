@@ -355,6 +355,7 @@ impl App {
                 endpoint_registry: clarity_core::endpoint::default_clarity_personas(),
                 active_persona_id,
                 persona_switcher_open: false,
+                active_project: None,
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
