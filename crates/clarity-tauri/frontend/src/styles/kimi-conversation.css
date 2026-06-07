@@ -1,0 +1,147 @@
+/* Kimi ConversationView layout rules — extracted from v3.0.15 */
+
+.conversation-view {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  height: 100%;
+  background: var(--Bg-Primary);
+}
+
+.conv-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.conv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 16px 0 10px;
+  background: var(--Bg-Primary);
+  flex-shrink: 0;
+}
+
+.conv-title {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--Labels-Primary);
+  font-weight: 400;
+  padding: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.message-list-inner {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 30px 4px;
+  box-sizing: border-box;
+}
+
+.msg {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.msg-user {
+  flex-direction: row-reverse;
+}
+
+.msg-assistant {
+  align-items: flex-start;
+}
+
+.msg-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  background: var(--Colors-KMBlue);
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  word-wrap: break-word;
+}
+
+.role-user {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--Others-BubbleGray_PC);
+  color: var(--Labels-Primary);
+}
+
+.role-assistant {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0 12px 16px;
+  color: var(--Labels-Primary);
+}
+
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 26px;
+  min-width: 0;
+}
+
+.composer-dock {
+  flex-shrink: 0;
+  padding: 0 16px 16px;
+  background: var(--Bg-Primary);
+}
+
+.composer-inner {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 840px) {
+  .message-list-inner,
+  .composer-inner {
+    max-width: 80%;
+  }
+}
+
+@media (max-width: 568px) {
+  .message-list-inner,
+  .composer-inner {
+    max-width: 100%;
+  }
+}
