@@ -10,6 +10,38 @@ use crate::App;
 pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme.clone();
 
+    // ── Empty state: minimal bar (no card frame, no toolbar) ──
+    let has_active_session = !app.session_store.active_session_id.is_empty();
+    let is_empty_state = !has_active_session
+        || app
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == app.session_store.active_session_id)
+            .map_or(true, |s| s.messages.is_empty() && !app.chat_store.is_loading);
+
+    if is_empty_state {
+        let hint = composer_hint(app);
+        let prev_input = app.chat_store.input.clone();
+        let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
+            .hint_text(hint)
+            .margin(egui::vec2(4.0, 4.0))
+            .frame(false);
+        let response = ui.add_sized(
+            egui::vec2(ui.available_width(), 40.0),
+            text_edit,
+        );
+        if app.ui_store.focus_input_requested {
+            response.request_focus();
+            app.ui_store.focus_input_requested = false;
+        }
+        if app.chat_store.input != prev_input {
+            app.ui_store.last_input_modified = std::time::Instant::now();
+        }
+        handle_tui_keys(app, ui, &response, &prev_input);
+        return;
+    }
+
     // ── Attachment chips (above the composer) ──
     if !app.chat_store.attachments.is_empty() || app.chat_store.last_snapshot.is_some() {
         ui.horizontal_wrapped(|ui| {

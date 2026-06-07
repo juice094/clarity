@@ -1072,7 +1072,13 @@ impl eframe::App for App {
         // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
-        self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
+        // Workspace: only render when window is wide enough to avoid three-column crowding.
+        let screen_w = ctx.screen_rect().width();
+        if screen_w >= self.ui_store.theme.breakpoint_medium
+            || self.ui_store.preview_item.is_some()
+        {
+            self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
+        }
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
 
         // ── Main view (mutually exclusive) ──

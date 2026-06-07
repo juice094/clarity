@@ -96,9 +96,9 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let has_preview = app.ui_store.preview_item.is_some() && app.ui_store.preview_drawer_open;
 
     egui::SidePanel::right("workspace_panel")
-        .default_width(280.0)
-        .min_width(180.0)
-        .max_width(400.0)
+        .default_width(220.0)
+        .min_width(160.0)
+        .max_width(360.0)
         .resizable(true)
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
@@ -109,9 +109,10 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             // ── Workspace header ──
             ui.label(
-                egui::RichText::new("WORKSPACE")
+                egui::RichText::new("工作区")
                     .size(text_xs)
-                    .color(text_dim),
+                    .color(text_dim)
+                    .strong(),
             );
             ui.separator();
             ui.add_space(space_4);

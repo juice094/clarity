@@ -326,7 +326,7 @@ impl App {
                 locale: crate::i18n::Locale::default(),
                 last_scroll_offset: 0.0,
                 preview_item: None,
-                preview_drawer_open: true,
+                preview_drawer_open: false,
                 last_input_modified: now,
                 web_tabs,
                 web_tabs_expanded: true,

@@ -288,58 +288,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── Tools / Tasks ──
                     crate::components::tools_section::render_tools_section(app, ui);
-                    ui.add_space(app.ui_store.theme.space_16);
-
-                    // ── Teams ──
-                    let team_count = app.team_store.teams.len();
-                    let mut team_open = matches!(
-                        app.view_state.right,
-                        Some(clarity_core::ui::SidePanel::Team)
-                    );
-                    clickable_row(ui, "Teams", Some(team_count), &mut team_open);
-                    if team_open
-                        != matches!(
-                            app.view_state.right,
-                            Some(clarity_core::ui::SidePanel::Team)
-                        )
-                    {
-                        app.view_state
-                            .toggle_right(clarity_core::ui::SidePanel::Team);
-                    }
-
-                    ui.add_space(app.ui_store.theme.space_16);
-
-                    // ── Cron Jobs ──
-                    crate::panels::cron::render_cron_section(app, ui);
-                    ui.add_space(app.ui_store.theme.space_12);
-
-                    // ── 分析 ──
-                    group_header(ui, "分析");
-
-                    // ── Dashboard ──
-                    let mut dashboard_open =
-                        app.view_state.main == clarity_core::ui::AppView::Dashboard;
-                    clickable_row(ui, "Dashboard", None, &mut dashboard_open);
-                    if dashboard_open
-                        != (app.view_state.main == clarity_core::ui::AppView::Dashboard)
-                    {
-                        app.view_state.main =
-                            if app.view_state.main == clarity_core::ui::AppView::Dashboard {
-                                clarity_core::ui::AppView::Chat
-                            } else {
-                                clarity_core::ui::AppView::Dashboard
-                            };
-                    }
-
-                    ui.add_space(app.ui_store.theme.space_16);
-
-                    // ── Plan Timeline ──
-                    clickable_row(
-                        ui,
-                        "Plan Timeline",
-                        None,
-                        &mut app.ui_store.gantt_panel_open,
-                    );
+                    ui.add_space(app.ui_store.theme.space_8);
 
                     // ── 底部用户区 (Kimi-style) ──
                     ui.add_space(theme.space_16);
