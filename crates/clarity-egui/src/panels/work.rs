@@ -8,13 +8,28 @@
 use crate::App;
 use crate::stores::BotStatus;
 
-/// Hard-coded project list for MVP (configurable via settings later).
-const PROJECTS: &[(&str, &str)] = &[
-    (".kimi_openclaw", "~/.kimi_openclaw"),
-    ("clarity", "~/dev/clarity"),
-    ("devbase", "~/dev/devbase"),
-    ("syncthing-rust", "~/dev/syncthing-rust"),
-];
+/// Resolve a path string that may contain `~` into an absolute PathBuf.
+fn resolve_project_path(raw: &str) -> std::path::PathBuf {
+    if raw.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(&raw[2..]);
+        }
+    }
+    std::path::PathBuf::from(raw)
+}
+
+/// Project list with resolved paths.
+fn projects() -> Vec<(String, std::path::PathBuf)> {
+    let raw = [
+        (".kimi_openclaw", "~/.kimi_openclaw"),
+        ("clarity", "~/dev/clarity"),
+        ("devbase", "~/dev/devbase"),
+        ("syncthing-rust", "~/dev/syncthing-rust"),
+    ];
+    raw.iter()
+        .map(|(name, path)| (name.to_string(), resolve_project_path(path)))
+        .collect()
+}
 
 pub fn render_work_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
@@ -41,8 +56,9 @@ pub fn render_work_panel(app: &mut App, ctx: &egui::Context) {
                         .color(theme.text_dim),
                 );
                 ui.add_space(theme.space_8);
-                for (name, _path) in PROJECTS {
-                    let active = app.ui_store.active_project.as_deref() == Some(*name);
+                let projects = projects();
+                for (name, _path) in &projects {
+                    let active = app.ui_store.active_project.as_deref() == Some(name.as_str());
                     let (bg, fg) = if active {
                         (theme.surface_strong, theme.text)
                     } else {
@@ -51,7 +67,7 @@ pub fn render_work_panel(app: &mut App, ctx: &egui::Context) {
                     if ui
                         .add(
                             egui::Button::new(
-                                egui::RichText::new(*name)
+                                egui::RichText::new(name.as_str())
                                     .size(theme.text_sm)
                                     .color(fg),
                             )
@@ -114,49 +130,86 @@ fn render_project_tree(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
     );
     ui.add_space(theme.space_8);
 
-    egui::ScrollArea::vertical()
-        .id_salt(ui.id().with("work_tree_scroll"))
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            let active_project: String = app
-                .ui_store
-                .active_project
-                .as_deref()
-                .unwrap_or(PROJECTS[0].0)
-                .to_string();
+    let projects = projects();
+    let active_project_name = app
+        .ui_store
+        .active_project
+        .clone()
+        .unwrap_or_else(|| projects[0].0.clone());
 
-            for (name, _path) in PROJECTS {
-                let is_active = *name == active_project;
-                let text_color = if is_active { theme.accent } else { theme.text_dim };
+    // Project switcher (compact list)
+    for (name, _path) in &projects {
+        let is_active = name == &active_project_name;
+        let text_color = if is_active { theme.accent } else { theme.text_dim };
+        let mut rt = egui::RichText::new(format!("📁 {}", name))
+            .size(theme.text_sm)
+            .color(text_color);
+        if is_active {
+            rt = rt.strong();
+        }
+        let resp = ui.selectable_label(is_active, rt);
+        if resp.clicked() {
+            app.ui_store.active_project = Some(name.clone());
+        }
+    }
 
-                let mut rt = egui::RichText::new(format!("📁 {}", name))
-                    .size(theme.text_sm)
-                    .color(text_color);
-                if is_active {
-                    rt = rt.strong();
-                }
-                let resp = ui.selectable_label(is_active, rt);
-                if resp.clicked() {
-                    app.ui_store.active_project = Some(name.to_string());
-                }
+    ui.add_space(theme.space_8);
+    ui.separator();
+    ui.add_space(theme.space_8);
 
-                if is_active {
-                    ui.add_space(theme.space_4);
-                    let subdirs = ["memory", "skills", "tools", "ontology"];
-                    for sub in subdirs {
-                        ui.horizontal(|ui| {
-                            ui.add_space(theme.space_12);
-                            ui.label(
-                                egui::RichText::new(format!("  📂 {}", sub))
-                                    .size(theme.text_xs)
-                                    .color(theme.text_dim),
-                            );
-                        });
-                    }
-                    ui.add_space(theme.space_8);
-                }
-            }
-        });
+    // Real file tree for active project
+    let active_path = projects
+        .iter()
+        .find(|(n, _)| n == &active_project_name)
+        .map(|(_, p)| p.clone())
+        .unwrap_or_else(|| resolve_project_path("~"));
+
+    if active_path.exists() {
+        // Extract selected path *before* the closure to avoid borrow conflict
+        let selected: Option<String> = app
+            .ui_store
+            .preview_item
+            .as_ref()
+            .and_then(|p| match p {
+                crate::ui::types::PreviewItem::File { path, .. } => Some(path.clone()),
+                _ => None,
+            });
+        egui::ScrollArea::vertical()
+            .id_salt(ui.id().with("work_file_tree"))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                let ctx = ui.ctx().clone();
+                crate::ui::file_browser::render_file_tree(
+                    ui,
+                    &active_path,
+                    theme,
+                    0,
+                    selected.as_deref(),
+                    &mut |path| {
+                        if let Ok(content) = std::fs::read_to_string(path) {
+                            app.ui_store.preview_item =
+                                Some(crate::ui::types::PreviewItem::File {
+                                    name: path
+                                        .file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_default(),
+                                    content,
+                                    path: path.to_string_lossy().to_string(),
+                                });
+                            app.ui_store.preview_drawer_open = true;
+                            ctx.request_repaint();
+                        }
+                    },
+                    false,
+                );
+            });
+    } else {
+        ui.label(
+            egui::RichText::new(format!("路径不存在: {}", active_path.display()))
+                .size(theme.text_sm)
+                .color(theme.text_dim),
+        );
+    }
 }
 
 fn render_task_pipeline(_app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
