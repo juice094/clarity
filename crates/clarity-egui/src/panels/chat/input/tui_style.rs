@@ -1,138 +1,193 @@
 use crate::App;
 
+/// Kimi-style rounded composer input.
+///
+/// Visual spec:
+/// - Rounded card container (16px radius) with subtle border
+/// - TextEdit inside with no internal frame
+/// - Bottom toolbar: [+] [Agent] ............ [Send]
+/// - Attachments shown as chips above the card
 pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme.clone();
 
-    ui.horizontal(|ui| {
-        let available = ui.available_width();
-        let y = ui.cursor().min.y;
-        ui.painter().hline(
-            ui.min_rect().min.x..=ui.min_rect().min.x + available,
-            y,
-            egui::Stroke::new(1.0, theme.border),
-        );
-        ui.allocate_space(egui::vec2(available, 2.0));
-    });
-    ui.add_space(2.0);
-
-    if let Some(ref snap) = app.chat_store.last_snapshot {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("📸").size(theme.text_xs));
-            ui.label(
-                egui::RichText::new(format!("Snapshot #{}", snap.id))
-                    .size(theme.text_xs)
-                    .color(theme.text_dim),
-            );
-        });
-        ui.add_space(2.0);
-    }
-
-    if !app.chat_store.attachments.is_empty() {
+    // ── Attachment chips (above the composer) ──
+    if !app.chat_store.attachments.is_empty() || app.chat_store.last_snapshot.is_some() {
         ui.horizontal_wrapped(|ui| {
-            for (i, att) in app.chat_store.attachments.iter().enumerate() {
-                if i > 0 {
-                    ui.add_space(4.0);
+            ui.spacing_mut().item_spacing.x = 6.0;
+            if let Some(ref snap) = app.chat_store.last_snapshot {
+                let chip = egui::Frame::new()
+                    .fill(theme.bg_hover)
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("📸").size(theme.text_xs));
+                            ui.label(
+                                egui::RichText::new(format!("Snapshot #{}", snap.id))
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim),
+                            );
+                        });
+                    });
+                if chip.response.clicked() {
+                    app.chat_store.last_snapshot = None;
                 }
-                ui.label(
-                    egui::RichText::new(format!("📎 {}", att.name))
-                        .size(theme.text_xs)
-                        .color(theme.text_muted)
-                        .underline(),
-                );
+            }
+            for att in &app.chat_store.attachments {
+                let chip = egui::Frame::new()
+                    .fill(theme.bg_hover)
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("📎").size(theme.text_xs));
+                            ui.label(
+                                egui::RichText::new(&att.name)
+                                    .size(theme.text_xs)
+                                    .color(theme.text_muted),
+                            );
+                        });
+                    });
+                if chip.response.clicked() {
+                    // TODO: remove specific attachment
+                }
             }
         });
-        ui.add_space(2.0);
+        ui.add_space(theme.space_8);
     }
 
-    let mut text_response: Option<egui::Response> = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        // Shell context prompt: "cwd branch" in muted small text, then ❯ icon
-        let mut prompt_width = 0.0;
-        if !app.ui_store.shell_prompt.is_empty() {
-            let ctx_label = ui.label(
-                egui::RichText::new(&app.ui_store.shell_prompt)
-                    .size(theme.text_sm)
-                    .color(theme.text_dim),
-            );
-            prompt_width += ctx_label.rect.width() + ui.spacing().item_spacing.x;
-        }
-        let prompt = ui.label(
-            egui::RichText::new("❯")
-                .font(theme.font_icon(theme.text_base))
-                .color(theme.accent),
-        );
-        prompt_width += prompt.rect.width();
+    // ── Composer card ──
+    let composer_frame = egui::Frame::new()
+        .fill(theme.input_bg)
+        .corner_radius(egui::CornerRadius::same(16))
+        .stroke(egui::Stroke::new(1.0, theme.border))
+        .inner_margin(egui::Margin::symmetric(16, 12));
 
-        if app.chat_store.is_loading {
-            let spinner = ui.label(
-                egui::RichText::new("◐")
-                    .font(theme.font_icon(theme.text_sm))
-                    .color(theme.status_busy),
-            );
-            if spinner.clicked() {
-                app.stop();
+    composer_frame.show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+
+        // Text input (frameless inside the card)
+        let hint = composer_hint(app);
+        let prev_input = app.chat_store.input.clone();
+        let line_count = app.chat_store.input.matches('\n').count() + 1;
+        let input_height = (line_count as f32 * 22.0 + 12.0).clamp(28.0, 120.0);
+
+        let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
+            .desired_rows(line_count.max(1))
+            .hint_text(hint)
+            .margin(egui::vec2(0.0, 2.0))
+            .frame(false);
+        let response = ui.add_sized(
+            egui::vec2(ui.available_width(), input_height),
+            text_edit,
+        );
+
+        if app.ui_store.focus_input_requested {
+            response.request_focus();
+            app.ui_store.focus_input_requested = false;
+        }
+        if app.chat_store.input != prev_input {
+            app.ui_store.last_input_modified = std::time::Instant::now();
+        }
+        handle_tui_keys(app, ui, &response, &prev_input);
+
+        ui.add_space(theme.space_8);
+
+        // ── Bottom toolbar ──
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+
+            // Left: add attachment / agent buttons
+            if crate::widgets::icon_button_toolbar(
+                ui,
+                crate::theme::ICON_LIST,
+                theme.text_sm,
+                theme,
+            )
+            .on_hover_text("Add attachment")
+            .clicked()
+            {
+                if let Some(paths) = rfd::FileDialog::new().pick_files() {
+                    for path in paths {
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        app.chat_store.attachments.push(crate::ui::types::Attachment {
+                            path,
+                            name,
+                        });
+                    }
+                }
             }
-        }
 
-        let available_width = ui.available_width();
-        let input_width = (available_width - prompt_width - 8.0).max(80.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(input_width, 44.0),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                let hint = tui_hint(app);
-                let prev_input = app.chat_store.input.clone();
-                let line_count = app.chat_store.input.matches('\n').count() + 1;
-                let input_height = (line_count as f32 * 20.0 + 16.0).clamp(36.0, 120.0);
-                let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
-                    .desired_rows(line_count.max(1))
-                    .hint_text(hint)
-                    .margin(egui::vec2(0.0, 4.0))
-                    .frame(false);
-                let response = ui.add_sized(egui::vec2(input_width, input_height), text_edit);
-                text_response = Some(response.clone());
+            let agent_btn = egui::Button::new(
+                egui::RichText::new("Agent")
+                    .size(theme.text_sm)
+                    .color(theme.text_muted),
+            )
+            .fill(theme.bg_hover)
+            .corner_radius(egui::CornerRadius::same(8));
+            if ui.add(agent_btn).on_hover_text("Agent mode").clicked() {
+                // TODO: toggle agent mode
+            }
 
-                if app.ui_store.focus_input_requested {
-                    response.request_focus();
-                    app.ui_store.focus_input_requested = false;
+            // Right: model selector + send button
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+
+                // Send button (or stop spinner when loading)
+                if app.chat_store.is_loading {
+                    let stop_btn = egui::Button::new(
+                        egui::RichText::new(crate::theme::ICON_X)
+                            .font(theme.font_icon(theme.text_base))
+                            .color(theme.danger),
+                    )
+                    .fill(theme.bg_hover)
+                    .corner_radius(egui::CornerRadius::same(10));
+                    if ui.add(stop_btn).on_hover_text("Stop generation").clicked() {
+                        app.stop();
+                    }
+                } else {
+                    let send_btn = egui::Button::new(
+                        egui::RichText::new(crate::theme::ICON_SEND)
+                            .font(theme.font_icon(theme.text_base))
+                            .color(if app.chat_store.input.trim().is_empty() {
+                                theme.text_dim
+                            } else {
+                                theme.accent
+                            }),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(10));
+                    if ui.add(send_btn).on_hover_text("Send (Ctrl+Enter)").clicked() {
+                        if !app.chat_store.input.trim().is_empty() && !app.chat_store.is_loading {
+                            app.chat_store.stick_to_bottom = true;
+                            app.send();
+                        }
+                    }
                 }
-                if app.chat_store.input != prev_input {
-                    app.ui_store.last_input_modified = std::time::Instant::now();
+
+                // Model selector pill
+                let model_name = app.settings_store.settings_edit.model.trim();
+                if !model_name.is_empty() {
+                    let model_btn = egui::Button::new(
+                        egui::RichText::new(format!("{} ↓", model_name))
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    )
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(egui::CornerRadius::same(8));
+                    if ui.add(model_btn).on_hover_text("Switch model").clicked() {
+                        app.settings_store.settings_open = true;
+                    }
                 }
-                handle_tui_keys(app, ui, &response, &prev_input);
-            },
-        );
-    });
-
-    ui.add_space(2.0);
-    ui.horizontal(|ui| {
-        let available = ui.available_width();
-        let y = ui.cursor().min.y;
-        ui.painter().hline(
-            ui.min_rect().min.x..=ui.min_rect().min.x + available,
-            y,
-            egui::Stroke::new(1.0, theme.border),
-        );
-        ui.allocate_space(egui::vec2(available, 2.0));
-    });
-
-    if let Some(response) = text_response {
-        let hint_text = micro_hint(app, &response);
-        if !hint_text.is_empty() {
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(hint_text)
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
-                );
             });
-        }
-    }
+        });
+    });
 }
 
-fn tui_hint(app: &App) -> String {
+fn composer_hint(app: &App) -> String {
     if app.chat_store.stopping {
         app.t("Stopping current turn...").to_string()
     } else if app.chat_store.pending_send.is_some() {
@@ -143,22 +198,6 @@ fn tui_hint(app: &App) -> String {
     } else {
         app.t("Type a message...").to_string()
     }
-}
-
-fn micro_hint(app: &App, response: &egui::Response) -> String {
-    if app.chat_store.is_loading {
-        return "Ctrl+C Stop".to_string();
-    }
-    if !response.has_focus() && app.chat_store.input.is_empty() {
-        return "Ctrl+K focus · ? help".to_string();
-    }
-    if response.has_focus() && app.chat_store.input.is_empty() {
-        return "Ctrl+Enter Send · Shift+↑ History · /coder · !cmd".to_string();
-    }
-    if response.has_focus() && !app.chat_store.input.is_empty() {
-        return "Ctrl+Enter Send".to_string();
-    }
-    String::new()
 }
 
 fn handle_tui_keys(app: &mut App, ui: &egui::Ui, response: &egui::Response, prev_input: &str) {

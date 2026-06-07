@@ -1,4 +1,3 @@
-use crate::ui::types::ToastLevel;
 use crate::App;
 
 fn format_thousands(n: u32) -> String {
@@ -42,41 +41,46 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                 .auto_shrink([true, false])
                 .show(ui, |ui| {
                     let theme = app.ui_store.theme.clone();
-                    // ── Top toolbar: collapse + global controls ──
+                    // ── Top toolbar: collapse + new session ──
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 4.0;
-                        let toolbar_avail = ui.available_width();
-                        let compact = toolbar_avail < 200.0;
+                        ui.spacing_mut().item_spacing.x = 6.0;
 
-                        // Collapse sidebar (left)
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new(crate::theme::ICON_ARROW_LEFT).font(
-                                        app.ui_store.theme.font_icon(app.ui_store.theme.text_base),
-                                    ),
-                                )
-                                .fill(egui::Color32::TRANSPARENT)
-                                .corner_radius(
-                                    egui::CornerRadius::same(app.ui_store.theme.radius_md as u8),
-                                ),
-                            )
-                            .clicked()
+                        // Collapse sidebar
+                        if crate::widgets::icon_button_toolbar(
+                            ui,
+                            crate::theme::ICON_ARROW_LEFT,
+                            app.ui_store.theme.text_base,
+                            &app.ui_store.theme,
+                        )
+                        .on_hover_text("Collapse sidebar")
+                        .clicked()
                         {
                             app.ui_store.sidebar_collapsed = true;
                         }
 
-                        // Global controls (right-aligned)
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
+                        // New session button (Kimi-style prominent action)
+                        let new_session_btn = egui::Button::new(
+                            egui::RichText::new("+ 新建会话")
+                                .size(app.ui_store.theme.text_sm)
+                                .color(app.ui_store.theme.text),
+                        )
+                        .fill(theme.bg_hover)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(new_session_btn).on_hover_text("New session (Ctrl+N)").clicked() {
+                            if !app.chat_store.is_loading {
+                                app.new_session();
+                            }
+                        }
 
-                            // Settings
+                        // Right: settings only
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if crate::widgets::icon_button_toolbar(
                                 ui,
                                 crate::theme::ICON_SETTINGS,
                                 app.ui_store.theme.text_base,
                                 &app.ui_store.theme,
                             )
+                            .on_hover_text("Settings")
                             .clicked()
                             {
                                 app.settings_store.settings_open = true;
@@ -85,201 +89,19 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                     guard.clone()
                                 };
                             }
-
-                            // Export current session
-                            if let Some(session) = app.session_store.active_session() {
-                                if crate::widgets::icon_button_toolbar(
-                                    ui,
-                                    crate::theme::ICON_EXPORT,
-                                    app.ui_store.theme.text_sm,
-                                    &app.ui_store.theme,
-                                )
-                                .on_hover_text("Export session")
-                                .clicked()
-                                {
-                                    let file_name = format!("{}-session.json", session.title);
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .add_filter("JSON", &["json"])
-                                        .set_file_name(&file_name)
-                                        .save_file()
-                                    {
-                                        if let Err(e) =
-                                            crate::session::export_session(session, &path)
-                                        {
-                                            app.push_toast(
-                                                format!("Export failed: {}", e),
-                                                ToastLevel::Error,
-                                            );
-                                        } else {
-                                            app.push_toast("Session exported", ToastLevel::Info);
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Import session
-                            if crate::widgets::icon_button_toolbar(
-                                ui,
-                                crate::theme::ICON_IMPORT,
-                                app.ui_store.theme.text_sm,
-                                &app.ui_store.theme,
-                            )
-                            .on_hover_text("Import session")
-                            .clicked()
-                            {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("JSON", &["json"])
-                                    .pick_file()
-                                {
-                                    match crate::session::import_session(&path) {
-                                        Ok(session) => {
-                                            let id = session.id.clone();
-                                            app.session_store.sessions.push(session);
-                                            app.session_store.active_session_id = id.clone();
-                                            app.chat_store.input = String::new();
-                                            app.chat_store.last_usage = None;
-                                            if let Some(s) = app
-                                                .session_store
-                                                .sessions
-                                                .iter()
-                                                .find(|s| s.id == id)
-                                            {
-                                                app.chat_store.tool_calls =
-                                                    crate::stores::rebuild_tool_calls(&s.messages);
-                                            }
-                                            app.push_toast("Session imported", ToastLevel::Info);
-                                        }
-                                        Err(e) => {
-                                            app.push_toast(
-                                                format!("Import failed: {}", e),
-                                                ToastLevel::Error,
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-
-                            // MCP
-                            let mcp_count = app
-                                .mcp_store
-                                .mcp_config
-                                .as_ref()
-                                .map_or(0, |c| c.servers.len());
-                            let mcp_btn_w = if mcp_count > 0 {
-                                theme.size_mcp_btn_w
-                            } else {
-                                theme.size_mcp_btn_w_compact
-                            };
-                            let (mcp_rect, mcp_resp) = ui.allocate_exact_size(
-                                egui::vec2(mcp_btn_w, 28.0),
-                                egui::Sense::click(),
-                            );
-                            if ui.is_rect_visible(mcp_rect) {
-                                let icon_color = if mcp_resp.hovered() {
-                                    app.ui_store.theme.text
-                                } else {
-                                    app.ui_store.theme.text_dim
-                                };
-                                ui.allocate_new_ui(
-                                    egui::UiBuilder::new().max_rect(mcp_rect),
-                                    |ui| {
-                                        ui.horizontal_centered(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(crate::theme::ICON_PLUG)
-                                                    .font(
-                                                        app.ui_store.theme.font_icon(
-                                                            app.ui_store.theme.text_base,
-                                                        ),
-                                                    )
-                                                    .color(icon_color),
-                                            );
-                                            if mcp_count > 0 {
-                                                ui.label(
-                                                    egui::RichText::new(format!("{}", mcp_count))
-                                                        .size(app.ui_store.theme.text_xs)
-                                                        .color(icon_color),
-                                                );
-                                            }
-                                        });
-                                    },
-                                );
-                            }
-                            if mcp_resp.clicked() {
-                                if matches!(
-                                    app.view_state.modal,
-                                    Some(clarity_core::ui::ModalType::Mcp)
-                                ) {
-                                    app.view_state.close_modal();
-                                } else {
-                                    app.view_state.open_modal(clarity_core::ui::ModalType::Mcp);
-                                }
-                            }
-
-                            // Skills
-                            let skills_resp = crate::widgets::icon_button_toolbar(
-                                ui,
-                                crate::theme::ICON_PUZZLE,
-                                app.ui_store.theme.text_base,
-                                &app.ui_store.theme,
-                            );
-                            if skills_resp.clicked() {
-                                app.view_state
-                                    .open_modal(clarity_core::ui::ModalType::Skill);
-                            }
-
-                            // Locale toggle (hidden in compact mode)
-                            if !compact {
-                                let locale_label = match app.ui_store.locale {
-                                    crate::i18n::Locale::EnUS => "EN",
-                                    crate::i18n::Locale::ZhCN => "中",
-                                };
-                                if ui
-                                    .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(locale_label)
-                                                .size(app.ui_store.theme.text_xs)
-                                                .color(app.ui_store.theme.text_dim)
-                                                .monospace(),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(
-                                            egui::CornerRadius::same(
-                                                app.ui_store.theme.radius_sm as u8,
-                                            ),
-                                        ),
-                                    )
-                                    .clicked()
-                                {
-                                    app.ui_store.locale = match app.ui_store.locale {
-                                        crate::i18n::Locale::EnUS => crate::i18n::Locale::ZhCN,
-                                        crate::i18n::Locale::ZhCN => crate::i18n::Locale::EnUS,
-                                    };
-                                }
-                            }
-
-                            // Token usage (hidden in compact mode)
-                            if !compact {
-                                if let Some((_, _, t)) = app.chat_store.last_usage {
-                                    ui.label(
-                                        egui::RichText::new(format!("{}∑", format_thousands(t)))
-                                            .size(app.ui_store.theme.text_xs)
-                                            .color(app.ui_store.theme.text_dim)
-                                            .monospace(),
-                                    );
-                                }
-                            }
                         });
                     });
                     ui.add_space(app.ui_store.theme.space_12);
 
-                    // Helper for group headers
+                    // Helper for group headers — Kimi-style: no ALL CAPS, no separator
                     let group_header = |ui: &mut egui::Ui, text: &str| {
+                        ui.add_space(theme.space_8);
                         ui.label(
                             egui::RichText::new(text)
                                 .size(theme.text_xs)
-                                .color(theme.text_dim),
+                                .color(theme.text_dim)
+                                .strong(),
                         );
-                        ui.separator();
                         ui.add_space(theme.space_4);
                     };
 
@@ -338,8 +160,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             }
                         };
 
-                    // ── ROLES ──
-                    group_header(ui, "ROLES");
+                    // ── 角色 ──
+                    group_header(ui, "角色");
 
                     // ── Category navigation ──
                     let categories = [
@@ -401,8 +223,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.add_space(app.ui_store.theme.space_12);
 
-                    // ── LIVE ──
-                    group_header(ui, "LIVE");
+                    // ── 实时 ──
+                    group_header(ui, "实时");
 
                     // ── Web Tabs ──
                     crate::components::web_tabs::render_web_tabs(app, ui);
@@ -461,8 +283,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     ui.add_space(app.ui_store.theme.space_12);
 
-                    // ── WORKSPACE ──
-                    group_header(ui, "WORKSPACE");
+                    // ── 工作区 ──
+                    group_header(ui, "工作区");
 
                     // ── Tools / Tasks ──
                     crate::components::tools_section::render_tools_section(app, ui);
@@ -491,8 +313,8 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                     crate::panels::cron::render_cron_section(app, ui);
                     ui.add_space(app.ui_store.theme.space_12);
 
-                    // ── ANALYTICS ──
-                    group_header(ui, "ANALYTICS");
+                    // ── 分析 ──
+                    group_header(ui, "分析");
 
                     // ── Dashboard ──
                     let mut dashboard_open =
@@ -519,7 +341,50 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         &mut app.ui_store.gantt_panel_open,
                     );
 
-                    // Workspace has moved to the right-side panel (Sprint 34 refactor).
+                    // ── 底部用户区 (Kimi-style) ──
+                    ui.add_space(theme.space_16);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        // Avatar placeholder
+                        let avatar_size = 28.0;
+                        let (avatar_rect, _avatar_resp) = ui.allocate_exact_size(
+                            egui::vec2(avatar_size, avatar_size),
+                            egui::Sense::hover(),
+                        );
+                        ui.painter().circle_filled(
+                            avatar_rect.center(),
+                            avatar_size * 0.5,
+                            theme.accent,
+                        );
+                        let initial = ui.fonts(|f| {
+                            f.layout(
+                                "U".to_string(),
+                                theme.font_bold(theme.text_sm),
+                                egui::Color32::WHITE,
+                                f32::INFINITY,
+                            )
+                        });
+                        let label_pos = avatar_rect.center() - initial.rect.size() * 0.5;
+                        ui.painter().galley(label_pos, initial, egui::Color32::WHITE);
+
+                        // User name + model badge
+                        ui.vertical(|ui| {
+                            ui.label(
+                                egui::RichText::new("User")
+                                    .size(theme.text_sm)
+                                    .strong()
+                                    .color(theme.text),
+                            );
+                            let model = app.settings_store.settings_edit.model.trim();
+                            if !model.is_empty() {
+                                ui.label(
+                                    egui::RichText::new(model)
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
+                                );
+                            }
+                        });
+                    });
                 });
         });
 

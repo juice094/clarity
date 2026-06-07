@@ -149,36 +149,96 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
 
                 if session.messages.is_empty() && !is_loading {
                     ui.vertical_centered(|ui| {
-                        let empty_state_offset = (ui.available_height() / 3.0).max(60.0);
+                        let empty_state_offset = (ui.available_height() / 3.0).max(80.0);
                         ui.add_space(empty_state_offset);
+
+                        // Large brand mark (Kimi-style centered logo)
                         ui.label(
                             egui::RichText::new("Clarity")
-                                .size(theme.text_2xl)
+                                .size(48.0)
                                 .strong()
-                                .color(theme.text_dim),
+                                .color(theme.text_strong),
                         );
-                        ui.add_space(app.ui_store.theme.space_8);
-                        ui.label(
-                            egui::RichText::new("Local-first AI agent runtime")
-                                .size(app.ui_store.theme.text_base)
-                                .color(theme.text_dim),
+                        ui.add_space(theme.space_12);
+
+                        // Centered composer-style prompt card (Kimi empty-state)
+                        let card_w = (ui.available_width() * 0.65).clamp(400.0, 720.0);
+                        let card_sense = egui::Sense::click();
+                        let (card_rect, card_resp) = ui.allocate_exact_size(
+                            egui::vec2(card_w, 56.0),
+                            card_sense,
                         );
-                        ui.add_space(app.ui_store.theme.space_24);
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    egui::RichText::new("Configure Settings")
-                                        .size(app.ui_store.theme.text_base)
-                                        .color(theme.text),
-                                )
-                                .fill(theme.surface)
-                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                                .min_size(egui::vec2(180.0, 40.0)),
-                            )
-                            .clicked()
-                        {
-                            configure_clicked = true;
+                        // Paint the card frame
+                        let card_frame = egui::Frame::new()
+                            .fill(theme.input_bg)
+                            .corner_radius(egui::CornerRadius::same(16))
+                            .stroke(egui::Stroke::new(1.0, theme.border))
+                            .inner_margin(egui::Margin::symmetric(20, 16));
+                        ui.allocate_new_ui(
+                            egui::UiBuilder::new().max_rect(card_rect),
+                            |ui| {
+                                card_frame.show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("输入消息开始对话…")
+                                                .size(theme.text_base)
+                                                .color(theme.text_dim),
+                                        );
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    egui::RichText::new("⏎")
+                                                        .font(theme.font_icon(theme.text_sm))
+                                                        .color(theme.text_dim),
+                                                );
+                                            },
+                                        );
+                                    });
+                                });
+                            },
+                        );
+                        if card_resp.clicked() {
+                            app.ui_store.focus_input_requested = true;
                         }
+
+                        ui.add_space(theme.space_24);
+
+                        // Quick-start hints (Kimi-style slash-command suggestions)
+                        let hints = [
+                            ("/coder", "代码助手"),
+                            ("/plan", "任务规划"),
+                            ("/review", "代码审查"),
+                        ];
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = theme.space_8;
+                            for (cmd, desc) in hints {
+                                let chip = egui::Frame::new()
+                                    .fill(theme.bg_hover)
+                                    .corner_radius(egui::CornerRadius::same(8))
+                                    .inner_margin(egui::Margin::symmetric(12, 8))
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                egui::RichText::new(cmd)
+                                                    .size(theme.text_sm)
+                                                    .monospace()
+                                                    .color(theme.accent),
+                                            );
+                                            ui.add_space(4.0);
+                                            ui.label(
+                                                egui::RichText::new(desc)
+                                                    .size(theme.text_sm)
+                                                    .color(theme.text_muted),
+                                            );
+                                        });
+                                    });
+                                if chip.response.clicked() {
+                                    app.chat_store.input = format!("{} ", cmd);
+                                    app.ui_store.focus_input_requested = true;
+                                }
+                            }
+                        });
                     });
                 } else if agent_turn_style && !kimi_conversation_style {
                     // --- AgentTurn aggregation mode ---

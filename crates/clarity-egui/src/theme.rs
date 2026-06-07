@@ -235,34 +235,34 @@ impl Theme {
     ///   layers without backdrop-blur (not supported by egui).
     /// - Ice-blue accent (#5B8DEF) harmonises with the cool glass aesthetic.
     /// - Larger corner radii (12/20 px) reinforce the modern glass feel.
+    /// Kimi-style dark theme — mimics Kimi Desktop v3.0.15 dark palette.
     pub fn dark() -> Self {
         Self {
-            // Backgrounds: midnight slate (not pure black) + translucent glass layers
-            // #12121a provides "ambient light" for depth perception while staying OLED-friendly
-            bg: hex("#12121a"),
-            bg_accent: rgba(28, 28, 38, 0.55),
-            bg_elevated: rgba(42, 42, 56, 0.85),
-            bg_hover: rgba(55, 55, 72, 0.75),
-            surface: rgba(38, 38, 52, 0.60),
-            surface_strong: rgba(48, 48, 64, 0.72),
-            glass: rgba(255, 255, 255, 0.06),
-            glass_strong: rgba(255, 255, 255, 0.12),
+            // Backgrounds: pure dark (Kimi Bg-Primary #121212)
+            bg: hex("#121212"),
+            bg_accent: hex("#1a1a1a"),
+            bg_elevated: hex("#1f1f1f"),
+            bg_hover: hex("#2a2a2a"),
+            surface: hex("#1f1f1f"),
+            surface_strong: hex("#2a2a2a"),
+            glass: rgba(255, 255, 255, 0.04),
+            glass_strong: rgba(255, 255, 255, 0.08),
 
-            // Text: high contrast on dark glass
-            text: hex("#E8EAEF"),
-            text_strong: hex("#FFFFFF"),
-            text_muted: rgba(200, 205, 220, 0.72),
-            text_dim: rgba(200, 205, 220, 0.50),
+            // Text: Kimi Labels-Primary #d6d6d6 hierarchy
+            text: hex("#d6d6d6"),
+            text_strong: hex("#ffffff"),
+            text_muted: hex("#999999"),
+            text_dim: hex("#666666"),
 
-            // Accent: ice blue
-            accent: hex("#5B8DEF"),
-            accent_hover: hex("#7DA8F2"),
-            accent_subtle: rgba(91, 141, 239, 0.14),
+            // Accent: Kimi KMBlue #1a88ff
+            accent: hex("#1a88ff"),
+            accent_hover: hex("#4a9eff"),
+            accent_subtle: rgba(26, 136, 255, 0.12),
 
-            // Chat bubbles: translucent glass
-            user_bubble: rgba(45, 80, 160, 0.32),
-            ai_bubble: rgba(255, 255, 255, 0.06),
-            chat_text: hex("#E8EAEF"),
+            // Chat bubbles: Kimi user bubble is dark gray, not blue
+            user_bubble: hex("#2a2a2a"),
+            ai_bubble: hex("#1a1a1a"),
+            chat_text: hex("#d6d6d6"),
             error_bubble: rgba(239, 91, 91, 0.50),
             error_text: hex("#EF8A8A"),
 
@@ -274,25 +274,23 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
-            // Borders: slate-blue tint for subtle boundary visibility on dark backgrounds
-            border: rgba(110, 135, 175, 0.08),
-            border_strong: rgba(110, 135, 175, 0.14),
-            border_hover: rgba(110, 135, 175, 0.22),
-            input_bg: rgba(32, 32, 48, 0.85),
+            // Borders: Kimi uses very subtle separators
+            border: rgba(255, 255, 255, 0.06),
+            border_strong: rgba(255, 255, 255, 0.10),
+            border_hover: rgba(255, 255, 255, 0.16),
+            input_bg: hex("#1f1f1f"),
 
-            // Focus: blue glow
-            focus_ring: rgba(91, 141, 239, 0.60),
-            focus_glow: rgba(91, 141, 239, 0.20),
-            // Selection: slate-grey background for low-intrusion highlighting
-            // (matches border colour family at higher opacity; replaces prior bright-blue)
-            selection: rgba(55, 58, 75, 0.72),
+            // Focus: Kimi blue glow
+            focus_ring: rgba(26, 136, 255, 0.50),
+            focus_glow: rgba(26, 136, 255, 0.15),
+            selection: rgba(26, 136, 255, 0.25),
 
             // Overlay: scrim + depth layers
-            overlay: hex_alpha("#000000", 0.50),
-            overlay_subtle: rgba(255, 255, 255, 0.03),
-            overlay_light: rgba(255, 255, 255, 0.06),
-            overlay_medium: rgba(255, 255, 255, 0.10),
-            overlay_strong: rgba(255, 255, 255, 0.18),
+            overlay: hex_alpha("#000000", 0.60),
+            overlay_subtle: rgba(255, 255, 255, 0.02),
+            overlay_light: rgba(255, 255, 255, 0.04),
+            overlay_medium: rgba(255, 255, 255, 0.08),
+            overlay_strong: rgba(255, 255, 255, 0.14),
 
             // Fonts
             font_body: "Inter".into(),
@@ -300,14 +298,14 @@ impl Theme {
 
             font_scale: 1.0,
 
-            // Typography tokens — compact scale for desktop density
-            text_xs: 9.0,
-            text_sm: 11.0,
-            text_base: 12.0,
-            text_md: 13.0,
-            text_lg: 15.0,
-            text_xl: 18.0,
-            text_2xl: 24.0,
+            // Typography tokens — Kimi scale (larger than prior compact scale)
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_md: 15.0,
+            text_lg: 18.0,
+            text_xl: 22.0,
+            text_2xl: 36.0,
 
             // Spacing: 8px baseline grid
             space_4: 4.0,
@@ -326,34 +324,34 @@ impl Theme {
             radius_full: 999.0,
 
             // Semantic surfaces
-            tool_call_bg: rgba(91, 141, 239, 0.08),
-            code_block_bg: rgba(0, 0, 0, 0.40),
-            mood_bg: rgba(91, 141, 239, 0.06),
+            tool_call_bg: rgba(26, 136, 255, 0.08),
+            code_block_bg: hex("#0d0d0d"),
+            mood_bg: rgba(26, 136, 255, 0.05),
 
-            // Shadow: subtle dark depth for glass layers
+            // Shadow: Kimi-style softer shadows (electron can do better blur)
             shadow_card: egui::Shadow {
-                offset: [0, 1],
-                blur: 8,
+                offset: [0, 2],
+                blur: 12,
                 spread: 0,
-                color: rgba(0, 0, 0, 0.31),
+                color: rgba(0, 0, 0, 0.40),
             },
             shadow_panel: egui::Shadow {
-                offset: [0, 2],
-                blur: 16,
+                offset: [0, 4],
+                blur: 20,
                 spread: 0,
-                color: rgba(0, 0, 0, 0.39),
+                color: rgba(0, 0, 0, 0.50),
             },
             shadow_modal: egui::Shadow {
                 offset: [0, 8],
                 blur: 32,
                 spread: 0,
-                color: rgba(0, 0, 0, 0.47),
+                color: rgba(0, 0, 0, 0.60),
             },
             shadow_toast: egui::Shadow {
                 offset: [0, 4],
                 blur: 16,
                 spread: 0,
-                color: rgba(0, 0, 0, 0.39),
+                color: rgba(0, 0, 0, 0.50),
             },
 
             // Animation
@@ -429,10 +427,10 @@ impl Theme {
             text_muted: rgba(200, 205, 220, 0.70),
             text_dim: rgba(200, 205, 220, 0.55),
 
-            // Accent: ice blue
-            accent: hex("#5B8DEF"),
-            accent_hover: hex("#7DA8F2"),
-            accent_subtle: rgba(91, 141, 239, 0.12),
+            // Accent: Kimi KMBlue
+            accent: hex("#1a88ff"),
+            accent_hover: hex("#4a9eff"),
+            accent_subtle: rgba(26, 136, 255, 0.12),
 
             // Chat bubbles
             user_bubble: rgba(45, 80, 160, 0.30),
@@ -475,14 +473,14 @@ impl Theme {
 
             font_scale: 1.0,
 
-            // Typography tokens — compact scale for desktop density
-            text_xs: 9.0,
-            text_sm: 11.0,
-            text_base: 12.0,
-            text_md: 13.0,
-            text_lg: 15.0,
-            text_xl: 18.0,
-            text_2xl: 24.0,
+            // Typography tokens — Kimi scale (larger than prior compact scale)
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_md: 15.0,
+            text_lg: 18.0,
+            text_xl: 22.0,
+            text_2xl: 36.0,
 
             // Spacing: 8px baseline grid
             space_4: 4.0,
@@ -640,14 +638,14 @@ impl Theme {
 
             font_scale: 1.0,
 
-            // Typography tokens — compact scale for desktop density
-            text_xs: 9.0,
-            text_sm: 11.0,
-            text_base: 12.0,
-            text_md: 13.0,
-            text_lg: 15.0,
-            text_xl: 18.0,
-            text_2xl: 24.0,
+            // Typography tokens — Kimi scale (larger than prior compact scale)
+            text_xs: 10.0,
+            text_sm: 12.0,
+            text_base: 14.0,
+            text_md: 15.0,
+            text_lg: 18.0,
+            text_xl: 22.0,
+            text_2xl: 36.0,
 
             space_4: 4.0,
             space_8: 8.0,
