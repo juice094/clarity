@@ -64,8 +64,8 @@ pub fn render_file_tree(
         let name = entry.file_name().to_string_lossy().to_string();
         let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
 
-        // Skip known large / irrelevant directories
-        if is_dir && SKIP_DIRS.contains(&name.as_str()) {
+        // Skip hidden files/dirs (dot-prefix) and known large / irrelevant directories
+        if name.starts_with('.') || (is_dir && SKIP_DIRS.contains(&name.as_str())) {
             continue;
         }
 

@@ -47,24 +47,27 @@ pub fn render_work_panel(app: &mut App, ctx: &egui::Context) {
             ui.set_min_size(egui::vec2(600.0, 400.0));
 
             // ── Three-column layout ──
+            // Kimi-style: narrow left (project + bot), wide center (tasks), right drawer (files)
             let total_w = ui.available_width();
-            let left_w = (total_w * 0.18).clamp(160.0, 220.0);
-            let right_w = (total_w * 0.28).clamp(240.0, 360.0);
+            let left_w = (total_w * 0.16).clamp(140.0, 200.0);
+            let right_w = (total_w * 0.30).clamp(260.0, 380.0);
             let center_w = total_w - left_w - right_w - theme.space_16 * 2.0;
 
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = theme.space_16;
 
-                // ── LEFT: Project list ──
+                // ── LEFT: Project list + Bot card ──
                 ui.allocate_ui_with_layout(
                     egui::vec2(left_w, ui.available_height()),
                     egui::Layout::top_down(egui::Align::LEFT),
                     |ui| {
                         render_project_list(app, ui, &theme);
+                        ui.add_space(theme.space_16);
+                        render_bot_compact(app, ui, &theme);
                     },
                 );
 
-                // ── CENTER: Task pipeline + Bot panel + File preview ──
+                // ── CENTER: Task pipeline + inline file preview ──
                 ui.allocate_ui_with_layout(
                     egui::vec2(center_w, ui.available_height()),
                     egui::Layout::top_down(egui::Align::LEFT),
@@ -128,11 +131,7 @@ fn render_center_zone(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
             render_task_pipeline(app, ui, theme);
             ui.add_space(theme.space_16);
 
-            // 2. Bot panel (moved from right)
-            render_bot_compact(app, ui, theme);
-            ui.add_space(theme.space_16);
-
-            // 3. File preview (inline, not drawer)
+            // 2. File preview (inline, not drawer)
             if app.ui_store.preview_item.is_some() {
                 ui.separator();
                 ui.add_space(theme.space_8);
