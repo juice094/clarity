@@ -1,17 +1,5 @@
 use crate::App;
 
-fn format_thousands(n: u32) -> String {
-    let s = n.to_string();
-    let mut result = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
-            result.push(',');
-        }
-        result.push(c);
-    }
-    result
-}
-
 pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
     if app.ui_store.sidebar_collapsed {
         return;
@@ -105,60 +93,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         ui.add_space(theme.space_4);
                     };
 
-                    // Helper for clickable sidebar rows
-                    let clickable_row =
-                        |ui: &mut egui::Ui,
-                         label: &str,
-                         count: Option<usize>,
-                         is_open: &mut bool| {
-                            let caret_icon = if *is_open {
-                                crate::theme::ICON_CARET_DOWN
-                            } else {
-                                crate::theme::ICON_CARET_RIGHT
-                            };
-                            let caret_color = if *is_open {
-                                theme.accent
-                            } else {
-                                theme.text_dim
-                            };
-                            let text_color = if *is_open { theme.text } else { theme.text_dim };
-
-                            let resp =
-                                crate::widgets::interactive_row(ui, *is_open, &theme, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.add_space(8.0);
-                                        ui.label(
-                                            egui::RichText::new(label)
-                                                .size(theme.text_sm)
-                                                .strong()
-                                                .color(text_color),
-                                        );
-                                        if let Some(c) = count {
-                                            if c > 0 {
-                                                ui.label(
-                                                    egui::RichText::new(format!("({})", c))
-                                                        .size(theme.text_sm)
-                                                        .color(theme.text_muted),
-                                                );
-                                            }
-                                        }
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                ui.add_space(8.0);
-                                                ui.label(
-                                                    egui::RichText::new(caret_icon)
-                                                        .font(theme.font_icon(theme.text_sm))
-                                                        .color(caret_color),
-                                                );
-                                            },
-                                        );
-                                    });
-                                });
-                            if resp.response.clicked() {
-                                *is_open = !*is_open;
-                            }
-                        };
+                    // Helper for clickable sidebar rows (currently unused —
+                    // Teams/Cron/Dashboard/Plan were removed from sidebar.
+                    // Keep the interactive_row widget in crate::widgets for reuse.)
 
                     // ── 角色 ──
                     group_header(ui, "角色");

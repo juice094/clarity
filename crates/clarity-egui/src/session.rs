@@ -113,69 +113,6 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
-pub fn export_session(session: &Session, path: &std::path::Path) -> Result<(), String> {
-    let data = SessionData {
-        id: session.id.clone(),
-        title: session.title.clone(),
-        category: Some(session.category.clone()),
-        created_at: session.updated_at,
-        updated_at: now_millis(),
-        messages: session
-            .messages
-            .iter()
-            .map(|m| MessageData {
-                role: match m.role {
-                    Role::User => "user".into(),
-                    Role::Agent => "agent".into(),
-                },
-                content: m.content.clone(),
-                blocks: if m.blocks.is_empty() {
-                    None
-                } else {
-                    Some(m.blocks.clone())
-                },
-            })
-            .collect(),
-    };
-    let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    std::fs::write(path, content).map_err(|e| e.to_string())
-}
-
-pub fn import_session(path: &std::path::Path) -> Result<Session, String> {
-    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let data: SessionData = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    let messages: Vec<Message> = data
-        .messages
-        .into_iter()
-        .map(|m| {
-            let mut msg = Message {
-                role: if m.role == "user" {
-                    Role::User
-                } else {
-                    Role::Agent
-                },
-                content: m.content,
-                blocks: m.blocks.unwrap_or_default(),
-                timestamp: Instant::now(),
-                parsed: vec![],
-                cached_height: None,
-                is_error: false,
-                lines: Vec::new(),
-            };
-            msg.prepare();
-            msg
-        })
-        .collect();
-    Ok(Session {
-        id: data.id,
-        title: data.title,
-        category: data.category.unwrap_or_else(|| "engineering".to_string()),
-        messages,
-        updated_at: data.updated_at,
-        turn_heights: vec![],
-    })
-}
-
 pub fn new_session(category: &str, index: usize) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
     let base = match category {

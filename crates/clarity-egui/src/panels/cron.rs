@@ -2,6 +2,7 @@ use crate::App;
 use clarity_core::background::cron::CronTask;
 
 /// Actions emitted by the cron section UI.
+#[allow(dead_code)]
 pub enum CronSectionAction {
     None,
     Delete(String),
@@ -9,6 +10,7 @@ pub enum CronSectionAction {
 }
 
 /// Render Cron Jobs as a collapsible section inside the left sidebar.
+#[allow(dead_code)]
 pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme;
     let task_count = app.cron_store.tasks.len();

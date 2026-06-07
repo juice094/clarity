@@ -12,6 +12,7 @@ use crate::ui::types::{ContentBlock, Message, Role, ToolCallInfo, ToolCallStatus
 // ============================================================================
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum CardStyle {
     Knowledge,
     Approval,
@@ -96,6 +97,7 @@ impl<'a> CollapsibleHeader<'a> {
     pub fn new(label: &'a str) -> Self {
         Self { label, is_loading: false, icon: None }
     }
+    #[allow(dead_code)]
     pub fn loading(mut self, v: bool) -> Self {
         self.is_loading = v;
         self
@@ -480,6 +482,7 @@ fn icon_button(ui: &mut egui::Ui, theme: &Theme, icon: &str, tooltip: &str) -> e
 // Thinking Block
 // ============================================================================
 
+#[allow(dead_code)]
 pub fn thinking_block(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -514,6 +517,7 @@ pub fn thinking_block(
 // Tool Group
 // ============================================================================
 
+#[allow(dead_code)]
 pub fn tool_group(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -535,6 +539,7 @@ pub fn tool_group(
     });
 }
 
+#[allow(dead_code)]
 fn render_tool_row(ui: &mut egui::Ui, theme: &Theme, tool: &ToolCallInfo, is_last: bool) {
     ui.horizontal(|ui| {
         let rail_width = 20.0;
@@ -579,6 +584,7 @@ fn render_tool_row(ui: &mut egui::Ui, theme: &Theme, tool: &ToolCallInfo, is_las
     }
 }
 
+#[allow(dead_code)]
 fn tool_status_icon(tools: &[ToolCallInfo]) -> &str {
     if tools.iter().any(|t| t.inferred_status() == ToolCallStatus::Running) {
         crate::theme::ICON_HOURGLASS
@@ -594,6 +600,7 @@ fn tool_status_icon(tools: &[ToolCallInfo]) -> &str {
 // ============================================================================
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum SubagentStatus {
     Pending,
     Running,
@@ -601,12 +608,14 @@ pub enum SubagentStatus {
     Failed,
 }
 
+#[allow(dead_code)]
 pub struct SubagentStep<'a> {
     pub ordinal: usize,
     pub description: &'a str,
     pub status: SubagentStatus,
 }
 
+#[allow(dead_code)]
 pub fn subagent_group(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -629,6 +638,7 @@ pub fn subagent_group(
     });
 }
 
+#[allow(dead_code)]
 fn render_subagent_row(ui: &mut egui::Ui, theme: &Theme, step: &SubagentStep<'_>) {
     let (status_text, status_color) = match step.status {
         SubagentStatus::Pending => ("Pending", theme.text_dim),

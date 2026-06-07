@@ -23,7 +23,6 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let max_w = app.ui_store.content_max_width;
     let active_id = app.session_store.active_session_id.clone();
     let scroll_y = app.ui_store.last_scroll_offset;
-    let mut configure_clicked = false;
     let agent_turn_style = app.ui_store.agent_turn_style;
     let agent_turn_glass = app.ui_store.agent_turn_glass;
     let kimi_conversation_style = app.ui_store.kimi_conversation_style;
@@ -706,13 +705,6 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         app.chat_store.stick_to_bottom = false;
     }
     app.ui_store.last_scroll_offset = output.state.offset.y;
-    if configure_clicked {
-        app.settings_store.settings_open = true;
-        app.settings_store.settings_edit = {
-            let guard = app.state.cached_settings.lock();
-            guard.clone()
-        };
-    }
 }
 
 // ============================================================================
