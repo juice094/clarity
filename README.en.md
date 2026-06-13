@@ -3,6 +3,8 @@
 [![CI](https://github.com/juice094/clarity/actions/workflows/ci.yml/badge.svg)](https://github.com/juice094/clarity/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-purple.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-orange?logo=rust)](https://www.rust-lang.org)
+[![GitHub release](https://img.shields.io/github/v/release/juice094/clarity?logo=github)](https://github.com/juice094/clarity/releases)
+[![Issues](https://img.shields.io/github/issues/juice094/clarity)](https://github.com/juice094/clarity/issues)
 
 > **Local-first AI Agent runtime in Rust.**  
 > Multi-model, MCP tool ecosystem, and data sovereignty.
@@ -89,3 +91,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
 [GNU Affero General Public License v3.0 (or later)](LICENSE) — Copyright (c) 2026 juice094 and contributors.
 
 See the top-level [`README.md`](README.md) §License for the network-copyleft details.
+
+---
+
+## Community & Support
+
+- **Bug reports**: [GitHub Issues](https://github.com/juice094/clarity/issues) — use the bug template.
+- **Feature discussions**: [GitHub Discussions](https://github.com/juice094/clarity/discussions).
+- **Security issues**: Please see [SECURITY.md](SECURITY.md) and report privately.
+- **Contributing**: Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

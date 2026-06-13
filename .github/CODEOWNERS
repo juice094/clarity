@@ -1,0 +1,15 @@
+# Global owner
+* @juice094
+
+# Core architecture and protocol changes
+/crates/clarity-core/ @juice094
+/crates/clarity-contract/ @juice094
+/crates/clarity-wire/ @juice094
+
+# CI/CD and repository configuration
+/.github/ @juice094
+/.cargo/ @juice094
+
+# Documentation
+/docs/ @juice094
+/*.md @juice094
