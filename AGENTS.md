@@ -94,7 +94,8 @@ cargo run -p clarity-headless -- --prompt "Hello" --provider local --output json
 正在进行 **Pretext 单页面 / 三栏布局迁移**（详见 [`docs/planning/plans/clarity-egui-pretext-layout-migration.md`](docs/planning/plans/clarity-egui-pretext-layout-migration.md)）。
 
 - **Phase A 已完成**：新增 `LeftRailSection` / `RightRailSection` / `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed` 并将旧 sidebar 折叠状态迁移到 `view_state.left_rail_expanded`；`clarity-egui` 新增 `render_left_rail` / `render_main_stage` / `render_right_rail`，形成三栏外壳。
-- **Phase B/C 待进行**：右 rail 真实内容卡片、左侧边栏双层化、插件面板、pretext 文本测量接入。
+- **Phase B 已完成**：新增 `panels/right_rail/` 模块，实现 `StatusCard`、`ToolsCard`、`SubagentCard`、`MemoryCard`；`task` / `team` 面板逻辑迁移到右 rail 卡片；`legacy/task.rs` 与 `legacy/team.rs` 已删除；Skill / MCP 仍保留为模态弹窗，ToolsCard 提供 Manage / Configure 入口。
+- **Phase C/D 待进行**：左侧边栏双层化/flatten、插件面板、pretext 文本测量接入。
 
 变更涉及 `clarity-core::ui::ViewState` 和 `clarity-egui` 渲染层；跨前端类型变更已同步导出到 `clarity_core::ui`。
 

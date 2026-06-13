@@ -82,10 +82,20 @@ The computed `LayoutMetrics` (`left_rail_w`, `left_panel_w`, `right_rail_w`, `co
 - Add a right-rail scaffold with section toggles and placeholder cards.
 - Preserve all existing panels: the old sidebar is still the expanded session list; workspace still renders file previews; modals remain unchanged.
 
-### 6. Phase B/C scope (pending)
+### 6. Phase B scope (implemented)
 
-- Populate right-rail cards (`StatusCard`, `ToolsCard`, `SubagentCard`, `MemoryCard`) with real content migrated from legacy panels.
+- Create `panels/right_rail/` with `StatusCard`, `ToolsCard`, `SubagentCard`, `MemoryCard`.
+- `StatusCard`: agent status, gateway status, network banner, session token usage.
+- `ToolsCard`: skill summary + Manage button (opens Skill modal), MCP server/tool summary + Configure button (opens MCP modal).
+- `SubagentCard`: background task list (reuse `ui::task_panel`) with cancel/view-output handling, plus parallel batch progress.
+- `MemoryCard`: team list with run/delete actions migrated from `legacy/team.rs`.
+- Delete `panels/legacy/task.rs` and `panels/legacy/team.rs`; remove their re-exports and `render_team_panel` call from the shell.
+- `Skill` and `MCP` remain `ModalType` modals; the right rail provides entry points rather than replacing them.
+
+### 7. Phase C/D scope (pending)
+
 - Flatten the left sidebar into a native rail-expanded list (remove nested `SidePanel`).
+- Implement a real Plugins panel and migrate `Skill` / `MCP` modals into dedicated rail cards if UX review confirms.
 - Evaluate `pretext-rust` integration for CJK line breaking and rich inline items.
 
 ## Consequences

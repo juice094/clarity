@@ -181,7 +181,6 @@ impl App {
         self.render_safe(ctx, "subagent_view", |app, ctx| {
             app.render_subagent_view_modal(ctx)
         });
-        self.render_safe(ctx, "team", |app, ctx| app.render_team_panel(ctx));
         self.render_safe(ctx, "team_create", |app, ctx| {
             app.render_team_create_modal(ctx)
         });
@@ -427,19 +426,27 @@ impl App {
                 ui.separator();
                 ui.add_space(theme.space_8);
 
-                // Phase B will populate these cards with real content.
-                let placeholder = match self.view_state.right_rail {
-                    RightRailSection::Status => "Status card placeholder",
-                    RightRailSection::Tools => "Tool list placeholder",
-                    RightRailSection::Subagents => "Sub-agent progress placeholder",
-                    RightRailSection::Memory => "Memory / context placeholder",
-                    RightRailSection::None => "Select a section above",
-                };
-                ui.label(
-                    egui::RichText::new(placeholder)
-                        .size(theme.text_sm)
-                        .color(theme.text_dim),
-                );
+                match self.view_state.right_rail {
+                    RightRailSection::Status => {
+                        crate::panels::right_rail::render_status_card(self, ui)
+                    }
+                    RightRailSection::Tools => {
+                        crate::panels::right_rail::render_tools_card(self, ui)
+                    }
+                    RightRailSection::Subagents => {
+                        crate::panels::right_rail::render_subagent_card(self, ui)
+                    }
+                    RightRailSection::Memory => {
+                        crate::panels::right_rail::render_memory_card(self, ui)
+                    }
+                    RightRailSection::None => {
+                        ui.label(
+                            egui::RichText::new("Select a section above")
+                                .size(theme.text_sm)
+                                .color(theme.text_dim),
+                        );
+                    }
+                }
             });
     }
 
@@ -1164,10 +1171,6 @@ impl App {
 
     fn render_subagent_view_modal(&mut self, ctx: &egui::Context) {
         panels::subagent_view::render_subagent_view_modal(self, ctx);
-    }
-
-    fn render_team_panel(&mut self, ctx: &egui::Context) {
-        panels::team::render_team_panel(self, ctx);
     }
 
     fn render_team_create_modal(&mut self, ctx: &egui::Context) {

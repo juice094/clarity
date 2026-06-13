@@ -23,7 +23,7 @@ tags: [planning, status, current-phase]
 - **Gray Migration 通道层**：ZeroClaw WeChat iLink 已移植至 `clarity-channels::zeroclaw`；Gateway 已切至 DeepSeek `deepseek-v4-pro`。
 - **Provider/Secret 体系**：Stage A/B/C 已完成，支持 `enc2:` 加密 key、`models.toml` per-alias 配置、`ReliableProvider` 链式 failover、`runtime_router` 与 OAuth device flow。
 - **egui 模块整理**：ViewState 单源化、panels/ 目录重组、widget 提取、design system 落地、layout shell 接入点。
-- **S6 Pretext 三栏布局 Phase A**：新增 `LeftRailSection` / `RightRailSection` 与 `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed`；`clarity-egui` 形成左 icon rail + 中主舞台 + 右工具 rail 的单页面外壳。
+- **S6 Pretext 三栏布局 Phase A/B**：新增 `LeftRailSection` / `RightRailSection` 与 `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed`；`clarity-egui` 形成左 icon rail + 中主舞台 + 右工具 rail 的单页面外壳；右 rail 卡片（Status / Tools / Subagents / Memory）已接入真实内容，`legacy/task.rs` 与 `legacy/team.rs` 已迁移删除。
 
 ---
 
