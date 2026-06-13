@@ -1,0 +1,69 @@
+name: Bug 报告
+description: 报告 Clarity 运行或构建中的问题
+title: '[bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢报告问题。请尽量填写以下信息，便于我们快速定位。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 运行 `cargo run -p clarity-headless -- --version` 或查看 Cargo.toml
+      placeholder: '例如：v0.3.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: entry
+    attributes:
+      label: 入口 / Crate
+      options:
+        - clarity-egui
+        - clarity-tui
+        - clarity-gateway
+        - clarity-headless
+        - clarity-claw
+        - clarity-core
+        - clarity-llm
+        - clarity-memory
+        - clarity-mcp
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 最小可复现步骤，包含命令或 UI 操作
+      placeholder: |
+        1. 运行 ...
+        2. 点击 ...
+        3. 出现 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: false
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 包含完整错误日志、截图或 traceback
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境信息
+      description: OS、Rust 版本、是否启用 CUDA 等
+      placeholder: |
+        - OS: Windows 11 / Ubuntu 24.04 / macOS 15
+        - Rust: 1.85.0
+        - Features: local-llm
+    validations:
+      required: false

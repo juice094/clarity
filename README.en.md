@@ -27,10 +27,12 @@ crates/
 ├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand channel
 ├── clarity-memory     # BM25 + vector hybrid search, chunking, compaction
 ├── clarity-mcp        # MCP client (stdio / SSE / HTTP / WebSocket)
-├── clarity-llm        # LLM provider abstraction + 6 built-ins + Candle GGUF
+├── clarity-llm        # LLM provider abstraction + built-ins + Candle GGUF
 ├── clarity-tools      # Built-in tool library (file/shell/web/devkit)
+├── clarity-channels   # External message channels
 ├── clarity-subagents  # Sub-agent executor + parallel scheduler
 ├── clarity-core       # Agent loop, Approval, Skill, MCP integration
+├── clarity-telemetry  # Unified telemetry
 ├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store
 ├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack
 ├── clarity-tui        # ratatui terminal interface
@@ -59,21 +61,28 @@ cargo run --package clarity-tui
 cargo run --package clarity-gateway
 ```
 
+No API key? Put a `.gguf` model in `~/models/` and select **Local (GGUF)** in settings.
+
 ## Development
 
 ```bash
-cargo test --workspace --lib
-cargo clippy --workspace --lib --bins --tests -- -D warnings
+cargo test --workspace --lib --exclude clarity-slint
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+cargo fmt --all -- --check
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Code-accurate architecture reference |
+| [`docs/architecture/architecture-positioning.md`](docs/architecture/architecture-positioning.md) | Project positioning and ecosystem |
 | [`AGENTS.md`](AGENTS.md) | Agent development guide |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Future direction |
+| [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md) | Future direction |
+| [`docs/planning/PROJECT_STATUS.md`](docs/planning/PROJECT_STATUS.md) | Current status and metrics |
 
 ## License
 

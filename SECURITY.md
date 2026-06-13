@@ -140,3 +140,12 @@ max_snapshots = 10              # Limit side-repo growth
 - 定期运行 `cargo audit` 跟踪 RUSTSEC 安全公告。
 - `Cargo.toml` 中标记了未维护依赖，按滚动计划解决。
 - 二进制发布通过 GitHub Actions 构建，工作流定义可复现（`.github/workflows/`）。
+
+### 更多安全文档
+
+| 文档 | 说明 |
+|------|------|
+| [`docs/security/THREAT_MODEL.md`](docs/security/THREAT_MODEL.md) | STRIDE 威胁模型 |
+| [`docs/security/risk-assessment.md`](docs/security/risk-assessment.md) | 技术风险评估 |
+| [`docs/security/PRIVACY_REVIEW.md`](docs/security/PRIVACY_REVIEW.md) | 隐私整改记录 |
+| [`docs/security/operations.md`](docs/security/operations.md) | 安全与运维细则 |

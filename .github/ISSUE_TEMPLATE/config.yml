@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞报告
+    url: https://github.com/juice094/clarity/security/advisories/new
+    about: 请通过 GitHub Security Advisory 私密报告安全漏洞。
+  - name: 讨论与问答
+    url: https://github.com/juice094/clarity/discussions
+    about: 使用疑问、架构讨论、非缺陷反馈请转到 Discussions。

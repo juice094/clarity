@@ -1,11 +1,12 @@
 /target
 *.db
 *.db-journal
+*.log
+*.tmp
+*.bak
 sessions/
 agents/
 .agents/
-.DS_Store
-*.log
 config.yaml
 .clarity/user_config.json
 hello.rs
@@ -14,19 +15,13 @@ subagent_context/
 tasks/
 .clarity/tasks/
 .clarity/devbase/
-
-
 **/.clarity/
 **/.clarity/**
-
 experiments/**/target/
 
-
-# Claude Code local config
-.claude/
-
-# Kimi AI local config
-.kimi/
+# Editor / personal workspace metadata
+.obsidian/
+docs/.obsidian/
 
 # Personal AI assistant instruction files
 CLAUDE.md

@@ -11,29 +11,35 @@ Thank you for considering a contribution. This document is the single source of 
 ```
 crates/
 ├── clarity-contract   # Shared trait/types contract: LlmProvider, Tool,
-│                      # AgentError, FederationMessage, CapabilityToken.
+│                      # AgentError, FederationMessage.
 │                      # Rule: ZERO internal dependencies.
 ├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand channel.
 ├── clarity-memory     # BM25 + vector hybrid search, chunking, compaction.
 ├── clarity-mcp        # MCP client — stdio / SSE / HTTP / WebSocket transports.
 ├── clarity-llm        # LLM provider abstraction + built-in providers + Candle GGUF.
 ├── clarity-tools      # Built-in tool library (file / shell / web / devkit / …).
+├── clarity-secrets    # ChaCha20-Poly1305 encrypted secret storage.
+├── clarity-channels   # External message channels (Discord/Slack/Telegram/Webhook/WeChat).
 ├── clarity-subagents  # Sub-agent executor + parallel scheduler.
 ├── clarity-core       # Agent loop (ReAct/Plan), Approval, Skill, MCP integration.
 │                      # Rule: NO dependencies on any frontend or network crate.
+├── clarity-telemetry  # WideEvent + metrics + traces + config audit.
 ├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store.
 ├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack, pure Rust.
 ├── clarity-tui        # ratatui terminal interface.
 ├── clarity-claw       # System-tray background monitor (tao + tray-icon).
-└── clarity-headless   # Headless CLI for scripts / CI.
+├── clarity-headless   # Headless CLI for scripts / CI.
+├── clarity-slint      # Experimental Slint frontend (excluded from default CI).
+└── clarity-tauri      # Archived frontend (excluded from workspace).
 ```
 
 **Dependency direction**
 
 ```
-contract  ←  {wire, memory, mcp, llm, tools}  ←  core  ←  {gateway, egui, tui, claw, headless}
-                                                   ↑
-                                            subagents (consumes core)
+contract ← {wire, memory, mcp, llm, tools, channels} ← core ← {gateway, egui, tui, claw, headless}
+                                                          ↑
+                                                    subagents (consumes core)
+                                                    telemetry (cross-cutting)
 ```
 
 **Forbidden patterns**:
@@ -79,7 +85,7 @@ cargo check -p clarity-core --features local-llm-cuda
 cargo run -p clarity-egui --features cuda
 ```
 
-See [`AGENTS.md`](AGENTS.md) for full CUDA setup instructions.
+See [`docs/development/setup.md`](docs/development/setup.md) for full build commands and CUDA setup.
 
 ---
 
@@ -229,7 +235,18 @@ If any answer is "no", the module is too coupled. Refactor first, feature second
 
 ---
 
-## 9. Contributor License Agreement (CLA)
+## 9. Further Reading
+
+| Document | Purpose |
+|----------|---------|
+| [`AGENTS.md`](AGENTS.md) | Agent development context, environment variables, architecture invariants |
+| [`docs/development/setup.md`](docs/development/setup.md) | Build, test, lint, and run commands |
+| [`docs/development/CODE-CHANGE-PRINCIPLES.md`](docs/development/CODE-CHANGE-PRINCIPLES.md) | PR self-checklist (P1–P7) |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Code-accurate architecture reference |
+| [`docs/planning/ROADMAP.md`](docs/planning/ROADMAP.md) | Future direction and milestones |
+| [`SECURITY.md`](SECURITY.md) | Security policy and vulnerability reporting |
+
+## 10. Contributor License Agreement (CLA)
 
 By submitting a pull request or otherwise contributing code, documentation, or other materials to Clarity, you agree to the following:
 

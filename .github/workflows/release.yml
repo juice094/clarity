@@ -139,6 +139,12 @@ jobs:
           name: clarity-linux
           path: artifacts/linux
 
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum windows/clarity-egui.exe windows/clarity-egui.msi linux/clarity-egui > checksums.sha256
+          cat checksums.sha256
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -146,5 +152,6 @@ jobs:
             artifacts/windows/clarity-egui.exe
             artifacts/windows/clarity-egui.msi
             artifacts/linux/clarity-egui
+            artifacts/checksums.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
