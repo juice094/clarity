@@ -169,7 +169,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
 pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
-        if app.ui_store.sidebar_collapsed
+        if !app.view_state.left_rail_expanded
             && crate::widgets::icon_button_toolbar(
                 ui,
                 crate::theme::ICON_SEND,
@@ -178,7 +178,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
             )
             .clicked()
         {
-            app.ui_store.sidebar_collapsed = false;
+            app.view_state.left_rail_expanded = true;
         }
     });
     ui.add_space(app.ui_store.theme.space_4);

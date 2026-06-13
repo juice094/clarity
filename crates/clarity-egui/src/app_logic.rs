@@ -315,7 +315,6 @@ impl App {
                 create_priority: 2,
             },
             ui_store: crate::stores::UiStore {
-                sidebar_collapsed: false,
                 network_banner: None,
                 frame_count: 0,
                 last_fps_time: cc.egui_ctx.input(|i| i.time),
@@ -436,7 +435,12 @@ impl App {
             last_tray_status: None,
             last_frame_width: None,
             command_palette: crate::widgets::command_palette::CommandPalette::new(),
-            view_state: clarity_core::ui::ViewState::new(),
+            view_state: {
+                let mut vs = clarity_core::ui::ViewState::new();
+                vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
+                vs.left_rail_expanded = true;
+                vs
+            },
         };
         app.refresh_tasks();
         Ok(app)

@@ -7,7 +7,8 @@ use std::time::Instant;
 
 /// Holds ui UI state.
 pub struct UiStore {
-    pub sidebar_collapsed: bool,
+    /// Deprecated: replaced by `view_state.left_rail_expanded` in S6.
+    /// Kept as a placeholder comment; field removed to enforce single source of truth.
     pub network_banner: Option<String>,
     pub frame_count: u64,
     pub last_fps_time: f64,

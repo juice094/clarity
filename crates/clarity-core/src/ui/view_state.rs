@@ -275,6 +275,44 @@ impl PanelExpansion {
     }
 }
 
+/// Left rail section for the Pretext single-page / three-column layout.
+///
+/// Added in S6 (2026-06-13). The icon rail is always visible; this enum
+/// controls which expanded list (if any) is shown next to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LeftRailSection {
+    /// No expanded list; only the icon rail is shown.
+    #[default]
+    None,
+    /// Session / category list.
+    Sessions,
+    /// Plugin / extension list.
+    Plugins,
+    /// Workspace / file preview list.
+    Workspace,
+}
+
+/// Right rail section for the Pretext single-page / three-column layout.
+///
+/// Added in S6 (2026-06-13). The right rail can be collapsed entirely; when
+/// visible, it shows one of the utility cards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RightRailSection {
+    /// Right rail is collapsed.
+    #[default]
+    None,
+    /// System + Agent status.
+    Status,
+    /// Tool list.
+    Tools,
+    /// Sub-agent progress.
+    Subagents,
+    /// Memory / context.
+    Memory,
+}
+
 /// Physical panel identifier — used by [`FocusScope::Panel`] to discriminate
 /// which panel currently owns keyboard input.
 ///
@@ -399,6 +437,18 @@ pub struct ViewState {
     /// Current keyboard focus scope.
     #[serde(default)]
     pub focus: FocusScope,
+    /// Pretext left rail section (S6).
+    #[serde(default)]
+    pub left_rail: LeftRailSection,
+    /// Whether the left expanded list is open (S6).
+    #[serde(default)]
+    pub left_rail_expanded: bool,
+    /// Pretext right rail section (S6).
+    #[serde(default)]
+    pub right_rail: RightRailSection,
+    /// Whether the right utility rail is visible (S6).
+    #[serde(default)]
+    pub right_rail_visible: bool,
 }
 
 impl ViewState {
@@ -464,6 +514,38 @@ impl ViewState {
     /// Returns true if a specific panel kind currently holds focus.
     pub fn is_focused(&self, panel: PanelKind) -> bool {
         matches!(self.focus, FocusScope::Panel(p) if p == panel)
+    }
+
+    /// Toggle a left rail section. Tapping the active section collapses it.
+    pub fn toggle_left_rail(&mut self, section: LeftRailSection) {
+        if self.left_rail == section && section != LeftRailSection::None {
+            self.left_rail = LeftRailSection::None;
+            self.left_rail_expanded = false;
+        } else {
+            self.left_rail = section;
+            self.left_rail_expanded = true;
+        }
+    }
+
+    /// Toggle a right rail section. Tapping the active section collapses the rail.
+    pub fn toggle_right_rail(&mut self, section: RightRailSection) {
+        if self.right_rail == section && section != RightRailSection::None {
+            self.right_rail = RightRailSection::None;
+            self.right_rail_visible = false;
+        } else {
+            self.right_rail = section;
+            self.right_rail_visible = true;
+        }
+    }
+
+    /// Collapse the left expanded list while keeping the icon rail visible.
+    pub fn collapse_left_rail(&mut self) {
+        self.left_rail_expanded = false;
+    }
+
+    /// Collapse the right utility rail.
+    pub fn collapse_right_rail(&mut self) {
+        self.right_rail_visible = false;
     }
 }
 
@@ -577,6 +659,89 @@ mod tests {
     fn focus_scope_default_is_app() {
         let fs = FocusScope::default();
         assert_eq!(fs, FocusScope::App);
+    }
+
+    #[test]
+    fn left_rail_section_default_is_none() {
+        let s = LeftRailSection::default();
+        assert_eq!(s, LeftRailSection::None);
+        assert!(serde_json::to_string(&s).unwrap().contains("none"));
+    }
+
+    #[test]
+    fn right_rail_section_default_is_none() {
+        let s = RightRailSection::default();
+        assert_eq!(s, RightRailSection::None);
+        assert!(serde_json::to_string(&s).unwrap().contains("none"));
+    }
+
+    #[test]
+    fn toggle_left_rail_expands_and_collapses() {
+        let mut vs = ViewState::new();
+        assert_eq!(vs.left_rail, LeftRailSection::None);
+        assert!(!vs.left_rail_expanded);
+
+        vs.toggle_left_rail(LeftRailSection::Sessions);
+        assert_eq!(vs.left_rail, LeftRailSection::Sessions);
+        assert!(vs.left_rail_expanded);
+
+        vs.toggle_left_rail(LeftRailSection::Sessions);
+        assert_eq!(vs.left_rail, LeftRailSection::None);
+        assert!(!vs.left_rail_expanded);
+
+        vs.toggle_left_rail(LeftRailSection::Plugins);
+        assert_eq!(vs.left_rail, LeftRailSection::Plugins);
+        assert!(vs.left_rail_expanded);
+    }
+
+    #[test]
+    fn toggle_right_rail_expands_and_collapses() {
+        let mut vs = ViewState::new();
+        assert_eq!(vs.right_rail, RightRailSection::None);
+        assert!(!vs.right_rail_visible);
+
+        vs.toggle_right_rail(RightRailSection::Tools);
+        assert_eq!(vs.right_rail, RightRailSection::Tools);
+        assert!(vs.right_rail_visible);
+
+        vs.toggle_right_rail(RightRailSection::Tools);
+        assert_eq!(vs.right_rail, RightRailSection::None);
+        assert!(!vs.right_rail_visible);
+
+        vs.toggle_right_rail(RightRailSection::Memory);
+        assert_eq!(vs.right_rail, RightRailSection::Memory);
+        assert!(vs.right_rail_visible);
+    }
+
+    #[test]
+    fn collapse_helpers_sync_visibility_flags() {
+        let mut vs = ViewState::new();
+        vs.toggle_left_rail(LeftRailSection::Workspace);
+        vs.toggle_right_rail(RightRailSection::Status);
+
+        vs.collapse_left_rail();
+        assert!(!vs.left_rail_expanded);
+        assert_eq!(vs.left_rail, LeftRailSection::Workspace);
+
+        vs.collapse_right_rail();
+        assert!(!vs.right_rail_visible);
+        assert_eq!(vs.right_rail, RightRailSection::Status);
+    }
+
+    #[test]
+    fn rail_sections_roundtrip_through_json() {
+        let mut vs = ViewState::new();
+        vs.left_rail = LeftRailSection::Sessions;
+        vs.left_rail_expanded = true;
+        vs.right_rail = RightRailSection::Subagents;
+        vs.right_rail_visible = true;
+
+        let json = serde_json::to_string(&vs).unwrap();
+        let restored: ViewState = serde_json::from_str(&json).unwrap();
+        assert_eq!(vs.left_rail, restored.left_rail);
+        assert_eq!(vs.left_rail_expanded, restored.left_rail_expanded);
+        assert_eq!(vs.right_rail, restored.right_rail);
+        assert_eq!(vs.right_rail_visible, restored.right_rail_visible);
     }
 
     #[test]

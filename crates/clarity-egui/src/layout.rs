@@ -2,19 +2,23 @@
 //!
 //! This module decouples the hot-path `update()` from layout arithmetic,
 //! making the future single-page / three-column migration easier to reason about.
+//!
+//! S6 (Pretext Phase A): the shell is now organised as
+//!   [icon rail] [left expanded panel] [main stage] [right utility rail]
+//! with one-way responsive collapse rules.
 
 use crate::App;
-use clarity_core::ui::{AppView, SidePanel};
+use clarity_core::ui::SidePanel;
 
 /// Computed widths for the main screen regions.
 #[derive(Debug, Clone, Copy)]
 pub struct LayoutMetrics {
-    /// Current sidebar width (collapsed or expanded).
-    pub sidebar_w: f32,
-    /// Right-side workspace panel width.
-    pub workspace_w: f32,
-    /// Combined width of all right-side business panels (Dashboard / Team / Task).
-    pub right_panel_w: f32,
+    /// Width of the icon-only left rail.
+    pub left_rail_w: f32,
+    /// Width of the expanded list next to the icon rail (0 when collapsed).
+    pub left_panel_w: f32,
+    /// Width of the right utility rail (0 when collapsed).
+    pub right_rail_w: f32,
     /// Remaining width available for the main content area.
     pub content_w: f32,
 }
@@ -33,34 +37,50 @@ impl LayoutMetrics {
 /// ensures the chat/content area never drops below the configured minimum.
 pub fn update_and_measure(app: &mut App, ctx: &egui::Context) -> LayoutMetrics {
     apply_responsive_breakpoints(app, ctx);
-    let metrics = compute_metrics(app, ctx);
+
+    // Protect the main stage: if content is too narrow, sacrifice right rail first,
+    // then legacy right panels, then the left expanded list.
+    let mut metrics = compute_metrics(app, ctx);
     if metrics.content_too_narrow(app.ui_store.theme.content_min_width) {
-        // Collapse right business panels to protect the content area.
+        app.view_state.right_rail_visible = false;
         if matches!(
             app.view_state.right,
             Some(SidePanel::Team) | Some(SidePanel::Task)
         ) {
             app.view_state.right = None;
         }
+        metrics = compute_metrics(app, ctx);
+        if metrics.content_too_narrow(app.ui_store.theme.content_min_width) {
+            app.view_state.left_rail_expanded = false;
+            metrics = compute_metrics(app, ctx);
+        }
     }
-    compute_metrics(app, ctx)
+    metrics
 }
 
 /// One-way responsive collapse: shrink when window gets narrower, never auto-restore.
 fn apply_responsive_breakpoints(app: &mut App, ctx: &egui::Context) {
     let current_width = ctx.screen_rect().width();
     if let Some(last_width) = app.last_frame_width {
+        // Below wide breakpoint: hide the right utility rail.
+        if last_width >= app.ui_store.theme.breakpoint_wide
+            && current_width < app.ui_store.theme.breakpoint_wide
+        {
+            app.view_state.right_rail_visible = false;
+        }
+        // Below medium breakpoint: collapse legacy right panels and left expanded list.
         if last_width >= app.ui_store.theme.breakpoint_medium
             && current_width < app.ui_store.theme.breakpoint_medium
         {
-            // Dashboard is controlled by `view_state.main` (AppView), not right panel.
-            // Team / Task right panels are collapsed via `view_state.right`.
             app.view_state.right = None;
+            app.view_state.left_rail_expanded = false;
         }
+        // Below compact breakpoint: keep only the icon rail and main stage.
         if last_width >= app.ui_store.theme.breakpoint_compact
             && current_width < app.ui_store.theme.breakpoint_compact
         {
-            app.ui_store.sidebar_collapsed = true;
+            app.view_state.left_rail_expanded = false;
+            app.view_state.right_rail_visible = false;
         }
     }
     app.last_frame_width = Some(current_width);
@@ -69,34 +89,32 @@ fn apply_responsive_breakpoints(app: &mut App, ctx: &egui::Context) {
 /// Compute region widths from current view state.
 fn compute_metrics(app: &App, ctx: &egui::Context) -> LayoutMetrics {
     let current_width = ctx.screen_rect().width();
-    let sidebar_w = if app.ui_store.sidebar_collapsed {
-        app.ui_store.theme.size_sidebar_collapsed
-    } else {
+    let left_rail_w = app.ui_store.theme.size_sidebar_collapsed;
+    let left_panel_w = if app.view_state.left_rail_expanded {
         app.ui_store.theme.size_sidebar
+    } else {
+        0.0
     };
-    let workspace_w = app.ui_store.theme.size_workspace;
-    let dashboard_w = if app.view_state.main == AppView::Dashboard {
+    let right_rail_w = if app.view_state.right_rail_visible {
         app.ui_store.theme.size_panel_right
     } else {
         0.0
     };
-    let team_w = if app.view_state.right == Some(SidePanel::Team) {
-        app.ui_store.theme.size_panel_right
-    } else {
-        0.0
+    // Dashboard as a main view still occupies the center stage; legacy right
+    // panels are layered on top and measured separately so the content guard
+    // can collapse them independently.
+    let legacy_right_w = match app.view_state.right {
+        Some(SidePanel::Team) | Some(SidePanel::Task) | Some(SidePanel::Dashboard) => {
+            app.ui_store.theme.size_panel_right
+        }
+        _ => 0.0,
     };
-    let task_w = if app.view_state.right == Some(SidePanel::Task) {
-        app.ui_store.theme.size_panel_right
-    } else {
-        0.0
-    };
-    let right_panel_w = dashboard_w + team_w + task_w;
-    let content_w = current_width - sidebar_w - workspace_w - right_panel_w;
+    let content_w = current_width - left_rail_w - left_panel_w - right_rail_w - legacy_right_w;
 
     LayoutMetrics {
-        sidebar_w,
-        workspace_w,
-        right_panel_w,
+        left_rail_w,
+        left_panel_w,
+        right_rail_w,
         content_w,
     }
 }

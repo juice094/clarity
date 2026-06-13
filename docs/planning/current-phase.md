@@ -23,6 +23,7 @@ tags: [planning, status, current-phase]
 - **Gray Migration 通道层**：ZeroClaw WeChat iLink 已移植至 `clarity-channels::zeroclaw`；Gateway 已切至 DeepSeek `deepseek-v4-pro`。
 - **Provider/Secret 体系**：Stage A/B/C 已完成，支持 `enc2:` 加密 key、`models.toml` per-alias 配置、`ReliableProvider` 链式 failover、`runtime_router` 与 OAuth device flow。
 - **egui 模块整理**：ViewState 单源化、panels/ 目录重组、widget 提取、design system 落地、layout shell 接入点。
+- **S6 Pretext 三栏布局 Phase A**：新增 `LeftRailSection` / `RightRailSection` 与 `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed`；`clarity-egui` 形成左 icon rail + 中主舞台 + 右工具 rail 的单页面外壳。
 
 ---
 
@@ -30,7 +31,7 @@ tags: [planning, status, current-phase]
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1087 | 0 | 8 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1093 | 0 | 8 |
 | `cargo test --workspace --bins --exclude clarity-slint` | 139 | 0 | 0 |
 | `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
 | `cargo test -p clarity-integration-tests --lib` | 16 | 0 | 0 |

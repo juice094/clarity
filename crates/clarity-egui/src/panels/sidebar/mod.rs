@@ -4,7 +4,7 @@ pub mod subagent_progress;
 use crate::App;
 
 pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
-    if app.ui_store.sidebar_collapsed {
+    if !app.view_state.left_rail_expanded {
         return;
     }
     let frame_fill = app.ui_store.theme.bg;
@@ -46,7 +46,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         .on_hover_text("Collapse sidebar")
                         .clicked()
                         {
-                            app.ui_store.sidebar_collapsed = true;
+                            app.view_state.left_rail_expanded = false;
                         }
 
                         // New session button (Kimi-style prominent action)

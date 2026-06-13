@@ -89,11 +89,20 @@ cargo run -p clarity-headless -- --prompt "Hello" --provider local --output json
 
 详细命令、Feature、CUDA 构建见 [`docs/development/setup.md`](docs/development/setup.md)。
 
+### 当前工作（S6）
+
+正在进行 **Pretext 单页面 / 三栏布局迁移**（详见 [`docs/planning/plans/clarity-egui-pretext-layout-migration.md`](docs/planning/plans/clarity-egui-pretext-layout-migration.md)）。
+
+- **Phase A 已完成**：新增 `LeftRailSection` / `RightRailSection` / `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed` 并将旧 sidebar 折叠状态迁移到 `view_state.left_rail_expanded`；`clarity-egui` 新增 `render_left_rail` / `render_main_stage` / `render_right_rail`，形成三栏外壳。
+- **Phase B/C 待进行**：右 rail 真实内容卡片、左侧边栏双层化、插件面板、pretext 文本测量接入。
+
+变更涉及 `clarity-core::ui::ViewState` 和 `clarity-egui` 渲染层；跨前端类型变更已同步导出到 `clarity_core::ui`。
+
 ### 当前测试基线
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1087 | 0 | 8 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1093 | 0 | 8 |
 | `cargo test --workspace --bins --exclude clarity-slint` | 139 | 0 | 0 |
 | `cargo test -p clarity-integration-tests --lib` | 16 | 0 | 0 |
 | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |

@@ -144,43 +144,24 @@ impl App {
 
     /// Orchestrates the full layout shell.
     ///
-    /// This is the single entry point for all chrome, main views, overlays and
-    /// modals. Keeping it isolated makes it easy to swap in the future
-    /// single-page/three-column layout without touching frame-level logic.
+    /// S6 (Pretext Phase A): the shell is now organised as a single-page
+    /// three-column layout:
+    ///   [left icon rail + expanded list] [main stage] [right utility rail]
+    /// The titlebar, input bar, overlays and modals are rendered on top.
     fn render_layout_shell(&mut self, ctx: &egui::Context) {
         // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
-        self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
+        self.render_safe(ctx, "left_rail", |app, ctx| app.render_left_rail(ctx));
 
-        // Workspace: only render when window is wide enough to avoid three-column crowding.
-        let screen_w = ctx.screen_rect().width();
-        if screen_w >= self.ui_store.theme.breakpoint_medium || self.ui_store.preview_item.is_some()
-        {
-            self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
-        }
+        // Input bar must be declared before the central/main stage so egui
+        // reserves the correct bottom area.
         self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
 
-        // ── Main view (mutually exclusive) ──
-        match self.view_state.main {
-            clarity_core::ui::AppView::Chat => {
-                self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
-            }
-            clarity_core::ui::AppView::Settings => {
-                self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
-            }
-            clarity_core::ui::AppView::Dashboard => {
-                self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
-            }
-            clarity_core::ui::AppView::Gantt => {
-                self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
-            }
-            clarity_core::ui::AppView::TaskBoard => {
-                self.render_safe(ctx, "task_board", |app, ctx| app.render_task_board(ctx));
-            }
-            clarity_core::ui::AppView::Work => {
-                self.render_safe(ctx, "work", |app, ctx| app.render_work_panel(ctx));
-            }
-        }
+        // ── Main stage (mutually exclusive) ──
+        self.render_safe(ctx, "main_stage", |app, ctx| app.render_main_stage(ctx));
+
+        // ── Right utility rail ──
+        self.render_safe(ctx, "right_rail", |app, ctx| app.render_right_rail(ctx));
 
         // ── Overlay panels ──
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
@@ -217,6 +198,249 @@ impl App {
         self.render_safe(ctx, "resize", |app, ctx| {
             app.handle_window_resize(ctx);
         });
+    }
+
+    /// Render the left icon rail and, when expanded, the associated list panel.
+    fn render_left_rail(&mut self, ctx: &egui::Context) {
+        let theme = self.ui_store.theme.clone();
+
+        // ── Icon rail (always visible) ──
+        egui::SidePanel::left("left_rail")
+            .exact_width(theme.size_sidebar_collapsed)
+            .resizable(false)
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .fill(theme.surface)
+                    .stroke(egui::Stroke::NONE)
+                    .inner_margin(egui::Margin::same(6)),
+            )
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(theme.space_12);
+
+                    let rail_btn = |ui: &mut egui::Ui, icon: &str, active: bool, tooltip: &str| {
+                        let (fg, bg) = if active {
+                            (theme.text, theme.surface_strong)
+                        } else {
+                            (theme.text_dim, theme.surface)
+                        };
+                        ui.add_sized(
+                            egui::vec2(theme.size_sidebar_collapsed - 12.0, 32.0),
+                            egui::Button::new(
+                                egui::RichText::new(icon).size(theme.text_base).color(fg),
+                            )
+                            .fill(bg)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                        )
+                        .on_hover_text(tooltip)
+                    };
+
+                    use clarity_core::ui::LeftRailSection;
+                    if rail_btn(
+                        ui,
+                        crate::theme::ICON_CHAT,
+                        self.view_state.left_rail == LeftRailSection::Sessions,
+                        "Sessions",
+                    )
+                    .clicked()
+                    {
+                        self.view_state.toggle_left_rail(LeftRailSection::Sessions);
+                    }
+                    ui.add_space(theme.space_8);
+                    if rail_btn(
+                        ui,
+                        crate::theme::ICON_FILE,
+                        self.view_state.left_rail == LeftRailSection::Workspace,
+                        "Workspace",
+                    )
+                    .clicked()
+                    {
+                        self.view_state.toggle_left_rail(LeftRailSection::Workspace);
+                    }
+                    ui.add_space(theme.space_8);
+                    if rail_btn(
+                        ui,
+                        crate::theme::ICON_BOOK,
+                        self.view_state.left_rail == LeftRailSection::Plugins,
+                        "Plugins",
+                    )
+                    .clicked()
+                    {
+                        self.view_state.toggle_left_rail(LeftRailSection::Plugins);
+                    }
+                });
+            });
+
+        // ── Expanded list panel (conditional) ──
+        // Phase A scaffold: reuse the existing sidebar/workspace panels as the
+        // expanded content. Phase C will flatten these into native rail sections.
+        if self.view_state.left_rail_expanded {
+            match self.view_state.left_rail {
+                clarity_core::ui::LeftRailSection::Sessions => {
+                    self.render_sidebar(ctx);
+                }
+                clarity_core::ui::LeftRailSection::Workspace => {
+                    let screen_w = ctx.screen_rect().width();
+                    if screen_w >= theme.breakpoint_medium || self.ui_store.preview_item.is_some() {
+                        self.render_workspace_panel(ctx);
+                    }
+                }
+                _ => {
+                    // Plugins and other sections are placeholders for Phase B/C.
+                    egui::SidePanel::left("left_rail_plugins")
+                        .default_width(theme.size_sidebar)
+                        .min_width(180.0)
+                        .max_width(400.0)
+                        .resizable(true)
+                        .frame(
+                            egui::Frame::side_top_panel(&ctx.style())
+                                .fill(theme.bg)
+                                .stroke(egui::Stroke::NONE)
+                                .inner_margin(egui::Margin::symmetric(12, 16)),
+                        )
+                        .show(ctx, |ui| {
+                            ui.label(
+                                egui::RichText::new("Plugins")
+                                    .size(theme.text_base)
+                                    .color(theme.text_strong),
+                            );
+                            ui.add_space(theme.space_12);
+                            ui.label(
+                                egui::RichText::new("Plugin manager coming in Phase C.")
+                                    .size(theme.text_sm)
+                                    .color(theme.text_dim),
+                            );
+                        });
+                }
+            }
+        }
+    }
+
+    /// Render the main stage (mutually exclusive central view).
+    fn render_main_stage(&mut self, ctx: &egui::Context) {
+        match self.view_state.main {
+            clarity_core::ui::AppView::Chat => self.render_chat_area(ctx),
+            clarity_core::ui::AppView::Settings => self.render_settings_panel(ctx),
+            clarity_core::ui::AppView::Dashboard => self.render_dashboard_panel(ctx),
+            clarity_core::ui::AppView::Gantt => self.render_gantt_panel(ctx),
+            clarity_core::ui::AppView::TaskBoard => self.render_task_board(ctx),
+            clarity_core::ui::AppView::Work => self.render_work_panel(ctx),
+        }
+    }
+
+    /// Render the right utility rail (collapsible).
+    fn render_right_rail(&mut self, ctx: &egui::Context) {
+        if !self.view_state.right_rail_visible {
+            return;
+        }
+        let theme = self.ui_store.theme.clone();
+        egui::SidePanel::right("right_rail")
+            .default_width(theme.size_panel_right)
+            .min_width(180.0)
+            .max_width(360.0)
+            .resizable(true)
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .fill(theme.bg)
+                    .stroke(egui::Stroke::NONE)
+                    .inner_margin(egui::Margin::symmetric(12, 16)),
+            )
+            .show(ctx, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Tools")
+                            .size(theme.text_base)
+                            .color(theme.text_strong),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if crate::widgets::icon_button_toolbar(
+                            ui,
+                            crate::theme::ICON_X,
+                            theme.text_base,
+                            &theme,
+                        )
+                        .on_hover_text("Collapse right rail")
+                        .clicked()
+                        {
+                            self.view_state.right_rail_visible = false;
+                        }
+                    });
+                });
+                ui.add_space(theme.space_12);
+
+                use clarity_core::ui::RightRailSection;
+                let section_btn = |ui: &mut egui::Ui, label: &str, icon: &str, active: bool| {
+                    let (fg, bg) = if active {
+                        (theme.text, theme.surface_strong)
+                    } else {
+                        (theme.text_dim, theme.surface)
+                    };
+                    ui.add_sized(
+                        [ui.available_width(), 28.0],
+                        egui::Button::new(
+                            egui::RichText::new(format!("{}  {}", icon, label))
+                                .size(theme.text_sm)
+                                .color(fg),
+                        )
+                        .fill(bg)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    )
+                    .clicked()
+                };
+
+                if section_btn(
+                    ui,
+                    "Status",
+                    crate::theme::ICON_HOURGLASS,
+                    self.view_state.right_rail == RightRailSection::Status,
+                ) {
+                    self.view_state.toggle_right_rail(RightRailSection::Status);
+                }
+                if section_btn(
+                    ui,
+                    "Tools",
+                    crate::theme::ICON_SETTINGS,
+                    self.view_state.right_rail == RightRailSection::Tools,
+                ) {
+                    self.view_state.toggle_right_rail(RightRailSection::Tools);
+                }
+                if section_btn(
+                    ui,
+                    "Subagents",
+                    crate::theme::ICON_WRENCH,
+                    self.view_state.right_rail == RightRailSection::Subagents,
+                ) {
+                    self.view_state
+                        .toggle_right_rail(RightRailSection::Subagents);
+                }
+                if section_btn(
+                    ui,
+                    "Memory",
+                    crate::theme::ICON_BOOK,
+                    self.view_state.right_rail == RightRailSection::Memory,
+                ) {
+                    self.view_state.toggle_right_rail(RightRailSection::Memory);
+                }
+
+                ui.add_space(theme.space_16);
+                ui.separator();
+                ui.add_space(theme.space_8);
+
+                // Phase B will populate these cards with real content.
+                let placeholder = match self.view_state.right_rail {
+                    RightRailSection::Status => "Status card placeholder",
+                    RightRailSection::Tools => "Tool list placeholder",
+                    RightRailSection::Subagents => "Sub-agent progress placeholder",
+                    RightRailSection::Memory => "Memory / context placeholder",
+                    RightRailSection::None => "Select a section above",
+                };
+                ui.label(
+                    egui::RichText::new(placeholder)
+                        .size(theme.text_sm)
+                        .color(theme.text_dim),
+                );
+            });
     }
 
     /// Handle system tray events: show/hide window and menu actions.
@@ -303,8 +527,8 @@ impl App {
                 // 溢出保护：RIGHT zone 不得超过当前可用宽度的 45%，防止挤压 CENTER
                 let max_right = ui.available_width() * 0.45;
                 let right_w = right_w.min(max_right.max(180.0));
-                // LEFT zone 动态化：sidebar 折叠时需要 toggle + brand，否则仅 brand
-                let left_w = if self.ui_store.sidebar_collapsed {
+                // LEFT zone 动态化：左 rail 折叠时需要 toggle + brand，否则仅 brand
+                let left_w = if !self.view_state.left_rail_expanded {
                     theme.titlebar_left_w
                 } else {
                     68.0
@@ -319,7 +543,7 @@ impl App {
                         strip.cell(|ui| {
                             ui.set_min_height(theme.size_titlebar);
                             ui.horizontal_centered(|ui| {
-                                if self.ui_store.sidebar_collapsed {
+                                if !self.view_state.left_rail_expanded {
                                     if crate::widgets::icon_button_toolbar(
                                         ui,
                                         crate::theme::ICON_LIST,
@@ -329,7 +553,7 @@ impl App {
                                     .on_hover_text("Expand sidebar")
                                     .clicked()
                                     {
-                                        self.ui_store.sidebar_collapsed = false;
+                                        self.view_state.left_rail_expanded = true;
                                     }
                                     ui.add_space(8.0);
                                 }
@@ -833,7 +1057,7 @@ impl App {
                 true
             }
             ids::TOGGLE_SIDEBAR => {
-                self.ui_store.sidebar_collapsed = !self.ui_store.sidebar_collapsed;
+                self.view_state.left_rail_expanded = !self.view_state.left_rail_expanded;
                 true
             }
             ids::OPEN_SETTINGS => {
