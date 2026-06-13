@@ -1,6 +1,7 @@
-use crate::theme::Theme;
 use crate::App;
+use crate::theme::Theme;
 
+/// Renders the interface UI.
 pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
 

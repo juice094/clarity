@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the about UI.
 pub fn render_about(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
         ui.add_space(24.0);

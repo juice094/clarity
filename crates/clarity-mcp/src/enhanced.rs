@@ -8,12 +8,12 @@ use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{RwLock, oneshot};
 use tracing::{info, warn};
 
 // =============================================================================
@@ -26,35 +26,48 @@ use tracing::{info, warn};
 pub enum McpTransport {
     /// Stdio transport (local process)
     Stdio {
+        /// Command to execute.
         command: String,
+        /// Command-line arguments.
         #[serde(default)]
         args: Vec<String>,
+        /// Environment variables passed to the subprocess.
         #[serde(default)]
         env: HashMap<String, String>,
     },
     /// HTTP transport (POST requests)
     Http {
+        /// Endpoint URL.
         url: String,
+        /// Custom HTTP headers.
         #[serde(default)]
         headers: HashMap<String, String>,
+        /// Request timeout in seconds.
         #[serde(default = "default_timeout")]
         timeout_seconds: u64,
     },
     /// SSE transport (Server-Sent Events)
     Sse {
+        /// Endpoint URL.
         url: String,
+        /// Custom HTTP headers.
         #[serde(default)]
         headers: HashMap<String, String>,
+        /// Request timeout in seconds.
         #[serde(default = "default_timeout")]
         timeout_seconds: u64,
+        /// Delay before reconnecting after a dropped stream, in milliseconds.
         #[serde(default = "default_reconnect_delay")]
         reconnect_delay_ms: u64,
     },
     /// WebSocket transport (bidirectional JSON-RPC over WS)
     WebSocket {
+        /// Endpoint URL.
         url: String,
+        /// Custom HTTP headers for the handshake.
         #[serde(default)]
         headers: HashMap<String, String>,
+        /// Request timeout in seconds.
         #[serde(default = "default_timeout")]
         timeout_seconds: u64,
     },
@@ -70,22 +83,33 @@ fn default_reconnect_delay() -> u64 {
 /// OAuth 2.0 configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OAuthConfig {
+    /// OAuth client identifier.
     pub client_id: String,
+    /// OAuth client secret.
     pub client_secret: Option<String>,
+    /// Token endpoint URL.
     pub token_url: String,
+    /// Authorization endpoint URL, if applicable.
     pub auth_url: Option<String>,
+    /// Requested OAuth scopes.
     pub scope: Option<String>,
+    /// Current access token.
     pub access_token: Option<String>,
+    /// Refresh token for obtaining new access tokens.
     pub refresh_token: Option<String>,
+    /// Unix timestamp when the access token expires.
     pub expires_at: Option<u64>,
 }
 
 /// MCP server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
+    /// Human-readable server name.
     pub name: String,
+    /// Transport-specific connection details.
     #[serde(flatten)]
     pub transport: McpTransport,
+    /// Optional OAuth authentication configuration.
     #[serde(default)]
     pub oauth: Option<OAuthConfig>,
 }
@@ -169,10 +193,7 @@ impl McpServerConfig {
 
     /// Add multiple arguments for stdio transport
     pub fn with_args(mut self, args: Vec<String>) -> Self {
-        if let McpTransport::Stdio {
-            args: ref mut a, ..
-        } = &mut self.transport
-        {
+        if let McpTransport::Stdio { args: a, .. } = &mut self.transport {
             a.extend(args);
         }
         self
@@ -180,7 +201,7 @@ impl McpServerConfig {
 
     /// Add multiple environment variables for stdio transport
     pub fn with_envs(mut self, env: std::collections::HashMap<String, String>) -> Self {
-        if let McpTransport::Stdio { env: ref mut e, .. } = &mut self.transport {
+        if let McpTransport::Stdio { env: e, .. } = &mut self.transport {
             e.extend(env);
         }
         self
@@ -201,6 +222,8 @@ struct JsonRpcRequest<T: serde::Serialize> {
 }
 
 #[derive(Debug, Deserialize)]
+// Intentionally retained because `jsonrpc` is part of the JSON-RPC 2.0 wire
+// format and is validated by serde even though it is not read directly.
 #[allow(dead_code)]
 struct JsonRpcResponse<T> {
     jsonrpc: String,
@@ -210,6 +233,8 @@ struct JsonRpcResponse<T> {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+// Intentionally retained because `code` and `data` are deserialized for
+// completeness and may be inspected by future error-handling logic.
 #[allow(dead_code)]
 struct JsonRpcError {
     code: i32,
@@ -221,6 +246,7 @@ struct JsonRpcError {
 // MCP Client Trait
 // =============================================================================
 
+/// Asynchronous MCP client interface.
 #[async_trait]
 pub trait McpClient: Send + Sync {
     /// Connect to the server
@@ -369,6 +395,7 @@ fn validate_mcp_command_with_allowlist(
 // Stdio Client
 // =============================================================================
 
+/// MCP client using a local stdio subprocess transport.
 pub struct StdioMcpClient {
     config: McpServerConfig,
     child: Option<Child>,
@@ -379,6 +406,7 @@ pub struct StdioMcpClient {
 }
 
 impl StdioMcpClient {
+    /// Create a new stdio MCP client from the given configuration.
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
@@ -569,6 +597,7 @@ impl McpClient for StdioMcpClient {
 // HTTP Client
 // =============================================================================
 
+/// MCP client using HTTP POST requests as transport.
 pub struct HttpMcpClient {
     config: McpServerConfig,
     client: reqwest::Client,
@@ -576,6 +605,7 @@ pub struct HttpMcpClient {
 }
 
 impl HttpMcpClient {
+    /// Create a new HTTP MCP client from the given configuration.
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
@@ -586,7 +616,10 @@ impl HttpMcpClient {
 
     fn build_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", "application/json".parse().unwrap());
+        headers.insert(
+            "Content-Type",
+            reqwest::header::HeaderValue::from_static("application/json"),
+        );
 
         if let McpTransport::Http {
             headers: custom_headers,
@@ -606,10 +639,11 @@ impl HttpMcpClient {
         // Add OAuth token if available
         if let Some(oauth) = &self.config.oauth {
             if let Some(token) = &oauth.access_token {
-                headers.insert(
-                    "Authorization",
-                    format!("Bearer {}", token).parse().unwrap(),
-                );
+                if let Ok(header_value) =
+                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))
+                {
+                    headers.insert("Authorization", header_value);
+                }
             }
         }
 
@@ -697,6 +731,7 @@ pub struct SseMcpClient {
 }
 
 impl SseMcpClient {
+    /// Create a new SSE MCP client from the given configuration.
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
@@ -774,7 +809,10 @@ impl McpClient for SseMcpClient {
                                                 {
                                                     Ok(u) => u.to_string(),
                                                     Err(e) => {
-                                                        warn!("Failed to resolve endpoint URL '{}': {}", data, e);
+                                                        warn!(
+                                                            "Failed to resolve endpoint URL '{}': {}",
+                                                            data, e
+                                                        );
                                                         String::new()
                                                     }
                                                 }
@@ -782,10 +820,12 @@ impl McpClient for SseMcpClient {
                                             if !resolved.is_empty() {
                                                 let mut ep = message_endpoint.write().await;
                                                 *ep = Some(resolved);
-                                                info!(
-                                                    "SSE message endpoint discovered: {}",
-                                                    ep.as_ref().unwrap()
-                                                );
+                                                if let Some(endpoint) = ep.as_ref() {
+                                                    info!(
+                                                        "SSE message endpoint discovered: {}",
+                                                        endpoint
+                                                    );
+                                                }
                                             }
                                         } else if current_event == "message"
                                             || current_event.is_empty()
@@ -958,6 +998,7 @@ impl McpClient for SseMcpClient {
 // WebSocket Client
 // =============================================================================
 
+/// MCP client using a WebSocket transport.
 pub struct WebSocketMcpClient {
     config: McpServerConfig,
     request_id: AtomicU64,
@@ -967,6 +1008,7 @@ pub struct WebSocketMcpClient {
 }
 
 impl WebSocketMcpClient {
+    /// Create a new WebSocket MCP client from the given configuration.
     pub fn new(config: McpServerConfig) -> Self {
         Self {
             config,
@@ -1165,9 +1207,11 @@ impl McpClient for WebSocketMcpClient {
 // Client Builder
 // =============================================================================
 
+/// Builder for constructing MCP client instances from configuration.
 pub struct McpClientBuilder;
 
 impl McpClientBuilder {
+    /// Build an `McpClientInstance` from a complete server configuration.
     pub fn from_config(config: McpServerConfig) -> McpClientInstance {
         match &config.transport {
             McpTransport::Stdio { .. } => {
@@ -1181,24 +1225,28 @@ impl McpClientBuilder {
         }
     }
 
+    /// Start building a stdio MCP client.
     pub fn stdio(name: impl Into<String>, command: impl Into<String>) -> StdioClientBuilder {
         StdioClientBuilder {
             config: McpServerConfig::stdio(name, command),
         }
     }
 
+    /// Start building an HTTP MCP client.
     pub fn http(name: impl Into<String>, url: impl Into<String>) -> HttpClientBuilder {
         HttpClientBuilder {
             config: McpServerConfig::http(name, url),
         }
     }
 
+    /// Start building an SSE MCP client.
     pub fn sse(name: impl Into<String>, url: impl Into<String>) -> SseClientBuilder {
         SseClientBuilder {
             config: McpServerConfig::sse(name, url),
         }
     }
 
+    /// Start building a WebSocket MCP client.
     pub fn websocket(name: impl Into<String>, url: impl Into<String>) -> WebSocketClientBuilder {
         WebSocketClientBuilder {
             config: McpServerConfig::websocket(name, url),
@@ -1206,7 +1254,7 @@ impl McpClientBuilder {
     }
 
     /// Build an `McpClientInstance` from an `McpServerEntry` (config-file format).
-    /// Automatically selects stdio, http, or sse based on the `transport` field.
+    /// Automatically selects stdio, HTTP, SSE, or WebSocket based on the `transport` field.
     pub fn from_mcp_entry(
         name: impl Into<String>,
         entry: &crate::config::McpServerEntry,
@@ -1251,11 +1299,13 @@ impl McpClientBuilder {
     }
 }
 
+/// Builder for configuring a stdio MCP client.
 pub struct StdioClientBuilder {
     config: McpServerConfig,
 }
 
 impl StdioClientBuilder {
+    /// Append a command-line argument for the spawned subprocess.
     pub fn arg(mut self, arg: impl Into<String>) -> Self {
         if let McpTransport::Stdio { args, .. } = &mut self.config.transport {
             args.push(arg.into());
@@ -1263,6 +1313,7 @@ impl StdioClientBuilder {
         self
     }
 
+    /// Add an environment variable for the spawned subprocess.
     pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         if let McpTransport::Stdio { env, .. } = &mut self.config.transport {
             env.insert(key.into(), value.into());
@@ -1270,66 +1321,79 @@ impl StdioClientBuilder {
         self
     }
 
+    /// Build the configured `McpClientInstance`.
     pub fn build(self) -> McpClientInstance {
         McpClientInstance::Stdio(Box::new(StdioMcpClient::new(self.config)))
     }
 }
 
+/// Builder for configuring an HTTP MCP client.
 pub struct HttpClientBuilder {
     config: McpServerConfig,
 }
 
 impl HttpClientBuilder {
+    /// Add a custom HTTP header to every request.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.config = self.config.with_header(key, value);
         self
     }
 
+    /// Attach OAuth configuration for bearer-token authentication.
     pub fn oauth(mut self, oauth: OAuthConfig) -> Self {
         self.config.oauth = Some(oauth);
         self
     }
 
+    /// Build the configured `McpClientInstance`.
     pub fn build(self) -> McpClientInstance {
         McpClientInstance::Http(HttpMcpClient::new(self.config))
     }
 }
 
+/// Builder for configuring an SSE MCP client.
 pub struct SseClientBuilder {
     config: McpServerConfig,
 }
 
 impl SseClientBuilder {
+    /// Add a custom HTTP header to every SSE request.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.config = self.config.with_header(key, value);
         self
     }
 
+    /// Attach OAuth configuration for bearer-token authentication.
     pub fn oauth(mut self, oauth: OAuthConfig) -> Self {
         self.config.oauth = Some(oauth);
         self
     }
 
+    /// Build the configured `McpClientInstance`.
     pub fn build(self) -> McpClientInstance {
         McpClientInstance::Sse(SseMcpClient::new(self.config))
     }
 }
 
+/// Builder for configuring a WebSocket MCP client.
 pub struct WebSocketClientBuilder {
     config: McpServerConfig,
 }
 
 impl WebSocketClientBuilder {
+    /// Add a custom HTTP header to the WebSocket handshake.
     pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.config = self.config.with_header(key, value);
         self
     }
 
+    /// Attach OAuth configuration for bearer-token authentication.
     pub fn oauth(mut self, oauth: OAuthConfig) -> Self {
         self.config.oauth = Some(oauth);
         self
     }
 
+    /// Build the configured `McpClientInstance`.
     pub fn build(self) -> McpClientInstance {
         McpClientInstance::WebSocket(WebSocketMcpClient::new(self.config))
     }
@@ -1339,39 +1403,66 @@ impl WebSocketClientBuilder {
 // Types
 // =============================================================================
 
+/// Metadata describing an MCP tool exposed by a server.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpTool {
+    /// Tool name.
     pub name: String,
+    /// Human-readable description.
     pub description: Option<String>,
+    /// JSON Schema describing the tool's input parameters.
     pub input_schema: Value,
 }
 
+/// Result of the MCP `tools/call` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCallResult {
+    /// Content items returned by the tool call.
     pub content: Vec<ToolContent>,
+    /// Whether the tool reported an application-level error.
     #[serde(default)]
     pub is_error: bool,
 }
 
+/// Content item returned by an MCP tool call.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum ToolContent {
+    /// Plain text content.
     #[serde(rename = "text")]
-    Text { text: String },
+    Text {
+        /// Text payload.
+        text: String,
+    },
+    /// Base64-encoded image content.
     #[serde(rename = "image")]
-    Image { data: String, mime_type: String },
+    Image {
+        /// Base64 image data.
+        data: String,
+        /// MIME type of the image.
+        mime_type: String,
+    },
+    /// Resource reference.
     #[serde(rename = "resource")]
-    Resource { resource: McpResource },
+    Resource {
+        /// Referenced resource.
+        resource: McpResource,
+    },
 }
 
+/// Resource reference embedded in MCP tool or prompt content.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpResource {
+    /// Resource URI.
     pub uri: String,
+    /// MIME type, if known.
     pub mime_type: Option<String>,
+    /// Text contents, if available.
     pub text: Option<String>,
+    /// Base64-encoded binary contents, if available.
     pub blob: Option<String>,
 }
 
@@ -1379,47 +1470,67 @@ pub struct McpResource {
 // Resource Types
 // =============================================================================
 
+/// Metadata describing an MCP resource exposed by a server.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpResourceMeta {
+    /// Resource URI.
     pub uri: String,
+    /// Display name.
     pub name: Option<String>,
+    /// MIME type, if known.
     pub mime_type: Option<String>,
+    /// Human-readable description.
     pub description: Option<String>,
 }
 
+/// Result of the MCP `resources/list` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListResourcesResult {
+    /// Available resources.
     pub resources: Vec<McpResourceMeta>,
 }
 
+/// Text contents returned by the MCP `resources/read` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextResourceContents {
+    /// Resource URI.
     pub uri: String,
+    /// MIME type, if known.
     pub mime_type: Option<String>,
+    /// Text payload.
     pub text: String,
 }
 
+/// Binary contents returned by the MCP `resources/read` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobResourceContents {
+    /// Resource URI.
     pub uri: String,
+    /// MIME type, if known.
     pub mime_type: Option<String>,
+    /// Base64-encoded binary payload.
     pub blob: String,
 }
 
+/// Discriminated resource contents returned by `resources/read`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum ResourceContents {
+    /// Text resource contents.
     Text(TextResourceContents),
+    /// Binary resource contents.
     Blob(BlobResourceContents),
 }
 
+/// Result of the MCP `resources/read` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadResourceResult {
+    /// Contents of the resource.
     pub contents: Vec<ResourceContents>,
 }
 
@@ -1427,57 +1538,91 @@ pub struct ReadResourceResult {
 // Prompt Types
 // =============================================================================
 
+/// Argument accepted by an MCP prompt template.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptArgument {
+    /// Argument name.
     pub name: String,
+    /// Human-readable description.
     pub description: Option<String>,
+    /// Whether the argument is required.
     pub required: Option<bool>,
 }
 
+/// Prompt template exposed by an MCP server.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpPrompt {
+    /// Prompt name.
     pub name: String,
+    /// Human-readable description.
     pub description: Option<String>,
+    /// Accepted arguments, if any.
     pub arguments: Option<Vec<PromptArgument>>,
 }
 
+/// Result of the MCP `prompts/list` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPromptsResult {
+    /// Available prompts.
     pub prompts: Vec<McpPrompt>,
 }
 
+/// Role of a message within a rendered prompt.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PromptMessageRole {
+    /// Message from the user.
     User,
+    /// Message from the assistant.
     Assistant,
 }
 
+/// Content of a message within a rendered prompt.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum PromptContent {
+    /// Plain text content.
     #[serde(rename = "text")]
-    Text { text: String },
+    Text {
+        /// Text payload.
+        text: String,
+    },
+    /// Base64-encoded image content.
     #[serde(rename = "image")]
-    Image { data: String, mime_type: String },
+    Image {
+        /// Base64 image data.
+        data: String,
+        /// MIME type of the image.
+        mime_type: String,
+    },
+    /// Resource reference.
     #[serde(rename = "resource")]
-    Resource { resource: McpResource },
+    Resource {
+        /// Referenced resource.
+        resource: McpResource,
+    },
 }
 
+/// A single message in a rendered prompt.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptMessage {
+    /// Message role.
     pub role: PromptMessageRole,
+    /// Message content.
     pub content: PromptContent,
 }
 
+/// Result of the MCP `prompts/get` method.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPromptResult {
+    /// Prompt description.
     pub description: Option<String>,
+    /// Rendered prompt messages.
     pub messages: Vec<PromptMessage>,
 }
 
@@ -1485,32 +1630,42 @@ pub struct GetPromptResult {
 // Error Types
 // =============================================================================
 
+/// Error type for MCP client operations.
 #[derive(Debug, thiserror::Error)]
 pub enum McpError {
+    /// Failed to establish or maintain a connection.
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
 
+    /// Transport configuration is invalid or unsupported.
     #[error("Invalid transport: {0}")]
     InvalidTransport(String),
 
+    /// Spawned command was rejected by the security validator.
     #[error("Command not allowed: {0}")]
     CommandNotAllowed(String),
 
+    /// Request reached the server but failed.
     #[error("Request failed: {0}")]
     RequestFailed(String),
 
+    /// Request exceeded the configured timeout.
     #[error("Request timeout")]
     RequestTimeout,
 
+    /// Response could not be parsed.
     #[error("Invalid response: {0}")]
     InvalidResponse(String),
 
+    /// Server returned an RPC error.
     #[error("RPC error: {0}")]
     RpcError(String),
 
+    /// JSON serialization or deserialization failed.
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// Underlying I/O error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -1519,10 +1674,15 @@ pub enum McpError {
 // MCP Registry
 // =============================================================================
 
+/// Polymorphic MCP client instance produced by [`McpClientBuilder`].
 pub enum McpClientInstance {
+    /// Stdio subprocess transport.
     Stdio(Box<StdioMcpClient>),
+    /// HTTP POST transport.
     Http(HttpMcpClient),
+    /// Server-Sent Events transport.
     Sse(SseMcpClient),
+    /// WebSocket transport.
     WebSocket(WebSocketMcpClient),
 }
 
@@ -1556,34 +1716,41 @@ impl McpClient for McpClientInstance {
     }
 }
 
+/// Registry holding named MCP client instances.
 pub struct McpRegistry {
     clients: HashMap<String, Arc<RwLock<McpClientInstance>>>,
 }
 
 impl McpRegistry {
+    /// Create an empty registry.
     pub fn new() -> Self {
         Self {
             clients: HashMap::new(),
         }
     }
 
+    /// Register a client under the given name.
     pub fn register(&mut self, name: impl Into<String>, client: McpClientInstance) {
         self.clients
             .insert(name.into(), Arc::new(RwLock::new(client)));
     }
 
+    /// Look up a registered client by name.
     pub fn get(&self, name: &str) -> Option<&Arc<RwLock<McpClientInstance>>> {
         self.clients.get(name)
     }
 
+    /// Remove and return a registered client by name.
     pub fn remove(&mut self, name: &str) -> Option<Arc<RwLock<McpClientInstance>>> {
         self.clients.remove(name)
     }
 
+    /// Return the names of all registered clients.
     pub fn list(&self) -> Vec<&str> {
         self.clients.keys().map(|k| k.as_str()).collect()
     }
 
+    /// Connect all registered clients.
     pub async fn connect_all(&self) -> Result<(), McpError> {
         for (name, client) in &self.clients {
             info!("Connecting to MCP server: {}", name);
@@ -1592,6 +1759,7 @@ impl McpRegistry {
         Ok(())
     }
 
+    /// Disconnect all registered clients.
     pub async fn disconnect_all(&self) -> Result<(), McpError> {
         for (name, client) in &self.clients {
             info!("Disconnecting from MCP server: {}", name);

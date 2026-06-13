@@ -18,19 +18,23 @@ pub mod cost_channel;
 pub mod definition;
 pub mod driver;
 pub mod enhanced;
+/// Error memory module.
 pub mod error_memory;
 pub mod flow;
+/// Hooks module.
 pub mod hooks;
 pub mod lsp;
 pub mod ops;
 pub mod snapshot;
 pub mod tool_map;
+/// Tool parser module.
 pub mod tool_parser;
 
 mod construct;
 mod execution;
 mod executor;
 pub mod jumpy;
+/// Loop detector module.
 pub mod loop_detector;
 pub mod plan;
 // B3: Re-export Plan types from `types.rs` to maintain backwards compatibility.
@@ -232,6 +236,7 @@ pub type SkillFactoryFn = Arc<
 >;
 
 #[derive(Clone)]
+/// Core Clarity agent: owns tool registry, configuration, and turn orchestration.
 pub struct Agent {
     registry: ToolRegistry,
     config: AgentConfig,

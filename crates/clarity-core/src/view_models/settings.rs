@@ -19,12 +19,19 @@ use std::path::PathBuf;
 /// Snapshot of settings state that can be persisted or applied to an Agent.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SettingsSnapshot {
+    /// Provider.
     pub provider: String,
+    /// Model.
     pub model: String,
+    /// Current approval mode.
     pub approval_mode: String,
+    /// Api key.
     pub api_key: Option<String>,
+    /// Local model path.
     pub local_model_path: Option<String>,
+    /// Theme.
     pub theme: String,
+    /// Active profile.
     pub active_profile: Option<String>,
 }
 
@@ -69,10 +76,12 @@ impl Default for SettingsViewModel {
 }
 
 impl SettingsViewModel {
+    /// Create a new `SettingsViewModel`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create from snapshot.
     pub fn from_snapshot(snapshot: &SettingsSnapshot, profiles: Vec<(String, String)>) -> Self {
         Self {
             provider: snapshot.provider.clone(),
@@ -87,6 +96,7 @@ impl SettingsViewModel {
         }
     }
 
+    /// `snapshot`.
     pub fn snapshot(&self) -> SettingsSnapshot {
         SettingsSnapshot {
             provider: self.provider.clone(),
@@ -99,10 +109,12 @@ impl SettingsViewModel {
         }
     }
 
+    /// `is_dirty`.
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
 
+    /// `clear_dirty`.
     pub fn clear_dirty(&mut self) {
         self.dirty = false;
     }
@@ -327,6 +339,7 @@ impl SettingsViewModel {
 // Model enumeration (moved from clarity-egui)
 // ============================================================================
 
+/// `scan_local_models`.
 pub fn scan_local_models() -> Vec<(String, String)> {
     let mut results = Vec::new();
     let mut seen = HashSet::new();
@@ -410,6 +423,7 @@ fn format_provider_name(id: &str) -> String {
     }
 }
 
+/// `get_available_models`.
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
     use std::collections::HashSet;
 

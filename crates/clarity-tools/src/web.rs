@@ -5,15 +5,55 @@
 //! - `WebFetchTool`: Fetch and extract content from web pages
 
 use async_trait::async_trait;
+use regex::Regex;
 use reqwest;
 use serde::Deserialize;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
+use std::sync::LazyLock;
 use tracing::{debug, error, warn};
 
 use crate::helpers;
 use crate::{Tool, ToolContext, ToolResult};
 use clarity_contract::ToolError;
+
+// =============================================================================
+/// Compile a constant regex pattern for static use.
+///
+/// # Panics
+///
+/// Panics only if `pattern` is invalid; all callers pass literal, known-good
+/// patterns, so this is treated as an infallible construction helper.
+#[allow(clippy::expect_used)]
+fn static_regex(pattern: &str) -> Regex {
+    Regex::new(pattern).expect("static regex is valid")
+}
+
+static CLEAN_HTML_TAG_RE: LazyLock<Regex> = LazyLock::new(|| static_regex(r"<[^>]+>"));
+
+static EXTRACT_SCRIPT_STYLE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    static_regex(
+        r"<(?:script|style|nav|footer|header)[^>]*>[\s\S]*?</(?:script|style|nav|footer|header)>",
+    )
+});
+
+static EXTRACT_MAIN_RE: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"<main[^>]*>([\s\S]*?)</main>"));
+
+static EXTRACT_ARTICLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"<article[^>]*>([\s\S]*?)</article>"));
+
+static EXTRACT_CONTENT_DIV_RE: LazyLock<Regex> = LazyLock::new(|| {
+    static_regex(
+        r#"<div[^>]*class=["'][^"']*(?:content|main|body)[^"']*["'][^>]*>([\s\S]*?)</div>"#,
+    )
+});
+
+static HTML_BLOCK_OPEN_RE: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"<(?:p|div|h[1-6]|li|tr)[^>]*>"));
+
+static HTML_BLOCK_CLOSE_RE: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"</(?:p|div|h[1-6]|li|tr)>"));
 
 // =============================================================================
 // WebSearchTool - Search the internet using DuckDuckGo
@@ -38,8 +78,8 @@ pub struct SearchResult {
 /// # Example
 ///
 /// ```rust,no_run
-/// use clarity_core::tools::WebSearchTool;
-/// use clarity_core::tools::{Tool, ToolContext};
+/// use clarity_tools::web::WebSearchTool;
+/// use clarity_tools::{Tool, ToolContext};
 /// use serde_json::json;
 ///
 /// # async fn example() -> anyhow::Result<()> {
@@ -64,7 +104,7 @@ impl WebSearchTool {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to build HTTP client");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         Self { client }
     }
@@ -144,7 +184,6 @@ impl WebSearchTool {
 
             let url = html_escape::decode_html_entities(&cap[1]).to_string();
             let title = self.clean_html(&cap[2]);
-            let _display_url = html_escape::decode_html_entities(&cap[3]).to_string();
             let snippet = self.clean_html(&cap[4]);
 
             // Skip ads and invalid results
@@ -217,8 +256,7 @@ impl WebSearchTool {
     /// Clean HTML tags and entities from text
     fn clean_html(&self, html: &str) -> String {
         // Remove HTML tags
-        let tag_regex = regex::Regex::new(r"<[^>]+>").unwrap();
-        let text = tag_regex.replace_all(html, "");
+        let text = CLEAN_HTML_TAG_RE.replace_all(html, "");
 
         // Decode HTML entities
         let text = html_escape::decode_html_entities(&text);
@@ -355,8 +393,8 @@ impl Tool for WebSearchTool {
 /// # Example
 ///
 /// ```rust,no_run
-/// use clarity_core::tools::WebFetchTool;
-/// use clarity_core::tools::{Tool, ToolContext};
+/// use clarity_tools::web::WebFetchTool;
+/// use clarity_tools::{Tool, ToolContext};
 /// use serde_json::json;
 ///
 /// # async fn example() -> anyhow::Result<()> {
@@ -381,7 +419,7 @@ impl WebFetchTool {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to build HTTP client");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         Self { client }
     }
@@ -443,33 +481,16 @@ impl WebFetchTool {
 
     /// Extract main content from HTML (simplified)
     fn extract_content(&self, html: &str) -> String {
-        // Remove script and style tags with their content
-        let script_regex = regex::Regex::new(r"<script[^>]*>[\s\S]*?</script>").unwrap();
-        let style_regex = regex::Regex::new(r"<style[^>]*>[\s\S]*?</style>").unwrap();
-        let nav_regex = regex::Regex::new(r"<nav[^>]*>[\s\S]*?</nav>").unwrap();
-        let footer_regex = regex::Regex::new(r"<footer[^>]*>[\s\S]*?</footer>").unwrap();
-        let header_regex = regex::Regex::new(r"<header[^>]*>[\s\S]*?</header>").unwrap();
-
+        // Remove script/style/nav/footer/header tags with their content.
         let mut text = html.to_string();
-        text = script_regex.replace_all(&text, "").to_string();
-        text = style_regex.replace_all(&text, "").to_string();
-        text = nav_regex.replace_all(&text, "").to_string();
-        text = footer_regex.replace_all(&text, "").to_string();
-        text = header_regex.replace_all(&text, "").to_string();
+        text = EXTRACT_SCRIPT_STYLE_RE.replace_all(&text, "").to_string();
 
-        // Try to extract main or article content
-        let main_regex = regex::Regex::new(r"<main[^>]*>([\s\S]*?)</main>").unwrap();
-        let article_regex = regex::Regex::new(r"<article[^>]*>([\s\S]*?)</article>").unwrap();
-        let content_regex = regex::Regex::new(
-            r#"<div[^>]*class=["'][^"']*(?:content|main|body)[^"']*["'][^>]*>([\s\S]*?)</div>"#,
-        )
-        .unwrap();
-
-        let content = if let Some(cap) = main_regex.captures(&text) {
+        // Try to extract main or article content.
+        let content = if let Some(cap) = EXTRACT_MAIN_RE.captures(&text) {
             cap.get(1).map(|m| m.as_str()).unwrap_or(&text)
-        } else if let Some(cap) = article_regex.captures(&text) {
+        } else if let Some(cap) = EXTRACT_ARTICLE_RE.captures(&text) {
             cap.get(1).map(|m| m.as_str()).unwrap_or(&text)
-        } else if let Some(cap) = content_regex.captures(&text) {
+        } else if let Some(cap) = EXTRACT_CONTENT_DIV_RE.captures(&text) {
             cap.get(1).map(|m| m.as_str()).unwrap_or(&text)
         } else {
             &text
@@ -484,14 +505,8 @@ impl WebFetchTool {
         // Replace common block elements with newlines
         let mut text = html.to_string();
 
-        // Add newlines around block elements
-        let block_tags = ["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"];
-        for tag in &block_tags {
-            let open_regex = regex::Regex::new(&format!(r"<{}[^>]*>", tag)).unwrap();
-            let close_regex = regex::Regex::new(&format!(r"</{}>", tag)).unwrap();
-            text = open_regex.replace_all(&text, "\n").to_string();
-            text = close_regex.replace_all(&text, "\n").to_string();
-        }
+        text = HTML_BLOCK_OPEN_RE.replace_all(&text, "\n").to_string();
+        text = HTML_BLOCK_CLOSE_RE.replace_all(&text, "\n").to_string();
 
         // Handle line breaks
         text = text
@@ -500,8 +515,7 @@ impl WebFetchTool {
             .replace("<br />", "\n");
 
         // Remove remaining HTML tags
-        let tag_regex = regex::Regex::new(r"<[^>]+>").unwrap();
-        text = tag_regex.replace_all(&text, "").to_string();
+        text = CLEAN_HTML_TAG_RE.replace_all(&text, "").to_string();
 
         // Decode HTML entities
         text = html_escape::decode_html_entities(&text).to_string();
@@ -522,13 +536,6 @@ impl WebFetchTool {
         }
 
         text.trim().to_string()
-    }
-
-    /// Convert text to simple markdown
-    fn text_to_markdown(&self, text: &str) -> String {
-        // Basic conversion - just return the text for now
-        // In a full implementation, this would add proper markdown formatting
-        text.to_string()
     }
 }
 
@@ -600,7 +607,7 @@ impl Tool for WebFetchTool {
 
         // Apply format
         let formatted_content = match format {
-            "markdown" => self.text_to_markdown(&content),
+            "markdown" => content, // Basic markdown: plain text for now
             "html" => content, // Already extracted as text, would need different approach for raw HTML
             _ => content,      // "text" is default
         };
@@ -719,11 +726,13 @@ mod tests {
 
         assert!(params.get("type").unwrap().as_str().unwrap() == "object");
         assert!(params.get("properties").unwrap().get("query").is_some());
-        assert!(params
-            .get("properties")
-            .unwrap()
-            .get("num_results")
-            .is_some());
+        assert!(
+            params
+                .get("properties")
+                .unwrap()
+                .get("num_results")
+                .is_some()
+        );
 
         let required = params.get("required").unwrap().as_array().unwrap();
         assert!(required.contains(&json!("query")));
@@ -737,11 +746,13 @@ mod tests {
         assert!(params.get("type").unwrap().as_str().unwrap() == "object");
         assert!(params.get("properties").unwrap().get("url").is_some());
         assert!(params.get("properties").unwrap().get("format").is_some());
-        assert!(params
-            .get("properties")
-            .unwrap()
-            .get("max_length")
-            .is_some());
+        assert!(
+            params
+                .get("properties")
+                .unwrap()
+                .get("max_length")
+                .is_some()
+        );
 
         let required = params.get("required").unwrap().as_array().unwrap();
         assert!(required.contains(&json!("url")));

@@ -1,21 +1,23 @@
-use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::sync::mpsc::channel;
 use std::time::{Duration, Instant};
 
+use crate::App;
 use crate::app_state::AppState;
 use crate::session::{load_sessions, new_session, save_session_internal, session_path};
 use crate::settings::GuiSettings;
 use crate::theme::Theme;
 use crate::ui::types::*;
-use crate::App;
 impl App {
+    /// Creates a new instance.
     pub(crate) fn new(
         cc: &eframe::CreationContext<'_>,
         gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
         tray_manager: Option<crate::services::tray::TrayManager>,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         crate::theme::setup_fonts(&cc.egui_ctx);
-        let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
         let mut state = AppState::default();
 
         // Load persisted cron tasks into the scheduler
@@ -275,7 +277,6 @@ impl App {
                 input_history_idx: None,
             },
             settings_store: crate::stores::SettingsStore {
-                settings_open: false,
                 settings_edit,
                 settings_vm,
                 settings_active_tab: 0,
@@ -291,7 +292,6 @@ impl App {
                 kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
             },
             task_store: crate::stores::TaskStore {
-                task_panel_open: true,
                 tasks: vec![],
                 last_task_refresh: now,
                 task_create_modal_open: false,
@@ -335,7 +335,6 @@ impl App {
                 thinking_log_show_all: false,
                 pending_approvals: Vec::new(),
                 toasts: vec![],
-                skill_panel_open: false,
                 tools_expanded: false,
                 subagents_expanded: false,
                 editing_session_id: None,
@@ -346,8 +345,6 @@ impl App {
                 kimi_conversation_style: true,
                 workspace_plan_expanded: false,
                 workspace_plan_manually_collapsed: false,
-                dashboard_panel_open: false,
-                gantt_panel_open: false,
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
                 titlebar_right_width: 260.0,
@@ -385,7 +382,6 @@ impl App {
                 viewing_subagent_id: None,
             },
             mcp_store: crate::stores::McpStore {
-                mcp_panel_open: false,
                 mcp_config: crate::ui::mcp_panel::load_mcp_config(),
                 mcp_changed: false,
                 connected_tools: vec![],
@@ -423,7 +419,6 @@ impl App {
                     })
                     .collect();
                 crate::stores::TeamStore {
-                    team_panel_open: false,
                     teams,
                     create_modal_open: false,
                     create_name: String::new(),
@@ -444,9 +439,10 @@ impl App {
             view_state: clarity_core::ui::ViewState::new(),
         };
         app.refresh_tasks();
-        app
+        Ok(app)
     }
 
+    /// Adds a transient toast notification.
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, level: ToastLevel) {
         crate::handlers::system::push_toast(&mut self.ui_store, message, level);
     }
@@ -549,10 +545,12 @@ impl App {
         });
     }
 
+    /// Dispatches queued UI events to handlers.
     pub(crate) fn process_events(&mut self) {
         crate::handlers::process_events(self);
     }
 
+    /// Persists current session to disk.
     pub(crate) fn save_current_session(&self) {
         if let Some(session) = self.session_store.active_session() {
             if let Err(e) = save_session_internal(session) {
@@ -560,6 +558,7 @@ impl App {
             }
         }
     }
+    /// Switch category.
     pub(crate) fn switch_category(&mut self, category: &str) {
         if self.session_store.active_category == category {
             return;
@@ -614,6 +613,7 @@ impl App {
         self.chat_store.last_usage = None;
     }
 
+    /// Creates a new session.
     pub(crate) fn new_session(&mut self) {
         let category = self.session_store.active_category.clone();
 
@@ -670,6 +670,7 @@ impl App {
         self.chat_store.input = self.session_store.drafts.remove(&id).unwrap_or_default();
         self.chat_store.last_usage = None;
     }
+    /// Stop.
     pub(crate) fn stop(&mut self) {
         self.state.agent.cancel();
         // run_streaming will detect cancellation, return AgentError::Cancelled,
@@ -744,6 +745,7 @@ impl App {
         }
     }
 
+    /// Delete session.
     #[allow(dead_code)]
     pub(crate) fn delete_session(&mut self, id: String) {
         self.session_store.sessions.retain(|s| s.id != id);

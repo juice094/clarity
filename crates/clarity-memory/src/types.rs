@@ -7,31 +7,44 @@ use std::fmt;
 /// A fact stored in the memory system
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Fact {
+    /// Unique fact identifier
     pub id: i64,
+    /// The fact content
     pub fact: String,
+    /// Tags associated with the fact
     pub tags: Vec<String>,
+    /// Optional time reference
     pub time: Option<String>,
+    /// Optional originating session identifier
     pub session_id: Option<String>,
+    /// Timestamp when the fact was created
     pub created_at: DateTime<Utc>,
 }
 
 /// A meta-fact extracted by LLM
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MetaFact {
+    /// The extracted fact content
     pub fact: String,
+    /// Tags categorizing the fact
     pub tags: Vec<String>,
+    /// Optional time reference
     pub time: Option<String>,
 }
 
 /// A chat message in a session
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
+    /// Message role (e.g. "user", "assistant", "system")
     pub role: String,
+    /// Message content
     pub content: String,
+    /// Timestamp when the message was created
     pub timestamp: DateTime<Utc>,
 }
 
 impl Message {
+    /// Create a new message with the given role and content
     pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             role: role.into(),
@@ -40,14 +53,17 @@ impl Message {
         }
     }
 
+    /// Create a new user message
     pub fn user(content: impl Into<String>) -> Self {
         Self::new("user", content)
     }
 
+    /// Create a new assistant message
     pub fn assistant(content: impl Into<String>) -> Self {
         Self::new("assistant", content)
     }
 
+    /// Create a new system message
     pub fn system(content: impl Into<String>) -> Self {
         Self::new("system", content)
     }
@@ -57,14 +73,24 @@ impl Message {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CompileStatus {
     /// Compilation succeeded with new content
-    Success { fingerprint: String },
+    Success {
+        /// Content fingerprint
+        fingerprint: String,
+    },
     /// Compilation skipped (no changes detected)
-    Skipped { fingerprint: String },
+    Skipped {
+        /// Content fingerprint
+        fingerprint: String,
+    },
     /// Compilation failed
-    Failed { error: String },
+    Failed {
+        /// Error message
+        error: String,
+    },
 }
 
 impl CompileStatus {
+    /// Return the fingerprint, if any
     pub fn fingerprint(&self) -> Option<&str> {
         match self {
             CompileStatus::Success { fingerprint } | CompileStatus::Skipped { fingerprint } => {
@@ -74,10 +100,12 @@ impl CompileStatus {
         }
     }
 
+    /// Check whether the compilation succeeded
     pub fn is_success(&self) -> bool {
         matches!(self, CompileStatus::Success { .. })
     }
 
+    /// Check whether the compilation was skipped
     pub fn is_skipped(&self) -> bool {
         matches!(self, CompileStatus::Skipped { .. })
     }
@@ -110,9 +138,11 @@ impl fmt::Display for CompileStatus {
 pub struct CompileConfig {
     /// Number of turns before triggering a summary
     pub turns_per_summary: u32,
-    /// Maximum tokens for each summary level
+    /// Maximum tokens for the today-level summary
     pub max_tokens_today: usize,
+    /// Maximum tokens for the week-level summary
     pub max_tokens_week: usize,
+    /// Maximum tokens for the long-term summary
     pub max_tokens_longterm: usize,
     /// Model to use for compilation
     pub compile_model: String,
@@ -137,19 +167,28 @@ impl Default for CompileConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionRecord {
+    /// A stored message
     Message {
+        /// The stored message
         message: MessageRecord,
+        /// Timestamp when the record was written
         timestamp: DateTime<Utc>,
     },
+    /// A stored summary
     Summary {
+        /// Summary content
         content: String,
+        /// Timestamp when the summary was written
         timestamp: DateTime<Utc>,
     },
 }
 
+/// A serializable message record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageRecord {
+    /// Message role
     pub role: String,
+    /// Message content
     pub content: String,
 }
 
@@ -181,28 +220,36 @@ impl From<SessionRecord> for Option<Message> {
 /// Errors that can occur in the memory system
 #[derive(thiserror::Error, Debug)]
 pub enum MemoryError {
+    /// Database error
     #[cfg(feature = "sqlite")]
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
 
+    /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Serialization error
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// LLM client error
     #[error("LLM client error: {0}")]
     LlmClient(String),
 
+    /// Compilation error
     #[error("Compilation error: {0}")]
     Compilation(String),
 
+    /// Requested session was not found
     #[error("Session not found: {0}")]
     SessionNotFound(String),
 
+    /// Invalid input
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    /// Storage error
     #[error("Storage error: {0}")]
     Storage(String),
 }
@@ -211,15 +258,22 @@ pub enum MemoryError {
 /// Used by TurnMemoryExtractor to persist key information.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionNotes {
+    /// Originating session identifier
     pub session_id: String,
+    /// Summary of the current session state
     pub current_state: String,
+    /// Errors encountered during the turn
     pub errors: Vec<String>,
+    /// Key learnings from the turn
     pub learnings: Vec<String>,
+    /// Key results produced during the turn
     pub key_results: Vec<String>,
+    /// Timestamp when the notes were created
     pub created_at: DateTime<Utc>,
 }
 
 impl SessionNotes {
+    /// Create empty notes for the given session
     pub fn new(session_id: impl Into<String>) -> Self {
         Self {
             session_id: session_id.into(),
@@ -235,9 +289,13 @@ impl SessionNotes {
 /// A flashcard for spaced-repetition review (Anki-compatible)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Flashcard {
+    /// Front side of the card
     pub front: String,
+    /// Back side of the card
     pub back: String,
+    /// Comma-separated tags
     pub tags: String,
 }
 
+/// Result type alias for memory operations
 pub type Result<T> = std::result::Result<T, MemoryError>;

@@ -1,3 +1,13 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
+)]
 //! clarity-claw —— 联邦运行时协调器
 //!
 //! Claw is the federation runtime for Project Clarity.
@@ -43,14 +53,18 @@ pub const POLL_INTERVAL_SECS: u64 = 5;
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TaskSummary {
     #[serde(rename = "task_id")]
+    /// Unique task identifier.
     pub task_id: String,
+    /// Human-readable task name.
     pub name: String,
+    /// Current task status (e.g., "Running", "Completed").
     pub status: String,
 }
 
 /// Gateway task list payload.
 #[derive(Clone, Debug, Deserialize)]
 pub struct TaskListPayload {
+    /// Tasks returned by the Gateway.
     pub tasks: Vec<TaskSummary>,
 }
 
@@ -165,16 +179,26 @@ pub async fn cancel_remote_task(gateway_url: &str, task_id: &str) -> anyhow::Res
 mod tests {
     use super::*;
 
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+        unsafe { std::env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+        unsafe { std::env::remove_var(key) };
+    }
+
     #[test]
     fn test_resolve_gateway_url() {
         // Default (no env var)
-        std::env::remove_var("CLARITY_GATEWAY_URL");
+        remove_env("CLARITY_GATEWAY_URL");
         assert_eq!(resolve_gateway_url(), GATEWAY_URL);
 
         // From env var
-        std::env::set_var("CLARITY_GATEWAY_URL", "http://custom:8080");
+        set_env("CLARITY_GATEWAY_URL", "http://custom:8080");
         assert_eq!(resolve_gateway_url(), "http://custom:8080");
-        std::env::remove_var("CLARITY_GATEWAY_URL");
+        remove_env("CLARITY_GATEWAY_URL");
     }
 
     #[test]

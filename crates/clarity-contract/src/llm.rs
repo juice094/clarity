@@ -6,10 +6,11 @@
 
 use crate::{AgentError, Message, StreamDelta, ToolCall};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Pricing info for cost estimation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct Pricing {
     /// Price per 1M input tokens in USD.
     pub input_per_1m: f64,
@@ -18,7 +19,9 @@ pub struct Pricing {
 }
 
 impl Pricing {
-    /// Estimate cost for a given number of prompt and completion tokens.
+    /// Estimate cost in USD for a given number of prompt and completion tokens.
+    ///
+    /// Costs are computed from per-1M-token rates.
     pub fn estimate_cost(&self, prompt_tokens: u32, completion_tokens: u32) -> f64 {
         (prompt_tokens as f64 * self.input_per_1m + completion_tokens as f64 * self.output_per_1m)
             / 1_000_000.0

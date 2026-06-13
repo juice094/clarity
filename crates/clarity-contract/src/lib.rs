@@ -1,3 +1,4 @@
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 //! `clarity-contract` — Core contract types shared across the Clarity ecosystem.
 //!
 //! This crate exists to break the monolithic dependency on `clarity-core`.
@@ -32,6 +33,9 @@
 //! 4. Downstream crates migrate to `use clarity_contract::TypeName` at their own pace
 //! 5. Re-exports are removed only after all downstream crates have migrated
 
+// 临时豁免：从 clarity-core 迁出的大量类型/字段尚未补全文档，后续统一补充。
+#![allow(missing_docs)]
+
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -52,16 +56,21 @@ pub mod tool;
 /// A tool call from the LLM.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolCall {
+    /// Unique identifier for this tool call.
     pub id: String,
+    /// Tool call type (typically `"function"`).
     #[serde(rename = "type")]
     pub call_type: String,
+    /// Function call details.
     pub function: FunctionCall,
 }
 
 /// Function call details.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FunctionCall {
+    /// Name of the function to invoke.
     pub name: String,
+    /// JSON-encoded arguments for the function.
     pub arguments: String, // JSON string
 }
 
@@ -73,19 +82,27 @@ pub struct FunctionCall {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum MessageRole {
+    /// System prompt message.
     System,
+    /// User input message.
     User,
+    /// Assistant-generated message.
     Assistant,
+    /// Tool response message.
     Tool,
 }
 
 /// A message in a conversation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
+    /// Role of the message sender.
     pub role: MessageRole,
+    /// Text content of the message.
     pub content: String,
+    /// Tool calls requested by the assistant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    /// Identifier of the tool call this message is responding to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
 }
@@ -135,7 +152,9 @@ impl Message {
 /// Delta emitted by a streaming LLM response.
 #[derive(Debug, Clone, Default)]
 pub struct StreamDelta {
+    /// Text chunk emitted by the model, if any.
     pub content: Option<String>,
+    /// Tool calls parsed from the stream so far.
     pub tool_calls: Vec<ToolCall>,
 }
 
@@ -151,7 +170,7 @@ impl StreamDelta {
 // ============================================================================
 
 pub use error::{
-    sanitize_path_str, AgentError, ContractError, ContractResult, ToolError, ToolResult,
+    AgentError, ContractError, ContractResult, ToolError, ToolResult, sanitize_path_str,
 };
 pub use federation::{
     Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus, TaskSpec,
@@ -159,11 +178,11 @@ pub use federation::{
 };
 pub use llm::{LlmProvider, LlmResponse};
 pub use subagent::{
-    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle,
-    BatchStatus, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
+    AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle, BatchStatus,
+    CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
     MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
     SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
-    TeamResult, TokenError,
+    TeamResult, TokenError, collect_git_context,
 };
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
 

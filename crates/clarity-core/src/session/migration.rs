@@ -5,18 +5,21 @@
 //! ```no_run
 //! use clarity_core::session::migration::SessionMigrator;
 //!
-//! let v1_path = ".clarity/sessions.db";
-//! let v2_path = ".clarity/sessions_v2.sqlite";
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let v1_path = ".clarity/sessions.db";
+//!     let v2_path = ".clarity/sessions_v2.sqlite";
 //!
-//! let migrator = SessionMigrator::new(v1_path, v2_path).unwrap();
+//!     let migrator = SessionMigrator::new(v1_path, v2_path)?;
 //!
-//! // Preview what will be migrated.
-//! let stats = migrator.dry_run().unwrap();
-//! println!("{:?}", stats);
+//!     // Preview what will be migrated.
+//!     let stats = migrator.dry_run()?;
+//!     println!("{:?}", stats);
 //!
-//! // Execute migration.
-//! let report = migrator.migrate().unwrap();
-//! println!("{:?}", report);
+//!     // Execute migration.
+//!     let report = migrator.migrate()?;
+//!     println!("{:?}", report);
+//!     Ok(())
+//! }
 //! ```
 
 use std::path::{Path, PathBuf};

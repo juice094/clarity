@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::App;
 use crate::app_state::ensure_llm;
 use crate::session::now_millis;
 use crate::ui::types::*;
-use crate::App;
 
 impl App {
     /// Execute a shell command directly (!cmd), bypassing the LLM entirely.
@@ -72,6 +72,7 @@ impl App {
         });
     }
 
+    /// Send.
     pub(crate) fn send(&mut self) {
         let text = self.chat_store.input.trim().to_string();
         if text.is_empty() && self.chat_store.attachments.is_empty() {

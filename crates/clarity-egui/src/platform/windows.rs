@@ -1,9 +1,10 @@
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE};
+use windows::Win32::Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DwmSetWindowAttribute};
 
 /// Apply Windows 11 DWM rounded corners to the application window.
 /// No-op on Windows 10 (DWM silently ignores the attribute).
+#[allow(unsafe_code)]
 pub fn apply_rounded_corners(cc: &eframe::CreationContext<'_>) -> Option<()> {
     let handle = cc.window_handle().ok()?;
     let raw = handle.as_raw();

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! End-to-End Integration Tests for Clarity
 //!
 //! These tests verify the integration between all crates in the workspace.
@@ -125,7 +132,14 @@ async fn test_tool_execution_integration() {
 #[test]
 #[allow(deprecated)]
 fn test_llm_factory_error_handling() {
-    // Without any env vars set, factory methods should return error
+    // Without any env vars set, factory methods should return error.
+    // SAFETY: test-only mutation of env vars; no other test in this crate
+    // depends on these keys being present.
+    unsafe {
+        std::env::remove_var("KIMI_API_KEY");
+        std::env::remove_var("DEEPSEEK_API_KEY");
+    }
+
     // Test kimi provider (requires KIMI_API_KEY)
     let result = LlmFactory::kimi();
     assert!(result.is_err(), "Should fail without KIMI_API_KEY");

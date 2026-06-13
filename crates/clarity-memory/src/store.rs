@@ -150,6 +150,19 @@ impl MemoryStore {
             .await
     }
 
+    /// Semantic search: TF-IDF cosine similarity over all facts.
+    ///
+    /// Unlike [`Self::search_hybrid`], this performs a dense-style semantic
+    /// ranking without requiring the query terms to match the FTS5 index. It
+    /// is most useful for paraphrase-style recall. Backends that do not
+    /// implement semantic search return an empty list, in which case callers
+    /// should fall back to [`Self::search_hybrid`].
+    pub async fn search_semantic(&self, query: &str, limit: usize) -> Result<Vec<(Fact, f32)>> {
+        self.inner
+            .search_semantic(query, limit, &self.decay_config)
+            .await
+    }
+
     /// Get facts by session ID
     pub async fn get_facts_by_session(&self, session_id: &str, limit: usize) -> Result<Vec<Fact>> {
         self.inner.get_facts_by_session(session_id, limit).await
@@ -323,6 +336,45 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search() {
+        let (_temp, store) = create_test_store().await;
+
+        store
+            .save_fact(
+                "User likes Rust programming language",
+                &["preference".to_string(), "tech".to_string()],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        store
+            .save_fact(
+                "User enjoys Python programming",
+                &["preference".to_string(), "tech".to_string()],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        store
+            .save_fact("User has a dog named Max", &["pet".to_string()], None, None)
+            .await
+            .unwrap();
+
+        let results = store.search_semantic("programming", 2).await.unwrap();
+        assert_eq!(results.len(), 2);
+        let ids: Vec<i64> = results.iter().map(|(fact, _)| fact.id).collect();
+        assert!(ids.contains(&1));
+        assert!(ids.contains(&2));
+
+        // Query with a term shared by both programming facts.
+        let results = store.search_semantic("Python", 1).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(results[0].0.fact.contains("Python"));
     }
 
     #[tokio::test]

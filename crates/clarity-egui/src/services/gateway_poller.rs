@@ -1,5 +1,5 @@
-use crate::ui::types::{GatewayStatus, UiEvent};
 use crate::App;
+use crate::ui::types::{GatewayStatus, UiEvent};
 
 impl App {
     /// Poll all tracked parallel batch statuses from the Gateway.

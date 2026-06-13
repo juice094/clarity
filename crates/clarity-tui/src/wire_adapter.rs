@@ -55,10 +55,10 @@ pub fn spawn_wire_adapter(mut ui_side: WireUISide, event_tx: UnboundedSender<Eve
                 _ => None,
             };
 
-            if let Some(ev) = event {
-                if event_tx.send(ev).is_err() {
-                    break;
-                }
+            if let Some(ev) = event
+                && event_tx.send(ev).is_err()
+            {
+                break;
             }
         }
     });

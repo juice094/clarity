@@ -100,7 +100,7 @@ tags: [protocol]
 | 文件 | 注入内容 |
 |------|---------|
 | `AGENTS.md` | Code Style 扩展：`unwrap()` 注释规则、`pub fn` doc 要求、`unsafe` 禁令、跨层检查单 |
-| `docs/test_governance.md` | 新增第 8 章：定量基线表、unwrap 分类策略、验收命令、违规处理 |
+| `docs/development/test_governance.md` | 新增第 8 章：定量基线表、unwrap 分类策略、验收命令、违规处理 |
 | `.kimi/SESSION_STARTER.md` | 重写为"会话启动检查清单"，前置健康红线 |
 
 **Commit**：`6ddda1d`（v0.3.0 发布）+ 后续文档更新
@@ -257,7 +257,7 @@ tags: [protocol]
 | D3 | 能力发现协议 | `CapabilityRegistry::supported_approval_modes(surface)`；禁用 egui 不可用模式 | Sprint 10 Week 1–2 |
 | D4 | egui 冒烟测试基线 | headless 存在性验证或 `build_*_commands()` 纯函数测试 | Sprint 10 Week 2 |
 
-> 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
+> 详见 `docs/planning/plans/2026-04-29-sprint10-protocol-first.md`
 
 ### 3.13 许可策略备忘 — SSPL 分层评估（2026-04-27）
 
@@ -404,7 +404,7 @@ clarity-wire
 |------|--------|----------|
 | **Sprint 14 — 前端全面翻新（Phase 1-5）** | 10-14 天 | ✅ 已批准，需在 Claw 架构下推进 |
 | egui Settings 模型选择短期修复 | ½ 天 | 无 |
-| egui 关键 Parity 差距修复 | 4 周 | Plan 已产出，见 `docs/plans/2026-04-27-egui-parity-gap-plan.md` |
+| egui 关键 Parity 差距修复 | 4 周 | Plan 已产出，见 `docs/planning/plans/2026-04-27-egui-parity-gap-plan.md` |
 | Phase A：WebSocket MCP + Gateway↔BTM | 2 周 | 用户确认启动 |
 | Release v0.3.1（质量硬化） | ½ 天 | 无 |
 | 单机跨窗口协作架构设计 | 2-3 天 | 需 plan 模式 |

@@ -1,5 +1,5 @@
-use crate::ui::types::{UiEvent, WebTab};
 use crate::App;
+use crate::ui::types::{UiEvent, WebTab};
 
 /// Render a collapsible Web Tabs panel for the left sidebar.
 pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {

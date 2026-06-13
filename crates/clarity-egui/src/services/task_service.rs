@@ -1,6 +1,6 @@
+use crate::App;
 use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::ui::types::UiEvent;
-use crate::App;
 
 impl App {
     /// Refresh the task list from the Gateway if it is online,

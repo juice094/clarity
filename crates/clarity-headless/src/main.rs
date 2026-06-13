@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Headless CLI for Clarity Agent
 //!
 //! Provides a pure terminal entry-point for running the Clarity agent
@@ -6,7 +10,9 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use clarity_core::{
+    Agent, ToolRegistry,
     agent::{
+        AgentConfig, TokenUsage,
         jumpy::{
             predictor::{
                 HistoricalPredictor, HybridPredictor, LlmAdapter, LlmAugmentedPredictor,
@@ -14,10 +20,9 @@ use clarity_core::{
             },
             state::JumpyState,
         },
-        AgentConfig, TokenUsage,
     },
     approval::ApprovalMode,
-    Agent, ToolRegistry,
+    config::Config,
 };
 use clarity_llm::{AnthropicLlm, DeepSeekProvider, KimiLlm, OllamaProvider, OpenAiCompatibleLlm};
 #[cfg(feature = "local-llm")]
@@ -45,6 +50,8 @@ enum Command {
     Run(RunArgs),
     /// Jumpy World Model — predict outcome of a skill without executing it
     Jumpy(JumpyArgs),
+    /// Validate configuration and print a health report
+    Health(HealthArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -141,6 +148,13 @@ struct JumpyArgs {
     output: OutputFormat,
 }
 
+#[derive(Parser, Debug, Clone)]
+struct HealthArgs {
+    /// Output format
+    #[arg(short, long, value_enum, default_value = "json")]
+    output: OutputFormat,
+}
+
 #[derive(Debug, Clone, ValueEnum, PartialEq)]
 enum OutputFormat {
     Markdown,
@@ -185,6 +199,7 @@ async fn async_main() -> Result<()> {
     match args.command {
         Command::Run(run_args) => run_command(run_args).await,
         Command::Jumpy(jumpy_args) => jumpy_command(jumpy_args).await,
+        Command::Health(health_args) => health_command(health_args).await,
     }
 }
 
@@ -324,7 +339,10 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
                     Box::new(HybridPredictor::new(historical, llm))
                 }
                 Err(e) => {
-                    eprintln!("Warning: LLM provider unavailable ({}). Falling back to historical predictor.", e);
+                    eprintln!(
+                        "Warning: LLM provider unavailable ({}). Falling back to historical predictor.",
+                        e
+                    );
                     Box::new(historical)
                 }
             }
@@ -369,6 +387,39 @@ async fn jumpy_command(args: JumpyArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn health_command(args: HealthArgs) -> Result<()> {
+    let (_, health) = Config::load_with_health().context("Failed to load configuration")?;
+
+    match args.output {
+        OutputFormat::Json => {
+            let json = health
+                .to_json()
+                .context("Failed to serialize health report")?;
+            println!("{}", json);
+        }
+        OutputFormat::Markdown => {
+            println!("# Config Health Report");
+            println!();
+            println!("- **Healthy**: {}", health.is_healthy());
+            println!("- **Issues**: {}", health.issues().len());
+            println!("- **Layers**: {}", health.layers().len());
+            if !health.issues().is_empty() {
+                println!();
+                println!("## Issues");
+                for issue in health.issues() {
+                    println!("- {:?}", issue);
+                }
+            }
+        }
+    }
+
+    if health.is_healthy() {
+        Ok(())
+    } else {
+        anyhow::bail!("Configuration health check failed");
+    }
 }
 
 fn read_prompt(args: &RunArgs) -> Result<String> {
@@ -683,6 +734,29 @@ mod tests {
                 assert_eq!(jumpy_args.threshold, Some(0.5));
             }
             _ => panic!("Expected Jumpy command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_health_default_json() {
+        let args = Args::try_parse_from(["clarity-headless", "health"]).unwrap();
+        match args.command {
+            Command::Health(health_args) => {
+                assert_eq!(health_args.output, OutputFormat::Json);
+            }
+            _ => panic!("Expected Health command"),
+        }
+    }
+
+    #[test]
+    fn test_args_parse_health_markdown() {
+        let args =
+            Args::try_parse_from(["clarity-headless", "health", "--output", "markdown"]).unwrap();
+        match args.command {
+            Command::Health(health_args) => {
+                assert_eq!(health_args.output, OutputFormat::Markdown);
+            }
+            _ => panic!("Expected Health command"),
         }
     }
 

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! MCP contract E2E tests — success/error detection logic.
 //!
 //! These tests verify that `clarity-core` correctly detects application-level
@@ -10,7 +17,7 @@
 //!   D. `"error"` field present    → Err(ExecutionFailed)
 
 use clarity_contract::ToolError;
-use clarity_core::mcp::{process_mcp_tool_result, ToolCallResult, ToolContent};
+use clarity_core::mcp::{ToolCallResult, ToolContent, process_mcp_tool_result};
 use serde_json::Value;
 
 // ---------------------------------------------------------------------------

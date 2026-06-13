@@ -22,6 +22,15 @@
 
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
+
+/// Tokenizer regex shared by all [`TfidfVectorizer`] instances.
+///
+/// # Panics
+///
+/// Panics only if the literal pattern is invalid; it is known to be valid.
+#[allow(clippy::unwrap_used)]
+static TOKENIZER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-zA-Z0-9]+").unwrap());
 
 /// TF-IDF Vectorizer
 ///
@@ -187,7 +196,7 @@ impl TfidfVectorizer {
             total_docs: 0,
             vocabulary: HashMap::new(),
             stop_words,
-            tokenizer: Regex::new(r"[a-zA-Z0-9]+").unwrap(),
+            tokenizer: TOKENIZER_RE.clone(),
             min_df: 1,
             max_df_ratio: 0.95,
         }
@@ -339,11 +348,7 @@ impl SparseVector {
         }
 
         let norm = (self_norm_sq * other_norm_sq).sqrt();
-        if norm > 0.0 {
-            dot_product / norm
-        } else {
-            0.0
-        }
+        if norm > 0.0 { dot_product / norm } else { 0.0 }
     }
 
     /// Get non-zero dimensions
@@ -463,6 +468,7 @@ impl VectorStore {
         self.facts.len()
     }
 
+    /// Check whether the store contains no facts
     pub fn is_empty(&self) -> bool {
         self.facts.is_empty()
     }

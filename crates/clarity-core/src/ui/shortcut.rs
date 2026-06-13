@@ -22,14 +22,20 @@ use crate::ui::view_state::FocusScope;
 /// before calling `ShortcutRegistry::resolve`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct KeyEvent {
+    /// Ctrl.
     pub ctrl: bool,
+    /// Shift.
     pub shift: bool,
+    /// Alt.
     pub alt: bool,
+    /// Skill metadata.
     pub meta: bool,
+    /// Argument key.
     pub key: String,
 }
 
 impl KeyEvent {
+    /// Create a new `KeyEvent`.
     pub fn new(key: impl Into<String>) -> Self {
         Self {
             ctrl: false,
@@ -40,21 +46,25 @@ impl KeyEvent {
         }
     }
 
+    /// Set the ctrl.
     pub fn with_ctrl(mut self) -> Self {
         self.ctrl = true;
         self
     }
 
+    /// Set the shift.
     pub fn with_shift(mut self) -> Self {
         self.shift = true;
         self
     }
 
+    /// Set the alt.
     pub fn with_alt(mut self) -> Self {
         self.alt = true;
         self
     }
 
+    /// Set the meta.
     pub fn with_meta(mut self) -> Self {
         self.meta = true;
         self
@@ -64,8 +74,11 @@ impl KeyEvent {
 /// A single binding: when `key` is pressed while `scope` is active, emit `command_id`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShortcutBinding {
+    /// Argument key.
     pub key: KeyEvent,
+    /// Scope.
     pub scope: FocusScope,
+    /// Command id.
     pub command_id: &'static str,
 }
 
@@ -82,6 +95,7 @@ pub struct ShortcutRegistry {
 }
 
 impl ShortcutRegistry {
+    /// Create a new `ShortcutRegistry`.
     pub fn new() -> Self {
         Self::default()
     }

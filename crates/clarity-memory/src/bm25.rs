@@ -23,6 +23,7 @@
 
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 /// Default k1 parameter for BM25
 const DEFAULT_K1: f32 = 1.5;
@@ -169,13 +170,19 @@ fn default_stop_words() -> HashSet<String> {
     .collect()
 }
 
+/// Token-matching regex for [`tokenize`].
+///
+/// # Panics
+///
+/// Panics only if the literal pattern is invalid; it is known to be valid.
+#[allow(clippy::unwrap_used)]
+static TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[a-zA-Z_\-]+\b").unwrap());
+
 /// Tokenize text into lowercase terms, filtering stop words and short tokens
 fn tokenize(text: &str) -> Vec<String> {
-    // Use a simple word matcher; compiling Regex each call is acceptable
-    // for the small documents (facts) this processes.
-    let re = Regex::new(r"\b[a-zA-Z_\-]+\b").unwrap();
     let stop_words = default_stop_words();
-    re.find_iter(text.to_lowercase().as_str())
+    TOKEN_RE
+        .find_iter(text.to_lowercase().as_str())
         .map(|m| m.as_str().to_string())
         .filter(|t| !stop_words.contains(t) && t.len() > 1)
         .collect()

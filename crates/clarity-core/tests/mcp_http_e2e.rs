@@ -1,9 +1,16 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! E2E test for MCP HTTP transport
 //!
 //! Spawns a minimal Axum-based HTTP MCP server, connects via `McpManager::from_config()`,
 //! then exercises `list_tools()` and `call_tool()` end-to-end.
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::net::TcpListener;

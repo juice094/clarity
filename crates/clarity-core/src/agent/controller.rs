@@ -9,9 +9,9 @@
 //! * resolve pending tool approvals, and
 //! * shut the agent down gracefully.
 
+use crate::agent::Agent;
 use crate::agent::driver::ChatDriver;
 use crate::agent::ops::Op;
-use crate::agent::Agent;
 use crate::approval::ApprovalResponse;
 use crate::error::AgentError;
 use std::sync::Arc;
@@ -30,14 +30,25 @@ pub enum ControllerEvent {
     Error(String),
     /// A tool call was initiated by the model (arguments fully assembled).
     ToolCallStart {
+        /// Tool call identifier.
         id: String,
+        /// Display name.
         name: String,
+        /// Tool call arguments.
         arguments: serde_json::Value,
     },
     /// A tool call finished executing.
-    ToolResult { id: String, result: String },
+    ToolResult {
+        /// Tool call identifier.
+        id: String,
+        /// Serialized tool result.
+        result: String,
+    },
     /// A new step (tool execution) began.
-    StepBegin { tool_name: String },
+    StepBegin {
+        /// Tool name.
+        tool_name: String,
+    },
 }
 
 /// State machine for the controller's background agent task.
@@ -399,7 +410,7 @@ mod tests {
     async fn test_controller_streaming_events() {
         use crate::agent::{AgentConfig, MockLlm};
         use std::sync::Arc;
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
 
         let registry = ToolRegistry::new();
         let agent =

@@ -26,8 +26,8 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tokio::net::{TcpListener, TcpStream};
@@ -177,6 +177,7 @@ impl GatewayHealthMonitor {
     }
 
     /// Reset the failure counter (e.g. after a successful restart).
+    /// Also removes any persisted restart intent file.
     pub fn reset(&self) {
         self.consecutive_failures.store(0, Ordering::Relaxed);
         // Remove any stale restart intent.

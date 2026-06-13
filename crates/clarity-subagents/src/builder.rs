@@ -119,7 +119,7 @@ impl SubagentBuilder {
         type_name: &str,
         store: &mut SubagentStore,
     ) -> anyhow::Result<Agent> {
-        let type_def = self.labor_market.require(type_name);
+        let type_def = self.labor_market.require(type_name)?;
         self.build(agent_id, type_def, store)
     }
 
@@ -177,7 +177,10 @@ mod tests {
         let builder = SubagentBuilder::new(registry, "/tmp");
         let mut store = SubagentStore::new("/tmp/store");
 
-        let type_def = builder.labor_market().require("coder");
+        let type_def = builder
+            .labor_market()
+            .require("coder")
+            .expect("coder type exists");
         let agent = builder.build("test-1", type_def, &mut store);
 
         assert!(agent.is_ok());
@@ -203,12 +206,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Unknown agent type")]
     fn test_build_unknown_type() {
         let registry = create_test_registry();
         let builder = SubagentBuilder::new(registry, "/tmp");
         let mut store = SubagentStore::new("/tmp/store");
 
-        let _result = builder.build_by_type("test-1", "unknown", &mut store);
+        let result = builder.build_by_type("test-1", "unknown", &mut store);
+        assert!(result.is_err());
     }
 }

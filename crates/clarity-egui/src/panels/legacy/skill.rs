@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the skill panel UI.
 pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
     if !matches!(
         app.view_state.modal,

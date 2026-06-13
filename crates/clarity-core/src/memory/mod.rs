@@ -224,8 +224,8 @@ fn uuid() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        // SAFE: system time is always after UNIX_EPOCH.
-        .unwrap()
+        // SAFE: system time is always after UNIX_EPOCH in practice.
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_nanos();
     format!("{:x}", timestamp)
 }
@@ -271,7 +271,7 @@ mod tests {
 
         // Cycle through turns
         assert!(shared.notify_turn("session-1").await.is_none()); // 1
-                                                                  // Trigger and wait to reset the compiling flag
+        // Trigger and wait to reset the compiling flag
         assert!(shared.notify_turn_and_wait("session-1").await.is_some()); // 2 - trigger
         assert!(shared.notify_turn("session-1").await.is_none()); // 3
         assert!(shared.notify_turn_and_wait("session-1").await.is_some()); // 4 - trigger

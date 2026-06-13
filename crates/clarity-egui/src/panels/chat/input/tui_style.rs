@@ -5,7 +5,7 @@ use crate::App;
 /// Visual spec:
 /// - Rounded card container (16px radius) with subtle border
 /// - TextEdit inside with no internal frame
-/// - Bottom toolbar: [+] [Agent] ............ [Send]
+/// - Bottom toolbar: [+] `Agent` ............ [Send]
 /// - Attachments shown as chips above the card
 pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme.clone();
@@ -18,7 +18,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .sessions
             .iter()
             .find(|s| s.id == app.session_store.active_session_id)
-            .map_or(true, |s| s.messages.is_empty() && !app.chat_store.is_loading);
+            .is_none_or(|s| s.messages.is_empty() && !app.chat_store.is_loading);
 
     if is_empty_state {
         // Empty-state input: subtle rounded bar with border so it doesn't blend into bg
@@ -35,10 +35,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 .hint_text(hint)
                 .margin(egui::vec2(0.0, 0.0))
                 .frame(false);
-            let response = ui.add_sized(
-                egui::vec2(ui.available_width(), 28.0),
-                text_edit,
-            );
+            let response = ui.add_sized(egui::vec2(ui.available_width(), 28.0), text_edit);
             if app.ui_store.focus_input_requested {
                 response.request_focus();
                 app.ui_store.focus_input_requested = false;
@@ -118,10 +115,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .hint_text(hint)
             .margin(egui::vec2(0.0, 2.0))
             .frame(false);
-        let response = ui.add_sized(
-            egui::vec2(ui.available_width(), input_height),
-            text_edit,
-        );
+        let response = ui.add_sized(egui::vec2(ui.available_width(), input_height), text_edit);
 
         if app.ui_store.focus_input_requested {
             response.request_focus();
@@ -154,10 +148,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                             .file_name()
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_default();
-                        app.chat_store.attachments.push(crate::ui::types::Attachment {
-                            path,
-                            name,
-                        });
+                        app.chat_store
+                            .attachments
+                            .push(crate::ui::types::Attachment { path, name });
                     }
                 }
             }
@@ -201,11 +194,15 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                     )
                     .fill(egui::Color32::TRANSPARENT)
                     .corner_radius(egui::CornerRadius::same(10));
-                    if ui.add(send_btn).on_hover_text("Send (Ctrl+Enter)").clicked() {
-                        if !app.chat_store.input.trim().is_empty() && !app.chat_store.is_loading {
-                            app.chat_store.stick_to_bottom = true;
-                            app.send();
-                        }
+                    if ui
+                        .add(send_btn)
+                        .on_hover_text("Send (Ctrl+Enter)")
+                        .clicked()
+                        && !app.chat_store.input.trim().is_empty()
+                        && !app.chat_store.is_loading
+                    {
+                        app.chat_store.stick_to_bottom = true;
+                        app.send();
                     }
                 }
 
@@ -220,7 +217,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                     .fill(egui::Color32::TRANSPARENT)
                     .corner_radius(egui::CornerRadius::same(8));
                     if ui.add(model_btn).on_hover_text("Switch model").clicked() {
-                        app.settings_store.settings_open = true;
+                        app.view_state.main = clarity_core::ui::AppView::Settings;
                     }
                 }
             });

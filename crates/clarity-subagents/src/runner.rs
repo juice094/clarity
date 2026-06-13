@@ -12,18 +12,18 @@
 // returns the concrete `Agent` so that caller-side builder methods work.
 use crate::builder::SubagentBuilder;
 use crate::store::SubagentStore;
+use clarity_contract::ApprovalMode;
 use clarity_contract::error::AgentError;
 use clarity_contract::subagent::AgentExecutor;
 use clarity_contract::subagent::{
     AgentTypeDefinition, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, RunSpec,
     SubagentError, SubagentProgressEvent, SubagentResult, SubagentStatus,
 };
-use clarity_contract::ApprovalMode;
 use clarity_core::agent::Agent;
 use clarity_core::approval::ApprovalRuntime;
 use clarity_core::registry::ToolRegistry;
 use clarity_llm::api::{LlmProvider, Message};
-use clarity_llm::{build_provider_from_registry, ModelRegistry};
+use clarity_llm::{ModelRegistry, build_provider_from_registry_entry, default_secret_store};
 use clarity_wire::{Wire, WireMessage};
 
 use std::path::{Path, PathBuf};
@@ -239,8 +239,7 @@ impl OutputCollector {
         let stage = stage.into();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            // SAFE: system time is always after UNIX_EPOCH.
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_millis();
         self.stages.push(format!("[{}] {}", timestamp, stage));
         debug!("Subagent stage: {}", stage);
@@ -423,8 +422,7 @@ impl SubagentRunner {
         let start_time = SystemTime::now();
         let started_at = start_time
             .duration_since(UNIX_EPOCH)
-            // SAFE: system time is always after UNIX_EPOCH.
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_secs();
 
         // 1. 准备或恢复代理实例
@@ -472,12 +470,19 @@ impl SubagentRunner {
         collector.stage("agent_built");
 
         // 5.5 根据 model_override 动态选择 LLM
+        let secrets = default_secret_store().ok();
         if let Some(ref model_alias) = spec.model_override {
             if let Some(ref registry) = self.registry {
                 match registry.get(model_alias) {
                     Some(entry) => {
                         if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
-                            match build_provider_from_registry(provider_cfg, &entry.model_id).await
+                            match build_provider_from_registry_entry(
+                                provider_cfg,
+                                entry,
+                                None,
+                                secrets.as_ref(),
+                            )
+                            .await
                             {
                                 Ok(new_llm) => {
                                     agent.set_llm(Arc::from(new_llm));
@@ -553,11 +558,12 @@ impl SubagentRunner {
         store.set_steps_taken(&agent_id, steps_taken);
 
         // 9. 处理结果
-        let elapsed = SystemTime::now().duration_since(start_time).unwrap(); // SAFE: start_time set earlier in this function
+        let elapsed = SystemTime::now()
+            .duration_since(start_time)
+            .unwrap_or(std::time::Duration::ZERO);
         let completed_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            // SAFE: system time is always after UNIX_EPOCH.
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_secs();
 
         match result {
@@ -1048,7 +1054,10 @@ mod tests {
             .with_git_context(Some("# Git Context\n\nCurrent branch: main\n".to_string()));
         let mut store = SubagentStore::new("/tmp/store");
 
-        let type_def = builder.labor_market().require("coder");
+        let type_def = builder
+            .labor_market()
+            .require("coder")
+            .expect("coder type exists");
         let agent = builder.build("test-git", type_def, &mut store).unwrap();
 
         assert!(agent.config().system_prompt.contains("Git Context"));

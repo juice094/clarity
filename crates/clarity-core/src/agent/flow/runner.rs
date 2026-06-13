@@ -3,7 +3,7 @@
 //! Drives a `Flow` by executing one node at a time, where each node
 //! becomes one Agent turn.
 
-use super::{parse_choice, Flow, FlowError, FlowNodeKind};
+use super::{Flow, FlowError, FlowNodeKind, parse_choice};
 use clarity_contract::AgentError;
 use std::sync::Arc;
 

@@ -22,10 +22,12 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 # Internal dependencies
+clarity-channels = { path = "../clarity-channels" }
 clarity-contract = { path = "../clarity-contract" }
 clarity-core = { workspace = true }
 clarity-llm = { path = "../clarity-llm" }
 clarity-memory = { path = "../clarity-memory", features = ["sqlite"] }
+clarity-secrets = { path = "../clarity-secrets" }
 clarity-subagents = { path = "../clarity-subagents" }
 clarity-telemetry = { path = "../clarity-telemetry", optional = true }
 clarity-wire = { path = "../clarity-wire" }
@@ -48,6 +50,8 @@ base64 = "0.22"
 # Slack SDK
 slack-morphism = { version = "2.8", features = ["hyper"], optional = true }
 parking_lot = "0.12"
+dirs = "5.0"
+toml = "0.8"
 
 [dev-dependencies]
 tokio-tungstenite = "0.24"
@@ -64,3 +68,6 @@ telegram = []
 slack = ["dep:slack-morphism"]
 telemetry-api = ["dep:clarity-telemetry"]
 webhook = []
+
+[lints]
+workspace = true

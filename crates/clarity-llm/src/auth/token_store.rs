@@ -17,13 +17,17 @@ use clarity_contract::AgentError;
 /// An OAuth 2.0 token set returned by the Kimi Code authorization server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuthToken {
+    /// Access token used to authenticate API requests.
     pub access_token: String,
+    /// Refresh token used to obtain a new access token.
     pub refresh_token: String,
     /// Unix timestamp when the token expires.
     #[serde(default)]
     pub expires_at: f64,
+    /// Authorized scope.
     #[serde(default)]
     pub scope: String,
+    /// Token type, typically "Bearer".
     #[serde(default)]
     pub token_type: String,
     /// Original expiry duration in seconds (used for threshold calculation).
@@ -113,6 +117,7 @@ pub struct TokenStore {
 }
 
 impl TokenStore {
+    /// Create a store at an explicit file path.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
@@ -141,6 +146,7 @@ impl TokenStore {
             .join("credentials")
     }
 
+    /// Load the token from disk, returning `Ok(None)` if no file exists.
     pub fn load(&self) -> Result<Option<OAuthToken>, AgentError> {
         if !self.path.exists() {
             return Ok(None);
@@ -168,6 +174,7 @@ impl TokenStore {
         Ok(())
     }
 
+    /// Delete the stored token file if it exists.
     pub fn delete(&self) -> Result<(), AgentError> {
         if self.path.exists() {
             std::fs::remove_file(&self.path)
@@ -176,6 +183,7 @@ impl TokenStore {
         Ok(())
     }
 
+    /// Return the token file path.
     pub fn path(&self) -> &Path {
         &self.path
     }

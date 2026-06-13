@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the approval modal UI.
 pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
     // Refresh pending approvals each frame from the shared runtime.
     app.ui_store.pending_approvals = app.state.mode_aware_approval_runtime.inner().list_pending();

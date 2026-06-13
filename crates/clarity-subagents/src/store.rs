@@ -25,9 +25,13 @@ impl SubagentStore {
     /// Create state for a new subagent
     pub fn create(&mut self, agent_id: String, agent_type: String) -> &SubagentState {
         let state = SubagentState::new(agent_id.clone(), agent_type);
-        self.in_memory.insert(agent_id.clone(), state);
-        // SAFE: state was just inserted with the same agent_id on the line above.
-        self.in_memory.get(&agent_id).unwrap()
+        match self.in_memory.entry(agent_id) {
+            std::collections::hash_map::Entry::Occupied(mut e) => {
+                *e.get_mut() = state;
+                e.into_mut()
+            }
+            std::collections::hash_map::Entry::Vacant(e) => e.insert(state),
+        }
     }
 
     /// Get state by agent_id
@@ -182,7 +186,7 @@ impl SubagentStore {
 fn now_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(std::time::Duration::ZERO)
         .as_secs()
 }
 

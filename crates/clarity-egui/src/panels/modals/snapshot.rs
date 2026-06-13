@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
+/// Renders the snapshot modal UI.
 pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
     if !app.snapshot_store.modal_open {
         return;

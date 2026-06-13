@@ -5,8 +5,11 @@
 //!   - Click file: file tree shrinks to 60px icon strip, preview drawer slides in
 //!   - Click drawer ✕: drawer closes, file tree restores full width
 
+pub mod plan;
+
 use crate::App;
 
+/// Renders the workspace panel UI.
 pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     // ── Clone theme to free app borrow for closures ──
     let theme = app.ui_store.theme.clone();
@@ -71,10 +74,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| p.to_string_lossy().to_string());
-                crate::components::chat::conversation::ContextFile {
-                    name,
-                    icon: None,
-                }
+                crate::components::chat::conversation::ContextFile { name, icon: None }
             })
             .collect()
     } else {
@@ -123,11 +123,13 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     .iter()
                     .zip(plan_step_details.iter())
                     .zip(plan_step_statuses.iter())
-                    .map(|((d, tool), st)| crate::components::chat::conversation::StepItem {
-                        title: d,
-                        detail: Some(tool),
-                        status: *st,
-                    })
+                    .map(
+                        |((d, tool), st)| crate::components::chat::conversation::StepItem {
+                            title: d,
+                            detail: Some(tool),
+                            status: *st,
+                        },
+                    )
                     .collect();
                 crate::components::chat::conversation::knowledge_panel(
                     ui,
@@ -212,7 +214,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
 
                         // Plan section at bottom (only in full-width mode, skip when Kimi style)
                         if !has_preview && !kimi_style {
-                            crate::panels::workspace_plan::render_workspace_plan(app, ui);
+                            crate::panels::workspace::plan::render_workspace_plan(app, ui);
                         }
                     },
                 );
@@ -298,8 +300,8 @@ fn render_preview_drawer(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     .on_hover_text("Save & git add")
                     .clicked()
             {
-                if let crate::ui::types::PreviewItem::File { content, path, .. } =
-                    app.ui_store.preview_item.as_ref().unwrap()
+                if let Some(crate::ui::types::PreviewItem::File { content, path, .. }) =
+                    app.ui_store.preview_item.as_ref()
                 {
                     let work_dir = app.state.agent.config().working_dir.clone();
                     match std::fs::write(path, content) {

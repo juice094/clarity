@@ -1,8 +1,7 @@
-use crate::async_job::ToolCallJob;
 use crate::diff::compute_diff;
 use crate::events::ToolCallInfo;
 use crate::popup::{EventState, Popup};
-use crate::popups::{diff_popup::DiffPopup, HelpPopup, ToolResultPopup};
+use crate::popups::{HelpPopup, ToolResultPopup, diff_popup::DiffPopup};
 use anyhow::Result;
 use chrono::Local;
 use clarity_core::agent::{Agent, AgentController, Op};
@@ -12,37 +11,50 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::commands::{build_default_registry, CommandRegistry};
+use crate::commands::{CommandRegistry, build_default_registry};
 use crate::events::Event;
 use crate::widgets::input_pane::InputPane;
 use crate::wire_adapter::spawn_wire_adapter;
 
+/// Per-generation timing and throughput metrics.
 #[derive(Debug, Clone)]
 pub struct GenerationMetrics {
+    /// Time when the current generation started.
     pub start_time: std::time::Instant,
+    /// Time when the first response chunk arrived, if any.
     pub first_token_time: Option<std::time::Instant>,
+    /// Total number of characters received so far.
     pub total_chars: usize,
 }
 
-/// 消息类型
+/// Visual role of a chat message.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageType {
+    /// Message sent by the user.
     User,
+    /// Message produced by the assistant.
     Assistant,
+    /// System/status message.
     System,
+    /// Tool call or tool result notification.
     ToolCall,
 }
 
-/// 聊天消息
+/// A single entry in the TUI chat history.
 #[derive(Clone, Debug)]
 pub struct Message {
+    /// Rendered text content.
     pub content: String,
+    /// Visual role of the message.
     pub msg_type: MessageType,
+    /// Timestamp shown in the header.
     pub timestamp: String,
+    /// Whether the assistant message is still streaming.
     pub is_streaming: bool,
 }
 
 impl Message {
+    /// Create a new message with the current timestamp.
     pub fn new(content: impl Into<String>, msg_type: MessageType) -> Self {
         Self {
             content: content.into(),
@@ -52,16 +64,19 @@ impl Message {
         }
     }
 
+    /// Mark this message as streaming.
     pub fn streaming(mut self) -> Self {
         self.is_streaming = true;
         self
     }
 }
 
-/// 应用模式
+/// High-level input mode of the TUI.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AppMode {
+    /// Normal mode: keys navigate/scroll.
     Normal,
+    /// Input mode: keys are inserted into the input pane.
     Input,
 }
 
@@ -92,9 +107,6 @@ pub struct App {
     pub mode: AppMode,
     /// 当前弹窗
     pub popup: Option<Box<dyn Popup>>,
-    /// 后台任务（工具调用）
-    #[allow(dead_code)]
-    pub async_job: ToolCallJob,
     /// Agent 实例
     pub(crate) agent: Arc<Agent>,
     /// 事件发送器（用于后台任务发送事件）
@@ -113,15 +125,14 @@ pub struct App {
     /// Skill registry for listing and selection
     pub skill_registry: Option<clarity_core::skills::SkillRegistry>,
     /// File-system watcher for live skill reloading.
+    // Intentionally retained: keeps the skill file watcher alive for the
+    // lifetime of the application.
     #[allow(dead_code)]
     pub skill_watcher: Option<clarity_core::skills::SkillWatcher>,
     /// Background task manager (shared with Gateway if running)
     pub task_manager: Option<Arc<BackgroundTaskManager>>,
     /// Most recently generated plan, awaiting user confirmation.
     pub pending_plan: Option<clarity_core::agent::Plan>,
-    /// Settings ViewModel (populated when entering settings mode).
-    #[allow(dead_code)]
-    pub settings_vm: Option<clarity_core::view_models::settings::SettingsViewModel>,
     /// Whether the TUI is in settings display mode.
     pub settings_mode: bool,
     /// Cached view commands received from the wire view channel.
@@ -159,7 +170,6 @@ impl App {
             input_height: 3,
             mode: AppMode::Input,
             popup: None,
-            async_job: ToolCallJob::new(),
             agent,
             event_tx: None,
             controller_tx: None,
@@ -172,7 +182,6 @@ impl App {
             skill_watcher: None,
             task_manager,
             pending_plan: None,
-            settings_vm: None,
             settings_mode: false,
             cached_view_commands: Vec::new(),
         }
@@ -186,24 +195,6 @@ impl App {
     /// Set the agent's approval mode at runtime.
     pub fn set_approval_mode(&self, mode: ApprovalMode) {
         self.agent.set_approval_mode(mode);
-    }
-
-    /// Get the agent's current approval mode.
-    #[allow(dead_code)]
-    pub fn approval_mode(&self) -> ApprovalMode {
-        self.agent.approval_mode()
-    }
-
-    /// 向后兼容的 input 访问器
-    #[allow(dead_code)]
-    pub fn input(&self) -> &str {
-        self.input_pane.input()
-    }
-
-    /// 向后兼容的光标位置访问器
-    #[allow(dead_code)]
-    pub fn cursor_position(&self) -> usize {
-        self.input_pane.cursor_position()
     }
 
     /// 设置事件发送器，并启动 Wire 适配器与 AgentController。
@@ -826,20 +817,6 @@ impl App {
         }
     }
 
-    /// Set the active skill on the underlying agent.
-    /// Kept for backward compatibility; prefer `skill_registry().toggle_active()`.
-    #[allow(dead_code, deprecated)]
-    pub fn set_active_skill(&self, skill_id: Option<String>) {
-        self.agent.set_active_skill(skill_id);
-    }
-
-    /// Get the currently active skill id from the underlying agent.
-    /// Kept for backward compatibility; prefer `skill_registry().active_ids()`.
-    #[allow(dead_code, deprecated)]
-    pub fn active_skill(&self) -> Option<String> {
-        self.agent.active_skill()
-    }
-
     /// 完成生成
     pub fn finish_generation(&mut self) {
         self.generation_metrics = None;
@@ -865,10 +842,11 @@ impl App {
             }
             metrics.total_chars += chunk.chars().count();
         }
-        if let Some(last) = self.messages.last_mut() {
-            if matches!(last.msg_type, MessageType::Assistant) && last.is_streaming {
-                last.content.push_str(&chunk);
-            }
+        if let Some(last) = self.messages.last_mut()
+            && matches!(last.msg_type, MessageType::Assistant)
+            && last.is_streaming
+        {
+            last.content.push_str(&chunk);
         }
     }
 
@@ -894,35 +872,34 @@ impl App {
             .and_then(|json| json.get("_diff_preview").cloned())
             .is_some();
 
-        if has_diff {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&tool.params) {
-                if let Some(diff_preview) = json.get("_diff_preview") {
-                    let path = json.get("path").and_then(|v| v.as_str());
+        if has_diff
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&tool.params)
+            && let Some(diff_preview) = json.get("_diff_preview")
+        {
+            let path = json.get("path").and_then(|v| v.as_str());
 
-                    // Sprint 11 Phase B: unified diff patch string
-                    if let Some(patch) = diff_preview.as_str() {
-                        if let Some(path) = path {
-                            self.popup = Some(Box::new(DiffPopup::from_patch(
-                                path.to_string(),
-                                patch.to_string(),
-                            )));
-                            return;
-                        }
-                    }
+            // Sprint 11 Phase B: unified diff patch string
+            if let Some(patch) = diff_preview.as_str()
+                && let Some(path) = path
+            {
+                self.popup = Some(Box::new(DiffPopup::from_patch(
+                    path.to_string(),
+                    patch.to_string(),
+                )));
+                return;
+            }
 
-                    // Legacy: {old, new} object (backward compatible)
-                    if let (Some(path), Some(old), Some(new)) = (
-                        path,
-                        diff_preview.get("old").and_then(|v| v.as_str()),
-                        diff_preview.get("new").and_then(|v| v.as_str()),
-                    ) {
-                        self.popup = Some(Box::new(DiffPopup::new(
-                            path.to_string(),
-                            compute_diff(old, new),
-                        )));
-                        return;
-                    }
-                }
+            // Legacy: {old, new} object (backward compatible)
+            if let (Some(path), Some(old), Some(new)) = (
+                path,
+                diff_preview.get("old").and_then(|v| v.as_str()),
+                diff_preview.get("new").and_then(|v| v.as_str()),
+            ) {
+                self.popup = Some(Box::new(DiffPopup::new(
+                    path.to_string(),
+                    compute_diff(old, new),
+                )));
+                return;
             }
         }
 
@@ -1150,7 +1127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_end_to_end_render_and_key_flow() {
-        use ratatui::{backend::TestBackend, Terminal};
+        use ratatui::{Terminal, backend::TestBackend};
 
         let mut app = test_app();
         app.terminal_size = (40, 12);

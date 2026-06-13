@@ -163,6 +163,7 @@ pub trait IntoSharedTool: Tool + Sized
 where
     Self: 'static,
 {
+    /// Wrap this tool in an `Arc<dyn Tool>`.
     fn into_shared(self) -> SharedTool {
         Arc::new(self)
     }

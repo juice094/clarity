@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Core-Memory Integration Tests
 //!
 //! These tests verify the integration between clarity-core and clarity-memory crates.
@@ -209,11 +216,12 @@ async fn test_memory_ticker_cycles() {
     let mut ticker = MemoryTicker::new(temp_dir.path(), Some(2));
     ticker.set_compile_callback(|| async { Ok(std::collections::HashMap::new()) });
 
-    // Cycle through
+    // Cycle through. Use `notify_turn_and_wait` on trigger turns so the
+    // internal "compiling" guard is reset and subsequent turns can fire again.
     assert!(ticker.notify_turn("session-1").is_none()); // 1
-    assert!(ticker.notify_turn("session-1").is_some()); // 2 - trigger
+    assert!(ticker.notify_turn_and_wait("session-1").await.is_some()); // 2 - trigger
     assert!(ticker.notify_turn("session-1").is_none()); // 3
-    assert!(ticker.notify_turn("session-1").is_some()); // 4 - trigger
+    assert!(ticker.notify_turn_and_wait("session-1").await.is_some()); // 4 - trigger
     assert!(ticker.notify_turn("session-1").is_none()); // 5
 }
 

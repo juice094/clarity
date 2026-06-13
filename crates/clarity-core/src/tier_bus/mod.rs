@@ -29,16 +29,23 @@ use std::collections::HashMap;
 pub enum TierMessage {
     /// Parent injects directives into a child soul.
     ParentDirective {
+        /// Source identifier.
         from: String,
+        /// Destination identifier.
         to: String,
+        /// Message payload.
         payload: DirectivePayload,
+        /// Task priority.
         priority: Priority,
     },
 
     /// Peer publishes to the shared bulletin board.
     PeerAnnouncement {
+        /// Source identifier.
         from: String,
+        /// Announcement topic.
         topic: String,
+        /// Message payload.
         payload: AnnouncementPayload,
         /// Time-to-live for this announcement.
         ttl_seconds: u64,
@@ -46,8 +53,11 @@ pub enum TierMessage {
 
     /// Child queries parent's public state.
     ChildQuery {
+        /// Source identifier.
         from: String,
+        /// Destination identifier.
         to: String,
+        /// Query payload.
         query: QueryPayload,
     },
 }
@@ -57,10 +67,14 @@ pub enum TierMessage {
     Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
 )]
 #[serde(rename_all = "lowercase")]
+/// `Priority` variants.
 pub enum Priority {
+    /// Background priority.
     Background,
     #[default]
+    /// Normal priority.
     Normal,
+    /// Critical priority.
     Critical,
 }
 

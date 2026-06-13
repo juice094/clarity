@@ -100,8 +100,9 @@ mod tests {
         let node = CoreNode::new(agent);
 
         let caps = node.capabilities();
-        assert!(caps
-            .iter()
-            .any(|c| matches!(c, Capability::Channel { name } if name == "agent_executor")));
+        assert!(
+            caps.iter()
+                .any(|c| matches!(c, Capability::Channel { name } if name == "agent_executor"))
+        );
     }
 }

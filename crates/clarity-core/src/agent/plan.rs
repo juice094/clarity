@@ -34,6 +34,7 @@ impl Plan {
         self.steps.len()
     }
 
+    /// Check whether the container is empty.
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty()
     }
@@ -593,10 +594,12 @@ mod tests {
     fn test_controller_init() {
         let controller = PlanExecutionController::new(sample_plan());
         assert_eq!(controller.states().len(), 3);
-        assert!(controller
-            .states()
-            .iter()
-            .all(|s| s.status == PlanStepExecutionStatus::Pending));
+        assert!(
+            controller
+                .states()
+                .iter()
+                .all(|s| s.status == PlanStepExecutionStatus::Pending)
+        );
         assert!(controller.has_next());
     }
 

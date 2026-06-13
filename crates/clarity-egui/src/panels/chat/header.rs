@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the session tabs UI.
 pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     // All categories render tabs uniformly — no special-casing for emotion.
     // Emotion with a single session shows one tab, same visual weight as others.
@@ -164,6 +165,7 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
+/// Renders the header UI.
 pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;

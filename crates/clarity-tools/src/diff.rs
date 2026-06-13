@@ -224,14 +224,16 @@ mod tests {
         let hunk = &hunks[0];
         assert_eq!(hunk.old_start, 1);
         assert_eq!(hunk.new_start, 1);
-        assert!(hunk
-            .lines
-            .iter()
-            .any(|l| matches!(l, DiffLine::Removed(s) if s.contains("line2"))));
-        assert!(hunk
-            .lines
-            .iter()
-            .any(|l| matches!(l, DiffLine::Added(s) if s.contains("modified"))));
+        assert!(
+            hunk.lines
+                .iter()
+                .any(|l| matches!(l, DiffLine::Removed(s) if s.contains("line2")))
+        );
+        assert!(
+            hunk.lines
+                .iter()
+                .any(|l| matches!(l, DiffLine::Added(s) if s.contains("modified")))
+        );
     }
 
     #[test]
@@ -260,10 +262,11 @@ mod tests {
         assert_eq!(hunks.len(), 1);
         let hunk = &hunks[0];
         assert_eq!(hunk.lines.len(), 3);
-        assert!(hunk
-            .lines
-            .iter()
-            .all(|l| !matches!(l, DiffLine::Context(s) if s.contains("No newline"))));
+        assert!(
+            hunk.lines
+                .iter()
+                .all(|l| !matches!(l, DiffLine::Context(s) if s.contains("No newline")))
+        );
     }
 
     #[test]

@@ -51,6 +51,7 @@ clarity-mcp = { path = "../clarity-mcp" }
 clarity-wire = { path = "../clarity-wire" }
 clarity-llm = { path = "../clarity-llm" }
 clarity-tools = { path = "../clarity-tools" }
+clarity-secrets = { path = "../clarity-secrets" }
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -78,3 +79,6 @@ harness = false
 name = "agent_prompt"
 harness = false
 
+
+[lints]
+workspace = true

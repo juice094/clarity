@@ -1,8 +1,8 @@
 //! Unit tests for clarity-telemetry.
 
 use crate::{
-    audit::{ConfigActor, ConfigAuditLog, ConfigChangeType},
     EventType, Severity, WideEvent,
+    audit::{ConfigActor, ConfigAuditLog, ConfigChangeType},
 };
 
 // ============================================================================

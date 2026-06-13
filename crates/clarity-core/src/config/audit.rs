@@ -13,6 +13,8 @@
 //!     "~/.clarity/config.toml",
 //!     ConfigChangeType::Update,
 //!     "changed default model to gpt-4",
+//!     None,
+//!     None,
 //! );
 //! ```
 
@@ -116,9 +118,13 @@ impl ConfigAuditLog {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigChangeType {
+    /// Configuration created.
     Create,
+    /// Configuration updated.
     Update,
+    /// Configuration deleted.
     Delete,
+    /// Configuration migration.
     Migration,
 }
 
@@ -126,9 +132,13 @@ pub enum ConfigChangeType {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigActor {
+    /// User-initiated change.
     User,
+    /// Agent-initiated change.
     Agent,
+    /// Configuration migration.
     Migration,
+    /// System-initiated change.
     System,
 }
 

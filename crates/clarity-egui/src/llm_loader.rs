@@ -151,6 +151,9 @@ async fn try_load_cloud(
             } else {
                 Some(api_key)
             },
+            None,
+            None,
+            None,
         )
         .await
         .map(Arc::from)

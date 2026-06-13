@@ -34,8 +34,11 @@ pub struct MemoryCompiler {
 /// Memory merge configuration
 #[derive(Debug, Clone)]
 pub struct MergeConfig {
+    /// Cosine similarity threshold above which memories are merged
     pub similarity_threshold: f32,
+    /// Minimum importance score for a memory to be promoted to long-term
     pub min_long_term_importance: f32,
+    /// Number of days after which low-importance memories may be forgotten
     pub forget_after_days: i64,
 }
 
@@ -400,9 +403,8 @@ Long-term memory summary:"#,
                     .iter()
                     .map(|&idx| &memories[idx])
                     .max_by_key(|m| m.len())
-                    // SAFE: similar_indices.len() > 1 ensures iterator is non-empty.
-                    .unwrap()
-                    .clone();
+                    .cloned()
+                    .unwrap_or_else(|| mem.clone());
                 merged.push(best);
             } else {
                 merged.push(mem.clone());

@@ -1,0 +1,257 @@
+import { Theme } from "theme.slint";
+import { TreeItem, SessionStatus } from "models.slint";
+import { Sidebar } from "navigation/sidebar.slint";
+import { ChatArea } from "chat/chat-area.slint";
+import { RightPanel } from "drawer/right-panel.slint";
+import { LucideIcon } from "components/lucide-icon.slint";
+import { IconSet } from "@lucide";
+
+export component AppWindow inherits Window {
+    // 窗口约束
+    preferred-width: 1280px;
+    preferred-height: 840px;
+    min-width: 900px;
+    min-height: 600px;
+    max-width: 1920px;
+    max-height: 1200px;
+
+    // 窗口基础美化
+    no-frame: true;
+    title: "Clarity";
+    background: Theme.surface;
+    default-font-family: "Microsoft YaHei UI";
+    icon: @image-url("assets/icon.png");
+
+    // 左侧导航数据
+    in property <[string]> core-actions: [];
+    in property <[string]> external-links: [];
+    in property <[string]> extra-features: [];
+    in property <[string]> claw-devices: [];
+    in property <[TreeItem]> tree-items: [];
+    in property <string> user-name: "User";
+
+    // 中央聊天区数据
+    in property <string> bot-name: "Bot";
+    in-out property <string> input-text: "";
+
+    // 右侧面板状态
+    in-out property <bool> right-panel-visible: false;
+
+    // 左侧导航栏展开/收起状态
+    in-out property <bool> sidebar-collapsed: false;
+
+    // 回调
+    pure callback core-action-clicked(string);
+    pure callback external-link-clicked(string);
+    pure callback extra-feature-clicked(string);
+    pure callback claw-device-clicked(string);
+    pure callback tree-item-clicked(TreeItem);
+    pure callback user-menu-clicked();
+    pure callback input-text-changed(string);
+    pure callback send-clicked();
+    pure callback upload-clicked();
+    pure callback pretext-render(string, length, string, color) -> image;
+
+    // 窗口无边框后的自定义标题栏控制
+    in-out property <bool> window-maximized: false;
+    callback window-minimize();
+    callback window-maximize-toggle();
+    callback window-close();
+
+    // 内部回调：处理右侧面板状态变更
+    callback do-toggle-right-panel();
+    do-toggle-right-panel => { root.right-panel-visible = !root.right-panel-visible; }
+
+    callback do-close-right-panel();
+    do-close-right-panel => { root.right-panel-visible = false; }
+
+    callback do-toggle-sidebar();
+    do-toggle-sidebar => { root.sidebar-collapsed = !root.sidebar-collapsed; }
+
+    VerticalLayout {
+        // 顶部标题栏（无边框窗口时充当自定义标题栏）
+        Rectangle {
+            height: Theme.title-bar-height;
+            background: Theme.surface-elevated;
+
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 16px;
+                alignment: start;
+
+                // 应用图标
+                LucideIcon {
+                    icon: IconSet.Sparkles;
+                    size: 22px;
+                    stroke: Theme.primary;
+                }
+
+                Text {
+                    text: "Clarity";
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+
+                // Work / Chat 标签
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    Rectangle {
+                        width: 60px;
+                        height: 28px;
+                        border-radius: Theme.radius-md;
+                        background: Theme.surface-hover;
+
+                        Text {
+                            text: "Work";
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    Rectangle {
+                        width: 60px;
+                        height: 28px;
+                        border-radius: Theme.radius-md;
+                        background: transparent;
+
+                        Text {
+                            text: "Chat";
+                            color: Theme.text-secondary;
+                            font-size: Theme.font-body;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                // 把窗口控制按钮推到右侧
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+
+                // 最小化 / 最大化 / 关闭
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    Rectangle {
+                        width: 32px;
+                        height: 28px;
+                        border-radius: Theme.radius-md;
+                        background: minimizeTouch.has-hover ? Theme.surface-hover : transparent;
+
+                        LucideIcon {
+                            icon: IconSet.Minus;
+                            size: 14px;
+                            stroke: Theme.text-secondary;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        minimizeTouch := TouchArea {
+                            clicked => { root.window-minimize(); }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 32px;
+                        height: 28px;
+                        border-radius: Theme.radius-md;
+                        background: maximizeTouch.has-hover ? Theme.surface-hover : transparent;
+
+                        LucideIcon {
+                            icon: root.window-maximized ? IconSet.Copy : IconSet.Maximize;
+                            size: 14px;
+                            stroke: Theme.text-secondary;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        maximizeTouch := TouchArea {
+                            clicked => { root.window-maximize-toggle(); }
+                        }
+                    }
+
+                    Rectangle {
+                        width: 32px;
+                        height: 28px;
+                        border-radius: Theme.radius-md;
+                        background: closeTouch.has-hover ? Theme.error : transparent;
+
+                        LucideIcon {
+                            icon: IconSet.X;
+                            size: 14px;
+                            stroke: closeTouch.has-hover ? Theme.text-primary : Theme.text-secondary;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        closeTouch := TouchArea {
+                            clicked => { root.window-close(); }
+                        }
+                    }
+                }
+            }
+
+            // 底部分隔线
+            Rectangle {
+                x: 0px;
+                y: parent.height - 1px;
+                width: parent.width;
+                height: 1px;
+                background: Theme.border;
+            }
+        }
+
+        // 主内容区
+        HorizontalLayout {
+            vertical-stretch: 1;
+            horizontal-stretch: 1;
+
+            Sidebar {
+                collapsed <=> root.sidebar-collapsed;
+                toggle-collapsed => { root.do-toggle-sidebar(); }
+                core-actions: root.core-actions;
+                external-links: root.external-links;
+                extra-features: root.extra-features;
+                claw-devices: root.claw-devices;
+                tree-items: root.tree-items;
+                user-name: root.user-name;
+                core-action-clicked(action) => { root.core-action-clicked(action); }
+                external-link-clicked(link) => { root.external-link-clicked(link); }
+                extra-feature-clicked(feature) => { root.extra-feature-clicked(feature); }
+                claw-device-clicked(device) => { root.claw-device-clicked(device); }
+                tree-item-clicked(item) => { root.tree-item-clicked(item); }
+                user-menu-clicked => { root.user-menu-clicked(); }
+            }
+
+            ChatArea {
+                horizontal-stretch: 1;
+                bot-name: root.bot-name;
+                input-text <=> root.input-text;
+                right-panel-visible: root.right-panel-visible;
+                toggle-right-panel => { root.do-toggle-right-panel(); }
+                input-text-changed(t) => { root.input-text-changed(t); }
+                send-clicked => { root.send-clicked(); }
+                upload-clicked => { root.upload-clicked(); }
+                pretext-render(text, width, font, color) => { root.pretext-render(text, width, font, color); }
+            }
+
+            // 右侧面板容器：默认宽度 0，展开时显示
+            Rectangle {
+                width: root.right-panel-visible ? Theme.right-panel-width : 0px;
+                height: 100%;
+                clip: true;
+
+                RightPanel {
+                    panel-visible: root.right-panel-visible;
+                    close-clicked => { root.do-close-right-panel(); }
+                }
+            }
+        }
+    }
+}

@@ -11,6 +11,7 @@ use crate::ui::types::{ContentBlock, Message, Role, ToolCallInfo, ToolCallStatus
 // Primitives
 // ============================================================================
 
+/// card style variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum CardStyle {
@@ -48,12 +49,15 @@ impl CardStyle {
 
     fn inner_margin(self) -> egui::Margin {
         match self {
-            CardStyle::Knowledge | CardStyle::Approval | CardStyle::ListItem => egui::Margin::same(16),
+            CardStyle::Knowledge | CardStyle::Approval | CardStyle::ListItem => {
+                egui::Margin::same(16)
+            }
             CardStyle::Nested | CardStyle::Error => egui::Margin::symmetric(12, 10),
         }
     }
 }
 
+/// Renders a styled card container.
 pub fn card<R>(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -67,9 +71,17 @@ pub fn card<R>(
 
     let inner = frame.show(ui, |ui| {
         if is_list_item {
-            let item_resp = ui.interact(ui.max_rect(), ui.id().with("card_hover"), egui::Sense::hover());
+            let item_resp = ui.interact(
+                ui.max_rect(),
+                ui.id().with("card_hover"),
+                egui::Sense::hover(),
+            );
             if item_resp.hovered() {
-                ui.painter().rect_filled(item_resp.rect, egui::CornerRadius::same(16), theme.bg_hover);
+                ui.painter().rect_filled(
+                    item_resp.rect,
+                    egui::CornerRadius::same(16),
+                    theme.bg_hover,
+                );
             }
             resp = Some(item_resp);
         }
@@ -77,16 +89,22 @@ pub fn card<R>(
     });
 
     let response = resp.unwrap_or_else(|| {
-        ui.interact(inner.response.rect, ui.id().with("card"), egui::Sense::hover())
+        ui.interact(
+            inner.response.rect,
+            ui.id().with("card"),
+            egui::Sense::hover(),
+        )
     });
     (response, inner.inner)
 }
 
+/// Holds collapsible state.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CollapsibleState {
     pub expanded: bool,
 }
 
+/// Holds collapsible header state.
 pub struct CollapsibleHeader<'a> {
     pub label: &'a str,
     pub is_loading: bool,
@@ -94,20 +112,28 @@ pub struct CollapsibleHeader<'a> {
 }
 
 impl<'a> CollapsibleHeader<'a> {
+    /// Creates a new instance.
     pub fn new(label: &'a str) -> Self {
-        Self { label, is_loading: false, icon: None }
+        Self {
+            label,
+            is_loading: false,
+            icon: None,
+        }
     }
+    /// Loading.
     #[allow(dead_code)]
     pub fn loading(mut self, v: bool) -> Self {
         self.is_loading = v;
         self
     }
+    /// Icon.
     pub fn icon(mut self, icon: &'a str) -> Self {
         self.icon = Some(icon);
         self
     }
 }
 
+/// Renders a collapsible header/body section.
 pub fn collapsible<R>(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -115,8 +141,7 @@ pub fn collapsible<R>(
     header: CollapsibleHeader<'_>,
     state: &mut CollapsibleState,
     add_body: impl FnOnce(&mut egui::Ui) -> R,
-) -> (bool, R) {
-    let mut body_result = None;
+) -> bool {
     ui.vertical(|ui| {
         let header_resp = ui.horizontal(|ui| {
             ui.set_min_height(32.0);
@@ -131,16 +156,23 @@ pub fn collapsible<R>(
             let chevron_resp = ui.add(egui::Label::new(chevron_text).sense(egui::Sense::click()));
 
             if let Some(icon) = header.icon {
-                ui.label(egui::RichText::new(icon).font(theme.font_icon(16.0)).color(theme.text_muted));
+                ui.label(
+                    egui::RichText::new(icon)
+                        .font(theme.font_icon(16.0))
+                        .color(theme.text_muted),
+                );
             }
 
             let label_color = if header.is_loading {
                 let t = ui.ctx().input(|i| i.time as f32);
                 let phase = (t * 2.0).sin() * 0.5 + 0.5;
                 egui::Color32::from_rgba_premultiplied(
-                    (theme.text_muted.r() as f32 * (1.0 - phase) + theme.text.r() as f32 * phase) as u8,
-                    (theme.text_muted.g() as f32 * (1.0 - phase) + theme.text.g() as f32 * phase) as u8,
-                    (theme.text_muted.b() as f32 * (1.0 - phase) + theme.text.b() as f32 * phase) as u8,
+                    (theme.text_muted.r() as f32 * (1.0 - phase) + theme.text.r() as f32 * phase)
+                        as u8,
+                    (theme.text_muted.g() as f32 * (1.0 - phase) + theme.text.g() as f32 * phase)
+                        as u8,
+                    (theme.text_muted.b() as f32 * (1.0 - phase) + theme.text.b() as f32 * phase)
+                        as u8,
                     255,
                 )
             } else {
@@ -149,7 +181,9 @@ pub fn collapsible<R>(
 
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(header.label).size(theme.text_md).color(label_color),
+                    egui::RichText::new(header.label)
+                        .size(theme.text_md)
+                        .color(label_color),
                 )
                 .truncate(),
             );
@@ -160,30 +194,42 @@ pub fn collapsible<R>(
             chevron_resp
         });
 
-        let row_resp = ui.interact(header_resp.response.rect, id.with("header_row"), egui::Sense::click());
+        let row_resp = ui.interact(
+            header_resp.response.rect,
+            id.with("header_row"),
+            egui::Sense::click(),
+        );
         if row_resp.clicked() && !header_resp.inner.clicked() {
             state.expanded = !state.expanded;
         }
 
         if state.expanded {
             ui.add_space(8.0);
-            body_result = Some(add_body(ui));
+            add_body(ui);
         }
     });
 
-    (state.expanded, body_result.expect("body rendered when expanded"))
+    state.expanded
 }
 
+/// Renders an animated streaming cursor dot.
 pub fn streaming_cursor(ui: &mut egui::Ui, theme: &Theme) -> egui::Response {
     let size = 14.0;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let t = ui.ctx().input(|i| i.time as f32);
     let alpha = ((t * 3.0).sin() * 0.5 + 0.5) * 255.0;
-    let color = egui::Color32::from_rgba_premultiplied(theme.text.r(), theme.text.g(), theme.text.b(), alpha as u8);
-    ui.painter().rect_filled(rect, egui::CornerRadius::same(2), color);
+    let color = egui::Color32::from_rgba_premultiplied(
+        theme.text.r(),
+        theme.text.g(),
+        theme.text.b(),
+        alpha as u8,
+    );
+    ui.painter()
+        .rect_filled(rect, egui::CornerRadius::same(2), color);
     resp
 }
 
+/// Lifecycle status variants for step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepStatus {
     Pending,
@@ -192,12 +238,14 @@ pub enum StepStatus {
     Failed,
 }
 
+/// Holds step item state.
 pub struct StepItem<'a> {
     pub title: &'a str,
     pub status: StepStatus,
     pub detail: Option<&'a str>,
 }
 
+/// Renders a vertical list of plan steps.
 pub fn step_list(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -215,9 +263,12 @@ pub fn step_list(
                         let t = ui.ctx().input(|inp| inp.time as f32);
                         let phase = (t * 3.0).sin() * 0.5 + 0.5;
                         let pulse_color = egui::Color32::from_rgba_premultiplied(
-                            (theme.text_muted.r() as f32 * (1.0 - phase) + theme.text.r() as f32 * phase) as u8,
-                            (theme.text_muted.g() as f32 * (1.0 - phase) + theme.text.g() as f32 * phase) as u8,
-                            (theme.text_muted.b() as f32 * (1.0 - phase) + theme.text.b() as f32 * phase) as u8,
+                            (theme.text_muted.r() as f32 * (1.0 - phase)
+                                + theme.text.r() as f32 * phase) as u8,
+                            (theme.text_muted.g() as f32 * (1.0 - phase)
+                                + theme.text.g() as f32 * phase) as u8,
+                            (theme.text_muted.b() as f32 * (1.0 - phase)
+                                + theme.text.b() as f32 * phase) as u8,
                             255,
                         );
                         (crate::theme::ICON_HOURGLASS, pulse_color)
@@ -225,11 +276,19 @@ pub fn step_list(
                     StepStatus::Done => (crate::theme::ICON_CHECK, theme.ok),
                     StepStatus::Failed => (crate::theme::ICON_WARNING, theme.danger),
                 };
-                ui.label(egui::RichText::new(icon).font(theme.font_icon(16.0)).color(color));
+                ui.label(
+                    egui::RichText::new(icon)
+                        .font(theme.font_icon(16.0))
+                        .color(color),
+                );
                 ui.add_space(4.0);
-                let mut title = egui::RichText::new(step.title)
-                    .size(theme.text_sm)
-                    .color(if step.status == StepStatus::Pending { theme.text_dim } else { theme.text_muted });
+                let mut title = egui::RichText::new(step.title).size(theme.text_sm).color(
+                    if step.status == StepStatus::Pending {
+                        theme.text_dim
+                    } else {
+                        theme.text_muted
+                    },
+                );
                 if step.status == StepStatus::Done {
                     title = title.strikethrough();
                 }
@@ -238,7 +297,11 @@ pub fn step_list(
             if let Some(detail) = step.detail {
                 ui.horizontal(|ui| {
                     ui.add_space(24.0);
-                    ui.label(egui::RichText::new(detail).size(theme.text_xs).color(theme.text_dim));
+                    ui.label(
+                        egui::RichText::new(detail)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
                 });
             }
             if i < steps.len() - 1 {
@@ -262,6 +325,9 @@ pub fn step_list(
 // Message Bubble
 // ============================================================================
 
+// UI render functions naturally carry multiple callback/state handles.
+/// Renders a single chat message bubble.
+#[allow(clippy::too_many_arguments)]
 pub fn message_bubble(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -275,7 +341,15 @@ pub fn message_bubble(
     let start_y = ui.cursor().min.y;
     match msg.role {
         Role::User => render_user_row(ui, theme, msg, msg_idx, on_copy, on_edit),
-        Role::Agent => render_assistant_row(ui, theme, msg, msg_idx, is_streaming, on_copy, on_regenerate),
+        Role::Agent => render_assistant_row(
+            ui,
+            theme,
+            msg,
+            msg_idx,
+            is_streaming,
+            on_copy,
+            on_regenerate,
+        ),
     }
     ui.add_space(theme.space_12);
     ui.cursor().min.y - start_y
@@ -303,7 +377,11 @@ fn render_user_row(
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                 ui.set_min_width(48.0);
                 if msg.parsed.is_empty() {
-                    ui.label(egui::RichText::new(&msg.content).size(theme.text_md).color(theme.text));
+                    ui.label(
+                        egui::RichText::new(&msg.content)
+                            .size(theme.text_md)
+                            .color(theme.text),
+                    );
                 } else {
                     crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text);
                 }
@@ -311,17 +389,23 @@ fn render_user_row(
         });
 
         let hovered = ui.ctx().input(|i| {
-            i.pointer.hover_pos().map_or(false, |p| bubble_resp.response.rect.contains(p))
+            i.pointer
+                .hover_pos()
+                .is_some_and(|p| bubble_resp.response.rect.contains(p))
         });
 
         if hovered {
             ui.horizontal(|ui| {
                 ui.add_space(16.0);
                 let copy_btn = icon_button(ui, theme, crate::theme::ICON_COPY, "Copy");
-                if copy_btn.clicked() { *on_copy = Some(msg.content.clone()); }
+                if copy_btn.clicked() {
+                    *on_copy = Some(msg.content.clone());
+                }
                 ui.add_space(4.0);
                 let edit_btn = icon_button(ui, theme, crate::theme::ICON_EDIT, "Edit");
-                if edit_btn.clicked() { *on_edit = Some(msg_idx); }
+                if edit_btn.clicked() {
+                    *on_edit = Some(msg_idx);
+                }
             });
         }
     });
@@ -338,11 +422,18 @@ fn render_assistant_row(
 ) {
     ui.horizontal(|ui| {
         let avatar_size = 32.0;
-        let (avatar_rect, _avatar_resp) = ui.allocate_exact_size(egui::vec2(avatar_size, avatar_size), egui::Sense::hover());
+        let (avatar_rect, _avatar_resp) =
+            ui.allocate_exact_size(egui::vec2(avatar_size, avatar_size), egui::Sense::hover());
         let center = avatar_rect.center();
-        ui.painter().circle_filled(center, avatar_size * 0.5, theme.accent);
+        ui.painter()
+            .circle_filled(center, avatar_size * 0.5, theme.accent);
         let label = ui.fonts(|f| {
-            f.layout("K".to_string(), theme.font_bold(theme.text_sm), egui::Color32::WHITE, f32::INFINITY)
+            f.layout(
+                "K".to_string(),
+                theme.font_bold(theme.text_sm),
+                egui::Color32::WHITE,
+                f32::INFINITY,
+            )
         });
         let label_pos = center - label.rect.size() * 0.5;
         ui.painter().galley(label_pos, label, egui::Color32::WHITE);
@@ -355,31 +446,46 @@ fn render_assistant_row(
             ui.set_max_width(max_width);
 
             if msg.parsed.is_empty() && !msg.content.is_empty() {
-                ui.label(egui::RichText::new(&msg.content).size(theme.text_md).color(theme.text));
+                ui.label(
+                    egui::RichText::new(&msg.content)
+                        .size(theme.text_md)
+                        .color(theme.text),
+                );
                 if is_streaming {
-                    ui.horizontal(|ui| { streaming_cursor(ui, theme); });
+                    ui.horizontal(|ui| {
+                        streaming_cursor(ui, theme);
+                    });
                 }
             } else if !msg.blocks.is_empty() {
                 render_blocks(ui, theme, msg, is_streaming);
             } else {
                 crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text);
                 if is_streaming {
-                    ui.horizontal(|ui| { streaming_cursor(ui, theme); });
+                    ui.horizontal(|ui| {
+                        streaming_cursor(ui, theme);
+                    });
                 }
             }
 
             let hovered = ui.ctx().input(|i| {
-                i.pointer.hover_pos().map_or(false, |p| ui.max_rect().contains(p))
+                i.pointer
+                    .hover_pos()
+                    .is_some_and(|p| ui.max_rect().contains(p))
             });
 
             if hovered {
                 ui.horizontal(|ui| {
                     ui.add_space(16.0);
                     let copy_btn = icon_button(ui, theme, crate::theme::ICON_COPY, "Copy");
-                    if copy_btn.clicked() { *on_copy = Some(msg.content.clone()); }
+                    if copy_btn.clicked() {
+                        *on_copy = Some(msg.content.clone());
+                    }
                     ui.add_space(4.0);
-                    let regen_btn = icon_button(ui, theme, crate::theme::ICON_REFRESH, "Regenerate");
-                    if regen_btn.clicked() { *on_regenerate = Some(msg_idx); }
+                    let regen_btn =
+                        icon_button(ui, theme, crate::theme::ICON_REFRESH, "Regenerate");
+                    if regen_btn.clicked() {
+                        *on_regenerate = Some(msg_idx);
+                    }
                 });
             }
         });
@@ -387,10 +493,21 @@ fn render_assistant_row(
 }
 
 fn render_blocks(ui: &mut egui::Ui, theme: &Theme, msg: &Message, is_streaming: bool) {
-    let visible_blocks: Vec<_> = msg.blocks.iter().filter(|b| matches!(b,
-        ContentBlock::Text { .. } | ContentBlock::Code { .. } | ContentBlock::Think { .. } |
-        ContentBlock::Plan { .. } | ContentBlock::ToolResult { .. } | ContentBlock::FilePreview { .. }
-    )).collect();
+    let visible_blocks: Vec<_> = msg
+        .blocks
+        .iter()
+        .filter(|b| {
+            matches!(
+                b,
+                ContentBlock::Text { .. }
+                    | ContentBlock::Code { .. }
+                    | ContentBlock::Think { .. }
+                    | ContentBlock::Plan { .. }
+                    | ContentBlock::ToolResult { .. }
+                    | ContentBlock::FilePreview { .. }
+            )
+        })
+        .collect();
 
     for block in visible_blocks {
         match block {
@@ -403,25 +520,42 @@ fn render_blocks(ui: &mut egui::Ui, theme: &Theme, msg: &Message, is_streaming: 
             }
             ContentBlock::Think { steps } => {
                 let id = ui.id().with("think");
-                let mut state = ui.ctx().data_mut(|d| *d.get_temp_mut_or(id, CollapsibleState::default()));
+                let mut state = ui
+                    .ctx()
+                    .data_mut(|d| *d.get_temp_mut_or(id, CollapsibleState::default()));
                 let header_text = format!("Thinking ({})", steps.len());
                 let header = CollapsibleHeader::new(&header_text);
                 collapsible(ui, theme, id, header, &mut state, |ui| {
                     for step in steps {
-                        ui.label(egui::RichText::new(step).size(theme.text_md).color(theme.text_muted));
+                        ui.label(
+                            egui::RichText::new(step)
+                                .size(theme.text_md)
+                                .color(theme.text_muted),
+                        );
                     }
                 });
                 ui.ctx().data_mut(|d| d.insert_temp(id, state));
             }
             ContentBlock::Plan { title, steps } => {
-                ui.label(egui::RichText::new(title).size(theme.text_base).strong().color(theme.text));
+                ui.label(
+                    egui::RichText::new(title)
+                        .size(theme.text_base)
+                        .strong()
+                        .color(theme.text),
+                );
                 for step in steps {
-                    ui.label(egui::RichText::new(format!("• {}", step)).size(theme.text_sm).color(theme.text_muted));
+                    ui.label(
+                        egui::RichText::new(format!("• {}", step))
+                            .size(theme.text_sm)
+                            .color(theme.text_muted),
+                    );
                 }
             }
             ContentBlock::ToolResult { name, output, .. } => {
                 let id = ui.id().with(("tool", name));
-                let mut state = ui.ctx().data_mut(|d| *d.get_temp_mut_or(id, CollapsibleState::default()));
+                let mut state = ui
+                    .ctx()
+                    .data_mut(|d| *d.get_temp_mut_or(id, CollapsibleState::default()));
                 let header_text = format!("🔧 {}", name);
                 let header = CollapsibleHeader::new(&header_text).icon(crate::theme::ICON_WRENCH);
                 collapsible(ui, theme, id, header, &mut state, |ui| {
@@ -432,8 +566,17 @@ fn render_blocks(ui: &mut egui::Ui, theme: &Theme, msg: &Message, is_streaming: 
             }
             ContentBlock::FilePreview { path, content } => {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(crate::theme::ICON_FILE).font(theme.font_icon(theme.text_sm)).color(theme.text_muted));
-                    ui.label(egui::RichText::new(path).size(theme.text_sm).strong().color(theme.text_muted));
+                    ui.label(
+                        egui::RichText::new(crate::theme::ICON_FILE)
+                            .font(theme.font_icon(theme.text_sm))
+                            .color(theme.text_muted),
+                    );
+                    ui.label(
+                        egui::RichText::new(path)
+                            .size(theme.text_sm)
+                            .strong()
+                            .color(theme.text_muted),
+                    );
                 });
                 let parsed = crate::ui::markdown::parse_markdown(content);
                 crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.text_muted);
@@ -444,16 +587,25 @@ fn render_blocks(ui: &mut egui::Ui, theme: &Theme, msg: &Message, is_streaming: 
     }
 
     if is_streaming && msg.blocks.is_empty() {
-        ui.horizontal(|ui| { streaming_cursor(ui, theme); });
+        ui.horizontal(|ui| {
+            streaming_cursor(ui, theme);
+        });
     }
 }
 
 fn render_code_block(ui: &mut egui::Ui, theme: &Theme, language: &str, code: &str) {
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(language).size(theme.text_xs).color(theme.text_dim).monospace());
+        ui.label(
+            egui::RichText::new(language)
+                .size(theme.text_xs)
+                .color(theme.text_dim)
+                .monospace(),
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let copy_btn = icon_button(ui, theme, crate::theme::ICON_COPY, "Copy code");
-            if copy_btn.clicked() { ui.ctx().copy_text(code.to_string()); }
+            if copy_btn.clicked() {
+                ui.ctx().copy_text(code.to_string());
+            }
         });
     });
     egui::Frame::new()
@@ -463,14 +615,20 @@ fn render_code_block(ui: &mut egui::Ui, theme: &Theme, language: &str, code: &st
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                 ui.set_min_width(ui.available_width());
-                ui.label(egui::RichText::new(code).font(theme.font_mono(theme.text_sm)).color(theme.text));
+                ui.label(
+                    egui::RichText::new(code)
+                        .font(theme.font_mono(theme.text_sm))
+                        .color(theme.text),
+                );
             });
         });
 }
 
 fn icon_button(ui: &mut egui::Ui, theme: &Theme, icon: &str, tooltip: &str) -> egui::Response {
     let btn = egui::Button::new(
-        egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)).color(theme.text_muted),
+        egui::RichText::new(icon)
+            .font(theme.font_icon(theme.text_sm))
+            .color(theme.text_muted),
     )
     .fill(egui::Color32::TRANSPARENT)
     .stroke(egui::Stroke::NONE)
@@ -482,6 +640,7 @@ fn icon_button(ui: &mut egui::Ui, theme: &Theme, icon: &str, tooltip: &str) -> e
 // Thinking Block
 // ============================================================================
 
+/// Thinking block.
 #[allow(dead_code)]
 pub fn thinking_block(
     ui: &mut egui::Ui,
@@ -504,7 +663,11 @@ pub fn thinking_block(
         for (i, step) in steps.iter().enumerate() {
             ui.horizontal(|ui| {
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(step).size(theme.text_md).color(theme.text_muted));
+                ui.label(
+                    egui::RichText::new(step)
+                        .size(theme.text_md)
+                        .color(theme.text_muted),
+                );
             });
             if i < steps.len() - 1 {
                 ui.add_space(theme.space_4);
@@ -517,6 +680,7 @@ pub fn thinking_block(
 // Tool Group
 // ============================================================================
 
+/// Tool group.
 #[allow(dead_code)]
 pub fn tool_group(
     ui: &mut egui::Ui,
@@ -559,13 +723,22 @@ fn render_tool_row(ui: &mut egui::Ui, theme: &Theme, tool: &ToolCallInfo, is_las
                     ToolCallStatus::Warning => theme.warn,
                     ToolCallStatus::Error => theme.danger,
                 };
-                ui.label(egui::RichText::new(icon).font(theme.font_icon(14.0)).color(color));
+                ui.label(
+                    egui::RichText::new(icon)
+                        .font(theme.font_icon(14.0))
+                        .color(color),
+                );
             },
         );
         ui.vertical(|ui| {
             ui.set_min_width((ui.available_width() - rail_width - 8.0).max(60.0));
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&tool.name).size(theme.text_sm).strong().color(theme.text_muted));
+                ui.label(
+                    egui::RichText::new(&tool.name)
+                        .size(theme.text_sm)
+                        .strong()
+                        .color(theme.text_muted),
+                );
                 if let Some(ref result) = tool.result {
                     ui.add(
                         egui::Label::new(
@@ -586,9 +759,15 @@ fn render_tool_row(ui: &mut egui::Ui, theme: &Theme, tool: &ToolCallInfo, is_las
 
 #[allow(dead_code)]
 fn tool_status_icon(tools: &[ToolCallInfo]) -> &str {
-    if tools.iter().any(|t| t.inferred_status() == ToolCallStatus::Running) {
+    if tools
+        .iter()
+        .any(|t| t.inferred_status() == ToolCallStatus::Running)
+    {
         crate::theme::ICON_HOURGLASS
-    } else if tools.iter().any(|t| t.inferred_status() == ToolCallStatus::Error) {
+    } else if tools
+        .iter()
+        .any(|t| t.inferred_status() == ToolCallStatus::Error)
+    {
         crate::theme::ICON_WARNING
     } else {
         crate::theme::ICON_CHECK
@@ -599,6 +778,7 @@ fn tool_status_icon(tools: &[ToolCallInfo]) -> &str {
 // Subagent Group
 // ============================================================================
 
+/// Lifecycle status variants for subagent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum SubagentStatus {
@@ -608,6 +788,7 @@ pub enum SubagentStatus {
     Failed,
 }
 
+/// Holds subagent step state.
 #[allow(dead_code)]
 pub struct SubagentStep<'a> {
     pub ordinal: usize,
@@ -615,6 +796,7 @@ pub struct SubagentStep<'a> {
     pub status: SubagentStatus,
 }
 
+/// Subagent group.
 #[allow(dead_code)]
 pub fn subagent_group(
     ui: &mut egui::Ui,
@@ -656,12 +838,18 @@ fn render_subagent_row(ui: &mut egui::Ui, theme: &Theme, step: &SubagentStep<'_>
         ui.add_space(4.0);
         ui.add(
             egui::Label::new(
-                egui::RichText::new(step.description).size(theme.text_sm).color(theme.text_muted),
+                egui::RichText::new(step.description)
+                    .size(theme.text_sm)
+                    .color(theme.text_muted),
             )
             .truncate(),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(status_text).size(theme.text_sm).color(status_color));
+            ui.label(
+                egui::RichText::new(status_text)
+                    .size(theme.text_sm)
+                    .color(status_color),
+            );
         });
     });
 }
@@ -670,6 +858,7 @@ fn render_subagent_row(ui: &mut egui::Ui, theme: &Theme, step: &SubagentStep<'_>
 // Approval Dock
 // ============================================================================
 
+/// Holds approval request state.
 pub struct ApprovalRequest {
     pub id: String,
     pub title: String,
@@ -677,6 +866,7 @@ pub struct ApprovalRequest {
     pub badge: Option<String>,
 }
 
+/// Renders the pending-approval dock.
 pub fn approval_dock(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -690,12 +880,17 @@ pub fn approval_dock(
 
         ui.horizontal(|ui| {
             let dot_size = 6.0;
-            let (dot_rect, _dot_resp) = ui.allocate_exact_size(egui::vec2(dot_size, dot_size), egui::Sense::hover());
-            ui.painter().circle_filled(dot_rect.center(), dot_size * 0.5, theme.warn);
+            let (dot_rect, _dot_resp) =
+                ui.allocate_exact_size(egui::vec2(dot_size, dot_size), egui::Sense::hover());
+            ui.painter()
+                .circle_filled(dot_rect.center(), dot_size * 0.5, theme.warn);
             ui.add_space(4.0);
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(&request.title).size(theme.text_md).strong().color(theme.text),
+                    egui::RichText::new(&request.title)
+                        .size(theme.text_md)
+                        .strong()
+                        .color(theme.text),
                 )
                 .truncate(),
             );
@@ -705,7 +900,11 @@ pub fn approval_dock(
                     .fill(theme.warn.linear_multiply(0.15))
                     .corner_radius(egui::CornerRadius::same(21));
                 badge_frame.show(ui, |ui| {
-                    ui.label(egui::RichText::new(badge).size(theme.text_xs).color(theme.warn));
+                    ui.label(
+                        egui::RichText::new(badge)
+                            .size(theme.text_xs)
+                            .color(theme.warn),
+                    );
                 });
             }
         });
@@ -716,14 +915,21 @@ pub fn approval_dock(
             .id_salt(ui.id().with("approval_detail"))
             .max_height(80.0)
             .show(ui, |ui| {
-                ui.label(egui::RichText::new(&request.detail).size(theme.text_sm).color(theme.text_muted));
+                ui.label(
+                    egui::RichText::new(&request.detail)
+                        .size(theme.text_sm)
+                        .color(theme.text_muted),
+                );
             });
 
         ui.add_space(theme.space_8);
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let allow_btn = egui::Button::new(
-                egui::RichText::new("Allow").size(theme.text_sm).strong().color(theme.bg),
+                egui::RichText::new("Allow")
+                    .size(theme.text_sm)
+                    .strong()
+                    .color(theme.bg),
             )
             .fill(theme.text)
             .corner_radius(egui::CornerRadius::same(10));
@@ -732,7 +938,10 @@ pub fn approval_dock(
             }
             ui.add_space(8.0);
             let deny_btn = egui::Button::new(
-                egui::RichText::new("Deny").size(theme.text_sm).strong().color(theme.text),
+                egui::RichText::new("Deny")
+                    .size(theme.text_sm)
+                    .strong()
+                    .color(theme.text),
             )
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(10));
@@ -749,11 +958,13 @@ pub fn approval_dock(
 // Knowledge Panel
 // ============================================================================
 
+/// Holds context file state.
 pub struct ContextFile {
     pub name: String,
     pub icon: Option<String>,
 }
 
+/// Renders the knowledge/context file panel.
 pub fn knowledge_panel(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -773,7 +984,10 @@ pub fn knowledge_panel(
                 ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
                     ui.label(
-                        egui::RichText::new(plan_title).size(theme.text_sm).strong().color(theme.text),
+                        egui::RichText::new(plan_title)
+                            .size(theme.text_sm)
+                            .strong()
+                            .color(theme.text),
                     );
                 });
                 ui.add_space(theme.space_8);
@@ -788,7 +1002,10 @@ pub fn knowledge_panel(
                 ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
                     ui.label(
-                        egui::RichText::new("Context").size(theme.text_sm).strong().color(theme.text),
+                        egui::RichText::new("Context")
+                            .size(theme.text_sm)
+                            .strong()
+                            .color(theme.text),
                     );
                 });
                 ui.add_space(theme.space_8);
@@ -796,12 +1013,16 @@ pub fn knowledge_panel(
                     ui.horizontal(|ui| {
                         let icon = file.icon.as_deref().unwrap_or(crate::theme::ICON_FILE);
                         ui.label(
-                            egui::RichText::new(icon).font(theme.font_icon(theme.text_sm)).color(theme.text_muted),
+                            egui::RichText::new(icon)
+                                .font(theme.font_icon(theme.text_sm))
+                                .color(theme.text_muted),
                         );
                         ui.add_space(4.0);
                         ui.add(
                             egui::Label::new(
-                                egui::RichText::new(&file.name).size(theme.text_sm).color(theme.text_muted),
+                                egui::RichText::new(&file.name)
+                                    .size(theme.text_sm)
+                                    .color(theme.text_muted),
                             )
                             .truncate(),
                         );

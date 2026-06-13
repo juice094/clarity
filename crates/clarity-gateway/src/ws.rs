@@ -1,7 +1,7 @@
 use axum::{
     extract::{
-        ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
 };
@@ -44,10 +44,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         session_id: session_id.to_string(),
         message: "Connected to Clarity Gateway".to_string(),
     };
-    if let Ok(msg) = serde_json::to_string(&welcome) {
-        if let Err(e) = sender.send(WsMessage::Text(msg)).await {
-            warn!("Failed to send welcome message: {}", e);
-        }
+    if let Ok(msg) = serde_json::to_string(&welcome)
+        && let Err(e) = sender.send(WsMessage::Text(msg)).await
+    {
+        warn!("Failed to send welcome message: {}", e);
     }
 
     // 处理消息循环
@@ -85,11 +85,11 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                         let error = WsResponse::Error {
                             error: format!("Invalid request: {}", e),
                         };
-                        if let Ok(json) = serde_json::to_string(&error) {
-                            if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                                warn!("Failed to send error response: {}", e);
-                                break;
-                            }
+                        if let Ok(json) = serde_json::to_string(&error)
+                            && let Err(e) = sender.send(WsMessage::Text(json)).await
+                        {
+                            warn!("Failed to send error response: {}", e);
+                            break;
                         }
                     }
                 }
@@ -188,10 +188,10 @@ async fn handle_chat_with_wire(
             let error = WsResponse::Error {
                 error: format!("Agent execution error: {}", e),
             };
-            if let Ok(json) = serde_json::to_string(&error) {
-                if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                    warn!("Failed to send agent error: {}", e);
-                }
+            if let Ok(json) = serde_json::to_string(&error)
+                && let Err(e) = sender.send(WsMessage::Text(json)).await
+            {
+                warn!("Failed to send agent error: {}", e);
             }
         }
         Err(e) => {
@@ -199,64 +199,88 @@ async fn handle_chat_with_wire(
             let error = WsResponse::Error {
                 error: format!("Agent task panicked: {}", e),
             };
-            if let Ok(json) = serde_json::to_string(&error) {
-                if let Err(e) = sender.send(WsMessage::Text(json)).await {
-                    warn!("Failed to send panic error: {}", e);
-                }
+            if let Ok(json) = serde_json::to_string(&error)
+                && let Err(e) = sender.send(WsMessage::Text(json)).await
+            {
+                warn!("Failed to send panic error: {}", e);
             }
         }
     }
 }
 
-/// WebSocket 请求
+/// WebSocket 请求类型.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum WsRequest {
+    /// Chat message request.
     Chat {
+        /// Message text from the user.
         message: String,
+        /// Optional request context.
         #[serde(default)]
         context: Option<serde_json::Value>,
+        /// Whether to stream wire events.
         #[serde(default)]
         use_wire: bool,
     },
+    /// Client keep-alive ping.
     Ping,
+    /// Request the conversation history.
     GetHistory,
 }
 
-/// WebSocket 响应
+/// WebSocket 响应类型.
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum WsResponse {
+    /// Initial welcome message on connection.
     Welcome {
+        /// Newly assigned session ID.
         session_id: String,
+        /// Welcome text.
         message: String,
     },
+    /// Assistant chat response.
     Chat {
+        /// Response text.
         message: String,
+        /// Tool calls issued by the assistant.
         #[serde(skip_serializing_if = "Option::is_none")]
         tool_calls: Option<Vec<ToolCall>>,
     },
+    /// Pong response to a ping.
     Pong,
+    /// Conversation history response.
     History {
+        /// Messages in the session.
         messages: Vec<ChatMessage>,
     },
+    /// Error response.
     Error {
+        /// Error message.
         error: String,
     },
 }
 
+/// Tool call representation in a WebSocket response.
 #[derive(Debug, Serialize)]
 pub struct ToolCall {
+    /// Name of the tool/function.
     pub name: String,
+    /// Arguments passed to the tool.
     pub arguments: serde_json::Value,
 }
 
+/// A single chat message returned in the WebSocket history response.
 #[derive(Debug, Serialize)]
 pub struct ChatMessage {
+    /// Message role.
     pub role: String,
+    /// Message content.
     pub content: String,
+    /// UTC timestamp in RFC 3339 format.
     pub timestamp: String,
 }
 

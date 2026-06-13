@@ -3,8 +3,8 @@
 //! Sprint 39: Plan UI now lives in the right-side Workspace panel as a
 //! collapsible section, freeing chat message list from plan cards.
 
-use crate::ui::types::{AgentStatus, PlanStepStatus, UiEvent};
 use crate::App;
+use crate::ui::types::{AgentStatus, PlanStepStatus, UiEvent};
 
 /// Render the Plan foldable section inside the workspace panel.
 pub fn render_workspace_plan(app: &mut App, ui: &mut egui::Ui) {
@@ -152,7 +152,9 @@ fn render_plan_review(app: &mut App, ui: &mut egui::Ui) {
         });
 
     if execute {
-        let plan = app.chat_store.pending_plan.take().unwrap();
+        let Some(plan) = app.chat_store.pending_plan.take() else {
+            return;
+        };
         app.chat_store.plan_tracker = Some(crate::ui::types::PlanExecutionTracker {
             title: plan.title.clone(),
             steps: plan

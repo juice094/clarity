@@ -9,12 +9,16 @@ use tracing::{debug, warn};
 /// Parsed agent definition from `agent.yaml`.
 #[derive(Debug, Clone)]
 pub struct AgentDefinition {
+    /// Schema version.
     pub version: u32,
+    /// Display name.
     pub name: Option<String>,
     /// Human-readable description of the agent's purpose.
     /// Used by the LLM when selecting which agent/tool to use.
     pub description: Option<String>,
+    /// Path to the system prompt template.
     pub system_prompt_path: Option<PathBuf>,
+    /// Template arguments for the system prompt.
     pub system_prompt_args: HashMap<String, String>,
     /// Default model alias (e.g. "gpt-4", "claude-3-opus").
     /// Resolved via ModelRegistry at runtime.
@@ -23,14 +27,18 @@ pub struct AgentDefinition {
     pub approval_mode: Option<String>,
     /// Whether to enable automatic memory extraction after each turn.
     pub memory_enabled: Option<bool>,
+    /// Tool identifiers enabled for the agent.
     pub tools: Vec<String>,
+    /// Subagent references.
     pub subagents: HashMap<String, SubagentRef>,
 }
 
 /// Reference to a sub-agent definition.
 #[derive(Debug, Clone)]
 pub struct SubagentRef {
+    /// Filesystem path.
     pub path: PathBuf,
+    /// Human-readable description.
     pub description: String,
 }
 

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 use clarity_core::mcp::{McpClient, McpClientBuilder, McpServerConfig};
 
 #[tokio::test]

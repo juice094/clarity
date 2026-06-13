@@ -80,6 +80,8 @@ impl MultiSink {
 
     /// Build from a configuration.
     pub fn from_config(config: &SinkConfig) -> TelemetryResult<Arc<dyn EventSink>> {
+        // Intentionally retained because `multi` is only mutated when backend
+        // features are enabled; without them it would trigger an unused_mut warning.
         #[allow(unused_mut)]
         let mut multi = Self::new();
 

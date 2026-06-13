@@ -1,7 +1,8 @@
+use crate::App;
 use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::ui::types::UiEvent;
-use crate::App;
 
+/// Renders the task create modal UI.
 pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
     if !app.task_store.task_create_modal_open {
         return;

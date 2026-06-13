@@ -1,5 +1,5 @@
 use clarity_core::{Agent, ToolRegistry};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_build_system_prompt(c: &mut Criterion) {
     let registry = ToolRegistry::with_builtin_tools();

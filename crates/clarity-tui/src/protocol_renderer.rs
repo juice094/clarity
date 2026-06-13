@@ -13,10 +13,10 @@
 
 use clarity_wire::{ButtonStyle, UserAction, ViewCommand};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 /// Render a slice of `ViewCommand`s into ratatui widgets within `area`,
@@ -212,8 +212,8 @@ fn render_single(
 mod tests {
     use super::*;
     use clarity_wire::{ButtonStyle, TextRole, ViewCommand};
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     #[test]
     fn test_render_text() {

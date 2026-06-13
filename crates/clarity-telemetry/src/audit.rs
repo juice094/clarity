@@ -152,9 +152,13 @@ fn sha256_hex(bytes: &[u8]) -> String {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigChangeType {
+    /// New configuration file or key created.
     Create,
+    /// Existing configuration updated.
     Update,
+    /// Configuration file or key deleted.
     Delete,
+    /// Change applied by an automated migration.
     Migration,
 }
 
@@ -162,8 +166,12 @@ pub enum ConfigChangeType {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfigActor {
+    /// A human user.
     User,
+    /// An autonomous agent.
     Agent,
+    /// A schema or data migration.
     Migration,
+    /// The system itself (e.g. installer, service).
     System,
 }

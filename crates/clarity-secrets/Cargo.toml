@@ -1,0 +1,22 @@
+[package]
+name = "clarity-secrets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Encrypted secret storage for Clarity (ChaCha20-Poly1305)"
+
+[dependencies]
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+rand = "0.8"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

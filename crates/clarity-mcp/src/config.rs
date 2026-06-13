@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 /// Standard MCP configuration format matching Claude Desktop's `mcp.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct McpConfig {
+    /// Map of server names to their configuration entries.
     #[serde(rename = "mcpServers", default)]
     pub servers: HashMap<String, McpServerEntry>,
 }
@@ -12,8 +13,10 @@ pub struct McpConfig {
 /// Per-server configuration entry inside `mcpServers`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct McpServerEntry {
+    /// Command to execute for stdio transport (e.g. `npx`).
     #[serde(default)]
     pub command: String,
+    /// Command-line arguments passed to the command.
     #[serde(default)]
     pub args: Vec<String>,
     /// Environment variables passed to the MCP server process.
@@ -23,12 +26,16 @@ pub struct McpServerEntry {
     /// and beta tools (13 total), filtering out experimental ones.
     #[serde(default)]
     pub env: HashMap<String, String>,
+    /// Whether this server is disabled and should not be connected.
     #[serde(default)]
     pub disabled: bool,
+    /// URL for HTTP, SSE, or WebSocket transports.
     #[serde(default)]
     pub url: Option<String>,
+    /// Transport type: `stdio`, `http`, `sse`, or `websocket`.
     #[serde(default)]
     pub transport: Option<String>,
+    /// Custom headers for HTTP, SSE, or WebSocket transports.
     #[serde(default)]
     pub headers: HashMap<String, String>,
 }

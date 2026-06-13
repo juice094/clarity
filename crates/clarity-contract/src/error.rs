@@ -148,9 +148,7 @@ pub enum AgentError {
     FlowExecution(String),
 
     /// Budget exceeded (per-turn or per-day)
-    #[error(
-        "Budget exceeded: limit=${limit:.4}, current=${current:.4}, requested=${requested:.4}"
-    )]
+    #[error("Budget exceeded: limit=${limit:.4}, current=${current:.4}, requested=${requested:.4}")]
     BudgetExceeded {
         /// The limit that was exceeded (USD)
         limit: f64,

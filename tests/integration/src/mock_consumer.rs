@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 use clarity_wire::{Wire, WireMessage};
 use std::sync::Arc;
 use tokio::sync::Mutex;

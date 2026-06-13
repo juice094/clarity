@@ -3,9 +3,10 @@
 //! Triggered by `ui_store.preview_item` (set from workspace panel clicks).
 //! Uses `egui::Area` with `Order::Foreground` to escape CentralPanel width limits.
 
-use crate::ui::types::PreviewItem;
 use crate::App;
+use crate::ui::types::PreviewItem;
 
+/// Renders the file preview overlay UI.
 #[allow(dead_code)]
 pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
     if app.ui_store.preview_item.is_none() {
@@ -53,7 +54,10 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
     };
 
     // ── Extract preview data ──
-    let (title, content, is_web, url) = match app.ui_store.preview_item.as_ref().unwrap() {
+    let Some(preview) = app.ui_store.preview_item.as_ref() else {
+        return;
+    };
+    let (title, content, is_web, url) = match preview {
         PreviewItem::File { name, content, .. } => (name.clone(), content.clone(), false, None),
         PreviewItem::WebPage {
             title,

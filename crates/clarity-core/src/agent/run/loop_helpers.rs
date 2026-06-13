@@ -103,19 +103,25 @@ pub(crate) fn scrub_credentials(input: &str) -> String {
     static RE_BEARER: OnceLock<Regex> = OnceLock::new();
     static RE_SK: OnceLock<Regex> = OnceLock::new();
 
+    // Patterns are compile-time literals; expect is safe because they are valid regexes.
+    #[allow(clippy::expect_used)]
     let re_keyval = RE_KEYVAL.get_or_init(|| {
         Regex::new(
             r#"(?i)(api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*["']?[^\s"']+["']?"#,
         )
-        .unwrap()
+        .expect("RE_KEYVAL regex is valid")
     });
-    let re_bearer = RE_BEARER.get_or_init(|| Regex::new(r"Bearer\s+[\w\-]+").unwrap());
-    let re_sk = RE_SK.get_or_init(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
+    #[allow(clippy::expect_used)]
+    let re_bearer = RE_BEARER
+        .get_or_init(|| Regex::new(r"Bearer\s+[\w\-]+").expect("RE_BEARER regex is valid"));
+    #[allow(clippy::expect_used)]
+    let re_sk =
+        RE_SK.get_or_init(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").expect("RE_SK regex is valid"));
 
     let mut result = input.to_string();
     result = re_keyval
         .replace_all(&result, |caps: &regex::Captures| {
-            let m = caps.get(0).unwrap().as_str();
+            let m = caps.get(0).map(|m| m.as_str()).unwrap_or("");
             if let Some(eq) = m.find('=') {
                 format!("{}=[REDACTED]", &m[..eq])
             } else if let Some(colon) = m.find(':') {

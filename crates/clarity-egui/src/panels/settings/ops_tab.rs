@@ -21,7 +21,10 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
         egui::Frame::new()
             .fill(theme.bg_hover)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-            .inner_margin(egui::Margin::symmetric(theme.space_12 as i8, theme.space_12 as i8))
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_12 as i8,
+                theme.space_12 as i8,
+            ))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
@@ -44,10 +47,13 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
                                 .color(theme.text),
                         );
                         ui.label(
-                            egui::RichText::new(format!("ID: {} · 版本: {}", bot.device_id, bot.version))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim)
-                                .monospace(),
+                            egui::RichText::new(format!(
+                                "ID: {} · 版本: {}",
+                                bot.device_id, bot.version
+                            ))
+                            .size(theme.text_xs)
+                            .color(theme.text_dim)
+                            .monospace(),
                         );
                     });
                 });
@@ -87,16 +93,28 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
         if resp.clicked() {
             match title {
                 "AI 问题诊断" => {
-                    app.push_toast("AI 诊断运行中...".to_string(), crate::ui::types::ToastLevel::Info);
+                    app.push_toast(
+                        "AI 诊断运行中...".to_string(),
+                        crate::ui::types::ToastLevel::Info,
+                    );
                 }
                 "重启 Gateway" => {
-                    app.push_toast("Gateway 重启请求已发送".to_string(), crate::ui::types::ToastLevel::Info);
+                    app.push_toast(
+                        "Gateway 重启请求已发送".to_string(),
+                        crate::ui::types::ToastLevel::Info,
+                    );
                 }
                 "修复配置" => {
-                    app.push_toast("配置修复中...".to_string(), crate::ui::types::ToastLevel::Info);
+                    app.push_toast(
+                        "配置修复中...".to_string(),
+                        crate::ui::types::ToastLevel::Info,
+                    );
                 }
                 "数据备份" => {
-                    app.push_toast("数据备份完成".to_string(), crate::ui::types::ToastLevel::Info);
+                    app.push_toast(
+                        "数据备份完成".to_string(),
+                        crate::ui::types::ToastLevel::Info,
+                    );
                 }
                 _ => {}
             }

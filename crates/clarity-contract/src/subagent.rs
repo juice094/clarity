@@ -16,26 +16,36 @@ pub use crate::capability::{CapabilityToken, TokenError};
 // runner.rs types
 // ============================================================================
 
-/// 子代理执行错误
+/// Errors that can occur during subagent execution.
 #[derive(Debug, Clone)]
 pub enum SubagentError {
-    /// 构建失败
+    /// Failed to build the subagent.
     BuildFailed(String),
-    /// 执行失败
-    ExecutionFailed { message: String, brief: String },
-    /// 达到最大步数
-    MaxStepsReached { steps: usize, phase: String },
-    /// LLM 错误
+    /// Subagent execution failed.
+    ExecutionFailed {
+        /// Detailed error message.
+        message: String,
+        /// Short error category.
+        brief: String,
+    },
+    /// Maximum allowed steps were reached.
+    MaxStepsReached {
+        /// Number of steps taken.
+        steps: usize,
+        /// Phase where the limit was reached.
+        phase: String,
+    },
+    /// LLM provider error.
     LlmError(String),
-    /// 已取消
+    /// Execution was cancelled.
     Cancelled,
-    /// 存储错误
+    /// Memory store error.
     StoreError(String),
-    /// 无效的响应
+    /// Invalid response from the subagent.
     InvalidResponse(String),
-    /// 未知代理类型
+    /// Unknown agent type requested.
     UnknownAgentType(String),
-    /// 恢复失败
+    /// Failed to resume a persisted subagent.
     ResumeFailed(String),
 }
 
@@ -96,19 +106,35 @@ impl From<anyhow::Error> for SubagentError {
 #[derive(Debug, Clone)]
 pub enum SubagentProgressEvent {
     /// A new execution stage was reached.
-    Stage { agent_id: String, name: String },
+    Stage {
+        /// Agent identifier.
+        agent_id: String,
+        /// Name of the stage.
+        name: String,
+    },
     /// New output text was appended.
-    Output { agent_id: String, text: String },
+    Output {
+        /// Agent identifier.
+        agent_id: String,
+        /// Output text.
+        text: String,
+    },
     /// The agent status changed.
     StatusChange {
+        /// Agent identifier.
         agent_id: String,
+        /// Agent type.
         agent_type: String,
+        /// New status.
         status: SubagentStatus,
     },
     /// Budget progress update (steps taken / max steps).
     Progress {
+        /// Agent identifier.
         agent_id: String,
+        /// Steps taken so far.
         steps: usize,
+        /// Maximum allowed steps.
         max_steps: usize,
     },
 }
@@ -141,12 +167,16 @@ pub struct SubagentResult {
     pub monitoring_enabled: bool,
 }
 
-/// 执行状态
+/// Final status of a subagent execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecutionStatus {
+    /// Execution completed successfully.
     Success,
+    /// Execution failed.
     Failed,
+    /// Execution was cancelled.
     Cancelled,
+    /// Maximum allowed steps were reached.
     MaxStepsReached,
 }
 
@@ -161,26 +191,26 @@ impl fmt::Display for ExecutionStatus {
     }
 }
 
-/// 子代理运行规格
+/// Specification for a single subagent run.
 #[derive(Debug, Clone)]
 pub struct RunSpec {
-    /// 任务描述
+    /// Human-readable task description.
     pub description: String,
-    /// 提示词
+    /// Prompt or instructions for the subagent.
     pub prompt: String,
-    /// 请求的代理类型
+    /// Requested agent type (e.g., "coder", "explore").
     pub requested_type: String,
-    /// 模型覆盖（可选）
+    /// Optional model override.
     pub model_override: Option<String>,
-    /// 恢复之前的代理实例（可选）
+    /// Optional agent instance identifier to resume.
     pub resume: Option<String>,
-    /// 最大迭代次数（覆盖类型定义）
+    /// Optional maximum iteration override.
     pub max_iterations: Option<usize>,
-    /// 是否启用 Git 上下文
+    /// Whether to collect Git context.
     pub git_context: bool,
-    /// 能力令牌（可选）
+    /// Optional capability token for permission isolation.
     pub capability_token: Option<CapabilityToken>,
-    /// 目标标签（用于 Jumpy Predictor 路由决策）
+    /// Goal tags for routing decisions.
     pub goal_tags: Vec<String>,
 }
 
@@ -247,16 +277,16 @@ impl RunSpec {
 // parallel.rs types
 // ============================================================================
 
-/// 并行执行配置
+/// Configuration for parallel subagent execution.
 #[derive(Debug, Clone)]
 pub struct ParallelConfig {
-    /// 最大并发数
+    /// Maximum number of concurrent subagents.
     pub max_concurrency: usize,
-    /// 超时时间（秒）
+    /// Optional timeout in seconds.
     pub timeout_secs: Option<u64>,
-    /// 是否取消所有任务当其中一个失败
+    /// Whether to cancel remaining tasks when one fails.
     pub cancel_on_error: bool,
-    /// 是否启用结果聚合
+    /// Whether to aggregate individual results into a summary.
     pub enable_aggregation: bool,
 }
 
@@ -302,18 +332,18 @@ impl ParallelConfig {
     }
 }
 
-/// 并行执行结果
+/// Result of a parallel subagent execution.
 #[derive(Debug, Clone)]
 pub struct ParallelResult {
-    /// 成功的执行结果
+    /// Successful subagent results.
     pub results: Vec<SubagentResult>,
-    /// 失败的执行
+    /// Failed subagents, as (description, error message) pairs.
     pub failures: Vec<(String, String)>,
-    /// 总耗时（毫秒）
+    /// Total elapsed time in milliseconds.
     pub total_elapsed_ms: u64,
-    /// 实际并发数
+    /// Actual concurrency level reached.
     pub actual_concurrency: usize,
-    /// 聚合摘要（如果启用）
+    /// Aggregated summary, if aggregation was enabled.
     pub aggregated_summary: Option<String>,
 }
 
@@ -378,6 +408,7 @@ pub struct BatchProgress {
 }
 
 impl BatchProgress {
+    /// Create a new batch progress tracker.
     pub fn new(batch_id: String, specs: &[RunSpec]) -> Self {
         let total = specs.len();
         let started_at = std::time::SystemTime::now()
@@ -402,9 +433,13 @@ impl BatchProgress {
 /// Status of a parallel batch.
 #[derive(Debug, Clone, PartialEq)]
 pub enum BatchStatus {
+    /// Batch is currently running.
     Running,
+    /// Batch completed successfully.
     Completed,
+    /// Batch was cancelled.
     Cancelled,
+    /// Batch failed with an error message.
     Failed(String),
 }
 
@@ -674,10 +709,10 @@ impl LaborMarket {
         self.types.get(name)
     }
 
-    /// Require a type definition (panics if unknown).
-    pub fn require(&self, name: &str) -> &AgentTypeDefinition {
+    /// Require a type definition, returning an error if unknown.
+    pub fn require(&self, name: &str) -> Result<&AgentTypeDefinition, crate::AgentError> {
         self.get(name)
-            .unwrap_or_else(|| panic!("Unknown agent type: {}", name))
+            .ok_or_else(|| crate::AgentError::Registry(format!("Unknown agent type: {}", name)))
     }
 
     /// List all registered types.
@@ -720,23 +755,33 @@ Guidelines:
 // store.rs types
 // ============================================================================
 
-/// Status of a subagent instance
+/// Status of a subagent instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SubagentStatus {
+    /// Subagent is idle and waiting.
     Idle,
+    /// Subagent is currently running.
     Running,
+    /// Subagent completed successfully.
     Completed,
+    /// Subagent failed.
     Failed,
 }
 
-/// State of a subagent instance
+/// Persistent state of a subagent instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubagentState {
+    /// Agent identifier.
     pub agent_id: String,
+    /// Agent type.
     pub agent_type: String,
+    /// Current status.
     pub status: SubagentStatus,
+    /// Conversation history.
     pub history: Vec<crate::Message>,
+    /// Creation timestamp (Unix seconds).
     pub created_at: u64,
+    /// Last update timestamp (Unix seconds).
     pub updated_at: u64,
     /// Maximum iterations allowed for this subagent (used for progress estimation).
     pub max_iterations: Option<usize>,
@@ -745,6 +790,7 @@ pub struct SubagentState {
 }
 
 impl SubagentState {
+    /// Create a new idle subagent state.
     pub fn new(agent_id: String, agent_type: String) -> Self {
         let now = now_timestamp();
         Self {
@@ -763,8 +809,8 @@ impl SubagentState {
 fn now_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 // ============================================================================

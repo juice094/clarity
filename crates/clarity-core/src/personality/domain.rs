@@ -97,11 +97,13 @@ template = "You are {{agent_name}}, helping {{user_name}} with {{crop}} in {{reg
             "wheat"
         );
         assert_eq!(config.tools.as_ref().unwrap().len(), 1);
-        assert!(config
-            .system_prompt
-            .as_ref()
-            .unwrap()
-            .template
-            .contains("{{agent_name}}"));
+        assert!(
+            config
+                .system_prompt
+                .as_ref()
+                .unwrap()
+                .template
+                .contains("{{agent_name}}")
+        );
     }
 }

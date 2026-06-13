@@ -5,7 +5,7 @@
 //! the conversation as a new user turn.
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::info;
 
 use crate::helpers;

@@ -1,16 +1,21 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
+//! Binary entry point for the Clarity Gateway server.
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
 use clarity_gateway::{channels, server};
 
 use channels::{
-    discord::DiscordChannel, slack::SlackChannel, telegram::TelegramChannel,
-    webhook::WebhookChannel, ChannelConfig, ChannelManager,
+    ChannelConfig, ChannelManager, discord::DiscordChannel, slack::SlackChannel,
+    telegram::TelegramChannel, webhook::WebhookChannel, wechat::WeChatGatewayChannel,
 };
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
-use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
-use clarity_core::mcp::{config::McpConfig, register_mcp_tools, McpClientBuilder, McpRegistry};
+use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
+use clarity_core::mcp::{McpClientBuilder, McpRegistry, config::McpConfig, register_mcp_tools};
 use clarity_core::memory::{
     LlmProviderBridge, MemoryTicker, PersistentMemoryStore, SharedMemoryTicker,
 };
@@ -19,7 +24,13 @@ use clarity_llm::LlmFactory;
 use std::path::PathBuf;
 
 /// 从环境变量加载渠道配置
-fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig, ChannelConfig) {
+fn load_channel_configs() -> (
+    ChannelConfig,
+    ChannelConfig,
+    ChannelConfig,
+    ChannelConfig,
+    ChannelConfig,
+) {
     // Telegram 配置
     let telegram_config = if std::env::var("TELEGRAM_ENABLED").unwrap_or_default() == "true" {
         ChannelConfig::new()
@@ -61,11 +72,35 @@ fn load_channel_configs() -> (ChannelConfig, ChannelConfig, ChannelConfig, Chann
         ChannelConfig::new()
     };
 
+    // WeChat 配置
+    let wechat_config = if std::env::var("WECHAT_ENABLED").unwrap_or_default() == "true" {
+        let allowed_users: Vec<String> = std::env::var("WECHAT_ALLOWED_USERS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut extra = serde_json::json!({
+            "alias": std::env::var("WECHAT_ALIAS").unwrap_or_else(|_| "default".to_string()),
+            "data_dir": std::env::var("WECHAT_DATA_DIR").unwrap_or_default(),
+        });
+
+        if !allowed_users.is_empty() {
+            extra["allowed_users"] = serde_json::json!(allowed_users);
+        }
+
+        ChannelConfig::new().enabled().with_extra(extra)
+    } else {
+        ChannelConfig::new()
+    };
+
     (
         telegram_config,
         discord_config,
         webhook_config,
         slack_config,
+        wechat_config,
     )
 }
 
@@ -82,7 +117,7 @@ async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
-    // 配置 Agent（window 入口：方法论驱动）
+    // 配置 Agent（window 入口：方法论驱动，或被 Gray workspace 覆盖）
     let window_context = r#"# Methodology
 You are a methodological query assistant. When answering:
 1. Clarify the scope of the question first
@@ -90,10 +125,57 @@ You are a methodological query assistant. When answering:
 3. Cite sources when possible; distinguish facts from speculation
 4. Explicitly state when you are uncertain"#;
 
-    let config = AgentConfig::new()
+    let mut config = AgentConfig::new()
         .with_max_iterations(10)
         .with_read_only(false)
         .with_entry_context(window_context);
+
+    // 如果存在 Gray workspace，加载其 agent.yaml 作为人格/记忆入口
+    let gray_workspace = std::env::var("GRAY_WORKSPACE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".kimi_openclaw")
+                .join("workspace")
+        });
+
+    if gray_workspace.join("agent.yaml").exists() {
+        match clarity_core::agent::definition::load_agent_definition(&gray_workspace) {
+            Ok(def) => {
+                info!(
+                    "Loaded Gray agent definition from {}",
+                    gray_workspace.display()
+                );
+                if let Err(e) = clarity_core::agent::definition::apply_to_config(&def, &mut config)
+                {
+                    warn!("Failed to apply Gray agent definition: {}", e);
+                }
+                // Gray 工作区内的相对路径（SOUL.md / MEMORY.md 等）应以工作区为基准
+                config = config.with_working_dir(&gray_workspace);
+            }
+            Err(e) => {
+                warn!("Gray workspace agent.yaml found but failed to load: {}", e);
+            }
+        }
+    } else {
+        info!(
+            "No Gray workspace agent.yaml found at {}, using default methodology",
+            gray_workspace.display()
+        );
+    }
+
+    // 使用加密 registry 中的 active alias 作为 model_alias，覆盖 Gray agent.yaml 中的默认值，
+    // 确保 Agent 实际调用的模型与当前选中的 LLM provider 一致。
+    if let Some(alias) = clarity_gateway::handlers::config::load_active_alias().await
+        && !alias.is_empty()
+    {
+        config.model_alias = Some(alias.clone());
+        info!(
+            "Overriding model alias from active alias registry: {}",
+            alias
+        );
+    }
 
     // 创建持久化记忆存储
     let clarity_dir = std::env::current_dir()
@@ -102,17 +184,18 @@ You are a methodological query assistant. When answering:
     let memory_db = clarity_dir.join("memory.db");
     let _ = tokio::fs::create_dir_all(&clarity_dir).await;
 
-    let memory_store = Arc::new(
-        PersistentMemoryStore::new(&memory_db)
-            .await
-            .unwrap_or_else(|e| {
-                warn!(
-                    "Failed to create persistent memory store: {}, using in-memory",
-                    e
-                );
-                PersistentMemoryStore::new_in_memory().expect("in-memory store should not fail")
-            }),
-    );
+    let memory_store = Arc::new(match PersistentMemoryStore::new(&memory_db).await {
+        Ok(store) => store,
+        Err(e) => {
+            warn!(
+                "Failed to create persistent memory store: {}, using in-memory",
+                e
+            );
+            PersistentMemoryStore::new_in_memory().map_err(|inner| {
+                anyhow::anyhow!("Failed to create in-memory memory store: {}", inner)
+            })?
+        }
+    });
 
     let compiled_dir = clarity_dir.join("compiled");
     let _ = tokio::fs::create_dir_all(&compiled_dir).await;
@@ -148,6 +231,37 @@ You are a methodological query assistant. When answering:
         .with_memory_ticker(memory_ticker)
         .with_llm(llm.clone());
     agent.set_provider_label(provider_label);
+
+    // 允许通过环境变量覆盖 Agent 最大上下文窗口
+    if let Ok(val) = std::env::var("CLARITY_MAX_CONTEXT_TOKENS") {
+        match val.parse::<usize>() {
+            Ok(max_tokens) => {
+                agent = agent.with_max_context_tokens(max_tokens);
+                info!("Agent max context tokens set to {}", max_tokens);
+            }
+            Err(_) => {
+                warn!(
+                    "CLARITY_MAX_CONTEXT_TOKENS is not a valid usize: {}, ignoring",
+                    val
+                );
+            }
+        }
+    }
+
+    // Headless Gateway 默认使用 yolo 审批模式，避免 channel 回复因等待人工确认而卡死。
+    // 可通过 CLARITY_APPROVAL_MODE=interactive|smart|plan|yolo 覆盖。
+    let approval_mode = match std::env::var("CLARITY_APPROVAL_MODE")
+        .unwrap_or_else(|_| "yolo".to_string())
+        .to_lowercase()
+        .as_str()
+    {
+        "interactive" => clarity_core::approval::ApprovalMode::Interactive,
+        "smart" => clarity_core::approval::ApprovalMode::Smart,
+        "plan" => clarity_core::approval::ApprovalMode::Plan,
+        _ => clarity_core::approval::ApprovalMode::Yolo,
+    };
+    agent = agent.with_approval_mode(approval_mode);
+    info!("Gateway approval mode set to {:?}", approval_mode);
 
     // 注入 SubagentOrchestrator（SubagentManager）
     let subagent_ctx = clarity_dir.join("subagent_context");
@@ -219,23 +333,11 @@ async fn load_llm_mcp() -> Option<Arc<dyn clarity_llm::api::LlmProvider>> {
     }
 }
 
-/// Load a single LLM provider: persisted config → auto-detection fallback.
+/// Load a single LLM provider: active alias from encrypted registry → auto-detection fallback.
 async fn load_llm_single() -> Arc<dyn clarity_llm::api::LlmProvider> {
-    if let Some(user_cfg) = clarity_gateway::handlers::config::load_persisted_config().await {
-        info!(
-            "Found persisted user config for provider: {}",
-            user_cfg.provider
-        );
-        match clarity_gateway::handlers::config::build_provider_from_config(&user_cfg).await {
-            Ok(provider) => {
-                info!("LLM provider loaded from persisted config");
-                Arc::from(provider)
-            }
-            Err(e) => {
-                warn!("Failed to build provider from persisted config: {}", e);
-                load_llm_fallback().await
-            }
-        }
+    if let Some(provider) = clarity_gateway::handlers::config::load_active_provider().await {
+        info!("LLM provider loaded from encrypted alias registry (ReliableProvider wrapped)");
+        provider
     } else {
         load_llm_fallback().await
     }
@@ -380,7 +482,8 @@ async fn main() {
     info!("🔗 Bound cron tools to BackgroundTaskManager");
 
     // 加载渠道配置
-    let (telegram_config, discord_config, webhook_config, slack_config) = load_channel_configs();
+    let (telegram_config, discord_config, webhook_config, slack_config, wechat_config) =
+        load_channel_configs();
 
     // 创建渠道管理器
     let mut channel_manager = ChannelManager::new();
@@ -415,6 +518,14 @@ async fn main() {
         channel_manager.register(Box::new(SlackChannel::new(slack_config)));
     } else {
         info!("💼 Slack channel disabled (set SLACK_ENABLED=true to enable)");
+    }
+
+    // 注册 WeChat 渠道
+    if wechat_config.enabled {
+        info!("📲 WeChat channel enabled");
+        channel_manager.register(Box::new(WeChatGatewayChannel::new(wechat_config)));
+    } else {
+        info!("📲 WeChat channel disabled (set WECHAT_ENABLED=true to enable)");
     }
 
     // 启动所有渠道（在后台任务中运行）
@@ -452,17 +563,29 @@ mod tests {
     #[test]
     fn test_channel_config_loading() {
         // 测试默认配置（禁用状态）
-        let (telegram, discord, webhook, slack) = load_channel_configs();
+        let (telegram, discord, webhook, slack, wechat) = load_channel_configs();
 
         assert!(!telegram.enabled);
         assert!(!discord.enabled);
         assert!(!webhook.enabled);
         assert!(!slack.enabled);
+        assert!(!wechat.enabled);
     }
 
     #[tokio::test]
     async fn test_agent_creation() {
         let agent = create_agent().await;
         assert!(agent.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_gray_workspace_loaded() {
+        let agent = create_agent().await.expect("agent should be created");
+        let config = agent.config();
+        assert_eq!(config.name.as_deref(), Some("gray"));
+        assert!(
+            config.system_prompt.contains("格雷") || config.system_prompt.contains("Gray"),
+            "Gray system prompt should be loaded from workspace"
+        );
     }
 }

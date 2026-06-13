@@ -680,10 +680,12 @@ mod tests {
 
         let (compact_msg, _) = compaction.prepare(&messages);
         assert!(compact_msg.is_some());
-        assert!(compact_msg
-            .unwrap()
-            .content
-            .contains("Focus on technical details"));
+        assert!(
+            compact_msg
+                .unwrap()
+                .content
+                .contains("Focus on technical details")
+        );
     }
 
     #[test]

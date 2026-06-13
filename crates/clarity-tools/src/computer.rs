@@ -1,9 +1,9 @@
 //! Computer Use Tool — GUI automation via Python bridge.
 
-use crate::{helpers, Tool, ToolContext, ToolResult};
+use crate::{Tool, ToolContext, ToolResult, helpers};
 use async_trait::async_trait;
 use clarity_contract::ToolError;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Tool for GUI automation: screenshot, click, type, scroll.
 #[derive(Clone)]

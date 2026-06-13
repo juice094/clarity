@@ -5,6 +5,7 @@ pub mod interface_tab;
 pub mod ops_tab;
 pub mod provider_tab;
 
+/// settings tab variants.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SettingsTab {
     Provider,
@@ -16,11 +17,8 @@ pub enum SettingsTab {
 /// Fixed content height so all three tabs feel equally sized.
 const CONTENT_HEIGHT: f32 = 420.0;
 
+/// Renders the settings panel UI.
 pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.settings_store.settings_open {
-        return;
-    }
-
     let screen = ctx.screen_rect();
 
     // ── Dimmer + outside-click-to-close ──
@@ -129,6 +127,6 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
 
     app.settings_store.settings_active_tab = at;
     if close_requested {
-        app.settings_store.settings_open = false;
+        app.view_state.main = clarity_core::ui::AppView::Chat;
     }
 }

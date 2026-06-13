@@ -7,7 +7,7 @@ use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
-use clarity_llm::{build_provider_from_registry, ModelRegistry};
+use clarity_llm::{ModelRegistry, build_provider_from_registry_entry, default_secret_store};
 // P1-1: Import from `types` instead of `subagents::registry` to break the
 // background↔subagents circular dependency.
 use crate::types::{AgentTypeDefinition, LaborMarket};
@@ -116,12 +116,19 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
         }
 
         // 根据 model_alias 动态选择 LLM
+        let secrets = default_secret_store().ok();
         if let Some(ref model_alias) = spec.model_alias {
             if let Some(ref reg) = self.registry {
                 match reg.get(model_alias) {
                     Some(entry) => {
                         if let Some(provider_cfg) = reg.get_provider(&entry.provider) {
-                            match build_provider_from_registry(provider_cfg, &entry.model_id).await
+                            match build_provider_from_registry_entry(
+                                provider_cfg,
+                                entry,
+                                None,
+                                secrets.as_ref(),
+                            )
+                            .await
                             {
                                 Ok(new_llm) => {
                                     agent.set_llm(Arc::from(new_llm));

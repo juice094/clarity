@@ -19,7 +19,9 @@ const DEFAULT_OAUTH_HOST: &str = "https://auth.kimi.com";
 /// Configuration for an OAuth 2.0 Device Authorization Grant provider.
 #[derive(Debug, Clone)]
 pub struct OAuthDeviceFlowConfig {
+    /// OAuth client ID.
     pub client_id: String,
+    /// OAuth authorization host (e.g. `https://auth.kimi.com`).
     pub oauth_host: String,
 }
 
@@ -42,20 +44,30 @@ impl OAuthDeviceFlowConfig {
 /// Response from the device-authorization endpoint.
 #[derive(Debug, Clone)]
 pub struct DeviceAuthorization {
+    /// User-facing code to enter at the verification URI.
     pub user_code: String,
+    /// Device code used to poll the token endpoint.
     pub device_code: String,
+    /// Verification URI shown to the user.
     pub verification_uri: String,
+    /// Verification URI with the user code pre-filled.
     pub verification_uri_complete: String,
+    /// Lifetime of the device code in seconds, if provided.
     pub expires_in: Option<u64>,
+    /// Polling interval in seconds.
     pub interval: u64,
 }
 
 /// Errors specific to the OAuth flow.
 #[derive(Debug, Clone)]
 pub enum AuthError {
+    /// Request-level error with a descriptive message.
     Request(String),
+    /// Authorization error (e.g. denied or invalid client).
     Unauthorized(String),
+    /// Device code expired before authorization completed.
     Expired,
+    /// Other OAuth error.
     Other(String),
 }
 
@@ -422,6 +434,7 @@ impl OAuthTokenManager {
 
 #[cfg(test)]
 impl OAuthTokenManager {
+    /// Test-only constructor using an explicit token store.
     pub fn new_with_store(store: TokenStore) -> Self {
         Self {
             store,

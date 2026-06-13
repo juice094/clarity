@@ -271,31 +271,37 @@ impl LocalGgufConfig {
         })
     }
 
+    /// Use a HuggingFace repo ID to download the tokenizer.
     pub fn with_tokenizer_repo(mut self, repo: impl Into<String>) -> Self {
         self.tokenizer_repo = Some(repo.into());
         self
     }
 
+    /// Use a local tokenizer.json file (overrides `tokenizer_repo`).
     pub fn with_tokenizer_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.tokenizer_path = Some(path.into());
         self
     }
 
+    /// Set the maximum number of tokens to generate.
     pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
         self.max_tokens = max_tokens;
         self
     }
 
+    /// Set the sampling temperature (0.0 = greedy).
     pub fn with_temperature(mut self, temperature: f64) -> Self {
         self.temperature = temperature;
         self
     }
 
+    /// Set the random seed for reproducible sampling.
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = seed;
         self
     }
 
+    /// Override the chat template detected from the model name.
     pub fn with_chat_template(mut self, template: ChatTemplate) -> Self {
         self.chat_template = template;
         self

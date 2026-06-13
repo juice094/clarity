@@ -507,9 +507,11 @@ fn federation_response_into_json() {
             .unwrap(),
         serde_json::json!(123)
     );
-    assert!(FederationResponse::Error(AgentError::Cancelled)
-        .into_json()
-        .is_err());
+    assert!(
+        FederationResponse::Error(AgentError::Cancelled)
+            .into_json()
+            .is_err()
+    );
 }
 
 #[test]
@@ -527,9 +529,11 @@ fn federation_response_into_text() {
             .unwrap(),
         r#"{"a":1}"#
     );
-    assert!(FederationResponse::Error(AgentError::Cancelled)
-        .into_text()
-        .is_err());
+    assert!(
+        FederationResponse::Error(AgentError::Cancelled)
+            .into_text()
+            .is_err()
+    );
 }
 
 // ============================================================================
@@ -618,9 +622,11 @@ fn capability_token_read_only() {
 fn capability_token_verify_whitelist() {
     let token = CapabilityToken::new(vec!["bash".to_string()]);
     assert!(token.verify("bash", std::path::Path::new("/")).is_ok());
-    assert!(token
-        .verify("file_read", std::path::Path::new("/"))
-        .is_err());
+    assert!(
+        token
+            .verify("file_read", std::path::Path::new("/"))
+            .is_err()
+    );
 }
 
 #[test]

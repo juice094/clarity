@@ -5,9 +5,12 @@
 //! - 接收消息事件
 //! - 支持流式响应（分批发送）
 
+// Intentionally retained: this module builds with the `discord` feature disabled,
+// so framework types and helper APIs appear unused but are part of the public API.
 #![allow(dead_code)]
 
 use async_trait::async_trait;
+use clarity_channels::retry::RetryPolicy;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -30,6 +33,7 @@ pub struct DiscordChannel {
 }
 
 impl DiscordChannel {
+    /// Create a new Discord channel from the given configuration.
     pub fn new(config: ChannelConfig) -> Self {
         Self {
             bot_token: config.token.clone(),
@@ -242,26 +246,37 @@ fn split_discord_message(text: &str, max_length: usize) -> Vec<&str> {
 /// Discord Webhook 请求体
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiscordWebhookRequest {
+    /// Message text content.
     pub content: Option<String>,
+    /// Override username shown for the message.
     pub username: Option<String>,
+    /// Override avatar URL shown for the message.
     pub avatar_url: Option<String>,
+    /// Rich embeds attached to the message.
     pub embeds: Option<Vec<DiscordEmbed>>,
 }
 
 /// Discord Embed
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscordEmbed {
+    /// Embed title.
     pub title: Option<String>,
+    /// Embed description body.
     pub description: Option<String>,
+    /// Embed color as a 24-bit integer.
     pub color: Option<u32>,
+    /// Embed field list.
     pub fields: Option<Vec<DiscordEmbedField>>,
 }
 
 /// Discord Embed Field
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscordEmbedField {
+    /// Field name.
     pub name: String,
+    /// Field value.
     pub value: String,
+    /// Whether the field should be displayed inline.
     pub inline: bool,
 }
 
@@ -269,68 +284,87 @@ pub struct DiscordEmbedField {
 pub struct DiscordWebhookClient {
     client: reqwest::Client,
     webhook_url: String,
+    retry_policy: RetryPolicy,
 }
 
 impl DiscordWebhookClient {
+    /// Create a new webhook client for the given webhook URL.
     pub fn new(webhook_url: impl Into<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
             webhook_url: webhook_url.into(),
+            retry_policy: RetryPolicy::new(),
         }
+    }
+
+    /// Set a custom retry policy for outbound webhook calls.
+    pub fn with_retry_policy(mut self, policy: RetryPolicy) -> Self {
+        self.retry_policy = policy;
+        self
     }
 
     /// 发送简单文本消息
     pub async fn send_message(&self, content: &str) -> Result<(), ChannelError> {
-        let body = DiscordWebhookRequest {
-            content: Some(content.to_string()),
-            username: None,
-            avatar_url: None,
-            embeds: None,
-        };
+        let webhook_url = self.webhook_url.clone();
+        self.retry_policy
+            .execute(move || {
+                let client = self.client.clone();
+                let webhook_url = webhook_url.clone();
+                async move {
+                    let body = DiscordWebhookRequest {
+                        content: Some(content.to_string()),
+                        username: None,
+                        avatar_url: None,
+                        embeds: None,
+                    };
 
-        let response = self
-            .client
-            .post(&self.webhook_url)
-            .json(&body)
-            .send()
-            .await?;
+                    let response = client.post(&webhook_url).json(&body).send().await?;
 
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(ChannelError::SendFailed(format!(
-                "Discord webhook error: {}",
-                error_text
-            )));
-        }
+                    if !response.status().is_success() {
+                        let error_text = response.text().await.unwrap_or_default();
+                        return Err(ChannelError::SendFailed(format!(
+                            "Discord webhook error: {}",
+                            error_text
+                        )));
+                    }
 
-        Ok(())
+                    Ok(())
+                }
+            })
+            .await
     }
 
     /// 发送 Embed 消息
     pub async fn send_embed(&self, embed: DiscordEmbed) -> Result<(), ChannelError> {
-        let body = DiscordWebhookRequest {
-            content: None,
-            username: None,
-            avatar_url: None,
-            embeds: Some(vec![embed]),
-        };
+        let webhook_url = self.webhook_url.clone();
+        let embed = embed.clone();
+        self.retry_policy
+            .execute(move || {
+                let client = self.client.clone();
+                let webhook_url = webhook_url.clone();
+                let embed = embed.clone();
+                async move {
+                    let body = DiscordWebhookRequest {
+                        content: None,
+                        username: None,
+                        avatar_url: None,
+                        embeds: Some(vec![embed]),
+                    };
 
-        let response = self
-            .client
-            .post(&self.webhook_url)
-            .json(&body)
-            .send()
-            .await?;
+                    let response = client.post(&webhook_url).json(&body).send().await?;
 
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(ChannelError::SendFailed(format!(
-                "Discord webhook error: {}",
-                error_text
-            )));
-        }
+                    if !response.status().is_success() {
+                        let error_text = response.text().await.unwrap_or_default();
+                        return Err(ChannelError::SendFailed(format!(
+                            "Discord webhook error: {}",
+                            error_text
+                        )));
+                    }
 
-        Ok(())
+                    Ok(())
+                }
+            })
+            .await
     }
 }
 
@@ -369,5 +403,20 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("Hello"));
         assert!(json.contains("Clarity Bot"));
+    }
+
+    #[test]
+    fn test_discord_webhook_client_accepts_retry_policy() {
+        use clarity_channels::retry::RetryPolicy;
+        use std::time::Duration;
+
+        let client = DiscordWebhookClient::new("https://example.com/webhook").with_retry_policy(
+            RetryPolicy::new()
+                .with_max_attempts(5)
+                .with_base_delay(Duration::from_secs(1)),
+        );
+
+        assert_eq!(client.retry_policy.max_attempts, 5);
+        assert_eq!(client.retry_policy.base_delay, Duration::from_secs(1));
     }
 }

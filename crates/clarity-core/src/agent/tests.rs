@@ -371,7 +371,7 @@ async fn test_tool_call_yolo_mode() {
 async fn test_agent_run_with_wire() {
     use clarity_wire::Wire;
     use std::sync::Arc;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     // Create Wire
     let wire = Wire::new();
@@ -425,7 +425,7 @@ async fn test_agent_run_streaming_with_wire() {
     use parking_lot::Mutex;
     use std::sync::Arc;
     use std::sync::Arc as StdArc;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     // Create Wire
     let wire = Wire::new();

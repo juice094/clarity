@@ -31,7 +31,7 @@ tags: [document, ui]
 
 | 文件 | 说明 |
 |---|---|
-| `docs/FUTURE_DIRECTION.md` L166-205 | Identity 枚举旧定义 |
+| `docs/planning/FUTURE_DIRECTION.md` L166-205 | Identity 枚举旧定义 |
 | `docs/archive/2026-04-26-cluster-as-single-node.md` C6 | Gray Anchor Hard-binding 旧规划 |
 
 ---
@@ -53,8 +53,8 @@ tags: [document, ui]
 ### 3.2 旧文档 ≠ 执行规范
 
 - `docs/archive/**`：已归档，仅作考古参考，**不可直接执行**
-- `docs/FUTURE_DIRECTION.md`：远景设计，执行前必须重新确认每个命名和每个接口
-- `docs/plans/BACKLOG.md`：任务清单，不等于技术规范
+- `docs/planning/FUTURE_DIRECTION.md`：远景设计，执行前必须重新确认每个命名和每个接口
+- `docs/planning/BACKLOG.md`：任务清单，不等于技术规范
 - **只有 `docs/adr/ADR-*.md` + 代码本身构成当前规范**
 
 ### 3.3 自动化检测（建议）

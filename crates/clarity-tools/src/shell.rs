@@ -1,11 +1,11 @@
 //! Shell execution tools: Bash and PowerShell
 
 use async_trait::async_trait;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use std::process::Stdio;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tracing::{debug, error, warn};
 
 use crate::file::is_sensitive_file;

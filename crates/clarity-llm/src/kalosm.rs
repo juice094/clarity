@@ -12,8 +12,11 @@ use std::path::PathBuf;
 /// Configuration for Kalosm local inference (deprecated).
 #[derive(Debug, Clone)]
 pub struct KalosmConfig {
+    /// Path to the local model file.
     pub model_path: PathBuf,
+    /// Maximum context length in tokens.
     pub max_context_length: usize,
+    /// Sampling temperature.
     pub temperature: f32,
 }
 
@@ -28,6 +31,7 @@ impl Default for KalosmConfig {
 }
 
 impl KalosmConfig {
+    /// Create a Kalosm config with the given model path.
     pub fn new(model_path: impl Into<PathBuf>) -> Self {
         Self {
             model_path: model_path.into(),
@@ -35,11 +39,13 @@ impl KalosmConfig {
         }
     }
 
+    /// Set the maximum context length.
     pub fn with_max_context_length(mut self, length: usize) -> Self {
         self.max_context_length = length;
         self
     }
 
+    /// Set the sampling temperature.
     pub fn with_temperature(mut self, temp: f32) -> Self {
         self.temperature = temp;
         self
@@ -52,6 +58,7 @@ pub struct KalosmProvider {
 }
 
 impl KalosmProvider {
+    /// Create a new stub provider that reports deprecation.
     pub async fn new(_config: KalosmConfig) -> Result<Self, AgentError> {
         Err(AgentError::Llm(
             "Kalosm provider is deprecated and has been removed. \

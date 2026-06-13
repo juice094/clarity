@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Session V2 migration test: verify append-only event log and compacted context.
 
 use clarity_memory::session_store_v2::{EventType as V2EventType, SessionState, SessionStoreV2};
@@ -120,10 +124,12 @@ fn test_session_v2_delete_cascade() {
 
     assert!(store.get_session("sess-delete").unwrap().is_none());
     assert!(store.read_events("sess-delete").unwrap().is_empty());
-    assert!(store
-        .load_compacted_context("sess-delete")
-        .unwrap()
-        .is_none());
+    assert!(
+        store
+            .load_compacted_context("sess-delete")
+            .unwrap()
+            .is_none()
+    );
 }
 
 /// Simulate a long session and verify compaction boundary.

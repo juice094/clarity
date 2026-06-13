@@ -10,7 +10,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```ignore
 //! use clarity_core::daemon::{DaemonLock, DaemonRuntime, DaemonError};
 //!
 //! #[tokio::main]

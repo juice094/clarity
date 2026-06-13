@@ -1,12 +1,15 @@
 //! Worker Pool - 工作线程池
 //!
 //! 提供可扩展的工作线程池，用于执行后台任务
+// Intentionally retained: worker pool module exposes several types and helper
+// methods that are not all consumed by current code paths but are kept for
+// operational flexibility and future scheduling features.
 #![allow(dead_code)]
 
 use super::{AgentTaskExecutor, TaskId, TaskResult, TaskSpec, TaskStatus, TaskStore};
-use crate::notifications::{task_status_notification, NotificationManager};
+use crate::notifications::{NotificationManager, task_status_notification};
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info};
 
@@ -23,6 +26,7 @@ struct WorkItem {
 
 /// 工作线程统计信息
 #[derive(Debug, Clone, Default)]
+// Intentionally retained: fields are read by external telemetry and debug dumps.
 #[allow(dead_code)]
 pub struct WorkerStats {
     /// 工作线程 ID
@@ -64,6 +68,7 @@ impl WorkerStats {
 
 /// 工作线程池
 #[derive(Debug)]
+// Intentionally retained: fields are used by background task scheduling infrastructure.
 #[allow(dead_code)]
 pub struct WorkerPool {
     /// 工作发送通道
@@ -399,6 +404,7 @@ impl WorkerPool {
 
 /// 可扩展工作线程池
 #[derive(Debug)]
+// Intentionally retained: fields are used by auto-scaling background task scheduling.
 #[allow(dead_code)]
 pub struct ScalableWorkerPool {
     /// 基础工作线程池
@@ -449,10 +455,6 @@ impl ScalableWorkerPool {
         self.pool.shutdown().await;
     }
 }
-
-/// Worker 结构体（兼容层）
-#[allow(dead_code)]
-pub struct Worker;
 
 #[cfg(test)]
 mod tests {

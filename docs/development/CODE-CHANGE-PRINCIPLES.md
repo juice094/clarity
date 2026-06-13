@@ -316,7 +316,7 @@ Q4: X / Y 是否可分为 ≤ 5 个 atomic commit（每个独立编译）？
 
 | 文档 | 作用 | 关系 |
 |------|------|------|
-| `docs/CODE-CHANGE-PRINCIPLES.md` (本文) | 跨 crate 通用原则 | 根 |
+| `docs/development/CODE-CHANGE-PRINCIPLES.md` (本文) | 跨 crate 通用原则 | 根 |
 | `crates/clarity-egui/EGUI_LAYOUT.md` | egui UI 5 条铁律 | 落实 P6 |
 | `crates/clarity-egui/ARCHITECTURE.md` | egui 冷热路径规范 | 落实 P3 (Markdown 单源) |
 | `docs/adr/ADR-*.md` | 单点架构决议 | 落实 P1 (重大变更需 ADR) |

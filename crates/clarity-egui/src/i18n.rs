@@ -27,6 +27,7 @@ use std::collections::HashMap;
 // Locale enum
 // ============================================================================
 
+/// locale variants.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[allow(dead_code)]
 pub enum Locale {

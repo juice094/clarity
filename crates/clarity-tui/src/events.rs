@@ -1,31 +1,44 @@
-#![allow(dead_code)]
-
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEventKind};
-
-#[derive(Clone, Debug)]
-pub enum MouseScroll {
-    Up,
-    Down,
-}
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-/// 工具调用信息
+/// Direction of a mouse wheel event.
+#[derive(Clone, Debug)]
+pub enum MouseScroll {
+    /// Wheel scrolled up.
+    Up,
+    /// Wheel scrolled down.
+    Down,
+}
+
+/// Metadata about a tool invocation or result.
 #[derive(Clone, Debug)]
 pub struct ToolCallInfo {
+    /// Tool name.
     pub name: String,
+    /// Serialized arguments or result payload.
     pub params: String,
+    /// Current execution status.
+    // Intentionally retained: the wire adapter currently only emits
+    // `Running`/`Success`, but the field is part of the public event contract.
+    #[allow(dead_code)]
     pub status: ToolStatus,
 }
 
+/// Lifecycle status of a tool call.
 #[derive(Clone, Debug)]
 pub enum ToolStatus {
+    /// Tool is still running.
     Running,
+    /// Tool completed successfully.
     Success,
+    /// Tool failed.
+    // Intentionally retained: reserved for future error visualization.
+    #[allow(dead_code)]
     Error,
 }
 
-/// 应用事件
+/// Event produced by the input loop and consumed by the TUI application.
 #[derive(Debug)]
 pub enum Event {
     /// 定时滴答
@@ -45,6 +58,9 @@ pub enum Event {
     /// 工具结果
     ToolResult(ToolCallInfo),
     /// 错误
+    // Intentionally retained: consumed by the main loop; reserved for future
+    // producers that emit structured errors.
+    #[allow(dead_code)]
     Error(String),
     /// Token usage update
     Usage {
@@ -61,6 +77,8 @@ pub struct EventHandler {
 }
 
 impl EventHandler {
+    /// Spawn the background event loop that forwards crossterm events into the
+    /// returned channel.
     pub fn new() -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         let tx_clone = tx.clone();

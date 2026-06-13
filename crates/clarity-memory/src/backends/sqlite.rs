@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -54,6 +54,7 @@ impl Bm25Cache {
     }
 }
 
+/// SQLite-backed storage backend with FTS5 full-text search.
 #[derive(Debug, Clone)]
 pub struct SqliteStore {
     conn: Arc<Mutex<Connection>>,
@@ -61,6 +62,7 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
+    /// Open or create a SQLite store at the given path.
     #[instrument(skip(db_path))]
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         let db_path = db_path.as_ref().to_path_buf();
@@ -80,6 +82,7 @@ impl SqliteStore {
         Ok(store)
     }
 
+    /// Create a new in-memory SQLite store.
     pub fn new_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory().map_err(MemoryError::Database)?;
         let store = Self {
@@ -90,6 +93,7 @@ impl SqliteStore {
         Ok(store)
     }
 
+    /// Enable SQLite WAL mode for better concurrent read performance.
     pub fn enable_wal_mode(&self) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute("PRAGMA journal_mode=WAL", [])?;
@@ -98,6 +102,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Save a note associated with a session.
     pub async fn save_session_note(
         &self,
         session_id: &str,
@@ -508,6 +513,68 @@ impl StorageBackend for SqliteStore {
         scored.truncate(limit);
 
         Ok(scored)
+    }
+
+    async fn search_semantic(
+        &self,
+        query: &str,
+        limit: usize,
+        decay: &DecayConfig,
+    ) -> Result<Vec<(Fact, f32)>> {
+        let query = query.to_string();
+        let decay = *decay;
+        let conn = self.conn.clone();
+
+        // Build an in-memory TF-IDF index over all facts. This is simple and
+        // correct for the current local-memory scale; caching can be added
+        // later if profiling shows it is needed.
+        let facts: Vec<(i64, String)> = tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            let mut stmt = conn.prepare("SELECT id, fact FROM facts")?;
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })?;
+            let mut facts = Vec::new();
+            for row in rows {
+                facts.push(row?);
+            }
+            Ok::<_, MemoryError>(facts)
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+
+        if facts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let index = crate::semantic::build_index(&facts);
+        let scored: Vec<(i64, f32)> = index.search(&query, limit * 5);
+
+        let ids: Vec<i64> = scored.iter().map(|(id, _)| *id).collect();
+        let fetched = self.get_facts_by_ids(&ids).await?;
+        let fact_map: std::collections::HashMap<i64, Fact> =
+            fetched.into_iter().map(|f| (f.id, f)).collect();
+
+        let now = Utc::now();
+        let lambda = std::f64::consts::LN_2 / decay.half_life_days;
+        let mut results: Vec<(Fact, f32)> = scored
+            .into_iter()
+            .filter_map(|(id, score)| {
+                fact_map.get(&id).map(|fact| {
+                    let weight = if decay.enabled {
+                        let age_days = (now - fact.created_at).num_days() as f64;
+                        (-lambda * age_days).exp() as f32
+                    } else {
+                        1.0
+                    };
+                    (fact.clone(), score * weight)
+                })
+            })
+            .collect();
+
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+        Ok(results)
     }
 
     async fn clear_all(&self) -> Result<usize> {

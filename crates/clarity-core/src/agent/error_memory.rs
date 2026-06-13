@@ -8,8 +8,11 @@ use tokio::io::AsyncWriteExt;
 /// A single record of tool execution, capturing environment context and outcome.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolExecutionMemory {
+    /// Timestamp of the record.
     pub timestamp: DateTime<Utc>,
+    /// Tool name.
     pub tool_name: String,
+    /// Tool arguments.
     pub tool_args: serde_json::Value,
     /// Environment context — working directory at the time of execution.
     pub working_dir: PathBuf,
@@ -32,19 +35,34 @@ pub struct ToolExecutionMemory {
 /// The result of a tool execution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Outcome {
+    /// Successful execution.
     Success,
-    Failure { retry_count: u8 },
-    Partial { warning: String },
+    /// Failed execution.
+    Failure {
+        /// Number of retries attempted.
+        retry_count: u8,
+    },
+    /// Partial success with warning.
+    Partial {
+        /// Warning message.
+        warning: String,
+    },
 }
 
 /// Taxonomy of tool execution failures for pattern learning.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ErrorCategory {
+    /// Skill not found.
     NotFound,
+    /// Permission denied.
     PermissionDenied,
+    /// Encoding error.
     EncodingError,
+    /// Operation timed out.
     Timeout,
+    /// Environment mismatch.
     EnvironmentMismatch,
+    /// Unknown error.
     Unknown,
 }
 
@@ -53,6 +71,7 @@ pub enum ErrorCategory {
 pub struct FragilityPattern {
     /// Tool name or generic pattern identifier.
     pub pattern: String,
+    /// Error category.
     pub category: ErrorCategory,
     /// How many times this pattern has been observed.
     pub frequency: u32,
@@ -61,6 +80,7 @@ pub struct FragilityPattern {
 /// Environment-wide cognition generated from historical error memory.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnvironmentCognition {
+    /// Known fragility patterns.
     pub known_fragilities: Vec<FragilityPattern>,
     /// Tool name → reliability score in [0.0, 1.0].
     pub tool_reliability: HashMap<String, f32>,
@@ -84,6 +104,7 @@ pub struct FileSystemErrorMemoryStore {
 }
 
 impl FileSystemErrorMemoryStore {
+    /// Create a new `FileSystemErrorMemoryStore`.
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }

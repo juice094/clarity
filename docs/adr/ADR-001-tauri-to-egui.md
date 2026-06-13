@@ -22,7 +22,7 @@ However, the following issues emerged during Sprint 12–14:
 4. **egui maturity**: `clarity-egui` (eframe/egui, pure Rust) reached feature parity in Sprint 14 with 71 `.rs` files, covering Chat, Settings, Plan visualization, Subagent progress, Cron/Team panels, Glassmorphism theming, and single-binary packaging — all without a JS build step.
 5. **Zero-dependency alignment**: The Phase 2 roadmap goal of "单二进制 + 嵌入式模型" is incompatible with Tauri's WebView runtime requirement.
 
-`docs/ROADMAP.md` Phase 1 was explicitly annotated as archived: "以下基于 `clarity-tauri`（React+Vite）的实现已废弃归档。v0.4.0 起全部功能由 `clarity-egui`（eframe/egui，纯 Rust）承接。"
+`docs/planning/ROADMAP.md` Phase 1 was explicitly annotated as archived: "以下基于 `clarity-tauri`（React+Vite）的实现已废弃归档。v0.4.0 起全部功能由 `clarity-egui`（eframe/egui，纯 Rust）承接。"
 
 ## Decision
 
@@ -61,7 +61,7 @@ However, the following issues emerged during Sprint 12–14:
 
 - Commit: `899d8f92` (chore: archive `clarity-tauri` out of active workspace)
 - Commit: `78dbbb72` (fix: remove archived tauri reference from benchmarks)
-- Related docs: `docs/ROADMAP.md` (Phase 1 archive annotation, Sprint 14 egui maturity)
-- Related docs: `docs/FUTURE_DIRECTION.md` ("UI 技术栈方向：egui 为唯一主力栈；Tauri 废弃归档")
+- Related docs: `docs/planning/ROADMAP.md` (Phase 1 archive annotation, Sprint 14 egui maturity)
+- Related docs: `docs/planning/FUTURE_DIRECTION.md` ("UI 技术栈方向：egui 为唯一主力栈；Tauri 废弃归档")
 - Related docs: `docs/ARCHITECTURE.md` (Crate Topology, Desktop GUI section)
 - Related docs: `docs/tech_stack_decision_ui.md` (original Tauri 2 selection rationale and reversal context)

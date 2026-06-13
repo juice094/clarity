@@ -18,10 +18,18 @@ use uuid::Uuid;
 /// The source of an approval request
 #[derive(Debug, Clone)]
 pub enum ApprovalSource {
-    /// Foreground turn context
-    ForegroundTurn { turn_id: String },
-    /// Background agent context
-    BackgroundAgent { task_id: String, agent_id: String },
+    /// Foreground turn context.
+    ForegroundTurn {
+        /// Turn identifier.
+        turn_id: String,
+    },
+    /// Background agent context.
+    BackgroundAgent {
+        /// Task identifier.
+        task_id: String,
+        /// Agent identifier.
+        agent_id: String,
+    },
 }
 
 impl ApprovalSource {
@@ -136,7 +144,7 @@ pub trait ApprovalRuntime: Send + Sync {
     /// * `request_id` - The ID of the request to resolve
     /// * `response` - The response to set
     async fn resolve(&self, request_id: &str, response: ApprovalResponse)
-        -> Result<(), AgentError>;
+    -> Result<(), AgentError>;
 
     /// List all currently pending approval requests.
     ///
@@ -631,8 +639,11 @@ impl ApprovalRuntime for InMemoryApprovalRuntime {
 /// Serializable snapshot of an approval decision for persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApprovalRecord {
+    /// Request identifier.
     pub request_id: String,
+    /// Whether the request was approved.
     pub approved: bool,
+    /// Timestamp of the record.
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
@@ -650,6 +661,7 @@ pub struct PersistingApprovalRuntime<R: ApprovalRuntime> {
 }
 
 impl<R: ApprovalRuntime> PersistingApprovalRuntime<R> {
+    /// Create a new instance.
     pub fn new(inner: Arc<R>, store: Option<Arc<dyn crate::memory::MemoryStore>>) -> Self {
         Self { inner, store }
     }

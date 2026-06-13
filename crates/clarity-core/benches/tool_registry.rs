@@ -1,5 +1,5 @@
 use clarity_core::registry::ToolRegistry;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 fn bench_tool_registry_creation(c: &mut Criterion) {
     c.bench_function("ToolRegistry::with_builtin_tools", |b| {

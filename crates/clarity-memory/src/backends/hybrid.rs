@@ -1,14 +1,14 @@
 //! Hybrid storage - Hot cache + Cold storage
-use crate::backends::file::FileStore;
 use crate::backends::StorageBackend;
+use crate::backends::file::FileStore;
 use crate::store::DecayConfig;
 use crate::types::{Fact, Result};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tracing::info;
 
@@ -18,6 +18,7 @@ struct CachedFact {
     last_access: i64,
 }
 
+/// Hybrid storage backend with a hot in-memory cache over cold file storage.
 pub struct HybridStore {
     hot_cache: Arc<DashMap<i64, CachedFact>>,
     cold_storage: FileStore,
@@ -40,6 +41,7 @@ impl std::fmt::Debug for HybridStore {
 }
 
 impl HybridStore {
+    /// Create a new hybrid store with the given cache size and cold storage directory.
     pub async fn new(
         cache_size: usize,
         cold_dir: impl AsRef<std::path::Path>,
@@ -152,6 +154,7 @@ impl HybridStore {
         merged
     }
 
+    /// Return current hot-cache statistics.
     pub fn cache_stats(&self) -> CacheStats {
         CacheStats {
             cache_size: self.hot_cache.len(),
@@ -169,9 +172,12 @@ impl Drop for HybridStore {
     }
 }
 
+/// Statistics for the hybrid store hot cache.
 #[derive(Debug, Clone)]
 pub struct CacheStats {
+    /// Current number of facts in the hot cache
     pub cache_size: usize,
+    /// Maximum number of facts the hot cache can hold
     pub max_cache_size: usize,
 }
 

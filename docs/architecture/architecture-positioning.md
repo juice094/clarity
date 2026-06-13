@@ -110,7 +110,7 @@ tags: [architecture]
 | **Approval 框架** | Interactive/Plan/Yolo | 四模式 + Smart batch grant toast + diff | ✅ 平 | — |
 | **MCP 接入** | 有 | 自动连接 + 工具注册 + WebSocket/SSE/HTTP/stdio 四 transport | ✅ 强于 Kimi CLI | — |
 
-> 表中"具体 Sprint 何时完成"已迁出此文件——查阅 `AGENTS.md §Current Phase` 与 `docs/sprint-archive.md`。
+> 表中"具体 Sprint 何时完成"已迁出此文件——查阅 `AGENTS.md §Current Phase` 与 `docs/planning/sprint-archive.md`。
 
 ---
 
@@ -133,7 +133,7 @@ ZeroClaw 从"待融合对象"降级为"架构对照组"。
 ## 五-A、与 Anthropic Managed Agents 的关系
 
 > **更新背景（2026-05-11）**：用户分享了 Anthropic Managed Agents 架构剖析（Kimi share + 视频）。
-> 详细映射分析见 [`notes/2026-05-11-anthropic-managed-agents-mapping.md`](notes/2026-05-11-anthropic-managed-agents-mapping.md)。
+> 详细映射分析见 [`notes/2026-05-11-anthropic-managed-agents-mapping.md`](../notes/2026-05-11-anthropic-managed-agents-mapping.md)。
 
 ### 5A.1 定位关系
 
@@ -234,7 +234,7 @@ Clarity 的 **Hybrid UI（egui GUI + tui TUI 共享后端）** 与 Anthropic 的
 
 ## 六、演进路线图（阶段性，非 Sprint 维度）
 
-> 与 `docs/ROADMAP.md` 的关系：本节给出 **运行时形态** 的阶段演化；ROADMAP 给出 **产品交付** 的版本节奏。
+> 与 `docs/planning/ROADMAP.md` 的关系：本节给出 **运行时形态** 的阶段演化；ROADMAP 给出 **产品交付** 的版本节奏。
 
 ### Phase 0：止血（已完成 ✅）
 - [x] 修复工具结果不回显、并发 Approval timeout、扩展名优先 sniff、绝对路径跨目录读取、Windows 仅注册 PowerShell、shell timeout 60s
@@ -260,7 +260,7 @@ Clarity 的 **Hybrid UI（egui GUI + tui TUI 共享后端）** 与 Anthropic 的
 - [ ] CoreNode + MemoryNode + GatewayNode 形成单机集群
 - [ ] FederationRouter 上升到主线
 
-> 具体 commit hash 与 sprint 完成日期请查阅 `CHANGELOG.md` 与 `docs/sprint-archive.md`，本节只描述阶段意图。
+> 具体 commit hash 与 sprint 完成日期请查阅 `CHANGELOG.md` 与 `docs/planning/sprint-archive.md`，本节只描述阶段意图。
 
 ---
 

@@ -16,6 +16,7 @@ pub type TaskId = String;
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, Hash, Default,
 )]
+/// `TaskPriority` variants.
 pub enum TaskPriority {
     /// 后台任务，最低优先级
     Background = 0,
@@ -52,10 +53,15 @@ impl TaskPriority {
 /// 任务状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
+    /// Task is pending.
     Pending,
+    /// Task is running.
     Running,
+    /// Task completed.
     Completed,
+    /// Task failed.
     Failed,
+    /// Task cancelled.
     Cancelled,
 }
 
@@ -83,14 +89,21 @@ impl TaskStatus {
 /// 任务规格
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskSpec {
+    /// Display name.
     pub name: String,
+    /// Human-readable description.
     pub description: String,
+    /// Agent type identifier.
     pub agent_type: String,
+    /// Prompt text.
     pub prompt: String,
+    /// Maximum iteration count.
     pub max_iterations: Option<usize>,
     #[serde(alias = "timeout_secs")]
+    /// Timeout in seconds.
     pub timeout_seconds: Option<u64>,
     #[serde(default)]
+    /// Task priority.
     pub priority: TaskPriority,
     /// 模型别名覆盖（从 ModelRegistry 查找）
     #[serde(default)]
@@ -157,9 +170,13 @@ impl TaskSpec {
 /// 任务结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResult {
+    /// Tool status.
     pub status: TaskStatus,
+    /// Task output text.
     pub output: String,
+    /// Elapsed time in milliseconds.
     pub elapsed_ms: u64,
+    /// Execution steps.
     pub steps: usize,
 }
 
@@ -200,10 +217,15 @@ impl TaskResult {
 /// 任务信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskInfo {
+    /// Tool call identifier.
     pub id: TaskId,
+    /// Task specification.
     pub spec: TaskSpec,
+    /// Tool status.
     pub status: TaskStatus,
+    /// Creation timestamp.
     pub created_at: u64,
+    /// Last update timestamp.
     pub updated_at: u64,
 }
 
@@ -462,7 +484,8 @@ impl TaskStore {
 fn now_timestamp() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .expect("system clock before 1970")
+        // SAFE: system time is always after UNIX_EPOCH in practice.
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_secs()
 }
 

@@ -95,13 +95,13 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | 统一 Agent Streaming Loop | ✅ | 提取 `run_streaming_turn()`，消除重复编排 |
 | 复活 ChatDriver + 解耦 Op | ✅ | Gateway 通过 `ConversationChatDriver` 注入消息历史；`Op` 恢复纯净 |
 | AppState 死字段清理 | ✅ | 移除 `initialized`、`active_connections`、外层 `RwLock`、重复 `approval_runtime` |
-| **Agent 空响应修复** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行（详见 `docs/plans/2026-05-02-agent-empty-response-followup.md`） |
+| **Agent 空响应修复** | ✅ | 修复 stream error fallback、tool filter 缺失、`finish_turn()` 不执行（详见 `docs/planning/plans/2026-05-02-agent-empty-response-followup.md`） |
 
 ### Phase 3：集群语义验证 + Claw 持续化（4-6 周）
 
 目标：将单 Agent 单进程假设重构为多 Agent Hub-Worker 调度器；实现跨会话状态快照与多角色认知协同。
 
-详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C 与 [`docs/visions/AGENT_OS_VISION.md`](docs/visions/AGENT_OS_VISION.md)。
+详见 [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) Phase A→C 与 [`docs/visions/AGENT_OS_VISION.md`](../visions/AGENT_OS_VISION.md)。
 
 #### 中间协议层状态
 

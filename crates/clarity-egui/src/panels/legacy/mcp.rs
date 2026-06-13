@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the mcp panel UI.
 pub fn render_mcp_panel(app: &mut App, ctx: &egui::Context) {
     if !matches!(app.view_state.modal, Some(clarity_core::ui::ModalType::Mcp)) {
         return;

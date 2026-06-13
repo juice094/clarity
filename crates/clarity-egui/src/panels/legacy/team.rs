@@ -1,12 +1,9 @@
-use crate::ui::types::ToastLevel;
 use crate::App;
+use crate::ui::types::ToastLevel;
 use clarity_core::tools::Tool;
 
+/// Renders the team panel UI.
 pub fn render_team_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.team_store.team_panel_open {
-        return;
-    }
-
     let theme = app.ui_store.theme.clone();
 
     egui::SidePanel::right("team_panel")

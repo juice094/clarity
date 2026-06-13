@@ -1,7 +1,8 @@
-use crate::services::gateway_task_client::GatewayTaskClient;
 use crate::App;
+use crate::services::gateway_task_client::GatewayTaskClient;
 use clarity_core::background::TaskStatus;
 
+/// Renders the task panel UI.
 #[allow(dead_code)]
 pub fn render_task_panel(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::right("task_panel")

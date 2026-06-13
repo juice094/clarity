@@ -402,6 +402,7 @@ pub struct ViewState {
 }
 
 impl ViewState {
+    /// Create a new `ViewState`.
     pub fn new() -> Self {
         Self::default()
     }

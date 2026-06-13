@@ -70,4 +70,4 @@ Add `parking_lot = "0.12"` to the `Cargo.toml` of each affected crate.
 
 - Commit: `5e827983`
 - Related docs: `docs/ARCHITECTURE.md` (Code Health Metrics: unwrap count baseline)
-- Related docs: `docs/sprint-archive.md` (Sprint 40 delivery notes)
+- Related docs: `docs/planning/sprint-archive.md` (Sprint 40 delivery notes)

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::LlmFactory;
 use clarity_contract::{AgentError, LlmProvider};
 
+/// Provider registry for the LLM mesh.
 pub struct MeshRegistry;
 
 impl MeshRegistry {

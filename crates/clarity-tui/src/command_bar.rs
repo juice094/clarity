@@ -1,47 +1,44 @@
 use crate::app::{App, AppMode};
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
 
+/// A single entry shown in the bottom command bar.
 pub struct CommandInfo {
+    /// Display label for the action.
     pub name: &'static str,
+    /// Key shortcut that triggers the action.
     pub key: &'static str,
-    #[allow(dead_code)]
-    pub description: &'static str,
 }
 
+/// Build the list of command-bar hints for the current application state.
 pub fn get_commands_for_app(app: &App) -> Vec<CommandInfo> {
     if app.is_generating() {
         vec![CommandInfo {
             name: "停止生成",
             key: "Ctrl+C",
-            description: "停止生成",
         }]
     } else if app.mode == AppMode::Normal {
         vec![
             CommandInfo {
                 name: "输入",
                 key: "i",
-                description: "进入输入模式",
             },
             CommandInfo {
                 name: "帮助",
                 key: "?",
-                description: "显示帮助",
             },
             CommandInfo {
                 name: "滚动",
                 key: "↑/↓",
-                description: "滚动聊天",
             },
             CommandInfo {
                 name: "退出",
                 key: "q",
-                description: "退出程序",
             },
         ]
     } else {
@@ -49,22 +46,20 @@ pub fn get_commands_for_app(app: &App) -> Vec<CommandInfo> {
             CommandInfo {
                 name: "发送",
                 key: "Enter",
-                description: "发送消息",
             },
             CommandInfo {
                 name: "返回",
                 key: "Esc",
-                description: "返回正常模式",
             },
             CommandInfo {
                 name: "停止",
                 key: "Ctrl+C",
-                description: "停止生成",
             },
         ]
     }
 }
 
+/// Render the command bar centered at the bottom of the given area.
 pub fn render_command_bar(f: &mut Frame, area: Rect, commands: &[CommandInfo]) {
     let spans: Vec<Span> = commands
         .iter()

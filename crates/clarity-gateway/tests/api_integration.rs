@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Gateway API integration tests — error-path & webhook coverage
 //!
 //! Complements `http_integration_test.rs` (happy-path) with edge-case
@@ -12,7 +19,7 @@ use tower::ServiceExt;
 
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
-use clarity_gateway::server::{create_api_router, AppState};
+use clarity_gateway::server::{AppState, create_api_router};
 
 fn test_agent() -> Arc<clarity_core::Agent> {
     let registry = ToolRegistry::with_builtin_tools();
@@ -31,7 +38,11 @@ fn test_task_manager() -> Arc<BackgroundTaskManager> {
 async fn test_app_state() -> Arc<AppState> {
     let agent = test_agent();
     let tm = test_task_manager();
-    Arc::new(AppState::new(agent, tm).await)
+    Arc::new(
+        AppState::new(agent, tm)
+            .await
+            .expect("failed to create app state"),
+    )
 }
 
 async fn read_json_body(res: axum::response::Response) -> serde_json::Value {
@@ -95,10 +106,12 @@ async fn test_chat_completions_no_llm_provider() {
 
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = read_json_body(res).await;
-    assert!(body["error"]
-        .as_str()
-        .unwrap()
-        .contains("Agent execution error"));
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("Agent execution error")
+    );
 }
 
 #[tokio::test]
@@ -134,8 +147,8 @@ async fn test_chat_completions_session_id_roundtrip() {
 // Webhook Router Tests
 // ============================================================================
 
-use clarity_gateway::channels::webhook::{WebhookChannel, WebhookRequest, WebhookResponse};
 use clarity_gateway::channels::ChannelConfig;
+use clarity_gateway::channels::webhook::{WebhookChannel, WebhookRequest, WebhookResponse};
 
 #[tokio::test]
 async fn test_webhook_empty_message() {

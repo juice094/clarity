@@ -14,11 +14,11 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::Agent;
 use crate::adaptive::AgentGrowthProfile;
 use crate::registry::ToolRegistry;
 use crate::skills::SkillRegistry;
 use crate::soul::Soul;
-use crate::Agent;
 
 // ============================================================================
 // Error types
@@ -28,15 +28,19 @@ use crate::Agent;
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum WakeError {
     #[error("soul not found: {0}")]
+    /// Soul not found.
     SoulNotFound(String),
 
     #[error("session store read failed: {0}")]
+    /// Session store error.
     SessionStore(String),
 
     #[error("missing dependency: {0}")]
+    /// Missing dependency.
     MissingDependency(String),
 
     #[error("state deserialization failed: {0}")]
+    /// Deserialization error.
     Deserialization(String),
 }
 
@@ -162,24 +166,35 @@ pub struct SuspendSnapshot {
 /// AgentConfig subset serializable for suspend/wake.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub struct SuspendConfig {
+    /// Maximum iteration count.
     pub max_iterations: usize,
+    /// Tool timeout secs.
     pub tool_timeout_secs: u64,
+    /// Whether the invocation is read-only.
     pub read_only: bool,
+    /// Maximum context token count.
     pub max_context_tokens: usize,
+    /// Optional system prompt.
     pub system_prompt: Option<String>,
+    /// Optional working directory.
     pub working_dir: Option<String>,
 }
 
 /// Session-scoped state preserved across suspension.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub struct SuspendSession {
+    /// Current approval mode.
     pub approval_mode: String,
+    /// Daily cost in USD.
     pub daily_cost_usd: f64,
+    /// Message count in the last turn.
     pub last_turn_message_count: usize,
+    /// Optional active provider label.
     pub provider_label: Option<String>,
 }
 
 impl SuspendSnapshot {
+    /// Create a new `SuspendSnapshot`.
     pub fn new() -> Self {
         Self {
             config: SuspendConfig::default(),

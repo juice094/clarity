@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! S2.P1.0 PoC — StripBuilder titlebar layout validation.
 //!
 //! Validates that `egui_extras::StripBuilder` can replace the current

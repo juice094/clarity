@@ -26,6 +26,7 @@ impl std::fmt::Display for EntryPoint {
 pub struct SessionId(String);
 
 impl SessionId {
+    /// Generate a new random session identifier.
     pub fn new() -> Self {
         Self(Uuid::new_v4().to_string())
     }

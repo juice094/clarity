@@ -5,36 +5,50 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::fs::{create_dir_all, OpenOptions};
+use std::fs::{OpenOptions, create_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
 
 /// 入口类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ActivityEntry {
+    /// Window-based activity.
     Window(WindowActivity),
+    /// Command-line activity.
     Cli(CliActivity),
 }
 
 /// Window 端活动
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowActivity {
+    /// Timestamp of the record.
     pub timestamp: String,
+    /// Type of activity.
     pub activity_type: String,
+    /// Announcement topic.
     pub topic: String,
+    /// Tools used during the activity.
     pub tools_used: Vec<String>,
+    /// Files involved in the activity.
     pub files_involved: Vec<String>,
+    /// Conclusion of the activity.
     pub conclusion: String,
 }
 
 /// Cli 端活动
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliActivity {
+    /// Timestamp of the record.
     pub timestamp: String,
+    /// Type of activity.
     pub activity_type: String,
+    /// Task performed.
     pub task: String,
+    /// Tools used during the activity.
     pub tools_used: Vec<String>,
+    /// Files changed by the task.
     pub files_changed: Vec<String>,
+    /// Outcome of the task.
     pub outcome: String,
 }
 

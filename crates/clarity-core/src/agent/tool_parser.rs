@@ -3,23 +3,34 @@ use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;
 
-// Module-level lazy regexes (avoid regex_creation_in_loops false positives)
-static RE_TOOL: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#).unwrap());
+// Module-level lazy regexes (avoid regex_creation_in_loops false positives).
+// The patterns are compile-time literals; expect is safe because they are valid regexes.
+#[allow(clippy::expect_used)]
+static RE_TOOL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#)
+        .expect("RE_TOOL regex is valid")
+});
+#[allow(clippy::expect_used)]
 static RE_ARG: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?s)<(?:arg|parameter)\s+(?:key|name)=["']([^"']+)["'][^>]*>(.*?)</(?:arg|parameter)>"#,
     )
-    .unwrap()
+    .expect("RE_ARG regex is valid")
 });
+#[allow(clippy::expect_used)]
 static RE_INVOKE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<invoke\s+name=["']([^"']+)["'][^>]*>(.*?)</invoke>"#).unwrap()
+    Regex::new(r#"(?s)<invoke\s+name=["']([^"']+)["'][^>]*>(.*?)</invoke>"#)
+        .expect("RE_INVOKE regex is valid")
 });
+#[allow(clippy::expect_used)]
 static RE_PARAM: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</parameter>"#).unwrap()
+    Regex::new(r#"(?s)<parameter\s+name=["']([^"']+)["'][^>]*>(.*?)</parameter>"#)
+        .expect("RE_PARAM regex is valid")
 });
-static RE_MINIMAX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").unwrap());
+#[allow(clippy::expect_used)]
+static RE_MINIMAX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").expect("RE_MINIMAX regex is valid")
+});
 
 /// Supported tool call formats.
 #[derive(Debug, Clone, Copy, PartialEq)]

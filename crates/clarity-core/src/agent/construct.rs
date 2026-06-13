@@ -392,20 +392,38 @@ impl Agent {
                             return;
                         }
                     };
-                    let session_store = self
+                    let session_store = if let Some(store) = self
                         .compaction_service
                         .as_ref()
                         .and_then(|s| s.session_store())
                         .map(|arc| (*arc).clone())
-                        .unwrap_or_else(|| {
-                            let path = self.config.working_dir.join(".clarity_sessions");
-                            clarity_memory::SessionStore::new(&path).unwrap_or_else(|_| {
-                                clarity_memory::SessionStore::new(
+                    {
+                        store
+                    } else {
+                        let path = self.config.working_dir.join(".clarity_sessions");
+                        match clarity_memory::SessionStore::new(&path) {
+                            Ok(store) => store,
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to create session store at {:?}: {}. Falling back to temp dir.",
+                                    path,
+                                    e
+                                );
+                                match clarity_memory::SessionStore::new(
                                     std::env::temp_dir().join("clarity_sessions"),
-                                )
-                                .expect("Failed to create fallback session store")
-                            })
-                        });
+                                ) {
+                                    Ok(store) => store,
+                                    Err(e) => {
+                                        tracing::error!(
+                                            "Failed to create fallback session store: {}. Disabling memory compilation.",
+                                            e
+                                        );
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    };
                     let config = clarity_memory::CompileConfig::default();
                     let compiler = Arc::new(tokio::sync::Mutex::new(
                         clarity_memory::MemoryCompiler::new(store, session_store, adapter, config),

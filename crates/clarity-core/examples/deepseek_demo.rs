@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! DeepSeek Provider Demo
 //!
 //! This example demonstrates how to use the DeepSeek LLM provider.
@@ -11,7 +18,7 @@
 //! ```
 
 use clarity_core::agent::{LlmProvider, Message};
-use clarity_llm::deepseek::{models, DeepSeekProvider};
+use clarity_llm::deepseek::{DeepSeekProvider, models};
 use serde_json::json;
 
 #[tokio::main]

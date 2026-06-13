@@ -58,7 +58,7 @@ fn format_tools_for_prompt(tools: &Value) -> String {
         "\n\nYou have access to the following tools. \
          When you need to use a tool, output a JSON object in this exact format on its own line:\n\
          {\"tool_calls\": [{\"id\": \"call_1\", \"type\": \"function\", \"function\": {\"name\": \"tool_name\", \"arguments\": {\"arg1\": \"value1\"}}}]\n\n\
-         Available tools:\n"
+         Available tools:\n",
     );
     if let Some(arr) = tools.as_array() {
         for tool in arr {

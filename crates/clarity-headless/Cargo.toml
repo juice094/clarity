@@ -1,7 +1,7 @@
 [package]
 name = "clarity-headless"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 clarity-core = { path = "../clarity-core" }
@@ -20,3 +20,6 @@ local-llm = ["clarity-core/local-llm"]
 [[bin]]
 name = "clarity-headless"
 path = "src/main.rs"
+
+[lints]
+workspace = true

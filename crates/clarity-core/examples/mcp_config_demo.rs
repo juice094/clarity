@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! MCP Configuration Demo
 //!
 //! This example demonstrates loading an `mcp.json` configuration,
@@ -16,8 +23,8 @@
 //!    ```
 
 use clarity_core::agent::{AgentConfig, MockLlm};
-use clarity_core::mcp::config::McpConfig;
 use clarity_core::mcp::McpManager;
+use clarity_core::mcp::config::McpConfig;
 use clarity_core::{Agent, ToolRegistry};
 use std::sync::Arc;
 

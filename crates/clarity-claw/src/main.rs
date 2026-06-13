@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! clarity-claw —— 联邦运行时协调器 + 系统托盘常驻应用
 //!
 //! Entry point: initializes the Claw Coordinator, registers federal nodes,

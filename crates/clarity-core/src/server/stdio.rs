@@ -21,12 +21,12 @@
 //! {"jsonrpc":"2.0","id":1,"result":{"response":"...","status":"complete"}}
 //! ```
 
+use crate::agent::Agent;
 use crate::agent::controller::{AgentController, ControllerEvent};
 use crate::agent::ops::Op;
-use crate::agent::Agent;
 use crate::error::AgentError;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::Write;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, BufReader};

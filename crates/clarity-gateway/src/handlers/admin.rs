@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
+use clarity_core::config::{ConfigHealthIssue, ConfigRollbackPoint};
 use clarity_llm::LlmFactory;
 use serde::{Deserialize, Serialize};
 
@@ -92,7 +93,7 @@ pub(crate) struct ModelInfo {
 }
 
 pub(crate) async fn admin_models() -> impl IntoResponse {
-    let registry = match clarity_llm::ModelRegistry::load_async().await {
+    let registry = match crate::handlers::config::load_model_registry().await {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("Failed to load model registry: {}", e);
@@ -237,13 +238,30 @@ pub(crate) async fn admin_switch_provider(
     };
 
     if names.len() == 1 {
-        // Single provider — direct replacement
-        match LlmFactory::create(&names[0]).await {
+        // Single provider — try alias registry (with ReliableProvider wrap) first, then legacy factory.
+        let name = names[0].clone();
+        match crate::handlers::config::build_reliable_provider_for_alias(&name).await {
+            Ok(new_llm) => {
+                let _ = crate::handlers::config::save_active_alias(&name).await;
+                state.set_llm(new_llm);
+                state.set_provider_label(&name);
+                let resp = SwitchProviderResponse {
+                    provider: name.clone(),
+                    message: "Provider switched successfully".to_string(),
+                };
+                return (StatusCode::OK, Json(resp));
+            }
+            Err(alias_err) => {
+                tracing::debug!("Alias registry miss for '{}': {}", name, alias_err);
+            }
+        }
+
+        match LlmFactory::create(&name).await {
             Ok(new_llm) => {
                 state.set_llm(Arc::from(new_llm));
-                state.set_provider_label(&names[0]);
+                state.set_provider_label(&name);
                 let resp = SwitchProviderResponse {
-                    provider: names[0].clone(),
+                    provider: name.clone(),
                     message: "Provider switched successfully".to_string(),
                 };
                 (StatusCode::OK, Json(resp))
@@ -251,7 +269,7 @@ pub(crate) async fn admin_switch_provider(
             Err(e) => {
                 error!("Failed to switch provider: {}", e);
                 let resp = SwitchProviderResponse {
-                    provider: names[0].clone(),
+                    provider: name.clone(),
                     message: format!("Failed to create provider: {}", e),
                 };
                 (StatusCode::BAD_REQUEST, Json(resp))
@@ -310,5 +328,79 @@ pub(crate) async fn admin_mesh_status() -> impl IntoResponse {
             circuits: std::collections::HashMap::new(),
         };
         (StatusCode::OK, Json(resp))
+    }
+}
+
+// ==================== Admin: Config Health ====================
+
+/// Serializable configuration health report.
+#[derive(Serialize)]
+pub(crate) struct ConfigHealthResponse {
+    pub healthy: bool,
+    pub layers: Vec<ConfigLayerInfo>,
+    pub issues: Vec<ConfigHealthIssue>,
+    pub rollback_points: Vec<ConfigRollbackPoint>,
+}
+
+/// Serializable source layer summary.
+#[derive(Serialize)]
+pub(crate) struct ConfigLayerInfo {
+    pub source: String,
+    pub active: bool,
+}
+
+pub(crate) async fn admin_config_health() -> Response {
+    match clarity_core::config::Config::load_with_health() {
+        Ok((_, health)) => {
+            let layers = health
+                .layers()
+                .iter()
+                .map(|(s, active)| ConfigLayerInfo {
+                    source: s.to_string(),
+                    active: *active,
+                })
+                .collect();
+            let resp = ConfigHealthResponse {
+                healthy: health.is_healthy(),
+                layers,
+                issues: health.issues().to_vec(),
+                rollback_points: health.rollback_points().to_vec(),
+            };
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to load configuration for health check: {}", e);
+            let resp = serde_json::json!({
+                "healthy": false,
+                "error": e.to_string(),
+            });
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(resp)).into_response()
+        }
+    }
+}
+
+pub(crate) async fn admin_validate_config() -> Response {
+    match clarity_core::config::Config::load_with_health() {
+        Ok((_, health)) => {
+            let status = if health.is_healthy() {
+                StatusCode::OK
+            } else {
+                StatusCode::UNPROCESSABLE_ENTITY
+            };
+            let resp = serde_json::json!({
+                "healthy": health.is_healthy(),
+                "issue_count": health.issues().len(),
+                "issues": health.issues(),
+            });
+            (status, Json(resp)).into_response()
+        }
+        Err(e) => {
+            error!("Failed to validate configuration: {}", e);
+            let resp = serde_json::json!({
+                "healthy": false,
+                "error": e.to_string(),
+            });
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(resp)).into_response()
+        }
     }
 }

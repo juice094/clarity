@@ -86,6 +86,19 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
         Ok(facts.into_iter().map(|f| (f, 1.0)).collect())
     }
 
+    /// Search with pure TF-IDF cosine semantic similarity (if supported).
+    ///
+    /// Backends that do not maintain a vector index may return an empty
+    /// result; callers can fall back to [`Self::search_similar`].
+    async fn search_semantic(
+        &self,
+        _query: &str,
+        _limit: usize,
+        _decay: &DecayConfig,
+    ) -> Result<Vec<(Fact, f32)>> {
+        Ok(Vec::new())
+    }
+
     /// Bulk save facts for better performance
     async fn bulk_save_facts(
         &self,
@@ -105,19 +118,26 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
 pub enum BackendConfig {
     /// File-based storage configuration
     File {
+        /// Directory where fact files are stored
         dir: std::path::PathBuf,
+        /// Whether to compress fact files
         compress: bool,
     },
     /// SQLite storage configuration
     #[cfg(feature = "sqlite")]
     Sqlite {
+        /// Path to the SQLite database file
         db_path: std::path::PathBuf,
+        /// Whether to enable WAL mode
         wal_mode: bool,
     },
     /// Hybrid storage configuration
     Hybrid {
+        /// Maximum number of facts kept in the hot cache
         cache_size: usize,
+        /// Directory for cold file storage
         cold_dir: std::path::PathBuf,
+        /// Interval in seconds between cache-to-disk syncs
         sync_interval_secs: u64,
     },
 }

@@ -53,6 +53,7 @@ pub struct RedactingWriter<W: Write> {
 }
 
 impl<W: Write> RedactingWriter<W> {
+    /// Create a new instance.
     pub fn new(inner: W) -> Self {
         Self {
             inner,

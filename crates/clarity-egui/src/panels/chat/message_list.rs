@@ -1,7 +1,7 @@
+use crate::App;
 use crate::theme::Theme;
 use crate::ui;
 use crate::ui::types::Role;
-use crate::App;
 
 /// Actions detected during the render pass that must be applied after the
 /// `session` mutable borrow is released.
@@ -16,6 +16,7 @@ struct PendingActions {
     cancel_edit: bool,
 }
 
+/// Renders the message list UI.
 pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height();
     let is_loading = app.chat_store.is_loading;
@@ -695,7 +696,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         app.regenerate(idx);
     }
     if pending.switch_model {
-        app.settings_store.settings_open = true;
+        app.view_state.main = clarity_core::ui::AppView::Settings;
     }
     if pending.copy_content.is_some() {
         app.push_toast("Copied to clipboard", crate::ui::types::ToastLevel::Info);

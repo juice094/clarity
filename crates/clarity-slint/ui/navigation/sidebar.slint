@@ -1,0 +1,295 @@
+import { Theme } from "../theme.slint";
+import { TreeItem } from "../models.slint";
+import { LucideIcon } from "../components/lucide-icon.slint";
+import { Icon, IconSet } from "@lucide";
+
+// 分组标题：左边缘与行文本对齐（而非与行背景左边缘对齐）
+component SectionHeader {
+    in property <string> text;
+
+    VerticalLayout {
+        padding-left: 24px;
+        padding-top: 8px;
+        padding-bottom: 4px;
+
+        Text {
+            text: root.text;
+            color: Theme.text-tertiary;
+            font-size: Theme.font-caption;
+            font-weight: 700;
+        }
+    }
+}
+
+// 通用导航行：左侧固定 16px 的 leading 区域，保证有/无图标时文本左边缘一致。
+component NavRow inherits Rectangle {
+    in property <string> label;
+    in property <brush> text-color;
+    in property <length> row-height: 32px;
+    in property <bool> has-leading: false;
+    in property <Icon> leading-icon: IconSet.Circle;
+    in property <length> leading-size: 16px;
+    in property <brush> leading-stroke: transparent;
+    in property <brush> leading-fill: transparent;
+
+    callback clicked();
+
+    height: root.row-height;
+    background: touch.has-hover ? Theme.surface-hover : transparent;
+    border-radius: Theme.radius-md;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 0;
+        alignment: start;
+
+        // 固定 leading 区域
+        Rectangle {
+            width: 16px;
+            height: root.row-height;
+
+            if root.has-leading: LucideIcon {
+                icon: root.leading-icon;
+                size: root.leading-size;
+                stroke: root.leading-stroke;
+                stroke-fill: root.leading-fill;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        // 图标与文本间距
+        Rectangle {
+            width: 8px;
+        }
+
+        Text {
+            text: root.label;
+            color: root.text-color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// 工作区树行：leading 区域同样固定 16px，确保父节点与叶子节点文本对齐。
+component TreeRow inherits Rectangle {
+    in property <TreeItem> item;
+
+    callback clicked();
+
+    height: 32px;
+    background: touch.has-hover ? Theme.surface-hover : transparent;
+    border-radius: Theme.radius-md;
+
+    HorizontalLayout {
+        padding-left: 8px + root.item.depth * 16px;
+        padding-right: 8px;
+        spacing: 0;
+        alignment: start;
+
+        Rectangle {
+            width: 16px;
+            height: root.height;
+
+            if root.item.has-children: LucideIcon {
+                icon: root.item.is-expanded ? IconSet.ChevronDown : IconSet.ChevronRight;
+                size: 14px;
+                stroke: Theme.text-tertiary;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+
+        Text {
+            text: root.item.label;
+            color: Theme.text-secondary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Sidebar {
+    in property <[string]> core-actions: [];
+    in property <[string]> external-links: [];
+    in property <[string]> extra-features: [];
+    in property <[string]> claw-devices: [];
+    in property <[TreeItem]> tree-items: [];
+    in property <string> user-name: "User";
+
+    // 展开/收起状态：收起后仅保留顶部切换按钮，用于诊断左侧空白/内容被挤出等问题。
+    in-out property <bool> collapsed: false;
+    callback toggle-collapsed();
+
+    pure callback core-action-clicked(string);
+    pure callback external-link-clicked(string);
+    pure callback extra-feature-clicked(string);
+    pure callback claw-device-clicked(string);
+    pure callback tree-item-clicked(TreeItem);
+    pure callback user-menu-clicked();
+
+    Rectangle {
+        width: root.collapsed ? Theme.sidebar-collapsed-width : Theme.sidebar-width;
+        background: Theme.surface-elevated;
+        clip: true;
+
+        VerticalLayout {
+            // 顶部切换栏
+            Rectangle {
+                height: 44px;
+                background: Theme.surface-elevated;
+
+                HorizontalLayout {
+                    padding: 8px;
+                    alignment: root.collapsed ? center : end;
+
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: Theme.radius-md;
+                        background: toggle-touch.has-hover ? Theme.surface-hover : transparent;
+
+                        LucideIcon {
+                            icon: root.collapsed ? IconSet.PanelLeftOpen : IconSet.PanelLeftClose;
+                            size: 18px;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+
+                        toggle-touch := TouchArea {
+                            clicked => { root.toggle-collapsed(); }
+                        }
+                    }
+                }
+            }
+
+            // 可滚动内容区：收起时隐藏
+            Rectangle {
+                vertical-stretch: 1;
+                visible: !root.collapsed;
+                clip: true;
+
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 16px;
+
+                    // 核心入口
+                    VerticalLayout {
+                        spacing: 4px;
+
+                        for action in root.core-actions: NavRow {
+                            label: action;
+                            text-color: Theme.text-primary;
+                            row-height: 36px;
+                            clicked => { root.core-action-clicked(action); }
+                        }
+                    }
+
+                    // 外链区
+                    SectionHeader { text: "外链"; }
+                    VerticalLayout {
+                        spacing: 4px;
+
+                        for link in root.external-links: NavRow {
+                            label: link;
+                            text-color: Theme.text-secondary;
+                            clicked => { root.external-link-clicked(link); }
+                        }
+                    }
+
+                    // 扩展功能
+                    SectionHeader { text: "扩展"; }
+                    VerticalLayout {
+                        spacing: 4px;
+
+                        for feature in root.extra-features: NavRow {
+                            label: feature;
+                            text-color: Theme.text-secondary;
+                            clicked => { root.extra-feature-clicked(feature); }
+                        }
+                    }
+
+                    // Claw 设备
+                    SectionHeader { text: "Claw"; }
+                    VerticalLayout {
+                        spacing: 4px;
+
+                        for device in root.claw-devices: NavRow {
+                            label: device;
+                            text-color: Theme.text-secondary;
+                            has-leading: true;
+                            leading-icon: IconSet.Circle;
+                            leading-size: 8px;
+                            leading-stroke: Theme.success;
+                            leading-fill: Theme.success;
+                            clicked => { root.claw-device-clicked(device); }
+                        }
+                    }
+
+                    // 项目/会话树
+                    SectionHeader { text: "工作区"; }
+
+                    VerticalLayout {
+                        spacing: 2px;
+
+                        for item in root.tree-items: TreeRow {
+                            item: item;
+                            clicked => { root.tree-item-clicked(item); }
+                        }
+                    }
+                }
+            }
+
+            // 用户区（底部固定）：收起时隐藏
+            Rectangle {
+                height: 48px;
+                visible: !root.collapsed;
+                background: Theme.surface-elevated;
+
+                HorizontalLayout {
+                    padding-left: 20px; // 8px 背景边距 + 16px leading 区域的一半居中修正
+                    padding-right: 12px;
+                    spacing: 10px;
+                    alignment: start;
+
+                    LucideIcon {
+                        icon: IconSet.CircleUser;
+                        size: 28px;
+                        stroke: Theme.primary;
+                        stroke-fill: Theme.primary;
+                    }
+
+                    Text {
+                        text: root.user-name;
+                        color: Theme.text-primary;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                    }
+                }
+
+                TouchArea {
+                    clicked => { root.user-menu-clicked(); }
+                }
+            }
+        }
+
+        // 右侧分隔线：收起时隐藏，避免在 0 宽区域漏出 1px 竖线
+        Rectangle {
+            x: parent.width - 1px;
+            width: 1px;
+            height: parent.height;
+            visible: !root.collapsed;
+            background: Theme.border;
+        }
+    }
+}

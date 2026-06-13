@@ -6,13 +6,44 @@
 //! 3. User config directory `~/.config/clarity/config.toml` (lowest priority)
 
 pub mod audit;
+pub mod health;
+
+pub use health::{ConfigHealth, ConfigHealthIssue, ConfigRollbackPoint, ConfigSource};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use std::fs;
-use std::path::Path;
 use tracing::{debug, info};
+
+/// Set an environment variable.
+///
+/// # Safety
+///
+/// `std::env::set_var` is marked unsafe because concurrent reads/writes to
+/// process environment variables are racy. This helper is only called from
+/// `Config::export_to_env` during configuration loading, before any other
+/// threads read the affected variables.
+#[allow(unsafe_code)]
+fn set_env_var(key: &str, value: &str) {
+    // SAFETY: `export_to_env` is called during single-threaded config
+    // initialization. The caller already verified the variable is not
+    // present, so no concurrent reader observes a torn value.
+    unsafe { env::set_var(key, value) };
+}
+
+/// Remove an environment variable.
+///
+/// # Safety
+///
+/// `std::env::remove_var` is marked unsafe because concurrent reads/writes to
+/// process environment variables are racy. This helper is only used in tests
+/// running in a single-threaded context.
+#[cfg(test)]
+#[allow(unsafe_code)]
+fn remove_env_var(key: &str) {
+    // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+    unsafe { env::remove_var(key) };
+}
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,67 +93,12 @@ impl Config {
     /// # Errors
     ///
     /// Returns an error if a config file exists but cannot be parsed.
+    /// Load configuration from all sources.
+    ///
+    /// Convenience wrapper around [`Config::load_with_health`]
+    /// that discards the health snapshot.
     pub fn load() -> anyhow::Result<Self> {
-        let mut config = Config::default();
-
-        // 1. Load from user config directory (lowest priority)
-        if let Some(user_config) = Self::load_user_config()? {
-            debug!("Loaded user config");
-            config.merge(user_config);
-        }
-
-        // 2. Load from project directory
-        if let Some(project_config) = Self::load_project_config()? {
-            debug!("Loaded project config");
-            config.merge(project_config);
-        }
-
-        // 3. Apply environment variables (highest priority)
-        debug!("Applying environment variables");
-        config.apply_env_vars();
-
-        info!("Config loaded with {} profiles", config.profiles.len());
-
-        Ok(config)
-    }
-
-    /// Load configuration from user config directory
-    ///
-    /// Looks for `config.toml` in the user's config directory
-    /// (e.g., `~/.config/clarity/config.toml` on Linux/macOS)
-    fn load_user_config() -> anyhow::Result<Option<Config>> {
-        let config_dir = dirs::config_dir()
-            .map(|p| p.join("clarity"))
-            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-
-        let config_path = config_dir.join("config.toml");
-
-        if !config_path.exists() {
-            debug!("User config file not found: {:?}", config_path);
-            return Ok(None);
-        }
-
-        info!("Loading user config from: {:?}", config_path);
-        let contents = fs::read_to_string(&config_path)?;
-        let config: Config = toml::from_str(&contents)?;
-        Ok(Some(config))
-    }
-
-    /// Load configuration from project directory
-    ///
-    /// Looks for `.clarity.toml` in the current working directory
-    fn load_project_config() -> anyhow::Result<Option<Config>> {
-        let config_path = Path::new(".clarity.toml");
-
-        if !config_path.exists() {
-            debug!("Project config file not found: {:?}", config_path);
-            return Ok(None);
-        }
-
-        info!("Loading project config from: {:?}", config_path);
-        let contents = fs::read_to_string(config_path)?;
-        let config: Config = toml::from_str(&contents)?;
-        Ok(Some(config))
+        Self::load_with_health().map(|(config, _)| config)
     }
 
     /// Apply environment variable overrides
@@ -215,22 +191,22 @@ impl Config {
             let provider = profile.provider.to_lowercase();
             match provider.as_str() {
                 "anthropic" | "claude" if env::var("ANTHROPIC_AUTH_TOKEN").is_err() => {
-                    env::set_var("ANTHROPIC_AUTH_TOKEN", api_key);
+                    set_env_var("ANTHROPIC_AUTH_TOKEN", api_key);
                     info!("Exported ANTHROPIC_AUTH_TOKEN from config profile");
                 }
                 "kimi" | "kimi-code" | "kimi_code" | "moonshot"
                     if env::var("KIMI_API_KEY").is_err()
                         && env::var("KIMI_CODE_API_KEY").is_err() =>
                 {
-                    env::set_var("KIMI_API_KEY", api_key);
+                    set_env_var("KIMI_API_KEY", api_key);
                     info!("Exported KIMI_API_KEY from config profile");
                 }
                 "deepseek" if env::var("DEEPSEEK_API_KEY").is_err() => {
-                    env::set_var("DEEPSEEK_API_KEY", api_key);
+                    set_env_var("DEEPSEEK_API_KEY", api_key);
                     info!("Exported DEEPSEEK_API_KEY from config profile");
                 }
                 "openai" if env::var("OPENAI_API_KEY").is_err() => {
-                    env::set_var("OPENAI_API_KEY", api_key);
+                    set_env_var("OPENAI_API_KEY", api_key);
                     info!("Exported OPENAI_API_KEY from config profile");
                 }
                 _ => {}
@@ -369,11 +345,11 @@ base_url = "https://api.openai.com/v1"
         let original_base_url = env::var("CLARITY_BASE_URL").ok();
 
         // Set test values
-        env::set_var("CLARITY_DEFAULT_PROFILE", "env_profile");
-        env::set_var("CLARITY_API_KEY", "env_api_key");
-        env::set_var("CLARITY_MODEL", "env_model");
-        env::set_var("CLARITY_PROVIDER", "env_provider");
-        env::set_var("CLARITY_BASE_URL", "http://env.example.com");
+        set_env_var("CLARITY_DEFAULT_PROFILE", "env_profile");
+        set_env_var("CLARITY_API_KEY", "env_api_key");
+        set_env_var("CLARITY_MODEL", "env_model");
+        set_env_var("CLARITY_PROVIDER", "env_provider");
+        set_env_var("CLARITY_BASE_URL", "http://env.example.com");
 
         let mut config = Config::default();
         config.apply_env_vars();
@@ -388,24 +364,24 @@ base_url = "https://api.openai.com/v1"
 
         // Restore original values
         match original_default {
-            Some(v) => env::set_var("CLARITY_DEFAULT_PROFILE", v),
-            None => env::remove_var("CLARITY_DEFAULT_PROFILE"),
+            Some(v) => set_env_var("CLARITY_DEFAULT_PROFILE", &v),
+            None => remove_env_var("CLARITY_DEFAULT_PROFILE"),
         }
         match original_api_key {
-            Some(v) => env::set_var("CLARITY_API_KEY", v),
-            None => env::remove_var("CLARITY_API_KEY"),
+            Some(v) => set_env_var("CLARITY_API_KEY", &v),
+            None => remove_env_var("CLARITY_API_KEY"),
         }
         match original_model {
-            Some(v) => env::set_var("CLARITY_MODEL", v),
-            None => env::remove_var("CLARITY_MODEL"),
+            Some(v) => set_env_var("CLARITY_MODEL", &v),
+            None => remove_env_var("CLARITY_MODEL"),
         }
         match original_provider {
-            Some(v) => env::set_var("CLARITY_PROVIDER", v),
-            None => env::remove_var("CLARITY_PROVIDER"),
+            Some(v) => set_env_var("CLARITY_PROVIDER", &v),
+            None => remove_env_var("CLARITY_PROVIDER"),
         }
         match original_base_url {
-            Some(v) => env::set_var("CLARITY_BASE_URL", v),
-            None => env::remove_var("CLARITY_BASE_URL"),
+            Some(v) => set_env_var("CLARITY_BASE_URL", &v),
+            None => remove_env_var("CLARITY_BASE_URL"),
         }
     }
 }

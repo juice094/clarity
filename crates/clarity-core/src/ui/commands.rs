@@ -17,6 +17,7 @@ pub struct CommandItem {
 }
 
 impl CommandItem {
+    /// Create a new `CommandItem`.
     pub fn new(id: impl Into<String>, name: impl Into<String>, scope: CommandScope) -> Self {
         Self {
             id: id.into(),
@@ -26,6 +27,7 @@ impl CommandItem {
         }
     }
 
+    /// Set the shortcut.
     pub fn with_shortcut(mut self, shortcut: impl Into<String>) -> Self {
         self.shortcut = Some(shortcut.into());
         self
@@ -62,29 +64,45 @@ pub mod prefix {
 /// 出现 6 处不匹配。此清单消除分歧。
 pub mod ids {
     // ── Session / Turn ──
+    /// `NEW_SESSION` constant.
     pub const NEW_SESSION: &str = "new-session";
+    /// `STOP_GENERATION` constant.
     pub const STOP_GENERATION: &str = "stop-generation";
+    /// `SEND_MESSAGE` constant.
     pub const SEND_MESSAGE: &str = "send-message";
 
     // ── Modal / View ──
+    /// `CLOSE_MODAL` constant.
     pub const CLOSE_MODAL: &str = "close-modal";
+    /// `OPEN_SETTINGS` constant.
     pub const OPEN_SETTINGS: &str = "open-settings";
 
     // ── Panels ──
+    /// `TOGGLE_SIDEBAR` constant.
     pub const TOGGLE_SIDEBAR: &str = "toggle-sidebar";
+    /// `TOGGLE_SKILL_PANEL` constant.
     pub const TOGGLE_SKILL_PANEL: &str = "toggle-skill-panel";
+    /// `TOGGLE_TEAM_PANEL` constant.
     pub const TOGGLE_TEAM_PANEL: &str = "toggle-team-panel";
+    /// `TOGGLE_DASHBOARD` constant.
     pub const TOGGLE_DASHBOARD: &str = "toggle-dashboard";
 
     // ── Input / Palette ──
+    /// `FOCUS_INPUT` constant.
     pub const FOCUS_INPUT: &str = "focus-input";
+    /// `TOGGLE_COMMAND_PALETTE` constant.
     pub const TOGGLE_COMMAND_PALETTE: &str = "toggle-command-palette";
 
     // ── Line-mode navigation (S7 Phase 2D) ──
+    /// `NAVIGATE_DOWN` constant.
     pub const NAVIGATE_DOWN: &str = "navigate-down";
+    /// `NAVIGATE_UP` constant.
     pub const NAVIGATE_UP: &str = "navigate-up";
+    /// `NAVIGATE_TOP` constant.
     pub const NAVIGATE_TOP: &str = "navigate-top";
+    /// `NAVIGATE_BOTTOM` constant.
     pub const NAVIGATE_BOTTOM: &str = "navigate-bottom";
+    /// `COPY_LINE` constant.
     pub const COPY_LINE: &str = "copy-line";
 }
 
@@ -92,11 +110,13 @@ pub mod ids {
 pub mod built_in {
     use super::*;
 
+    /// `new_session`.
     pub fn new_session() -> CommandItem {
         CommandItem::new(ids::NEW_SESSION, "New Session", CommandScope::Global)
             .with_shortcut("Ctrl+N")
     }
 
+    /// `stop_generation`.
     pub fn stop_generation() -> CommandItem {
         CommandItem::new(
             ids::STOP_GENERATION,
@@ -106,25 +126,30 @@ pub mod built_in {
         .with_shortcut("Ctrl+C")
     }
 
+    /// `send_message`.
     pub fn send_message() -> CommandItem {
         CommandItem::new(ids::SEND_MESSAGE, "Send Message", CommandScope::Global)
             .with_shortcut("Ctrl+Enter")
     }
 
+    /// `toggle_sidebar`.
     pub fn toggle_sidebar() -> CommandItem {
         CommandItem::new(ids::TOGGLE_SIDEBAR, "Toggle Sidebar", CommandScope::Global)
             .with_shortcut("Ctrl+B")
     }
 
+    /// `focus_input`.
     pub fn focus_input() -> CommandItem {
         CommandItem::new(ids::FOCUS_INPUT, "Focus Input", CommandScope::Global)
             .with_shortcut("Ctrl+K")
     }
 
+    /// `open_settings`.
     pub fn open_settings() -> CommandItem {
         CommandItem::new(ids::OPEN_SETTINGS, "Settings", CommandScope::Global).with_shortcut("Esc")
     }
 
+    /// `close_modal`.
     pub fn close_modal() -> CommandItem {
         CommandItem::new(
             ids::CLOSE_MODAL,
@@ -134,6 +159,7 @@ pub mod built_in {
         .with_shortcut("Esc")
     }
 
+    /// `toggle_skill_panel`.
     pub fn toggle_skill_panel() -> CommandItem {
         CommandItem::new(
             ids::TOGGLE_SKILL_PANEL,
@@ -143,6 +169,7 @@ pub mod built_in {
         .with_shortcut("Ctrl+.")
     }
 
+    /// `toggle_team_panel`.
     pub fn toggle_team_panel() -> CommandItem {
         CommandItem::new(
             ids::TOGGLE_TEAM_PANEL,
@@ -152,6 +179,7 @@ pub mod built_in {
         .with_shortcut("Ctrl+Shift+T")
     }
 
+    /// `toggle_dashboard`.
     pub fn toggle_dashboard() -> CommandItem {
         CommandItem::new(
             ids::TOGGLE_DASHBOARD,
@@ -161,6 +189,7 @@ pub mod built_in {
         .with_shortcut("Ctrl+Shift+D")
     }
 
+    /// `toggle_command_palette`.
     pub fn toggle_command_palette() -> CommandItem {
         CommandItem::new(
             ids::TOGGLE_COMMAND_PALETTE,

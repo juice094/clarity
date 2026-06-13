@@ -16,33 +16,12 @@ pub struct ChatPane<'a> {
 }
 
 impl<'a> ChatPane<'a> {
+    /// Create a new chat pane bound to the given message slice and scroll offset.
     pub fn new(messages: &'a [Message], scroll_offset: usize) -> Self {
         Self {
             messages,
             scroll_offset,
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_down(&mut self) {
-        self.scroll_offset += 1;
-    }
-
-    #[allow(dead_code)]
-    pub fn messages(&self) -> &[Message] {
-        self.messages
-    }
-
-    #[allow(dead_code)]
-    pub fn scroll_offset(&self) -> usize {
-        self.scroll_offset
     }
 }
 

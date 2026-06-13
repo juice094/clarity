@@ -1,12 +1,26 @@
+//! Axum HTTP handlers for the public API and admin UI.
+//!
+//! Each submodule groups related routes (chat, tasks, files, config, etc.).
+
+/// Admin/configuration handlers.
 pub mod admin;
+/// OpenAI-compatible chat completion handler.
 pub mod chat;
+/// Provider and alias configuration handlers.
 pub mod config;
+/// Scheduled cron task handlers.
 pub mod cron;
+/// File operation handlers.
 pub mod files;
+/// MCP server management handlers.
 pub mod mcp;
+/// Memory search handlers.
 pub mod memory;
+/// Session management handlers.
 pub mod sessions;
+/// Background and parallel task handlers.
 pub mod tasks;
+/// Telemetry endpoint handlers (requires the `telemetry-api` feature).
 #[cfg(feature = "telemetry-api")]
 pub mod telemetry;
 
@@ -26,7 +40,12 @@ pub(crate) trait AgentHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::{create_admin_router, create_api_router, AppState};
+    use crate::server::{AppState, create_admin_router, create_api_router};
+
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+        unsafe { std::env::set_var(key, value) };
+    }
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use clarity_core::agent::{Agent, AgentConfig, MockLlm};
@@ -52,7 +71,7 @@ mod tests {
             temp.join("context"),
         ));
 
-        Arc::new(AppState::new(agent, task_manager).await)
+        Arc::new(AppState::new(agent, task_manager).await.unwrap())
     }
 
     // ==================== Security tests (preserved) ====================
@@ -288,10 +307,12 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"]
-            .as_str()
-            .unwrap()
-            .contains("Failed to create provider"));
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("Failed to create provider")
+        );
     }
 
     #[tokio::test]
@@ -316,17 +337,19 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"]
-            .as_str()
-            .unwrap()
-            .contains("Failed to connect MCP LLM"));
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("Failed to connect MCP LLM")
+        );
     }
 
     #[tokio::test]
     async fn test_admin_switch_provider_mesh_invalid() {
         // Temporarily override mesh env with invalid providers
         let _guard = std::env::var("CLARITY_MESH_PROVIDERS");
-        std::env::set_var(
+        set_env(
             "CLARITY_MESH_PROVIDERS",
             "invalid_provider_1,invalid_provider_2",
         );
@@ -349,9 +372,64 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["message"]
-            .as_str()
-            .unwrap()
-            .contains("Failed to create mesh"));
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("Failed to create mesh")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_admin_config_health_returns_report() {
+        let state = test_state().await;
+        let app = create_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/config/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.get("healthy").is_some());
+        assert!(json.get("layers").is_some());
+        assert!(json.get("issues").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_admin_config_validate_returns_result() {
+        let state = test_state().await;
+        let app = create_admin_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/config/validate")
+                    .method("POST")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // The response status depends on whether the current config is healthy.
+        assert!(
+            response.status() == StatusCode::OK
+                || response.status() == StatusCode::UNPROCESSABLE_ENTITY,
+            "unexpected status: {:?}",
+            response.status()
+        );
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.get("healthy").is_some());
+        assert!(json.get("issue_count").is_some());
+        assert!(json.get("issues").is_some());
     }
 }

@@ -1,9 +1,16 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 mod common;
 
 use std::net::SocketAddr;
 
-use axum::{routing::post, Json, Router};
-use clarity_core::mcp::{register_mcp_tools, McpRegistry};
+use axum::{Json, Router, routing::post};
+use clarity_core::mcp::{McpRegistry, register_mcp_tools};
 use clarity_core::registry::ToolRegistry;
 use clarity_mcp::McpClient;
 use serde_json::Value;

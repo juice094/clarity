@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! 端到端流式响应集成测试
 //!
 //! 启动一个本地 mock HTTP server，模拟 OpenAI SSE 流式响应，

@@ -1,5 +1,16 @@
+//! Terminal UI entry point for Clarity.
+
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
+)]
 mod app;
-mod async_job;
 mod command_bar;
 mod commands;
 mod diff;
@@ -15,10 +26,10 @@ mod wire_adapter;
 use anyhow::Result;
 use app::App;
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
-use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::background::BackgroundTaskManager;
+use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
 use clarity_core::mcp::config::McpConfig;
-use clarity_core::mcp::{register_mcp_tools, McpClientBuilder, McpRegistry};
+use clarity_core::mcp::{McpClientBuilder, McpRegistry, register_mcp_tools};
 use clarity_core::memory::{MemoryTicker, PersistentMemoryStore, SharedMemoryTicker};
 use clarity_core::registry::ToolRegistry;
 use clarity_core::skills::SkillRegistry;
@@ -26,11 +37,11 @@ use clarity_llm::LlmFactory;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
-    backend::{Backend, CrosstermBackend},
     Terminal,
+    backend::{Backend, CrosstermBackend},
 };
 use std::sync::Arc;
 

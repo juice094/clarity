@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! # Clarity Core
 //!
 //! Core engine for Project Clarity - An AI agent framework with tool registry.
@@ -20,22 +24,21 @@
 //!
 //! ```rust,no_run
 //! use clarity_core::{Agent, ToolRegistry};
-//! use clarity_core::tools::{FileReadTool, BashTool, GlobTool};
+//! use clarity_core::tools::{FileReadTool, GlobTool};
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Create registry and register tools
 //!     let mut registry = ToolRegistry::new();
 //!     registry.register(FileReadTool::new())?;
-//!     registry.register(BashTool::new())?;
 //!     registry.register(GlobTool::new())?;
 //!
 //!     // Create agent with registry
 //!     let agent = Agent::new(registry);
-//!     
+//!
 //!     // Run agent loop
 //!     agent.run("List all Rust files in the project").await?;
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -71,6 +74,7 @@ pub mod tier_bus;
 pub mod tools;
 pub mod types;
 pub mod ui;
+/// View models module.
 pub mod view_models;
 
 // Re-export core types

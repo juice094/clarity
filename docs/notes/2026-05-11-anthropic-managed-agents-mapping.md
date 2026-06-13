@@ -10,7 +10,7 @@ tags: [note, agent]
 > Type: Comparative architecture analysis
 > Source: Kimi share 对话 https://www.kimi.com/share/19e17737-7fa2-841d-8000-00006dd455ec
 > Trigger: 用户视频 "比Openclaw更好！我发现了多Agent协作架构的版本答案" + Kimi 综合分析
-> Status: 用于支撑 ADR-008（待立项）+ docs/architecture-positioning.md 章节更新
+> Status: 用于支撑 ADR-008（待立项）+ docs/architecture/architecture-positioning.md 章节更新
 
 ---
 

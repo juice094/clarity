@@ -115,7 +115,7 @@ $env:CLARITY_LOCAL_MODEL_PATH="C:\path\to\model.gguf"
 | `toolbar.rs` 残留 | `panels/toolbar.rs` | ⚠️ 编译 warning | 不影响功能，待清理 |
 | 响应式自动收缩 | 全局 | ⏸️ 遗留 | 无 `CHAT_MIN_WIDTH` 自动折叠 sidebar/workspace 逻辑 |
 
-> 完整问题清单见 [`AGENTS.md`](../AGENTS.md) Known Issues 章节。
+> 完整问题清单见 [`AGENTS.md`](../../crates/clarity-wire/AGENTS.md) Known Issues 章节。
 
 ---
 

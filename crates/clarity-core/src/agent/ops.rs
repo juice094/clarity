@@ -8,7 +8,12 @@ pub enum Op {
     /// Cancel the current in-flight agent run.
     Interrupt,
     /// Respond to a pending tool-approval request.
-    ToolApproval { request_id: String, approved: bool },
+    ToolApproval {
+        /// Request identifier.
+        request_id: String,
+        /// Whether the request is approved.
+        approved: bool,
+    },
     /// Trigger context compaction.
     Compact,
     /// Shut down the controller gracefully.

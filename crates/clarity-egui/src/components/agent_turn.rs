@@ -23,6 +23,7 @@ pub struct AgentTurn {
     pub cached_height: Option<f32>,
 }
 
+/// Holds turn header state.
 #[derive(Clone, Debug)]
 pub struct TurnHeader {
     /// Reserved — will be wired to runtime telemetry.
@@ -34,12 +35,14 @@ pub struct TurnHeader {
     pub tool_count: usize,
 }
 
+/// Holds thinking block state.
 #[derive(Clone, Debug)]
 pub struct ThinkingBlock {
     pub steps: Vec<String>,
     pub token_hint: usize,
 }
 
+/// Holds tool call row state.
 #[derive(Clone, Debug)]
 pub struct ToolCallRow {
     pub name: String,

@@ -9,7 +9,7 @@ tags: [guide, agent, ui]
 
 > 本文档封装从 Kimi CLI/Claude Code CLI 等终端交互中提取的设计原则，指导 Clarity egui 前端的工程决策。
 > 版本：2026-05-05
-> 关联：Sprint 19 规划、`docs/ai-protocol.md`
+> 关联：Sprint 19 规划、`docs/architecture/ai-protocol.md`
 
 ---
 
@@ -291,4 +291,4 @@ CollapsingHeader::new("Thinking Log")
 
 - CLI 风格来源：Kimi CLI、Claude Code CLI、Sprint 18 子代理执行记录
 - 相关 Issue：egui 双框线、内容不折叠、头像重复、think JSON 暴露
-- 关联文档：`docs/ai-protocol.md`、`AGENTS.md`
+- 关联文档：`docs/architecture/ai-protocol.md`、`AGENTS.md`

@@ -27,58 +27,91 @@ use smol_str::SmolStr;
 pub enum RenderLine {
     /// Plain text with optional inline spans and semantic role.
     Text {
+        /// Text spans.
         spans: Vec<Span>,
+        /// Line role.
         role: LineRole,
+        /// Indentation level.
         indent: u8,
     },
 
     /// One line inside a fenced code block.
     CodeLine {
+        /// Code language.
         lang: SmolStr,
+        /// Text content.
         content: SmolStr,
+        /// Optional line number.
         line_no: Option<u32>,
+        /// Diff kind.
         diff: DiffKind,
     },
 
     /// Header line for a tool call block (expandable).
     ToolCallHeader {
+        /// Display name.
         name: SmolStr,
+        /// Tool status.
         status: ToolStatus,
+        /// Whether the block is expanded.
         expanded: bool,
     },
 
     /// A single argument row inside an expanded tool call.
-    ToolCallArg { key: SmolStr, value: SmolStr },
+    ToolCallArg {
+        /// Argument key.
+        key: SmolStr,
+        /// Argument value.
+        value: SmolStr,
+    },
 
     /// Collapsible thinking / reasoning block (ClaudeCode-borrowed).
-    Thinking { content: SmolStr, collapsed: bool },
+    Thinking {
+        /// Thinking content.
+        content: SmolStr,
+        /// Whether the block is collapsed.
+        collapsed: bool,
+    },
 
     /// Interactive approval prompt with options.
-    ApprovalPrompt { options: Vec<ApprovalOption> },
+    ApprovalPrompt {
+        /// Available approval options.
+        options: Vec<ApprovalOption>,
+    },
 
     /// Transient or persistent status indicator (spinner, progress, network).
     StatusLine {
+        /// Status kind.
         kind: StatusKind,
+        /// Text content.
         content: SmolStr,
+        /// Whether the status is transient.
         transient: bool,
     },
 
     /// Reference to an Artifact (ClaudeCode-borrowed, rendered as a card).
     ArtifactRef {
+        /// Artifact identifier.
         artifact_id: ArtifactId,
+        /// Artifact summary.
         summary: SmolStr,
     },
 
     /// Cross-instance mention — clicking navigates to the target instance/session.
     CrossInstanceRef {
+        /// Target instance identifier.
         target_instance: InstanceId,
+        /// Target session identifier, if any.
         target_session: Option<SessionId>,
+        /// Message text.
         message: SmolStr,
     },
 
     /// Slash-command autocomplete suggestion row.
     SlashCompletion {
+        /// Command.
         command: SmolStr,
+        /// Human-readable description.
         description: SmolStr,
     },
 
@@ -93,7 +126,12 @@ pub enum RenderLine {
 
     /// Escape hatch for blocks that cannot be line-atomised (tables, images, Plan).
     /// The frontend delegates to the existing `RenderBlock` pipeline.
-    BlockSlot { block_id: BlockId, line_count: u8 },
+    BlockSlot {
+        /// Block identifier.
+        block_id: BlockId,
+        /// Number of lines in the block.
+        line_count: u8,
+    },
 }
 
 /// Inline text span with a semantic style tag.
@@ -101,11 +139,14 @@ pub enum RenderLine {
 /// Frontends map `SpanStyle` to concrete colors/fonts via their theme system.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
+    /// Text.
     pub text: SmolStr,
+    /// Style.
     pub style: SpanStyle,
 }
 
 impl Span {
+    /// `plain`.
     pub fn plain(text: impl Into<SmolStr>) -> Self {
         Self {
             text: text.into(),
@@ -113,6 +154,7 @@ impl Span {
         }
     }
 
+    /// `styled`.
     pub fn styled(text: impl Into<SmolStr>, style: SpanStyle) -> Self {
         Self {
             text: text.into(),
@@ -125,14 +167,23 @@ impl Span {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SpanStyle {
+    /// Normal priority.
     Normal,
+    /// Bold variant.
     Bold,
+    /// Italic variant.
     Italic,
+    /// Bold italic variant.
     BoldItalic,
+    /// Code variant.
     Code,
+    /// Link variant.
     Link,
-    Mention,   // @user / @instance
-    FileRef,   // @path/to/file
+    /// Mention variant.
+    Mention, // @user / @instance
+    /// File ref variant.
+    FileRef, // @path/to/file
+    /// Highlight variant.
     Highlight, // search match / selection
 }
 
@@ -157,7 +208,12 @@ pub enum LineRole {
     /// Bullet list item at a given indent depth (0 = top level).
     UnorderedListItem(u8),
     /// Numbered list item.
-    OrderedListItem { num: u32, indent: u8 },
+    OrderedListItem {
+        /// List item number.
+        num: u32,
+        /// Indentation depth.
+        indent: u8,
+    },
     /// @-mention of a user or instance.
     Mention,
     /// File path reference.
@@ -181,9 +237,13 @@ pub enum LineRole {
 #[serde(rename_all = "snake_case")]
 pub enum DiffKind {
     #[default]
+    /// Normal priority.
     Normal,
+    /// Added variant.
     Added,
+    /// Removed variant.
     Removed,
+    /// Context variant.
     Context,
 }
 
@@ -191,9 +251,13 @@ pub enum DiffKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolStatus {
+    /// Task is running.
     Running,
+    /// Successful execution.
     Success,
+    /// Warning variant.
     Warning,
+    /// Error variant.
     Error,
 }
 
@@ -201,10 +265,20 @@ pub enum ToolStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "value")]
 pub enum StatusKind {
+    /// Spinner variant.
     Spinner,
-    Progress { current: u32, total: u32 },
+    /// Progress variant.
+    Progress {
+        /// Current progress value.
+        current: u32,
+        /// Total progress value.
+        total: u32,
+    },
+    /// Network variant.
     Network,
+    /// Compaction variant.
     Compaction,
+    /// Model switch variant.
     ModelSwitch,
 }
 
@@ -212,9 +286,16 @@ pub enum StatusKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "value")]
 pub enum ApprovalOption {
+    /// Yes variant.
     Yes,
+    /// Yes and remember variant.
     YesAndRemember,
-    No { reason_required: bool },
+    /// No variant.
+    No {
+        /// Whether a reason is required.
+        reason_required: bool,
+    },
+    /// Custom variant carrying SmolStr.
     Custom(SmolStr),
 }
 
@@ -222,9 +303,13 @@ pub enum ApprovalOption {
 // Type aliases — identity types for cross-instance and artifact references
 // ============================================================================
 
+/// `ArtifactId` identifier.
 pub type ArtifactId = SmolStr;
+/// `InstanceId` identifier.
 pub type InstanceId = SmolStr;
+/// `SessionId` identifier.
 pub type SessionId = SmolStr;
+/// `BlockId` identifier.
 pub type BlockId = SmolStr;
 
 // ============================================================================
@@ -489,12 +574,16 @@ pub fn markdown_to_lines(md: &str) -> Vec<RenderLine> {
 /// (pixels visible) each frame; `line_height` is a theme token (e.g. 18 px).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineViewport {
+    /// Line height.
     pub line_height: f32,
+    /// Scroll offset.
     pub scroll_offset: f32,
+    /// Viewport height.
     pub viewport_height: f32,
 }
 
 impl LineViewport {
+    /// Create a new `LineViewport`.
     pub fn new(line_height: f32, scroll_offset: f32, viewport_height: f32) -> Self {
         Self {
             line_height,
@@ -532,10 +621,12 @@ impl LineViewport {
 pub struct LineCursor {
     /// `None` = no line selected (navigation dormant).
     pub selected: Option<usize>,
+    /// Total.
     pub total: usize,
 }
 
 impl LineCursor {
+    /// Create a new `LineCursor`.
     pub fn new(total: usize) -> Self {
         Self {
             selected: None,
@@ -739,9 +830,11 @@ Final words."#;
                 ..
             }
         )));
-        assert!(lines
-            .iter()
-            .any(|l| matches!(l, RenderLine::CodeLine { lang, .. } if lang == "python")));
+        assert!(
+            lines
+                .iter()
+                .any(|l| matches!(l, RenderLine::CodeLine { lang, .. } if lang == "python"))
+        );
         assert!(lines.iter().any(|l| matches!(
             l,
             RenderLine::Text {

@@ -74,6 +74,8 @@ struct OllamaChatResponse {
 
 #[derive(Debug, Deserialize)]
 struct OllamaMessage {
+    // Intentionally retained: `role` is part of the Ollama chat response schema
+    // and is useful for validating the response shape during deserialization.
     #[allow(dead_code)]
     role: String,
     content: String,
@@ -384,8 +386,22 @@ impl LlmProvider for OllamaProvider {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::Mutex;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    /// Serializes tests that mutate process environment variables.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+        unsafe { env::set_var(key, value) };
+    }
+
+    fn remove_env(key: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in single-threaded test context.
+        unsafe { env::remove_var(key) };
+    }
 
     #[test]
     fn test_ollama_provider_creation() {
@@ -396,45 +412,47 @@ mod tests {
 
     #[test]
     fn test_ollama_from_env() {
+        let _guard = ENV_LOCK.lock().unwrap();
         let original_host = env::var("OLLAMA_HOST").ok();
         let original_model = env::var("OLLAMA_MODEL").ok();
 
-        env::set_var("OLLAMA_HOST", "http://ollama.example.com");
-        env::set_var("OLLAMA_MODEL", "qwen");
+        set_env("OLLAMA_HOST", "http://ollama.example.com");
+        set_env("OLLAMA_MODEL", "qwen");
 
         let provider = OllamaProvider::from_env().unwrap();
         assert_eq!(provider.base_url, "http://ollama.example.com");
         assert_eq!(provider.model, "qwen");
 
         match original_host {
-            Some(v) => env::set_var("OLLAMA_HOST", v),
-            None => env::remove_var("OLLAMA_HOST"),
+            Some(v) => set_env("OLLAMA_HOST", &v),
+            None => remove_env("OLLAMA_HOST"),
         }
         match original_model {
-            Some(v) => env::set_var("OLLAMA_MODEL", v),
-            None => env::remove_var("OLLAMA_MODEL"),
+            Some(v) => set_env("OLLAMA_MODEL", &v),
+            None => remove_env("OLLAMA_MODEL"),
         }
     }
 
     #[test]
     fn test_ollama_from_env_defaults() {
+        let _guard = ENV_LOCK.lock().unwrap();
         let original_host = env::var("OLLAMA_HOST").ok();
         let original_model = env::var("OLLAMA_MODEL").ok();
 
-        env::remove_var("OLLAMA_HOST");
-        env::remove_var("OLLAMA_MODEL");
+        remove_env("OLLAMA_HOST");
+        remove_env("OLLAMA_MODEL");
 
         let provider = OllamaProvider::from_env().unwrap();
         assert_eq!(provider.base_url, "http://localhost:11434");
         assert_eq!(provider.model, "llama3");
 
         match original_host {
-            Some(v) => env::set_var("OLLAMA_HOST", v),
-            None => env::remove_var("OLLAMA_HOST"),
+            Some(v) => set_env("OLLAMA_HOST", &v),
+            None => remove_env("OLLAMA_HOST"),
         }
         match original_model {
-            Some(v) => env::set_var("OLLAMA_MODEL", v),
-            None => env::remove_var("OLLAMA_MODEL"),
+            Some(v) => set_env("OLLAMA_MODEL", &v),
+            None => remove_env("OLLAMA_MODEL"),
         }
     }
 

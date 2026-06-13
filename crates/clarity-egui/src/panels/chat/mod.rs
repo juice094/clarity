@@ -72,6 +72,7 @@ pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
         });
 }
 
+/// Renders the chat area UI.
 pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
     egui::CentralPanel::default()
         .frame(

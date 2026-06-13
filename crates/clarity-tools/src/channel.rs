@@ -13,7 +13,7 @@
 //! | `webhook` | Generic JSON `{"message": ...}` | None |
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::info;
 
 use crate::helpers;
@@ -30,17 +30,25 @@ impl ChannelSendTool {
     }
 
     /// Build platform-specific payload
-    fn build_payload(&self, platform: &str, message: &str, secret: Option<&str>) -> Value {
+    fn build_payload(
+        &self,
+        platform: &str,
+        message: &str,
+        secret: Option<&str>,
+    ) -> ToolResult<Value> {
         match platform {
-            "feishu" => json!({
+            "feishu" => Ok(json!({
                 "msg_type": "text",
                 "content": {
                     "text": message
                 }
-            }),
+            })),
             "dingtalk" => {
                 let timestamp = chrono::Utc::now().timestamp_millis();
-                let sign = secret.map(|s| Self::compute_dingtalk_sign(s, timestamp));
+                let sign = match secret {
+                    Some(s) => Some(Self::compute_dingtalk_sign(s, timestamp)?),
+                    None => None,
+                };
 
                 let mut payload = json!({
                     "msgtype": "text",
@@ -56,19 +64,19 @@ impl ChannelSendTool {
                     }
                 }
 
-                payload
+                Ok(payload)
             }
-            "slack" => json!({
+            "slack" => Ok(json!({
                 "text": message
-            }),
-            _ => json!({
+            })),
+            _ => Ok(json!({
                 "message": message
-            }),
+            })),
         }
     }
 
     /// Compute DingTalk HMAC-SHA256 signature
-    fn compute_dingtalk_sign(secret: &str, timestamp: i64) -> String {
+    fn compute_dingtalk_sign(secret: &str, timestamp: i64) -> ToolResult<String> {
         use base64::Engine;
         use hmac::{Hmac, Mac};
         use sha2::Sha256;
@@ -76,12 +84,13 @@ impl ChannelSendTool {
         type HmacSha256 = Hmac<Sha256>;
 
         let sign_string = format!("{}\n{}", timestamp, secret);
-        let mut mac =
-            HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|e| {
+            ToolError::execution_failed(format!("Failed to initialize HMAC signer: {}", e))
+        })?;
         mac.update(sign_string.as_bytes());
         let result = mac.finalize();
         let bytes = result.into_bytes();
-        base64::engine::general_purpose::STANDARD.encode(bytes)
+        Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
     }
 }
 
@@ -147,12 +156,12 @@ impl Tool for ChannelSendTool {
                 return Err(ToolError::invalid_params(format!(
                     "Unsupported platform: {}. Supported: feishu, dingtalk, slack, webhook",
                     platform
-                )))
+                )));
             }
         }
 
         // Build platform-specific payload
-        let payload = self.build_payload(platform, message, secret);
+        let payload = self.build_payload(platform, message, secret)?;
 
         // Send HTTP POST
         let client = reqwest::Client::new();
@@ -196,7 +205,7 @@ mod tests {
     #[test]
     fn test_build_payload_feishu() {
         let tool = ChannelSendTool::new();
-        let payload = tool.build_payload("feishu", "Hello", None);
+        let payload = tool.build_payload("feishu", "Hello", None).unwrap();
         assert_eq!(payload["msg_type"].as_str().unwrap(), "text");
         assert_eq!(payload["content"]["text"].as_str().unwrap(), "Hello");
     }
@@ -204,7 +213,9 @@ mod tests {
     #[test]
     fn test_build_payload_dingtalk() {
         let tool = ChannelSendTool::new();
-        let payload = tool.build_payload("dingtalk", "Hello", Some("secret123"));
+        let payload = tool
+            .build_payload("dingtalk", "Hello", Some("secret123"))
+            .unwrap();
         assert_eq!(payload["msgtype"].as_str().unwrap(), "text");
         assert_eq!(payload["text"]["content"].as_str().unwrap(), "Hello");
         assert!(payload["timestamp"].is_number());
@@ -214,21 +225,21 @@ mod tests {
     #[test]
     fn test_build_payload_slack() {
         let tool = ChannelSendTool::new();
-        let payload = tool.build_payload("slack", "Hello", None);
+        let payload = tool.build_payload("slack", "Hello", None).unwrap();
         assert_eq!(payload["text"].as_str().unwrap(), "Hello");
     }
 
     #[test]
     fn test_build_payload_webhook() {
         let tool = ChannelSendTool::new();
-        let payload = tool.build_payload("webhook", "Hello", None);
+        let payload = tool.build_payload("webhook", "Hello", None).unwrap();
         assert_eq!(payload["message"].as_str().unwrap(), "Hello");
     }
 
     #[test]
     fn test_compute_dingtalk_sign() {
         use base64::Engine;
-        let sign = ChannelSendTool::compute_dingtalk_sign("secret123", 1234567890);
+        let sign = ChannelSendTool::compute_dingtalk_sign("secret123", 1234567890).unwrap();
         // Verify it's valid base64
         let decoded = base64::engine::general_purpose::STANDARD.decode(&sign);
         assert!(decoded.is_ok());

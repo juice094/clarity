@@ -5,14 +5,14 @@
 //! channels, write requests to stdin.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{RwLock, oneshot};
 use tracing::{debug, info};
 
 use crate::agent::lsp::protocol::{
@@ -22,6 +22,7 @@ use crate::agent::lsp::protocol::{
 };
 use crate::error::AgentError;
 
+/// `LspClient` configuration/state.
 pub struct LspClient {
     _child: Option<Child>,
     stdin: Arc<tokio::sync::Mutex<Option<ChildStdin>>>,

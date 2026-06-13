@@ -1,7 +1,7 @@
 [package]
 name = "clarity-tui"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 ratatui = "0.30"
@@ -20,3 +20,6 @@ similar = "2"
 uuid = { workspace = true }
 ctrlc = "3.4"
 pulldown-cmark = "0.9"
+
+[lints]
+workspace = true

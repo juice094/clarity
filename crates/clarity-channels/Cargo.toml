@@ -1,0 +1,68 @@
+[package]
+name = "clarity-channels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "External communication channels for Clarity (WeChat, Telegram, Discord, etc.)"
+
+[dependencies]
+# Async runtime
+async-trait.workspace = true
+tokio.workspace = true
+futures.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Unique IDs
+uuid.workspace = true
+
+# System directories
+dirs = "5.0"
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+urlencoding = "2.1"
+
+# Crypto (WeChat iLink AES + pairing token hashing)
+aes = "0.8"
+base64 = "0.22"
+ecb = "0.1"
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+
+# Tokio utilities (CancellationToken for messages)
+tokio-util = { workspace = true }
+
+# Sync primitives used by migrated ZeroClaw code
+parking_lot = "0.12"
+
+# QR code rendering for terminal login
+qrcode = "0.14"
+
+# Markdown stripping and filename sanitization
+regex = { workspace = true }
+mime_guess = "2.0"
+md5 = "0.7"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+
+[lints]
+workspace = true

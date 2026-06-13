@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Adaptive engine loop test: verify ModelRouter learns from historical data.
 
 use clarity_core::adaptive::{

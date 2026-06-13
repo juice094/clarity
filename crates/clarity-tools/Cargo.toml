@@ -40,3 +40,6 @@ clarity-memory = { path = "../clarity-memory" }
 
 [dev-dependencies]
 tempfile = "3.9"
+
+[lints]
+workspace = true

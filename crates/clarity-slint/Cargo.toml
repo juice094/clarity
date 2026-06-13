@@ -1,0 +1,41 @@
+[package]
+name = "clarity-slint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Clarity Desktop GUI powered by Slint — experimental replacement for clarity-egui"
+
+[dependencies]
+slint = { version = "1.16.1", features = ["raw-window-handle-06"] }
+raw-window-handle = "0.6"
+pretext-slint = { path = "../../../pretext-rust/crates/pretext-slint" }
+pretext-fontdb = { path = "../../../pretext-rust/crates/pretext-fontdb" }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+
+# Error handling / observability
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Internal crates — 仅依赖契约与协议层，不依赖任何前端实现
+clarity-contract = { path = "../clarity-contract" }
+clarity-wire = { path = "../clarity-wire" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_UI_HiDpi", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi"] }
+
+[build-dependencies]
+lucide-slint = { version = "1.17.0", registry = "ustc" }
+slint-build = "1.16.1"
+
+[[bin]]
+name = "clarity-slint"
+path = "src/main.rs"
+
+[lints]
+workspace = true

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Simple benchmark runner for key clarity-core operations.
 //!
 //! Run with: `cargo run --example benchmark -p clarity-core --release`

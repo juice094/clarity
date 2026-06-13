@@ -146,6 +146,7 @@ impl WindowManager {
         self.windows.len()
     }
 
+    /// Returns true when there are no windows.
     pub fn is_empty(&self) -> bool {
         self.windows.is_empty()
     }

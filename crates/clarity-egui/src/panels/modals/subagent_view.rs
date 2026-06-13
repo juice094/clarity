@@ -2,6 +2,7 @@
 
 use crate::App;
 
+/// Renders the subagent view modal UI.
 pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
     if !app.subagent_store.subagent_view_modal_open {
         return;

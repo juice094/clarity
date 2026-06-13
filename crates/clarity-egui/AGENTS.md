@@ -9,7 +9,7 @@ cargo build -p clarity-egui
 ## 测试
 
 ```bash
-cargo test -p clarity-egui --lib
+cargo test -p clarity-egui --bin clarity-egui
 ```
 
 ## 关键文件
@@ -31,6 +31,7 @@ cargo test -p clarity-egui --lib
 - UI 架构：即时模式 egui + Zustand 风格 stores
 - `render_safe()` 提供 React 式 error boundary，按面板隔离崩溃
 - Windows 平台通过 `raw-window-handle` + `windows` crate 实现圆角窗口
+- **迁移期宽限**：Sprint S5 / Pretext 三栏外壳迁移完成前，`main.rs` 顶部保留 `#![allow(dead_code)]`；迁移结束后随 `render_layout_shell()` 落地一并移除
 
 ## Sprint 43 冻结声明（2026-05-10 起生效）
 
@@ -57,6 +58,8 @@ cargo test -p clarity-egui --lib
 
 ### 当前基线
 
-- `cargo check -p clarity-egui`: 0 errors, 0 warnings
-- `cargo test --workspace --lib`: 177 passed, 0 failed, 5 ignored
+- `cargo check -p clarity-egui`: 0 errors, 0 warnings（迁移期允许 dead_code）
+- `cargo test -p clarity-egui --bin clarity-egui`: 89 passed, 0 failed, 0 ignored
+- `cargo test --workspace --lib --exclude clarity-slint`: 全绿
+- `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings`: 全绿
 - 视觉基线：需手动截图保存（sidebar / titlebar / chat / workspace / settings）

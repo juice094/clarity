@@ -1,6 +1,7 @@
 use crate::stores::{SettingsStore, UiStore};
 use crate::ui::types::ToastLevel;
 
+/// Handles the provider test result event.
 pub fn on_provider_test_result(
     settings_store: &mut SettingsStore,
     ui_store: &mut UiStore,
@@ -28,6 +29,7 @@ pub fn on_provider_test_result(
     }
 }
 
+/// Handles the provider model list event.
 pub fn on_provider_model_list(
     settings_store: &mut SettingsStore,
     ui_store: &mut UiStore,

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -9,16 +9,22 @@ use tracing::{debug, info, instrument};
 /// A chat message stored in a session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionMessage {
+    /// Message role (`user`, `assistant`, or `tool`).
     pub role: String,
+    /// Message content.
     pub content: String,
+    /// Serialized tool calls, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<String>,
+    /// Identifier for the tool call this message answers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// UTC creation timestamp.
     pub created_at: DateTime<Utc>,
 }
 
 impl SessionMessage {
+    /// Create a new session message with the given role and content.
     pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             role: role.into(),
@@ -29,11 +35,13 @@ impl SessionMessage {
         }
     }
 
+    /// Attach serialized tool calls to this message.
     pub fn with_tool_calls(mut self, tool_calls: impl Into<String>) -> Self {
         self.tool_calls = Some(tool_calls.into());
         self
     }
 
+    /// Attach the tool call identifier to this message.
     pub fn with_tool_call_id(mut self, tool_call_id: impl Into<String>) -> Self {
         self.tool_call_id = Some(tool_call_id.into());
         self
@@ -46,21 +54,27 @@ pub struct PersistentSessionStore {
     conn: Arc<Mutex<Connection>>,
 }
 
+/// Errors that can occur when interacting with the persistent session store.
 #[derive(Debug, thiserror::Error)]
 pub enum SessionStoreError {
+    /// Database (SQLite) error.
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
 
+    /// IO error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Requested session was not found.
     #[error("Session not found: {0}")]
     NotFound(String),
 }
 
+/// Shorthand result type for session store operations.
 pub type Result<T> = std::result::Result<T, SessionStoreError>;
 
 impl PersistentSessionStore {
+    /// Open a persistent SQLite-backed session store.
     #[instrument(skip(db_path))]
     pub async fn new(db_path: impl AsRef<Path> + std::fmt::Debug) -> Result<Self> {
         let db_path = db_path.as_ref().to_path_buf();
@@ -82,6 +96,7 @@ impl PersistentSessionStore {
         Ok(store)
     }
 
+    /// Create an in-memory session store, useful for tests and fallbacks.
     pub fn new_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory().map_err(SessionStoreError::Database)?;
         let store = Self {

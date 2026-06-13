@@ -27,6 +27,7 @@ pub struct CommandPalette {
 }
 
 impl CommandPalette {
+    /// Creates a new instance.
     pub fn new() -> Self {
         Self {
             open: false,

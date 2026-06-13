@@ -1,14 +1,15 @@
-use crate::diff::{parse_unified_diff, DiffHunk, DiffLine};
+use crate::diff::{DiffHunk, DiffLine, parse_unified_diff};
 use crate::popup::{EventState, Popup};
 use crossterm::event::{Event, KeyCode};
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Color, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
-    Frame,
 };
 
+/// Popup that previews a unified diff and lets the user confirm or cancel.
 pub struct DiffPopup {
     file_path: String,
     hunks: Vec<DiffHunk>,
@@ -18,6 +19,7 @@ pub struct DiffPopup {
 }
 
 impl DiffPopup {
+    /// Create a diff popup from parsed hunks.
     pub fn new(file_path: impl Into<String>, hunks: Vec<DiffHunk>) -> Self {
         Self {
             file_path: file_path.into(),

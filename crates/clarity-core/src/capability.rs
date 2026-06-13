@@ -18,6 +18,7 @@
 pub struct CapabilityRegistry;
 
 impl CapabilityRegistry {
+    /// `supported_approval_modes`.
     pub fn supported_approval_modes(surface: &str) -> Vec<&'static str> {
         match surface {
             "egui" => vec!["interactive", "yolo", "plan", "smart"],

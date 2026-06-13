@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::stores::CronStore;
 
+/// Handles the cron list event.
 #[allow(dead_code)]
 pub fn on_cron_list(
     cron_store: &mut CronStore,

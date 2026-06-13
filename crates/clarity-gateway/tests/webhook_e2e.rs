@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Webhook channel E2E validation for feishu/dingtalk/wecom
 //!
 //! Uses Tower `ServiceExt::oneshot` to test the webhook router without
@@ -12,10 +19,10 @@ use tower::ServiceExt;
 
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::registry::ToolRegistry;
-use clarity_gateway::channels::webhook::{
-    compute_hmac_sha256_base64, WebhookChannel, WebhookRequest, WebhookResponse,
-};
 use clarity_gateway::channels::ChannelConfig;
+use clarity_gateway::channels::webhook::{
+    WebhookChannel, WebhookRequest, WebhookResponse, compute_hmac_sha256_base64,
+};
 
 fn create_test_agent() -> Arc<Agent> {
     let registry = ToolRegistry::with_builtin_tools();
@@ -230,7 +237,7 @@ async fn test_webhook_feishu_success() {
     let nonce = "abc123";
     let body_json = r#"{"event":{"message":{"content":"{\"text\":\"Hello Feishu\"}"}}}"#;
     let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_json);
-    let signature = compute_hmac_sha256_base64(secret, &sign_string);
+    let signature = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     let res = router
         .oneshot(
@@ -311,7 +318,7 @@ async fn test_webhook_feishu_plain_content() {
     // 飞书消息 content 直接是文本（不是 JSON 字符串）
     let body_json = r#"{"event":{"message":{"content":"Plain text message"}}}"#;
     let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_json);
-    let signature = compute_hmac_sha256_base64(secret, &sign_string);
+    let signature = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     let res = router
         .oneshot(
@@ -347,7 +354,7 @@ async fn test_webhook_dingtalk_success() {
 
     let timestamp = "1234567890";
     let sign_string = format!("{}\n{}", timestamp, secret);
-    let sign = compute_hmac_sha256_base64(secret, &sign_string);
+    let sign = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     let body_json = format!(
         r#"{{"timestamp":"{}","sign":"{}","text":{{"content":"Hello DingTalk"}}}}"#,
@@ -424,7 +431,7 @@ async fn test_webhook_dingtalk_content_field() {
 
     let timestamp = "1234567890";
     let sign_string = format!("{}\n{}", timestamp, secret);
-    let sign = compute_hmac_sha256_base64(secret, &sign_string);
+    let sign = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     // 使用顶层 content 字段（替代 text.content）
     let body_json = format!(
@@ -625,7 +632,7 @@ async fn test_webhook_feishu_signature_computation() {
     let nonce = "abc123";
     let body = r#"{"event":{"message":{"content":"Hello"}}}"#;
     let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body);
-    let signature = compute_hmac_sha256_base64(secret, &sign_string);
+    let signature = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     let mut headers = HeaderMap::new();
     headers.insert("X-Lark-Signature", signature.parse().unwrap());
@@ -646,7 +653,7 @@ async fn test_webhook_dingtalk_signature_computation() {
     let secret = "test_secret";
     let timestamp = "1234567890";
     let sign_string = format!("{}\n{}", timestamp, secret);
-    let sign = compute_hmac_sha256_base64(secret, &sign_string);
+    let sign = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
     let body = format!(
         r#"{{"timestamp":"{}","sign":"{}","text":{{"content":"Hello"}}}}"#,

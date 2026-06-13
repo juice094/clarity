@@ -21,11 +21,11 @@ use tracing::{debug, error, info};
 ///
 /// ```rust
 /// use clarity_core::ToolRegistry;
-/// use clarity_core::tools::{FileReadTool, BashTool};
+/// use clarity_core::tools::{FileReadTool, GlobTool};
 ///
 /// let mut registry = ToolRegistry::new();
-/// registry.register(FileReadTool::new()).unwrap();
-/// registry.register(BashTool::new()).unwrap();
+/// let _ = registry.register(FileReadTool::new());
+/// let _ = registry.register(GlobTool::new());
 ///
 /// // Get tool schemas for LLM
 /// let schemas = registry.get_tool_schemas();
@@ -488,6 +488,7 @@ impl clarity_contract::tool::ToolRegistry for ToolRegistry {
 }
 
 #[cfg(test)]
+/// `mock_registry_with_tools`.
 pub fn mock_registry_with_tools(tools: Vec<Box<dyn Tool>>) -> ToolRegistry {
     let reg = ToolRegistry::new();
     for t in tools {

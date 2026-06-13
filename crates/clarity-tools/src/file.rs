@@ -1,8 +1,8 @@
 //! File operation tools: FileRead, FileEdit, FileWrite
 
 use async_trait::async_trait;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};
@@ -897,10 +897,12 @@ mod tests {
         let args = json!({"path": ".env"});
         let result = tool.execute(args, ctx).await.unwrap();
         assert_eq!(result["content"], "SECRET=1");
-        assert!(result["sensitive_file_warning"]
-            .as_str()
-            .unwrap()
-            .contains(".env"));
+        assert!(
+            result["sensitive_file_warning"]
+                .as_str()
+                .unwrap()
+                .contains(".env")
+        );
     }
 
     #[tokio::test]

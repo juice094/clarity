@@ -12,10 +12,10 @@ tags: [adr]
 > Affects: clarity-core, clarity-tools, clarity-memory（潜在）
 > Supersedes: 无
 > Relates to:
->   - docs/CODE-CHANGE-PRINCIPLES.md P3（单源真相）
+>   - docs/development/CODE-CHANGE-PRINCIPLES.md P3（单源真相）
 >   - docs/adr/ADR-006-protocol-layer-convergence.md（wire 单源化先例）
 >   - docs/notes/2026-05-11-anthropic-managed-agents-mapping.md（数据基础）
->   - docs/architecture-positioning.md 五-A（定位关系）
+>   - docs/architecture/architecture-positioning.md 五-A（定位关系）
 
 ---
 
@@ -50,7 +50,7 @@ Brain（推理）         Hands（执行）        Session（日志）
 
 ### 1.3 关键约束
 
-Clarity 必须保持的核心定位（参 docs/architecture-positioning.md 一）：
+Clarity 必须保持的核心定位（参 docs/architecture/architecture-positioning.md 一）：
 
 - Local-first：本地优先，不依赖云
 - 单二进制：cargo install 即用，无外部运行时依赖
@@ -275,10 +275,10 @@ ADR-008 视为完整落地的判据：
 - Anthropic Engineering Blog: https://www.anthropic.com/engineering/managed-agents
 - Claude Docs: https://platform.claude.com/docs/en/managed-agents/overview
 - arxiv 2603.12644v1 "A Case Study of OpenClaw"
-- docs/CODE-CHANGE-PRINCIPLES.md P3 单源真相
+- docs/development/CODE-CHANGE-PRINCIPLES.md P3 单源真相
 - docs/adr/ADR-006-protocol-layer-convergence.md（wire 单源化先例）
 - docs/notes/2026-05-11-anthropic-managed-agents-mapping.md（详细映射分析）
-- docs/architecture-positioning.md 五-A（定位关系）
+- docs/architecture/architecture-positioning.md 五-A（定位关系）
 
 ---
 

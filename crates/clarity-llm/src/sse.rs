@@ -25,6 +25,7 @@ impl Default for SseParser {
 }
 
 impl SseParser {
+    /// Create a fresh SSE parser.
     pub fn new() -> Self {
         Self {
             partial_calls: Vec::new(),

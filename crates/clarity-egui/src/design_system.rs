@@ -34,16 +34,17 @@ pub fn install_theme(ctx: &egui::Context, theme: Theme) {
     ctx.data_mut(|d| d.insert_temp(theme_id(), theme));
 }
 
-/// Retrieve the installed Theme from Context. Panics if not installed.
+/// Retrieve the installed Theme from Context, falling back to the default theme.
 fn theme(ctx: &egui::Context) -> Theme {
     ctx.data(|d| d.get_temp::<Theme>(theme_id()))
-        .expect("Theme not installed — call install_theme() at app startup")
+        .unwrap_or_default()
 }
 
 // =============================================================================
 // Surface — visual layering (background, border, radius, shadow, padding)
 // =============================================================================
 
+/// surface variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Surface {
     /// Primary app background — no border, no radius, no padding.
@@ -100,9 +101,7 @@ impl Surface {
     fn padding(self, t: &Theme) -> egui::Margin {
         match self {
             Surface::Canvas | Surface::Row => egui::Margin::ZERO,
-            Surface::Card | Surface::Prompt => {
-                egui::Margin::same(t.space_16.round() as i8)
-            }
+            Surface::Card | Surface::Prompt => egui::Margin::same(t.space_16.round() as i8),
             Surface::Nested | Surface::Error | Surface::Code | Surface::Input => {
                 egui::Margin::symmetric(t.space_12.round() as i8, t.space_12.round() as i8)
             }
@@ -127,6 +126,7 @@ pub fn surface<R>(
 // Stack — layout primitives (row, column, center, space-between)
 // =============================================================================
 
+/// halign variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HAlign {
     Left,
@@ -144,6 +144,7 @@ impl HAlign {
     }
 }
 
+/// valign variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VAlign {
     Top,
@@ -172,10 +173,9 @@ pub fn row_align<R>(
     v: VAlign,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    ui.with_layout(
-        egui::Layout::left_to_right(v.to_egui()),
-        |ui| add_contents(ui),
-    )
+    ui.with_layout(egui::Layout::left_to_right(v.to_egui()), |ui| {
+        add_contents(ui)
+    })
     .inner
 }
 
@@ -190,11 +190,8 @@ pub fn col_align<R>(
     h: HAlign,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    ui.with_layout(
-        egui::Layout::top_down(h.to_egui()),
-        |ui| add_contents(ui),
-    )
-    .inner
+    ui.with_layout(egui::Layout::top_down(h.to_egui()), |ui| add_contents(ui))
+        .inner
 }
 
 /// Center content in both axes.
@@ -218,8 +215,10 @@ pub fn push_bottom(ui: &mut egui::Ui) {
 
 /// Right-align a block of content.
 pub fn right<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_contents(ui))
-        .inner
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        add_contents(ui)
+    })
+    .inner
 }
 
 /// Constrain width to a fraction of available space.
@@ -233,6 +232,7 @@ pub fn width_pct(ui: &mut egui::Ui, fraction: f32, add_contents: impl FnOnce(&mu
 // Text — typography semantics
 // =============================================================================
 
+/// text variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Text {
     /// 18px, strong, primary color.
@@ -264,7 +264,11 @@ impl Text {
         match self {
             Text::Title => t.text_xl,
             Text::Headline => t.text_lg,
-            Text::Body | Text::BodyStrong | Text::BodyMuted | Text::Error | Text::Accent
+            Text::Body
+            | Text::BodyStrong
+            | Text::BodyMuted
+            | Text::Error
+            | Text::Accent
             | Text::Placeholder => t.text_base,
             Text::Caption => t.text_sm,
             Text::Small => t.text_xs,
@@ -284,7 +288,10 @@ impl Text {
     }
 
     fn strong(self) -> bool {
-        matches!(self, Text::Title | Text::Headline | Text::BodyStrong | Text::Accent)
+        matches!(
+            self,
+            Text::Title | Text::Headline | Text::BodyStrong | Text::Accent
+        )
     }
 
     fn mono(self) -> bool {
@@ -321,6 +328,7 @@ pub fn heading(ui: &mut egui::Ui, content: impl Into<String>) {
 // Spacer — spacing tokens (4px baseline)
 // =============================================================================
 
+/// space variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Space {
     /// 4px — tight inset, icon gaps.
@@ -365,7 +373,8 @@ pub fn divider(ui: &mut egui::Ui) {
     let y = ui.cursor().min.y;
     let x_range = ui.available_rect_before_wrap().x_range();
     ui.add(egui::Separator::default().spacing(0.0));
-    ui.painter().hline(x_range, y, egui::Stroke::new(0.5, t.border));
+    ui.painter()
+        .hline(x_range, y, egui::Stroke::new(0.5, t.border));
 }
 
 // =============================================================================
@@ -419,6 +428,7 @@ pub fn icon_text(ui: &mut egui::Ui, icon: &str, label: impl Into<String>, style:
 // Button primitives
 // =============================================================================
 
+/// button style variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonStyle {
     Primary,
@@ -451,13 +461,9 @@ pub fn btn(ui: &mut egui::Ui, label: impl Into<String>, style: ButtonStyle) -> e
 pub fn btn_icon(ui: &mut egui::Ui, icon: &str) -> egui::Response {
     let t = theme(ui.ctx());
     ui.add(
-        egui::Button::new(
-            egui::RichText::new(icon)
-                .size(t.text_sm)
-                .color(t.text_dim),
-        )
-        .fill(egui::Color32::TRANSPARENT)
-        .corner_radius(egui::CornerRadius::same(t.radius_sm.round() as u8)),
+        egui::Button::new(egui::RichText::new(icon).size(t.text_sm).color(t.text_dim))
+            .fill(egui::Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(t.radius_sm.round() as u8)),
     )
 }
 
@@ -492,7 +498,7 @@ pub fn scroll<R>(
     kind: Scroll,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let t = theme(ui.ctx());
+    let _t = theme(ui.ctx());
     match kind {
         Scroll::Vertical => {
             egui::ScrollArea::vertical()
@@ -528,7 +534,7 @@ pub fn scroll_styled<R>(
     kind: Scroll,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let t = theme(ui.ctx());
+    let _t = theme(ui.ctx());
     let scroll_id = ui.id().with("scroll_styled");
     let mut area = match kind {
         Scroll::Vertical => egui::ScrollArea::vertical(),
@@ -555,6 +561,7 @@ pub struct ModalSpec {
 }
 
 impl ModalSpec {
+    /// Creates a new instance.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
@@ -562,11 +569,13 @@ impl ModalSpec {
             max_width: 600.0,
         }
     }
+    /// Width.
     pub fn width(mut self, w: f32) -> Self {
         self.min_width = w;
         self.max_width = w;
         self
     }
+    /// Width range.
     pub fn width_range(mut self, min: f32, max: f32) -> Self {
         self.min_width = min;
         self.max_width = max;
@@ -654,6 +663,7 @@ pub struct TabItem {
 }
 
 impl TabItem {
+    /// Creates a new instance.
     pub fn new(label: impl Into<String>, active: bool) -> Self {
         Self {
             label: label.into(),
@@ -685,9 +695,7 @@ pub fn tab_bar(ui: &mut egui::Ui, tabs: &[TabItem]) -> Option<usize> {
             } else {
                 (egui::Color32::TRANSPARENT, t.text_dim, false)
             };
-            let mut rt = egui::RichText::new(&tab.label)
-                .size(t.text_base)
-                .color(fg);
+            let mut rt = egui::RichText::new(&tab.label).size(t.text_base).color(fg);
             if weight {
                 rt = rt.strong();
             }
@@ -733,11 +741,7 @@ pub fn tab_bar(ui: &mut egui::Ui, tabs: &[TabItem]) -> Option<usize> {
 /// let mut value = String::new();
 /// input(ui, &mut value, "Enter name…");
 /// ```
-pub fn input(
-    ui: &mut egui::Ui,
-    value: &mut String,
-    hint: impl Into<String>,
-) -> egui::Response {
+pub fn input(ui: &mut egui::Ui, value: &mut String, hint: impl Into<String>) -> egui::Response {
     let t = theme(ui.ctx());
     let hint_str: String = hint.into();
     ui.add(
@@ -779,11 +783,7 @@ pub fn field(
 }
 
 /// Checkbox with semantic label styling.
-pub fn checkbox(
-    ui: &mut egui::Ui,
-    label: impl Into<String>,
-    value: &mut bool,
-) -> egui::Response {
+pub fn checkbox(ui: &mut egui::Ui, label: impl Into<String>, value: &mut bool) -> egui::Response {
     ui.checkbox(value, label.into())
 }
 
@@ -814,7 +814,11 @@ pub fn select(
 }
 
 /// A form section with a headline and standard padding.
-pub fn form_section(ui: &mut egui::Ui, title: impl Into<String>, add_contents: impl FnOnce(&mut egui::Ui)) {
+pub fn form_section(
+    ui: &mut egui::Ui,
+    title: impl Into<String>,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
     col(ui, |ui| {
         heading(ui, title);
         gap(ui, Space::S1);
@@ -853,7 +857,8 @@ pub fn status_dot(ui: &mut egui::Ui, status: Status) -> egui::Response {
     let t = theme(ui.ctx());
     let size = egui::vec2(8.0, 8.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
-    ui.painter().circle_filled(rect.center(), 4.0, status.color(&t));
+    ui.painter()
+        .circle_filled(rect.center(), 4.0, status.color(&t));
     response
 }
 
@@ -862,26 +867,25 @@ pub fn status_badge(ui: &mut egui::Ui, label: impl Into<String>, status: Status)
     let t = theme(ui.ctx());
     let color = status.color(&t);
     // Create a subtle background tint
-    let bg = egui::Color32::from_rgba_premultiplied(
-        color.r(),
-        color.g(),
-        color.b(),
-        30,
-    );
+    let bg = egui::Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), 30);
     let frame = egui::Frame::new()
         .fill(bg)
         .corner_radius(egui::CornerRadius::same(t.radius_full.round() as u8))
-        .inner_margin(egui::Margin::symmetric(t.space_8.round() as i8, t.space_4.round() as i8));
-    frame.show(ui, |ui| {
-        row(ui, |ui| {
-            status_dot(ui, status);
-            gap(ui, Space::S0);
-            let mut rt = egui::RichText::new(label.into()).size(t.text_sm);
-            rt = rt.color(color);
-            ui.label(rt)
+        .inner_margin(egui::Margin::symmetric(
+            t.space_8.round() as i8,
+            t.space_4.round() as i8,
+        ));
+    frame
+        .show(ui, |ui| {
+            row(ui, |ui| {
+                status_dot(ui, status);
+                gap(ui, Space::S0);
+                let mut rt = egui::RichText::new(label.into()).size(t.text_sm);
+                rt = rt.color(color);
+                ui.label(rt)
+            })
         })
-    })
-    .inner
+        .inner
 }
 
 // =============================================================================
@@ -906,6 +910,7 @@ pub enum Responsive {
     Wide,
 }
 
+/// Responsive.
 pub fn responsive<R>(
     ui: &mut egui::Ui,
     add_contents: impl FnOnce(&mut egui::Ui, Responsive) -> R,

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::memory::{Memory, MemoryStore, PersistentMemoryStore};
 use clarity_core::registry::ToolRegistry;

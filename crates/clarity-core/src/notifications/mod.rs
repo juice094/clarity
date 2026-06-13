@@ -129,7 +129,7 @@ pub fn task_status_notification(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     #[test]
     fn test_notification_manager_new() {

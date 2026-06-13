@@ -20,7 +20,9 @@ pub enum ModelDownloadProgress {
     Started,
     /// Progress update with bytes downloaded and total (if known).
     Progress {
+        /// Bytes downloaded so far.
         bytes_downloaded: u64,
+        /// Total bytes expected, if known.
         total_bytes: Option<u64>,
     },
     /// Download completed successfully.
@@ -34,11 +36,17 @@ pub enum ModelDownloadProgress {
 /// A pre-configured model available for one-click download.
 #[derive(Debug, Clone, Copy)]
 pub struct PreconfiguredModel {
+    /// HuggingFace repository identifier.
     pub repo_id: &'static str,
+    /// Model filename.
     pub filename: &'static str,
+    /// Tokenizer repository identifier.
     pub tokenizer_repo_id: Option<&'static str>,
+    /// Tokenizer filename.
     pub tokenizer_filename: Option<&'static str>,
+    /// Human-readable model name.
     pub display_name: &'static str,
+    /// Approximate size in megabytes.
     pub size_mb: u32,
 }
 

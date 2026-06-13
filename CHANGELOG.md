@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
+
+- **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。
+- **panels/ 目录重组** — 按职责迁入 `chat/` / `work/` / `settings/` / `modals/` / `sidebar/` / `workspace/` / `system/` / `legacy/`，`panels/mod.rs` 保留向后兼容 re-export。
+- **Store 文件拆分** — `stores/mod.rs` 拆分为 12 个按域子模块（`session` / `chat` / `settings` / `task` / `team` / `cron` / `ui` / `subagent` / `mcp` / `snapshot` / `onboarding` / `tool_call`），`mod.rs` 通过 `pub use X::*;` 保持原有导入路径。
+- **公共 widget 整理** — 增强 `widgets/avatar.rs`、新增 `widgets/user_avatar.rs`、删除未启用的 `widgets/card.rs` / `badge.rs` / `toggle.rs` / `settings_row.rs` 及意外临时文件。
+- **布局外壳接入点** — 新增 `layout.rs`（`LayoutMetrics` + `update_and_measure`）；`App::render_layout_shell()` 成为 chrome / 主视图 / 浮层 / 模态框唯一编排入口，为 Pretext 三栏布局提供可替换 staging point。
+- **Design System 落地** — 注册 `mod design_system`；在 `main.rs::update()` 每帧调用 `design_system::install_theme()`，使语义化 helper 自动获取 Theme；修复 `design_system.rs` 2 处 clippy 警告。
+- **全 workspace 基线修复** — 修复 `clarity-core::agent::cost_channel` 因全局静态变量导致的并行测试 flake。
+- **迁移规划** — 产出 `docs/plans/clarity-egui-pretext-layout-migration.md`。
+- **验证结果**：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（~1044 passed / 0 failed / 8 ignored）、`cargo test -p clarity-egui --bin clarity-egui` ✅（89 passed / 0 failed）。
+
 ### Added
 
 - **Three-layer architecture (Phase 0-3 + Sprint 4.1, 2026-06-05~06)** — 8 commits, ~7,000 LOC, 99 new tests.
@@ -115,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **状态外置** — open/close 状态写入 `UiStore.persona_switcher_open` 而非组件局部 state，便于未来 `Ctrl+P` 等程序化触发。`active_persona_id: Option<String>` 持久化到 `gui-settings.json`（`#[serde(default)]`）。
   - **端到端链路**：`settings.rs → app_logic.rs (默认 "kin") → UiStore → main.rs::render_persona_switcher → widgets::persona_switcher → SettingsStore.save() → %APPDATA%/clarity/gui-settings.json`。切换时弹出 toast `"Switched persona: {name}"`。
   - **触及文件**：6 文件 / 474 LOC / 6 单测全绿（`first_letter_uppercases_lowercase_input` / `parse_accent_accepts_six_digit_hex_with_hash` / `parse_accent_rejects_malformed_input` / `truncate_returns_input_when_it_fits` / `truncate_adds_ellipsis_when_too_long` / `truncate_returns_empty_for_zero_width`）。
-  - **隐私整改（2026-05-15 EOD）** — 识别到旧文档中使用了真实人名作为默认 persona 标识符。已将代码与活跃文档中的该标识符替换为 `"Kin"`，并在 `docs/PRIVACY_REVIEW.md` 建立审查规范。历史文档（`FUTURE_DIRECTION.md`、`archive/2026-04-26-...`）保留原始文本但标注 `[DEPRECATED_NAMING]`。
+  - **隐私整改（2026-05-15 EOD）** — 识别到旧文档中使用了真实人名作为默认 persona 标识符。已将代码与活跃文档中的该标识符替换为 `"Kin"`，并在 `docs/security/PRIVACY_REVIEW.md` 建立审查规范。历史文档（`FUTURE_DIRECTION.md`、`archive/2026-04-26-...`）保留原始文本但标注 `[DEPRECATED_NAMING]`。
 
 ## [0.3.2] — 2026-05-03
 
@@ -194,7 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **嵌入式模型自动下载** — `clarity-core` 新增 `model_download.rs`（HuggingFace 直链流式下载 + 进度回调）。预配置 Qwen2.5-1.5B-Instruct-GGUF（~1.0 GB）。`clarity-egui` 新增首次启动引导覆盖层 `onboarding.rs`：三选项（输入 API Key / 下载本地模型 / 稍后配置），下载完成后自动配置 provider=local 并 reload LLM。
-- **unwrap/expect 全面审计** — 全 workspace 非测试代码 171 处 unwrap/expect 分级审计。5 处高风险已修复（subagents/store、gateway/webhook、memory/embedding×2、tui/main）。中风险 9 处确认全部已有 `// SAFE:` 注释或属低风险类别（Regex::new、锁、duration_since）。新增 `docs/unwrap-debt-map.md` 作为持续维护的债务地图。
+- **unwrap/expect 全面审计** — 全 workspace 非测试代码 171 处 unwrap/expect 分级审计。5 处高风险已修复（subagents/store、gateway/webhook、memory/embedding×2、tui/main）。中风险 9 处确认全部已有 `// SAFE:` 注释或属低风险类别（Regex::new、锁、duration_since）。新增 `docs/development/unwrap-debt-map.md` 作为持续维护的债务地图。
 
 ### Changed
 

@@ -69,7 +69,7 @@ impl SqliteBackend {
         let conn = Connection::open(&path)
             .map_err(|e| TelemetryError::Backend(format!("failed to open sqlite: {e}")))?;
 
-        // SAFETY: PRAGMA journal_mode may return a result row on some SQLite builds.
+        // NOTE: PRAGMA journal_mode may return a result row on some SQLite builds.
         // We use execute_batch to silently ignore it; failure is non-fatal.
         let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
 
@@ -110,7 +110,7 @@ impl SqliteBackend {
                 let sql = "SELECT timestamp, trace_id, span_id, parent_span_id, service_name, \
                            event_type, severity, attributes, metrics, payload_hash \
                            FROM wide_events WHERE event_type = ?1 \
-                           ORDER BY timestamp DESC LIMIT ?2";
+                           ORDER BY timestamp DESC, rowid DESC LIMIT ?2";
                 let params: Vec<Box<dyn rusqlite::ToSql>> =
                     vec![Box::new(event_type.to_string()), Box::new(limit as i64)];
                 (sql.to_string(), params)
@@ -119,7 +119,7 @@ impl SqliteBackend {
                 let sql = "SELECT timestamp, trace_id, span_id, parent_span_id, service_name, \
                            event_type, severity, attributes, metrics, payload_hash \
                            FROM wide_events WHERE event_type = ?1 AND timestamp >= ?2 \
-                           ORDER BY timestamp DESC LIMIT ?3";
+                           ORDER BY timestamp DESC, rowid DESC LIMIT ?3";
                 let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
                     Box::new(event_type.to_string()),
                     Box::new(s),
@@ -131,7 +131,7 @@ impl SqliteBackend {
                 let sql = "SELECT timestamp, trace_id, span_id, parent_span_id, service_name, \
                            event_type, severity, attributes, metrics, payload_hash \
                            FROM wide_events WHERE event_type = ?1 AND timestamp <= ?2 \
-                           ORDER BY timestamp DESC LIMIT ?3";
+                           ORDER BY timestamp DESC, rowid DESC LIMIT ?3";
                 let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
                     Box::new(event_type.to_string()),
                     Box::new(e),
@@ -144,7 +144,7 @@ impl SqliteBackend {
                            event_type, severity, attributes, metrics, payload_hash \
                            FROM wide_events WHERE event_type = ?1 \
                            AND timestamp >= ?2 AND timestamp <= ?3 \
-                           ORDER BY timestamp DESC LIMIT ?4";
+                           ORDER BY timestamp DESC, rowid DESC LIMIT ?4";
                 let params: Vec<Box<dyn rusqlite::ToSql>> = vec![
                     Box::new(event_type.to_string()),
                     Box::new(s),

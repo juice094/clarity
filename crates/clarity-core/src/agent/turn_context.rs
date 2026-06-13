@@ -17,6 +17,7 @@ pub(crate) struct TurnContext {
 }
 
 impl TurnContext {
+    /// Create a new `TurnContext`.
     pub fn new(turn_id: String, active_skill: Option<String>, max_repetitions: usize) -> Self {
         Self {
             turn_id,

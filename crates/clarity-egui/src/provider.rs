@@ -42,6 +42,7 @@ pub enum ApiFormat {
 }
 
 impl ApiFormat {
+    /// Returns the string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             ApiFormat::OpenaiCompletions => "openai-completions",
@@ -50,6 +51,7 @@ impl ApiFormat {
         }
     }
 
+    /// Parses from a string.
     pub fn from_str(s: &str) -> Self {
         match s {
             "anthropic-messages" => Self::AnthropicMessages,
@@ -73,6 +75,7 @@ pub enum AuthType {
 }
 
 impl AuthType {
+    /// Returns the string representation.
     pub fn as_str(&self) -> &'static str {
         match self {
             AuthType::ApiKey => "api-key",
@@ -329,6 +332,8 @@ impl From<&ProviderDefinition> for clarity_llm::ProviderConfig {
             auth_token_key: Some(def.auth_token_key.clone()).filter(|s| !s.is_empty()),
             oauth,
             extra: HashMap::new(),
+            pricing: None,
+            tags: Vec::new(),
         }
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::App;
 
+/// Renders the task view modal UI.
 pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
     if !app.task_store.task_view_modal_open {
         return;

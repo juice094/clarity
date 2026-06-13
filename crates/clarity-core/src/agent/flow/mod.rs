@@ -11,36 +11,52 @@ use std::collections::HashMap;
 /// Kinds of nodes in a flow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlowNodeKind {
+    /// Begin node.
     Begin,
+    /// End node.
     End,
+    /// Task node.
     Task,
+    /// Decision node.
     Decision,
+    /// Skill invocation node.
     InvokeSkill,
+    /// Predictive checkpoint node.
     PredictCheckpoint,
 }
 
 /// A single node in a flowchart.
 #[derive(Debug, Clone)]
 pub struct FlowNode {
+    /// Tool call identifier.
     pub id: String,
+    /// Snapshot label.
     pub label: String,
+    /// Status kind.
     pub kind: FlowNodeKind,
 }
 
 /// A directed edge between two nodes.
 #[derive(Debug, Clone)]
 pub struct FlowEdge {
+    /// Src.
     pub src: String,
+    /// Dst.
     pub dst: String,
+    /// Snapshot label.
     pub label: Option<String>,
 }
 
 /// A parsed flowchart.
 #[derive(Debug, Clone, Default)]
 pub struct Flow {
+    /// Nodes.
     pub nodes: HashMap<String, FlowNode>,
+    /// Outgoing.
     pub outgoing: HashMap<String, Vec<FlowEdge>>,
+    /// Begin id.
     pub begin_id: String,
+    /// End id.
     pub end_id: String,
 }
 
@@ -48,18 +64,25 @@ pub struct Flow {
 #[derive(Debug, thiserror::Error)]
 pub enum FlowError {
     #[error("Flow validation failed: {0}")]
+    /// Validation error.
     Validation(String),
     #[error("Node '{0}' not found")]
+    /// Missing node.
     MissingNode(String),
     #[error("Node '{0}' has no outgoing edges")]
+    /// Node has no outgoing edges.
     NoOutgoingEdges(String),
     #[error("Decision node '{0}' has duplicate edge labels")]
+    /// Duplicate edge labels.
     DuplicateEdgeLabels(String),
     #[error("Max steps reached ({0})")]
+    /// Maximum steps reached.
     MaxStepsReached(usize),
     #[error("Execution error: {0}")]
+    /// Execution error.
     Execution(String),
     #[error("Parse error: {0}")]
+    /// Parse error.
     Parse(String),
 }
 

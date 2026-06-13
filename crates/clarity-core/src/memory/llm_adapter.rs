@@ -4,11 +4,13 @@ use async_trait::async_trait;
 use clarity_llm::api::{LlmProvider, Message};
 use std::sync::Arc;
 
+/// `LlmProviderAdapter` configuration/state.
 pub struct LlmProviderAdapter {
     provider: Arc<dyn LlmProvider>,
 }
 
 impl LlmProviderAdapter {
+    /// Create a new `LlmProviderAdapter`.
     pub fn new(provider: Arc<dyn LlmProvider>) -> Self {
         Self { provider }
     }

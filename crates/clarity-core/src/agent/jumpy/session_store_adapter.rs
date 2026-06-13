@@ -350,14 +350,18 @@ mod tests {
         ];
         let obs = session_to_observations(&records, &AdapterConfig::default());
         assert_eq!(obs.len(), 1);
-        assert!(obs[0]
-            .after
-            .active_files
-            .contains(&"src/lib.rs".to_string()));
-        assert!(obs[0]
-            .after
-            .active_files
-            .contains(&"tests/test.rs".to_string()));
+        assert!(
+            obs[0]
+                .after
+                .active_files
+                .contains(&"src/lib.rs".to_string())
+        );
+        assert!(
+            obs[0]
+                .after
+                .active_files
+                .contains(&"tests/test.rs".to_string())
+        );
     }
 
     #[test]

@@ -151,14 +151,14 @@ febe6cc1 (baseline)
 
 | 资产 | 位置 | 用途 |
 |------|------|------|
-| 七条改动原则 | `docs/CODE-CHANGE-PRINCIPLES.md` | 所有 PR 必须自查 |
+| 七条改动原则 | `docs/development/CODE-CHANGE-PRINCIPLES.md` | 所有 PR 必须自查 |
 | ADR-006 协议层收敛决议 | `docs/adr/ADR-006-protocol-layer-convergence.md` | 历史决议 |
 | ADR-008 三层解耦决议草案 | `docs/adr/ADR-008-brain-hands-session-decoupling.md` | 待 Accept |
 | Anthropic Managed Agents 映射 | `docs/notes/2026-05-11-anthropic-managed-agents-mapping.md` | ADR-008 数据基础 |
 | 协议层收敛回顾 | `docs/notes/2026-05-11-protocol-convergence-retrospective.md` | 方法论沉淀 |
 | Settings 真相源审计 | `docs/notes/2026-05-11-S3-settings-truth-audit.md` | S3.3-5 设计依据 |
 | 并行 session 协调记录 | `docs/notes/2026-05-11-parallel-session-coordination.md` | 多会话协议 |
-| 项目定位文档更新 | `docs/architecture-positioning.md §五-A` | 与 Anthropic 关系 |
+| 项目定位文档更新 | `docs/architecture/architecture-positioning.md §五-A` | 与 Anthropic 关系 |
 | PR 模板 | `.github/PULL_REQUEST_TEMPLATE.md` | 七条原则机器化 |
 | ROADMAP pointer | `ROADMAP.md` | GitHub 首页可发现 |
 | vault 报告 | `C:\Users\22414\reports\clarity-protocol-convergence-2026-05-11.md` | 跨项目检索 |

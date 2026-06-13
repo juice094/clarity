@@ -1,10 +1,10 @@
 use axum::{
+    Router,
     body::Body,
-    http::{header, HeaderValue, Method, Request, StatusCode},
+    http::{HeaderValue, Method, Request, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
-    Router,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::handlers;
-use crate::session_store::PersistentSessionStore;
+use crate::session_store::{PersistentSessionStore, SessionStoreError};
 use chrono::{DateTime, Utc};
 use clarity_contract::subagent::BatchProgress;
 use clarity_core::activity::ActivityLogger;
@@ -26,21 +26,44 @@ use clarity_core::background::BackgroundTaskManager;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
+/// Allowed CORS origins for the public API.
+const ALLOWED_ORIGINS: [HeaderValue; 5] = [
+    HeaderValue::from_static("http://localhost:3000"),
+    HeaderValue::from_static("http://localhost:5173"),
+    HeaderValue::from_static("http://127.0.0.1:3000"),
+    HeaderValue::from_static("http://127.0.0.1:5173"),
+    HeaderValue::from_static("http://127.0.0.1:18800"),
+];
+
 /// 应用状态
 pub struct AppState {
+    /// Shared Clarity agent.
     pub agent: Arc<Agent>,
+    /// Persistent SQLite session store.
     pub session_store: Arc<PersistentSessionStore>,
+    /// Background task manager.
     pub task_manager: Arc<BackgroundTaskManager>,
+    /// Activity/event logger.
     pub activity_logger: ActivityLogger,
+    /// Server start timestamp.
     pub started_at: DateTime<Utc>,
     /// Registry of in-flight parallel batch progress for UI polling.
     pub parallel_batches: Arc<RwLock<HashMap<String, Arc<Mutex<BatchProgress>>>>>,
     /// Concurrency limit for /v1/chat/completions to prevent unbounded spawn.
     pub chat_sem: Arc<Semaphore>,
+    /// Unified OAuth service for providers that use OAuth device flow.
+    pub oauth_service: Arc<clarity_llm::auth::OAuthService>,
 }
 
 impl AppState {
-    pub async fn new(agent: Arc<Agent>, task_manager: Arc<BackgroundTaskManager>) -> Self {
+    /// Create a new shared application state.
+    ///
+    /// Falls back to an in-memory session store if the persistent SQLite store
+    /// cannot be opened. Returns an error only if both attempts fail.
+    pub async fn new(
+        agent: Arc<Agent>,
+        task_manager: Arc<BackgroundTaskManager>,
+    ) -> Result<Self, SessionStoreError> {
         let db_path = std::env::current_dir()
             .unwrap_or_else(|_| std::path::PathBuf::from("."))
             .join(".clarity")
@@ -56,14 +79,17 @@ impl AppState {
                     "Failed to create persistent session store at {:?}: {}. Falling back to in-memory store.",
                     db_path, e
                 );
-                Arc::new(
-                    PersistentSessionStore::new_in_memory()
-                        .expect("Failed to create in-memory session store"),
-                )
+                Arc::new(PersistentSessionStore::new_in_memory().map_err(|inner| {
+                    warn!("Failed to create in-memory session store: {}", inner);
+                    inner
+                })?)
             }
         };
 
-        Self {
+        let oauth_service = Arc::new(clarity_llm::auth::OAuthService::new());
+        oauth_service.register_kimi_code();
+
+        Ok(Self {
             agent: agent.clone(),
             session_store,
             task_manager,
@@ -71,7 +97,8 @@ impl AppState {
             started_at: Utc::now(),
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
             chat_sem: Arc::new(Semaphore::new(32)),
-        }
+            oauth_service,
+        })
     }
 }
 
@@ -106,7 +133,7 @@ pub async fn run(
     agent: Arc<Agent>,
     task_manager: Arc<BackgroundTaskManager>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let state = Arc::new(AppState::new(agent, task_manager).await);
+    let state = Arc::new(AppState::new(agent, task_manager).await?);
 
     // 启动会话清理后台任务
     let cleanup_state = state.clone();
@@ -236,13 +263,7 @@ async fn serve_chat_v1() -> impl IntoResponse {
 /// 创建 API 路由器
 pub fn create_api_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
-        .allow_origin([
-            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
-            "http://localhost:5173".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:3000".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:18800".parse::<HeaderValue>().unwrap(),
-        ])
+        .allow_origin(ALLOWED_ORIGINS.to_vec())
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT]);
 
@@ -348,6 +369,19 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
             "/api/config",
             get(handlers::config::admin_get_config).post(handlers::config::admin_set_config),
         )
+        .route(
+            "/api/config/health",
+            get(handlers::admin::admin_config_health),
+        )
+        .route(
+            "/api/config/validate",
+            post(handlers::admin::admin_validate_config),
+        )
+        .route(
+            "/api/auth/device",
+            post(handlers::config::admin_start_oauth),
+        )
+        .route("/api/auth/poll", post(handlers::config::admin_poll_oauth))
         .route("/api/sessions", get(handlers::sessions::list_sessions))
         .route(
             "/api/sessions/:id",
@@ -361,17 +395,21 @@ pub fn create_admin_router(state: Arc<AppState>) -> Router {
 /// 优雅关闭信号处理
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        if let Err(e) = signal::ctrl_c().await {
+            warn!("Failed to install Ctrl+C handler: {}", e);
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut stream) => {
+                stream.recv().await;
+            }
+            Err(e) => {
+                warn!("Failed to install terminate signal handler: {}", e);
+            }
+        }
     };
 
     #[cfg(not(unix))]

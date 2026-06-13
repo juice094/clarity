@@ -18,8 +18,8 @@
 //! Events are batched in memory and flushed periodically or on `flush()`.
 //! Each flush sends an `INSERT INTO` SQL statement over HTTP.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;

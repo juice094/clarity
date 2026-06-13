@@ -11,6 +11,7 @@ pub struct GitRestoreTool {
 }
 
 impl GitRestoreTool {
+    /// Create a new `GitRestoreTool`.
     pub fn new(service: Arc<SnapshotService>) -> Self {
         Self { service }
     }

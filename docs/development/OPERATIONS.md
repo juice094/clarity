@@ -7,7 +7,7 @@ tags: [status]
 
 # Clarity 运维与部署指南
 
-> 版本：v0.3.1+ | 关联文档：[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`ROADMAP.md`](ROADMAP.md)
+> 版本：v0.3.1+ | 关联文档：[`ARCHITECTURE.md`](../architecture/ARCHITECTURE.md) · [`ROADMAP.md`](../planning/ROADMAP.md)
 
 ---
 

@@ -22,6 +22,7 @@ struct ProfilesFile {
     profiles: HashMap<String, AgentProfile>,
 }
 
+/// Holds gui settings state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GuiSettings {
     pub model: String,
@@ -55,6 +56,7 @@ pub struct GuiSettings {
 }
 
 impl GuiSettings {
+    /// Returns the path to the settings file.
     pub fn config_path() -> PathBuf {
         if let Ok(appdata) = std::env::var("APPDATA") {
             let mut path = PathBuf::from(appdata);
@@ -72,6 +74,7 @@ impl GuiSettings {
         PathBuf::from("gui-settings.json")
     }
 
+    /// Returns the path to the profiles file.
     pub fn profiles_path() -> PathBuf {
         if let Ok(appdata) = std::env::var("APPDATA") {
             let mut path = PathBuf::from(appdata);
@@ -89,6 +92,7 @@ impl GuiSettings {
         PathBuf::from("profiles.toml")
     }
 
+    /// Loads persisted state from disk.
     pub fn load() -> Self {
         let path = Self::config_path();
         let mut settings: Self = if let Ok(content) = std::fs::read_to_string(&path) {
@@ -136,6 +140,7 @@ impl GuiSettings {
         settings
     }
 
+    /// Returns defaults merged with environment variables.
     pub fn default_with_env() -> Self {
         let mut s = Self::default();
         if let Ok(key) = std::env::var("KIMI_API_KEY") {
@@ -304,6 +309,12 @@ mod tests {
         assert_eq!(original.approval_mode, deserialized.approval_mode);
     }
 
+    #[allow(unsafe_code)]
+    fn set_env(key: &str, value: &str) {
+        // SAFETY: test-only helper; env vars are manipulated in a single-threaded test context.
+        unsafe { std::env::set_var(key, value) };
+    }
+
     #[test]
     fn test_resolve_api_key_plain() {
         assert_eq!(
@@ -314,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_resolve_api_key_env_syntax() {
-        std::env::set_var("CLARITY_TEST_KEY_12345", "secret-from-env");
+        set_env("CLARITY_TEST_KEY_12345", "secret-from-env");
         assert_eq!(
             GuiSettings::resolve_api_key(&Some("${env:CLARITY_TEST_KEY_12345}".into())),
             Some("secret-from-env".into())

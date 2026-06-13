@@ -14,6 +14,7 @@ use crate::ui::types::{InlineSpan, RenderBlock};
 // Markdown Parser — Cold path (called once when Message content changes)
 // ============================================================================
 
+/// Parse markdown.
 pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
     let lines: Vec<&str> = text.lines().collect();
     let mut blocks = Vec::new();
@@ -309,6 +310,7 @@ fn parse_inline(text: &str) -> Vec<InlineSpan> {
 // Layout — Hot path (called every frame, only iterates pre-parsed blocks)
 // ============================================================================
 
+/// Renders the blocks UI.
 pub fn render_blocks(
     ui: &mut egui::Ui,
     blocks: &[RenderBlock],

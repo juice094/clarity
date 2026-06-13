@@ -1,0 +1,103 @@
+import { Theme } from "../theme.slint";
+import { SessionStatus } from "../models.slint";
+import { ListView } from "std-widgets.slint";
+
+export component StatusPanel {
+    in property <[SessionStatus]> sessions: [];
+    in property <string> gateway-status: "Offline";
+
+    pure callback session-clicked(SessionStatus);
+
+    Rectangle {
+        width: Theme.status-width;
+        background: Theme.surface-elevated;
+
+        VerticalLayout {
+            padding: 16px;
+            spacing: 16px;
+
+            Text {
+                text: "状态总览";
+                color: Theme.text-primary;
+                font-size: Theme.font-headline;
+                font-weight: 700;
+            }
+
+            // Gateway 状态
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: root.gateway-status == "Online" ? Theme.success : Theme.error;
+                }
+
+                Text {
+                    text: root.gateway-status;
+                    color: Theme.text-secondary;
+                    font-size: Theme.font-body;
+                }
+            }
+
+            // 会话列表
+            Text {
+                text: "会话";
+                color: Theme.text-secondary;
+                font-size: Theme.font-caption;
+                font-weight: 700;
+            }
+
+            ListView {
+                for session in root.sessions: Rectangle {
+                    height: 64px;
+                    background: session.is-active ? Theme.border : transparent;
+                    border-radius: Theme.radius-md;
+
+                    HorizontalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+
+                        Rectangle {
+                            width: 32px;
+                            height: 32px;
+                            border-radius: 16px;
+                            background: session.is-active ? Theme.primary : Theme.text-tertiary;
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+
+                            Text {
+                                text: session.name;
+                                color: Theme.text-primary;
+                                font-size: Theme.font-body;
+                            }
+
+                            Text {
+                                text: session.role + " · " + session.message-count + " 条消息";
+                                color: Theme.text-tertiary;
+                                font-size: Theme.font-caption;
+                            }
+                        }
+                    }
+
+                    TouchArea {
+                        clicked => { root.session-clicked(session); }
+                    }
+                }
+            }
+        }
+
+        // 左侧分隔线
+        Rectangle {
+            x: 0px;
+            width: 1px;
+            height: parent.height;
+            background: Theme.border;
+        }
+    }
+}

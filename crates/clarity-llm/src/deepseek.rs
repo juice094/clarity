@@ -10,8 +10,8 @@
 //! export DEEPSEEK_MODEL="deepseek-chat"  # or "deepseek-reasoner"
 //! ```
 
-use crate::api::{LlmProvider, LlmResponse, Message};
 use crate::OpenAiCompatibleLlm;
+use crate::api::{LlmProvider, LlmResponse, Message};
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use serde_json::Value;
@@ -64,6 +64,7 @@ impl DeepSeekProvider {
         Self::new(api_key, "https://api.deepseek.com/v1", "deepseek-reasoner")
     }
 
+    /// Set a key used to enable prompt caching for subsequent requests.
     pub fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }

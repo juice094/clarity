@@ -1,3 +1,13 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
+)]
 //! LLM Provider System for Project Clarity
 //!
 //! This module provides integrations with various LLM providers:
@@ -18,8 +28,10 @@ pub mod mesh;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
+pub mod registry_table;
 pub mod reliable;
 pub mod runtime;
+pub mod runtime_router;
 pub mod sse;
 pub mod tool_payload;
 
@@ -33,8 +45,9 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    build_provider_from_registry, build_provider_from_registry_with_key, AuthType, ModelConfigFile,
-    ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
+    AuthType, ModelConfigFile, ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType,
+    ProviderConfig, build_provider_from_registry, build_provider_from_registry_entry,
+    build_provider_from_registry_with_key, default_secret_store,
 };
 pub use ollama::OllamaProvider;
 pub use reliable::ReliableProvider;
@@ -46,7 +59,7 @@ pub use tool_payload::{NativeToolAdapter, PromptGuidedAdapter, ToolPayloadAdapte
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -122,7 +135,13 @@ fn shared_http_client() -> reqwest::Client {
                 .connect_timeout(Duration::from_secs(10))
                 .pool_max_idle_per_host(10)
                 .build()
-                .expect("failed to build reqwest client")
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        "failed to build custom reqwest client ({}), using default",
+                        e
+                    );
+                    reqwest::Client::new()
+                })
         })
         .clone()
 }
@@ -180,6 +199,8 @@ struct ChatCompletionResponse {
 #[derive(Debug, Deserialize)]
 struct Choice {
     message: ApiMessage,
+    // Intentionally retained: `finish_reason` is part of the OpenAI chat-completion
+    // response schema and may be used for debugging / telemetry in the future.
     #[allow(dead_code)]
     #[serde(default)]
     finish_reason: Option<String>,
@@ -231,6 +252,7 @@ impl OpenAiCompatibleLlm {
         Ok(Self::new(api_key, base_url, model))
     }
 
+    /// Set a key used to enable prompt caching for subsequent requests.
     pub fn set_prompt_cache_key(&self, key: impl Into<String>) {
         *self.prompt_cache_key.write() = Some(key.into());
     }
@@ -624,6 +646,7 @@ impl OAuthLlm {
         ))
     }
 
+    /// Set a key used to enable prompt caching for subsequent requests.
     pub fn set_prompt_cache_key(&self, key: &str) {
         self.inner.set_prompt_cache_key(key);
     }
@@ -1078,16 +1101,20 @@ impl LlmFactory {
     }
 
     /// Create a provider by alias or legacy name.
-    /// First checks ModelRegistry, then falls back to hard-coded legacy names.
+    /// First checks ModelRegistry (with encrypted keys from the default
+    /// secret store), then falls back to hard-coded legacy names.
     #[allow(deprecated)]
     pub async fn create(name: &str) -> Result<Box<dyn LlmProvider>, AgentError> {
         // Try registry first
         if let Ok(registry) = ModelRegistry::load_async().await {
             if let Some(entry) = registry.get(name) {
                 if let Some(provider_cfg) = registry.get_provider(&entry.provider) {
-                    return model_registry::build_provider_from_registry(
+                    let secrets = default_secret_store().ok();
+                    return model_registry::build_provider_from_registry_entry(
                         provider_cfg,
-                        &entry.model_id,
+                        entry,
+                        None,
+                        secrets.as_ref(),
                     )
                     .await;
                 }
@@ -1112,13 +1139,13 @@ impl LlmFactory {
                 if let Some(model_path) = resolve_local_model_path() {
                     let repo = std::env::var("CLARITY_LOCAL_TOKENIZER_REPO")
                         .unwrap_or_else(|_| "Qwen/Qwen2.5-7B-Instruct".into());
-                    let config = LocalGgufConfig::new(model_path)?
-                        .with_tokenizer_repo(repo);
+                    let config = LocalGgufConfig::new(model_path)?.with_tokenizer_repo(repo);
                     return Ok(Box::new(LocalGgufProvider::new(config).await?));
                 }
                 Err(AgentError::Llm(
-                    "Local LLM not available. Ensure the local-llm feature is enabled.\n".to_string()
-                    + LOCAL_MODEL_HELP,
+                    "Local LLM not available. Ensure the local-llm feature is enabled.\n"
+                        .to_string()
+                        + LOCAL_MODEL_HELP,
                 ))
             }
             _ => Err(AgentError::Llm(format!(
@@ -1157,7 +1184,11 @@ impl LlmFactory {
             "deepseek" => Ok(Box::new(DeepSeekProvider::new(
                 api_key,
                 "https://api.deepseek.com/v1",
-                if model.is_empty() { "deepseek-chat" } else { model },
+                if model.is_empty() {
+                    "deepseek-chat"
+                } else {
+                    model
+                },
             ))),
             "openai" => Ok(Box::new(OpenAiCompatibleLlm::new(
                 api_key,

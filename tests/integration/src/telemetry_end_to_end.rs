@@ -1,8 +1,11 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! End-to-end telemetry test: verify WideEvent flows through EventSink to SQLite.
 
 use clarity_telemetry::{
-    audit::ConfigActor, backend::sqlite::SqliteBackend, ConfigChangeType, EventSink, EventType,
-    Severity, WideEvent,
+    EventSink, EventType, Severity, WideEvent, audit::ConfigActor, backend::sqlite::SqliteBackend,
 };
 
 /// Create a WideEvent, emit it through SqliteBackend, then read it back.

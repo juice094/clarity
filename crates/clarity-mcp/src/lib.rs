@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! MCP (Model Context Protocol) Client and Server Interface
 //!
 //! This crate provides JSON-RPC 2.0 clients for MCP servers,
@@ -45,9 +49,13 @@
 //! }
 //! ```
 
+/// MCP server configuration file formats.
 pub mod config;
+/// Devkit result types for devbase MCP tools.
 pub mod devkit;
+/// Enhanced MCP client with multiple transports.
 pub mod enhanced;
+/// Minimal MCP server infrastructure.
 pub mod server;
 
 // Re-export from enhanced module
@@ -59,7 +67,7 @@ pub use enhanced::{
 };
 
 // Re-export from config module
-pub use config::{default_config_path, McpConfig, McpServerEntry};
+pub use config::{McpConfig, McpServerEntry, default_config_path};
 
 // Re-export server types
 pub use server::{McpServer, StdioMcpServer};
@@ -80,10 +88,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{RwLock, oneshot};
 use tracing::{debug, info};
 
-/// Legacy MCP client for stdio transport
+/// Legacy MCP client for stdio transport.
+///
+/// Prefer [`McpClient`] and [`McpClientBuilder`] for new code.
 pub struct McpClientLegacy {
     _command: String,
     _args: Vec<String>,
@@ -285,44 +295,67 @@ impl Drop for McpClientLegacy {
     }
 }
 
-/// Tool information from MCP server
+/// Tool information returned by a legacy MCP server.
 #[derive(Debug, Clone, Deserialize)]
 pub struct McpToolInfo {
+    /// Tool name.
     pub name: String,
+    /// Human-readable description of the tool.
     #[serde(default)]
     pub description: Option<String>,
+    /// JSON Schema describing the tool's input parameters.
     #[serde(default)]
     pub input_schema: Value,
 }
 
-/// Result of calling an MCP tool
+/// Result of calling a tool through a legacy MCP client.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ToolCallResultLegacy {
+    /// Content items returned by the tool call.
     pub content: Vec<ToolContentLegacy>,
+    /// Whether the tool reported an application-level error.
     #[serde(default)]
     pub is_error: bool,
 }
 
-/// Content from tool execution
+/// Content payload returned by a legacy MCP tool call.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum ToolContentLegacy {
+    /// Plain text content.
     #[serde(rename = "text")]
-    Text { text: String },
+    Text {
+        /// Text payload.
+        text: String,
+    },
+    /// Base64-encoded image content.
     #[serde(rename = "image")]
-    Image { data: String, mime_type: String },
+    Image {
+        /// Base64 image data.
+        data: String,
+        /// MIME type of the image.
+        mime_type: String,
+    },
+    /// Resource reference.
     #[serde(rename = "resource")]
-    Resource { resource: McpResourceLegacy },
+    Resource {
+        /// Referenced resource.
+        resource: McpResourceLegacy,
+    },
 }
 
-/// Resource reference from tool execution
+/// Resource reference embedded in a legacy tool result.
 #[derive(Debug, Clone, Deserialize)]
 pub struct McpResourceLegacy {
+    /// Resource URI.
     pub uri: String,
+    /// MIME type of the resource, if known.
     #[serde(default)]
     pub mime_type: Option<String>,
+    /// Text contents, if available.
     #[serde(default)]
     pub text: Option<String>,
+    /// Base64-encoded binary contents, if available.
     #[serde(default)]
     pub blob: Option<String>,
 }

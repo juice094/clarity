@@ -52,18 +52,23 @@ pub use watcher::SkillWatcher;
 #[derive(Debug, thiserror::Error)]
 pub enum SkillError {
     #[error("IO error: {0}")]
+    /// I/O error.
     Io(#[from] std::io::Error),
 
     #[error("YAML parse error: {0}")]
+    /// YAML parsing error.
     Yaml(#[from] serde_yaml::Error),
 
     #[error("Invalid frontmatter: {0}")]
+    /// Invalid frontmatter.
     InvalidFrontmatter(String),
 
     #[error("Missing required field: {0}")]
+    /// Missing required field.
     MissingField(String),
 
     #[error("Skill not found: {0}")]
+    /// Skill not found.
     NotFound(String),
 }
 
@@ -113,6 +118,7 @@ fn default_skill_type() -> String {
 /// A loaded skill template.
 #[derive(Debug, Clone)]
 pub struct Skill {
+    /// Skill metadata.
     pub meta: SkillMeta,
     /// Markdown body (everything after the frontmatter)
     pub body: String,

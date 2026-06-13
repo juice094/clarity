@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Subagent management system
 //!
 //! 提供子代理的完整生命周期管理，包括：
@@ -20,16 +24,16 @@ pub mod token;
 // Re-export contract-level subagent types so existing `use clarity_subagents::TypeName`
 // continue to work. New code should prefer `clarity_contract::subagent::TypeName`.
 pub use clarity_contract::subagent::{
-    collect_git_context, AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle,
-    BatchStatus, CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
+    AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle, BatchStatus,
+    CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
     MailboxMessage, MessagePayload, ParallelConfig, ParallelResult, RunSpec, SubagentError,
     SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
-    TeamResult, TokenError,
+    TeamResult, TokenError, collect_git_context,
 };
 
 // Re-export local types with logic.
 pub use builder::SubagentBuilder;
-pub use parallel::{run_parallel, ParallelExecutor, SubagentBatch};
+pub use parallel::{ParallelExecutor, SubagentBatch, run_parallel};
 pub use runner::{ExecutionContext, OutputCollector, SubagentRunner};
 pub use store::SubagentStore;
 pub use team::TeamCoordinator;

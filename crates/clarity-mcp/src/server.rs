@@ -19,6 +19,7 @@ use crate::{McpError, McpTool, ToolCallResult, ToolContent};
 // McpServer trait
 // ============================================================================
 
+/// Server capability provider for the MCP JSON-RPC protocol.
 #[async_trait]
 pub trait McpServer: Send + Sync {
     /// Server name (e.g. "clarity-llm-mesh").
@@ -40,6 +41,9 @@ pub trait McpServer: Send + Sync {
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
+    // Intentionally retained because it is part of the JSON-RPC 2.0 wire format
+    // and is validated by serde during deserialization even though it is not
+    // referenced by the request handler.
     #[allow(dead_code)]
     jsonrpc: String,
     id: Option<Value>,
@@ -84,14 +88,6 @@ impl JsonRpcError {
     fn invalid_params(msg: impl Into<String>) -> Self {
         Self {
             code: -32602,
-            message: msg.into(),
-            data: None,
-        }
-    }
-    #[allow(dead_code)]
-    fn internal_error(msg: impl Into<String>) -> Self {
-        Self {
-            code: -32603,
             message: msg.into(),
             data: None,
         }

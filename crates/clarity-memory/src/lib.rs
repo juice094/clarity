@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! # Clarity Memory
 //!
 //! An advanced memory storage system for Clarity with multiple backends,
@@ -80,6 +84,7 @@ pub mod compiler;
 pub mod embedding;
 pub mod extractor;
 pub mod flashcards;
+pub mod semantic;
 pub mod session_store;
 #[cfg(feature = "sqlite")]
 pub mod session_store_v2;
@@ -98,10 +103,11 @@ pub use compiler::MemoryCompiler;
 pub use embedding::{CosineIndex, SparseVector, TfidfVectorizer, VectorStore};
 pub use extractor::{FactExtractor, LlmClient};
 pub use flashcards::export_facts_to_flashcards;
+pub use semantic::{SemanticIndex, build_index};
 pub use session_store::SessionStore;
 pub use store::DecayConfig;
 pub use store::MemoryStore;
-pub use ticker::{MemoryTicker, SharedMemoryTicker, DEFAULT_TURNS_PER_SUMMARY};
+pub use ticker::{DEFAULT_TURNS_PER_SUMMARY, MemoryTicker, SharedMemoryTicker};
 pub use types::{
     CompileConfig, CompileStatus, Fact, Flashcard, MemoryError, Message, MetaFact, Result,
     SessionNotes,

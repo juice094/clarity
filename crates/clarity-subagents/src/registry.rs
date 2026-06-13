@@ -21,15 +21,14 @@ mod tests {
     #[test]
     fn test_require_existing() {
         let market = LaborMarket::new();
-        let coder = market.require("coder");
+        let coder = market.require("coder").expect("coder type exists");
         assert_eq!(coder.name, "coder");
     }
 
     #[test]
-    #[should_panic]
     fn test_require_unknown() {
         let market = LaborMarket::new();
-        market.require("unknown");
+        assert!(market.require("unknown").is_err());
     }
 
     #[test]

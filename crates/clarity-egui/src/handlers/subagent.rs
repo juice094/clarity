@@ -3,6 +3,7 @@ use std::time::Instant;
 use crate::stores::SubAgentStore;
 use crate::ui::types::{SingleSubagentProgress, SubAgentProgress};
 
+/// Handles the subagent batch event.
 pub fn on_subagent_batch(
     subagent_store: &mut SubAgentStore,
     batch_id: String,
@@ -54,10 +55,12 @@ fn ensure_agent(
         })
 }
 
+/// Handles the subagent stage event.
 pub fn on_subagent_stage(subagent_store: &mut SubAgentStore, agent_id: String, name: String) {
     ensure_agent(subagent_store, agent_id).stages.push(name);
 }
 
+/// Handles the subagent output event.
 pub fn on_subagent_output(subagent_store: &mut SubAgentStore, agent_id: String, text: String) {
     let agent = ensure_agent(subagent_store, agent_id);
     agent.output_lines.push(text);
@@ -67,6 +70,7 @@ pub fn on_subagent_output(subagent_store: &mut SubAgentStore, agent_id: String, 
     }
 }
 
+/// Handles the subagent status event.
 pub fn on_subagent_status(
     subagent_store: &mut SubAgentStore,
     agent_id: String,
@@ -78,6 +82,7 @@ pub fn on_subagent_status(
     agent.status = status;
 }
 
+/// Handles the subagent progress event.
 pub fn on_subagent_progress(
     subagent_store: &mut SubAgentStore,
     agent_id: String,
@@ -89,6 +94,7 @@ pub fn on_subagent_progress(
     agent.max_steps = max_steps;
 }
 
+/// Handles the subagent complete event.
 pub fn on_subagent_complete(subagent_store: &mut SubAgentStore, agent_id: String, success: bool) {
     if let Some(agent) = subagent_store.running_agents.get_mut(&agent_id) {
         agent.status = if success {

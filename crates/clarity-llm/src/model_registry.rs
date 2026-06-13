@@ -44,6 +44,7 @@
 use crate::api::LlmProvider;
 use crate::{LlamaServerProvider, OpenAiCompatibleLlm};
 use clarity_contract::AgentError;
+use clarity_contract::llm::Pricing;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -111,7 +112,9 @@ fn default_token_path() -> String {
 /// Provider-level connection configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
+    /// Communication protocol used by this provider.
     pub protocol: ProtocolType,
+    /// Base URL for the provider API.
     #[serde(default)]
     pub base_url: Option<String>,
     /// Environment variable name that holds the API key
@@ -130,10 +133,19 @@ pub struct ProviderConfig {
     /// Provider-specific extra settings (model_path for local, etc.)
     #[serde(default)]
     pub extra: HashMap<String, String>,
+    /// Optional pricing info for cost-aware routing.
+    #[serde(default)]
+    pub pricing: Option<Pricing>,
+    /// Capability tags for hint-based routing (e.g. "cheap", "coding", "vision").
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
-/// A user-facing model alias mapped to a concrete provider + model_id
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A user-facing model alias mapped to a concrete provider + model_id.
+///
+/// Alias-level overrides allow the same provider family to be configured
+/// multiple times with different keys, endpoints, or model IDs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ModelEntry {
     /// Human-friendly name shown in UI (e.g. "kimi-k2", "claude-sonnet")
     pub alias: String,
@@ -147,13 +159,68 @@ pub struct ModelEntry {
     /// Optional per-model max_tokens override
     #[serde(default)]
     pub max_tokens: Option<u32>,
+    /// Optional encrypted or literal API key.
+    ///
+    /// If present, it overrides the provider's `api_key_env`.
+    /// Encrypted values use the `enc2:` prefix and are decrypted by
+    /// `SecretStore` at provider construction time.
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// Optional override for the environment variable that holds the API key.
+    #[serde(default)]
+    pub api_key_env: Option<String>,
+    /// Optional override for the provider base URL.
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Per-alias extra settings merged over `ProviderConfig.extra`.
+    #[serde(default)]
+    pub extra: HashMap<String, String>,
+    /// Per-alias extra HTTP headers.
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    /// Fallback aliases to try if this alias fails.
+    #[serde(default)]
+    pub fallback_aliases: Vec<String>,
+    /// Optional per-alias pricing override.
+    #[serde(default)]
+    pub pricing: Option<Pricing>,
+    /// Capability tags for hint-based routing.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+impl ModelEntry {
+    /// Merge alias-level overrides into a base provider config.
+    pub fn merge_into(&self, base: &ProviderConfig) -> ProviderConfig {
+        let mut cfg = base.clone();
+        if let Some(ref env) = self.api_key_env {
+            cfg.api_key_env = Some(env.clone());
+        }
+        if let Some(ref url) = self.base_url {
+            cfg.base_url = Some(url.clone());
+        }
+        if self.pricing.is_some() {
+            cfg.pricing = self.pricing;
+        }
+        for tag in &self.tags {
+            if !cfg.tags.contains(tag) {
+                cfg.tags.push(tag.clone());
+            }
+        }
+        for (k, v) in &self.extra {
+            cfg.extra.insert(k.clone(), v.clone());
+        }
+        cfg
+    }
 }
 
 /// Top-level configuration file structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ModelConfigFile {
+    /// Provider family definitions keyed by name.
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
+    /// Model aliases exposed to callers.
     #[serde(default)]
     pub models: Vec<ModelEntry>,
 }
@@ -249,120 +316,56 @@ impl ModelRegistry {
         None
     }
 
-    /// Built-in fallback when no config file exists — mirrors old LlmFactory::auto() behavior
+    /// Built-in fallback when no config file exists — mirrors old LlmFactory::auto() behavior.
+    ///
+    /// Family defaults are sourced from [`crate::registry_table`] so that the
+    /// env-var fallback and the canonical registry never drift.
     fn built_in_fallback() -> ModelConfigFile {
         let mut providers = HashMap::new();
         let mut models = Vec::new();
 
-        if std::env::var("ANTHROPIC_AUTH_TOKEN").is_ok() {
+        for family in super::registry_table::all_family_names() {
+            let Some(defaults) = super::registry_table::family_defaults(family) else {
+                tracing::warn!("registered family '{}' has no defaults; skipping", family);
+                continue;
+            };
+
+            // Only auto-include families that have a configured API key.
+            let has_key = defaults
+                .api_key_env
+                .as_ref()
+                .map(|env| std::env::var(env).is_ok())
+                .unwrap_or(false);
+            if !has_key {
+                continue;
+            }
+
             providers.insert(
-                "anthropic".to_string(),
+                family.to_string(),
                 ProviderConfig {
-                    protocol: ProtocolType::AnthropicMessages,
-                    base_url: Some("https://api.anthropic.com".into()),
-                    api_key_env: Some("ANTHROPIC_AUTH_TOKEN".into()),
+                    protocol: defaults.protocol.clone(),
+                    base_url: defaults.base_url.clone(),
+                    api_key_env: defaults.api_key_env.clone(),
+                    auth_type: defaults.auth_type.clone(),
+                    auth_token_key: defaults.auth_token_key.clone(),
+                    oauth: defaults.oauth.clone(),
                     ..Default::default()
                 },
             );
+
+            let model_id = defaults
+                .default_model
+                .clone()
+                .unwrap_or_else(|| family.to_string());
             models.push(ModelEntry {
-                alias: "claude-sonnet".into(),
-                provider: "anthropic".into(),
-                model_id: std::env::var("ANTHROPIC_MODEL")
-                    .unwrap_or_else(|_| "claude-3-7-sonnet-20250219".into()),
-                temperature: None,
-                max_tokens: None,
+                alias: model_id.clone(),
+                provider: family.to_string(),
+                model_id,
+                ..Default::default()
             });
         }
 
-        if std::env::var("KIMI_CODE_API_KEY").is_ok() {
-            providers.insert(
-                "kimi-code".to_string(),
-                ProviderConfig {
-                    protocol: ProtocolType::OpenAiChat,
-                    base_url: Some("https://api.kimi.com/coding/v1".into()),
-                    api_key_env: Some("KIMI_CODE_API_KEY".into()),
-                    auth_type: AuthType::OAuth,
-                    auth_token_key: Some("kimi-code".into()),
-                    oauth: Some(OAuthProviderConfig {
-                        client_id: "17e5f671-d194-4dfb-9706-5516cb48c098".into(),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            );
-            models.push(ModelEntry {
-                alias: "kimi-k2".into(),
-                provider: "kimi-code".into(),
-                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into()),
-                temperature: None,
-                max_tokens: None,
-            });
-        } else if std::env::var("KIMI_API_KEY").is_ok() {
-            providers.insert(
-                "kimi".to_string(),
-                ProviderConfig {
-                    protocol: ProtocolType::OpenAiChat,
-                    base_url: Some("https://api.moonshot.cn/v1".into()),
-                    api_key_env: Some("KIMI_API_KEY".into()),
-                    ..Default::default()
-                },
-            );
-            models.push(ModelEntry {
-                alias: "kimi-k2".into(),
-                provider: "kimi".into(),
-                model_id: std::env::var("KIMI_MODEL").unwrap_or_else(|_| "kimi-k2.6".into()),
-                temperature: None,
-                max_tokens: None,
-            });
-        }
-
-        if std::env::var("DEEPSEEK_API_KEY").is_ok() {
-            providers.insert(
-                "deepseek".to_string(),
-                ProviderConfig {
-                    protocol: ProtocolType::OpenAiChat,
-                    base_url: Some("https://api.deepseek.com".into()),
-                    api_key_env: Some("DEEPSEEK_API_KEY".into()),
-                    ..Default::default()
-                },
-            );
-            models.push(ModelEntry {
-                alias: "deepseek-chat".into(),
-                provider: "deepseek".into(),
-                model_id: std::env::var("DEEPSEEK_MODEL")
-                    .unwrap_or_else(|_| "deepseek-chat".into()),
-                temperature: None,
-                max_tokens: None,
-            });
-            models.push(ModelEntry {
-                alias: "deepseek-reasoner".into(),
-                provider: "deepseek".into(),
-                model_id: "deepseek-reasoner".into(),
-                temperature: None,
-                max_tokens: None,
-            });
-        }
-
-        if std::env::var("OPENAI_API_KEY").is_ok() {
-            providers.insert(
-                "openai".to_string(),
-                ProviderConfig {
-                    protocol: ProtocolType::OpenAiChat,
-                    base_url: Some("https://api.openai.com/v1".into()),
-                    api_key_env: Some("OPENAI_API_KEY".into()),
-                    ..Default::default()
-                },
-            );
-            models.push(ModelEntry {
-                alias: "gpt-4o".into(),
-                provider: "openai".into(),
-                model_id: std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()),
-                temperature: None,
-                max_tokens: None,
-            });
-        }
-
-        // Local fallback
+        // Local fallback requires a model path and is handled separately.
         #[cfg(feature = "local-llm")]
         if let Some(model_path) = super::resolve_local_model_path() {
             let mut extra = HashMap::new();
@@ -388,8 +391,7 @@ impl ModelRegistry {
                 alias: "local-qwen".into(),
                 provider: "local".into(),
                 model_id: "Qwen2.5-7B-Instruct".into(),
-                temperature: None,
-                max_tokens: None,
+                ..Default::default()
             });
         }
 
@@ -414,6 +416,18 @@ impl ModelRegistry {
     /// List all provider names
     pub fn list_providers(&self) -> Vec<&String> {
         self.config.providers.keys().collect()
+    }
+
+    /// Add or replace a provider family configuration.
+    pub fn add_provider(&mut self, name: String, cfg: ProviderConfig) {
+        self.config.providers.insert(name, cfg);
+    }
+
+    /// Add a model alias, replacing any existing alias with the same name.
+    pub fn add_or_update_model(&mut self, entry: ModelEntry) {
+        self.index.insert(entry.alias.clone(), entry.clone());
+        self.config.models.retain(|m| m.alias != entry.alias);
+        self.config.models.push(entry);
     }
 
     /// Resolve env-var placeholders in a string (e.g. "${OPENAI_API_KEY}")
@@ -483,27 +497,66 @@ pub fn resolve_key_ref(raw: &str) -> Option<String> {
     std::env::var(raw).ok().or_else(|| Some(raw.to_string()))
 }
 
+/// Resolve an API key from a hierarchy of sources.
+///
+/// Priority (highest first):
+/// 1. Explicit runtime override (`override_key`)
+/// 2. Alias-level literal or encrypted key (`alias_api_key`)
+/// 3. Alias-level environment-variable name (`alias_api_key_env`)
+/// 4. Provider-level environment-variable name (`provider_api_key_env`)
+fn resolve_api_key(
+    provider_api_key_env: Option<&str>,
+    alias_api_key: Option<&str>,
+    alias_api_key_env: Option<&str>,
+    override_key: Option<&str>,
+    secrets: Option<&clarity_secrets::SecretStore>,
+) -> Option<String> {
+    if let Some(key) = override_key {
+        return Some(key.to_string());
+    }
+    if let Some(key) = alias_api_key {
+        if clarity_secrets::SecretStore::is_encrypted(key) {
+            return secrets.and_then(|s| s.decrypt(key).ok());
+        }
+        return Some(key.to_string());
+    }
+    let env_name = alias_api_key_env.or(provider_api_key_env)?;
+    resolve_key_ref(env_name)
+}
+
 /// Build a concrete provider from registry config + model_id.
 /// This is used by the legacy `LlmFactory` in `mod.rs`.
 pub async fn build_provider_from_registry(
     cfg: &ProviderConfig,
     model_id: &str,
 ) -> Result<Box<dyn LlmProvider>, AgentError> {
-    build_provider_from_registry_with_key(cfg, model_id, None).await
+    build_provider_from_registry_with_key(cfg, model_id, None, None, None, None).await
 }
 
 /// Build a provider with an optional API-key override (e.g. from GUI Settings).
+///
+/// `alias_api_key` / `alias_api_key_env` represent alias-level overrides
+/// and take precedence over the provider-level `cfg.api_key_env`.
+/// `secrets` is required when `alias_api_key` is encrypted with `enc2:`.
 pub async fn build_provider_from_registry_with_key(
     cfg: &ProviderConfig,
     model_id: &str,
     override_key: Option<&str>,
+    alias_api_key: Option<&str>,
+    alias_api_key_env: Option<&str>,
+    secrets: Option<&clarity_secrets::SecretStore>,
 ) -> Result<Box<dyn LlmProvider>, AgentError> {
+    let merged_api_key_env = alias_api_key_env.or(cfg.api_key_env.as_deref());
     match cfg.protocol {
         ProtocolType::OpenAiChat => {
-            let api_key = override_key
-                .map(|s| s.to_string())
-                .or_else(|| cfg.api_key_env.as_ref().and_then(|s| resolve_key_ref(s)))
-                .unwrap_or_default();
+            let api_key = resolve_api_key(
+                merged_api_key_env,
+                alias_api_key,
+                alias_api_key_env,
+                override_key,
+                secrets,
+            )
+            .unwrap_or_default();
             let base_url = cfg
                 .base_url
                 .clone()
@@ -570,4 +623,48 @@ pub async fn build_provider_from_registry_with_key(
             Ok(Box::new(provider))
         }
     }
+}
+
+/// Build a provider from a merged alias/provider configuration.
+///
+/// This is the preferred entry point for runtime provider construction:
+/// it applies alias-level overrides and decrypts alias keys.
+pub async fn build_provider_from_registry_entry(
+    base_cfg: &ProviderConfig,
+    entry: &ModelEntry,
+    override_key: Option<&str>,
+    secrets: Option<&clarity_secrets::SecretStore>,
+) -> Result<Box<dyn LlmProvider>, AgentError> {
+    let merged = entry.merge_into(base_cfg);
+    build_provider_from_registry_with_key(
+        &merged,
+        &entry.model_id,
+        override_key,
+        entry.api_key.as_deref(),
+        entry.api_key_env.as_deref(),
+        secrets,
+    )
+    .await
+}
+
+/// Load the default `SecretStore` for the active user profile.
+///
+/// Search order:
+/// 1. `CLARITY_SECRETS_KEY` env var (path to the master key file)
+/// 2. `<config_dir>/clarity/secrets.key`
+pub fn default_secret_store() -> Result<clarity_secrets::SecretStore, AgentError> {
+    let key_path = if let Ok(path) = std::env::var("CLARITY_SECRETS_KEY") {
+        PathBuf::from(path)
+    } else {
+        let dir = dirs::config_dir()
+            .ok_or_else(|| {
+                AgentError::Llm("Cannot determine config directory for secret store".into())
+            })?
+            .join("clarity");
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| AgentError::Llm(format!("Failed to create config dir: {e}")))?;
+        dir.join("secrets.key")
+    };
+    clarity_secrets::SecretStore::load_or_create(key_path)
+        .map_err(|e| AgentError::Llm(format!("Failed to load secret store: {e}")))
 }

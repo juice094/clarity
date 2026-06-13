@@ -1,9 +1,16 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::background::BackgroundTaskManager;
 use clarity_core::registry::ToolRegistry;
-use clarity_gateway::server::{create_admin_router, create_api_router, AppState};
+use clarity_gateway::server::{AppState, create_admin_router, create_api_router};
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tower::util::ServiceExt;
@@ -37,7 +44,11 @@ fn create_test_task_manager() -> Arc<BackgroundTaskManager> {
 
 #[tokio::test]
 async fn test_health_check() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state);
 
     let response = app
@@ -59,7 +70,11 @@ async fn test_health_check() {
 
 #[tokio::test]
 async fn test_chat_completions() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state);
 
     let request_body = serde_json::json!({
@@ -90,7 +105,11 @@ async fn test_chat_completions() {
 
 #[tokio::test]
 async fn test_admin_stats() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_admin_router(state);
 
     let response = app
@@ -114,7 +133,11 @@ async fn test_admin_stats() {
 
 #[tokio::test]
 async fn test_admin_tools() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_admin_router(state);
 
     let response = app
@@ -137,7 +160,11 @@ async fn test_admin_tools() {
 
 #[tokio::test]
 async fn test_list_sessions() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_admin_router(state);
 
     let response = app
@@ -160,7 +187,11 @@ async fn test_list_sessions() {
 
 #[tokio::test]
 async fn test_session_crud() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
 
     // Create a session via the store directly
     state
@@ -236,7 +267,11 @@ async fn test_session_crud() {
 
 #[tokio::test]
 async fn test_task_lifecycle() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state.clone());
 
     // 1. Create a task
@@ -305,7 +340,11 @@ async fn test_task_lifecycle() {
 
 #[tokio::test]
 async fn test_get_nonexistent_task() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state);
 
     let response = app
@@ -327,7 +366,11 @@ async fn test_get_nonexistent_task() {
 
 #[tokio::test]
 async fn test_admin_models() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_admin_router(state);
 
     let response = app
@@ -349,7 +392,11 @@ async fn test_admin_models() {
 
 #[tokio::test]
 async fn test_admin_switch_provider_invalid() {
-    let state = Arc::new(AppState::new(create_test_agent(), create_test_task_manager()).await);
+    let state = Arc::new(
+        AppState::new(create_test_agent(), create_test_task_manager())
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_admin_router(state);
 
     let req_body = serde_json::json!({"provider": "nonexistent-provider-12345"});

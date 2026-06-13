@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! `clarity-telemetry` — Unified telemetry foundation for the Clarity ecosystem.
 //!
 //! Provides a **wide event** model that unifies metrics, logs, and traces into a single
@@ -46,11 +50,15 @@ use uuid::Uuid;
 // Public modules
 // ============================================================================
 
+/// Configuration audit trail support.
 pub mod audit;
+/// Telemetry storage backends.
 pub mod backend;
+/// Event sink abstraction and fan-out.
 pub mod sink;
 
 #[cfg(feature = "tracing-integration")]
+/// `tracing-subscriber` integration layer.
 pub mod tracing_layer;
 
 // ============================================================================
@@ -134,7 +142,7 @@ impl WideEvent {
                 self.attributes.insert(key.into(), v);
             }
             Err(e) => {
-                // SAFETY: attribute serialization failure must not block the hot path.
+                // NOTE: attribute serialization failure must not block the hot path.
                 // The error is silently dropped; the event still carries other data.
                 let _ = e;
             }
@@ -180,56 +188,85 @@ impl WideEvent {
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     // Session lifecycle
+    /// Start of a new session.
     SessionStart,
+    /// End of a session.
     SessionEnd,
 
     // Message flow
+    /// Outbound message.
     MessageSend,
+    /// Inbound message.
     MessageRecv,
 
     // Tool execution
+    /// Tool invocation.
     ToolCall,
+    /// Successful tool result.
     ToolResult,
+    /// Tool execution failure.
     ToolError,
 
     // LLM routing and inference
+    /// Model routing decision.
     ModelRoute,
+    /// LLM request emitted.
     LlmRequest,
+    /// LLM response received.
     LlmResponse,
+    /// Chunk of a streaming LLM response.
     LlmStreamChunk,
 
     // Context management
+    /// Context compression occurred.
     ContextCompress,
+    /// Context truncation occurred.
     ContextTruncate,
 
     // Memory system
+    /// Memory query executed.
     MemoryQuery,
+    /// Memory compilation.
     MemoryCompile,
+    /// Memory store operation.
     MemoryStore,
 
     // Configuration and audit
+    /// Configuration value changed.
     ConfigChange,
+    /// Configuration audit record.
     ConfigAudit,
 
     // Gateway health
+    /// Gateway health check.
     GatewayHealth,
+    /// Gateway probe event.
     GatewayProbe,
 
     // Agent lifecycle
+    /// Agent spawned.
     AgentSpawn,
+    /// Agent terminated.
     AgentTerminate,
 
     // Background tasks
+    /// Task scheduled.
     TaskSchedule,
+    /// Task started.
     TaskStart,
+    /// Task completed.
     TaskComplete,
+    /// Task failed.
     TaskFail,
 
     // User interaction
+    /// User feedback received.
     UserFeedback,
+    /// User interrupted execution.
     UserInterrupt,
 
     // Catch-all for forward compatibility
+    /// Unknown or unrecognized event type.
     #[default]
     #[serde(other)]
     Unknown,
@@ -255,11 +292,16 @@ impl std::fmt::Display for EventType {
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    /// Verbose diagnostic information.
     Debug,
+    /// General informational message.
     #[default]
     Info,
+    /// Non-fatal warning.
     Warn,
+    /// Recoverable error.
     Error,
+    /// Unrecoverable error.
     Fatal,
 }
 
@@ -282,12 +324,15 @@ impl From<tracing::Level> for Severity {
 /// Errors emitted by the telemetry subsystem.
 #[derive(Debug, thiserror::Error)]
 pub enum TelemetryError {
+    /// The storage backend returned an error.
     #[error("backend error: {0}")]
     Backend(String),
 
+    /// Serialization or deserialization failed.
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    /// The supplied configuration is invalid or incomplete.
     #[error("invalid configuration: {0}")]
     Config(String),
 }

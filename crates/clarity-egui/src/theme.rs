@@ -231,6 +231,7 @@ impl Theme {
     ///   layers without backdrop-blur (not supported by egui).
     /// - Ice-blue accent (#5B8DEF) harmonises with the cool glass aesthetic.
     /// - Larger corner radii (12/20 px) reinforce the modern glass feel.
+    ///
     /// Kimi-style dark theme — mimics Kimi Desktop v3.0.15 dark palette.
     pub fn dark() -> Self {
         Self {
@@ -818,12 +819,14 @@ impl Theme {
             .corner_radius(egui::CornerRadius::same(self.radius_sm as u8))
     }
 
+    /// Builds a secondary button widget.
     pub fn secondary_button(&self, text: impl Into<egui::WidgetText>) -> egui::Button<'_> {
         egui::Button::new(text)
             .fill(self.surface)
             .corner_radius(egui::CornerRadius::same(self.radius_sm as u8))
     }
 
+    /// Builds a ghost button widget.
     pub fn ghost_button(&self, text: impl Into<egui::WidgetText>) -> egui::Button<'_> {
         egui::Button::new(text)
             .fill(egui::Color32::TRANSPARENT)
@@ -894,6 +897,7 @@ fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
     egui::Color32::from_rgba_premultiplied(r, g, b, a)
 }
 
+/// Installs custom fonts into the egui context.
 pub fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 

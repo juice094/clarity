@@ -2,15 +2,11 @@
 //!
 //! Sprint 39: Window-style popup showing plan step status as horizontal bars.
 
-use crate::ui::types::PlanStepStatus;
 use crate::App;
+use crate::ui::types::PlanStepStatus;
 
 /// Render the Plan Timeline Gantt chart as a resizable window popup.
 pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.ui_store.gantt_panel_open {
-        return;
-    }
-
     let theme = app.ui_store.theme.clone();
 
     let screen = ctx.screen_rect();
@@ -45,7 +41,7 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                         )
                         .clicked()
                     {
-                        app.ui_store.gantt_panel_open = false;
+                        app.view_state.main = clarity_core::ui::AppView::Chat;
                     }
                 });
             });

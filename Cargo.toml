@@ -1,11 +1,11 @@
 [workspace]
 members = ["crates/*", "tests/integration"]
 resolver = "2"
-exclude = []
+exclude = ["crates/clarity-tauri"]
 
 [workspace.package]
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 rust-version = "1.85"
 authors = ["juice094 and contributors"]
 license = "AGPL-3.0-or-later"
@@ -53,6 +53,15 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 opt-level = 3
 lto = true
 codegen-units = 1
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
 
 [profile.dev]
 opt-level = 0

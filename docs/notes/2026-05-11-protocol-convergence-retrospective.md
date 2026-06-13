@@ -117,7 +117,7 @@ febe6cc1  (baseline)
 ```
 1. AGENTS.md §Current Phase                            # 当前活跃迭代
 2. PROJECT_STATUS.md                                   # 测试基线 + 活跃 ADR
-3. docs/CODE-CHANGE-PRINCIPLES.md                      # 七条原则（强制 PR 自查）
+3. docs/development/CODE-CHANGE-PRINCIPLES.md                      # 七条原则（强制 PR 自查）
 4. docs/adr/ADR-006-protocol-layer-convergence.md      # 协议收敛背景
 5. crates/clarity-egui/EGUI_LAYOUT.md                  # egui 5 条铁律
 6. crates/clarity-egui/docs/layout-audit-architecture-crisis.md  # 反模式审计

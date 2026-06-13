@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use tracing::info;
 
@@ -20,19 +20,27 @@ fn teams_dir() -> ToolResult<PathBuf> {
 /// Serializable team member configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamMemberConfig {
+    /// Member name / role
     pub name: String,
+    /// What this member should do
     pub description: String,
+    /// Agent type: explore, coder, plan, or default
     pub agent_type: String,
 }
 
 /// Serializable team configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamConfig {
+    /// Unique team name
     pub name: String,
+    /// High-level objective the team works toward
     pub goal: String,
+    /// Members of the team
     pub members: Vec<TeamMemberConfig>,
+    /// Max parallel members
     #[serde(default = "default_max_concurrency")]
     pub max_concurrency: usize,
+    /// Timeout per member in seconds
     #[serde(default = "default_timeout_secs")]
     pub timeout_secs: u64,
 }

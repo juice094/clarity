@@ -5,6 +5,7 @@ use clarity_core::mcp::config::{McpConfig, McpServerEntry};
 // MCP Configuration Panel
 // ============================================================================
 
+/// Renders the mcp panel UI.
 pub fn render_mcp_panel(
     ui: &mut egui::Ui,
     config: &mut McpConfig,

@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! MCP Development Server Example
 //!
 //! Exposes Clarity workspace build/test/lint tools as an MCP server over stdio.
@@ -17,7 +24,7 @@ use clarity_mcp::{McpServer, McpTool, StdioMcpServer, ToolCallResult, ToolConten
 use serde_json::Value;
 use std::process::Stdio;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 struct DevMcpServer {
     workspace_root: std::path::PathBuf,

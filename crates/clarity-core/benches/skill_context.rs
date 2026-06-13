@@ -1,5 +1,5 @@
 use clarity_core::skills::SkillLoader;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 const SKILL_MD: &str = r#"---
 id: bench-skill

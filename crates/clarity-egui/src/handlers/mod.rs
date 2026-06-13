@@ -6,9 +6,10 @@ pub mod system;
 pub mod task;
 pub mod team;
 
-use crate::ui::types::{ContentBlock, Message, Role, UiEvent};
 use crate::App;
+use crate::ui::types::{ContentBlock, Message, Role, UiEvent};
 
+/// Dispatches queued UI events to handlers.
 pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
         match event {

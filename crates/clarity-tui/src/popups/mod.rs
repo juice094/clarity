@@ -3,19 +3,21 @@ pub mod diff_popup;
 use crate::popup::{EventState, Popup};
 use crossterm::event::{Event, KeyCode};
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
-    Frame,
 };
 
+/// Keyboard shortcut help popup.
 pub struct HelpPopup {
     commands: Vec<(&'static str, &'static str)>,
     done: bool,
 }
 
 impl HelpPopup {
+    /// Create a new help popup with the default shortcuts.
     pub fn new() -> Self {
         Self {
             commands: vec![
@@ -79,6 +81,7 @@ impl Popup for HelpPopup {
     }
 }
 
+/// Popup that displays the raw result of a tool call.
 pub struct ToolResultPopup {
     title: String,
     body: String,
@@ -86,6 +89,7 @@ pub struct ToolResultPopup {
 }
 
 impl ToolResultPopup {
+    /// Create a popup with the given title and body text.
     pub fn new(title: impl Into<String>, body: impl Into<String>) -> Self {
         Self {
             title: title.into(),
@@ -113,11 +117,11 @@ impl Popup for ToolResultPopup {
     }
 
     fn handle_event(&mut self, event: Event) -> EventState {
-        if let Event::Key(key) = event {
-            if key.code == KeyCode::Esc || key.code == KeyCode::Enter {
-                self.done = true;
-                return EventState::Consumed;
-            }
+        if let Event::Key(key) = event
+            && (key.code == KeyCode::Esc || key.code == KeyCode::Enter)
+        {
+            self.done = true;
+            return EventState::Consumed;
         }
         EventState::NotConsumed
     }

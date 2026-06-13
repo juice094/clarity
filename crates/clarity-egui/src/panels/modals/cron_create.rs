@@ -1,5 +1,6 @@
 use crate::App;
 
+/// Renders the cron create modal UI.
 pub fn render_cron_create_modal(app: &mut App, ctx: &egui::Context) {
     if !app.cron_store.create_modal_open {
         return;

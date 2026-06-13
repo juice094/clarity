@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Cross-window verification: devbase MCP tool tier filtering.
 //!
 //! Validates that devbase v0.2.3 correctly filters tools when

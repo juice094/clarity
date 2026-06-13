@@ -1,5 +1,12 @@
-use clarity_core::mcp::config::{McpConfig, McpServerEntry};
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 use clarity_core::mcp::McpManager;
+use clarity_core::mcp::config::{McpConfig, McpServerEntry};
 use clarity_core::tools::{Tool, ToolContext};
 use std::collections::HashMap;
 

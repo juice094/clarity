@@ -6,8 +6,8 @@
 //! IS-1 Sprint 31: auto-trigger download on first launch, auto-configure on complete,
 //! true cancellation via CancellationToken.
 
-use crate::settings::GuiSettings;
 use crate::App;
+use crate::settings::GuiSettings;
 
 /// State machine for the onboarding flow.
 #[derive(Debug, Clone)]
@@ -122,7 +122,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     )
                     .clicked()
                 {
-                    app.settings_store.settings_open = true;
+                    app.view_state.main = clarity_core::ui::AppView::Settings;
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
 
@@ -312,7 +312,7 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
                     .add_sized([140.0, 28.0], egui::Button::new("Enter API Key Instead"))
                     .clicked()
                 {
-                    app.settings_store.settings_open = true;
+                    app.view_state.main = clarity_core::ui::AppView::Settings;
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
                 ui.add_space(app.ui_store.theme.space_8);
@@ -348,7 +348,7 @@ fn auto_configure_and_hide(app: &mut App, model_path: &std::path::Path) {
 
 fn start_model_download(app: &mut App) {
     use clarity_core::model_download::{
-        default_model_dir, download_model_files, ModelDownloadProgress, PRECONFIGURED_MODELS,
+        ModelDownloadProgress, PRECONFIGURED_MODELS, default_model_dir, download_model_files,
     };
     use tokio_util::sync::CancellationToken;
 

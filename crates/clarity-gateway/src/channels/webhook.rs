@@ -6,15 +6,16 @@
 //! - 流式响应（通过 SSE 或分块响应）
 //! - 可用于接入：飞书、钉钉、企业微信等
 
+// Intentionally retained: platform-specific parsers and sender types are public API.
 #![allow(dead_code)]
 
 use async_trait::async_trait;
 use axum::{
+    Router,
     extract::{Json, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::post,
-    Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -43,6 +44,7 @@ pub struct WebhookChannel {
 }
 
 impl WebhookChannel {
+    /// Create a new webhook channel from the given configuration.
     pub fn new(config: ChannelConfig) -> Self {
         // 从 extra 配置中提取端口和认证信息
         let (port, auth_header, auth_token) = config
@@ -190,16 +192,22 @@ pub struct WebhookRequest {
     pub metadata: Option<serde_json::Value>,
     /// 飞书/钉钉等平台特定字段
     pub text: Option<String>,
+    /// Generic message content.
     pub content: Option<String>,
+    /// Platform message type, if provided.
     pub msg_type: Option<String>,
 }
 
 /// Webhook 响应
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WebhookResponse {
+    /// Whether the request was processed successfully.
     pub success: bool,
+    /// Human-readable status message.
     pub message: Option<String>,
+    /// Assistant response text.
     pub response: Option<String>,
+    /// Error description, if any.
     pub error: Option<String>,
 }
 
@@ -212,27 +220,27 @@ async fn webhook_handler(
     info!("[Webhook] Received request");
 
     // 验证认证
-    if let Some(ref header) = state.auth_header {
-        if let Some(ref token) = state.auth_token {
-            let provided = headers
-                .get(header)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("");
+    if let Some(ref header) = state.auth_header
+        && let Some(ref token) = state.auth_token
+    {
+        let provided = headers
+            .get(header)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
 
-            // 支持 "Bearer token" 格式
-            let provided = provided.strip_prefix("Bearer ").unwrap_or(provided);
+        // 支持 "Bearer token" 格式
+        let provided = provided.strip_prefix("Bearer ").unwrap_or(provided);
 
-            if provided != token {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(WebhookResponse {
-                        success: false,
-                        message: None,
-                        response: None,
-                        error: Some("Unauthorized".to_string()),
-                    }),
-                );
-            }
+        if provided != token {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(WebhookResponse {
+                    success: false,
+                    message: None,
+                    response: None,
+                    error: Some("Unauthorized".to_string()),
+                }),
+            );
         }
     }
 
@@ -397,12 +405,11 @@ fn parse_feishu_request(body: &[u8]) -> Option<String> {
     let content = req.event?.message?.content?;
 
     // 飞书消息内容可能是 JSON 字符串
-    if content.starts_with('{') {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(text) = json.get("text").and_then(|v| v.as_str()) {
-                return Some(text.to_string());
-            }
-        }
+    if content.starts_with('{')
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(text) = json.get("text").and_then(|v| v.as_str())
+    {
+        return Some(text.to_string());
     }
 
     Some(content)
@@ -483,7 +490,7 @@ pub fn verify_platform_auth(
             let body_str = std::str::from_utf8(body).unwrap_or("");
             let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_str);
 
-            let computed = compute_hmac_sha256_base64(secret, &sign_string);
+            let computed = compute_hmac_sha256_base64(secret, &sign_string)?;
 
             if !constant_time_str_eq(&computed, signature) {
                 return Err(ChannelError::AuthFailed(
@@ -512,7 +519,7 @@ pub fn verify_platform_auth(
                 .ok_or_else(|| ChannelError::AuthFailed("Missing sign".to_string()))?;
 
             let sign_string = format!("{}\n{}", timestamp, secret);
-            let computed = compute_hmac_sha256_base64(secret, &sign_string);
+            let computed = compute_hmac_sha256_base64(secret, &sign_string)?;
 
             if !constant_time_str_eq(&computed, &sign) {
                 return Err(ChannelError::AuthFailed(
@@ -534,19 +541,21 @@ pub fn verify_platform_auth(
 }
 
 /// 计算 HMAC-SHA256 并进行 Base64 编码
-pub fn compute_hmac_sha256_base64(secret: &str, message: &str) -> String {
+///
+/// Returns an empty error result if the HMAC instance cannot be initialized.
+pub fn compute_hmac_sha256_base64(secret: &str, message: &str) -> Result<String, ChannelError> {
     use base64::Engine;
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| ChannelError::Unknown(format!("Failed to initialize HMAC: {}", e)))?;
     mac.update(message.as_bytes());
     let result = mac.finalize();
     let bytes = result.into_bytes();
-    base64::engine::general_purpose::STANDARD.encode(bytes)
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
 /// Constant-time string comparison to mitigate timing attacks.
@@ -603,6 +612,7 @@ pub struct WebhookSender {
 }
 
 impl WebhookSender {
+    /// Create a new webhook sender with a default HTTP client.
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -745,7 +755,7 @@ mod tests {
         let secret = "test_secret";
         let timestamp = "1234567890";
         let sign_string = format!("{}\n{}", timestamp, secret);
-        let sign = compute_hmac_sha256_base64(secret, &sign_string);
+        let sign = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
         let body = format!(
             r#"{{"timestamp":"{}","sign":"{}","text":{{"content":"Hello"}}}}"#,
@@ -773,7 +783,7 @@ mod tests {
         let nonce = "abc123";
         let body_str = r#"{"event":{"message":{"content":"Hello"}}}"#;
         let sign_string = format!("{}\n{}\n{}", timestamp, nonce, body_str);
-        let sign = compute_hmac_sha256_base64(secret, &sign_string);
+        let sign = compute_hmac_sha256_base64(secret, &sign_string).unwrap();
 
         let mut headers = HeaderMap::new();
         headers.insert("X-Lark-Signature", sign.parse().unwrap());

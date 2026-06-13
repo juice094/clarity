@@ -1,10 +1,17 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! 流式响应演示
 //!
 //! 本示例使用 MockLlm 验证 Agent::run_streaming() 的流式行为。
 //! 真实环境中，只需将 MockLlm 替换为 KimiLlm / OpenAiCompatibleLlm。
 
-use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use clarity_core::ToolRegistry;
+use clarity_core::agent::{Agent, AgentConfig, MockLlm};
 use parking_lot::Mutex;
 use std::sync::Arc;
 

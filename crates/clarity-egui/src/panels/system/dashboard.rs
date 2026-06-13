@@ -1,12 +1,8 @@
-use crate::ui::types::{AgentStatus, GatewayStatus};
 use crate::App;
+use crate::ui::types::{AgentStatus, GatewayStatus};
 
 /// Render the Agent execution metrics dashboard as a right-side panel.
 pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
-    if !app.ui_store.dashboard_panel_open {
-        return;
-    }
-
     let theme = app.ui_store.theme.clone();
 
     egui::SidePanel::right("dashboard_panel")

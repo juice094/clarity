@@ -5,8 +5,8 @@ use crate::llm_policy::resolve_provider;
 use crate::settings::GuiSettings;
 use parking_lot::Mutex;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 /// Parse approval mode string from settings into core enum.
 pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
@@ -18,12 +18,14 @@ pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
     }
 }
 
+/// Holds llm binding state.
 #[derive(Clone, Debug)]
 pub struct LlmBinding {
     pub provider: String,
     pub local_model_path: String,
 }
 
+/// Holds app state.
 pub struct AppState {
     pub agent: clarity_core::Agent,
     pub llm_binding: Mutex<Option<LlmBinding>>,

@@ -61,10 +61,14 @@ pub struct Task {
 /// Task priority for queue ordering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TaskPriority {
+    /// Low priority.
     Low,
     #[default]
+    /// Normal priority.
     Normal,
+    /// High priority.
     High,
+    /// Urgent priority.
     Urgent,
 }
 
@@ -75,7 +79,9 @@ pub enum TaskPriority {
 /// Lightweight handle to a registered worker soul.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorkerHandle {
+    /// Soul identifier.
     pub soul_id: String,
+    /// Associated skill identifiers.
     pub skills: Vec<String>,
     /// Current number of in-flight tasks.
     pub current_load: usize,
@@ -263,7 +269,12 @@ impl Default for HubScheduler {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DispatchResult {
     /// Task was immediately assigned to a worker.
-    Assigned { task_id: String, worker_id: String },
+    Assigned {
+        /// Task identifier.
+        task_id: String,
+        /// Worker identifier.
+        worker_id: String,
+    },
     /// Task was queued for later dispatch.
     Queued,
 }

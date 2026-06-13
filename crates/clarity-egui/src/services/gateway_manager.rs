@@ -3,8 +3,8 @@
 //! Provides auto-start on egui launch and manual start/stop controls.
 //! Gateway runs as an independent process — egui closing does not kill it.
 
+use parking_lot::Mutex;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
 
 /// Manages the Gateway child process lifecycle.
 pub struct GatewayManager {
@@ -12,6 +12,7 @@ pub struct GatewayManager {
 }
 
 impl GatewayManager {
+    /// Creates a new instance.
     pub fn new() -> Self {
         Self {
             child: Mutex::new(None),
@@ -42,7 +43,7 @@ impl GatewayManager {
             .spawn()
             .map_err(|e| format!("Failed to spawn Gateway: {}", e))?;
 
-        *self.child.lock().unwrap() = Some(child);
+        *self.child.lock() = Some(child);
 
         // Wait up to 5s for port to come alive
         for _ in 0..50 {
@@ -61,7 +62,7 @@ impl GatewayManager {
     /// Returns `Ok(true)` if we stopped it, `Ok(false)` if we did not own it.
     #[allow(dead_code)]
     pub fn stop(&self) -> Result<bool, String> {
-        let mut guard = self.child.lock().unwrap();
+        let mut guard = self.child.lock();
         if let Some(mut child) = guard.take() {
             tracing::info!("Stopping Gateway (pid {:?})", child.id());
             let _ = child.kill();

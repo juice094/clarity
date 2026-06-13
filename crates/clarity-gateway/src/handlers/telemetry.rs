@@ -6,7 +6,7 @@
 //! axum `Extension<Arc<SqliteBackend>>` rather than `State`, so the
 //! sub-router uses `Router<()>` and can be `.nest()`-ed into the main API router.
 
-use axum::{extract::Query, http::StatusCode, response::Json, Extension};
+use axum::{Extension, extract::Query, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

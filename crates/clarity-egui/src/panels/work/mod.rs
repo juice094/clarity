@@ -10,9 +10,9 @@ use crate::stores::BotStatus;
 
 /// Resolve a path string that may contain `~` into an absolute PathBuf.
 fn resolve_project_path(raw: &str) -> std::path::PathBuf {
-    if raw.starts_with("~/") {
+    if let Some(rest) = raw.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&raw[2..]);
+            return home.join(rest);
         }
     }
     std::path::PathBuf::from(raw)
@@ -31,6 +31,7 @@ fn projects() -> Vec<(String, std::path::PathBuf)> {
         .collect()
 }
 
+/// Renders the work panel UI.
 pub fn render_work_panel(app: &mut App, ctx: &egui::Context) {
     let theme = app.ui_store.theme.clone();
 
@@ -104,7 +105,11 @@ fn render_project_list(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
     let projects = projects();
     for (name, _path) in &projects {
         let is_active = app.ui_store.active_project.as_deref() == Some(name.as_str());
-        let text_color = if is_active { theme.accent } else { theme.text_dim };
+        let text_color = if is_active {
+            theme.accent
+        } else {
+            theme.text_dim
+        };
         let mut rt = egui::RichText::new(format!("📁 {}", name))
             .size(theme.text_sm)
             .color(text_color);
@@ -158,7 +163,10 @@ fn render_task_pipeline(_app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
         egui::Frame::new()
             .fill(theme.bg_hover)
             .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-            .inner_margin(egui::Margin::symmetric(theme.space_12 as i8, theme.space_12 as i8))
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_12 as i8,
+                theme.space_12 as i8,
+            ))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 ui.label(
@@ -194,11 +202,8 @@ fn render_task_pipeline(_app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
     ];
     for (name, status, color) in agents {
         ui.horizontal(|ui| {
-            ui.painter().circle_filled(
-                ui.cursor().min + egui::vec2(6.0, 8.0),
-                4.0,
-                color,
-            );
+            ui.painter()
+                .circle_filled(ui.cursor().min + egui::vec2(6.0, 8.0), 4.0, color);
             ui.add_space(theme.space_12);
             ui.label(
                 egui::RichText::new(name)
@@ -229,7 +234,10 @@ fn render_bot_compact(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
         egui::Frame::new()
             .fill(theme.bg_hover)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
-            .inner_margin(egui::Margin::symmetric(theme.space_12 as i8, theme.space_12 as i8))
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_12 as i8,
+                theme.space_12 as i8,
+            ))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
 
@@ -315,7 +323,10 @@ fn render_bot_compact(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
                     .fill(theme.surface)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
                     if ui.add(diag_btn).clicked() {
-                        app.push_toast("AI 诊断运行中...".to_string(), crate::ui::types::ToastLevel::Info);
+                        app.push_toast(
+                            "AI 诊断运行中...".to_string(),
+                            crate::ui::types::ToastLevel::Info,
+                        );
                     }
 
                     let restart_btn = egui::Button::new(
@@ -326,7 +337,10 @@ fn render_bot_compact(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
                     .fill(theme.surface)
                     .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
                     if ui.add(restart_btn).clicked() {
-                        app.push_toast("Gateway 重启请求已发送".to_string(), crate::ui::types::ToastLevel::Info);
+                        app.push_toast(
+                            "Gateway 重启请求已发送".to_string(),
+                            crate::ui::types::ToastLevel::Info,
+                        );
                     }
                 });
             });
@@ -443,14 +457,10 @@ fn render_workspace_tree(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
         .unwrap_or_else(|| resolve_project_path("~"));
 
     if active_path.exists() {
-        let selected: Option<String> = app
-            .ui_store
-            .preview_item
-            .as_ref()
-            .and_then(|p| match p {
-                crate::ui::types::PreviewItem::File { path, .. } => Some(path.clone()),
-                _ => None,
-            });
+        let selected: Option<String> = app.ui_store.preview_item.as_ref().and_then(|p| match p {
+            crate::ui::types::PreviewItem::File { path, .. } => Some(path.clone()),
+            _ => None,
+        });
 
         egui::ScrollArea::vertical()
             .id_salt(ui.id().with("workspace_tree"))
@@ -464,15 +474,14 @@ fn render_workspace_tree(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
                     selected.as_deref(),
                     &mut |path| {
                         if let Ok(content) = std::fs::read_to_string(path) {
-                            app.ui_store.preview_item =
-                                Some(crate::ui::types::PreviewItem::File {
-                                    name: path
-                                        .file_name()
-                                        .map(|n| n.to_string_lossy().to_string())
-                                        .unwrap_or_default(),
-                                    content,
-                                    path: path.to_string_lossy().to_string(),
-                                });
+                            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                                name: path
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default(),
+                                content,
+                                path: path.to_string_lossy().to_string(),
+                            });
                         }
                     },
                     false,

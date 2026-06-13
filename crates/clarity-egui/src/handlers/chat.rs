@@ -5,6 +5,7 @@ use crate::ui::types::{
     AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
 };
 
+/// Handles the done event.
 pub fn on_done(app: &mut crate::App) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
@@ -30,6 +31,7 @@ pub fn on_done(app: &mut crate::App) {
     }
 }
 
+/// Handles the error event.
 pub fn on_error(app: &mut crate::App, msg: String) {
     app.chat_store.is_loading = false;
     app.chat_store.agent_status = AgentStatus::Online;
@@ -61,12 +63,13 @@ pub fn on_error(app: &mut crate::App, msg: String) {
     }
 }
 
+/// Handles the chunk event.
 pub fn on_chunk(session_store: &mut SessionStore, text: String) {
     if let Some(session) = session_store.active_session_mut() {
         if let Some(last) = session.messages.last_mut() {
             if last.role == Role::Agent {
                 last.content.push_str(&text);
-                if let Some(ContentBlock::Text { text: ref mut t }) = last.blocks.last_mut() {
+                if let Some(ContentBlock::Text { text: t }) = last.blocks.last_mut() {
                     t.push_str(&text);
                 } else {
                     last.blocks.push(ContentBlock::Text { text: text.clone() });
@@ -89,6 +92,7 @@ pub fn on_chunk(session_store: &mut SessionStore, text: String) {
     }
 }
 
+/// Handles the tool start event.
 pub fn on_tool_start(
     session_store: &mut SessionStore,
     chat_store: &mut ChatStore,
@@ -202,6 +206,7 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
     }
 }
 
+/// Handles the tool result event.
 pub fn on_tool_result(
     session_store: &mut SessionStore,
     chat_store: &mut ChatStore,
@@ -234,14 +239,17 @@ pub fn on_tool_result(
     }
 }
 
+/// Handles the compaction begin event.
 pub fn on_compaction_begin(chat_store: &mut ChatStore) {
     chat_store.compacting = true;
 }
 
+/// Handles the compaction end event.
 pub fn on_compaction_end(chat_store: &mut ChatStore) {
     chat_store.compacting = false;
 }
 
+/// Handles the usage event.
 pub fn on_usage(
     chat_store: &mut ChatStore,
     prompt_tokens: u32,
@@ -251,12 +259,14 @@ pub fn on_usage(
     chat_store.last_usage = Some((prompt_tokens, completion_tokens, total_tokens));
 }
 
+/// Handles the plan ready event.
 pub fn on_plan_ready(chat_store: &mut ChatStore, plan: clarity_core::agent::Plan) {
     chat_store.is_loading = false;
     chat_store.agent_status = AgentStatus::Online;
     chat_store.pending_plan = Some(plan);
 }
 
+/// Handles the plan step begin event.
 pub fn on_plan_step_begin(chat_store: &mut ChatStore, step_id: String, _tool_name: String) {
     if let Some(ref mut tracker) = chat_store.plan_tracker {
         for step in &mut tracker.steps {
@@ -268,6 +278,7 @@ pub fn on_plan_step_begin(chat_store: &mut ChatStore, step_id: String, _tool_nam
     }
 }
 
+/// Handles the plan step end event.
 pub fn on_plan_step_end(chat_store: &mut ChatStore, step_id: String, success: bool) {
     if let Some(ref mut tracker) = chat_store.plan_tracker {
         for step in &mut tracker.steps {
@@ -283,6 +294,7 @@ pub fn on_plan_step_end(chat_store: &mut ChatStore, step_id: String, success: bo
     }
 }
 
+/// Handles the plan step skipped event.
 pub fn on_plan_step_skipped(chat_store: &mut ChatStore, step_id: String) {
     if let Some(ref mut tracker) = chat_store.plan_tracker {
         for step in &mut tracker.steps {
@@ -294,6 +306,7 @@ pub fn on_plan_step_skipped(chat_store: &mut ChatStore, step_id: String) {
     }
 }
 
+/// Handles the web page fetched event.
 pub fn on_web_page_fetched(
     ui_store: &mut crate::stores::UiStore,
     title: String,

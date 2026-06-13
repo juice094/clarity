@@ -3,15 +3,16 @@
 //! 本模块为 clarity-egui (GUI) 和 clarity-tui (TUI) 提供统一的视图状态、
 //! 命令体系和面板语义。任何前端特有的渲染细节不应出现在此模块中。
 
+/// Commands module.
 pub mod commands;
 pub mod render_line;
 pub mod shortcut;
 pub mod view_state;
 
-pub use commands::{ids, CommandItem, CommandScope};
+pub use commands::{CommandItem, CommandScope, ids};
 pub use render_line::{
-    markdown_to_lines, render_line_plain_text, ApprovalOption, ArtifactId, BlockId, DiffKind,
-    InstanceId, LineRole, RenderLine, SessionId, Span, SpanStyle, StatusKind, ToolStatus,
+    ApprovalOption, ArtifactId, BlockId, DiffKind, InstanceId, LineRole, RenderLine, SessionId,
+    Span, SpanStyle, StatusKind, ToolStatus, markdown_to_lines, render_line_plain_text,
 };
 pub use shortcut::{KeyEvent, ShortcutBinding, ShortcutRegistry};
 pub use view_state::{

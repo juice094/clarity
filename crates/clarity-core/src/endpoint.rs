@@ -154,6 +154,7 @@ pub struct EndpointRegistry {
 }
 
 impl EndpointRegistry {
+    /// Create a new `EndpointRegistry`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -188,6 +189,7 @@ impl EndpointRegistry {
         self.entries.len()
     }
 
+    /// Check whether the container is empty.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }

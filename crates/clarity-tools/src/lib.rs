@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Tool implementations for Project Clarity
 //!
 //! This crate contains all built-in tools and the core `Tool` trait.
@@ -182,8 +186,8 @@ pub mod helpers {
 
 #[cfg(test)]
 mod tests {
-    use crate::helpers::{normalize_path, resolve_path};
     use crate::ToolContext;
+    use crate::helpers::{normalize_path, resolve_path};
     use std::path::PathBuf;
 
     fn test_base() -> PathBuf {

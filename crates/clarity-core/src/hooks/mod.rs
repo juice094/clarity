@@ -376,14 +376,18 @@ mod tests {
     #[tokio::test]
     async fn test_pre_delivery_block() {
         let registry = HookRegistry::new().register_pre_delivery(BlockP2Hook);
-        assert!(registry
-            .run_pre_delivery("x", DeliveryTier::P2)
-            .await
-            .is_err());
-        assert!(registry
-            .run_pre_delivery("x", DeliveryTier::P1)
-            .await
-            .is_ok());
+        assert!(
+            registry
+                .run_pre_delivery("x", DeliveryTier::P2)
+                .await
+                .is_err()
+        );
+        assert!(
+            registry
+                .run_pre_delivery("x", DeliveryTier::P1)
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

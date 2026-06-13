@@ -32,14 +32,17 @@ pub struct HookRegistry {
 }
 
 impl HookRegistry {
+    /// Create a new `HookRegistry`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// `register`.
     pub fn register(&mut self, hook: Box<dyn AgentHook>) {
         self.hooks.push(hook);
     }
 
+    /// `before_tool_call`.
     pub async fn before_tool_call(&self, tool_call: &mut ToolCall) -> HookResult {
         for hook in &self.hooks {
             match hook.before_tool_call(tool_call).await {
@@ -56,12 +59,14 @@ impl HookRegistry {
         HookResult::Continue
     }
 
+    /// `after_tool_call`.
     pub async fn after_tool_call(&self, tool_call: &ToolCall, result: &mut Value) {
         for hook in &self.hooks {
             hook.after_tool_call(tool_call, result).await;
         }
     }
 
+    /// `on_llm_input`.
     pub async fn on_llm_input(&self, messages: &mut Vec<clarity_llm::api::Message>) {
         for hook in &self.hooks {
             hook.on_llm_input(messages).await;
@@ -73,8 +78,8 @@ impl HookRegistry {
 mod tests {
     use super::*;
     use clarity_llm::api::Message;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     struct CancelHook;
 

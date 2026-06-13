@@ -3,7 +3,7 @@
 //! Allows the Agent to register, list, and cancel recurring tasks using cron expressions.
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::background::BackgroundTaskManager;
@@ -341,10 +341,12 @@ mod tests {
 
         let result = tool.execute(json!({}), ctx).await.unwrap();
         assert_eq!(result["count"], 1);
-        assert!(result["tasks"].as_array().unwrap()[0]["task_id"]
-            .as_str()
-            .unwrap()
-            .starts_with("cron_"));
+        assert!(
+            result["tasks"].as_array().unwrap()[0]["task_id"]
+                .as_str()
+                .unwrap()
+                .starts_with("cron_")
+        );
     }
 
     #[tokio::test]

@@ -235,7 +235,9 @@ pub struct ToolStats {
 /// A single point in the model preference evolution timeline.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ModelPreferenceSnapshot {
+    /// Timestamp of the record.
     pub timestamp: DateTime<Utc>,
+    /// Provider identifier.
     pub provider_id: String,
     /// Normalized weight (0.0 - 1.0) for this provider at this time.
     pub weight: f64,
@@ -257,9 +259,13 @@ pub struct InteractionPatterns {
 /// Outcome of a compression strategy.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CompressionOutcome {
+    /// Timestamp of the record.
     pub timestamp: DateTime<Utc>,
+    /// Compression method used.
     pub method: String,
+    /// Token count before compression.
     pub tokens_before: usize,
+    /// Token count after compression.
     pub tokens_after: usize,
     /// Whether the user regenerated after compaction (negative signal).
     pub user_regenerated: bool,

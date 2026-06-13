@@ -30,7 +30,7 @@ pub fn resolve_provider(
     current_binding: &Option<LlmBinding>,
 ) -> ProviderSelection {
     // Early exit: already bound to the desired provider.
-    if let Some(ref b) = current_binding {
+    if let Some(b) = current_binding {
         if b.provider == desired_provider {
             return ProviderSelection::Preferred {
                 provider: desired_provider.to_string(),

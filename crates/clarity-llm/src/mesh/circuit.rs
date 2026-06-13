@@ -1,7 +1,7 @@
 //! Simple circuit breaker for LLM provider failover.
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 /// Circuit breaker states.
@@ -25,6 +25,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+    /// Create a new circuit breaker with the given failure threshold and recovery timeout.
     pub fn new(threshold: u32, recovery_timeout_secs: u64) -> Self {
         Self {
             state: Mutex::new(CircuitState::Closed),
@@ -37,14 +38,14 @@ impl CircuitBreaker {
 
     /// Check whether the circuit allows a request through.
     pub fn allow(&self) -> bool {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *state {
             CircuitState::Closed => true,
             CircuitState::Open => {
                 let should_try = self
                     .last_failure
                     .lock()
-                    .unwrap()
+                    .unwrap_or_else(|e| e.into_inner())
                     .is_some_and(|t| t.elapsed() >= self.recovery_timeout);
                 if should_try {
                     *state = CircuitState::HalfOpen;
@@ -59,7 +60,7 @@ impl CircuitBreaker {
 
     /// Record a successful call — reset failure count and close the circuit.
     pub fn record_success(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         self.failure_count.store(0, Ordering::SeqCst);
         *state = CircuitState::Closed;
     }
@@ -68,14 +69,15 @@ impl CircuitBreaker {
     pub fn record_failure(&self) {
         let count = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
         if count >= self.threshold {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             *state = CircuitState::Open;
         }
-        *self.last_failure.lock().unwrap() = Some(Instant::now());
+        *self.last_failure.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
     }
 
+    /// Return the current circuit state.
     pub fn state(&self) -> CircuitState {
-        *self.state.lock().unwrap()
+        *self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 

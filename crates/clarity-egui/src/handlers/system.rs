@@ -4,6 +4,7 @@ use crate::stores::UiStore;
 use crate::ui::types::{Toast, ToastLevel};
 use clarity_core::approval::ApprovalRuntime;
 
+/// Adds a transient toast notification.
 pub fn push_toast(ui_store: &mut UiStore, message: impl Into<String>, level: ToastLevel) {
     ui_store.toasts.push(Toast {
         message: message.into(),
@@ -16,6 +17,7 @@ pub fn push_toast(ui_store: &mut UiStore, message: impl Into<String>, level: Toa
     }
 }
 
+/// Handles the fallback event.
 pub fn on_fallback(ui_store: &mut UiStore, fallback: bool, reason: String) {
     let msg = if fallback {
         format!(
@@ -29,10 +31,12 @@ pub fn on_fallback(ui_store: &mut UiStore, fallback: bool, reason: String) {
     ui_store.network_banner = if fallback { Some(msg) } else { None };
 }
 
+/// Handles the step begin event.
 pub fn on_step_begin(tool_name: String) {
     tracing::info!("Step begin: {}", tool_name);
 }
 
+/// Handles the resolve approval event.
 pub fn on_resolve_approval(
     approval_runtime: std::sync::Arc<clarity_core::approval::InMemoryApprovalRuntime>,
     runtime: &tokio::runtime::Runtime,

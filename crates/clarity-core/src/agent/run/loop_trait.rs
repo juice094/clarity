@@ -9,6 +9,8 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// Result of a single iteration of the agent loop.
+// Intentionally retained: token fields are populated by loop implementations and
+// reserved for future cost/telemetry accounting.
 #[allow(dead_code)]
 pub(crate) struct IterationResult {
     pub response_content: String,
@@ -220,8 +222,8 @@ mod tests {
     use crate::registry::ToolRegistry;
     use crate::types::{FunctionCall, ToolCall};
     use clarity_llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct MockLlmCircuit;
 

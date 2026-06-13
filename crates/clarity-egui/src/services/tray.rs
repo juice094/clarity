@@ -54,7 +54,7 @@ impl TrayManager {
     ///
     /// Returns `None` if the tray subsystem fails to initialize.
     pub fn new() -> Option<Self> {
-        let icon = Self::build_icon(TrayIconStatus::Idle);
+        let icon = Self::build_icon(TrayIconStatus::Idle)?;
         let menu = Menu::new();
 
         let show_item = MenuItem::new("Show Clarity", true, None);
@@ -105,7 +105,10 @@ impl TrayManager {
             return;
         }
         self.current_status = status;
-        let new_icon = Self::build_icon(status);
+        let Some(new_icon) = Self::build_icon(status) else {
+            tracing::warn!("Failed to build tray icon");
+            return;
+        };
         if let Err(e) = self.tray_icon.set_icon(Some(new_icon)) {
             tracing::warn!("Failed to update tray icon: {}", e);
         }
@@ -152,7 +155,7 @@ impl TrayManager {
     }
 
     /// Build a 32×32 icon for the given status.
-    fn build_icon(status: TrayIconStatus) -> Icon {
+    fn build_icon(status: TrayIconStatus) -> Option<Icon> {
         let (color, with_dot) = match status {
             TrayIconStatus::Idle => ([0xc1, 0xc2, 0xc5, 0xff], false),
             TrayIconStatus::Active => ([0x4d, 0xab, 0xf7, 0xff], false),
@@ -160,7 +163,7 @@ impl TrayManager {
             TrayIconStatus::Message => ([0x4d, 0xab, 0xf7, 0xff], true),
         };
         let rgba = generate_node_wave_rgba(32, color, with_dot);
-        Icon::from_rgba(rgba, 32, 32).expect("valid 32×32 icon")
+        Icon::from_rgba(rgba, 32, 32).ok()
     }
 }
 

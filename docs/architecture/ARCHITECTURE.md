@@ -186,10 +186,10 @@ Latest: v0.3.3 (2026-05-15).
 
 ## 5. Roadmap & Plans
 
-📄 Master schedule: [`../plans/2026-05-14-master-schedule.md`](../plans/2026-05-14-master-schedule.md)
-📄 BACKLOG: [`../plans/BACKLOG.md`](../plans/BACKLOG.md)
-📄 Pretext UI evolution: [`../plans/2026-05-12-pretext-ui-evolution.md`](../plans/2026-05-12-pretext-ui-evolution.md)
-📄 Tri-role kernel extraction: [`../plans/2026-05-11-trirole-kernel-architecture-extraction.md`](../plans/2026-05-11-trirole-kernel-architecture-extraction.md)
+📄 Master schedule: [`../plans/2026-05-14-master-schedule.md`](../planning/plans/2026-05-14-master-schedule.md)
+📄 BACKLOG: [`../plans/BACKLOG.md`](../planning/BACKLOG.md)
+📄 Pretext UI evolution: [`../plans/2026-05-12-pretext-ui-evolution.md`](../planning/plans/2026-05-12-pretext-ui-evolution.md)
+📄 Tri-role kernel extraction: [`../plans/2026-05-11-trirole-kernel-architecture-extraction.md`](../planning/plans/2026-05-11-trirole-kernel-architecture-extraction.md)
 
 ---
 
@@ -205,7 +205,7 @@ These constraints are non-negotiable:
 6. **Rust core stays in-house** — subagents may research, but core code must
    be reviewed by the primary agent.
 
-See [`../plans/2026-05-14-master-schedule.md#9-hard-veto-边界不可逾越`](../plans/2026-05-14-master-schedule.md) for rationale.
+See [`../plans/2026-05-14-master-schedule.md#9-hard-veto-边界不可逾越`](../planning/plans/2026-05-14-master-schedule.md) for rationale.
 
 ---
 

@@ -1,7 +1,8 @@
-use crate::stores::TeamMember;
 use crate::App;
+use crate::stores::TeamMember;
 use clarity_core::tools::Tool;
 
+/// Renders the team create modal UI.
 pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
     if !app.team_store.create_modal_open {
         return;

@@ -37,20 +37,32 @@ pub struct ExecutionStep {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// `StepType` variants.
 pub enum StepType {
+    /// LLM request event.
     LlmRequest,
+    /// LLM response event.
     LlmResponse,
+    /// Tool execution event.
     ToolExecution,
+    /// Tool result event.
     ToolResult,
+    /// Error recovery event.
     ErrorRecovery,
+    /// State save event.
     StateSave,
+    /// State load event.
     StateLoad,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// `TokenUsage` configuration/state.
 pub struct TokenUsage {
+    /// Number of prompt tokens.
     pub prompt_tokens: u32,
+    /// Number of completion tokens.
     pub completion_tokens: u32,
+    /// Total token count.
     pub total_tokens: u32,
 }
 
@@ -164,20 +176,30 @@ impl Default for ExecutionTracer {
 /// Summary of execution statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionSummary {
+    /// Session id.
     pub session_id: String,
+    /// Total number of steps.
     pub total_steps: usize,
+    /// Number of LLM requests.
     pub llm_requests: usize,
+    /// Number of tool executions.
     pub tool_executions: usize,
+    /// Number of errors.
     pub errors: usize,
+    /// Total duration in milliseconds.
     pub total_duration_ms: u64,
+    /// Total token count.
     pub total_tokens: u32,
 }
 
 /// Error recovery strategy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecoveryStrategy {
-    /// Retry the operation
-    Retry { max_attempts: u32 },
+    /// Retry the operation.
+    Retry {
+        /// Maximum retry attempts.
+        max_attempts: u32,
+    },
     /// Fall back to alternative provider
     Fallback,
     /// Skip and continue
@@ -189,10 +211,15 @@ pub enum RecoveryStrategy {
 /// Error recovery configuration
 #[derive(Debug, Clone)]
 pub struct ErrorRecoveryConfig {
+    /// Recovery strategy for LLM errors.
     pub llm_error_strategy: RecoveryStrategy,
+    /// Recovery strategy for tool errors.
     pub tool_error_strategy: RecoveryStrategy,
+    /// Initial retry delay in milliseconds.
     pub retry_base_delay_ms: u64,
+    /// Maximum retry delay in milliseconds.
     pub retry_max_delay_ms: u64,
+    /// Retry backoff multiplier.
     pub retry_backoff_multiplier: f64,
 }
 
@@ -281,11 +308,17 @@ impl ErrorRecovery {
 /// Conversation state for persistence
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationState {
+    /// Session id.
     pub session_id: String,
+    /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Last update timestamp.
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Conversation messages.
     pub messages: Vec<Message>,
+    /// Arbitrary metadata.
     pub metadata: HashMap<String, serde_json::Value>,
+    /// Current iteration count.
     pub iteration_count: usize,
 }
 

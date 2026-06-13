@@ -108,7 +108,7 @@ tags: [plan]
 | ID | 事项 | 优先级 | 状态 | 说明 |
 |----|------|--------|------|------|
 | S27-A1 | **Prompt Reorder：静态前缀 + 动态尾部** | P0 | ✅ 已完成 | `SystemPromptBuilder` 将静态组件（base/tools/skills/security）与动态组件（git/active_files/metadata/memory）分离为独立消息，避免 prefix cache miss |
-| S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 📋 计划就绪 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching。详见 [`docs/plans/2026-05-05-sprint27-a2-prompt-cache-key.md`](./2026-05-05-sprint27-a2-prompt-cache-key.md) |
+| S27-A2 | **`prompt_cache_key` 策略层实现** | P0 | 📋 计划就绪 | 计算静态 system prompt 的 stable hash 作为 cache key；API provider 启用服务端 prefix caching。详见 `docs/planning/plans/2026-05-05-sprint27-a2-prompt-cache-key.md` |
 | S27-A3 | **LocalGgufProvider KV cache 跨 turn 持久化** | P1 | 未启动 | 保持模型状态跨 turns，不从 `index_pos=0` 重置 |
 | S27-A4 | **System Prompt KV Snapshot（跨会话）** | P1 | 未启动 | `~/.clarity/cache/kv/{model_id}/{hash}.kvcache` 序列化/反序列化 |
 | S27-B1 | `refresh_context()` 统一移入 `run_streaming_turn()` | P2 | 未启动 | Sprint 15 遗留（Gateway/egui/TUI 所有路径获取最新上下文） |
@@ -118,7 +118,7 @@ tags: [plan]
 
 ## 三、解耦与架构健康（分发标准）
 
-来源：`docs/plans/2026-04-27-decoupling.md`、`docs/architecture/COUPLING_AUDIT.md`
+来源：`docs/planning/plans/2026-04-27-decoupling.md`、`docs/architecture/COUPLING_AUDIT.md`
 
 ### 2.1 已完成 ✅
 - `tools↔subagents` 循环依赖打破
@@ -140,7 +140,7 @@ tags: [plan]
 
 ## 四、egui 功能 Parity（与 core 对齐）
 
-来源：`docs/PROJECT_STATUS.md` §3
+来源：`docs/planning/PROJECT_STATUS.md` §3
 
 | 功能 | core 状态 | egui 状态 | 差距 |
 |------|-----------|-----------|------|
@@ -160,7 +160,7 @@ tags: [plan]
 
 ## 五、核心架构演进（Future Direction）
 
-来源：`docs/FUTURE_DIRECTION.md`
+来源：`docs/planning/FUTURE_DIRECTION.md`
 
 ### Phase A：基础设施联通（2 周）
 
@@ -279,7 +279,7 @@ cargo check --workspace --lib                   # 0 warnings
 
 | Sprint | ID | 事项 | 优先级 | 预估 | 来源 |
 |--------|----|------|--------|------|------|
-| **Sprint 37** | S37-A | `prompt_cache_key` 策略层 | **P0** | 2–3d | DeepSeek-TUI #1 — Prompt Cache-Prefix 稳定性。计划已就绪（`docs/plans/2026-05-05-sprint27-a2-prompt-cache-key.md`） |
+| **Sprint 37** | S37-A | `prompt_cache_key` 策略层 | **P0** | 2–3d | DeepSeek-TUI #1 — Prompt Cache-Prefix 稳定性。计划已就绪（`docs/planning/plans/2026-05-05-sprint27-a2-prompt-cache-key.md`） |
 | **Sprint 37** | S37-B | 当前 working tree 提交 | **P0** | 0.5d | 归档 Sprint 36.5/36.6 |
 | **Sprint 37** | S37-C | LSP 轻量级 stdio 客户端 + hook | **P0** | 3–4d | DeepSeek-TUI #2 — LSP 作为合成用户消息。新增 `LspManager`（~400 LOC，无 `tower-lsp`），`ToolResult` 后注入诊断 |
 | **Sprint 37** | S37-D | 进程级成本旁路通道 | **P0** | 1–2d | DeepSeek-TUI #3 — `static PENDING: OnceLock<Mutex<f64>>`，子代理/compaction/memory 完成后 report，主 Agent 每轮 `drain()` |

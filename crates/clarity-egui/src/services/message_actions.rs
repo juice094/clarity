@@ -7,8 +7,8 @@
 //!
 //! Sprint 33: compensates missing modern frontend affordances (Edit/Regenerate).
 
-use crate::ui::types::Role;
 use crate::App;
+use crate::ui::types::Role;
 
 impl App {
     // ── Inline Edit ──

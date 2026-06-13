@@ -74,17 +74,25 @@ pub struct PlanResult {
 /// Distinct from the LLM-generated `PlanStep` — this tracks mutable runtime state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlanStepExecutionStatus {
+    /// Task is pending.
     Pending,
+    /// Task is running.
     Running,
+    /// Successful execution.
     Success,
+    /// Task failed.
     Failed,
+    /// Step was skipped.
     Skipped,
 }
 
 /// Runtime state for one step of a plan execution.
 #[derive(Debug, Clone)]
 pub struct PlanExecutionState {
+    /// Step identifier.
     pub step_id: String,
+    /// Tool status.
     pub status: PlanStepExecutionStatus,
+    /// Serialized tool result.
     pub result: Option<PlanResult>,
 }

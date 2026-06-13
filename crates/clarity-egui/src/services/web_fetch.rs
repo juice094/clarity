@@ -1,7 +1,28 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
-static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"<[^>]+>").unwrap());
+/// Compile a literal regex pattern that is valid by construction.
+///
+// SAFE: only called with hard-coded static patterns below.
+#[allow(clippy::unwrap_used)]
+fn compile_regex(pattern: &str) -> Regex {
+    Regex::new(pattern).unwrap()
+}
+
+static TAG_RE: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"<[^>]+>"));
+
+static BLOCK_TAG_RES: LazyLock<Vec<(Regex, Regex)>> = LazyLock::new(|| {
+    ["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"]
+        .iter()
+        .map(|tag| {
+            let open = compile_regex(&format!(r"<{}[^>]*>", regex::escape(tag)));
+            let close = compile_regex(&format!(r"</{}>", regex::escape(tag)));
+            (open, close)
+        })
+        .collect()
+});
+
+static TITLE_RE: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"<title[^>]*>(.*?)</title>"));
 
 /// Fetch a web page, extract its title, and convert HTML to plain text.
 pub async fn fetch_web_page(url: &str) -> Result<(String, String), String> {
@@ -30,10 +51,7 @@ pub async fn fetch_web_page(url: &str) -> Result<(String, String), String> {
 fn html_to_text(html: &str) -> String {
     let mut text = html.to_string();
 
-    let block_tags = ["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr"];
-    for tag in &block_tags {
-        let open_re = Regex::new(&format!(r"<{}[^>]*>", regex::escape(tag))).unwrap();
-        let close_re = Regex::new(&format!(r"</{}>", regex::escape(tag))).unwrap();
+    for (open_re, close_re) in BLOCK_TAG_RES.iter() {
         text = open_re.replace_all(&text, "\n").to_string();
         text = close_re.replace_all(&text, "\n").to_string();
     }
@@ -67,9 +85,7 @@ fn html_to_text(html: &str) -> String {
 
 /// Extract the `<title>` tag contents from HTML.
 fn extract_title(html: &str) -> String {
-    let re = Regex::new(r"<title[^>]*>(.*?)</title>")
-        .unwrap()
-        .captures(html);
+    let re = TITLE_RE.captures(html);
     match re {
         Some(caps) => html_escape::decode_html_entities(caps.get(1).map_or("", |m| m.as_str()))
             .trim()

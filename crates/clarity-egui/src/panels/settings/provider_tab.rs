@@ -1,11 +1,12 @@
+use crate::App;
 use crate::provider::{ApiFormat, ProviderDefinition, ProviderRegistry};
 use crate::ui::types::{ToastLevel, UiEvent};
-use crate::App;
 
 use clarity_llm::runtime::{
-    list_models, set_provider_config, test_connection, RuntimeProviderConfig,
+    RuntimeProviderConfig, list_models, set_provider_config, test_connection,
 };
 
+/// Renders the provider UI.
 pub fn render_provider(app: &mut App, ui: &mut egui::Ui) {
     let left_w = (ui.available_width() * 0.35).clamp(180.0, 260.0);
 

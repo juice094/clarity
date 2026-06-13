@@ -1,3 +1,7 @@
+#![cfg_attr(
+    test,
+    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+)]
 //! Clarity Tauri App — Kimi-style frontend for clarity-core.
 //!
 //! Architecture:
@@ -10,7 +14,7 @@ use tokio::sync::Mutex;
 
 /// Application state shared across Tauri commands.
 struct AppState {
-    // TODO: wire clarity-core runtime
+    /// Archived placeholder; Tauri frontend is not actively developed.
     _placeholder: (),
 }
 
@@ -23,19 +27,20 @@ fn greet(name: &str) -> String {
 async fn list_sessions(
     _state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<String>, String> {
-    // TODO: integrate with clarity-core session store
+    // Stub response; Tauri frontend is archived.
     Ok(vec!["session-1".into(), "session-2".into()])
 }
 
 fn main() {
-    let state = Arc::new(Mutex::new(AppState {
-        _placeholder: (),
-    }));
+    let state = Arc::new(Mutex::new(AppState { _placeholder: () }));
 
-    tauri::Builder::default()
+    if let Err(e) = tauri::Builder::default()
         .manage(state)
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![greet, list_sessions])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    {
+        eprintln!("error while running tauri application: {e}");
+        std::process::exit(1);
+    }
 }

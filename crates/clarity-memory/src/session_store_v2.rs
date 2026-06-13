@@ -379,26 +379,39 @@ impl SessionStoreV2 {
 /// Session metadata (V2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionV2 {
+    /// Session identifier
     pub id: String,
+    /// Optional session title
     pub title: Option<String>,
+    /// Optional associated soul identifier
     pub soul_id: Option<String>,
+    /// Creation timestamp (milliseconds since epoch)
     pub created_at: i64,
+    /// Last update timestamp (milliseconds since epoch)
     pub updated_at: Option<i64>,
+    /// Parent session identifier for handoff lineage
     pub parent_session_id: Option<String>,
+    /// Current lifecycle state
     pub state: SessionState,
+    /// Hash of the configuration active when the session was created
     pub config_hash: Option<String>,
 }
 
 /// Session lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SessionState {
+    /// Session is active and accepting events
     Active,
+    /// Session has been archived
     Archived,
+    /// Session is waiting to be handed off
     HandoffPending,
+    /// Session is being compacted
     Compacting,
 }
 
 impl SessionState {
+    /// Return the string representation stored in the database
     pub fn as_str(&self) -> &'static str {
         match self {
             SessionState::Active => "active",
@@ -425,19 +438,30 @@ impl std::str::FromStr for SessionState {
 /// Event type for the append-only event log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventType {
+    /// A message sent by the user
     UserMessage,
+    /// A message sent by the assistant
     AssistantMessage,
+    /// A tool call
     ToolCall,
+    /// A successful tool result
     ToolResult,
+    /// A tool error
     ToolError,
+    /// A compaction event
     Compaction,
+    /// A configuration change
     ConfigChange,
+    /// Session start marker
     SessionStart,
+    /// Session end marker
     SessionEnd,
+    /// Unknown or unrecognized event type
     Unknown,
 }
 
 impl EventType {
+    /// Return the string representation stored in the database
     pub fn as_str(&self) -> &'static str {
         match self {
             EventType::UserMessage => "user_message",
@@ -475,24 +499,38 @@ impl std::str::FromStr for EventType {
 /// A single event record from the event log.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventRecord {
+    /// Session identifier
     pub session_id: String,
+    /// Turn identifier within the session
     pub turn_id: i64,
+    /// Event identifier within the turn
     pub event_id: i64,
+    /// Timestamp when the event was recorded (milliseconds since epoch)
     pub timestamp: i64,
+    /// Type of event
     pub event_type: EventType,
+    /// Event payload
     pub payload: serde_json::Value,
+    /// Hash of the payload bytes
     pub payload_hash: String,
 }
 
 /// A compacted context snapshot.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompactedContext {
+    /// Session identifier
     pub session_id: String,
+    /// Turn identifier up to which the context was compacted
     pub turn_id: i64,
+    /// Last event identifier included in the compaction
     pub event_id: i64,
+    /// Compacted context as JSON
     pub context_json: serde_json::Value,
+    /// Method used to compress the context
     pub compression_method: String,
+    /// Hash of the source events used to build the snapshot
     pub source_hash: String,
+    /// Timestamp when the snapshot was created (milliseconds since epoch)
     pub created_at: i64,
 }
 

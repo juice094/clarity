@@ -93,7 +93,7 @@ command palette actually executes commands.
 
 ## 3. Phase 1 — Grid for Chrome ✅ (S2, ~3.8h actual vs ~5h budget, 1 session)
 
-> **Completed 2026-05-12** — see `docs/plans/2026-05-12-S2-session-archive.md`.
+> **Completed 2026-05-12** — see `docs/planning/plans/2026-05-12-S2-session-archive.md`.
 > Phase scope expanded mid-session to include icon font migration
 > (originally Phase 0.5 epilogue): ADR-010 superseded ADR-009 to adopt
 > `lucide-icons` over `egui-phosphor`. 5 commits total. Tests 66/66.

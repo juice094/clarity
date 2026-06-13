@@ -4,6 +4,7 @@ use crate::ui::types::{ContentBlock, Message, Role, Session};
 use std::path::PathBuf;
 use std::time::Instant;
 
+/// Sessions dir.
 pub fn sessions_dir() -> PathBuf {
     let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("clarity");
@@ -11,12 +12,14 @@ pub fn sessions_dir() -> PathBuf {
     path
 }
 
+/// Session path.
 pub fn session_path(id: &str) -> PathBuf {
     let mut path = sessions_dir();
     path.push(format!("{}.json", id));
     path
 }
 
+/// Loads sessions from disk.
 pub fn load_sessions() -> Vec<Session> {
     let dir = sessions_dir();
     if !dir.exists() {
@@ -74,6 +77,7 @@ pub fn load_sessions() -> Vec<Session> {
     sessions
 }
 
+/// Persists session internal to disk.
 pub fn save_session_internal(session: &Session) -> Result<(), String> {
     let path = session_path(&session.id);
     // Empty sessions are transient — don't write them to disk.
@@ -113,6 +117,7 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Creates a new session.
 pub fn new_session(category: &str, index: usize) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
     let base = match category {
@@ -136,6 +141,7 @@ pub fn new_session(category: &str, index: usize) -> Session {
     }
 }
 
+/// Returns the current time in milliseconds.
 pub fn now_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

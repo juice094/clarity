@@ -208,9 +208,11 @@ mod tests {
             )
             .await
             .expect("Wrapper execution failed");
-        assert!(output
-            .as_str()
-            .unwrap()
-            .contains("Hello from MCP filesystem server!"));
+        assert!(
+            output
+                .as_str()
+                .unwrap()
+                .contains("Hello from MCP filesystem server!")
+        );
     }
 }

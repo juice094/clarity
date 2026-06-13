@@ -42,13 +42,21 @@ use thiserror::Error;
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum RouterError {
     #[error("no provider available for task: {0}")]
+    /// No provider matched the request.
     NoProvider(String),
 
     #[error("all providers failed health check")]
+    /// All providers are currently unhealthy.
     AllProvidersUnhealthy,
 
     #[error("budget exceeded for task: required {required}, available {available}")]
-    BudgetExceeded { required: f64, available: f64 },
+    /// Requested budget exceeded.
+    BudgetExceeded {
+        /// Required budget.
+        required: f64,
+        /// Available budget.
+        available: f64,
+    },
 }
 
 // ============================================================================
@@ -140,6 +148,7 @@ pub enum TaskType {
     /// Background/async task.
     Background,
     #[default]
+    /// General routing failure.
     General,
 }
 
@@ -284,9 +293,13 @@ impl Default for ProviderProfile {
 /// Per-task-type weighting for the composite fitness function.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RoutingWeights {
+    /// Latency score.
     pub latency: f64,
+    /// Quality score.
     pub quality: f64,
+    /// Reliability score.
     pub reliability: f64,
+    /// Cost score.
     pub cost: f64,
 }
 

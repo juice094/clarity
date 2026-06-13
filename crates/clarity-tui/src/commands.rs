@@ -4,17 +4,22 @@ use std::sync::Arc;
 use crate::app::{App, Message, MessageType};
 use clarity_core::approval::ApprovalMode;
 
+/// A slash-command handler executed by the TUI command registry.
 pub trait CommandHandler: Send + Sync {
+    /// Execute the command, mutating the application state.
     fn execute(&self, app: &mut App, args: &[&str]);
+    /// Short human-readable description shown in `/help`.
     fn description(&self) -> &str;
 }
 
+/// Registry of slash commands and their aliases.
 pub struct CommandRegistry {
     commands: HashMap<String, Arc<dyn CommandHandler>>,
     aliases: HashMap<String, String>,
 }
 
 impl CommandRegistry {
+    /// Create an empty command registry.
     pub fn new() -> Self {
         Self {
             commands: HashMap::new(),
@@ -22,14 +27,17 @@ impl CommandRegistry {
         }
     }
 
+    /// Register a command handler under the given name.
     pub fn register(&mut self, name: impl Into<String>, handler: Arc<dyn CommandHandler>) {
         self.commands.insert(name.into(), handler);
     }
 
+    /// Register an alias that resolves to another registered command name.
     pub fn alias(&mut self, alias: impl Into<String>, target: impl Into<String>) {
         self.aliases.insert(alias.into(), target.into());
     }
 
+    /// Look up a handler by name, resolving aliases if needed.
     pub fn get(&self, name: &str) -> Option<Arc<dyn CommandHandler>> {
         self.commands.get(name).cloned().or_else(|| {
             self.aliases
@@ -38,6 +46,7 @@ impl CommandRegistry {
         })
     }
 
+    /// Return all registered command names in sorted order.
     pub fn names(&self) -> Vec<&str> {
         let mut names: Vec<&str> = self.commands.keys().map(|s| s.as_str()).collect();
         names.sort_unstable();
@@ -45,6 +54,7 @@ impl CommandRegistry {
     }
 }
 
+/// `/exit` — quit the application.
 pub struct ExitCommand;
 impl CommandHandler for ExitCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -55,6 +65,7 @@ impl CommandHandler for ExitCommand {
     }
 }
 
+/// `/clear` — remove all messages from the chat pane.
 pub struct ClearCommand;
 impl CommandHandler for ClearCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -70,6 +81,7 @@ impl CommandHandler for ClearCommand {
     }
 }
 
+/// `/help` — show available slash commands and shortcuts.
 pub struct HelpCommand;
 impl CommandHandler for HelpCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -93,6 +105,7 @@ impl CommandHandler for HelpCommand {
     }
 }
 
+/// `/model` — display or override the current model name.
 pub struct ModelCommand;
 impl CommandHandler for ModelCommand {
     fn execute(&self, app: &mut App, args: &[&str]) {
@@ -110,13 +123,13 @@ impl CommandHandler for ModelCommand {
     }
 }
 
+/// `/settings` — open the settings overlay.
 pub struct SettingsCommand;
 impl CommandHandler for SettingsCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
         use clarity_core::view_models::settings::SettingsViewModel;
         let vm = SettingsViewModel::new();
         app.cached_view_commands = vm.commands();
-        app.settings_vm = Some(vm);
         app.settings_mode = true;
     }
     fn description(&self) -> &str {
@@ -124,6 +137,7 @@ impl CommandHandler for SettingsCommand {
     }
 }
 
+/// `/stop` — interrupt an ongoing generation.
 pub struct StopCommand;
 impl CommandHandler for StopCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -134,6 +148,7 @@ impl CommandHandler for StopCommand {
     }
 }
 
+/// `/skills` — list loaded skills and their active state.
 pub struct SkillListCommand;
 impl CommandHandler for SkillListCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -163,6 +178,7 @@ impl CommandHandler for SkillListCommand {
     }
 }
 
+/// `/skill` — toggle a skill on or off.
 pub struct SkillUseCommand;
 impl CommandHandler for SkillUseCommand {
     fn execute(&self, app: &mut App, args: &[&str]) {
@@ -185,23 +201,23 @@ impl CommandHandler for SkillUseCommand {
             return;
         }
         let id = args.join(" ");
-        if let Some(ref reg) = app.agent.skill_registry() {
-            if reg.contains(&id) {
-                let now_active = reg.toggle_active(&id);
-                app.messages.push(Message::new(
-                    format!(
-                        "Skill {}: {}",
-                        id,
-                        if now_active {
-                            "已激活"
-                        } else {
-                            "已取消激活"
-                        }
-                    ),
-                    MessageType::System,
-                ));
-                return;
-            }
+        if let Some(ref reg) = app.agent.skill_registry()
+            && reg.contains(&id)
+        {
+            let now_active = reg.toggle_active(&id);
+            app.messages.push(Message::new(
+                format!(
+                    "Skill {}: {}",
+                    id,
+                    if now_active {
+                        "已激活"
+                    } else {
+                        "已取消激活"
+                    }
+                ),
+                MessageType::System,
+            ));
+            return;
         }
         app.messages.push(Message::new(
             format!("未找到 Skill: {}", id),
@@ -213,6 +229,7 @@ impl CommandHandler for SkillUseCommand {
     }
 }
 
+/// `/task` — background task management overview.
 pub struct TaskCommand;
 impl CommandHandler for TaskCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -226,6 +243,7 @@ impl CommandHandler for TaskCommand {
     }
 }
 
+/// `/plan` — ask the agent to generate an execution plan.
 pub struct PlanCommand;
 impl CommandHandler for PlanCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -239,6 +257,7 @@ impl CommandHandler for PlanCommand {
     }
 }
 
+/// `/execute` — run the plan produced by the last `/plan`.
 pub struct ExecuteCommand;
 impl CommandHandler for ExecuteCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -252,6 +271,7 @@ impl CommandHandler for ExecuteCommand {
     }
 }
 
+/// `/parallel` — run multiple subagents concurrently.
 pub struct ParallelCommand;
 impl CommandHandler for ParallelCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -265,6 +285,7 @@ impl CommandHandler for ParallelCommand {
     }
 }
 
+/// `/yolo` — switch to automatic tool approval.
 pub struct YoloCommand;
 impl CommandHandler for YoloCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -279,6 +300,7 @@ impl CommandHandler for YoloCommand {
     }
 }
 
+/// `/interactive` — switch to interactive tool approval.
 pub struct InteractiveCommand;
 impl CommandHandler for InteractiveCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -293,6 +315,7 @@ impl CommandHandler for InteractiveCommand {
     }
 }
 
+/// `/planmode` — switch to plan-based tool approval.
 pub struct PlanModeCommand;
 impl CommandHandler for PlanModeCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
@@ -307,6 +330,7 @@ impl CommandHandler for PlanModeCommand {
     }
 }
 
+/// Build the default slash-command registry used by the TUI.
 pub fn build_default_registry() -> CommandRegistry {
     let mut registry = CommandRegistry::new();
 

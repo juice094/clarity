@@ -53,10 +53,18 @@ pub fn pending_cost() -> f64 {
 mod tests {
     use super::*;
 
+    // The module uses a process-wide static buffer. Serialise tests that touch
+    // it so parallel runs do not contaminate each other's assertions.
+    static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset() {
+        let _ = drain_pending_cost();
+    }
+
     #[test]
     fn test_report_and_drain() {
-        // Ensure a fresh state for this test.
-        let _ = drain_pending_cost();
+        let _guard = TEST_SERIAL.lock().unwrap();
+        reset();
         report_cost(0.5);
         report_cost(0.3);
         assert!((pending_cost() - 0.8).abs() < f64::EPSILON);
@@ -66,21 +74,24 @@ mod tests {
 
     #[test]
     fn test_negative_cost_ignored() {
-        let _ = drain_pending_cost();
+        let _guard = TEST_SERIAL.lock().unwrap();
+        reset();
         report_cost(-1.0);
         assert!((pending_cost()).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_zero_cost_ignored() {
-        let _ = drain_pending_cost();
+        let _guard = TEST_SERIAL.lock().unwrap();
+        reset();
         report_cost(0.0);
         assert!((pending_cost()).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_drain_resets_to_zero() {
-        let _ = drain_pending_cost();
+        let _guard = TEST_SERIAL.lock().unwrap();
+        reset();
         report_cost(1.0);
         assert!((drain_pending_cost() - 1.0).abs() < f64::EPSILON);
         assert!((pending_cost()).abs() < f64::EPSILON);

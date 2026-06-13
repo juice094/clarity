@@ -1,5 +1,6 @@
 //! Streaming agent execution loop.
 
+use crate::agent::Agent;
 use crate::agent::run::loop_helpers::{
     fast_trim_tool_results, is_context_overflow_error, retry_with_backoff,
 };
@@ -7,9 +8,8 @@ use crate::agent::run::loop_steps::{
     check_budget, estimate_prompt_tokens, parse_tool_calls, record_cost, run_hooks,
 };
 use crate::agent::run::loop_trait::{
-    run_loop_iterations, AgentLoop, DispatchOutcome, IterationResult, LoopOutcome,
+    AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
 };
-use crate::agent::Agent;
 use crate::error::AgentError;
 use crate::types::ToolCall;
 use clarity_llm::api::{LlmProvider, LlmResponse, Message};

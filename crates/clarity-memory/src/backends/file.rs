@@ -7,12 +7,13 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 
+/// File-based storage backend with atomic writes.
 #[derive(Debug, Clone)]
 pub struct FileStore {
     dir: PathBuf,
@@ -39,6 +40,7 @@ struct StoreMetadata {
 }
 
 impl FileStore {
+    /// Create a new file-backed store in the given directory.
     pub async fn new(dir: impl AsRef<Path>) -> Result<Self> {
         let dir = dir.as_ref().to_path_buf();
         let meta_path = dir.join("_meta.json");

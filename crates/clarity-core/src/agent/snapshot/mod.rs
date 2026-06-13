@@ -18,18 +18,26 @@ use crate::error::AgentError;
 /// Unique identifier for a single snapshot.
 #[derive(Debug, Clone)]
 pub struct SnapshotId {
+    /// Tool call identifier.
     pub id: usize,
+    /// Snapshot hash.
     pub hash: String,
+    /// Snapshot label.
     pub label: String,
+    /// Timestamp of the record.
     pub timestamp: String,
 }
 
 /// Information about a stored snapshot (for listing / UI).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SnapshotInfo {
+    /// Tool call identifier.
     pub id: usize,
+    /// Snapshot hash.
     pub hash: String,
+    /// Snapshot label.
     pub label: String,
+    /// Timestamp of the record.
     pub timestamp: String,
 }
 

@@ -114,7 +114,7 @@ clarity-hub (主线程)
 > 建议验证路径：
 > 1. `cargo test --workspace --lib` 确认基线
 > 2. 直接阅读目标 crate 的 `src/lib.rs` 和最新测试
-> 3. 检查 `docs/ai-protocol.md` 获取最新架构决策
+> 3. 检查 `docs/architecture/ai-protocol.md` 获取最新架构决策
 
 ---
 

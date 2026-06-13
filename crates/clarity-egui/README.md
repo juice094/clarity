@@ -10,13 +10,14 @@ Lightweight desktop GUI for Clarity built on egui + glow. Ships as a single nati
 ## Test
 
 ```bash
-cargo test -p clarity-egui --lib
+cargo test -p clarity-egui --bin clarity-egui
 ```
 
 ## 边界与稳定性
 
-- **Stability tier**: Experimental
-  - Experimental: API may change before v0.4.0
+- **Stability tier**: Beta / Primary desktop frontend
+  - egui 是当前主力桌面栈；Tauri 已归档，`clarity-slint` 为实验栈
+  - Sprint S5 正在进行 Pretext 单页 / 三栏布局迁移，迁移期间保持 `cargo clippy` 零警告
 - **MSRV**: 1.78.0
 - **反向依赖禁止** (No reverse dependencies):
   - 可依赖 clarity-core + clarity-memory + clarity-wire

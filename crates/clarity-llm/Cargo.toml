@@ -41,6 +41,7 @@ tokenizers = { version = "0.21", optional = true }
 clarity-contract = { path = "../clarity-contract" }
 clarity-memory = { path = "../clarity-memory" }
 clarity-mcp = { path = "../clarity-mcp" }
+clarity-secrets = { path = "../clarity-secrets" }
 
 [dev-dependencies]
 tempfile = "3.9"
@@ -49,3 +50,6 @@ tempfile = "3.9"
 default = ["local-llm"]
 local-llm = ["dep:candle-core", "dep:candle-transformers", "dep:hf-hub", "dep:tokenizers"]
 local-llm-cuda = ["local-llm", "candle-core/cuda"]
+
+[lints]
+workspace = true

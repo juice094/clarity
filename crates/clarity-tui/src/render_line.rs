@@ -1,4 +1,4 @@
-//! RenderLine → ratatui mapping — S7 Phase 3A skeleton.
+//! RenderLine → ratatui mapping.
 //!
 //! Converts `clarity_core::ui::render_line::RenderLine` into ratatui
 //! `Line`/`Span` primitives so that `clarity-tui` shares the same semantic
@@ -8,12 +8,10 @@
 //!   markdown -> `clarity_core::ui::markdown_to_lines()` -> `Vec<RenderLine>`
 //!     -> `render_line_to_ratatui()` -> `ratatui::text::Line`.
 
-#![allow(dead_code)] // Skeleton: wired into ChatPane in a follow-up commit.
-
 use clarity_core::ui::render_line::{DiffKind, LineRole, RenderLine, Span, StatusKind, ToolStatus};
 use ratatui::{
     style::{Color, Modifier, Style},
-    text::{Line, Span as RataSpan, Text},
+    text::{Line, Span as RataSpan},
 };
 
 /// Convert a single `RenderLine` into a ratatui `Line`.
@@ -78,15 +76,6 @@ pub fn render_line_to_ratatui(line: &RenderLine, theme_base: Style) -> Line<'sta
                 .fg(Color::Rgb(150, 200, 255)),
         )),
     }
-}
-
-/// Batch convert a slice of `RenderLine`s into a ratatui `Text` block.
-pub fn render_lines_to_text(lines: &[RenderLine], theme_base: Style) -> Text<'static> {
-    let rata_lines: Vec<Line<'static>> = lines
-        .iter()
-        .map(|l| render_line_to_ratatui(l, theme_base))
-        .collect();
-    Text::from(rata_lines)
 }
 
 // ===== Variant-specific renderers =========================================

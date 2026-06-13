@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! MCP Filesystem Server Integration Demo
 //!
 //! This example demonstrates how to connect to the official Model Context Protocol
@@ -37,11 +44,11 @@
 //!    - Search for files
 //! 5. Shows proper error handling
 
+use clarity_core::ToolRegistry;
 use clarity_core::mcp::{
     McpClient, McpClientBuilder, McpClientInstance, McpManager, McpToolAdapter,
 };
 use clarity_core::tools::ToolContext;
-use clarity_core::ToolRegistry;
 use serde_json::json;
 use std::env;
 use tracing::warn;

@@ -1,3 +1,6 @@
+pub mod cron;
+pub mod subagent_progress;
+
 use crate::App;
 
 pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
@@ -54,10 +57,13 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                         )
                         .fill(theme.bg_hover)
                         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-                        if ui.add(new_session_btn).on_hover_text("New session (Ctrl+N)").clicked() {
-                            if !app.chat_store.is_loading {
-                                app.new_session();
-                            }
+                        if ui
+                            .add(new_session_btn)
+                            .on_hover_text("New session (Ctrl+N)")
+                            .clicked()
+                            && !app.chat_store.is_loading
+                        {
+                            app.new_session();
                         }
 
                         // Right: settings only
@@ -71,7 +77,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .on_hover_text("Settings")
                             .clicked()
                             {
-                                app.settings_store.settings_open = true;
+                                app.view_state.main = clarity_core::ui::AppView::Settings;
                                 app.settings_store.settings_edit = {
                                     let guard = app.state.cached_settings.lock();
                                     guard.clone()
@@ -268,7 +274,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     if subagents_expanded {
                         ui.add_space(app.ui_store.theme.space_8);
-                        crate::panels::subagent_progress::render_subagent_progress(app, ui);
+                        crate::panels::sidebar::subagent_progress::render_subagent_progress(
+                            app, ui,
+                        );
                     }
 
                     ui.add_space(app.ui_store.theme.space_12);
@@ -282,48 +290,9 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
 
                     // ── 底部用户区 (Kimi-style) ──
                     ui.add_space(theme.space_16);
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        // Avatar placeholder
-                        let avatar_size = 28.0;
-                        let (avatar_rect, _avatar_resp) = ui.allocate_exact_size(
-                            egui::vec2(avatar_size, avatar_size),
-                            egui::Sense::hover(),
-                        );
-                        ui.painter().circle_filled(
-                            avatar_rect.center(),
-                            avatar_size * 0.5,
-                            theme.accent,
-                        );
-                        let initial = ui.fonts(|f| {
-                            f.layout(
-                                "U".to_string(),
-                                theme.font_bold(theme.text_sm),
-                                egui::Color32::WHITE,
-                                f32::INFINITY,
-                            )
-                        });
-                        let label_pos = avatar_rect.center() - initial.rect.size() * 0.5;
-                        ui.painter().galley(label_pos, initial, egui::Color32::WHITE);
-
-                        // User name + model badge
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new("User")
-                                    .size(theme.text_sm)
-                                    .strong()
-                                    .color(theme.text),
-                            );
-                            let model = app.settings_store.settings_edit.model.trim();
-                            if !model.is_empty() {
-                                ui.label(
-                                    egui::RichText::new(model)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                );
-                            }
-                        });
-                    });
+                    let model = app.settings_store.settings_edit.model.trim();
+                    let subtitle = if model.is_empty() { None } else { Some(model) };
+                    let _ = crate::widgets::user_avatar_row(ui, "User", subtitle, &theme);
                 });
         });
 

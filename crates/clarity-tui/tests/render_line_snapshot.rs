@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! Snapshot tests for the RenderLine → ratatui pipeline (S7 Phase 3A).
 //!
 //! These tests act as cross-renderer parity gates: any change to

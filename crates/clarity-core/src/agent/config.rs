@@ -2,8 +2,8 @@
 
 use crate::agent::compaction_service::CompactionServiceConfig;
 use crate::agent::jumpy::ComposerConfig;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 /// Default max context size in tokens (approximate)
 pub(crate) const DEFAULT_MAX_CONTEXT_TOKENS: usize = 8000;

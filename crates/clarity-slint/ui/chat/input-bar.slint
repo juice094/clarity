@@ -1,0 +1,99 @@
+import { Theme } from "../theme.slint";
+import { LucideIcon } from "../components/lucide-icon.slint";
+import { IconSet } from "@lucide";
+
+export component InputBar {
+    in-out property <string> text: "";
+    in property <bool> enabled: true;
+
+    pure callback text-changed(string);
+    pure callback send-clicked();
+    pure callback upload-clicked();
+
+    Rectangle {
+        height: Theme.input-bar-height;
+        background: Theme.surface;
+
+        HorizontalLayout {
+            padding: 12px;
+            spacing: 12px;
+
+            // 上传按钮
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: Theme.radius-full;
+                background: touch-upload.has-hover ? Theme.surface-hover : Theme.surface-elevated;
+
+                LucideIcon {
+                    icon: IconSet.Plus;
+                    size: 20px;
+                    stroke: Theme.text-secondary;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                touch-upload := TouchArea {
+                    clicked => { root.upload-clicked(); }
+                }
+            }
+
+            // 输入框
+            Rectangle {
+                horizontal-stretch: 1;
+                background: Theme.surface-elevated;
+                border-radius: Theme.radius-lg;
+
+                Text {
+                    text: "输入 '/' 可快捷使用技能...";
+                    color: Theme.text-tertiary;
+                    font-size: Theme.font-body;
+                    x: 10px;
+                    y: 10px;
+                    visible: root.text == "";
+                }
+
+                TextInput {
+                    text <=> root.text;
+                    enabled: root.enabled;
+                    x: 10px;
+                    y: 10px;
+                    width: parent.width - 20px;
+                    height: parent.height - 20px;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+            }
+
+            // 发送按钮
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: Theme.radius-full;
+                background: root.text == "" ? Theme.surface-elevated : Theme.primary;
+
+                LucideIcon {
+                    icon: IconSet.Send;
+                    size: 18px;
+                    stroke: root.text == "" ? Theme.text-tertiary : Theme.text-primary;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                TouchArea {
+                    clicked => { root.send-clicked(); }
+                }
+            }
+        }
+
+        // 顶部分隔线
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: 1px;
+            background: Theme.border;
+        }
+    }
+}

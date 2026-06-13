@@ -1,7 +1,14 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::routing::{get, post};
-use axum::Router;
 use clarity_core::background::BackgroundTaskManager;
 use clarity_gateway::{handlers, server::AppState, ws::ws_handler};
 use http_body_util::BodyExt;
@@ -23,7 +30,11 @@ async fn test_api_router() -> Router {
         temp.join("work"),
         temp.join("context"),
     ));
-    let state = Arc::new(AppState::new(agent, task_manager).await);
+    let state = Arc::new(
+        AppState::new(agent, task_manager)
+            .await
+            .expect("failed to create app state"),
+    );
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -133,7 +144,11 @@ async fn test_gateway_websocket_wire_forwarding() {
         temp.join("work"),
         temp.join("context"),
     ));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
+    let state = Arc::new(
+        clarity_gateway::server::AppState::new(agent, task_manager)
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -217,7 +232,11 @@ async fn test_tui_wire_to_gateway_websocket() {
         temp.join("work"),
         temp.join("context"),
     ));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
+    let state = Arc::new(
+        clarity_gateway::server::AppState::new(agent, task_manager)
+            .await
+            .expect("failed to create app state"),
+    );
     let app = create_api_router(state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -246,10 +265,10 @@ async fn test_tui_wire_to_gateway_websocket() {
     // Spawn a forwarder that deserializes WebSocket text into WireMessages
     tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_rx.next().await {
-            if let Message::Text(text) = msg {
-                if let Ok(wire_msg) = serde_json::from_str::<WireMessage>(&text) {
-                    let _ = soul.send(wire_msg);
-                }
+            if let Message::Text(text) = msg
+                && let Ok(wire_msg) = serde_json::from_str::<WireMessage>(&text)
+            {
+                let _ = soul.send(wire_msg);
             }
         }
     });
@@ -348,7 +367,8 @@ async fn test_gateway_chat_completions_invalid_json() {
 /// Admin router requires no token when CLARITY_ADMIN_TOKEN is unset.
 #[tokio::test]
 async fn test_gateway_admin_tools_list() {
-    std::env::remove_var("CLARITY_ADMIN_TOKEN");
+    // SAFETY: test-only; env vars are manipulated in single-threaded test context.
+    unsafe { std::env::remove_var("CLARITY_ADMIN_TOKEN") };
     let registry = clarity_core::registry::ToolRegistry::with_builtin_tools();
     let config = clarity_core::agent::AgentConfig::new();
     let agent = Arc::new(clarity_core::agent::Agent::with_config(registry, config));
@@ -359,7 +379,11 @@ async fn test_gateway_admin_tools_list() {
         temp.join("work"),
         temp.join("context"),
     ));
-    let state = Arc::new(clarity_gateway::server::AppState::new(agent, task_manager).await);
+    let state = Arc::new(
+        clarity_gateway::server::AppState::new(agent, task_manager)
+            .await
+            .expect("failed to create app state"),
+    );
     let app = clarity_gateway::server::create_admin_router(state);
 
     let response = app

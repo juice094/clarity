@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tracing::debug;
 
 use crate::error::AgentError;
@@ -10,8 +10,11 @@ use crate::error::AgentError;
 /// Represents a single snapshot commit in the side repo.
 #[derive(Debug, Clone)]
 pub struct SnapshotCommit {
+    /// Snapshot hash.
     pub hash: String,
+    /// Message text.
     pub message: String,
+    /// Timestamp of the record.
     pub timestamp: String,
 }
 

@@ -27,6 +27,7 @@ pub struct Goal {
 }
 
 impl Goal {
+    /// Create a new `Goal`.
     pub fn new(required_tags: Vec<String>) -> Self {
         Self {
             required_tags,
@@ -74,6 +75,7 @@ impl Goal {
 /// A single skill invocation in a planned sequence.
 #[derive(Debug, Clone)]
 pub struct SkillProposal {
+    /// Skill identifier.
     pub skill_id: String,
     /// Parameters / subgoal description (the "z" in π_z).
     pub params: String,
@@ -117,6 +119,7 @@ pub struct HierarchicalPlanner<P: OutcomePredictor + ?Sized> {
 }
 
 impl<P: OutcomePredictor + ?Sized> HierarchicalPlanner<P> {
+    /// Create a new instance.
     pub fn new(predictor: Arc<P>, config: PlannerConfig) -> Self {
         let rng = match config.rng_seed {
             Some(seed) => rand::rngs::StdRng::seed_from_u64(seed),

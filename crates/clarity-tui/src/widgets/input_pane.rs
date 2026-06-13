@@ -20,6 +20,7 @@ pub struct InputPane {
 }
 
 impl InputPane {
+    /// Create an empty input pane.
     pub fn new() -> Self {
         Self {
             input: String::new(),
@@ -30,10 +31,12 @@ impl InputPane {
         }
     }
 
+    /// Return the current input text.
     pub fn input(&self) -> &str {
         &self.input
     }
 
+    /// Return the cursor position in characters.
     pub fn cursor_position(&self) -> usize {
         self.cursor_position
     }
@@ -47,6 +50,7 @@ impl InputPane {
             .unwrap_or(self.input.len())
     }
 
+    /// Insert a character at the current cursor position.
     pub fn insert_char(&mut self, c: char) {
         let byte_idx = self.char_pos_to_byte_idx(self.cursor_position);
         self.input.insert(byte_idx, c);
@@ -54,6 +58,7 @@ impl InputPane {
         self.history_index = None;
     }
 
+    /// Delete the character before the cursor.
     pub fn delete_char(&mut self) {
         if self.cursor_position > 0 {
             self.cursor_position -= 1;
@@ -64,31 +69,36 @@ impl InputPane {
         }
     }
 
+    /// Delete the character at the cursor.
     pub fn delete_char_forward(&mut self) {
         let byte_idx = self.char_pos_to_byte_idx(self.cursor_position);
-        if byte_idx < self.input.len() {
-            if let Some(c) = self.input.chars().nth(self.cursor_position) {
-                self.input.drain(byte_idx..byte_idx + c.len_utf8());
-            }
+        if byte_idx < self.input.len()
+            && let Some(c) = self.input.chars().nth(self.cursor_position)
+        {
+            self.input.drain(byte_idx..byte_idx + c.len_utf8());
         }
     }
 
+    /// Move the cursor one character to the left.
     pub fn move_cursor_left(&mut self) {
         if self.cursor_position > 0 {
             self.cursor_position -= 1;
         }
     }
 
+    /// Move the cursor one character to the right.
     pub fn move_cursor_right(&mut self) {
         if self.cursor_position < self.input.chars().count() {
             self.cursor_position += 1;
         }
     }
 
+    /// Set the cursor position, clamped to the input length.
     pub fn set_cursor_position(&mut self, pos: usize) {
         self.cursor_position = pos.min(self.input.chars().count());
     }
 
+    /// Clear the input, saving it to history if non-empty.
     pub fn clear(&mut self) {
         let text = self.input.trim().to_string();
         if !text.is_empty() && self.history.last() != Some(&text) {
@@ -100,6 +110,7 @@ impl InputPane {
         self.draft.clear();
     }
 
+    /// Replace the input with the previous history entry.
     pub fn history_prev(&mut self) {
         if self.history.is_empty() {
             return;
@@ -122,6 +133,7 @@ impl InputPane {
         }
     }
 
+    /// Replace the input with the next history entry or the draft.
     pub fn history_next(&mut self) {
         match self.history_index {
             None => {}

@@ -3,7 +3,7 @@
 //! Provides the tao event loop, tray icon, menu, OS notifications,
 //! Gateway task polling, and wire message listening.
 
-use crate::{TaskListPayload, TaskSummary, POLL_INTERVAL_SECS};
+use crate::{POLL_INTERVAL_SECS, TaskListPayload, TaskSummary};
 use clarity_wire::{Wire, WireMessage};
 use notify::Watcher;
 use parking_lot::Mutex;
@@ -15,26 +15,32 @@ use tao::{
     window::WindowBuilder,
 };
 use tray_icon::{
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
     Icon, MouseButton, TrayIconBuilder, TrayIconEvent,
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
 };
 
 // ------------------------------------------------------------------
 // Shared tokio runtime for tray callbacks (avoids spawning a new
 // Runtime on every menu click).
 // ------------------------------------------------------------------
-static TRAY_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
-
-fn tray_runtime() -> &'static tokio::runtime::Runtime {
-    TRAY_RUNTIME.get_or_init(|| {
-        tokio::runtime::Runtime::new().expect("Failed to create tray tokio runtime")
-    })
+fn tray_runtime() -> anyhow::Result<Arc<tokio::runtime::Runtime>> {
+    static RUNTIME: Mutex<Option<Arc<tokio::runtime::Runtime>>> = Mutex::new(None);
+    let mut guard = RUNTIME.lock();
+    if guard.is_none() {
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| anyhow::anyhow!("Failed to create tray tokio runtime: {}", e))?;
+        *guard = Some(Arc::new(rt));
+    }
+    match guard.as_ref() {
+        Some(rt) => Ok(rt.clone()),
+        None => Err(anyhow::anyhow!("tray runtime not initialized")),
+    }
 }
 
 // ------------------------------------------------------------------
 // Default icon (32×32 copper #c98a5e square)
 // ------------------------------------------------------------------
-fn default_icon() -> Icon {
+fn default_icon() -> anyhow::Result<Icon> {
     const SIZE: usize = 32;
     let mut rgba = Vec::with_capacity(SIZE * SIZE * 4);
     for _ in 0..(SIZE * SIZE) {
@@ -44,18 +50,22 @@ fn default_icon() -> Icon {
         rgba.push(0xFF); // A
     }
     Icon::from_rgba(rgba, SIZE as u32, SIZE as u32)
-        .unwrap_or_else(|_| Icon::from_rgba(vec![0xFF; 16], 2, 2).expect("fallback icon"))
+        .map_err(|e| anyhow::anyhow!("Failed to create tray icon: {}", e))
 }
 
 // ------------------------------------------------------------------
 // Single-instance guard (cross-platform: TCP port binding)
 // ------------------------------------------------------------------
+
+/// Ensure only one Clarity Claw process binds the local instance port.
+///
+/// Returns `true` if this is the first instance, `false` if another
+/// instance is already running.
 pub fn ensure_single_instance() -> bool {
     use std::net::TcpListener;
-    use std::sync::Mutex;
 
     static INSTANCE_LOCK: Mutex<Option<TcpListener>> = Mutex::new(None);
-    let mut lock = INSTANCE_LOCK.lock().unwrap();
+    let mut lock = INSTANCE_LOCK.lock();
     if lock.is_some() {
         return false;
     }
@@ -126,7 +136,7 @@ pub fn run() -> anyhow::Result<()> {
     let tray_icon = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("Clarity Claw — connecting...")
-        .with_icon(default_icon())
+        .with_icon(default_icon()?)
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to create tray icon: {}", e))?;
 
@@ -314,7 +324,17 @@ pub fn run() -> anyhow::Result<()> {
                             let input = input.trim().to_string();
                             if !input.is_empty() {
                                 let gw = gw_url.clone();
-                                let rt = tray_runtime();
+                                let rt = match tray_runtime() {
+                                    Ok(rt) => rt,
+                                    Err(e) => {
+                                        tracing::error!("{}", e);
+                                        let _ = notify_rust::Notification::new()
+                                            .summary("Clarity Error")
+                                            .body(&format!("Runtime initialization failed: {}", e))
+                                            .show();
+                                        return;
+                                    }
+                                };
                                 match rt.block_on(crate::quick_chat(&gw, &input)) {
                                     Ok(reply) => {
                                         let _ = notify_rust::Notification::new()
@@ -351,7 +371,20 @@ pub fn run() -> anyhow::Result<()> {
                                     let prompt = prompt.trim().to_string();
                                     if !prompt.is_empty() {
                                         let gw = gw_url.clone();
-                                        let rt = tray_runtime();
+                                        let rt = match tray_runtime() {
+                                            Ok(rt) => rt,
+                                            Err(e) => {
+                                                tracing::error!("{}", e);
+                                                let _ = notify_rust::Notification::new()
+                                                    .summary("Clarity Error")
+                                                    .body(&format!(
+                                                        "Runtime initialization failed: {}",
+                                                        e
+                                                    ))
+                                                    .show();
+                                                return;
+                                            }
+                                        };
                                         match rt.block_on(crate::create_remote_task(
                                             &gw, &name, &prompt,
                                         )) {
@@ -383,7 +416,13 @@ pub fn run() -> anyhow::Result<()> {
                     let task_id = task_id.clone();
                     let gw = gw_url.clone();
                     std::thread::spawn(move || {
-                        let rt = tray_runtime();
+                        let rt = match tray_runtime() {
+                            Ok(rt) => rt,
+                            Err(e) => {
+                                tracing::error!("{}", e);
+                                return;
+                            }
+                        };
                         match rt.block_on(crate::cancel_remote_task(&gw, &task_id)) {
                             Ok(()) => {
                                 let _ = notify_rust::Notification::new()

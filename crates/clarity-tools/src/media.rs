@@ -9,7 +9,7 @@
 //! - README: "Read media files as base64 for LLM vision/audio input."
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use tokio::fs;
 use tracing::{debug, warn};

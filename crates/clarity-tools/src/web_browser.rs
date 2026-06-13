@@ -12,7 +12,7 @@
 use async_trait::async_trait;
 use regex::Regex;
 use scraper::{Html, Selector};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Mutex;
 use tracing::{debug, error};
 
@@ -238,6 +238,16 @@ impl WebBrowserTool {
 
     /// Convert raw HTML to readable plain text.
     fn html_to_text(html: &str) -> String {
+        /// Compile a constant regex pattern for static use.
+        ///
+        /// # Panics
+        ///
+        /// Panics only if the literal pattern is invalid; it is known to be valid.
+        #[allow(clippy::unwrap_used)]
+        fn static_regex(pattern: &str) -> Regex {
+            Regex::new(pattern).unwrap()
+        }
+
         // Pre-compiled regexes — avoid re-compilation on every call.
         static SCRIPT_STYLE_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
         static BLOCK_OPEN_RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
@@ -248,17 +258,17 @@ impl WebBrowserTool {
 
         // Strip script / style / nav / footer / header tags entirely.
         text = SCRIPT_STYLE_RE
-            .get_or_init(|| Regex::new(r"<(?:script|style|nav|footer|header)[^>]*>[\s\S]*?</(?:script|style|nav|footer|header)>").unwrap())
+            .get_or_init(|| static_regex(r"<(?:script|style|nav|footer|header)[^>]*>[\s\S]*?</(?:script|style|nav|footer|header)>"))
             .replace_all(&text, "")
             .to_string();
 
         // Replace common block elements with newlines.
         text = BLOCK_OPEN_RE
-            .get_or_init(|| Regex::new(r"<(?:p|div|h[1-6]|li|tr)[^>]*>").unwrap())
+            .get_or_init(|| static_regex(r"<(?:p|div|h[1-6]|li|tr)[^>]*>"))
             .replace_all(&text, "\n")
             .to_string();
         text = BLOCK_CLOSE_RE
-            .get_or_init(|| Regex::new(r"</(?:p|div|h[1-6]|li|tr)>").unwrap())
+            .get_or_init(|| static_regex(r"</(?:p|div|h[1-6]|li|tr)>"))
             .replace_all(&text, "\n")
             .to_string();
 
@@ -268,7 +278,7 @@ impl WebBrowserTool {
             .replace("<br />", "\n");
 
         text = TAG_RE
-            .get_or_init(|| Regex::new(r"<[^>]+>").unwrap())
+            .get_or_init(|| static_regex(r"<[^>]+>"))
             .replace_all(&text, "")
             .to_string();
 

@@ -48,15 +48,19 @@
 //!
 //! ```rust,no_run
 //! use clarity_core::agent::jumpy::*;
+//! use std::sync::Arc;
 //!
-//! let predictor = Arc::new(HistoricalPredictor::new());
-//! let composer = ComposerBuilder::new()
-//!     .with_predictor(predictor.clone())
-//!     .with_skills(vec![
-//!         ("explore".into(), "default".into()),
-//!         ("coder".into(), "default".into()),
-//!     ])
-//!     .build()?;
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let predictor = Arc::new(HistoricalPredictor::new());
+//!     let _composer = ComposerBuilder::new()
+//!         .with_predictor(predictor.clone())
+//!         .with_skills(vec![
+//!             ("explore".into(), "default".into()),
+//!             ("coder".into(), "default".into()),
+//!         ])
+//!         .build()?;
+//!     Ok(())
+//! }
 //! ```
 
 pub mod composer;

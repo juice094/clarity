@@ -8,9 +8,11 @@
 //! - `SLACK_ENABLED=true`
 //! - `SLACK_BOT_TOKEN=xoxb-...`
 
+// Intentionally retained: public types and helpers are kept for Slack integration and tests.
 #![allow(dead_code)]
 
 use async_trait::async_trait;
+use clarity_channels::retry::RetryPolicy;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -22,20 +24,28 @@ use super::{Channel, ChannelConfig, ChannelError};
 /// Slack Events API 推送的消息体（简化版）
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SlackEvent {
+    /// Top-level event type (e.g. "event_callback" or "url_verification").
     #[serde(rename = "type")]
     pub event_type: String,
+    /// Inner message event, present for event callbacks.
     pub event: Option<SlackMessageEvent>,
+    /// Challenge string returned during URL verification.
     pub challenge: Option<String>,
 }
 
 /// Slack message event
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SlackMessageEvent {
+    /// Event subtype (e.g. "message").
     #[serde(rename = "type")]
     pub event_type: String,
+    /// Sending user identifier.
     pub user: Option<String>,
+    /// Message text.
     pub text: Option<String>,
+    /// Channel identifier.
     pub channel: String,
+    /// Event timestamp.
     pub ts: String,
 }
 
@@ -50,50 +60,75 @@ struct SlackApiResponse {
 pub struct SlackChannel {
     config: ChannelConfig,
     bot_token: Option<String>,
+    client: reqwest::Client,
+    retry_policy: RetryPolicy,
 }
 
 impl SlackChannel {
+    /// Create a new Slack channel from the given configuration.
     pub fn new(config: ChannelConfig) -> Self {
         Self {
             bot_token: config.token.clone(),
             config,
+            client: reqwest::Client::new(),
+            retry_policy: RetryPolicy::new(),
         }
+    }
+
+    /// Set a custom retry policy for Slack Web API calls.
+    pub fn with_retry_policy(mut self, policy: RetryPolicy) -> Self {
+        self.retry_policy = policy;
+        self
     }
 
     /// 发送消息到指定 Slack 频道
     pub async fn send_message(&self, channel: &str, text: &str) -> Result<(), ChannelError> {
-        let token = self.bot_token.as_ref().ok_or_else(|| {
+        let token = self.bot_token.clone().ok_or_else(|| {
             ChannelError::AuthFailed("Slack bot token not configured".to_string())
         })?;
 
-        let client = reqwest::Client::new();
-        let resp = client
-            .post("https://slack.com/api/chat.postMessage")
-            .bearer_auth(token)
-            .header("Content-Type", "application/json; charset=utf-8")
-            .json(&serde_json::json!({
-                "channel": channel,
-                "text": text,
-            }))
-            .send()
+        let channel = channel.to_string();
+        let text = text.to_string();
+
+        self.retry_policy
+            .execute(move || {
+                let client = self.client.clone();
+                let token = token.clone();
+                let channel = channel.clone();
+                let text = text.clone();
+                async move {
+                    let resp = client
+                        .post("https://slack.com/api/chat.postMessage")
+                        .bearer_auth(&token)
+                        .header("Content-Type", "application/json; charset=utf-8")
+                        .json(&serde_json::json!({
+                            "channel": channel,
+                            "text": text,
+                        }))
+                        .send()
+                        .await
+                        .map_err(ChannelError::HttpError)?;
+
+                    let status = resp.status();
+                    let body: SlackApiResponse =
+                        resp.json().await.map_err(ChannelError::HttpError)?;
+
+                    if !body.ok {
+                        let err = body.error.unwrap_or_else(|| "unknown".to_string());
+                        return Err(ChannelError::SendFailed(format!(
+                            "Slack API error (HTTP {}): {}",
+                            status, err
+                        )));
+                    }
+
+                    Ok(())
+                }
+            })
             .await
-            .map_err(ChannelError::HttpError)?;
-
-        let status = resp.status();
-        let body: SlackApiResponse = resp.json().await.map_err(ChannelError::HttpError)?;
-
-        if !body.ok {
-            let err = body.error.unwrap_or_else(|| "unknown".to_string());
-            return Err(ChannelError::SendFailed(format!(
-                "Slack API error (HTTP {}): {}",
-                status, err
-            )));
-        }
-
-        Ok(())
     }
 
     /// 验证 Slack Events API 请求签名（可选）
+    // Intentionally retained: public verification helper for Slack webhook security.
     #[allow(dead_code)]
     pub fn verify_signature(
         &self,
@@ -210,5 +245,15 @@ mod tests {
         let json = r#"{"type":"url_verification","challenge":"abc123"}"#;
         let event: SlackEvent = serde_json::from_str(json).unwrap();
         assert_eq!(event.challenge.unwrap(), "abc123");
+    }
+
+    #[test]
+    fn test_slack_channel_accepts_retry_policy() {
+        use clarity_channels::retry::RetryPolicy;
+
+        let channel = SlackChannel::new(ChannelConfig::new().enabled().with_token("xoxb-test"))
+            .with_retry_policy(RetryPolicy::new().with_max_attempts(4));
+
+        assert_eq!(channel.retry_policy.max_attempts, 4);
     }
 }

@@ -14,15 +14,24 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderSelection {
     /// Use the user's preferred cloud provider.
-    Preferred { provider: String },
+    Preferred {
+        /// Selected provider alias.
+        provider: String,
+    },
     /// Preferred failed; fallback to local.
     Fallback {
+        /// Provider that was originally preferred.
         preferred: String,
+        /// Provider to fall back to.
         fallback: String,
+        /// Reason for the fallback decision.
         reason: String,
     },
     /// Use a local GGUF model.
-    LocalOnly { path: Option<String> },
+    LocalOnly {
+        /// Optional path to the local model.
+        path: Option<String>,
+    },
 }
 
 /// Trait for pluggable provider-selection strategies.

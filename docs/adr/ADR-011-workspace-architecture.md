@@ -136,7 +136,7 @@ Pre-merge acceptance criteria for Phase 1.5 / S6 work adopting this schema:
 - openclaw workspace contract: `~/dev/third_party/openclaw/docs/concepts/agent-workspace.md`
 - openclaw runtime contract: `~/dev/third_party/openclaw/docs/concepts/agent-runtimes.md`
 - Pretext UI theory: `docs/architecture/pretext-ui-theory.md` §9 (filesystem as Agent evolution substrate)
-- Future direction: `docs/FUTURE_DIRECTION.md` Phase A-D
+- Future direction: `docs/planning/FUTURE_DIRECTION.md` Phase A-D
 - Companion: ADR-012 (RenderLine enum, defines note types for `notes/` subdirectories)
 - Related: ADR-005 (subagent-core decoupling), ADR-006 (protocol-layer convergence)
 - Syncthing-Rust: `syncthing-rust v0.2.0-beta` (TTL 2026-06-01)

@@ -454,7 +454,7 @@ preventable rework.
 
 ## References
 
-- `docs/plans/2026-05-12-pretext-ui-evolution.md` — Phase plan (amended in §6 above)
+- `docs/planning/plans/2026-05-12-pretext-ui-evolution.md` — Phase plan (amended in §6 above)
 - `crates/clarity-egui/EGUI_LAYOUT.md` — Layout rules (Appendix: 5 traps)
 - `~/.config/agents/skills/egui-layout-canons/SKILL.md` — Skill protocol
 - `crates/clarity-core/src/ui/view_state.rs` — Canonical state machine

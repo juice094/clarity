@@ -1,8 +1,8 @@
 //! Task management tools: TaskList, TaskOutput, TaskStop
 
 use async_trait::async_trait;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 
 use crate::background::store::{TaskSpec, TaskStatus, TaskStore};
 use crate::error::ToolError;

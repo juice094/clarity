@@ -167,7 +167,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 /// Returns `true` when a modal dialog is open that should block main-UI shortcuts.
 fn is_modal_open(app: &App) -> bool {
     !app.ui_store.pending_approvals.is_empty()
-        || app.settings_store.settings_open
+        || app.view_state.main == clarity_core::ui::AppView::Settings
         || app.team_store.create_modal_open
         || app.cron_store.create_modal_open
         || app.snapshot_store.modal_open

@@ -170,7 +170,7 @@ llm_policy.rs, main.rs, onboarding.rs, session.rs, settings.rs, theme.rs
 |------|------|---------|
 | AGENTS.md（根） | `AGENTS.md` | `[VERIFY]` `Test-Path AGENTS.md` |
 | AGENTS.md（clarity） | `crates/clarity-egui/AGENTS.md` 等 | `[VERIFY]` `Get-ChildItem -Recurse -Filter AGENTS.md` |
-| ai-protocol.md | `docs/ai-protocol.md` | `[VERIFY]` `Test-Path docs/ai-protocol.md` |
+| ai-protocol.md | `docs/architecture/ai-protocol.md` | `[VERIFY]` `Test-Path docs/architecture/ai-protocol.md` |
 | ARCHITECTURE.md | `docs/ARCHITECTURE.md` | `[VERIFY]` `Test-Path docs/ARCHITECTURE.md` |
 | 架构地图 | `docs/architecture/` | `[VERIFY]` `Get-ChildItem docs/architecture` |
 

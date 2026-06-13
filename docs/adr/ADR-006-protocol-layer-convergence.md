@@ -11,7 +11,7 @@ tags: [adr, protocol]
 > Deciders: juice094 + Agent (architect layer)
 > Affects: `clarity-wire`, `clarity-core`, `clarity-egui`, `clarity-tui`, `clarity-claw`, `clarity-gateway`
 > Supersedes: 无
-> Relates to: `docs/CODE-CHANGE-PRINCIPLES.md` (P3 单源真相, P7 协议不前瞻)
+> Relates to: `docs/development/CODE-CHANGE-PRINCIPLES.md` (P3 单源真相, P7 协议不前瞻)
 
 ---
 
@@ -267,11 +267,11 @@ pub enum WireMessage { ... NewEvent { ... } }
 
 ## 6. References
 
-- `docs/CODE-CHANGE-PRINCIPLES.md` § P1, P3, P7
+- `docs/development/CODE-CHANGE-PRINCIPLES.md` § P1, P3, P7
 - `crates/clarity-egui/docs/layout-audit-architecture-crisis.md`
 - `crates/clarity-wire/src/lib.rs` § Protocol-Driven UI Layer (Phase 2 Pilot) — 本 ADR 否决该 Pilot
 - Codex repo `protocol.rs::Event` — Gen-2 的设计灵感来源（不再引用）
-- `docs/RFC-2026-04-30-ensure-llm-decoupling.md` — 同类"三层解耦"成功范例
+- `docs/adr/RFC-2026-04-30-ensure-llm-decoupling.md` — 同类"三层解耦"成功范例
 
 ---
 

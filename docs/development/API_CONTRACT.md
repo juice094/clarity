@@ -7,7 +7,7 @@ tags: [contract]
 
 # Clarity Gateway API 契约
 
-> 版本：v0.3.1+ | 关联：[`ARCHITECTURE.md`](ARCHITECTURE.md) · [`THREAT_MODEL.md`](THREAT_MODEL.md)
+> 版本：v0.3.1+ | 关联：[`ARCHITECTURE.md`](../architecture/ARCHITECTURE.md) · [`THREAT_MODEL.md`](../security/THREAT_MODEL.md)
 
 ---
 

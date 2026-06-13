@@ -1,3 +1,17 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
+)]
+// Phase A.4: egui is undergoing a UI refactor; dead-code warnings are expected
+// while the Pretext single-page shell migration is in progress. Re-enable once
+// the new layout callers land.
+#![allow(dead_code)]
 //! Clarity egui Desktop — Application entry point.
 //!
 //! ARCHITECTURE CONSTRAINT (Pretext-aligned):
@@ -10,15 +24,17 @@
 
 use eframe::egui;
 use egui_extras::{Size, StripBuilder};
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 mod app_state;
 mod components;
+mod design_system;
 mod error;
 mod handlers;
 mod i18n;
+mod layout;
 mod llm_binder;
 mod llm_loader;
 mod llm_policy;
@@ -46,6 +62,7 @@ use ui::types::*;
 
 // (layout constants moved to Theme tokens)
 
+/// Holds app state.
 pub(crate) struct App {
     // === Core Runtime ===
     pub(crate) state: Arc<AppState>,
@@ -125,6 +142,83 @@ impl App {
         }
     }
 
+    /// Orchestrates the full layout shell.
+    ///
+    /// This is the single entry point for all chrome, main views, overlays and
+    /// modals. Keeping it isolated makes it easy to swap in the future
+    /// single-page/three-column layout without touching frame-level logic.
+    fn render_layout_shell(&mut self, ctx: &egui::Context) {
+        // ── Base chrome (always rendered) ──
+        self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
+        self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
+
+        // Workspace: only render when window is wide enough to avoid three-column crowding.
+        let screen_w = ctx.screen_rect().width();
+        if screen_w >= self.ui_store.theme.breakpoint_medium || self.ui_store.preview_item.is_some()
+        {
+            self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
+        }
+        self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
+
+        // ── Main view (mutually exclusive) ──
+        match self.view_state.main {
+            clarity_core::ui::AppView::Chat => {
+                self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
+            }
+            clarity_core::ui::AppView::Settings => {
+                self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
+            }
+            clarity_core::ui::AppView::Dashboard => {
+                self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
+            }
+            clarity_core::ui::AppView::Gantt => {
+                self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
+            }
+            clarity_core::ui::AppView::TaskBoard => {
+                self.render_safe(ctx, "task_board", |app, ctx| app.render_task_board(ctx));
+            }
+            clarity_core::ui::AppView::Work => {
+                self.render_safe(ctx, "work", |app, ctx| app.render_work_panel(ctx));
+            }
+        }
+
+        // ── Overlay panels ──
+        self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
+        self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
+        self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
+
+        // ── Modals (top-most, blocking) ──
+        self.render_safe(ctx, "cron_create", |app, ctx| {
+            app.render_cron_create_modal(ctx)
+        });
+        self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
+        self.render_safe(ctx, "snapshot", |app, ctx| app.render_snapshot_modal(ctx));
+        self.render_safe(ctx, "task_create", |app, ctx| {
+            app.render_task_create_modal(ctx)
+        });
+        self.render_safe(ctx, "task_view", |app, ctx| app.render_task_view_modal(ctx));
+        self.render_safe(ctx, "subagent_view", |app, ctx| {
+            app.render_subagent_view_modal(ctx)
+        });
+        self.render_safe(ctx, "team", |app, ctx| app.render_team_panel(ctx));
+        self.render_safe(ctx, "team_create", |app, ctx| {
+            app.render_team_create_modal(ctx)
+        });
+        self.render_safe(ctx, "kimi_login", |app, ctx| {
+            crate::panels::modals::login::render_oauth_login_modal(
+                app,
+                ctx,
+                &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
+            );
+        });
+        self.render_safe(ctx, "onboarding", |app, ctx| {
+            onboarding::render_onboarding(app, ctx);
+        });
+        self.render_safe(ctx, "resize", |app, ctx| {
+            app.handle_window_resize(ctx);
+        });
+    }
+
     /// Handle system tray events: show/hide window and menu actions.
     fn handle_tray_events(&mut self, ctx: &egui::Context) {
         let Some(tray) = self.tray_manager.as_ref() else {
@@ -161,7 +255,7 @@ impl App {
                     self.push_toast("Agent paused".to_string(), ToastLevel::Info);
                 }
                 TrayAction::Settings => {
-                    self.settings_store.settings_open = true;
+                    self.view_state.main = clarity_core::ui::AppView::Settings;
                 }
                 TrayAction::Quit => {
                     self.tray_quit_requested = true;
@@ -250,10 +344,8 @@ impl App {
                                 ui.add_space(theme.space_12);
 
                                 // ── Chat / Work pill toggle (OpenClaw dual-mode) ──
-                                let is_chat = matches!(
-                                    self.view_state.main,
-                                    clarity_core::ui::AppView::Chat
-                                );
+                                let is_chat =
+                                    matches!(self.view_state.main, clarity_core::ui::AppView::Chat);
                                 let (chat_bg, chat_fg) = if is_chat {
                                     (theme.surface_strong, theme.text)
                                 } else {
@@ -662,7 +754,7 @@ impl App {
             ids::CLOSE_MODAL => {
                 if self.team_store.create_modal_open {
                     self.team_store.create_modal_open = false;
-                } else if self.view_state.main != clarity_core::ui::AppView::Chat {
+                } else if self.view_state.main == clarity_core::ui::AppView::Settings {
                     self.view_state.main = clarity_core::ui::AppView::Chat;
                 } else if matches!(
                     self.view_state.modal,
@@ -971,14 +1063,14 @@ impl eframe::App for App {
         }
 
         // Refresh task list periodically when panel is open
-        if self.task_store.task_panel_open
+        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
             && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3)
         {
             self.refresh_tasks();
         }
 
         // Poll parallel batch status when panel is open
-        if self.task_store.task_panel_open
+        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
             && !self.subagent_store.parallel_batches.is_empty()
             && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
         {
@@ -1024,95 +1116,15 @@ impl eframe::App for App {
             }
         }
 
-        // ── Responsive breakpoints: auto-collapse panels when window is too narrow ──
-        let current_width = ctx.screen_rect().width();
-        if let Some(last_width) = self.last_frame_width {
-            // One-way collapse: only trigger when window becomes narrower.
-            // Do NOT auto-restore on widen to avoid fighting user intent.
-            if last_width >= self.ui_store.theme.breakpoint_medium
-                && current_width < self.ui_store.theme.breakpoint_medium
-            {
-                // Dashboard is controlled by view_state.main (AppView), not right panel.
-                // Team / Task right panels are collapsed via view_state.right.
-                self.view_state.right = None;
-            }
-            if last_width >= self.ui_store.theme.breakpoint_compact
-                && current_width < self.ui_store.theme.breakpoint_compact
-            {
-                self.ui_store.sidebar_collapsed = true;
-            }
-        }
-        self.last_frame_width = Some(current_width);
-
-        // ── Content-area guard: ensure chat area never drops below 480px ──
-        // This catches cases where user manually resized side panels narrower
-        // than the window-width breakpoints above.
-        let sidebar_w = if self.ui_store.sidebar_collapsed {
-            self.ui_store.theme.size_sidebar_collapsed
-        } else {
-            self.ui_store.theme.size_sidebar
-        };
-        let workspace_w = self.ui_store.theme.size_workspace; // always present
-        let dashboard_w = if self.ui_store.dashboard_panel_open {
-            self.ui_store.theme.size_panel_right
-        } else {
-            0.0
-        };
-        let team_w = if self.team_store.team_panel_open {
-            self.ui_store.theme.size_panel_right
-        } else {
-            0.0
-        };
-        let task_w = if self.task_store.task_panel_open {
-            self.ui_store.theme.size_panel_right
-        } else {
-            0.0
-        };
-        let content_w = current_width - sidebar_w - workspace_w - dashboard_w - team_w - task_w;
-        if content_w < self.ui_store.theme.content_min_width {
-            // Collapse Team or Task right panel if open (dashboard is AppView, not right panel).
-            if matches!(
-                self.view_state.right,
-                Some(clarity_core::ui::SidePanel::Team) | Some(clarity_core::ui::SidePanel::Task)
-            ) {
-                self.view_state.right = None;
-            }
-        }
+        // ── Layout shell: responsive geometry + collapse policy ──
+        let _metrics = crate::layout::update_and_measure(self, ctx);
 
         ctx.style_mut(|style| {
             self.ui_store.theme.apply(style);
         });
-
-        // Sync legacy boolean flags with ViewState (compatibility layer).
-        // This ensures render_* methods that still check their private booleans
-        // stay consistent with the unified view state machine.
-        self.settings_store.settings_open =
-            self.view_state.main == clarity_core::ui::AppView::Settings;
-        self.ui_store.dashboard_panel_open =
-            self.view_state.main == clarity_core::ui::AppView::Dashboard;
-        self.ui_store.gantt_panel_open = self.view_state.main == clarity_core::ui::AppView::Gantt;
-
-        // Forward-direction sync (P1.5.4 bridge reversal — ADR-014):
-        // ViewState is the authoritative source for side-panel and modal state.
-        // Legacy booleans are read-only mirrors used by render_* methods that
-        // have not yet been migrated.  turn/expansions remain on reverse-sync
-        // until their respective P1.5.x subtasks complete.
-        self.team_store.team_panel_open = matches!(
-            self.view_state.right,
-            Some(clarity_core::ui::SidePanel::Team)
-        );
-        self.task_store.task_panel_open = matches!(
-            self.view_state.right,
-            Some(clarity_core::ui::SidePanel::Task)
-        );
-        self.ui_store.skill_panel_open = matches!(
-            self.view_state.modal,
-            Some(clarity_core::ui::ModalType::Skill)
-        );
-        self.mcp_store.mcp_panel_open = matches!(
-            self.view_state.modal,
-            Some(clarity_core::ui::ModalType::Mcp)
-        );
+        // Install theme into egui Context data so design_system helpers can
+        // retrieve it automatically without threading `&Theme` everywhere.
+        crate::design_system::install_theme(ctx, self.ui_store.theme.clone());
 
         // Reverse-direction sync — remaining booleans not yet reversed.
         self.view_state.turn = clarity_core::ui::TurnState::from_legacy(
@@ -1131,75 +1143,8 @@ impl eframe::App for App {
             self.ui_store.workspace_plan_manually_collapsed,
         );
 
-        // ── Base chrome (always rendered) ──
-        self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
-        self.render_safe(ctx, "sidebar", |app, ctx| app.render_sidebar(ctx));
-        // Workspace: only render when window is wide enough to avoid three-column crowding.
-        let screen_w = ctx.screen_rect().width();
-        if screen_w >= self.ui_store.theme.breakpoint_medium
-            || self.ui_store.preview_item.is_some()
-        {
-            self.render_safe(ctx, "workspace", |app, ctx| app.render_workspace_panel(ctx));
-        }
-        self.render_safe(ctx, "input", |app, ctx| app.render_input_panel(ctx));
-
-        // ── Main view (mutually exclusive) ──
-        match self.view_state.main {
-            clarity_core::ui::AppView::Chat => {
-                self.render_safe(ctx, "chat", |app, ctx| app.render_chat_area(ctx));
-            }
-            clarity_core::ui::AppView::Settings => {
-                self.render_safe(ctx, "settings", |app, ctx| app.render_settings_panel(ctx));
-            }
-            clarity_core::ui::AppView::Dashboard => {
-                self.render_safe(ctx, "dashboard", |app, ctx| app.render_dashboard_panel(ctx));
-            }
-            clarity_core::ui::AppView::Gantt => {
-                self.render_safe(ctx, "gantt", |app, ctx| app.render_gantt_panel(ctx));
-            }
-            clarity_core::ui::AppView::TaskBoard => {
-                self.render_safe(ctx, "task_board", |app, ctx| app.render_task_board(ctx));
-            }
-            clarity_core::ui::AppView::Work => {
-                self.render_safe(ctx, "work", |app, ctx| app.render_work_panel(ctx));
-            }
-        }
-
-        // ── Overlay panels ──
-        self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
-        self.render_safe(ctx, "mcp", |app, ctx| app.render_mcp_panel(ctx));
-        self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
-
-        // ── Modals (top-most, blocking) ──
-        self.render_safe(ctx, "cron_create", |app, ctx| {
-            app.render_cron_create_modal(ctx)
-        });
-        self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
-        self.render_safe(ctx, "snapshot", |app, ctx| app.render_snapshot_modal(ctx));
-        self.render_safe(ctx, "task_create", |app, ctx| {
-            app.render_task_create_modal(ctx)
-        });
-        self.render_safe(ctx, "task_view", |app, ctx| app.render_task_view_modal(ctx));
-        self.render_safe(ctx, "subagent_view", |app, ctx| {
-            app.render_subagent_view_modal(ctx)
-        });
-        self.render_safe(ctx, "team", |app, ctx| app.render_team_panel(ctx));
-        self.render_safe(ctx, "team_create", |app, ctx| {
-            app.render_team_create_modal(ctx)
-        });
-        self.render_safe(ctx, "kimi_login", |app, ctx| {
-            crate::components::login_modal::render_oauth_login_modal(
-                app,
-                ctx,
-                &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
-            );
-        });
-        self.render_safe(ctx, "onboarding", |app, ctx| {
-            onboarding::render_onboarding(app, ctx);
-        });
-        self.render_safe(ctx, "resize", |app, ctx| {
-            app.handle_window_resize(ctx);
-        });
+        // ── Layout shell: chrome + main view + overlays + modals ──
+        self.render_layout_shell(ctx);
 
         // Command Palette (top-most layer)
         if self.command_palette.open {
@@ -1288,7 +1233,7 @@ fn main() -> eframe::Result {
             if tray_manager.is_none() {
                 tracing::warn!("Failed to initialize system tray icon");
             }
-            Ok(Box::new(App::new(cc, gateway_manager, tray_manager)))
+            Ok(Box::new(App::new(cc, gateway_manager, tray_manager)?))
         }),
     )
 }

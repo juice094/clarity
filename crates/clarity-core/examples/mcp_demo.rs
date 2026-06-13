@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! MCP (Model Context Protocol) Integration Demo
 //!
 //! This example demonstrates how to connect to an external MCP server
@@ -21,8 +28,8 @@
 //! cargo run --example mcp_demo -- <command> [args...]
 //! ```
 
-use clarity_core::mcp::{McpClient, McpClientBuilder, McpManager, McpToolAdapter};
 use clarity_core::ToolRegistry;
+use clarity_core::mcp::{McpClient, McpClientBuilder, McpManager, McpToolAdapter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

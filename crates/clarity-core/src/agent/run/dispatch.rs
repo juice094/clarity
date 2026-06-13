@@ -199,10 +199,15 @@ impl Agent {
                     fatal = Some((tool_call.function.name.clone(), e.to_string()));
                 } else {
                     let mut inner = self.inner.write();
-                    let ctx = inner
-                        .turn_context
-                        .as_mut()
-                        .expect("turn_context must be set during dispatch_tool_calls");
+                    let ctx = match inner.turn_context.as_mut() {
+                        Some(ctx) => ctx,
+                        None => {
+                            tracing::error!(
+                                "turn_context missing during dispatch_tool_calls; treating as stalled"
+                            );
+                            return Err(AgentError::Stalled);
+                        }
+                    };
                     let count = ctx
                         .recoverable_failure_counts
                         .entry(tool_call.function.name.clone())
@@ -231,10 +236,15 @@ impl Agent {
             // Check for repetitive output loops (only if no fatal error already).
             if fatal.is_none() {
                 let mut inner = self.inner.write();
-                let ctx = inner
-                    .turn_context
-                    .as_mut()
-                    .expect("turn_context must be set during dispatch_tool_calls");
+                let ctx = match inner.turn_context.as_mut() {
+                    Some(ctx) => ctx,
+                    None => {
+                        tracing::error!(
+                            "turn_context missing during dispatch_tool_calls; treating as stalled"
+                        );
+                        return Err(AgentError::Stalled);
+                    }
+                };
                 match ctx.loop_detector.record(
                     &tool_call.function.name,
                     &tool_call.function.arguments,

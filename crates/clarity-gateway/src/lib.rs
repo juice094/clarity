@@ -1,3 +1,13 @@
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
+)]
 //! # Clarity Gateway
 //!
 //! HTTP Gateway for Project Clarity — 提供 REST API、Web UI、WebSocket 实时通信
@@ -66,9 +76,14 @@
 //! | GET/DELETE | `/api/sessions/:id` | 会话管理 |
 
 pub mod channels;
+/// HTTP/Axum request handlers.
 pub mod handlers;
 pub mod health;
+/// Shared application state and dual-port server runner.
 pub mod server;
+/// Session identifier types.
 pub mod session;
+/// Persistent SQLite session store.
 pub mod session_store;
+/// WebSocket real-time messaging handler.
 pub mod ws;

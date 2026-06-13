@@ -1,5 +1,5 @@
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// Result of a loop detection check.
@@ -8,9 +8,19 @@ pub enum LoopDetection {
     /// No loop detected.
     Ok,
     /// Warning: repetitive pattern detected; a system message should be injected.
-    Warning { tool_name: String, message: String },
+    Warning {
+        /// Tool name.
+        tool_name: String,
+        /// Warning message.
+        message: String,
+    },
     /// Break: loop confirmed; the turn should be hard-terminated.
-    Break { tool_name: String, message: String },
+    Break {
+        /// Tool name.
+        tool_name: String,
+        /// Break message.
+        message: String,
+    },
 }
 
 /// Detects repeated tool-call patterns within a single turn to prevent
@@ -25,6 +35,7 @@ pub struct LoopDetector {
 }
 
 impl LoopDetector {
+    /// Create a new `LoopDetector`.
     pub fn new(max_repetitions: usize) -> Self {
         Self {
             max_repetitions,

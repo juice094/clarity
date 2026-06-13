@@ -3,6 +3,7 @@
 /// Ordered list of provider names to try for each LLM request.
 #[derive(Clone, Debug)]
 pub struct MeshRouter {
+    /// Provider aliases to try in order.
     pub fallback_chain: Vec<String>,
 }
 
@@ -21,6 +22,7 @@ impl MeshRouter {
         }
     }
 
+    /// Create a router with an explicit fallback chain.
     pub fn with_chain(chain: Vec<String>) -> Self {
         Self {
             fallback_chain: chain,

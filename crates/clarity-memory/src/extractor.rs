@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tracing::{debug, error, info, instrument};
 
 // ============================================================================
@@ -240,61 +240,87 @@ enum FactTemplate {
     Custom(fn(&regex::Captures) -> Option<String>),
 }
 
+// Default rule-based patterns, compiled once.
+// SAFE: regex literals are statically valid and compilation is infallible.
+#[allow(clippy::unwrap_used)]
+static DEFAULT_PATTERNS: LazyLock<Vec<ExtractionPattern>> = LazyLock::new(|| {
+    vec![
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+(?:really\s+)?(?:like|love|enjoy|prefer)\s+(.+)").unwrap(),
+            tags: vec!["preference".to_string()],
+            template: FactTemplate::Prefixed("User likes ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+(?:dislike|hate|don't like|do not like)\s+(.+)").unwrap(),
+            tags: vec!["preference".to_string(), "dislike".to_string()],
+            template: FactTemplate::Prefixed("User dislikes ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+(?:am|is)\s+(?:a\s+)?(.+)").unwrap(),
+            tags: vec!["identity".to_string()],
+            template: FactTemplate::Prefixed("User is ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+(?:work\s+(?:at|for)|am\s+(?:employed\s+by|at))\s+(.+)").unwrap(),
+            tags: vec!["work".to_string(), "employment".to_string()],
+            template: FactTemplate::Prefixed("User works at ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+have\s+(?:a\s+)?(.+)").unwrap(),
+            tags: vec!["possession".to_string()],
+            template: FactTemplate::Prefixed("User has ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:let's|we should|i will|i'll)\s+(.+)").unwrap(),
+            tags: vec!["decision".to_string()],
+            template: FactTemplate::Prefixed("Decision: ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:i|user)\s+(?:want|plan|need)\s+to\s+(.+)").unwrap(),
+            tags: vec!["goal".to_string()],
+            template: FactTemplate::Prefixed("User wants to ".to_string(), 1),
+        },
+        ExtractionPattern {
+            regex: Regex::new(r"(?i)(?:on|at)\s+(\w+day|today|tomorrow|yesterday|\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+|\d{4}-\d{2}-\d{2})").unwrap(),
+            tags: vec!["time".to_string()],
+            template: FactTemplate::Capture(1),
+        },
+    ]
+});
+
+// Time-extraction patterns, compiled once.
+// SAFE: regex literals are statically valid and compilation is infallible.
+#[allow(clippy::unwrap_used)]
+static TIME_PATTERNS: LazyLock<[(Regex, usize); 3]> = LazyLock::new(|| {
+    [
+        (Regex::new(r"\b(today|tomorrow|yesterday)\b").unwrap(), 1),
+        (Regex::new(r"\b(\d{4}-\d{2}-\d{2})\b").unwrap(), 1),
+        (Regex::new(r"\b(\w+day)\b").unwrap(), 1),
+    ]
+});
+
+// Code-snippet patterns, compiled once.
+// SAFE: regex literals are statically valid and compilation is infallible.
+#[allow(clippy::unwrap_used)]
+static CODE_BLOCK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"```(\w+)?\n(.*?)```").unwrap());
+#[allow(clippy::unwrap_used)]
+static INLINE_CODE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").unwrap());
+
+// File-path pattern, compiled once.
+// SAFE: regex literal is statically valid and compilation is infallible.
+#[allow(clippy::unwrap_used)]
+static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:[\w-]+/)+[\w-]+\.(rs|py|js|ts|json|toml|yaml|yml|md|txt|go|java|cpp|c|h|hpp)")
+        .unwrap()
+});
+
 impl RuleBasedExtractor {
     /// Create a new RuleBasedExtractor with default patterns
     pub fn new() -> Self {
-        let patterns = vec![
-            // User preferences
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+(?:really\s+)?(?:like|love|enjoy|prefer)\s+(.+)").unwrap(),
-                tags: vec!["preference".to_string()],
-                template: FactTemplate::Prefixed("User likes ".to_string(), 1),
-            },
-            // User dislikes
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+(?:dislike|hate|don't like|do not like)\s+(.+)").unwrap(),
-                tags: vec!["preference".to_string(), "dislike".to_string()],
-                template: FactTemplate::Prefixed("User dislikes ".to_string(), 1),
-            },
-            // User is/has/works
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+(?:am|is)\s+(?:a\s+)?(.+)").unwrap(),
-                tags: vec!["identity".to_string()],
-                template: FactTemplate::Prefixed("User is ".to_string(), 1),
-            },
-            // User works at
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+(?:work\s+(?:at|for)|am\s+(?:employed\s+by|at))\s+(.+)").unwrap(),
-                tags: vec!["work".to_string(), "employment".to_string()],
-                template: FactTemplate::Prefixed("User works at ".to_string(), 1),
-            },
-            // User has (possessions, attributes)
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+have\s+(?:a\s+)?(.+)").unwrap(),
-                tags: vec!["possession".to_string()],
-                template: FactTemplate::Prefixed("User has ".to_string(), 1),
-            },
-            // Decisions/choices
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:let's|we should|i will|i'll)\s+(.+)").unwrap(),
-                tags: vec!["decision".to_string()],
-                template: FactTemplate::Prefixed("Decision: ".to_string(), 1),
-            },
-            // Goals/plans
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:i|user)\s+(?:want|plan|need)\s+to\s+(.+)").unwrap(),
-                tags: vec!["goal".to_string()],
-                template: FactTemplate::Prefixed("User wants to ".to_string(), 1),
-            },
-            // Important dates
-            ExtractionPattern {
-                regex: Regex::new(r"(?i)(?:on|at)\s+(\w+day|today|tomorrow|yesterday|\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?\w+|\d{4}-\d{2}-\d{2})").unwrap(),
-                tags: vec!["time".to_string()],
-                template: FactTemplate::Capture(1),
-            },
-        ];
-
-        Self { patterns }
+        Self {
+            patterns: DEFAULT_PATTERNS.clone(),
+        }
     }
 
     /// Add a custom pattern
@@ -358,14 +384,7 @@ impl RuleBasedExtractor {
 
     /// Try to extract time references
     fn extract_time(&self, text: &str) -> Option<String> {
-        // Simple patterns for time extraction
-        let time_patterns = [
-            (Regex::new(r"\b(today|tomorrow|yesterday)\b").unwrap(), 1),
-            (Regex::new(r"\b(\d{4}-\d{2}-\d{2})\b").unwrap(), 1),
-            (Regex::new(r"\b(\w+day)\b").unwrap(), 1),
-        ];
-
-        for (pattern, group) in &time_patterns {
+        for (pattern, group) in TIME_PATTERNS.iter() {
             if let Some(captures) = pattern.captures(text) {
                 return captures.get(*group).map(|m| m.as_str().to_string());
             }
@@ -379,8 +398,7 @@ impl RuleBasedExtractor {
         let mut facts = Vec::new();
 
         // Match code blocks
-        let code_block_regex = Regex::new(r"```(\w+)?\n(.*?)```").unwrap();
-        for captures in code_block_regex.captures_iter(text) {
+        for captures in CODE_BLOCK_RE.captures_iter(text) {
             let language = captures.get(1).map(|m| m.as_str()).unwrap_or("code");
             let code = captures.get(2).map(|m| m.as_str()).unwrap_or("");
 
@@ -400,9 +418,8 @@ impl RuleBasedExtractor {
         }
 
         // Match inline code
-        let inline_code_regex = Regex::new(r"`([^`]+)`").unwrap();
         let mut inline_codes = Vec::new();
-        for captures in inline_code_regex.captures_iter(text) {
+        for captures in INLINE_CODE_RE.captures_iter(text) {
             if let Some(code) = captures.get(1) {
                 let code_str = code.as_str();
                 if code_str.len() > 10 && !inline_codes.contains(&code_str.to_string()) {
@@ -431,13 +448,7 @@ impl RuleBasedExtractor {
         let mut facts = Vec::new();
         let mut paths = Vec::new();
 
-        // Match file paths
-        let path_regex = Regex::new(
-            r"(?:[\w-]+/)+[\w-]+\.(rs|py|js|ts|json|toml|yaml|yml|md|txt|go|java|cpp|c|h|hpp)",
-        )
-        .unwrap();
-
-        for captures in path_regex.captures_iter(text) {
+        for captures in PATH_RE.captures_iter(text) {
             if let Some(path) = captures.get(0) {
                 let path_str = path.as_str();
                 if !paths.contains(&path_str.to_string()) {
@@ -490,12 +501,14 @@ pub struct MockLlmClient {
 }
 
 impl MockLlmClient {
+    /// Create a mock client that returns the given response string.
     pub fn new(response: impl Into<String>) -> Self {
         Self {
             response: Some(response.into()),
         }
     }
 
+    /// Create a mock client that returns a JSON-encoded list of facts.
     pub fn with_facts(facts: Vec<MetaFact>) -> Self {
         let extracted: Vec<ExtractedFact> = facts
             .into_iter()
@@ -506,9 +519,11 @@ impl MockLlmClient {
             })
             .collect();
 
-        Self {
-            response: Some(serde_json::to_string(&extracted).unwrap()),
-        }
+        // SAFE: ExtractedFact derives Serialize and contains only serializable fields.
+        #[allow(clippy::unwrap_used)]
+        let response = Some(serde_json::to_string(&extracted).unwrap());
+
+        Self { response }
     }
 }
 
@@ -655,9 +670,11 @@ Hope that helps!"#;
 
         assert!(!facts.is_empty());
         assert!(facts.iter().any(|f| f.fact.contains("likes Rust")));
-        assert!(facts
-            .iter()
-            .any(|f| f.tags.contains(&"preference".to_string())));
+        assert!(
+            facts
+                .iter()
+                .any(|f| f.tags.contains(&"preference".to_string()))
+        );
     }
 
     #[test]

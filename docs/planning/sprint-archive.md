@@ -233,9 +233,9 @@ tags: [sprint]
 - 10 个 crate README 新增 `## 边界与稳定性`（稳定性等级 + 反向依赖规则）
 - `docs/adr/` 目录 + 4 条架构决策记录（Tauri→egui、parking_lot、contract 提取、rustls-tls）
 - `docs/ARCHITECTURE.md` 补全 3 条数据流：MCP End-to-End、Memory Compaction、Plan-Parallel Execution
-- `docs/OPERATIONS.md` 新建：二进制布局、资源需求、配置体系、日志观测、部署模式、故障排查
-- `docs/API_CONTRACT.md` 新建：Gateway HTTP + WebSocket 端点、认证、错误码矩阵
-- `docs/THREAT_MODEL.md` 新建：STRIDE 分析 16 条威胁、4 条攻击树、安全测试矩阵
+- `docs/development/OPERATIONS.md` 新建：二进制布局、资源需求、配置体系、日志观测、部署模式、故障排查
+- `docs/development/API_CONTRACT.md` 新建：Gateway HTTP + WebSocket 端点、认证、错误码矩阵
+- `docs/security/THREAT_MODEL.md` 新建：STRIDE 分析 16 条威胁、4 条攻击树、安全测试矩阵
 - CI `doc-guard` job 新建：强制 README.md + AGENTS.md + rustdoc 编译 + cargo-modules 结构验证
 - `scripts/verify.ps1` 升级：5 项检查（文档/编译/测试/Clippy/格式化）+ 可选 cargo-modules
 - 死代码审计：`devkit_dead_code` 扫描 50 条，全部验证为误报（serde default / unwrap_or_else / Axum 路由 / 测试函数）
@@ -299,7 +299,7 @@ cargo check -p clarity-egui
 
 **Sprint 19 — 设计原则封装与 UI 工程硬化（已完成 ✅）**
 
-- P0.1 ✅: CLI→GUI 设计原则文档化 (`docs/design-principles.md`)
+- P0.1 ✅: CLI→GUI 设计原则文档化 (`docs/architecture/design-principles.md`)
 - P0.2 ✅: 错误记忆系统架构 (`ToolExecutionMemory` + `ErrorMemoryStore`)
 - P0.3 ✅: AgentTurn 聚合层原型 (`agent_turn.rs` + `turn_renderer.rs`)
 - P1.1 ✅: 输入框扁平化（消除三级边框）+ Agent 头像去重
@@ -339,7 +339,7 @@ cargo check -p clarity-egui
 - D3 ✅: 能力发现协议（`CapabilityRegistry::supported_approval_modes`）
 - D4 ✅: egui 冒烟测试基线（`apply_profile_overlay` 纯函数 + 11 个新增测试）
 
-> 详见 [`docs/plans/2026-04-29-sprint10-protocol-first.md`](./docs/plans/2026-04-29-sprint10-protocol-first.md)
+> 详见 `docs/planning/plans/2026-04-29-sprint10-protocol-first.md`
 
 **Sprint 11 — 超越 Kimi CLI（✅ Complete）**
 
@@ -349,7 +349,7 @@ cargo check -p clarity-egui
 - V1 ✅: 风险点清偿 — 批量替换原子性验证 + 文件路径目录结构保留
 - V2 ✅: 端到端验证 — 上下文注入 + approval_mode 切换 + legacy 兼容全部通过
 
-> 详见 [`docs/plans/2026-04-28-sprint11-validation-and-sprint12-plan.md`](./docs/plans/2026-04-28-sprint11-validation-and-sprint12-plan.md)
+> 详见 `docs/planning/plans/2026-04-28-sprint11-validation-and-sprint12-plan.md`
 
 **Sprint 12 — egui 功能补齐（✅ 已完成）**
 
@@ -362,8 +362,8 @@ cargo check -p clarity-egui
 - ✅ Polish: `parse_unified_diff` 跳过 `\ No newline at end of file` + `send()` 自动清除旧 `plan_tracker` + Diff 下沉至 `clarity-core::diff`
 - 周期: 2 周
 
-> 详见 [`docs/plans/2026-04-28-sprint12-egui-feature-parity.md`](./docs/plans/2026-04-28-sprint12-egui-feature-parity.md)
-> 风险与优化分析: [`docs/plans/2026-04-28-sprint12-risk-analysis.md`](./docs/plans/2026-04-28-sprint12-risk-analysis.md)（7 项风险 + 4 决策点 + 5 优化）
+> 详见 `docs/planning/plans/2026-04-28-sprint12-egui-feature-parity.md`
+> 风险与优化分析: `docs/planning/plans/2026-04-28-sprint12-risk-analysis.md`（7 项风险 + 4 决策点 + 5 优化）
 
 **Sprint 13 — 稳定性硬化 + 架构解耦（✅ 已完成，2026-04-27 ~ 2026-05-03）**
 
@@ -383,10 +383,10 @@ cargo check -p clarity-egui
   - ✅ P2: `clarity-contract` crate PoC — `ToolCall` + `FunctionCall` 提取，core 重新导出保持兼容
   - ✅ P3: MCP 提取评估 — 当前被 `clarity-contract` 成熟度阻塞，暂缓
 
-> 详细执行计划见 [`docs/plans/BACKLOG.md`](./docs/plans/BACKLOG.md)
-> 长程计划见 [`docs/plans/black-widow-stature-john-stewart.md`](./docs/plans/black-widow-stature-john-stewart.md)
+> 详细执行计划见 [`docs/planning/BACKLOG.md`](BACKLOG.md)
+> 长程计划见 `docs/plans/black-widow-stature-john-stewart.md`
 
-> 详见 [`docs/plans/2026-04-30-sprint11-surpass-kimicli.md`](./docs/plans/2026-04-30-sprint11-surpass-kimicli.md)
+> 详见 `docs/planning/plans/2026-04-30-sprint11-surpass-kimicli.md`
 
 **Sprint 13.5 — 前端架构重构（已完成，2026-05-01）**
 
@@ -400,7 +400,7 @@ cargo check -p clarity-egui
   - `services/agent_runner.rs` / `gateway_poller.rs` / `task_service.rs`
 - 验证：`cargo test --workspace --lib` 584 passed / 0 failed / 6 ignored
 
-> 详细对比报告见 [`docs/frontend-architecture-comparison.md`](./docs/frontend-architecture-comparison.md)
+> 详细对比报告见 [`docs/frontend-architecture-comparison.md`](../architecture/frontend-architecture-comparison.md)
 
 **Sprint 14 — Glassmorphism 视觉精调（✅ 已完成，2026-05-01 ~ 2026-05-03）**
 
@@ -455,11 +455,11 @@ cargo check -p clarity-egui
   - P2 — 左侧 Activity Bar 视图切换：窄条图标切换对话/文件/网页/设置（VS Code 模式）
   - P3 — Cursor 式内联对话：文件预览本身成为 Agent message 的一种，支持选中文段直接提问
 
-> 设计审查报告见 [`docs/plans/frontend-design-critique-2026-05-01.md`](./docs/plans/frontend-design-critique-2026-05-01.md)
+> 设计审查报告见 `docs/plans/frontend-design-critique-2026-05-01.md`
 
 **Sprint 14.5 — 架构解耦与代码健康（✅ 已完成，2026-05-02）**
 
-> 详见 [`docs/plans/nightcrawler-drax-atom.md`](./docs/plans/nightcrawler-drax-atom.md)
+> 详见 `docs/plans/nightcrawler-drax-atom.md`
 
 - **Phase A ✅**: 统一 Agent Streaming Loop — 提取 `run_streaming_turn()` 共享编排逻辑（setup → loop → teardown），`run_streaming()` 与 `run_streaming_with_messages()` 缩减为纯消息构建包装器
 - **Phase B ✅**: 复活 `ChatDriver` trait + 解耦 `Op` 枚举 — Gateway 通过 `ConversationChatDriver` 注入 OpenAI 风格消息历史；移除 `Op::ConversationTurn` / `Op::ConversationTurnSync`；`Op` 恢复为 5 个纯生命周期变体
@@ -591,7 +591,7 @@ cargo check -p clarity-egui
   - 阶段四：前端日志面板（Console 劫持 + 可折叠面板）
 - 零依赖发行准备（单二进制 + 嵌入式模型）✅
 
-> AI 关键决策见 [`docs/ai-protocol.md`](./docs/ai-protocol.md)。
+> AI 关键决策见 [`docs/architecture/ai-protocol.md`](../architecture/ai-protocol.md)。
 > 架构定位声明：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
 
-完整路线图见 [`docs/ROADMAP.md`](./docs/ROADMAP.md)。
+完整路线图见 [`docs/planning/ROADMAP.md`](ROADMAP.md)。

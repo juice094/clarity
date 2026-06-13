@@ -7,23 +7,26 @@
 //!
 //! ```no_run
 //! use tracing_subscriber::layer::SubscriberExt;
+//! use tracing_subscriber::util::SubscriberInitExt;
 //! use clarity_telemetry::tracing_layer::TelemetryLayer;
 //!
-//! let sink = clarity_telemetry::sink::MultiSink::from_config(&Default::default()
-//! ).unwrap();
+//! fn install() -> Result<(), Box<dyn std::error::Error>> {
+//!     let sink = clarity_telemetry::sink::MultiSink::from_config(&Default::default())?;
 //!
-//! tracing_subscriber::registry()
-//!     .with(TelemetryLayer::new(sink))
-//!     .init();
+//!     tracing_subscriber::registry()
+//!         .with(TelemetryLayer::new(sink))
+//!         .init();
+//!     Ok(())
+//! }
 //! ```
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tracing::span::Id as SpanId;
 use tracing::Event as TracingEvent;
-use tracing_subscriber::layer::Context;
+use tracing::span::Id as SpanId;
 use tracing_subscriber::Layer;
+use tracing_subscriber::layer::Context;
 
 use crate::{EventSink, EventType, Severity, WideEvent};
 

@@ -81,5 +81,5 @@ cargo tree -i openssl
 
 - Commit: `d27a075a` (security: remove openssl dependency entirely — Dependabot #22/#23)
 - Commit: `e7303e3a` (security: bump openssl 0.10.78 → 0.10.79 — intermediate step, superseded by full removal)
-- Related docs: `docs/sprint-archive.md` (Sprint 40 — "安全修复：彻底移除 openssl 依赖")
+- Related docs: `docs/planning/sprint-archive.md` (Sprint 40 — "安全修复：彻底移除 openssl 依赖")
 - Related docs: `docs/ARCHITECTURE.md` (Security Model: TLS layer)

@@ -59,15 +59,15 @@ pub mod tools;
 
 // Re-export from clarity-mcp (pure MCP protocol layer)
 pub use clarity_mcp::{
-    map_mcp_error, process_mcp_tool_result, HttpClientBuilder, HttpMcpClient, McpClient,
-    McpClientBuilder, McpClientInstance, McpClientLegacy, McpError, McpRegistry, McpResource,
-    McpResourceLegacy, McpServerConfig, McpTool, McpToolInfo, McpTransport, OAuthConfig,
-    SseClientBuilder, SseMcpClient, StdioClientBuilder, StdioMcpClient, ToolCallResult,
-    ToolCallResultLegacy, ToolContent, ToolContentLegacy,
+    HttpClientBuilder, HttpMcpClient, McpClient, McpClientBuilder, McpClientInstance,
+    McpClientLegacy, McpError, McpRegistry, McpResource, McpResourceLegacy, McpServerConfig,
+    McpTool, McpToolInfo, McpTransport, OAuthConfig, SseClientBuilder, SseMcpClient,
+    StdioClientBuilder, StdioMcpClient, ToolCallResult, ToolCallResultLegacy, ToolContent,
+    ToolContentLegacy, map_mcp_error, process_mcp_tool_result,
 };
 
 // Re-export MCP tool bridge
-pub use tools::{register_mcp_tools, McpToolWrapper};
+pub use tools::{McpToolWrapper, register_mcp_tools};
 
 use crate::error::AgentError;
 use crate::registry::ToolRegistry;
@@ -86,18 +86,22 @@ pub struct McpToolAdapter {
 }
 
 impl McpToolAdapter {
+    /// Create a new `McpToolAdapter`.
     pub fn new(client: Arc<tokio::sync::Mutex<McpClientInstance>>, tool_info: McpTool) -> Self {
         Self { client, tool_info }
     }
 
+    /// Return the name.
     pub fn name(&self) -> &str {
         &self.tool_info.name
     }
 
+    /// Return the description, if any.
     pub fn description(&self) -> Option<&str> {
         self.tool_info.description.as_deref()
     }
 
+    /// Return the JSON schema.
     pub fn schema(&self) -> &Value {
         &self.tool_info.input_schema
     }
@@ -137,6 +141,7 @@ pub struct McpManager {
 }
 
 impl McpManager {
+    /// Create a new `McpManager`.
     pub fn new() -> Self {
         Self {
             clients: HashMap::new(),

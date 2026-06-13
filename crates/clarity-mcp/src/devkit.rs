@@ -14,12 +14,17 @@ use serde::{Deserialize, Serialize};
 /// - All array fields always return at least `[]`, never `null`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DevkitProjectContextResult {
+    /// Whether the tool call succeeded.
     pub success: bool,
+    /// Identified project name.
     pub project: String,
+    /// Matched repository metadata, if any.
     #[serde(default)]
     pub repo: Option<DevkitRepo>,
+    /// Associated vault notes.
     #[serde(default)]
     pub vault_notes: Vec<DevkitVaultNote>,
+    /// Project assets (files or folders).
     #[serde(default)]
     pub assets: Vec<DevkitAsset>,
 }
@@ -27,11 +32,16 @@ pub struct DevkitProjectContextResult {
 /// Repository metadata returned by devkit.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DevkitRepo {
+    /// Repository identifier.
     pub id: String,
+    /// Absolute path to the repository root.
     pub path: String,
+    /// Primary programming language.
     pub language: String,
+    /// Tags describing the repository.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Star or relevance score.
     #[serde(default)]
     pub stars: u32,
 }
@@ -39,7 +49,9 @@ pub struct DevkitRepo {
 /// A vault note referenced in the project context.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DevkitVaultNote {
+    /// Note identifier.
     pub id: String,
+    /// Note title.
     pub title: String,
     /// `"link"` for explicit association, `"search"` for keyword match.
     pub source: String,
@@ -48,7 +60,9 @@ pub struct DevkitVaultNote {
 /// A project asset (file or folder).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DevkitAsset {
+    /// Asset filename.
     pub name: String,
+    /// Asset path relative to the project root.
     pub path: String,
     /// `"folder"` or omitted.
     #[serde(default, rename = "type")]

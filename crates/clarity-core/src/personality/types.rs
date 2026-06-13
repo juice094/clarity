@@ -11,10 +11,12 @@ pub struct PersonalityConfig {
 }
 
 impl PersonalityConfig {
+    /// Create a new `PersonalityConfig`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the template variables.
     pub fn with_template_variables(mut self, vars: HashMap<String, String>) -> Self {
         self.template_variables = vars;
         self

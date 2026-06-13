@@ -1,9 +1,10 @@
 //! Kimi Code OAuth Device Flow login modal.
 
+use crate::App;
 use crate::stores::KimiCodeLoginState;
 use crate::ui::types::UiEvent;
-use crate::App;
 
+/// Renders the oauth login modal UI.
 pub fn render_oauth_login_modal(
     app: &mut App,
     ctx: &egui::Context,

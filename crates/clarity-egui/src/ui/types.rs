@@ -15,6 +15,7 @@ use std::time::Instant;
 // Shared UI Types — extracted from main.rs for modularity
 // ============================================================================
 
+/// ui event variants.
 #[derive(Debug, Clone)]
 pub enum UiEvent {
     Chunk(String),
@@ -193,6 +194,7 @@ pub struct PlanExecutionTracker {
     pub steps: Vec<PlanStepTracker>,
 }
 
+/// Holds plan step tracker state.
 #[derive(Clone, Debug)]
 pub struct PlanStepTracker {
     pub id: String,
@@ -201,6 +203,7 @@ pub struct PlanStepTracker {
     pub status: PlanStepStatus,
 }
 
+/// Lifecycle status variants for plan step.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlanStepStatus {
     Pending,
@@ -210,6 +213,7 @@ pub enum PlanStepStatus {
     Skipped,
 }
 
+/// Holds session state.
 #[derive(Clone)]
 pub struct Session {
     pub id: String,
@@ -221,6 +225,7 @@ pub struct Session {
     pub turn_heights: Vec<Option<f32>>,
 }
 
+/// content block variants.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ContentBlock {
@@ -257,6 +262,7 @@ pub enum ContentBlock {
     },
 }
 
+/// Holds message state.
 #[derive(Clone)]
 pub struct Message {
     pub role: Role,
@@ -287,7 +293,7 @@ impl Message {
         // Map default AgentMessage → UserMessage for user-authored content.
         if self.role == Role::User {
             for line in &mut self.lines {
-                if let clarity_core::ui::RenderLine::Text { ref mut role, .. } = line {
+                if let clarity_core::ui::RenderLine::Text { role, .. } = line {
                     if *role == clarity_core::ui::LineRole::AgentMessage {
                         *role = clarity_core::ui::LineRole::UserMessage;
                     }
@@ -333,12 +339,14 @@ impl Message {
     }
 }
 
+/// role variants.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Role {
     User,
     Agent,
 }
 
+/// Lifecycle status variants for agent.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum AgentStatus {
     Online,
@@ -347,6 +355,7 @@ pub enum AgentStatus {
     Offline,
 }
 
+/// Lifecycle status variants for gateway.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum GatewayStatus {
     Online,
@@ -354,6 +363,7 @@ pub enum GatewayStatus {
     Checking,
 }
 
+/// Holds tool call info state.
 #[derive(Clone)]
 pub struct ToolCallInfo {
     pub id: String,
@@ -362,6 +372,7 @@ pub struct ToolCallInfo {
     pub result: Option<String>,
 }
 
+/// Lifecycle status variants for tool call.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToolCallStatus {
     Running,
@@ -401,12 +412,14 @@ impl ToolCallInfo {
     }
 }
 
+/// Holds attachment state.
 #[derive(Clone, Debug)]
 pub struct Attachment {
     pub path: std::path::PathBuf,
     pub name: String,
 }
 
+/// Holds toast state.
 #[derive(Clone, Debug)]
 pub struct Toast {
     pub message: String,
@@ -414,6 +427,7 @@ pub struct Toast {
     pub created_at: std::time::Instant,
 }
 
+/// toast level variants.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ToastLevel {
     Info,
@@ -427,6 +441,7 @@ pub enum ToastLevel {
 // layout():  iterate blocks and issue egui commands per frame
 // ============================================================================
 
+/// inline span variants.
 #[derive(Clone, Debug)]
 pub enum InlineSpan {
     Text(String),
@@ -435,6 +450,7 @@ pub enum InlineSpan {
     Link { text: String, url: String },
 }
 
+/// render block variants.
 #[derive(Clone, Debug)]
 pub enum RenderBlock {
     Paragraph(Vec<InlineSpan>),
@@ -457,6 +473,7 @@ pub enum RenderBlock {
 // Preview — reused glass-card preview in chat area for files and web pages
 // ============================================================================
 
+/// preview item variants.
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum PreviewItem {
@@ -472,6 +489,7 @@ pub enum PreviewItem {
     },
 }
 
+/// Holds web tab state.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WebTab {
     pub title: String,

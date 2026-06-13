@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    missing_docs,
+    unsafe_code
+)]
 //! API Compatibility and Stability Tests
 //!
 //! These tests verify that public APIs maintain backward compatibility.

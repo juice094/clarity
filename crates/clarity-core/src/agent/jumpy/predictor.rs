@@ -181,9 +181,13 @@ impl OutcomePredictor for HybridPredictor {
 /// A single observed transition: (skill, params, before, after).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SkillObservation {
+    /// Skill identifier.
     pub skill_id: String,
+    /// Serialized skill parameters.
     pub params: String, // JSON or human-readable parameterization
+    /// State before the skill invocation.
     pub before: JumpyState,
+    /// State after the skill invocation.
     pub after: JumpyState,
 }
 
@@ -221,6 +225,7 @@ impl Default for HistoricalPredictor {
 }
 
 impl HistoricalPredictor {
+    /// Create a new `Default`.
     pub fn new() -> Self {
         Self {
             observations: HashMap::new(),
@@ -228,6 +233,7 @@ impl HistoricalPredictor {
         }
     }
 
+    /// Set the threshold.
     pub fn with_threshold(mut self, threshold: f32) -> Self {
         self.similarity_threshold = threshold.clamp(0.0, 1.0);
         self
@@ -412,6 +418,7 @@ pub struct ConsistentPredictor<P: OutcomePredictor> {
 }
 
 impl<P: OutcomePredictor> ConsistentPredictor<P> {
+    /// Create a new instance.
     pub fn new(inner: P) -> Self {
         Self {
             inner,
@@ -420,6 +427,7 @@ impl<P: OutcomePredictor> ConsistentPredictor<P> {
         }
     }
 
+    /// Set the horizons.
     pub fn with_horizons(mut self, short: f32, long: f32) -> Self {
         self.short_commitment = short.clamp(0.0, 1.0);
         self.long_commitment = long.clamp(0.0, 1.0);

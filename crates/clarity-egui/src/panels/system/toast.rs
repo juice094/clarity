@@ -6,6 +6,7 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
 }
 
+/// Renders the toasts UI.
 pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
     let now = Instant::now();
     app.ui_store

@@ -21,11 +21,17 @@ use std::sync::Arc;
 /// Result of executing one skill in the sequence.
 #[derive(Debug, Clone)]
 pub struct ExecutionStep {
+    /// Skill identifier.
     pub skill_id: String,
+    /// Serialized skill parameters.
     pub params: String,
+    /// Predicted state before execution.
     pub predicted_state: JumpyState,
+    /// Actual state after execution.
     pub actual_state: JumpyState,
+    /// Deviation between predicted and actual state.
     pub deviation: f32,
+    /// Whether the plan was replanned.
     pub replanned: bool,
 }
 
@@ -59,6 +65,7 @@ pub struct SkillComposer<P: OutcomePredictor + ?Sized> {
 }
 
 impl<P: OutcomePredictor + ?Sized> SkillComposer<P> {
+    /// Create a new instance.
     pub fn new(planner: HierarchicalPlanner<P>, config: ComposerConfig) -> Self {
         Self {
             planner,
@@ -175,9 +182,13 @@ impl<P: OutcomePredictor + ?Sized> SkillComposer<P> {
 /// The result of a full composition run.
 #[derive(Debug, Clone)]
 pub struct CompositionResult {
+    /// Whether execution succeeded.
     pub success: bool,
+    /// Final state after execution.
     pub final_state: JumpyState,
+    /// Execution steps.
     pub steps: Vec<ExecutionStep>,
+    /// Total number of steps.
     pub total_steps: usize,
 }
 
@@ -189,6 +200,7 @@ pub struct ComposerBuilder<P: OutcomePredictor + ?Sized> {
 }
 
 impl<P: OutcomePredictor + ?Sized> ComposerBuilder<P> {
+    /// Create a new instance.
     pub fn new() -> Self {
         Self {
             predictor: None,
@@ -197,31 +209,37 @@ impl<P: OutcomePredictor + ?Sized> ComposerBuilder<P> {
         }
     }
 
+    /// Set the predictor.
     pub fn with_predictor(mut self, predictor: Arc<P>) -> Self {
         self.predictor = Some(predictor);
         self
     }
 
+    /// Set the skills.
     pub fn with_skills(mut self, skills: Vec<(String, String)>) -> Self {
         self.planner_config.available_skills = skills;
         self
     }
 
+    /// Set the replan threshold.
     pub fn with_replan_threshold(mut self, threshold: f32) -> Self {
         self.composer_config.replan_threshold = threshold;
         self
     }
 
+    /// Set the num candidates.
     pub fn with_num_candidates(mut self, n: usize) -> Self {
         self.planner_config.num_candidates = n;
         self
     }
 
+    /// Set the rng seed.
     pub fn with_rng_seed(mut self, seed: u64) -> Self {
         self.planner_config.rng_seed = Some(seed);
         self
     }
 
+    /// Build the configured value.
     pub fn build(self) -> Result<SkillComposer<P>, String> {
         let predictor = self.predictor.ok_or("Predictor required")?;
         let planner = HierarchicalPlanner::new(predictor, self.planner_config);

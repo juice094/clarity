@@ -24,10 +24,11 @@ use async_trait::async_trait;
 /// returning the textual output and the number of steps taken.
 #[async_trait]
 pub trait AgentTaskExecutor: Send + Sync + std::fmt::Debug {
+    /// Execute the task described by execute.
     async fn execute(&self, spec: &TaskSpec) -> anyhow::Result<(String, usize)>;
 }
 
-use crate::notifications::{task_status_notification, NotificationManager};
+use crate::notifications::{NotificationManager, task_status_notification};
 use std::collections::BinaryHeap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -89,6 +90,8 @@ pub(crate) struct TaskScheduler {
     sequence: RwLock<u64>,
 }
 
+// Intentionally retained: TaskScheduler exposes a stable internal API; some helper
+// methods are not currently used outside tests but are kept for operational flexibility.
 #[allow(dead_code)]
 impl TaskScheduler {
     /// 创建新的任务调度器
@@ -195,9 +198,11 @@ pub struct BackgroundTaskManager {
     /// 任务存储
     store: TaskStore,
     /// 工作目录
+    // Intentionally retained: reserved for future background task file operations.
     #[allow(dead_code)]
     work_dir: PathBuf,
     /// 上下文目录
+    // Intentionally retained: reserved for future background task context isolation.
     #[allow(dead_code)]
     context_dir: PathBuf,
     /// 运行中的任务
@@ -216,6 +221,8 @@ pub struct BackgroundTaskManager {
     cron_scheduler: Option<Arc<tokio::sync::Mutex<CronScheduler>>>,
 }
 
+// Intentionally retained: BackgroundTaskManager exposes a stable internal API; some
+// helper methods are not currently used outside tests but are kept for operational flexibility.
 #[allow(dead_code)]
 impl BackgroundTaskManager {
     /// 创建新的后台任务管理器
@@ -789,6 +796,7 @@ impl BackgroundTaskManager {
 /// 任务句柄
 #[derive(Debug)]
 pub(crate) struct TaskHandle {
+    // Intentionally retained: carried in the handle for debugging and future cancellation messages.
     #[allow(dead_code)]
     task_id: TaskId,
     abort_handle: tokio::task::AbortHandle,
@@ -1115,10 +1123,11 @@ mod tests {
         let spec = TaskSpec::new("agent_task", "Say hello").with_agent_type("coder");
         let err = manager.spawn_agent(spec.clone()).await;
         assert!(err.is_err());
-        assert!(err
-            .unwrap_err()
-            .to_string()
-            .contains("AgentTaskExecutor not configured"));
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("AgentTaskExecutor not configured")
+        );
 
         // 配置 executor 后应能成功启动真实 Agent 任务
         let registry = crate::registry::mock_registry_with_tools(vec![]);
