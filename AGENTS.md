@@ -95,7 +95,7 @@ cargo run -p clarity-headless -- --prompt "Hello" --provider local --output json
 
 - **Phase A 已完成**：新增 `LeftRailSection` / `RightRailSection` / `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed` 并将旧 sidebar 折叠状态迁移到 `view_state.left_rail_expanded`；`clarity-egui` 新增 `render_left_rail` / `render_main_stage` / `render_right_rail`，形成三栏外壳。
 - **Phase B 已完成**：新增 `panels/right_rail/` 模块，实现 `StatusCard`、`ToolsCard`、`SubagentCard`、`MemoryCard`；`task` / `team` 面板逻辑迁移到右 rail 卡片；`legacy/task.rs` 与 `legacy/team.rs` 已删除；Skill / MCP 仍保留为模态弹窗，ToolsCard 提供 Manage / Configure 入口。
-- **Phase C/D 待进行**：左侧边栏双层化/flatten、插件面板、pretext 文本测量接入。
+- **Phase C/D 已完成**：右栏改为抽屉式，内部纵向堆叠 `进度`（Status + Subagents）与 `上下文`（Tools + Memory）两张卡片；聊天区头部新增 bot 名称/头像、上下文互斥切换图标、右栏展开图标；左侧 `Plugins` 展开区实现可自定义插件条，支持布局编辑模式与拖拽排序；新增 `RightRailContext` / `RightRailCard` / `PluginStore` 及 `GuiSettings` 持久化；新增 Lucide `ICON_FILE_TEXT` / `ICON_TABLE` / `ICON_PRESENTATION`。
 
 变更涉及 `clarity-core::ui::ViewState` 和 `clarity-egui` 渲染层；跨前端类型变更已同步导出到 `clarity_core::ui`。
 

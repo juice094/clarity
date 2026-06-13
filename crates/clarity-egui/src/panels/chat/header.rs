@@ -1,4 +1,51 @@
+//! Chat area header.
+//!
+//! S6 Phase C: the header now hosts the bot identity on the left and the
+//! right-rail context toggles + drawer expand icon on the right.  Session tabs
+//! remain available for callers that need them (e.g. the custom titlebar).
+
 use crate::App;
+use crate::ui::types::Session;
+use clarity_core::ui::RightRailContext;
+
+/// Compute which drawer contexts are available for the active session.
+///
+/// The current heuristic is intentionally simple:
+/// - Every session gets the plain `Session` context.
+/// - Sessions whose category/title hints at Claw also get `Claw`.
+/// - Sessions whose category/title hints at a project/workspace also get `Project`.
+///
+/// As the workspace model matures, this should be driven by explicit session
+/// metadata rather than string matching.
+pub fn available_contexts(session: Option<&Session>) -> Vec<RightRailContext> {
+    let mut contexts = vec![RightRailContext::Session];
+    let marker = session.map(|s| format!("{} {}", s.category, s.title).to_lowercase());
+    if let Some(ref m) = marker {
+        if m.contains("claw") {
+            contexts.push(RightRailContext::Claw);
+        }
+        if m.contains("project") || m.contains("workspace") {
+            contexts.push(RightRailContext::Project);
+        }
+    }
+    contexts
+}
+
+fn context_icon(ctx: RightRailContext) -> &'static str {
+    match ctx {
+        RightRailContext::Session => crate::theme::ICON_CHAT,
+        RightRailContext::Claw => crate::theme::ICON_WRENCH,
+        RightRailContext::Project => crate::theme::ICON_FILE,
+    }
+}
+
+fn context_tooltip(ctx: RightRailContext) -> &'static str {
+    match ctx {
+        RightRailContext::Session => "会话上下文",
+        RightRailContext::Claw => "Claw",
+        RightRailContext::Project => "项目资源",
+    }
+}
 
 /// Renders the session tabs UI.
 pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
@@ -167,38 +214,97 @@ pub fn render_session_tabs(app: &mut App, ui: &mut egui::Ui) {
 
 /// Renders the header UI.
 pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
+    let theme = app.ui_store.theme.clone();
+    let active_session = app.session_store.active_session().cloned();
+    let contexts = available_contexts(active_session.as_ref());
+
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        if !app.view_state.left_rail_expanded
-            && crate::widgets::icon_button_toolbar(
+        ui.spacing_mut().item_spacing.x = theme.space_8;
+
+        // ── Left: bot avatar + name ──
+        let bot_name = app
+            .settings_store
+            .settings_edit
+            .active_persona_id
+            .as_deref()
+            .unwrap_or("Clarity");
+        let initial = bot_name.chars().next().unwrap_or('C').to_string();
+        crate::widgets::avatar::avatar(
+            ui,
+            &initial,
+            &theme,
+            Some(theme.accent.linear_multiply(0.25)),
+            Some(theme.accent),
+        );
+        ui.label(
+            egui::RichText::new(bot_name)
+                .size(theme.text_base)
+                .strong()
+                .color(theme.text_strong),
+        );
+
+        // ── Right: context toggles + drawer expand ──
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = theme.space_4;
+
+            // Expand / collapse right rail.
+            let expand_label = if app.view_state.right_rail_visible {
+                "Collapse right rail"
+            } else {
+                "Open right rail"
+            };
+            if crate::widgets::icon_button_toolbar(
                 ui,
-                crate::theme::ICON_SEND,
-                app.ui_store.theme.text_base,
-                &app.ui_store.theme,
+                crate::theme::ICON_LIST,
+                theme.text_base,
+                &theme,
             )
+            .on_hover_text(expand_label)
             .clicked()
-        {
-            app.view_state.left_rail_expanded = true;
-        }
+            {
+                app.view_state.right_rail_visible = !app.view_state.right_rail_visible;
+                app.persist_layout_settings();
+            }
+
+            // Context toggles (rendered right-to-left, so reverse for stable order).
+            for ctx in contexts.iter().rev() {
+                let active = app.view_state.right_rail_context == *ctx;
+                let (fg, bg) = if active {
+                    (theme.text, theme.surface_strong)
+                } else {
+                    (theme.text_dim, theme.surface)
+                };
+                let resp = ui
+                    .add_sized(
+                        egui::vec2(32.0, 32.0),
+                        egui::Button::new(
+                            egui::RichText::new(context_icon(*ctx))
+                                .size(theme.text_base)
+                                .color(fg),
+                        )
+                        .fill(bg)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    )
+                    .on_hover_text(context_tooltip(*ctx));
+                if resp.clicked() {
+                    app.view_state.set_right_rail_context(*ctx);
+                    app.persist_layout_settings();
+                }
+            }
+        });
     });
-    ui.add_space(app.ui_store.theme.space_4);
-    // Separator removed: active tab now "connects" to content area
-    // via matching bg color and square bottom corners.
+
+    ui.add_space(theme.space_4);
 
     if let Some(banner) = app.ui_store.network_banner.clone() {
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new(banner)
-                    .size(app.ui_store.theme.text_sm)
-                    .color(app.ui_store.theme.status_busy),
+                    .size(theme.text_sm)
+                    .color(theme.status_busy),
             );
-            if crate::widgets::icon_button_toolbar(
-                ui,
-                crate::theme::ICON_X,
-                app.ui_store.theme.text_sm,
-                &app.ui_store.theme,
-            )
-            .clicked()
+            if crate::widgets::icon_button_toolbar(ui, crate::theme::ICON_X, theme.text_sm, &theme)
+                .clicked()
             {
                 app.ui_store.network_banner = None;
             }
@@ -210,10 +316,66 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("Compacting conversation history…")
-                    .size(app.ui_store.theme.text_sm)
-                    .color(app.ui_store.theme.text_dim),
+                    .size(theme.text_sm)
+                    .color(theme.text_dim),
             );
         });
         ui.separator();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_session(category: &str, title: &str) -> Session {
+        Session {
+            id: "s-1".into(),
+            title: title.into(),
+            category: category.into(),
+            messages: vec![],
+            updated_at: 0,
+            turn_heights: vec![],
+        }
+    }
+
+    #[test]
+    fn plain_session_has_only_session_context() {
+        let s = make_session("engineering", "general");
+        let ctxs = available_contexts(Some(&s));
+        assert_eq!(ctxs, vec![RightRailContext::Session]);
+    }
+
+    #[test]
+    fn claw_session_adds_claw_context() {
+        let s = make_session("claw", "remote");
+        let ctxs = available_contexts(Some(&s));
+        assert_eq!(
+            ctxs,
+            vec![RightRailContext::Session, RightRailContext::Claw]
+        );
+    }
+
+    #[test]
+    fn project_session_adds_project_context() {
+        let s = make_session("project", "ui refactor");
+        let ctxs = available_contexts(Some(&s));
+        assert_eq!(
+            ctxs,
+            vec![RightRailContext::Session, RightRailContext::Project]
+        );
+    }
+
+    #[test]
+    fn workspace_in_title_adds_project_context() {
+        let s = make_session("engineering", "workspace onboarding");
+        let ctxs = available_contexts(Some(&s));
+        assert!(ctxs.contains(&RightRailContext::Project));
+    }
+
+    #[test]
+    fn no_session_has_only_session_context() {
+        let ctxs = available_contexts(None);
+        assert_eq!(ctxs, vec![RightRailContext::Session]);
     }
 }

@@ -313,6 +313,35 @@ pub enum RightRailSection {
     Memory,
 }
 
+/// Right rail drawer context for the Pretext layout.
+///
+/// S6 Phase C: the drawer content changes based on the active conversation
+/// target (plain session, claw remote session, or project workspace).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RightRailContext {
+    /// Plain conversation: progress = status + subagents, context = tools + memory.
+    #[default]
+    Session,
+    /// Claw remote session: progress = remote tasks, context = remote files/env.
+    Claw,
+    /// Project workspace session: progress = project tasks, context = workspace plan + files.
+    Project,
+}
+
+/// A stacked card inside the right rail drawer.
+///
+/// S6 Phase C: the drawer shows a vertical stack of cards. For the initial
+/// implementation we use two high-level cards: Progress and Context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RightRailCard {
+    /// Progress card (status, subagents, project/claw tasks).
+    Progress,
+    /// Context card (tools, memory, workspace/claw resources).
+    Context,
+}
+
 /// Physical panel identifier — used by [`FocusScope::Panel`] to discriminate
 /// which panel currently owns keyboard input.
 ///
@@ -449,6 +478,15 @@ pub struct ViewState {
     /// Whether the right utility rail is visible (S6).
     #[serde(default)]
     pub right_rail_visible: bool,
+    /// Current right rail drawer context (S6 Phase C).
+    #[serde(default)]
+    pub right_rail_context: RightRailContext,
+    /// Display order of stacked cards inside the right rail drawer (S6 Phase C).
+    #[serde(default)]
+    pub right_rail_card_order: Vec<RightRailCard>,
+    /// Whether the UI is in layout edit mode (unlocks drag reordering, S6 Phase C).
+    #[serde(default)]
+    pub layout_edit_mode: bool,
 }
 
 impl ViewState {
@@ -547,6 +585,20 @@ impl ViewState {
     pub fn collapse_right_rail(&mut self) {
         self.right_rail_visible = false;
     }
+
+    /// Switch the right rail drawer context.
+    ///
+    /// Selecting the same context again keeps it active (icon stays highlighted)
+    /// and does not collapse the rail.
+    pub fn set_right_rail_context(&mut self, ctx: RightRailContext) {
+        self.right_rail_context = ctx;
+        self.right_rail_visible = true;
+    }
+
+    /// Toggle layout edit mode (unlocks drag-reorder of plugins and cards).
+    pub fn toggle_layout_edit_mode(&mut self) {
+        self.layout_edit_mode = !self.layout_edit_mode;
+    }
 }
 
 // ============================================================================
@@ -568,6 +620,9 @@ mod tests {
         assert!(vs.modal.is_none());
         assert!(!vs.is_turn_active());
         assert!(!vs.has_panels());
+        assert_eq!(vs.right_rail_context, RightRailContext::Session);
+        assert!(vs.right_rail_card_order.is_empty());
+        assert!(!vs.layout_edit_mode);
     }
 
     #[test]
@@ -676,6 +731,44 @@ mod tests {
     }
 
     #[test]
+    fn right_rail_context_default_is_session() {
+        let ctx = RightRailContext::default();
+        assert_eq!(ctx, RightRailContext::Session);
+        assert!(serde_json::to_string(&ctx).unwrap().contains("session"));
+    }
+
+    #[test]
+    fn right_rail_card_roundtrips_through_json() {
+        for card in [RightRailCard::Progress, RightRailCard::Context] {
+            let s = serde_json::to_string(&card).unwrap();
+            let restored: RightRailCard = serde_json::from_str(&s).unwrap();
+            assert_eq!(card, restored);
+        }
+    }
+
+    #[test]
+    fn set_right_rail_context_opens_rail() {
+        let mut vs = ViewState::new();
+        assert!(!vs.right_rail_visible);
+        vs.set_right_rail_context(RightRailContext::Project);
+        assert_eq!(vs.right_rail_context, RightRailContext::Project);
+        assert!(vs.right_rail_visible);
+        // Re-selecting the same context keeps the rail open.
+        vs.set_right_rail_context(RightRailContext::Project);
+        assert!(vs.right_rail_visible);
+    }
+
+    #[test]
+    fn toggle_layout_edit_mode() {
+        let mut vs = ViewState::new();
+        assert!(!vs.layout_edit_mode);
+        vs.toggle_layout_edit_mode();
+        assert!(vs.layout_edit_mode);
+        vs.toggle_layout_edit_mode();
+        assert!(!vs.layout_edit_mode);
+    }
+
+    #[test]
     fn toggle_left_rail_expands_and_collapses() {
         let mut vs = ViewState::new();
         assert_eq!(vs.left_rail, LeftRailSection::None);
@@ -735,6 +828,9 @@ mod tests {
         vs.left_rail_expanded = true;
         vs.right_rail = RightRailSection::Subagents;
         vs.right_rail_visible = true;
+        vs.right_rail_context = RightRailContext::Claw;
+        vs.right_rail_card_order = vec![RightRailCard::Context, RightRailCard::Progress];
+        vs.layout_edit_mode = true;
 
         let json = serde_json::to_string(&vs).unwrap();
         let restored: ViewState = serde_json::from_str(&json).unwrap();
@@ -742,6 +838,9 @@ mod tests {
         assert_eq!(vs.left_rail_expanded, restored.left_rail_expanded);
         assert_eq!(vs.right_rail, restored.right_rail);
         assert_eq!(vs.right_rail_visible, restored.right_rail_visible);
+        assert_eq!(vs.right_rail_context, restored.right_rail_context);
+        assert_eq!(vs.right_rail_card_order, restored.right_rail_card_order);
+        assert_eq!(vs.layout_edit_mode, restored.layout_edit_mode);
     }
 
     #[test]

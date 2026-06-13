@@ -78,6 +78,7 @@ pub(crate) struct App {
     pub(crate) ui_store: stores::UiStore,
     pub(crate) subagent_store: stores::SubAgentStore,
     pub(crate) mcp_store: stores::McpStore,
+    pub(crate) plugin_store: stores::PluginStore,
     pub(crate) onboarding_store: stores::OnboardingStore,
     pub(crate) team_store: stores::TeamStore,
     pub(crate) snapshot_store: stores::SnapshotStore,
@@ -285,31 +286,7 @@ impl App {
                     }
                 }
                 _ => {
-                    // Plugins and other sections are placeholders for Phase B/C.
-                    egui::SidePanel::left("left_rail_plugins")
-                        .default_width(theme.size_sidebar)
-                        .min_width(180.0)
-                        .max_width(400.0)
-                        .resizable(true)
-                        .frame(
-                            egui::Frame::side_top_panel(&ctx.style())
-                                .fill(theme.bg)
-                                .stroke(egui::Stroke::NONE)
-                                .inner_margin(egui::Margin::symmetric(12, 16)),
-                        )
-                        .show(ctx, |ui| {
-                            ui.label(
-                                egui::RichText::new("Plugins")
-                                    .size(theme.text_base)
-                                    .color(theme.text_strong),
-                            );
-                            ui.add_space(theme.space_12);
-                            ui.label(
-                                egui::RichText::new("Plugin manager coming in Phase C.")
-                                    .size(theme.text_sm)
-                                    .color(theme.text_dim),
-                            );
-                        });
+                    crate::panels::left_rail::render_plugins_panel(self, ctx);
                 }
             }
         }
@@ -327,7 +304,16 @@ impl App {
         }
     }
 
-    /// Render the right utility rail (collapsible).
+    /// Human-readable label for the active right rail drawer context.
+    fn right_rail_context_label(ctx: clarity_core::ui::RightRailContext) -> &'static str {
+        match ctx {
+            clarity_core::ui::RightRailContext::Session => "会话上下文",
+            clarity_core::ui::RightRailContext::Claw => "Claw",
+            clarity_core::ui::RightRailContext::Project => "项目资源",
+        }
+    }
+
+    /// Render the right utility rail as a drawer with stacked cards.
     fn render_right_rail(&mut self, ctx: &egui::Context) {
         if !self.view_state.right_rail_visible {
             return;
@@ -346,11 +332,16 @@ impl App {
             )
             .show(ctx, |ui| {
                 ui.set_min_width(ui.available_width());
+
+                // ── Drawer header ──
                 ui.horizontal(|ui| {
                     ui.label(
-                        egui::RichText::new("Tools")
-                            .size(theme.text_base)
-                            .color(theme.text_strong),
+                        egui::RichText::new(Self::right_rail_context_label(
+                            self.view_state.right_rail_context,
+                        ))
+                        .size(theme.text_base)
+                        .strong()
+                        .color(theme.text_strong),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if crate::widgets::icon_button_toolbar(
@@ -363,89 +354,58 @@ impl App {
                         .clicked()
                         {
                             self.view_state.right_rail_visible = false;
+                            self.persist_layout_settings();
                         }
                     });
                 });
                 ui.add_space(theme.space_12);
 
-                use clarity_core::ui::RightRailSection;
-                let section_btn = |ui: &mut egui::Ui, label: &str, icon: &str, active: bool| {
-                    let (fg, bg) = if active {
-                        (theme.text, theme.surface_strong)
-                    } else {
-                        (theme.text_dim, theme.surface)
-                    };
-                    ui.add_sized(
-                        [ui.available_width(), 28.0],
-                        egui::Button::new(
-                            egui::RichText::new(format!("{}  {}", icon, label))
+                // ── Stacked cards ──
+                use clarity_core::ui::RightRailCard;
+                for (i, card) in self
+                    .view_state
+                    .right_rail_card_order
+                    .clone()
+                    .iter()
+                    .enumerate()
+                {
+                    if i > 0 {
+                        ui.add_space(theme.space_12);
+                    }
+                    egui::Frame::new()
+                        .fill(theme.surface)
+                        .stroke(egui::Stroke::new(1.0, theme.border))
+                        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+                        .inner_margin(egui::Margin::same(12))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.label(
+                                egui::RichText::new(match card {
+                                    RightRailCard::Progress => "进度",
+                                    RightRailCard::Context => "上下文",
+                                })
                                 .size(theme.text_sm)
-                                .color(fg),
-                        )
-                        .fill(bg)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                    )
-                    .clicked()
-                };
-
-                if section_btn(
-                    ui,
-                    "Status",
-                    crate::theme::ICON_HOURGLASS,
-                    self.view_state.right_rail == RightRailSection::Status,
-                ) {
-                    self.view_state.toggle_right_rail(RightRailSection::Status);
-                }
-                if section_btn(
-                    ui,
-                    "Tools",
-                    crate::theme::ICON_SETTINGS,
-                    self.view_state.right_rail == RightRailSection::Tools,
-                ) {
-                    self.view_state.toggle_right_rail(RightRailSection::Tools);
-                }
-                if section_btn(
-                    ui,
-                    "Subagents",
-                    crate::theme::ICON_WRENCH,
-                    self.view_state.right_rail == RightRailSection::Subagents,
-                ) {
-                    self.view_state
-                        .toggle_right_rail(RightRailSection::Subagents);
-                }
-                if section_btn(
-                    ui,
-                    "Memory",
-                    crate::theme::ICON_BOOK,
-                    self.view_state.right_rail == RightRailSection::Memory,
-                ) {
-                    self.view_state.toggle_right_rail(RightRailSection::Memory);
-                }
-
-                ui.add_space(theme.space_16);
-                ui.separator();
-                ui.add_space(theme.space_8);
-
-                match self.view_state.right_rail {
-                    RightRailSection::Status => {
-                        crate::panels::right_rail::render_status_card(self, ui)
-                    }
-                    RightRailSection::Tools => {
-                        crate::panels::right_rail::render_tools_card(self, ui)
-                    }
-                    RightRailSection::Subagents => {
-                        crate::panels::right_rail::render_subagent_card(self, ui)
-                    }
-                    RightRailSection::Memory => {
-                        crate::panels::right_rail::render_memory_card(self, ui)
-                    }
-                    RightRailSection::None => {
-                        ui.label(
-                            egui::RichText::new("Select a section above")
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
-                    }
+                                .strong()
+                                .color(theme.text),
+                            );
+                            ui.add_space(theme.space_8);
+                            match card {
+                                RightRailCard::Progress => {
+                                    crate::panels::right_rail::render_progress_card(
+                                        self,
+                                        ui,
+                                        self.view_state.right_rail_context,
+                                    )
+                                }
+                                RightRailCard::Context => {
+                                    crate::panels::right_rail::render_context_card(
+                                        self,
+                                        ui,
+                                        self.view_state.right_rail_context,
+                                    )
+                                }
+                            }
+                        });
                 }
             });
     }

@@ -15,6 +15,7 @@
 //! call sites (e.g. `panels::approval`) keep compiling during migration.
 
 pub mod chat;
+pub mod left_rail;
 pub mod legacy;
 pub mod modals;
 pub mod right_rail;

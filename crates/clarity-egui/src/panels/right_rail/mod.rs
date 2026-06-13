@@ -1,15 +1,17 @@
 //! Right rail cards for the Pretext three-column layout.
 //!
-//! Each card is a self-contained content unit rendered inside the right utility
-//! rail. They are intentionally decoupled from panel chrome so the rail shell
-//! can switch between them without touching content logic.
+//! S6 Phase C: the right rail is now a drawer with a vertical stack of cards.
+//! The shell (`main.rs::render_right_rail`) renders the drawer chrome and
+//! iterates over the active card order; each card is responsible for its own
+//! content.
 
-pub mod memory_card;
-pub mod status_card;
-pub mod subagent_card;
-pub mod tools_card;
+pub mod context_card;
+pub mod progress_card;
 
-pub use memory_card::render as render_memory_card;
-pub use status_card::render as render_status_card;
-pub use subagent_card::render as render_subagent_card;
-pub use tools_card::render as render_tools_card;
+pub(crate) mod memory_card;
+pub(crate) mod status_card;
+pub(crate) mod subagent_card;
+pub(crate) mod tools_card;
+
+pub use context_card::render as render_context_card;
+pub use progress_card::render as render_progress_card;

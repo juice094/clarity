@@ -51,6 +51,18 @@ pub struct GuiSettings {
     /// Maps to `clarity_core::endpoint::EndpointDescriptor.id`.
     #[serde(default)]
     pub active_persona_id: Option<String>,
+    /// S6 Phase C: whether the right rail drawer is visible.
+    #[serde(default)]
+    pub right_rail_visible: bool,
+    /// S6 Phase C: last active right rail drawer context.
+    #[serde(default)]
+    pub right_rail_context: clarity_core::ui::RightRailContext,
+    /// S6 Phase C: display order of stacked right rail cards.
+    #[serde(default)]
+    pub right_rail_card_order: Vec<clarity_core::ui::RightRailCard>,
+    /// S6 Phase C: display order of plugin toolbar items.
+    #[serde(default)]
+    pub plugin_order: Vec<String>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -225,6 +237,18 @@ impl Default for GuiSettings {
             sidebar_width: None,
             web_tabs: Vec::new(),
             active_persona_id: None,
+            right_rail_visible: false,
+            right_rail_context: clarity_core::ui::RightRailContext::Session,
+            right_rail_card_order: vec![
+                clarity_core::ui::RightRailCard::Progress,
+                clarity_core::ui::RightRailCard::Context,
+            ],
+            plugin_order: vec![
+                "doc".to_string(),
+                "web".to_string(),
+                "sheet".to_string(),
+                "ppt".to_string(),
+            ],
             profiles: HashMap::new(),
         }
     }

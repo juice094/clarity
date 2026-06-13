@@ -207,6 +207,10 @@ impl App {
             .active_persona_id
             .clone()
             .unwrap_or_else(|| "kin".to_string());
+        let right_rail_visible = settings_edit.right_rail_visible;
+        let right_rail_context = settings_edit.right_rail_context;
+        let right_rail_card_order = settings_edit.right_rail_card_order.clone();
+        let plugin_order = settings_edit.plugin_order.clone();
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -245,7 +249,7 @@ impl App {
             None
         };
 
-        let app = Self {
+        let mut app = Self {
             state,
             runtime,
             ui_tx,
@@ -435,13 +439,30 @@ impl App {
             last_tray_status: None,
             last_frame_width: None,
             command_palette: crate::widgets::command_palette::CommandPalette::new(),
+            plugin_store: crate::stores::PluginStore::new(),
             view_state: {
                 let mut vs = clarity_core::ui::ViewState::new();
                 vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
                 vs.left_rail_expanded = true;
+                vs.right_rail_visible = right_rail_visible;
+                vs.right_rail_context = right_rail_context;
+                if right_rail_card_order.is_empty() {
+                    vs.right_rail_card_order = vec![
+                        clarity_core::ui::RightRailCard::Progress,
+                        clarity_core::ui::RightRailCard::Context,
+                    ];
+                } else {
+                    vs.right_rail_card_order = right_rail_card_order;
+                }
                 vs
             },
         };
+
+        // Sync the initial plugin order back into settings so that new defaults
+        // are persisted on first run.
+        if app.settings_store.settings_edit.plugin_order.is_empty() {
+            app.settings_store.settings_edit.plugin_order = plugin_order;
+        }
         app.refresh_tasks();
         Ok(app)
     }
@@ -699,6 +720,29 @@ impl App {
         let mut guard = self.state.cached_settings.lock();
         *guard = self.settings_store.settings_edit.clone();
         Ok(())
+    }
+
+    /// S6 Phase C: mirror layout state into `settings_edit` and persist.
+    ///
+    /// Call this whenever the right rail visibility, active context, card order,
+    /// or plugin order changes.  Errors are logged but not surfaced as toasts to
+    /// avoid spamming the user every frame.
+    pub(crate) fn persist_layout_settings(&mut self) {
+        self.settings_store.settings_edit.right_rail_visible = self.view_state.right_rail_visible;
+        self.settings_store.settings_edit.right_rail_context = self.view_state.right_rail_context;
+        self.settings_store.settings_edit.right_rail_card_order =
+            self.view_state.right_rail_card_order.clone();
+        if let Err(e) = self.commit_settings() {
+            tracing::warn!("Failed to persist layout settings: {}", e);
+        }
+    }
+
+    /// S6 Phase C: persist the current plugin order.
+    pub(crate) fn persist_plugin_order(&mut self, order: Vec<String>) {
+        self.settings_store.settings_edit.plugin_order = order;
+        if let Err(e) = self.commit_settings() {
+            tracing::warn!("Failed to persist plugin order: {}", e);
+        }
     }
 
     /// Propagate the current `settings_edit.approval_mode` to the agent and
