@@ -23,7 +23,6 @@ pub struct Team {
 /// Holds team UI state.
 pub struct TeamStore {
     pub teams: Vec<Team>,
-    pub create_modal_open: bool,
     pub create_name: String,
     pub create_goal: String,
     pub create_members: Vec<TeamMember>,

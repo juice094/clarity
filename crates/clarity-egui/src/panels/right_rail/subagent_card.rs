@@ -1,6 +1,7 @@
 //! Right rail — Subagents / background tasks card.
 
 use crate::App;
+use crate::design_system::{self, ButtonStyle, Space, Surface, Text};
 use crate::services::gateway_task_client::GatewayTaskClient;
 use clarity_core::background::TaskStatus;
 
@@ -8,30 +9,20 @@ use clarity_core::background::TaskStatus;
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
 
-    ui.label(
-        egui::RichText::new("Subagents & Tasks")
-            .size(theme.text_base)
-            .strong()
-            .color(theme.text),
-    );
-    ui.add_space(theme.space_12);
+    design_system::text(ui, "Subagents & Tasks", Text::BodyStrong);
+    design_system::gap(ui, Space::S2);
 
     // New task button
+    let mut new_task_clicked = false;
     ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .button(
-                    egui::RichText::new("+ New Task")
-                        .size(theme.text_xs)
-                        .color(theme.text),
-                )
-                .clicked()
-            {
-                app.task_store.task_create_modal_open = true;
-            }
-        });
+        design_system::push_right(ui);
+        new_task_clicked = design_system::btn(ui, "+ New Task", ButtonStyle::Secondary).clicked();
     });
-    ui.add_space(theme.space_8);
+    if new_task_clicked {
+        app.view_state
+            .open_modal(clarity_core::ui::ModalType::TaskCreate);
+    }
+    design_system::gap(ui, Space::S1);
 
     // Background tasks
     let action = crate::ui::task_panel::render_task_panel(ui, &app.task_store.tasks, &theme);
@@ -47,35 +38,23 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     // Parallel batches
     if !app.subagent_store.parallel_batches.is_empty() {
-        ui.add_space(theme.space_16);
-        ui.label(
-            egui::RichText::new("Parallel Batches")
-                .size(theme.text_sm)
-                .strong()
-                .color(theme.text),
-        );
-        ui.add_space(theme.space_4);
-        egui::Frame::new()
-            .fill(theme.surface)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-            .inner_margin(egui::Margin::same(8))
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                for batch in &app.subagent_store.parallel_batches {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(&batch.batch_id)
-                                .size(theme.text_xs)
-                                .color(theme.text),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("{}/{}", batch.completed, batch.total))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-                    });
-                }
-            });
+        design_system::gap(ui, Space::S3);
+        design_system::text(ui, "Parallel Batches", Text::BodyStrong);
+        design_system::gap(ui, Space::S0);
+        design_system::surface(ui, Surface::Well, |ui| {
+            ui.set_min_width(ui.available_width());
+            for batch in &app.subagent_store.parallel_batches {
+                design_system::row(ui, |ui| {
+                    design_system::text(ui, &batch.batch_id, Text::Small);
+                    design_system::push_right(ui);
+                    design_system::text(
+                        ui,
+                        format!("{}/{}", batch.completed, batch.total),
+                        Text::BodyMuted,
+                    );
+                });
+            }
+        });
     }
 }
 
@@ -108,7 +87,8 @@ fn cancel_task(app: &mut App, task_id: &str) {
 
 fn view_task_output(app: &mut App, task_id: &str) {
     app.task_store.viewing_task_id = Some(task_id.to_string());
-    app.task_store.task_view_modal_open = true;
+    app.view_state
+        .open_modal(clarity_core::ui::ModalType::TaskView);
     let gateway_client = GatewayTaskClient::new();
     let local_store = app.state.task_store.clone();
     let tx = app.ui_tx.clone();

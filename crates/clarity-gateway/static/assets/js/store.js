@@ -112,6 +112,7 @@ export const store = reactive({
     // Chat State
     sessions: [],
     activeSessionId: null,
+    currentThreadId: null,
     isGenerating: false,
     currentModel: 'auto',
 
@@ -139,11 +140,12 @@ export function getActiveTab() {
     return store.tabs.find(t => t.id === store.activeTabId);
 }
 
-export function addSession(title = 'New Chat') {
+export function addSession(title = 'New Chat', threadId = null) {
     const id = 'sess_' + Date.now().toString(36);
     const session = {
         id,
         title,
+        threadId,
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),

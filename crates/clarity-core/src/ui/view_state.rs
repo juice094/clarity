@@ -487,6 +487,9 @@ pub struct ViewState {
     /// Whether the UI is in layout edit mode (unlocks drag reordering, S6 Phase C).
     #[serde(default)]
     pub layout_edit_mode: bool,
+    /// S6 Phase C3: show the layout debug overlay (green/blue/red/yellow diagnostic rects).
+    #[serde(default)]
+    pub debug_layout_overlay: bool,
 }
 
 impl ViewState {
@@ -599,6 +602,11 @@ impl ViewState {
     pub fn toggle_layout_edit_mode(&mut self) {
         self.layout_edit_mode = !self.layout_edit_mode;
     }
+
+    /// Toggle the layout debug overlay.
+    pub fn toggle_debug_layout_overlay(&mut self) {
+        self.debug_layout_overlay = !self.debug_layout_overlay;
+    }
 }
 
 // ============================================================================
@@ -623,6 +631,7 @@ mod tests {
         assert_eq!(vs.right_rail_context, RightRailContext::Session);
         assert!(vs.right_rail_card_order.is_empty());
         assert!(!vs.layout_edit_mode);
+        assert!(!vs.debug_layout_overlay);
     }
 
     #[test]
@@ -841,6 +850,23 @@ mod tests {
         assert_eq!(vs.right_rail_context, restored.right_rail_context);
         assert_eq!(vs.right_rail_card_order, restored.right_rail_card_order);
         assert_eq!(vs.layout_edit_mode, restored.layout_edit_mode);
+        assert_eq!(vs.debug_layout_overlay, restored.debug_layout_overlay);
+    }
+
+    #[test]
+    fn debug_layout_overlay_default_is_false() {
+        let vs = ViewState::new();
+        assert!(!vs.debug_layout_overlay);
+    }
+
+    #[test]
+    fn toggle_debug_layout_overlay_flips_flag() {
+        let mut vs = ViewState::new();
+        assert!(!vs.debug_layout_overlay);
+        vs.toggle_debug_layout_overlay();
+        assert!(vs.debug_layout_overlay);
+        vs.toggle_debug_layout_overlay();
+        assert!(!vs.debug_layout_overlay);
     }
 
     #[test]

@@ -85,11 +85,11 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
     let plan_active =
         app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
     if !kimi_style {
-        if plan_active && !app.ui_store.workspace_plan_manually_collapsed {
-            app.ui_store.workspace_plan_expanded = true;
+        if plan_active && !app.view_state.expansions.workspace_plan_manually_collapsed {
+            app.view_state.expansions.workspace_plan = true;
         } else if !plan_active {
-            app.ui_store.workspace_plan_expanded = false;
-            app.ui_store.workspace_plan_manually_collapsed = false;
+            app.view_state.expansions.workspace_plan = false;
+            app.view_state.expansions.workspace_plan_manually_collapsed = false;
         }
     }
 
@@ -164,7 +164,7 @@ pub fn render_workspace_panel(app: &mut App, ctx: &egui::Context) {
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
                         let has_plan =
-                            plan_active && app.ui_store.workspace_plan_expanded && !has_preview;
+                            plan_active && app.view_state.expansions.workspace_plan && !has_preview;
                         let max_tree_h = if has_plan {
                             ui.available_height() * 0.55
                         } else {

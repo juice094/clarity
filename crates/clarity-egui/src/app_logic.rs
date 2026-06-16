@@ -33,7 +33,7 @@ impl App {
             .map(|d| d.join("clarity").join("memory.db"))
             .unwrap_or_else(|| std::path::PathBuf::from("memory.db"));
         state.memory_store = runtime.block_on(async {
-            match clarity_memory::MemoryStore::new(&memory_db).await {
+            match clarity_memory::MemoryStore::new_auto(&memory_db).await {
                 Ok(store) => {
                     tracing::info!("MemoryStore initialized at {:?}", memory_db);
                     Some(store)
@@ -211,6 +211,7 @@ impl App {
         let right_rail_context = settings_edit.right_rail_context;
         let right_rail_card_order = settings_edit.right_rail_card_order.clone();
         let plugin_order = settings_edit.plugin_order.clone();
+        let debug_layout_overlay = settings_edit.debug_layout_overlay;
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -263,13 +264,10 @@ impl App {
             chat_store: crate::stores::ChatStore {
                 input: String::new(),
                 attachments: vec![],
-                is_loading: false,
                 agent_status: AgentStatus::Unconfigured,
                 gateway_status: crate::ui::types::GatewayStatus::Checking,
                 tool_calls: first_session_tool_calls,
-                compacting: false,
                 pending_send: None,
-                stopping: false,
                 last_usage: None,
                 pending_plan: None,
                 plan_tracker: None,
@@ -292,26 +290,21 @@ impl App {
                 provider_registry: crate::provider::ProviderRegistry::load(),
                 testing_provider: None,
                 refreshing_provider: None,
-                kimi_code_login_open: false,
                 kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
             },
             task_store: crate::stores::TaskStore {
                 tasks: vec![],
                 last_task_refresh: now,
-                task_create_modal_open: false,
                 task_create_name: String::new(),
                 task_create_desc: String::new(),
                 task_create_prompt: String::new(),
                 task_create_priority: 2,
-                task_view_modal_open: false,
                 viewing_task_id: None,
                 viewing_task_result: None,
             },
             cron_store: crate::stores::CronStore {
-                cron_expanded: false,
                 tasks: vec![],
                 last_refresh: now,
-                create_modal_open: false,
                 create_name: String::new(),
                 create_desc: String::new(),
                 create_prompt: String::new(),
@@ -332,22 +325,16 @@ impl App {
                 preview_drawer_open: false,
                 last_input_modified: now,
                 web_tabs,
-                web_tabs_expanded: true,
                 web_tabs_add_visible: false,
-                thinking_log_expanded: false,
                 thinking_log_show_all: false,
                 pending_approvals: Vec::new(),
                 toasts: vec![],
-                tools_expanded: false,
-                subagents_expanded: false,
                 editing_session_id: None,
                 editing_title: String::new(),
                 focus_input_requested: false,
                 agent_turn_style: true,
                 agent_turn_glass: false,
                 kimi_conversation_style: true,
-                workspace_plan_expanded: false,
-                workspace_plan_manually_collapsed: false,
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
                 titlebar_right_width: 260.0,
@@ -356,6 +343,9 @@ impl App {
                 active_persona_id,
                 persona_switcher_open: false,
                 active_project: None,
+                pretext_probe_open: false,
+                pretext_probe_wrap_width: 400.0,
+                pretext_estimate_enabled: true,
                 bot_instances: vec![
                     crate::stores::BotInstance {
                         id: "gray-cloud".into(),
@@ -381,7 +371,6 @@ impl App {
                 last_parallel_poll: now,
                 running_agents: std::collections::HashMap::new(),
                 last_gateway_health_poll: now,
-                subagent_view_modal_open: false,
                 viewing_subagent_id: None,
             },
             mcp_store: crate::stores::McpStore {
@@ -423,7 +412,6 @@ impl App {
                     .collect();
                 crate::stores::TeamStore {
                     teams,
-                    create_modal_open: false,
                     create_name: String::new(),
                     create_goal: String::new(),
                     create_members: vec![],
@@ -439,13 +427,15 @@ impl App {
             last_tray_status: None,
             last_frame_width: None,
             command_palette: crate::widgets::command_palette::CommandPalette::new(),
-            plugin_store: crate::stores::PluginStore::new(),
             view_state: {
                 let mut vs = clarity_core::ui::ViewState::new();
                 vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
                 vs.left_rail_expanded = true;
                 vs.right_rail_visible = right_rail_visible;
                 vs.right_rail_context = right_rail_context;
+                vs.debug_layout_overlay = debug_layout_overlay;
+                // Legacy expansion defaults: most collapsed, web tabs open.
+                vs.expansions.web_tabs = true;
                 if right_rail_card_order.is_empty() {
                     vs.right_rail_card_order = vec![
                         clarity_core::ui::RightRailCard::Progress,
@@ -456,6 +446,7 @@ impl App {
                 }
                 vs
             },
+            pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
         };
 
         // Sync the initial plugin order back into settings so that new defaults
@@ -732,6 +723,8 @@ impl App {
         self.settings_store.settings_edit.right_rail_context = self.view_state.right_rail_context;
         self.settings_store.settings_edit.right_rail_card_order =
             self.view_state.right_rail_card_order.clone();
+        self.settings_store.settings_edit.debug_layout_overlay =
+            self.view_state.debug_layout_overlay;
         if let Err(e) = self.commit_settings() {
             tracing::warn!("Failed to persist layout settings: {}", e);
         }

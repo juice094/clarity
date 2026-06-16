@@ -8,10 +8,6 @@
         unsafe_code
     )
 )]
-// Phase A.4: egui is undergoing a UI refactor; dead-code warnings are expected
-// while the Pretext single-page shell migration is in progress. Re-enable once
-// the new layout callers land.
-#![allow(dead_code)]
 //! Clarity egui Desktop — Application entry point.
 //!
 //! ARCHITECTURE CONSTRAINT (Pretext-aligned):
@@ -40,6 +36,7 @@ mod llm_loader;
 mod llm_policy;
 mod panels;
 mod platform;
+mod pretext;
 mod provider;
 mod render;
 mod services;
@@ -78,7 +75,6 @@ pub(crate) struct App {
     pub(crate) ui_store: stores::UiStore,
     pub(crate) subagent_store: stores::SubAgentStore,
     pub(crate) mcp_store: stores::McpStore,
-    pub(crate) plugin_store: stores::PluginStore,
     pub(crate) onboarding_store: stores::OnboardingStore,
     pub(crate) team_store: stores::TeamStore,
     pub(crate) snapshot_store: stores::SnapshotStore,
@@ -100,6 +96,8 @@ pub(crate) struct App {
     pub(crate) command_palette: crate::widgets::command_palette::CommandPalette,
     /// Pretext UI unified view state (replaces boolean flag hell).
     pub(crate) view_state: clarity_core::ui::ViewState,
+    /// Pretext text measurement backend backed by egui fonts.
+    pub(crate) pretext_metrics: crate::pretext::EguiFontMetrics,
 }
 
 mod app_logic;
@@ -170,34 +168,56 @@ impl App {
         self.render_safe(ctx, "toast", |app, ctx| app.render_toasts(ctx));
 
         // ── Modals (top-most, blocking) ──
-        self.render_safe(ctx, "cron_create", |app, ctx| {
-            app.render_cron_create_modal(ctx)
-        });
-        self.render_safe(ctx, "approval", |app, ctx| app.render_approval_modal(ctx));
-        self.render_safe(ctx, "snapshot", |app, ctx| app.render_snapshot_modal(ctx));
-        self.render_safe(ctx, "task_create", |app, ctx| {
-            app.render_task_create_modal(ctx)
-        });
-        self.render_safe(ctx, "task_view", |app, ctx| app.render_task_view_modal(ctx));
-        self.render_safe(ctx, "subagent_view", |app, ctx| {
-            app.render_subagent_view_modal(ctx)
-        });
-        self.render_safe(ctx, "team_create", |app, ctx| {
-            app.render_team_create_modal(ctx)
-        });
-        self.render_safe(ctx, "kimi_login", |app, ctx| {
-            crate::panels::modals::login::render_oauth_login_modal(
-                app,
-                ctx,
-                &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
-            );
-        });
+        // Dispatch exclusively through `view_state.modal` (P1.5 migration).
+        if let Some(modal) = self.view_state.modal {
+            use clarity_core::ui::ModalType;
+            let name = match modal {
+                ModalType::CronCreate => "cron_create",
+                ModalType::Approval => "approval",
+                ModalType::Snapshot => "snapshot",
+                ModalType::TaskCreate => "task_create",
+                ModalType::TaskView => "task_view",
+                ModalType::SubAgentView => "subagent_view",
+                ModalType::TeamCreate => "team_create",
+                ModalType::KimiCodeLogin => "kimi_login",
+                ModalType::Skill | ModalType::Mcp | ModalType::Login | ModalType::AddProvider => {
+                    // Skill/Mcp are overlay panels handled above; Login/AddProvider
+                    // are not currently used as top modals.
+                    ""
+                }
+            };
+            if !name.is_empty() {
+                self.render_safe(ctx, name, |app, ctx| match modal {
+                    ModalType::CronCreate => app.render_cron_create_modal(ctx),
+                    ModalType::Approval => app.render_approval_modal(ctx),
+                    ModalType::Snapshot => app.render_snapshot_modal(ctx),
+                    ModalType::TaskCreate => app.render_task_create_modal(ctx),
+                    ModalType::TaskView => app.render_task_view_modal(ctx),
+                    ModalType::SubAgentView => app.render_subagent_view_modal(ctx),
+                    ModalType::TeamCreate => app.render_team_create_modal(ctx),
+                    ModalType::KimiCodeLogin => {
+                        crate::panels::modals::login::render_oauth_login_modal(
+                            app,
+                            ctx,
+                            &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
+                        );
+                    }
+                    _ => {}
+                });
+            }
+        }
+
         self.render_safe(ctx, "onboarding", |app, ctx| {
             onboarding::render_onboarding(app, ctx);
         });
         self.render_safe(ctx, "resize", |app, ctx| {
             app.handle_window_resize(ctx);
         });
+    }
+
+    /// Returns true when an agent turn is actively loading/generating.
+    pub(crate) fn is_loading(&self) -> bool {
+        matches!(self.view_state.turn, clarity_core::ui::TurnState::Loading)
     }
 
     /// Render the left icon rail and, when expanded, the associated list panel.
@@ -215,6 +235,9 @@ impl App {
                     .inner_margin(egui::Margin::same(6)),
             )
             .show(ctx, |ui| {
+                if crate::ui::debug_overlay::is_enabled(ctx) {
+                    crate::ui::debug_overlay::show_layout_state(ui, "left-rail-icon");
+                }
                 ui.vertical_centered(|ui| {
                     ui.add_space(theme.space_12);
 
@@ -331,6 +354,9 @@ impl App {
                     .inner_margin(egui::Margin::symmetric(12, 16)),
             )
             .show(ctx, |ui| {
+                if crate::ui::debug_overlay::is_enabled(ctx) {
+                    crate::ui::debug_overlay::show_layout_state(ui, "right-rail");
+                }
                 ui.set_min_width(ui.available_width());
 
                 // ── Drawer header ──
@@ -943,15 +969,10 @@ impl App {
         use clarity_core::ui::ids;
         match cmd_id {
             ids::CLOSE_MODAL => {
-                if self.team_store.create_modal_open {
-                    self.team_store.create_modal_open = false;
+                if self.view_state.modal.is_some() {
+                    self.view_state.close_modal();
                 } else if self.view_state.main == clarity_core::ui::AppView::Settings {
                     self.view_state.main = clarity_core::ui::AppView::Chat;
-                } else if matches!(
-                    self.view_state.modal,
-                    Some(clarity_core::ui::ModalType::Skill)
-                ) {
-                    self.view_state.close_modal();
                 } else if matches!(
                     self.view_state.right,
                     Some(clarity_core::ui::SidePanel::Team)
@@ -959,19 +980,10 @@ impl App {
                 ) {
                     self.view_state.right = None;
                 }
-                if self.cron_store.create_modal_open {
-                    self.cron_store.create_modal_open = false;
-                }
-                if self.snapshot_store.modal_open {
-                    self.snapshot_store.modal_open = false;
-                }
-                if self.task_store.task_create_modal_open {
-                    self.task_store.task_create_modal_open = false;
-                }
                 true
             }
             ids::NEW_SESSION => {
-                if !self.chat_store.is_loading {
+                if !self.is_loading() {
                     self.new_session();
                 }
                 true
@@ -981,7 +993,7 @@ impl App {
                 true
             }
             ids::SEND_MESSAGE => {
-                if !self.chat_store.input.trim().is_empty() && !self.chat_store.is_loading {
+                if !self.chat_store.input.trim().is_empty() && !self.is_loading() {
                     self.chat_store.stick_to_bottom = true;
                     self.send();
                 }
@@ -1021,6 +1033,11 @@ impl App {
                     } else {
                         clarity_core::ui::AppView::Dashboard
                     };
+                true
+            }
+            ids::TOGGLE_LAYOUT_DEBUG => {
+                self.view_state.toggle_debug_layout_overlay();
+                self.persist_layout_settings();
                 true
             }
             ids::TOGGLE_SIDEBAR => {
@@ -1205,6 +1222,9 @@ impl eframe::App for App {
 
         self.process_events();
 
+        // Sync the layout debug overlay toggle from ViewState to egui memory.
+        crate::ui::debug_overlay::sync_enabled(ctx, self.view_state.debug_layout_overlay);
+
         // Poll MCP config for external changes (hot-reload).
         self.check_mcp_config_reload();
 
@@ -1217,7 +1237,7 @@ impl eframe::App for App {
             self.push_toast(msg, ToastLevel::Info);
         }
 
-        if self.chat_store.is_loading {
+        if self.is_loading() {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
 
@@ -1274,7 +1294,7 @@ impl eframe::App for App {
         self.chat_store.agent_status = match self.state.agent.state() {
             AgentState::Unconfigured => AgentStatus::Unconfigured,
             AgentState::Idle => {
-                if self.chat_store.is_loading {
+                if self.is_loading() {
                     AgentStatus::Busy
                 } else {
                     AgentStatus::Online
@@ -1313,25 +1333,26 @@ impl eframe::App for App {
         // retrieve it automatically without threading `&Theme` everywhere.
         crate::design_system::install_theme(ctx, self.ui_store.theme.clone());
 
-        // Reverse-direction sync — remaining booleans not yet reversed.
-        self.view_state.turn = clarity_core::ui::TurnState::from_legacy(
-            self.chat_store.is_loading,
-            self.chat_store.compacting,
-            self.chat_store.stopping,
-            self.snapshot_store.restoring,
-        );
-        self.view_state.expansions = clarity_core::ui::PanelExpansion::from_legacy_flags(
-            self.cron_store.cron_expanded,
-            self.ui_store.web_tabs_expanded,
-            self.ui_store.thinking_log_expanded,
-            self.ui_store.tools_expanded,
-            self.ui_store.subagents_expanded,
-            self.ui_store.workspace_plan_expanded,
-            self.ui_store.workspace_plan_manually_collapsed,
-        );
+        // Mirror pending approvals into the modal state machine. Approval takes
+        // precedence only when no other modal is currently open.
+        if !self.ui_store.pending_approvals.is_empty() && !self.ui_store.kimi_conversation_style {
+            if self.view_state.modal.is_none()
+                || self.view_state.modal == Some(clarity_core::ui::ModalType::Approval)
+            {
+                self.view_state
+                    .open_modal(clarity_core::ui::ModalType::Approval);
+            }
+        } else if self.view_state.modal == Some(clarity_core::ui::ModalType::Approval) {
+            self.view_state.close_modal();
+        }
 
         // ── Layout shell: chrome + main view + overlays + modals ──
         self.render_layout_shell(ctx);
+
+        // Pretext PoC: measurement probe window
+        if self.ui_store.pretext_probe_open {
+            crate::widgets::pretext_probe::render_pretext_probe(self, ctx);
+        }
 
         // Command Palette (top-most layer)
         if self.command_palette.open {
@@ -1470,3 +1491,6 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
         }
     }
 }
+
+#[cfg(test)]
+mod pretext_alignment;

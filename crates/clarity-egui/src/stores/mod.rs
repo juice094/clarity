@@ -51,7 +51,6 @@ mod tests {
                 max_concurrency: 2,
                 timeout_secs: 60,
             }],
-            create_modal_open: false,
             create_name: String::new(),
             create_goal: String::new(),
             create_members: vec![],

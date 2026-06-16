@@ -182,7 +182,7 @@ fn render_plugin_row(
 
         ui.label(
             egui::RichText::new(icon)
-                .size(theme.text_base)
+                .font(theme.font_icon(theme.text_base))
                 .color(theme.accent),
         );
 

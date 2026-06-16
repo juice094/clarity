@@ -18,7 +18,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .sessions
             .iter()
             .find(|s| s.id == app.session_store.active_session_id)
-            .is_none_or(|s| s.messages.is_empty() && !app.chat_store.is_loading);
+            .is_none_or(|s| {
+                s.messages.is_empty() && app.view_state.turn != clarity_core::ui::TurnState::Loading
+            });
 
     if is_empty_state {
         // Empty-state input: subtle rounded bar with border so it doesn't blend into bg
@@ -171,7 +173,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 ui.spacing_mut().item_spacing.x = 8.0;
 
                 // Send button (or stop spinner when loading)
-                if app.chat_store.is_loading {
+                if app.view_state.turn == clarity_core::ui::TurnState::Loading {
                     let stop_btn = egui::Button::new(
                         egui::RichText::new(crate::theme::ICON_X)
                             .font(theme.font_icon(theme.text_base))
@@ -199,7 +201,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                         .on_hover_text("Send (Ctrl+Enter)")
                         .clicked()
                         && !app.chat_store.input.trim().is_empty()
-                        && !app.chat_store.is_loading
+                        && app.view_state.turn != clarity_core::ui::TurnState::Loading
                     {
                         app.chat_store.stick_to_bottom = true;
                         app.send();
@@ -226,7 +228,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn composer_hint(app: &App) -> String {
-    if app.chat_store.stopping {
+    if app.view_state.turn == clarity_core::ui::TurnState::Stopping {
         app.t("Stopping current turn...").to_string()
     } else if app.chat_store.pending_send.is_some() {
         app.t("Message queued, will send after current response...")
@@ -256,7 +258,7 @@ fn handle_tui_keys(app: &mut App, ui: &egui::Ui, response: &egui::Response, prev
         }
         if app.chat_store.input == *prev_input
             && !app.chat_store.input.trim().is_empty()
-            && !app.chat_store.is_loading
+            && app.view_state.turn != clarity_core::ui::TurnState::Loading
         {
             let trimmed = app.chat_store.input.trim().to_string();
             if let Some(cmd) = trimmed.strip_prefix('!') {

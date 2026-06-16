@@ -10,7 +10,7 @@ pub fn render_oauth_login_modal(
     ctx: &egui::Context,
     config: &clarity_llm::auth::OAuthDeviceFlowConfig,
 ) {
-    if !app.settings_store.kimi_code_login_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::KimiCodeLogin) {
         return;
     }
 
@@ -195,7 +195,7 @@ pub fn render_oauth_login_modal(
         });
 
     if close_requested {
-        app.settings_store.kimi_code_login_open = false;
+        app.view_state.close_modal();
         app.settings_store.kimi_code_login_state = KimiCodeLoginState::Idle;
     }
 }

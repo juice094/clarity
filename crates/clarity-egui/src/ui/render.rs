@@ -9,8 +9,12 @@
 
 #![allow(dead_code)] // line-mode feature toggles which functions are active
 
+use crate::pretext::EguiFontMetrics;
 use crate::theme::Theme;
-use crate::ui::types::{ContentBlock, Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus};
+use crate::ui::rich_inline::text_to_spans;
+use crate::ui::types::{
+    ContentBlock, InlineSpan, Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus,
+};
 
 // ============================================================================
 // Render — Message bubbles, tool calls, typing indicator
@@ -33,12 +37,14 @@ pub fn message_bubble(
     retry_idx: &mut Option<usize>,
     switch_model: &mut bool,
     selected_idx: Option<usize>,
+    metrics: Option<&EguiFontMetrics>,
 ) -> f32 {
     if msg.is_error {
         error_bubble(ui, msg, theme, msg_idx, retry_idx, switch_model)
     } else {
         #[cfg(feature = "line-mode")]
         {
+            let _ = metrics;
             match msg.role {
                 Role::User => line_mode_user(ui, msg, theme, selected_idx),
                 Role::Agent => line_mode_agent(ui, msg, theme, show_header, selected_idx),
@@ -48,8 +54,8 @@ pub fn message_bubble(
         {
             let _ = selected_idx;
             match msg.role {
-                Role::User => user_bubble(ui, msg, theme),
-                Role::Agent => agent_message(ui, msg, theme, show_header),
+                Role::User => user_bubble(ui, msg, theme, metrics),
+                Role::Agent => agent_message(ui, msg, theme, show_header, metrics),
             }
         }
     }
@@ -57,7 +63,13 @@ pub fn message_bubble(
 
 // ── Agent ──
 
-fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: bool) -> f32 {
+fn agent_message(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    show_header: bool,
+    metrics: Option<&EguiFontMetrics>,
+) -> f32 {
     let start_y = ui.cursor().min.y;
 
     if show_header {
@@ -76,13 +88,13 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
 
     if msg.parsed.is_empty() {
         // Lazy parse fallback: streaming phase, show raw text without markdown parsing.
-        agent_text_plain_inner(ui, msg, theme);
+        agent_text_plain_inner(ui, msg, theme, metrics);
     } else if msg.blocks.is_empty() {
         // Fallback: render from parsed content (legacy sessions)
         if has_structure(msg) {
             agent_structured_card_inner(ui, msg, theme);
         } else {
-            agent_text_plain_inner(ui, msg, theme);
+            agent_text_plain_inner(ui, msg, theme, metrics);
         }
     } else {
         // Phase 1: render blocks with type-aware strategy
@@ -102,7 +114,7 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
                 .show(ui, |ui| {
                     ui.set_max_width(max_width);
                     for (idx, block) in visible_blocks.iter().enumerate() {
-                        render_content_block(ui, block, theme, idx);
+                        render_content_block(ui, block, theme, idx, metrics);
                     }
                 });
             ui.add_space(theme.space_16);
@@ -113,12 +125,27 @@ fn agent_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme, show_header: b
 }
 
 /// Agent plain text — Swiss Style: no bubble, full-width, bottom border separator.
-fn agent_text_plain_inner(ui: &mut egui::Ui, msg: &Message, theme: &Theme) {
+fn agent_text_plain_inner(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    metrics: Option<&EguiFontMetrics>,
+) {
     // Content: straight layout, text directly on page background
     let max_width = ui.available_width();
     ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
         ui.set_max_width(max_width);
-        if msg.parsed.is_empty() {
+        if let Some(metrics) = metrics {
+            let profile = pretext_core::EngineProfile::chromium();
+            let spans = if msg.parsed.is_empty() || is_simple_paragraph(&msg.parsed) {
+                text_to_spans(&msg.content)
+            } else {
+                first_paragraph_spans(&msg.parsed)
+            };
+            crate::widgets::rich_paragraph::rich_paragraph(
+                ui, &spans, theme, metrics, &profile, max_width,
+            );
+        } else if msg.parsed.is_empty() {
             // Lazy parse fallback: streaming phase, show raw text.
             ui.label(
                 egui::RichText::new(&msg.content)
@@ -159,6 +186,19 @@ fn has_structure(msg: &Message) -> bool {
         .any(|b| matches!(b, RenderBlock::CodeBlock { .. } | RenderBlock::Table { .. }))
 }
 
+/// True if the parsed blocks are a single paragraph with no block-level elements.
+fn is_simple_paragraph(blocks: &[RenderBlock]) -> bool {
+    blocks.len() == 1 && matches!(blocks.first(), Some(RenderBlock::Paragraph(_)))
+}
+
+/// Extract spans from the first paragraph, or return an empty span list.
+fn first_paragraph_spans(blocks: &[RenderBlock]) -> Vec<InlineSpan> {
+    match blocks.first() {
+        Some(RenderBlock::Paragraph(spans)) => spans.clone(),
+        _ => Vec::new(),
+    }
+}
+
 // ============================================================================
 // Phase 1 — ContentBlock rendering
 // ============================================================================
@@ -178,11 +218,26 @@ fn should_show_tool_in_chat(name: &str) -> bool {
     matches!(name, "file_read" | "file_write" | "plan" | "grep")
 }
 
-fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme, block_idx: usize) {
+fn render_content_block(
+    ui: &mut egui::Ui,
+    block: &ContentBlock,
+    theme: &Theme,
+    block_idx: usize,
+    metrics: Option<&EguiFontMetrics>,
+) {
     match block {
         ContentBlock::Text { text } => {
-            let parsed = crate::ui::markdown::parse_markdown(text);
-            crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+            if let Some(metrics) = metrics {
+                let profile = pretext_core::EngineProfile::chromium();
+                let spans = text_to_spans(text);
+                let max_width = ui.available_width();
+                crate::widgets::rich_paragraph::rich_paragraph(
+                    ui, &spans, theme, metrics, &profile, max_width,
+                );
+            } else {
+                let parsed = crate::ui::markdown::parse_markdown(text);
+                crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
+            }
             ui.add_space(theme.space_4);
         }
         ContentBlock::Code { language, code } => {
@@ -315,7 +370,12 @@ fn render_content_block(ui: &mut egui::Ui, block: &ContentBlock, theme: &Theme, 
 
 // ── User ──
 
-fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+fn user_bubble(
+    ui: &mut egui::Ui,
+    msg: &Message,
+    theme: &Theme,
+    metrics: Option<&EguiFontMetrics>,
+) -> f32 {
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 
@@ -330,7 +390,30 @@ fn user_bubble(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.set_min_width(48.0);
-                    crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.text_strong);
+                    if let Some(metrics) = metrics {
+                        let profile = pretext_core::EngineProfile::chromium();
+                        let spans = if msg.parsed.is_empty() || is_simple_paragraph(&msg.parsed) {
+                            text_to_spans(&msg.content)
+                        } else {
+                            first_paragraph_spans(&msg.parsed)
+                        };
+                        let inner_max_width = ui.available_width();
+                        crate::widgets::rich_paragraph::rich_paragraph(
+                            ui,
+                            &spans,
+                            theme,
+                            metrics,
+                            &profile,
+                            inner_max_width,
+                        );
+                    } else {
+                        crate::ui::markdown::render_blocks(
+                            ui,
+                            &msg.parsed,
+                            theme,
+                            theme.text_strong,
+                        );
+                    }
                 });
             });
     });
@@ -628,16 +711,21 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
 // Helpers
 // ============================================================================
 
-/// Pretext-style height estimation for virtual list culling.
+/// Height estimation for virtual list culling.
 /// Called on the cold path (once per message when height cache is missing).
+///
+/// Pretext is now the only supported path; the legacy character-count
+/// heuristic has been removed in Phase 4.
 pub fn estimate_height(
     msg: &crate::ui::types::Message,
     content_max_width: f32,
     theme: &crate::theme::Theme,
+    metrics: &EguiFontMetrics,
 ) -> f32 {
     #[cfg(feature = "line-mode")]
     {
         let _ = content_max_width;
+        let _ = metrics;
         let line_h = crate::ui::line_renderer::LINE_HEIGHT;
         let lines_h = msg.lines.len() as f32 * line_h;
         // Padding for bubble frame + trailing space.
@@ -646,47 +734,96 @@ pub fn estimate_height(
 
     #[cfg(not(feature = "line-mode"))]
     {
-        use crate::ui::types::RenderBlock;
-        let mut height = 28.0; // bubble padding + trailing space_8
-
-        // Approximate chars per line based on available width and base font size.
-        // Average glyph width ≈ text_base * 0.65 (mix of Latin and CJK).
-        let chars_per_line = ((content_max_width / (theme.text_base * 0.65)).max(20.0)) as usize;
-        let line_height = theme.text_base * 1.5; // ~18px when text_base=12.0
-
-        for block in &msg.parsed {
-            match block {
-                RenderBlock::Paragraph(spans) => {
-                    let chars: usize = spans
-                        .iter()
-                        .map(|s| match s {
-                            crate::ui::types::InlineSpan::Text(t)
-                            | crate::ui::types::InlineSpan::Bold(t)
-                            | crate::ui::types::InlineSpan::Code(t) => t.len(),
-                            crate::ui::types::InlineSpan::Link { text, .. } => text.len(),
-                        })
-                        .sum();
-                    let lines = (chars / chars_per_line).max(1);
-                    height += lines as f32 * line_height;
-                }
-                RenderBlock::Heading(_, _) => height += theme.text_lg + theme.space_8,
-                RenderBlock::CodeBlock { code, .. } => {
-                    let lines = code.lines().count().max(1);
-                    height += lines as f32 * (theme.text_sm + theme.space_4) + 30.0;
-                }
-                RenderBlock::ListItem(_) => height += line_height + theme.space_4,
-                RenderBlock::Blockquote(_) => height += line_height + theme.space_4,
-                RenderBlock::HorizontalRule => height += theme.space_12,
-                RenderBlock::Table { rows, .. } => {
-                    height += line_height + theme.space_8; // header row
-                    height += rows.len() as f32 * (line_height + theme.space_4);
-                    height += theme.space_8; // padding
-                }
-            }
-            height += theme.space_4; // inter-block spacing
-        }
-        height
+        estimate_height_pretext(msg, content_max_width, theme, metrics)
     }
+}
+
+/// Pretext-based estimator. Measures paragraph text width against the actual
+/// bubble width to compute line count.
+fn estimate_height_pretext(
+    msg: &crate::ui::types::Message,
+    content_max_width: f32,
+    theme: &crate::theme::Theme,
+    metrics: &EguiFontMetrics,
+) -> f32 {
+    use crate::ui::types::RenderBlock;
+
+    // Bubble padding matches the actual render path:
+    // - user bubble: inner_margin vertical 14*2 + trailing space_16 = 44
+    // - agent plain text: trailing space_12
+    // - agent card (blocks / structured): inner_margin vertical 12*2 + trailing space_16 = 40
+    let base_padding = match msg.role {
+        Role::User => 44.0,
+        Role::Agent => {
+            let has_visible_blocks = !msg.blocks.is_empty()
+                && msg.blocks.iter().any(|b| {
+                    matches!(
+                        b,
+                        crate::ui::types::ContentBlock::Text { .. }
+                            | crate::ui::types::ContentBlock::Code { .. }
+                            | crate::ui::types::ContentBlock::Think { .. }
+                            | crate::ui::types::ContentBlock::Plan { .. }
+                            | crate::ui::types::ContentBlock::FilePreview { .. }
+                            | crate::ui::types::ContentBlock::ToolResult { .. }
+                    )
+                });
+            if has_visible_blocks || has_structure(msg) {
+                40.0
+            } else {
+                12.0
+            }
+        }
+    };
+    let mut height = base_padding;
+    let font = crate::pretext::font_body(theme);
+    let line_height = metrics.row_height(&font) * 1.2;
+    let options = pretext_core::PrepareOptions::default();
+    let profile = pretext_core::EngineProfile::chromium();
+
+    // Available width for the text itself.
+    // User bubble has inner margin; agent plain text uses the full available width.
+    let text_width = match msg.role {
+        Role::User => ((content_max_width * 0.72).max(280.0) - 36.0).max(120.0),
+        Role::Agent => content_max_width.max(120.0),
+    };
+
+    for block in &msg.parsed {
+        match block {
+            RenderBlock::Paragraph(spans) => {
+                let text = paragraph_text(spans);
+                let lines = pretext_core::prepare_with_segments(&text, &font, metrics, &options)
+                    .and_then(|p| pretext_core::layout::layout_with_lines(&p, text_width, &profile))
+                    .map(|r| r.line_count.max(1))
+                    .unwrap_or(1);
+                height += lines as f32 * line_height;
+            }
+            RenderBlock::Heading(_, _) => height += theme.text_lg + theme.space_8,
+            RenderBlock::CodeBlock { code, .. } => {
+                let lines = code.lines().count().max(1);
+                height += lines as f32 * (theme.text_sm + theme.space_4) + 30.0;
+            }
+            RenderBlock::ListItem(_) => height += line_height + theme.space_4,
+            RenderBlock::Blockquote(_) => height += line_height + theme.space_4,
+            RenderBlock::HorizontalRule => height += theme.space_12,
+            RenderBlock::Table { rows, .. } => {
+                height += line_height + theme.space_8;
+                height += rows.len() as f32 * (line_height + theme.space_4);
+                height += theme.space_8;
+            }
+        }
+        height += theme.space_4; // inter-block spacing
+    }
+    height
+}
+
+fn paragraph_text(spans: &[InlineSpan]) -> String {
+    spans
+        .iter()
+        .map(|s| match s {
+            InlineSpan::Text(t) | InlineSpan::Bold(t) | InlineSpan::Code(t) => t.as_str(),
+            InlineSpan::Link { text, .. } => text.as_str(),
+        })
+        .collect()
 }
 
 /// Truncate a string to at most `max_chars` characters, appending "…" if truncated.

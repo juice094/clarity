@@ -1,5 +1,6 @@
 //! User avatar row — circular avatar + name + optional subtitle/badge.
 
+use crate::design_system::{self, Text};
 use crate::theme::Theme;
 
 /// Render a user identity row: circular initial avatar, display name, and
@@ -31,19 +32,10 @@ pub fn user_avatar_row(
         );
 
         ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new(name)
-                    .size(theme.text_sm)
-                    .strong()
-                    .color(theme.text),
-            );
+            design_system::text(ui, name, Text::CaptionStrong);
             if let Some(sub) = subtitle {
                 if !sub.is_empty() {
-                    ui.label(
-                        egui::RichText::new(sub)
-                            .size(theme.text_xs)
-                            .color(theme.text_dim),
-                    );
+                    design_system::text(ui, sub, Text::Small);
                 }
             }
         });

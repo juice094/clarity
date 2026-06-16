@@ -102,30 +102,6 @@ impl SqliteStore {
         Ok(())
     }
 
-    /// Save a note associated with a session.
-    pub async fn save_session_note(
-        &self,
-        session_id: &str,
-        section: &str,
-        content: &str,
-    ) -> Result<()> {
-        let session_id = session_id.to_string();
-        let section = section.to_string();
-        let content = content.to_string();
-        let conn = self.conn.clone();
-        tokio::task::spawn_blocking(move || {
-            let conn = conn.lock();
-            conn.execute(
-                "INSERT INTO session_notes (session_id, section, content) VALUES (?1, ?2, ?3)",
-                params![session_id, section, content],
-            )?;
-            Ok::<_, MemoryError>(())
-        })
-        .await
-        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
-        Ok(())
-    }
-
     fn init_schema(&self) -> Result<()> {
         let conn = self.conn.lock();
         conn.execute(
@@ -592,6 +568,29 @@ impl StorageBackend for SqliteStore {
         *cache = None;
 
         Ok(rows)
+    }
+
+    async fn save_session_note(
+        &self,
+        session_id: &str,
+        section: &str,
+        content: &str,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        let section = section.to_string();
+        let content = content.to_string();
+        let conn = self.conn.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = conn.lock();
+            conn.execute(
+                "INSERT INTO session_notes (session_id, section, content) VALUES (?1, ?2, ?3)",
+                params![session_id, section, content],
+            )?;
+            Ok::<_, MemoryError>(())
+        })
+        .await
+        .map_err(|e| MemoryError::InvalidInput(e.to_string()))??;
+        Ok(())
     }
 
     async fn bulk_save_facts(

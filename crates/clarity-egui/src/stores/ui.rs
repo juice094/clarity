@@ -29,21 +29,13 @@ pub struct UiStore {
     pub last_input_modified: Instant,
     /// Web tabs managed in the left sidebar.
     pub web_tabs: Vec<WebTab>,
-    /// Whether the web tabs section is expanded in the sidebar.
-    pub web_tabs_expanded: bool,
     /// Whether to show the URL input row when web tabs are empty.
     pub web_tabs_add_visible: bool,
-    /// Whether the thinking log section is expanded in the sidebar.
-    pub thinking_log_expanded: bool,
     /// Whether the thinking log shows all tool calls or only the latest 3.
     pub thinking_log_show_all: bool,
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,
-    /// Tools section expanded in left sidebar.
-    pub tools_expanded: bool,
-    /// Subagents section expanded in left sidebar.
-    pub subagents_expanded: bool,
     /// Session tab currently being renamed (double-click).
     pub editing_session_id: Option<String>,
     /// Buffer for the in-progress rename.
@@ -57,10 +49,6 @@ pub struct UiStore {
     pub agent_turn_glass: bool,
     /// Toggle Kimi Desktop v3-style conversation rendering.
     pub kimi_conversation_style: bool,
-    /// Workspace panel Plan section expanded.
-    pub workspace_plan_expanded: bool,
-    /// User manually collapsed Plan section (blocks auto-expand).
-    pub workspace_plan_manually_collapsed: bool,
     /// S7 Phase 2D: global selected line index in the flat line stream (line-mode only).
     pub line_cursor_selected: Option<usize>,
     /// S7 Phase 2D: total flat line count last frame (used to clamp cursor).
@@ -86,6 +74,12 @@ pub struct UiStore {
     pub bot_instances: Vec<BotInstance>,
     /// OpenClaw: currently active bot instance id.
     pub active_bot_id: String,
+    /// Pretext PoC: whether the text-measurement probe window is open.
+    pub pretext_probe_open: bool,
+    /// Pretext PoC: wrap-preview max width in the probe window.
+    pub pretext_probe_wrap_width: f32,
+    /// Pretext Phase 1: use pretext for `estimate_height` in the message list.
+    pub pretext_estimate_enabled: bool,
 }
 
 /// Bot instance descriptor (OpenClaw — aligned to Kimi Desktop bot management).

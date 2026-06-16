@@ -34,15 +34,20 @@ use rusqlite::Connection;
 /// Statistics from a dry-run analysis.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct MigrationStats {
+    /// Number of V1 sessions present.
     pub sessions: usize,
+    /// Number of V1 messages present.
     pub messages: usize,
 }
 
 /// Report after migration execution.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MigrationReport {
+    /// Number of sessions migrated to V2.
     pub sessions_migrated: usize,
+    /// Number of messages migrated to V2.
     pub messages_migrated: usize,
+    /// Errors encountered during migration.
     pub errors: Vec<String>,
 }
 

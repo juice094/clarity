@@ -4,7 +4,7 @@ use crate::App;
 
 /// Renders the task view modal UI.
 pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
-    if !app.task_store.task_view_modal_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::TaskView) {
         return;
     }
 
@@ -122,7 +122,7 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
         });
 
     if close_requested {
-        app.task_store.task_view_modal_open = false;
+        app.view_state.close_modal();
         app.task_store.viewing_task_id = None;
         app.task_store.viewing_task_result = None;
     }

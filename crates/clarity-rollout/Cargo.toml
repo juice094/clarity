@@ -1,0 +1,29 @@
+[package]
+name = "clarity-rollout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "JSONL rollout persistence for Clarity threads - ported from OpenAI Codex rollout"
+
+[dependencies]
+clarity-contract = { path = "../clarity-contract" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+parking_lot = "0.12"
+tokio-util = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.9"
+
+[lints]
+workspace = true

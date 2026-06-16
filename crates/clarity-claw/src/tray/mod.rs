@@ -3,7 +3,7 @@
 //! Provides the tao event loop, tray icon, menu, OS notifications,
 //! Gateway task polling, and wire message listening.
 
-use crate::{POLL_INTERVAL_SECS, TaskListPayload, TaskSummary};
+use crate::{POLL_INTERVAL_SECS, TaskListPayload, TaskSummary, ThreadListPayload, ThreadSummary};
 use clarity_wire::{Wire, WireMessage};
 use notify::Watcher;
 use parking_lot::Mutex;
@@ -16,7 +16,7 @@ use tao::{
 };
 use tray_icon::{
     Icon, MouseButton, TrayIconBuilder, TrayIconEvent,
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 
 // ------------------------------------------------------------------
@@ -54,6 +54,79 @@ fn default_icon() -> anyhow::Result<Icon> {
 }
 
 // ------------------------------------------------------------------
+// Menu identifiers (stable across rebuilds)
+// ------------------------------------------------------------------
+const MENU_QUICK_ASK: &str = "quick-ask";
+const MENU_NEW_CHAT: &str = "new-chat";
+const MENU_CREATE_TASK: &str = "create-task";
+const MENU_REFRESH_TASKS: &str = "refresh-tasks";
+const MENU_VIEW_TASKS: &str = "view-tasks";
+const MENU_RECENT_THREADS: &str = "recent-threads";
+const MENU_THREAD_PREFIX: &str = "thread-";
+const MENU_NO_THREADS: &str = "no-threads";
+const MENU_QUIT: &str = "quit";
+
+/// Build a thread label from a [`ThreadSummary`].
+fn thread_label(thread: &ThreadSummary) -> String {
+    thread.title.clone().unwrap_or_else(|| {
+        let len = thread.thread_id.len();
+        format!("Thread {}", &thread.thread_id[..8.min(len)])
+    })
+}
+
+/// Build the tray menu, including a dynamic "Recent Threads" submenu.
+fn build_tray_menu(threads: &[ThreadSummary]) -> Menu {
+    let menu = Menu::new();
+    let _ = menu.append(&MenuItem::with_id(
+        MENU_QUICK_ASK,
+        "Quick Ask...",
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(MENU_NEW_CHAT, "New Chat", true, None));
+    let _ = menu.append(&PredefinedMenuItem::separator());
+    let _ = menu.append(&MenuItem::with_id(
+        MENU_CREATE_TASK,
+        "Create Task...",
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        MENU_REFRESH_TASKS,
+        "Refresh Tasks",
+        true,
+        None,
+    ));
+    let _ = menu.append(&MenuItem::with_id(
+        MENU_VIEW_TASKS,
+        "View Tasks",
+        true,
+        None,
+    ));
+
+    let threads_menu = Submenu::with_id(MENU_RECENT_THREADS, "Recent Threads", true);
+    if threads.is_empty() {
+        let _ = threads_menu.append(&MenuItem::with_id(
+            MENU_NO_THREADS,
+            "No recent threads",
+            false,
+            None,
+        ));
+    } else {
+        for thread in threads.iter().take(5) {
+            let id = format!("{MENU_THREAD_PREFIX}{}", thread.thread_id);
+            let label = thread_label(thread);
+            let _ = threads_menu.append(&MenuItem::with_id(&id, &label, true, None));
+        }
+    }
+    let _ = menu.append(&threads_menu);
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
+    let _ = menu.append(&MenuItem::with_id(MENU_QUIT, "Quit", true, None));
+    menu
+}
+
+// ------------------------------------------------------------------
 // Single-instance guard (cross-platform: TCP port binding)
 // ------------------------------------------------------------------
 
@@ -85,6 +158,8 @@ pub enum UserEvent {
     WireMsg(WireMessage),
     /// Task list update from Gateway polling.
     TaskUpdate(Vec<TaskSummary>),
+    /// Thread list update from Gateway polling.
+    ThreadUpdate(Vec<ThreadSummary>),
     /// Show quick input dialog.
     QuickInput,
     /// Show task creation dialog.
@@ -109,32 +184,12 @@ pub fn run() -> anyhow::Result<()> {
     let mut ui_side = wire.ui_side(true);
 
     // ------------------------------------------------------------------
-    // Tray menu
+    // Tray menu and icon
     // ------------------------------------------------------------------
-    let menu = Menu::new();
-    let quick_ask_item = MenuItem::new("Quick Ask...", true, None);
-    let new_chat_item = MenuItem::new("New Chat", true, None);
-    let separator1 = PredefinedMenuItem::separator();
-    let create_task_item = MenuItem::new("Create Task...", true, None);
-    let refresh_tasks_item = MenuItem::new("Refresh Tasks", true, None);
-    let view_tasks_item = MenuItem::new("View Tasks", true, None);
-    let separator2 = PredefinedMenuItem::separator();
-    let quit_item = MenuItem::new("Quit", true, None);
-
-    let _ = menu.append(&quick_ask_item);
-    let _ = menu.append(&new_chat_item);
-    let _ = menu.append(&separator1);
-    let _ = menu.append(&create_task_item);
-    let _ = menu.append(&refresh_tasks_item);
-    let _ = menu.append(&view_tasks_item);
-    let _ = menu.append(&separator2);
-    let _ = menu.append(&quit_item);
-
-    // ------------------------------------------------------------------
-    // Tray icon
-    // ------------------------------------------------------------------
+    let thread_cache: Arc<Mutex<Vec<ThreadSummary>>> = Arc::new(Mutex::new(Vec::new()));
+    let initial_menu = build_tray_menu(&thread_cache.lock());
     let tray_icon = TrayIconBuilder::new()
-        .with_menu(Box::new(menu))
+        .with_menu(Box::new(initial_menu))
         .with_tooltip("Clarity Claw — connecting...")
         .with_icon(default_icon()?)
         .build()
@@ -191,12 +246,14 @@ pub fn run() -> anyhow::Result<()> {
     // ------------------------------------------------------------------
     let poll_proxy = proxy.clone();
     let poll_url = format!("{}/v1/tasks", gateway_url);
+    let threads_poll_url = format!("{}/api/v2/threads?limit=10", gateway_url);
     let tasks_dir = std::env::current_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
         .join(".clarity")
         .join("tasks");
     let task_cache: Arc<Mutex<Vec<TaskSummary>>> = Arc::new(Mutex::new(Vec::new()));
     let task_cache_bg = task_cache.clone();
+    let thread_cache_bg = thread_cache.clone();
 
     tokio::spawn(async move {
         let client = reqwest::Client::builder()
@@ -279,6 +336,27 @@ pub fn run() -> anyhow::Result<()> {
                 }
                 _ => {
                     let _ = poll_proxy.send_event(UserEvent::TaskUpdate(Vec::new()));
+                }
+            }
+
+            match client.get(&threads_poll_url).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    if let Ok(payload) = resp.json::<ThreadListPayload>().await {
+                        let threads: Vec<ThreadSummary> = payload
+                            .data
+                            .iter()
+                            .map(|t| ThreadSummary {
+                                thread_id: t.thread_id.clone(),
+                                title: t.title.clone(),
+                                updated_at: t.updated_at,
+                            })
+                            .collect();
+                        *thread_cache_bg.lock() = threads.clone();
+                        let _ = poll_proxy.send_event(UserEvent::ThreadUpdate(threads));
+                    }
+                }
+                _ => {
+                    let _ = poll_proxy.send_event(UserEvent::ThreadUpdate(Vec::new()));
                 }
             }
         }
@@ -453,8 +531,20 @@ pub fn run() -> anyhow::Result<()> {
                 UserEvent::TaskUpdate(tasks) => {
                     let running = tasks.iter().filter(|t| t.status == "Running").count();
                     let pending = tasks.iter().filter(|t| t.status == "Pending").count();
-                    let tooltip = crate::format_tooltip(running, pending, tasks.len());
+                    let threads = thread_cache.lock();
+                    let tooltip =
+                        crate::format_tooltip(running, pending, tasks.len(), threads.len());
                     let _ = tray_icon.set_tooltip(Some(&tooltip));
+                }
+                UserEvent::ThreadUpdate(threads) => {
+                    let tasks = task_cache.lock();
+                    let running = tasks.iter().filter(|t| t.status == "Running").count();
+                    let pending = tasks.iter().filter(|t| t.status == "Pending").count();
+                    let tooltip =
+                        crate::format_tooltip(running, pending, tasks.len(), threads.len());
+                    let _ = tray_icon.set_tooltip(Some(&tooltip));
+                    let new_menu = build_tray_menu(threads);
+                    tray_icon.set_menu(Some(Box::new(new_menu)));
                 }
                 UserEvent::Quit => {
                     tracing::info!("Graceful shutdown requested");
@@ -475,27 +565,58 @@ pub fn run() -> anyhow::Result<()> {
 
         // Tray menu events
         if let Ok(menu_event) = menu_channel.try_recv() {
-            let id = menu_event.id;
+            let id_str = menu_event.id.0.as_str();
 
-            if id == quick_ask_item.id() {
-                let _ = proxy.send_event(UserEvent::QuickInput);
-            } else if id == new_chat_item.id() {
-                let url = format!("{}/chat.html", gateway_url);
-                let _ = open_url(&url);
-            } else if id == create_task_item.id() {
-                let _ = proxy.send_event(UserEvent::CreateTask);
-            } else if id == refresh_tasks_item.id() {
-                let _ = proxy.send_event(UserEvent::TaskUpdate(task_cache.lock().clone()));
-            } else if id == view_tasks_item.id() {
-                let url = format!("{}/chat.html", gateway_url);
-                let _ = open_url(&url);
-            } else if id == quit_item.id() {
-                tracing::info!("Menu: Quit");
-                *control_flow = ControlFlow::Exit;
-            } else {
-                let id_str = id.0.as_str();
-                if let Some(task_id) = id_str.strip_prefix("cancel-") {
-                    let _ = proxy.send_event(UserEvent::CancelTask(task_id.to_string()));
+            match id_str {
+                MENU_QUICK_ASK => {
+                    let _ = proxy.send_event(UserEvent::QuickInput);
+                }
+                MENU_NEW_CHAT => {
+                    let gw = gateway_url.clone();
+                    std::thread::spawn(move || {
+                        let rt = match tray_runtime() {
+                            Ok(rt) => rt,
+                            Err(e) => {
+                                tracing::error!("{}", e);
+                                return;
+                            }
+                        };
+                        match rt.block_on(crate::create_remote_thread(&gw, None)) {
+                            Ok(thread_id) => {
+                                let url = format!("{}/chat.html?thread_id={}", gw, thread_id);
+                                let _ = open_url(&url);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create thread: {}", e);
+                                let _ = notify_rust::Notification::new()
+                                    .summary("Clarity")
+                                    .body(&format!("Could not start a new chat: {}", e))
+                                    .show();
+                            }
+                        }
+                    });
+                }
+                MENU_CREATE_TASK => {
+                    let _ = proxy.send_event(UserEvent::CreateTask);
+                }
+                MENU_REFRESH_TASKS => {
+                    let _ = proxy.send_event(UserEvent::TaskUpdate(task_cache.lock().clone()));
+                }
+                MENU_VIEW_TASKS => {
+                    let url = format!("{}/chat.html", gateway_url);
+                    let _ = open_url(&url);
+                }
+                MENU_QUIT => {
+                    tracing::info!("Menu: Quit");
+                    *control_flow = ControlFlow::Exit;
+                }
+                _ => {
+                    if let Some(thread_id) = id_str.strip_prefix(MENU_THREAD_PREFIX) {
+                        let url = format!("{}/chat.html?thread_id={}", gateway_url, thread_id);
+                        let _ = open_url(&url);
+                    } else if let Some(task_id) = id_str.strip_prefix("cancel-") {
+                        let _ = proxy.send_event(UserEvent::CancelTask(task_id.to_string()));
+                    }
                 }
             }
         }

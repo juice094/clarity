@@ -14,7 +14,7 @@ pub enum CronSectionAction {
 pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme;
     let task_count = app.cron_store.tasks.len();
-    let expanded = app.cron_store.cron_expanded;
+    let expanded = app.view_state.expansions.cron;
 
     ui.horizontal(|ui| {
         ui.label(
@@ -39,7 +39,8 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.cron_store.create_modal_open = true;
+                app.view_state
+                    .open_modal(clarity_core::ui::ModalType::CronCreate);
             }
             ui.add_space(theme.space_4);
 
@@ -58,7 +59,7 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.cron_store.cron_expanded = !expanded;
+                app.view_state.expansions.cron = !expanded;
             }
         });
     });

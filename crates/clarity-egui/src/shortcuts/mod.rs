@@ -35,6 +35,8 @@ pub enum ShortcutAction {
     ToggleCommandPalette,
     /// Toggle the dashboard metrics side-panel.
     ToggleDashboardPanel,
+    /// Toggle the layout debug overlay (green/blue/red/yellow diagnostic rects).
+    ToggleLayoutDebug,
     /// Line-mode: move cursor down one line (`j`).
     #[allow(dead_code)] // only constructed when line-mode feature is enabled
     NavigateDown,
@@ -66,6 +68,7 @@ impl ShortcutAction {
             ShortcutAction::FocusInput => ids::FOCUS_INPUT,
             ShortcutAction::ToggleCommandPalette => ids::TOGGLE_COMMAND_PALETTE,
             ShortcutAction::ToggleDashboardPanel => ids::TOGGLE_DASHBOARD,
+            ShortcutAction::ToggleLayoutDebug => ids::TOGGLE_LAYOUT_DEBUG,
             ShortcutAction::NavigateDown => ids::NAVIGATE_DOWN,
             ShortcutAction::NavigateUp => ids::NAVIGATE_UP,
             ShortcutAction::NavigateTop => ids::NAVIGATE_TOP,
@@ -90,7 +93,9 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         actions.push(ShortcutAction::CloseModal);
     }
 
-    if app.chat_store.is_loading && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl) {
+    if app.view_state.turn == clarity_core::ui::TurnState::Loading
+        && ctx.input(|i| i.key_pressed(egui::Key::C) && i.modifiers.ctrl)
+    {
         actions.push(ShortcutAction::StopGeneration);
     }
 
@@ -108,7 +113,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl)
         && !app.chat_store.input.trim().is_empty()
-        && !app.chat_store.is_loading
+        && app.view_state.turn != clarity_core::ui::TurnState::Loading
     {
         actions.push(ShortcutAction::SendMessage);
     }
@@ -133,6 +138,10 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
         actions.push(ShortcutAction::ToggleDashboardPanel);
     }
 
+    if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl && i.modifiers.shift) {
+        actions.push(ShortcutAction::ToggleLayoutDebug);
+    }
+
     // ── Line-mode navigation (S7 Phase 2D) ──
     #[cfg(feature = "line-mode")]
     {
@@ -142,7 +151,7 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
                 clarity_core::ui::view_state::PanelKind::ChatStream
             )
         );
-        if chat_focused && !app.chat_store.is_loading {
+        if chat_focused && app.view_state.turn != clarity_core::ui::TurnState::Loading {
             if ctx.input(|i| i.key_pressed(egui::Key::J)) {
                 actions.push(ShortcutAction::NavigateDown);
             }
@@ -168,10 +177,10 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 fn is_modal_open(app: &App) -> bool {
     !app.ui_store.pending_approvals.is_empty()
         || app.view_state.main == clarity_core::ui::AppView::Settings
-        || app.team_store.create_modal_open
-        || app.cron_store.create_modal_open
-        || app.snapshot_store.modal_open
-        || app.task_store.task_create_modal_open
+        || app.view_state.modal == Some(clarity_core::ui::ModalType::TeamCreate)
+        || app.view_state.modal == Some(clarity_core::ui::ModalType::CronCreate)
+        || app.view_state.modal == Some(clarity_core::ui::ModalType::Snapshot)
+        || app.view_state.modal == Some(clarity_core::ui::ModalType::TaskCreate)
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +218,7 @@ mod tests {
                 ids::TOGGLE_COMMAND_PALETTE,
             ),
             (ShortcutAction::ToggleDashboardPanel, ids::TOGGLE_DASHBOARD),
+            (ShortcutAction::ToggleLayoutDebug, ids::TOGGLE_LAYOUT_DEBUG),
         ];
         for (action, expected) in all {
             assert_eq!(

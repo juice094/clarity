@@ -252,6 +252,11 @@ pub enum MemoryError {
     /// Storage error
     #[error("Storage error: {0}")]
     Storage(String),
+
+    /// Hermes-memory backend error.
+    #[cfg(feature = "hermes")]
+    #[error("Hermes memory error: {0}")]
+    Hermes(#[from] hermes_memory_core::MemoryError),
 }
 
 /// Structured notes extracted from a single conversation turn.

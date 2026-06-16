@@ -7,7 +7,7 @@ tags: [status]
 
 # Clarity 项目现状报告
 
-> 版本：v0.3.4-rc | 日期：2026-06-12 | 基于实机测试与代码审计
+> 版本：v0.3.4-rc | 日期：2026-06-15 | 基于实机测试与代码审计
 > 关联文档：`ENGINEERING_PLAN.md` · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)
 > Pretext UI 演进：S1 (Phase 0.5) + S2 (Phase 1) 已完成 — 详见 `plans/2026-05-12-S1-session-archive.md` · `plans/2026-05-12-S2-session-archive.md`
 
@@ -26,7 +26,62 @@ tags: [status]
 - **全 workspace 基线修复**：修复 `clarity-core::agent::cost_channel` 因全局静态变量导致的并行测试 flake。
 - **迁移规划产出**：`docs/plans/clarity-egui-pretext-layout-migration.md` 明确三栏目标结构、ViewState 扩展草案、pretext 接入点及分阶段路线。
 
-**验证结果**：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（全绿）、`cargo test -p clarity-egui --bin clarity-egui` ✅（89 passed / 0 failed）。
+**S6-C3 布局几何精化与人机协作标注器（2026-06-13）**：基于用户提供的手绘 UI 概念图与 Kimi 参考截图，完成 Pretext 三栏布局的像素级比例映射与代码落地。
+
+**Pretext PoC 启动（2026-06-13）**：
+- 在 `clarity-egui` 引入 `pretext-core` / `pretext-fontdb` 依赖，PoC 阶段先用本地 path，验证通过后已切换为 git 依赖并固定到稳定 rev。
+- 实现 `pretext::EguiFontMetrics`：用 egui 自身字体栈作为 pretext 的 `FontMetrics` backend，保证测量与渲染同源。
+- 新增 `widgets/pretext_probe.rs` 校准窗口：对比 10 组样本的 pretext 预测宽度与 egui 实际宽度；提供 Wrap Preview 滑块，实时对比预测行数/高度与实际行数/高度。
+- 入口：Settings → Interface → "Open Pretext Measurement Probe"；窗口在 `App::update` 中渲染。
+- 修复了 `clarity-core/src/thread/manager.rs` 中因 `SessionSource`/`ThreadSource` 未 clone 及 `ToolCall` 缺 `call_type` 导致的编译错误（前置阻塞问题，与当前 PoC 无直接功能关联）。
+
+**Pretext Phase 2 — Rich Inline Chip（2026-06-13）**：
+- 新增 `ui/rich_inline.rs`：轻量化 tokenizer 将文本切分为 text / `code` / `@mention` 三类 token，并为 chip 设置 `RichInlineBreak::Never` 与 `extra_width`（padding）。
+- `layout_rich_inline` 使用 `pretext_core::rich_inline` 计算每行 fragment 的 x 偏移，输出可交给 egui 逐 fragment 渲染。
+- `widgets/pretext_probe.rs` 增加 Rich Inline Chip Preview：用色块直观显示 chip 是否被整颗换行。
+- 回归测试覆盖：token 解析、mention/code chip 不被截断、普通文本可正常换行；同时修复 `clarity-gateway` 测试共享磁盘状态导致的并行 flake（`AppState::new_with_home` + `test_state` 使用独立 temp dir）。
+
+**Pretext Phase 3 — MessageBubble 渲染器（2026-06-13）**：
+- 新增 `widgets/rich_paragraph.rs`：接受 `InlineSpan` 序列，用 pretext 计算精确换行，再用 egui 逐 fragment 绘制；chip 带背景框与描边。
+- `ui/render.rs` 中的 `message_bubble` / `agent_text_plain_inner` / `user_bubble` / `render_content_block` 增加 `metrics: Option<&EguiFontMetrics>` 参数。
+- 当 `app.ui_store.pretext_estimate_enabled` 开启时，消息列表的预计算高度、fallback 高度估算、实际渲染均走 pretext 路径；关闭时保持原有 markdown 渲染。
+- 简单段落（空 `parsed` 或单 `Paragraph`）优先走 rich paragraph；复杂 markdown 仍可在后续迭代中扩展。
+
+**Pretext Phase 4 — 默认启用并删除 heuristic fallback（2026-06-13）**：
+- `app_logic.rs` 将 `pretext_estimate_enabled` 默认设为 `true`。
+- `ui/render.rs`：`estimate_height()` 改为强制接收 `&EguiFontMetrics`，删除 `estimate_height_heuristic`。
+- `components/agent_turn.rs`：`AgentTurn::estimate_height()` 同步接受 `metrics` 并透传。
+- `message_list.rs` 所有高度估算路径统一使用 pretext，不再走字符数启发式。
+- 顺手修复 `tests/integration/src/thread_api.rs` 编译与断言错误（`>` 污染首行、`BackgroundTaskManager::new` 缺 `context_dir`、创建返回 201、history 结构为扁平 `RolloutItem` 数组），integration tests 从 16 增至 20 并全绿。
+
+**Pretext Phase 5 — 性能与回归测试（2026-06-13）**：
+- 新增 `src/pretext_alignment.rs`（23 个样本 + 1000 条性能基准）。
+- 回归测试 `pretext_estimate_matches_rendered_height_for_agent_text` / `..._user_text` 各跑 23 个样本，验证 `estimate_height()` 与 `message_bubble()` 实际高度差 ≤ 32 px（Agent）/ ≤ 48 px（User）。
+- 性能基准 `pretext_message_list_performance_1000` 标记 `#[ignore]`，release 下可测量 1000 条消息的 pretext 估算与 rich paragraph 渲染耗时；实测 **estimate ≈ 74.4 µs/msg、render ≈ 135.7 µs/msg，聚合高度偏差 ≈ 1.45%**。
+- 修复 `estimate_height_pretext()` 的 padding 常数：User bubble 按实际 `inner_margin 14×2 + space_16` 计为 44 px；Agent plain 保持 12 px；Agent card（blocks / structured）按 `inner_margin 12×2 + space_16` 计为 40 px，使估算高度与 `message_bubble()` 实际渲染高度对齐。
+- 顺手修复 `crates/clarity-thread-store/src/local.rs` 测试断言与 `std::sync::Arc` 未使用导入。
+
+**Phase 1.5 — 状态机迁移（2026-06-13）**：
+- 移除 `clarity-egui/src/main.rs` 顶部全局 `#![allow(dead_code)]`。
+- 所有遗留 boolean 标志迁移到 `clarity-core::ui::ViewState` 已有类型：
+  - Modal：`team/cron/task/subagent/snapshot/settings` 的 `*_modal_open` → `view_state.modal: Option<ModalType>`。
+  - Turn：`chat_store.is_loading/compacting/stopping` 与 `snapshot_store.restoring` → `view_state.turn: TurnState`。
+  - Expansion：`cron/web_tabs/thinking_log/tools/subagents/workspace_plan` → `view_state.expansions: PanelExpansion`。
+- 顺手修复 `clarity-gateway/src/main.rs` 测试中的 `await_holding_lock`（`std::sync::Mutex` → `tokio::sync::Mutex`）。
+
+**Phase E — 设计系统替换（已完成，2026-06-15）**：
+- 扩展 `design_system` 原语：新增 `Surface::Warning`、`Surface::Well`、`Text::CaptionStrong`；精简未使用原语，`design_system.rs` 不再保留模块级 `#[allow(dead_code)]`。
+- 右 rail 全部卡片迁移到语义原语：`status_card.rs`、`tools_card.rs`、`subagent_card.rs`、`memory_card.rs`、`context_card.rs`、`progress_card.rs`。
+- 关键 widgets 迁移：`provider_row.rs`、`sidebar_card.rs`、`user_avatar.rs` 使用 `design_system::text/gap/row/center/surface/status_dot/btn/scroll`。
+- 删除被 `design_system::status_dot` 取代的 `widgets/status_dot.rs`。
+- 验收：`cargo clippy -p clarity-egui --bins --tests -- -D warnings` ✅、`cargo test -p clarity-egui --bins` ✅（116 passed / 0 failed / 2 ignored）。
+
+- **布局比例 token 调整**：`size_sidebar` 220→200、`size_input` 72→88、`window_default_w/h` 900×700→1280×800；默认窗口比例更接近概念图与 Kimi 参考。
+- **聊天区结构重构**：`CentralPanel` 水平内边距清零；`chat_header` 撑满中间列全宽；消息列表仍按 `content_max_width` 居中；底部输入栏保持居中。
+- **Header 右栏切换按钮修复**：通过 `right_to_left` 布局将右栏抽屉与上下文切换图标推至最右侧，解决了此前在居中 Ui 内部右对齐被 clip 的问题。
+- **人机协作图片标注器**：新增 `assets/ui_annotator.html`（单文件零依赖）、`assets/ui-annotator-schema.md`、`assets/render_annotations.py`；支持拖框、标签、移动/缩放、JSON 导入导出、`localStorage` 自动保存；统一红/绿/蓝/黄颜色语义，便于将用户框选直接转译为 egui 布局代码。
+
+**验证结果**：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1147 passed / 0 failed / 8 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（171 passed / 0 failed / 2 ignored）、`cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2` ✅（34 passed / 0 failed / 3 ignored）、`cargo test -p clarity-integration-tests --lib` ✅（26 passed / 0 failed）。
 
 ---
 
@@ -35,9 +90,10 @@ tags: [status]
 | 指标 | 实测结果 | 评估 |
 |------|---------|------|
 | **编译检查** | `cargo check --workspace --lib --bins --exclude clarity-slint` | ✅ 零错误 |
-| **单元测试** | **~1044 passed, 0 failed, 8 ignored**（`--workspace --lib --exclude clarity-slint`） | ✅ 全绿 |
-| **集成测试** | **16 passed, 0 failed**（`cargo test -p clarity-integration-tests --lib`） | ✅ 全绿 |
-| **Doc Tests** | `cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2` | ✅ 全绿 |
+| **单元测试** | **1147 passed, 0 failed, 8 ignored**（`--workspace --lib --exclude clarity-slint`） | ✅ 全绿 |
+| **Binary 测试** | **171 passed, 0 failed, 2 ignored**（`--workspace --bins --exclude clarity-slint`） | ✅ 全绿 |
+| **集成测试** | **26 passed, 0 failed**（`cargo test -p clarity-integration-tests --lib`） | ✅ 全绿 |
+| **Doc Tests** | **34 passed, 0 failed, 3 ignored**（`cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2`） | ✅ 全绿 |
 | **Rustdoc** | `cargo doc --workspace --no-deps --exclude clarity-slint` | ✅ 无警告 |
 | **Clippy 检查** | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | ✅ **零警告** |
 | **安全审计** | `cargo audit --deny unsound --deny yanked` + [`THREAT_MODEL.md`](../security/THREAT_MODEL.md) | ✅ Dependabot #22/#23 已修复；STRIDE 威胁模型 16 条已建档，6 项未缓解风险已排期 |
@@ -46,26 +102,27 @@ tags: [status]
 
 **测试覆盖详情**（lib 目标）：
 - `clarity-channels`: 49 passed
-- `clarity-claw`: 16 passed
-- `clarity-contract`: 45 passed
-- `clarity-core`: 535 passed, 1 ignored
+- `clarity-claw`: 18 passed
+- `clarity-contract`: 47 passed
+- `clarity-core`: 557 passed, 1 ignored
 - `clarity-llm`: 63 passed, 1 ignored
 - `clarity-mcp`: 37 passed
 - `clarity-wire`: 13 passed, 1 ignored
 - `clarity-memory`: 97 passed
 - `clarity-secrets`: 5 passed
 - `clarity-tools`: 99 passed, 5 ignored
-- `clarity-subagents`: 8 passed
-- `clarity-telemetry`: 10 passed
-- `clarity-gateway`: 57 passed
+- `clarity-subagents`: 37 passed
+- `clarity-telemetry`: 8 passed
+- `clarity-gateway`: 62 passed
+- `clarity-thread-store`: 13 passed
+- `clarity-rollout`: 6 passed
 - `clarity-tui`: 10 passed（lib tests）+ 36 passed（bin tests）
-- `clarity-claw`: 16 passed
-- `clarity-headless`: bin-only，无 lib 测试
-- `clarity-egui`: bin-only；binary 测试 89 passed / 0 failed
-- `clarity-integration-tests`: 16 个集成测试（adaptive_loop ×7 / session_v2_migration ×5 / telemetry_end_to_end ×4）
+- `clarity-headless`: bin-only，16 passed（bin tests）
+- `clarity-egui`: bin-only；binary 测试 116 passed / 0 failed / 2 ignored
+- `clarity-integration-tests`: 26 个集成测试（adaptive_loop ×8 / session_v2_migration ×4 / telemetry_end_to_end ×4 / thread_api ×10）
 - 各 crate `tests/` 目录：gateway/http/ws/webhook、core_wire、memory_persistence、mcp_end_to_end 等约 70 个测试
 
-**前端测试**：`clarity-egui` binary 测试 89 passed / 0 failed；全部为纯逻辑/小部件单元测试，UI 集成测试待 Pretext 迁移后补齐
+**前端测试**：`clarity-egui` binary 测试 116 passed / 0 failed / 2 ignored；新增 23 样本 pretext 对齐回归 + 1000 条消息性能基准（`#[ignore]`）
 
 ---
 
@@ -164,6 +221,9 @@ tags: [status]
 ✅ **RenderLine Pipeline** — 13-variant 前端无关行原子 + markdown_to_lines + TUI 映射
 ✅ **行级导航** — j/k/g/G 焦点感知快捷键 + y 复制选中行
 ✅ **Persona Switcher** — titlebar pill + `egui::Area` popup + 持久化到 settings（S8 P3B.1）
+✅ **布局几何精化（S6-C3）** — `CentralPanel` 去水平边距、`chat_header` 全宽、消息列表/输入栏居中、右栏切换按钮 far-right 定位修复
+✅ **人机协作图片标注器** — `assets/ui_annotator.html` + schema + 批量渲染脚本，支持用户框选 UI 元素后直接转译为 egui 布局代码
+✅ **红绿蓝黄布局诊断覆盖层** — `debug_overlay.rs` 可视化 `max_rect`/`clip_rect`/锚点/警告，快捷键 `Ctrl+Shift+L`
 ```
 
 ---

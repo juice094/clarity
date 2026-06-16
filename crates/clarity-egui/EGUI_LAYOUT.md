@@ -383,6 +383,18 @@ For every PR touching `crates/clarity-egui/src/**/*.rs`, the reviewer must verif
 
 ---
 
+## Appendix: Layout Debugging
+
+When a widget compiles but does not appear, use the dedicated layout debug overlay instead of adding temporary `painter` rectangles to panel code. It visualises `max_rect` (green), `clip_rect` (blue), widget anchors (red), and warnings (yellow) with a single global toggle.
+
+- **File:** `crates/clarity-egui/EGUI_LAYOUT_DEBUG.md`
+- **Shortcut:** `Ctrl+Shift+L`
+- **API:** `crate::ui::debug_overlay`
+
+See that document for the standard 5-step diagnostic flow and the chat-header right-rail case study.
+
+---
+
 ## Appendix: egui 0.31 Quick Reference
 
 - `Frame::new()` replaces deprecated `Frame::group()` for custom containers.

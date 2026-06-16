@@ -14,6 +14,9 @@ use crate::agent::driver::ChatDriver;
 use crate::agent::ops::Op;
 use crate::approval::ApprovalResponse;
 use crate::error::AgentError;
+use crate::thread::ThreadManager;
+use clarity_contract::{Message, MessageRole, ThreadId};
+use clarity_thread_store::ThreadStore;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
@@ -69,6 +72,10 @@ pub struct AgentController {
     rx: UnboundedReceiver<Op>,
     event_tx: Option<UnboundedSender<ControllerEvent>>,
     chat_driver: Option<Arc<dyn ChatDriver>>,
+    /// Optional thread manager for loading/persisting conversation history.
+    thread_manager: Option<ThreadManager>,
+    /// Identifier of the thread this controller is operating on.
+    thread_id: Option<ThreadId>,
 }
 
 impl AgentController {
@@ -80,6 +87,8 @@ impl AgentController {
             rx,
             event_tx: None,
             chat_driver: None,
+            thread_manager: None,
+            thread_id: None,
         }
     }
 
@@ -93,6 +102,8 @@ impl AgentController {
                 rx,
                 event_tx: None,
                 chat_driver: None,
+                thread_manager: None,
+                thread_id: None,
             },
             tx,
         )
@@ -154,9 +165,28 @@ impl AgentController {
                 rx,
                 event_tx: Some(event_tx),
                 chat_driver,
+                thread_manager: None,
+                thread_id: None,
             },
             tx,
         )
+    }
+
+    /// Attach a thread store and thread identifier to this controller.
+    ///
+    /// When both are set, the controller will load persisted history before each
+    /// turn and append the user/assistant exchange after a successful turn.
+    #[must_use]
+    pub fn with_thread_store(mut self, store: Arc<dyn ThreadStore>) -> Self {
+        self.thread_manager = Some(ThreadManager::new(store));
+        self
+    }
+
+    /// Set the thread identifier this controller operates on.
+    #[must_use]
+    pub fn with_thread_id(mut self, thread_id: ThreadId) -> Self {
+        self.thread_id = Some(thread_id);
+        self
     }
 
     /// Convenience constructor that spawns the event loop and returns the
@@ -202,7 +232,68 @@ impl AgentController {
                             let agent = self.agent.clone();
                             let event_tx = self.event_tx.clone();
                             let event_tx2 = event_tx.clone();
-                            let handle = if let Some(ref driver) = self.chat_driver {
+                            let thread_manager = self.thread_manager.clone();
+                            let thread_id = self.thread_id;
+                            let handle = if let (Some(tm), Some(id)) = (thread_manager, thread_id) {
+                                tokio::spawn(async move {
+                                    let mut history = match tm.load_llm_history(id).await {
+                                        Ok(h) => h,
+                                        Err(e) => {
+                                            warn!("Failed to load thread history for {}: {}", id, e);
+                                            Vec::new()
+                                        }
+                                    };
+
+                                    let messages = match agent.build_messages_with_cache(&prompt).await {
+                                        Ok(base) => {
+                                            let mut system_messages = Vec::new();
+                                            let mut user_message = None;
+                                            for msg in base {
+                                                if msg.role == MessageRole::User {
+                                                    user_message = Some(msg);
+                                                } else {
+                                                    system_messages.push(msg);
+                                                }
+                                            }
+                                            let mut messages = system_messages;
+                                            messages.append(&mut history);
+                                            if let Some(um) = user_message {
+                                                messages.push(um);
+                                            } else {
+                                                messages.push(Message::user(&prompt));
+                                            }
+                                            messages
+                                        }
+                                        Err(e) => return Err(e),
+                                    };
+
+                                    let prompt_for_history = prompt.clone();
+                                    let result = agent.run_streaming_with_messages(messages, move |chunk| {
+                                        if let Some(ref tx) = event_tx {
+                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
+                                        }
+                                    }).await;
+
+                                    if let Some(ref tx) = event_tx2 {
+                                        match &result {
+                                            Ok(response) => {
+                                                let _ = tx.send(ControllerEvent::Complete(response.clone()));
+                                            }
+                                            Err(e) => {
+                                                let _ = tx.send(ControllerEvent::Error(e.to_string()));
+                                            }
+                                        }
+                                    }
+
+                                    if let Ok(ref response) = result {
+                                        if let Err(e) = tm.append_turn(id, prompt_for_history, response).await {
+                                            warn!("Failed to append turn to thread {}: {}", id, e);
+                                        }
+                                    }
+
+                                    result
+                                })
+                            } else if let Some(ref driver) = self.chat_driver {
                                 let (static_prompt, dynamic_prompt) = self.agent.build_system_prompt_split_raw();
                                 let messages = driver.build_messages_split(&prompt, &static_prompt, &dynamic_prompt);
                                 tokio::spawn(async move {
@@ -290,6 +381,11 @@ impl AgentController {
 
                         Some(Op::Shutdown) | None => {
                             debug!("Controller: Shutdown");
+                            if let (Some(ref tm), Some(id)) = (self.thread_manager, self.thread_id) {
+                                if let Err(e) = tm.shutdown(id).await {
+                                    warn!("Failed to shutdown thread {}: {}", id, e);
+                                }
+                            }
                             break;
                         }
                     }
@@ -445,5 +541,64 @@ mod tests {
 
         op_tx.send(Op::Shutdown).unwrap();
         let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_controller_thread_aware_persists_history() {
+        use crate::agent::{AgentConfig, MockLlm};
+        use crate::thread::ThreadManager;
+        use clarity_thread_store::InMemoryThreadStore;
+        use std::sync::Arc;
+        use tokio::time::{Duration, timeout};
+
+        let registry = ToolRegistry::new();
+        let agent =
+            Agent::with_config(registry, AgentConfig::default()).with_llm(Arc::new(MockLlm));
+
+        let store = Arc::new(InMemoryThreadStore::new());
+        let manager = ThreadManager::new(store.clone());
+        let thread_id = manager
+            .create_thread(
+                ".",
+                "controller-test",
+                clarity_contract::SessionSource::Test,
+            )
+            .await
+            .expect("create thread");
+
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel::<ControllerEvent>();
+        let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, None);
+        let controller = controller
+            .with_thread_store(store)
+            .with_thread_id(thread_id);
+        let handle = tokio::spawn(controller.run());
+
+        async fn wait_complete(rx: &mut tokio::sync::mpsc::UnboundedReceiver<ControllerEvent>) {
+            while let Ok(Some(event)) = timeout(Duration::from_secs(2), rx.recv()).await {
+                if matches!(event, ControllerEvent::Complete(_)) {
+                    break;
+                }
+            }
+        }
+
+        op_tx.send(Op::UserTurn("first turn".to_string())).unwrap();
+        wait_complete(&mut event_rx).await;
+
+        op_tx.send(Op::UserTurn("second turn".to_string())).unwrap();
+        wait_complete(&mut event_rx).await;
+
+        op_tx.send(Op::Shutdown).unwrap();
+        let _ = handle.await;
+
+        let history = manager
+            .load_llm_history(thread_id)
+            .await
+            .expect("load history");
+        assert_eq!(history.len(), 4, "expected two user/assistant pairs");
+        assert_eq!(history[0].role, MessageRole::User);
+        assert_eq!(history[0].content, "first turn");
+        assert_eq!(history[1].role, MessageRole::Assistant);
+        assert_eq!(history[2].role, MessageRole::User);
+        assert_eq!(history[2].content, "second turn");
     }
 }

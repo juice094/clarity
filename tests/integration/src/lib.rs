@@ -18,3 +18,5 @@ pub mod mock_consumer;
 pub mod session_v2_migration;
 #[cfg(test)]
 pub mod telemetry_end_to_end;
+#[cfg(test)]
+pub mod thread_api;

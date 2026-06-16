@@ -46,8 +46,8 @@ pub fn process_events(app: &mut App) {
             UiEvent::StepBegin { tool_name } => {
                 system::on_step_begin(tool_name);
             }
-            UiEvent::CompactionBegin => chat::on_compaction_begin(&mut app.chat_store),
-            UiEvent::CompactionEnd => chat::on_compaction_end(&mut app.chat_store),
+            UiEvent::CompactionBegin => chat::on_compaction_begin(&mut app.view_state),
+            UiEvent::CompactionEnd => chat::on_compaction_end(&mut app.view_state),
             UiEvent::Done => chat::on_done(app),
             UiEvent::Error(msg) => chat::on_error(app, msg),
             UiEvent::Fallback { fallback, reason } => {
@@ -67,7 +67,9 @@ pub fn process_events(app: &mut App) {
                 completion_tokens,
                 total_tokens,
             ),
-            UiEvent::PlanReady(plan) => chat::on_plan_ready(&mut app.chat_store, plan),
+            UiEvent::PlanReady(plan) => {
+                chat::on_plan_ready(&mut app.chat_store, &mut app.view_state, plan)
+            }
             UiEvent::PlanStepBegin { step_id, tool_name } => {
                 chat::on_plan_step_begin(&mut app.chat_store, step_id, tool_name);
             }
@@ -220,7 +222,7 @@ pub fn process_events(app: &mut App) {
                 app.chat_store.gateway_status = status;
             }
             UiEvent::SnapshotRestored { id, success, error } => {
-                app.snapshot_store.restoring = false;
+                app.view_state.turn = clarity_core::ui::TurnState::Idle;
                 if success {
                     app.push_toast(
                         format!("Workspace restored to snapshot #{}", id),

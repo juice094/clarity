@@ -32,6 +32,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+mod threads;
+
 /// Headless mode CLI arguments
 #[derive(Parser, Debug)]
 #[command(
@@ -52,6 +54,8 @@ enum Command {
     Jumpy(JumpyArgs),
     /// Validate configuration and print a health report
     Health(HealthArgs),
+    /// Manage V2 threads and rollouts
+    Threads(threads::ThreadsArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -200,6 +204,7 @@ async fn async_main() -> Result<()> {
         Command::Run(run_args) => run_command(run_args).await,
         Command::Jumpy(jumpy_args) => jumpy_command(jumpy_args).await,
         Command::Health(health_args) => health_command(health_args).await,
+        Command::Threads(threads_args) => threads::run(threads_args).await,
     }
 }
 

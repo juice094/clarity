@@ -330,12 +330,47 @@
     border-color: var(--accent);
 }
 
-/* === Session List === */
-.session-list {
+/* === Session / Thread List === */
+.session-list,
+.thread-list {
     padding: var(--s-2);
 }
 
-.session-item {
+.nav-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--s-2) var(--s-3);
+}
+
+.nav-label-row .nav-label {
+    padding: 0;
+}
+
+.new-thread-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--r-sm);
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all var(--t-fast);
+}
+
+.new-thread-btn:hover {
+    background: var(--accent-muted);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.session-item,
+.thread-item {
     display: flex;
     align-items: center;
     gap: var(--s-2);
@@ -346,13 +381,34 @@
     transition: background var(--t-fast);
 }
 
-.session-item:hover {
+.session-item:hover,
+.thread-item:hover {
     background: var(--bg-tertiary);
 }
 
-.session-item.active {
+.session-item.active,
+.thread-item.active {
     background: var(--accent-muted);
     color: var(--accent);
+}
+
+.thread-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.thread-time {
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+}
+
+.thread-item.active .thread-time {
+    color: var(--accent);
+    opacity: 0.8;
 }
 
 /* === Modal === */

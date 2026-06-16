@@ -24,6 +24,7 @@ async fn test_in_memory_store_basic_operations() {
         max_memories: 100,
         importance_threshold: 0.3,
         memory_format: String::from("[{timestamp}] {content}"),
+        ..Default::default()
     };
 
     let store = InMemoryStore::with_config(config);
@@ -180,6 +181,7 @@ async fn test_persistent_memory_store_with_config() {
         max_memories: 50,
         importance_threshold: 0.5,
         memory_format: String::from("{content}"),
+        ..Default::default()
     };
 
     let store = PersistentMemoryStore::with_config(std::path::Path::new(":memory:"), config)

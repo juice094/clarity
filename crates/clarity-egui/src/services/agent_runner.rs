@@ -84,12 +84,12 @@ impl App {
 
         // If currently streaming, steer: cancel the current turn and queue the
         // message for immediate send when the cancellation completes.
-        if self.chat_store.is_loading {
+        if self.view_state.turn == clarity_core::ui::TurnState::Loading {
             // Debounce: ignore rapid consecutive Enter presses while stopping.
-            if self.chat_store.stopping {
+            if self.view_state.turn == clarity_core::ui::TurnState::Stopping {
                 return;
             }
-            self.chat_store.stopping = true;
+            self.view_state.turn = clarity_core::ui::TurnState::Stopping;
             self.stop();
             self.chat_store.pending_send =
                 Some((text, std::mem::take(&mut self.chat_store.attachments)));
@@ -135,7 +135,7 @@ impl App {
         self.session_store
             .drafts
             .remove(&self.session_store.active_session_id);
-        self.chat_store.is_loading = true;
+        self.view_state.turn = clarity_core::ui::TurnState::Loading;
         self.chat_store.agent_status = AgentStatus::Busy;
         self.chat_store.tool_calls.clear();
 

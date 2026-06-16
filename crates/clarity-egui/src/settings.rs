@@ -63,6 +63,9 @@ pub struct GuiSettings {
     /// S6 Phase C: display order of plugin toolbar items.
     #[serde(default)]
     pub plugin_order: Vec<String>,
+    /// S6 Phase C3: show the layout debug overlay (green/blue/red/yellow diagnostic rects).
+    #[serde(default)]
+    pub debug_layout_overlay: bool,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -249,6 +252,7 @@ impl Default for GuiSettings {
                 "sheet".to_string(),
                 "ppt".to_string(),
             ],
+            debug_layout_overlay: false,
             profiles: HashMap::new(),
         }
     }

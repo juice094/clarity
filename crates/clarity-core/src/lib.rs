@@ -70,6 +70,7 @@ pub(crate) mod server;
 pub mod session;
 pub mod skills;
 pub mod soul;
+pub mod thread;
 pub mod tier_bus;
 pub mod tools;
 pub mod types;

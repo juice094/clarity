@@ -2,7 +2,7 @@
  * Clarity Chat Module - SSE streaming, message rendering, tool cards
  */
 
-import { store, addMessage, getActiveSession, addSession } from './store.js';
+import { store, addMessage, getActiveSession, addSession, loadSessions } from './store.js';
 import * as api from './api.js';
 import { toast } from './app.js';
 
@@ -12,6 +12,8 @@ const messagesEl = document.getElementById('chat-messages');
 const inputEl = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
+const newThreadBtn = document.getElementById('new-thread-btn');
+const threadListEl = document.getElementById('thread-list');
 const modelDisplay = document.getElementById('model-display');
 const tokenDisplay = document.getElementById('token-display');
 
@@ -179,10 +181,9 @@ async function sendMessage() {
 
     try {
         const messages = session.messages.map(m => ({ role: m.role, content: m.content }));
-        const stream = api.streamChat({
-            model: store.currentModel,
-            messages,
-        });
+        const stream = store.currentThreadId
+            ? api.streamThreadChat(store.currentThreadId, { model: store.currentModel, messages })
+            : api.streamChat({ model: store.currentModel, messages });
 
         for await (const event of stream) {
             if (abortController.signal.aborted) break;
@@ -271,11 +272,17 @@ sendBtn.addEventListener('click', () => {
     }
 });
 
-// ==================== New Chat ====================
+// ==================== New Chat / Thread ====================
 
 newChatBtn.addEventListener('click', () => {
+    store.currentThreadId = null;
     addSession('新对话');
+    updateUrlThreadId(null);
     renderMessages();
+});
+
+newThreadBtn?.addEventListener('click', () => {
+    startNewThread();
 });
 
 // ==================== Suggestion Chips ====================
@@ -325,10 +332,137 @@ export function addSystemMessage(text) {
     createMessageElement('system', text);
 }
 
+// ==================== Thread Management ====================
+
+function updateUrlThreadId(id) {
+    const url = new URL(window.location.href);
+    if (id) {
+        url.searchParams.set('thread_id', id);
+    } else {
+        url.searchParams.delete('thread_id');
+    }
+    history.replaceState(null, '', url.toString());
+}
+
+function loadThread(thread) {
+    if (!thread || !thread.id) return;
+    store.currentThreadId = thread.id;
+    updateUrlThreadId(thread.id);
+
+    let session = store.sessions.find(s => s.threadId === thread.id);
+    if (!session) {
+        session = addSession(thread.title || '(untitled)', thread.id);
+    } else {
+        store.activeSessionId = session.id;
+    }
+
+    const history = thread.history || thread.messages || [];
+    session.messages = history.map(m => ({ role: m.role, content: m.content || '' }));
+    session.title = thread.title || '(untitled)';
+    session.updatedAt = thread.updated_at ? new Date(thread.updated_at).getTime() : Date.now();
+
+    renderMessages();
+}
+
+async function startNewThread() {
+    if (store.isGenerating) return;
+    try {
+        const thread = await api.createThread();
+        loadThread(thread);
+        await renderThreadList();
+    } catch (err) {
+        console.warn('Failed to create thread, falling back to local session:', err);
+        toast('Thread API 不可用，使用本地会话', 'info');
+        store.currentThreadId = null;
+        updateUrlThreadId(null);
+        addSession('新对话');
+        renderMessages();
+    }
+}
+
+async function switchThread(id) {
+    if (!id || id === store.currentThreadId) return;
+    try {
+        const thread = await api.getThread(id, true);
+        loadThread(thread);
+        renderThreadList();
+    } catch (err) {
+        console.error('Failed to switch thread:', err);
+        toast('切换会话失败', 'error');
+    }
+}
+
+export async function renderThreadList() {
+    if (!threadListEl) return;
+    threadListEl.innerHTML = '<div class="session-item">加载中...</div>';
+    try {
+        const data = await api.listThreads();
+        const threads = data?.threads || [];
+        if (threads.length === 0) {
+            threadListEl.innerHTML = '<div class="session-item" style="color:var(--text-tertiary);cursor:default;">暂无对话</div>';
+            return;
+        }
+
+        threadListEl.innerHTML = '';
+        for (const t of threads) {
+            const el = document.createElement('div');
+            el.className = `session-item thread-item ${t.id === store.currentThreadId ? 'active' : ''}`;
+            el.title = t.title || '(untitled)';
+
+            const updated = t.updated_at ? new Date(t.updated_at) : null;
+            const timeStr = updated && !isNaN(updated)
+                ? updated.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : '';
+
+            el.innerHTML = `
+                <span class="thread-title">${escapeHtml(t.title || '(untitled)')}</span>
+                <span class="thread-time">${escapeHtml(timeStr)}</span>
+            `;
+            el.addEventListener('click', () => switchThread(t.id));
+            threadListEl.appendChild(el);
+        }
+    } catch (err) {
+        console.error('Failed to render thread list:', err);
+        threadListEl.innerHTML = `<div class="session-item" style="color:var(--error);cursor:default;">加载失败</div>`;
+    }
+}
+
+async function initializeThread() {
+    const params = new URLSearchParams(window.location.search);
+    const threadId = params.get('thread_id');
+
+    if (threadId) {
+        try {
+            const thread = await api.getThread(threadId, true);
+            loadThread(thread);
+            return;
+        } catch (err) {
+            console.warn('Failed to load thread from URL:', err);
+            toast('无法加载指定会话', 'error');
+        }
+    }
+
+    try {
+        const thread = await api.createThread();
+        loadThread(thread);
+    } catch (err) {
+        console.warn('Thread API unavailable, using local session fallback:', err);
+        toast('Thread API 不可用，使用本地会话', 'info');
+        store.currentThreadId = null;
+        updateUrlThreadId(null);
+        loadSessions();
+        if (store.sessions.length === 0) {
+            addSession('新对话');
+        }
+        renderMessages();
+    }
+}
+
 // ==================== Init ====================
 
-export function init() {
-    renderMessages();
+export async function init() {
+    await initializeThread();
+    renderThreadList();
 
     // Watch session changes
     let lastSessionId = store.activeSessionId;

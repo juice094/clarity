@@ -30,18 +30,7 @@ export async function checkHealth() {
 
 // ==================== Chat Completions (SSE) ====================
 
-export async function* streamChat({ model, messages, onToolCall }) {
-    const resp = await fetch(`${BASE_URL}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages, stream: true }),
-    });
-
-    if (!resp.ok) {
-        const text = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status}: ${text}`);
-    }
-
+async function* parseSSE(resp) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
@@ -92,9 +81,64 @@ export async function* streamChat({ model, messages, onToolCall }) {
     }
 }
 
+export async function* streamChat({ model, messages }) {
+    const resp = await fetch(`${BASE_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: true }),
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+
+    yield* parseSSE(resp);
+}
+
 // Non-streaming chat completion
 export async function completeChat({ model, messages }) {
     return request('/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({ model, messages, stream: false }),
+    });
+}
+
+// ==================== V2 Threads ====================
+
+export async function listThreads(limit = 20) {
+    return request(`/api/v2/threads?limit=${encodeURIComponent(limit)}`);
+}
+
+export async function createThread(title = null) {
+    const body = title ? { title } : {};
+    return request('/api/v2/threads', {
+        method: 'POST',
+        body: JSON.stringify(body),
+    });
+}
+
+export async function getThread(id, includeHistory = false) {
+    return request(`/api/v2/threads/${encodeURIComponent(id)}?include_history=${includeHistory}`);
+}
+
+export async function* streamThreadChat(threadId, { model, messages }) {
+    const resp = await fetch(`${BASE_URL}/api/v2/threads/${encodeURIComponent(threadId)}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: true }),
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+
+    yield* parseSSE(resp);
+}
+
+export async function completeThreadChat(threadId, { model, messages }) {
+    return request(`/api/v2/threads/${encodeURIComponent(threadId)}/chat`, {
         method: 'POST',
         body: JSON.stringify({ model, messages, stream: false }),
     });

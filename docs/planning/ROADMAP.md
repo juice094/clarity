@@ -51,6 +51,9 @@ tags: [roadmap, planning]
 - ✅ 单二进制打包 + CI Release workflow（`.msi` / `.exe` / `.nsis`）已交付
 - ✅ egui 归一化 UI 完成（tab bar、sidebar 工具栏、统一弹窗、Frame 系统、Glassmorphism）
 - ✅ KimiCLI 兼容层（`agent.yaml` 声明式配置 + 工具映射 + 子代理定义）
+- ✅ Pretext 三栏布局 Phase A/B/C3 落地（左 icon rail + 中主舞台 + 右抽屉 rail；header 全宽 + 内容居中；默认窗口 1280×800）
+- ✅ 人机协作图片标注器 `assets/ui_annotator.html` + schema + 渲染脚本
+- ✅ 红绿蓝黄布局诊断覆盖层 `debug_overlay.rs`（快捷键 `Ctrl+Shift+L`）
 - ⏸️ 嵌入式模型自动下载（首次启动引导）
 
 ### 风险对冲
@@ -124,7 +127,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
 | Gateway ↔ BackgroundTaskManager 集成 | ✅ 已完成 | `GatewayTaskClient` + `GatewayManager` — egui 自动启动 Gateway，BTM ops 全走 `/v1/tasks` REST API，本地 store fallback |
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
-| 会话层统一（SQLite） | ⏸️ 未启动 | 替代 JSON+JSONL 双系统 |
+| 会话层统一 / Thread 生命周期 | 🔄 进行中 | 从 Codex 迁移 `ThreadStore`/`RolloutRecorder`：新增 `clarity-thread-store`、`clarity-rollout`，统一 Thread 资源模型与 JSONL rollout 真相源 |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
 | 子 Agent UI 接入（IS-1） | 🔄 后端就绪，前端待接入 | `subagents::builder` 已具备 spawn 能力，缺 egui 独立面板 |
 | Token 权限校验前端（IS-3） | 🔄 后端就绪，前端待接入 | `verify_sandbox_escape` 已存在，缺 UI 层的权限可视化 |

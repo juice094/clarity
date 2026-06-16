@@ -361,16 +361,16 @@ impl Theme {
 
             // Layout dimensions
             size_titlebar: 36.0,
-            size_sidebar: 220.0,
+            size_sidebar: 200.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
-            size_input: 72.0,
+            size_input: 88.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1)
-            window_default_w: 900.0,
-            window_default_h: 700.0,
+            window_default_w: 1280.0,
+            window_default_h: 800.0,
             window_min_w: 900.0,
             window_min_h: 600.0,
             window_edge_zone: 10.0,
@@ -536,16 +536,16 @@ impl Theme {
 
             // Layout dimensions (shared across dark/oled)
             size_titlebar: 36.0,
-            size_sidebar: 220.0,
+            size_sidebar: 200.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
-            size_input: 72.0,
+            size_input: 88.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1, shared)
-            window_default_w: 900.0,
-            window_default_h: 700.0,
+            window_default_w: 1280.0,
+            window_default_h: 800.0,
             window_min_w: 900.0,
             window_min_h: 600.0,
             window_edge_zone: 10.0,
@@ -698,16 +698,16 @@ impl Theme {
 
             // Layout dimensions (shared)
             size_titlebar: 36.0,
-            size_sidebar: 220.0,
+            size_sidebar: 200.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
-            size_input: 72.0,
+            size_input: 88.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1, shared)
-            window_default_w: 900.0,
-            window_default_h: 700.0,
+            window_default_w: 1280.0,
+            window_default_h: 800.0,
             window_min_w: 900.0,
             window_min_h: 600.0,
             window_edge_zone: 10.0,

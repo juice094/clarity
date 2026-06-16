@@ -21,5 +21,9 @@ uuid = { workspace = true }
 ctrlc = "3.4"
 pulldown-cmark = "0.9"
 
+[features]
+default = []
+hermes = ["clarity-core/hermes"]
+
 [lints]
 workspace = true
