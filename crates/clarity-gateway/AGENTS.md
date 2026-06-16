@@ -16,7 +16,8 @@ cargo test -p clarity-gateway --lib
 
 - `src/lib.rs` — 模块声明
 - `src/server.rs` — 双端口服务器、`AppState`、路由构造器
-- `src/handlers.rs` — 所有 Axum handler（chat、tasks、admin、files）
+- `src/handlers/mod.rs` — 所有 Axum handler（chat、tasks、admin、files、mcp）
+- `src/handlers/mcp.rs` — MCP 服务器管理 handler
 - `src/session_store.rs` — SQLite 持久化会话存储
 - `src/ws.rs` — WebSocket handler
 - `static/` — 内嵌 Web UI 静态文件
@@ -27,3 +28,4 @@ cargo test -p clarity-gateway --lib
 - 异步使用 `tokio`
 - 共享状态通过 `Arc<AppState>` 注入 handler
 - Admin 端口（18800）仅限本地回环，可配置 `CLARITY_ADMIN_TOKEN` 认证
+- MCP 配置路径可通过 `CLARITY_MCP_CONFIG_PATH` 覆盖，否则使用平台默认路径

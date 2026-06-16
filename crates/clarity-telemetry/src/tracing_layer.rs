@@ -233,3 +233,202 @@ fn span_id_to_uuid(id: &SpanId) -> uuid::Uuid {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     uuid::Uuid::from_bytes(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{EventSink, EventType, Severity, TelemetryResult, WideEvent};
+    use async_trait::async_trait;
+    use serde_json::json;
+    use std::sync::Arc;
+    use tracing::span::Id as SpanId;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    struct TestSink {
+        tx: tokio::sync::mpsc::UnboundedSender<WideEvent>,
+    }
+
+    #[async_trait]
+    impl EventSink for TestSink {
+        async fn emit(&self, event: WideEvent) -> TelemetryResult<()> {
+            let _ = self.tx.send(event);
+            Ok(())
+        }
+
+        fn name(&self) -> &str {
+            "test"
+        }
+    }
+
+    #[test]
+    fn infer_event_type_from_target() {
+        assert_eq!(
+            infer_event_type("my::tool::handler", None),
+            EventType::ToolCall
+        );
+        assert_eq!(infer_event_type("llm::client", None), EventType::LlmRequest);
+        assert_eq!(
+            infer_event_type("memory::store", None),
+            EventType::MemoryQuery
+        );
+        assert_eq!(
+            infer_event_type("config::audit", None),
+            EventType::ConfigChange
+        );
+        assert_eq!(
+            infer_event_type("gateway::health", None),
+            EventType::GatewayHealth
+        );
+        assert_eq!(
+            infer_event_type("agent::spawn", None),
+            EventType::AgentSpawn
+        );
+        assert_eq!(
+            infer_event_type("task::scheduler", None),
+            EventType::TaskSchedule
+        );
+        assert_eq!(
+            infer_event_type("background::worker", None),
+            EventType::TaskSchedule
+        );
+    }
+
+    #[test]
+    fn infer_event_type_fallback_to_message() {
+        assert_eq!(
+            infer_event_type("unknown", Some("an error occurred")),
+            EventType::Unknown
+        );
+        assert_eq!(
+            infer_event_type("unknown", Some("request failed")),
+            EventType::Unknown
+        );
+        assert_eq!(
+            infer_event_type("unknown", Some("panic in worker")),
+            EventType::Unknown
+        );
+    }
+
+    #[test]
+    fn infer_event_type_unknown_when_no_match() {
+        assert_eq!(infer_event_type("other", Some("ok")), EventType::Unknown);
+        assert_eq!(infer_event_type("other", None), EventType::Unknown);
+    }
+
+    #[test]
+    fn span_id_to_uuid_sets_version_and_variant() {
+        let id = SpanId::from_u64(1);
+        let uuid = span_id_to_uuid(&id);
+        assert_eq!(uuid.get_version_num(), 4);
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+
+        let id = SpanId::from_u64(0x1234_5678_9abc_def0);
+        let uuid = span_id_to_uuid(&id);
+        assert_eq!(uuid.get_version_num(), 4);
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+    }
+
+    #[test]
+    fn span_id_to_uuid_is_deterministic() {
+        let id = SpanId::from_u64(42);
+        assert_eq!(span_id_to_uuid(&id), span_id_to_uuid(&id));
+    }
+
+    #[tokio::test]
+    async fn telemetry_layer_forwards_event() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink = Arc::new(TestSink { tx });
+        let layer = TelemetryLayer::new(sink);
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(target: "clarity_core::tool", "user requested file read");
+        });
+
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("timed out waiting for event")
+            .expect("channel closed");
+
+        assert_eq!(event.event_type, EventType::ToolCall);
+        assert_eq!(event.severity, Severity::Info);
+        assert_eq!(
+            event.attributes.get("message"),
+            Some(&json!("user requested file read"))
+        );
+        assert!(event.attributes.contains_key("span_name"));
+    }
+
+    #[tokio::test]
+    async fn telemetry_layer_extracts_metrics() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink = Arc::new(TestSink { tx });
+        let layer = TelemetryLayer::new(sink);
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(
+                target: "clarity_core::llm",
+                latency_ms = 42u64,
+                "prompt sent"
+            );
+        });
+
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("timed out waiting for event")
+            .expect("channel closed");
+
+        assert_eq!(event.event_type, EventType::LlmRequest);
+        assert_eq!(event.metrics.get("latency_ms"), Some(&42.0));
+    }
+
+    #[tokio::test]
+    async fn telemetry_layer_attaches_trace_context() {
+        let trace_id = uuid::Uuid::new_v4();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink = Arc::new(TestSink { tx });
+        let layer = TelemetryLayer::new(sink);
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!(
+                target: "clarity_core::agent",
+                "process_request",
+                trace_id = trace_id.to_string()
+            );
+            span.in_scope(|| {
+                tracing::info!(target: "clarity_core::agent", "inside span");
+            });
+        });
+
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("timed out waiting for event")
+            .expect("channel closed");
+
+        assert_eq!(event.event_type, EventType::AgentSpawn);
+        assert_eq!(event.trace_id, Some(trace_id));
+        assert!(event.span_id.is_some());
+    }
+
+    #[tokio::test]
+    async fn telemetry_layer_falls_back_to_unknown() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink = Arc::new(TestSink { tx });
+        let layer = TelemetryLayer::new(sink);
+        let subscriber = tracing_subscriber::registry().with(layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::warn!(target: "some_module", "something failed");
+        });
+
+        let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("timed out waiting for event")
+            .expect("channel closed");
+
+        assert_eq!(event.event_type, EventType::Unknown);
+        assert_eq!(event.severity, Severity::Warn);
+    }
+}

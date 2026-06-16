@@ -209,7 +209,7 @@ async fn handle_chat_with_wire(
 }
 
 /// WebSocket 请求类型.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum WsRequest {
@@ -231,7 +231,7 @@ pub enum WsRequest {
 }
 
 /// WebSocket 响应类型.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum WsResponse {
@@ -265,7 +265,7 @@ pub enum WsResponse {
 }
 
 /// Tool call representation in a WebSocket response.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ToolCall {
     /// Name of the tool/function.
     pub name: String,
@@ -274,7 +274,7 @@ pub struct ToolCall {
 }
 
 /// A single chat message returned in the WebSocket history response.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChatMessage {
     /// Message role.
     pub role: String,
@@ -354,5 +354,251 @@ async fn handle_request(
 
             WsResponse::History { messages }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+    use clarity_core::background::BackgroundTaskManager;
+    use clarity_core::registry::ToolRegistry;
+    use futures::stream::StreamExt;
+    use std::sync::Arc;
+    use tower::util::ServiceExt;
+
+    async fn test_state() -> Arc<crate::server::AppState> {
+        let registry = ToolRegistry::with_builtin_tools();
+        let config = AgentConfig::new()
+            .with_max_iterations(2)
+            .with_read_only(false);
+        let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
+
+        let temp = std::env::temp_dir().join(format!(
+            "clarity-ws-test-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        let _ = std::fs::create_dir_all(&temp);
+
+        let task_manager = Arc::new(BackgroundTaskManager::new(
+            temp.join("store"),
+            temp.join("work"),
+            temp.join("context"),
+        ));
+
+        Arc::new(
+            crate::server::AppState::new_with_home(agent, task_manager, temp.join(".clarity"))
+                .await
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_chat() {
+        let json = r#"{"type":"chat","message":"hello","context":{"key":"value"},"use_wire":true}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        match req {
+            WsRequest::Chat {
+                message,
+                context,
+                use_wire,
+            } => {
+                assert_eq!(message, "hello");
+                assert_eq!(context.unwrap()["key"], "value");
+                assert!(use_wire);
+            }
+            _ => panic!("expected Chat variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_ping() {
+        let json = r#"{"type":"ping"}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        assert!(matches!(req, WsRequest::Ping));
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_get_history() {
+        let json = r#"{"type":"get_history"}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        assert!(matches!(req, WsRequest::GetHistory));
+    }
+
+    #[test]
+    fn test_ws_response_serialization_welcome() {
+        let resp = WsResponse::Welcome {
+            session_id: "sid".to_string(),
+            message: "Connected".to_string(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "welcome");
+        assert_eq!(json["session_id"], "sid");
+        assert_eq!(json["message"], "Connected");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_chat() {
+        let resp = WsResponse::Chat {
+            message: "hello".to_string(),
+            tool_calls: None,
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "chat");
+        assert_eq!(json["message"], "hello");
+        assert!(json.get("tool_calls").is_none());
+    }
+
+    #[test]
+    fn test_ws_response_serialization_chat_with_tool_calls() {
+        let resp = WsResponse::Chat {
+            message: "ok".to_string(),
+            tool_calls: Some(vec![ToolCall {
+                name: "read".to_string(),
+                arguments: serde_json::json!({"path": "/tmp"}),
+            }]),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "chat");
+        assert!(json["tool_calls"].is_array());
+        assert_eq!(json["tool_calls"][0]["name"], "read");
+        assert_eq!(json["tool_calls"][0]["arguments"]["path"], "/tmp");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_error() {
+        let resp = WsResponse::Error {
+            error: "bad request".to_string(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "error");
+        assert_eq!(json["error"], "bad request");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_pong() {
+        let resp = WsResponse::Pong;
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "pong");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_history() {
+        let resp = WsResponse::History {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "hi".to_string(),
+                timestamp: "2024-01-01T00:00:00Z".to_string(),
+            }],
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "history");
+        assert_eq!(json["messages"][0]["role"], "user");
+        assert_eq!(json["messages"][0]["content"], "hi");
+        assert_eq!(json["messages"][0]["timestamp"], "2024-01-01T00:00:00Z");
+    }
+
+    #[tokio::test]
+    async fn test_ws_upgrade_and_welcome() {
+        let state = test_state().await;
+        let app = crate::server::create_api_router(state);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let url = format!("ws://127.0.0.1:{}/ws", port);
+        let (mut ws_stream, response) = tokio_tungstenite::connect_async(&url).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+
+        let msg = ws_stream.next().await.unwrap().unwrap();
+        let welcome: WsResponse = match msg {
+            tokio_tungstenite::tungstenite::Message::Text(text) => {
+                serde_json::from_str(&text).unwrap()
+            }
+            other => panic!("expected text welcome message, got {:?}", other),
+        };
+        match welcome {
+            WsResponse::Welcome {
+                session_id,
+                message,
+            } => {
+                assert!(!session_id.is_empty());
+                assert!(message.contains("Clarity Gateway"));
+            }
+            _ => panic!("expected Welcome variant"),
+        }
+
+        let ping = serde_json::to_string(&WsRequest::Ping).unwrap();
+        ws_stream
+            .send(tokio_tungstenite::tungstenite::Message::Text(ping))
+            .await
+            .unwrap();
+
+        let msg = ws_stream.next().await.unwrap().unwrap();
+        let pong: WsResponse = match msg {
+            tokio_tungstenite::tungstenite::Message::Text(text) => {
+                serde_json::from_str(&text).unwrap()
+            }
+            other => panic!("expected text pong message, got {:?}", other),
+        };
+        assert!(matches!(pong, WsResponse::Pong));
+
+        let _ = ws_stream.close(None).await;
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_ping() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+        let response = handle_request(&state, &session_id, WsRequest::Ping).await;
+        assert!(matches!(response, WsResponse::Pong));
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_get_history() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+
+        let msg = SessionMessage::new("user", "hello history");
+        state
+            .session_store
+            .append_message(&session_id.to_string(), &msg)
+            .await
+            .unwrap();
+
+        let response = handle_request(&state, &session_id, WsRequest::GetHistory).await;
+        match response {
+            WsResponse::History { messages } => {
+                assert_eq!(messages.len(), 1);
+                assert_eq!(messages[0].role, "user");
+                assert_eq!(messages[0].content, "hello history");
+            }
+            _ => panic!("expected History variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ws_upgrade_route_rejects_plain_get() {
+        let state = test_state().await;
+        let app = crate::server::create_api_router(state);
+
+        let response = app
+            .oneshot(Request::builder().uri("/ws").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert!(
+            response.status().is_client_error(),
+            "expected client error for non-websocket request, got {:?}",
+            response.status()
+        );
     }
 }

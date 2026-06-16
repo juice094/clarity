@@ -372,3 +372,333 @@ pub(crate) async fn get_parallel_status(
             .into_response(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::server::{AppState, create_api_router};
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use clarity_core::agent::{Agent, AgentConfig, MockLlm};
+    use clarity_core::background::BackgroundTaskManager;
+    use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
+    use clarity_core::registry::ToolRegistry;
+    use http_body_util::BodyExt;
+    use std::sync::Arc;
+    use tower::util::ServiceExt;
+
+    async fn test_state() -> Arc<AppState> {
+        let registry = ToolRegistry::with_builtin_tools();
+        let config = AgentConfig::new()
+            .with_max_iterations(2)
+            .with_read_only(false);
+        let agent = Arc::new(Agent::with_config(registry, config).with_llm(Arc::new(MockLlm)));
+
+        let temp = std::env::temp_dir().join(format!(
+            "clarity-tasks-test-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        let _ = std::fs::create_dir_all(&temp);
+
+        let registry = ToolRegistry::with_builtin_tools();
+        let llm = Arc::new(MockLlm);
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+            llm,
+            registry,
+            temp.join("work"),
+        ));
+        let task_manager = Arc::new(
+            BackgroundTaskManager::new(temp.join("store"), temp.join("work"), temp.join("context"))
+                .with_agent_executor(executor),
+        );
+
+        Arc::new(
+            AppState::new_with_home(agent, task_manager, temp.join(".clarity"))
+                .await
+                .unwrap(),
+        )
+    }
+
+    async fn read_json_body(res: axum::response::Response) -> serde_json::Value {
+        let body = res.into_body().collect().await.unwrap().to_bytes();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_empty() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json_body(response).await;
+        assert!(body.get("tasks").is_some(), "missing tasks key: {}", body);
+        assert!(
+            body["tasks"].is_array(),
+            "tasks is not an array: {}",
+            body["tasks"]
+        );
+        assert!(body["tasks"].as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_task() {
+        let state = test_state().await;
+        let app = create_api_router(state.clone());
+
+        let req_body = serde_json::json!({
+            "name": "unit-test-task",
+            "prompt": "Say hello",
+            "max_iterations": 1
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(req_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let body = read_json_body(response).await;
+        let task_id = body["task_id"].as_str().unwrap();
+        assert!(!task_id.is_empty());
+        assert_eq!(body["status"], "Pending");
+
+        // Clean up the background task.
+        let _ = state.task_manager.cancel(&task_id.to_string()).await;
+    }
+
+    #[tokio::test]
+    async fn test_create_task_invalid_json() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{not valid json"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_get_task() {
+        let state = test_state().await;
+        let app = create_api_router(state.clone());
+
+        let req_body = serde_json::json!({
+            "name": "unit-test-get-task",
+            "prompt": "Say hello",
+            "max_iterations": 1
+        });
+
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(req_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(create_response.status(), StatusCode::ACCEPTED);
+        let create_body = read_json_body(create_response).await;
+        let task_id = create_body["task_id"].as_str().unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/v1/tasks/{}", task_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json_body(response).await;
+        assert_eq!(body["task_id"], task_id);
+        assert_eq!(body["name"], "unit-test-get-task");
+        assert_eq!(body["prompt"], "Say hello");
+        assert!(body.get("status").is_some());
+
+        // Clean up the background task.
+        let _ = state.task_manager.cancel(&task_id.to_string()).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_task_not_found() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks/nonexistent-task-12345")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = read_json_body(response).await;
+        assert!(body["error"].as_str().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_cancel_task() {
+        let state = test_state().await;
+        let app = create_api_router(state.clone());
+
+        let req_body = serde_json::json!({
+            "name": "unit-test-cancel-task",
+            "prompt": "Say hello",
+            "max_iterations": 1
+        });
+
+        let create_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(req_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(create_response.status(), StatusCode::ACCEPTED);
+        let create_body = read_json_body(create_response).await;
+        let task_id = create_body["task_id"].as_str().unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/v1/tasks/{}", task_id))
+                    .method("DELETE")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = read_json_body(response).await;
+        assert_eq!(body["cancelled"], true);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_task_not_found() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/tasks/nonexistent-task-12345")
+                    .method("DELETE")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = read_json_body(response).await;
+        assert!(body["error"].as_str().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_run_parallel_empty_tasks() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let req_body = serde_json::json!({"tasks": []});
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/parallel")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(req_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = read_json_body(response).await;
+        assert_eq!(body["error"], "No tasks provided");
+    }
+
+    #[tokio::test]
+    async fn test_run_parallel_invalid_json() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/parallel")
+                    .method("POST")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{not valid json"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_get_parallel_status_not_found() {
+        let state = test_state().await;
+        let app = create_api_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/parallel/nonexistent-batch/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = read_json_body(response).await;
+        assert_eq!(body["error"], "Batch not found");
+    }
+}

@@ -16,10 +16,9 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 
 # GUI / System tray
-tao = "0.35"
-tray-icon = "0.22"
+tao = "0.35.3"
+tray-icon = "0.24.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
-
 
 # Notifications
 notify-rust = "4"
