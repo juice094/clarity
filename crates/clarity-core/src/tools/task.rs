@@ -336,3 +336,113 @@ impl Tool for TaskStopTool {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctx() -> ToolContext {
+        ToolContext::new()
+    }
+
+    #[test]
+    fn task_list_tool_metadata() {
+        let tool = TaskListTool::new();
+        assert_eq!(tool.name(), "task_list");
+        assert!(tool.description().contains("List all background tasks"));
+        let params = tool.parameters();
+        assert_eq!(params["type"], "object");
+        assert!(params["properties"].get("status_filter").is_some());
+        assert_eq!(params["required"], json!([]));
+    }
+
+    #[test]
+    fn task_output_tool_metadata() {
+        let tool = TaskOutputTool::new();
+        assert_eq!(tool.name(), "task_output");
+        assert!(tool.description().contains("result of a background task"));
+        let params = tool.parameters();
+        assert!(params["properties"].get("task_id").is_some());
+        assert_eq!(params["required"], json!(["task_id"]));
+    }
+
+    #[test]
+    fn task_create_tool_metadata() {
+        let tool = TaskCreateTool::new();
+        assert_eq!(tool.name(), "task_create");
+        assert!(tool.description().contains("background task"));
+        let params = tool.parameters();
+        assert_eq!(params["required"], json!(["name", "prompt"]));
+        assert!(params["properties"].get("priority").is_some());
+    }
+
+    #[test]
+    fn task_stop_tool_metadata() {
+        let tool = TaskStopTool::new();
+        assert_eq!(tool.name(), "task_stop");
+        assert!(tool.description().contains("Cancelled"));
+        let params = tool.parameters();
+        assert_eq!(params["required"], json!(["task_id"]));
+    }
+
+    #[tokio::test]
+    async fn task_list_tool_returns_array_for_all_status_filters() {
+        let tool = TaskListTool::new();
+        for filter in [
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "all",
+            "invalid",
+        ] {
+            let result = tool
+                .execute(json!({"status_filter": filter}), ctx())
+                .await
+                .unwrap();
+            assert!(
+                result.is_array(),
+                "filter '{}' should return an array",
+                filter
+            );
+        }
+
+        // No filter defaults to the all branch.
+        let result = tool.execute(json!({}), ctx()).await.unwrap();
+        assert!(result.is_array());
+    }
+
+    #[tokio::test]
+    async fn task_output_tool_reports_missing_result() {
+        let tool = TaskOutputTool::new();
+        let result = tool
+            .execute(json!({"task_id": "does-not-exist"}), ctx())
+            .await
+            .unwrap();
+        assert_eq!(result["exists"], false);
+        assert_eq!(result["task_id"], "does-not-exist");
+    }
+
+    #[tokio::test]
+    async fn task_stop_tool_errors_when_task_missing() {
+        let tool = TaskStopTool::new();
+        let result = tool
+            .execute(json!({"task_id": "does-not-exist"}), ctx())
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn task_create_tool_requires_name_and_prompt() {
+        let tool = TaskCreateTool::new();
+        assert!(tool.execute(json!({"name": "x"}), ctx()).await.is_err());
+        assert!(tool.execute(json!({"prompt": "y"}), ctx()).await.is_err());
+        assert!(tool.execute(json!({}), ctx()).await.is_err());
+    }
+
+    // NOTE: TaskCreateTool::execute writes to the hard-coded Clarity data directory
+    // (via super::clarity_data_dir()). On Windows this resolves to the user's profile
+    // via a Windows API call and cannot be redirected with an environment variable in
+    // a unit test, so the successful-creation path is not exercised here without
+    // refactoring the production code to accept an injected store/path.
+}

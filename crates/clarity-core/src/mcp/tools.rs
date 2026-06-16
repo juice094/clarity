@@ -215,4 +215,155 @@ mod tests {
                 .contains("Hello from MCP filesystem server!")
         );
     }
+
+    use axum::{Router, extract::Json, routing::post};
+    use clarity_mcp::{HttpMcpClient, McpServerConfig};
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+
+    async fn mock_mcp_handler(Json(req): Json<serde_json::Value>) -> Json<serde_json::Value> {
+        let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
+        let id = req.get("id").cloned().unwrap_or(serde_json::Value::Null);
+
+        if method == "tools/call" {
+            let params = req
+                .get("params")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if name == "error_tool" {
+                return Json(serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": { "code": -32600, "message": "not owned by current user" }
+                }));
+            }
+            return Json(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "content": [{ "type": "text", "text": format!("Hello from {}", name) }],
+                    "isError": false
+                }
+            }));
+        }
+
+        Json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "tools": [
+                    {
+                        "name": "tool1",
+                        "description": "First mock tool",
+                        "inputSchema": { "type": "object" }
+                    },
+                    {
+                        "name": "tool2",
+                        "description": "Second mock tool",
+                        "inputSchema": { "type": "object" }
+                    }
+                ]
+            }
+        }))
+    }
+
+    async fn start_mock_server() -> (SocketAddr, tokio::task::JoinHandle<()>) {
+        let app = Router::new().route("/", post(mock_mcp_handler));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = axum::serve(listener, app);
+        let handle = tokio::spawn(async move { server.await.unwrap() });
+        (addr, handle)
+    }
+
+    #[tokio::test]
+    async fn test_mcp_tool_wrapper_metadata() {
+        let client = Arc::new(RwLock::new(McpClientInstance::Http(HttpMcpClient::new(
+            McpServerConfig::http("dummy", "http://127.0.0.1:1"),
+        ))));
+        let tool = McpTool {
+            name: "srv_hello".to_string(),
+            description: Some("Hello tool".to_string()),
+            input_schema: serde_json::json!({"type": "object"}),
+        };
+        let wrapper = McpToolWrapper::new(client, tool, "hello");
+
+        assert_eq!(wrapper.name(), "srv_hello");
+        assert_eq!(wrapper.description(), "Hello tool");
+        assert_eq!(wrapper.parameters(), serde_json::json!({"type": "object"}));
+    }
+
+    #[tokio::test]
+    async fn test_mcp_tool_wrapper_execute_success() {
+        let (addr, _server) = start_mock_server().await;
+        let client = Arc::new(RwLock::new(McpClientInstance::Http(HttpMcpClient::new(
+            McpServerConfig::http("mock", format!("http://{}", addr)),
+        ))));
+        let tool = McpTool {
+            name: "mock_hello".to_string(),
+            description: None,
+            input_schema: serde_json::json!({}),
+        };
+        let wrapper = McpToolWrapper::new(client, tool, "hello");
+
+        let result = wrapper
+            .execute(serde_json::json!({}), ToolContext::new())
+            .await
+            .unwrap();
+        assert_eq!(result, serde_json::json!("Hello from hello"));
+    }
+
+    #[tokio::test]
+    async fn test_mcp_tool_wrapper_execute_git_ownership_hint() {
+        let (addr, _server) = start_mock_server().await;
+        let client = Arc::new(RwLock::new(McpClientInstance::Http(HttpMcpClient::new(
+            McpServerConfig::http("mock", format!("http://{}", addr)),
+        ))));
+        let tool = McpTool {
+            name: "mock_error".to_string(),
+            description: None,
+            input_schema: serde_json::json!({}),
+        };
+        let wrapper = McpToolWrapper::new(client, tool, "error_tool");
+
+        let err = wrapper
+            .execute(serde_json::json!({}), ToolContext::new())
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("not owned by current user"));
+        assert!(msg.contains("safe.directory"));
+    }
+
+    #[tokio::test]
+    async fn test_register_mcp_tools() {
+        let (addr, _server) = start_mock_server().await;
+        let client = McpClientInstance::Http(HttpMcpClient::new(McpServerConfig::http(
+            "mock",
+            format!("http://{}", addr),
+        )));
+
+        let mut mcp_registry = McpRegistry::new();
+        mcp_registry.register("mock", client);
+
+        let tool_registry = ToolRegistry::new();
+        register_mcp_tools(&mcp_registry, &tool_registry)
+            .await
+            .unwrap();
+
+        let names = tool_registry.list_tools().unwrap();
+        assert!(names.contains(&"mock_tool1".to_string()));
+        assert!(names.contains(&"mock_tool2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_register_mcp_tools_empty_registry() {
+        let mcp_registry = McpRegistry::new();
+        let tool_registry = ToolRegistry::new();
+        register_mcp_tools(&mcp_registry, &tool_registry)
+            .await
+            .unwrap();
+        assert!(tool_registry.list_tools().unwrap().is_empty());
+    }
 }

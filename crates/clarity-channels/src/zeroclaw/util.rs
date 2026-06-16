@@ -164,3 +164,76 @@ pub fn strip_tool_call_tags(message: &str) -> String {
 
     result.trim().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn leaves_plain_text_unchanged() {
+        assert_eq!(strip_tool_call_tags("Hello, world!"), "Hello, world!");
+    }
+
+    #[test]
+    fn strips_closed_tool_call_block() {
+        let input = "Before <tool_call>{\"x\":1}</tool_call> After";
+        assert_eq!(strip_tool_call_tags(input), "Before  After");
+    }
+
+    #[test]
+    fn strips_function_calls_block() {
+        let input = "Plan: <function_calls><invoke>foo</invoke></function_calls> Done";
+        assert_eq!(strip_tool_call_tags(input), "Plan:  Done");
+    }
+
+    #[test]
+    fn strips_unclosed_json_and_trailing_close_tags() {
+        let input = "Text <tool_call>{\"action\":\"x\"}</tool_call> trailing";
+        assert_eq!(strip_tool_call_tags(input), "Text  trailing");
+    }
+
+    #[test]
+    fn strips_unclosed_json_but_keeps_plain_trailing_text() {
+        let input = "Text <tool_call>{\"action\":\"x\"} trailing";
+        assert_eq!(strip_tool_call_tags(input), "Text trailing");
+    }
+
+    #[test]
+    fn strips_tool_structure_that_runs_to_end() {
+        let input = "Intro <tool_call><invoke><parameter>foo</parameter></invoke>";
+        assert_eq!(strip_tool_call_tags(input), "Intro");
+    }
+
+    #[test]
+    fn preserves_unclosed_tag_that_looks_like_prose() {
+        let input = "Note: <tool_call>This is a sentence. Keep it.";
+        assert_eq!(
+            strip_tool_call_tags(input),
+            "Note: <tool_call>This is a sentence. Keep it."
+        );
+    }
+
+    #[test]
+    fn strips_multiple_blocks() {
+        let input = "A <tool>1</tool> B <tool>2</tool> C";
+        assert_eq!(strip_tool_call_tags(input), "A  B  C");
+    }
+
+    #[test]
+    fn normalizes_excess_blank_lines() {
+        let input = "A\n\n\n\nB";
+        assert_eq!(strip_tool_call_tags(input), "A\n\nB");
+    }
+
+    #[test]
+    fn trims_leading_and_trailing_whitespace() {
+        let input = "   \n\nhello\n\n   ";
+        assert_eq!(strip_tool_call_tags(input), "hello");
+    }
+
+    #[test]
+    fn handles_unknown_open_tag_without_matching_close() {
+        let input = "Start <unknown>content End";
+        assert_eq!(strip_tool_call_tags(input), "Start <unknown>content End");
+    }
+}
