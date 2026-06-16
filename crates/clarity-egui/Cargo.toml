@@ -30,7 +30,7 @@ html-escape = "0.2"
 once_cell = "1"
 raw-window-handle = "0.6"
 rfd = "0.15"
-tray-icon = "0.22.2"
+tray-icon = "0.24.1"
 
 # Internal crates
 clarity-core = { path = "../clarity-core" }
@@ -41,12 +41,17 @@ clarity-subagents = { path = "../clarity-subagents" }
 clarity-tools = { path = "../clarity-tools" }
 clarity-wire = { path = "../clarity-wire" }
 
+# Pretext text measurement. Pinned to a stable rev; update intentionally.
+pretext-core = { git = "https://github.com/juice094/pretext-rust.git", rev = "d90e6085383aa170a70c70e153222a95cae9e545" }
+pretext-fontdb = { git = "https://github.com/juice094/pretext-rust.git", rev = "d90e6085383aa170a70c70e153222a95cae9e545" }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 
 [features]
 default = []
 line-mode = []
+hermes = ["clarity-core/hermes", "clarity-memory/hermes"]
 
 [[bin]]
 name = "clarity-egui"

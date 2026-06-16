@@ -40,7 +40,7 @@ urlencoding = "2.1"
 
 # Crypto (WeChat iLink AES + pairing token hashing)
 aes = "0.8"
-base64 = "0.22"
+base64 = { workspace = true }
 ecb = "0.1"
 rand = "0.8"
 sha2 = "0.10"
