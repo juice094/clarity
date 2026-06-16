@@ -1,4 +1,4 @@
-//! Utility helpers ported from ZeroClaw.
+//! Utility helpers for channel message normalization.
 
 /// Strip tool-call XML tags from a message before sending it to a channel.
 pub fn strip_tool_call_tags(message: &str) -> String {

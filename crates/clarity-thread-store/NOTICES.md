@@ -2,21 +2,13 @@
 
 ## OpenAI Codex
 
-This crate is derived from the OpenAI Codex project
-(`https://github.com/openai/codex`), which is licensed under the Apache
-License, Version 2.0.
+The `ThreadStore` trait and related types in this crate were inspired by the
+OpenAI Codex project (`https://github.com/openai/codex`), which is licensed
+under the Apache License, Version 2.0.
 
-The original Codex source files that inspired this port include:
-
-- `codex-rs/thread-store/src/store.rs`
-- `codex-rs/thread-store/src/types.rs`
-- `codex-rs/thread-store/src/live_thread.rs`
-- `codex-rs/thread-store/src/in_memory.rs`
-- `codex-rs/thread-store/src/error.rs`
-
-This derivative work is licensed under the AGPL-3.0-or-later license that
-applies to the rest of the Clarity project. The Apache-2.0 licensed Codex code
-remains available under its original license.
+Clarity does not incorporate Codex source code. The implementation here is
+original and is licensed under the AGPL-3.0-or-later license that applies to
+the rest of the Clarity project.
 
 ```text
 Copyright 2025 OpenAI

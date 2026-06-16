@@ -69,6 +69,7 @@ pub mod registry;
 pub(crate) mod server;
 pub mod session;
 pub mod skills;
+// Experimental Agent OS building blocks; not yet integrated with the main loop.
 pub mod soul;
 pub mod thread;
 pub mod tier_bus;

@@ -1,8 +1,7 @@
-//! Structured log emission surface.
+//! Structured log emission surface for channel events.
 //!
-//! This is a lightweight port of `zeroclaw_log::record!`. It forwards to
-//! `tracing` with structured fields so the Clarity Gateway can observe
-//! channel events. A future extension can add JSONL persistence / broadcast.
+//! Emits `tracing` events with structured fields so the Clarity Gateway can
+//! observe channel activity. A future extension can add JSONL persistence / broadcast.
 
 /// Re-exported `tracing` helpers for span propagation in spawned channel tasks.
 pub use tracing::{Instrument, Span, debug_span, error_span, info_span, trace_span, warn_span};

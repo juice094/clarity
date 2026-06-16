@@ -49,7 +49,7 @@ hex = "0.4"
 # Tokio utilities (CancellationToken for messages)
 tokio-util = { workspace = true }
 
-# Sync primitives used by migrated ZeroClaw code
+# Sync primitives used by channel state/pairing code
 parking_lot = "0.12"
 
 # QR code rendering for terminal login

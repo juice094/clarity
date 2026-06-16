@@ -127,7 +127,7 @@ Agent ReAct 循环、Plan Mode、三层审批、MCP 三协议、Memory 系统、
 | WebSocket MCP 传输 | ⏸️ 未启动 | `McpTransport` 新增变体 |
 | Gateway ↔ BackgroundTaskManager 集成 | ✅ 已完成 | `GatewayTaskClient` + `GatewayManager` — egui 自动启动 Gateway，BTM ops 全走 `/v1/tasks` REST API，本地 store fallback |
 | Worker 池自动扩缩容 | ⏸️ 未启动 | `ScalableWorkerPool` 去下划线前缀 |
-| 会话层统一 / Thread 生命周期 | 🔄 进行中 | 从 Codex 迁移 `ThreadStore`/`RolloutRecorder`：新增 `clarity-thread-store`、`clarity-rollout`，统一 Thread 资源模型与 JSONL rollout 真相源 |
+| 会话层统一 / Thread 生命周期 | 🔄 进行中 | 新增 `clarity-thread-store`、`clarity-rollout`：统一 Thread 资源模型与 JSONL rollout 真相源（API 设计受 Codex 启发） |
 | Hub-Worker 调度器 | ⏸️ 未启动 | `AgentPool` + `AgentInstance` |
 | 子 Agent UI 接入（IS-1） | 🔄 后端就绪，前端待接入 | `subagents::builder` 已具备 spawn 能力，缺 egui 独立面板 |
 | Token 权限校验前端（IS-3） | 🔄 后端就绪，前端待接入 | `verify_sandbox_escape` 已存在，缺 UI 层的权限可视化 |

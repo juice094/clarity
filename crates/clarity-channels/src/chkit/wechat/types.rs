@@ -63,11 +63,11 @@ pub(crate) fn long_poll_client_timeout(timeout_ms: u64) -> Duration {
 }
 
 pub(crate) fn wechat_cli_string(key: &str) -> String {
-    crate::zeroclaw::i18n::get_required_cli_string(key)
+    crate::chkit::i18n::get_required_cli_string(key)
 }
 
 pub(crate) fn wechat_cli_string_with_args(key: &str, args: &[(&str, &str)]) -> String {
-    crate::zeroclaw::i18n::get_required_cli_string_with_args(key, args)
+    crate::chkit::i18n::get_required_cli_string_with_args(key, args)
 }
 
 pub(crate) fn https_base_url(

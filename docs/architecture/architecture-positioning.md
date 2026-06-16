@@ -7,10 +7,10 @@ tags: [architecture]
 
 # Clarity 架构定位文档（项目关系 + 边界）
 
-> **目的**：固化 Clarity 在 Kimi CLI / ZeroClaw / OpenClaw / devbase 等周边项目中的层级、角色与禁用项。
+> **目的**：明确 Clarity 自身的层级、角色与边界；Kimi CLI / ZeroClaw / OpenClaw / devbase 等仅作为外部参考或潜在对接方，不构成 Clarity 的依赖或组成部分。
 > **维护规则**：任何"项目间关系"或"项目边界"变更后，必须同步更新此文件；纯代码/crate 拓扑变更请改 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
-> **生效范围**：`dev/third_party/clarity/` 及其子目录。
-> **上次更新**：2026-06-05（Phase 0-3 三层架构交付：Telemetry + Adaptive + Agent OS）。
+> **生效范围**：本仓库 `clarity/`（外部项目仅作设计参考，不进入依赖树）。
+> **上次更新**：2026-06-16（架构整理：弱化外部项目依赖声明，调和自身 crate 拓扑）。
 
 ---
 
@@ -20,10 +20,14 @@ tags: [architecture]
 
 | Clarity 是 | Clarity 不是 |
 |-----------|-------------|
-| Agent/LLM 运行时内核 | 终端产品（不是 OpenClaw） |
-| 联邦协调器（单机集群 → 分布式） | CLI 工具（不是 Kimi CLI） |
-| 被嵌入的引擎（egui/Gateway/MCP） | 竞品代码库（不合并 ZeroClaw） |
-| 守护进程（唯一生命周期） | oneshot 命令行工具 |
+| Agent/LLM 运行时内核 | 终端产品（不是 OpenClaw，也不依赖 OpenClaw） |
+| 本地优先的多入口运行时（egui/TUI/Gateway/CLI） | CLI 工具（不是 Kimi CLI，也不依赖 Kimi CLI） |
+| 可被嵌入的引擎（通过 Gateway / MCP / stdio 暴露） | 竞品代码库（不合并 ZeroClaw，ZeroClaw 仅作参考） |
+| 长生命周期的桌面/后台运行时 | oneshot 命令行工具 |
+
+| 愿景（未实现） | 说明 |
+|---------------|------|
+| 联邦协调器（单机集群 → 分布式） | 长期演进方向，当前 `Soul` / `TierBus` / `Hub` 为实验性模块，未接入主循环 |
 
 **核心原则**：Clarity 只有一个生命周期——守护进程。任何"单次调用"需求都通过外部瘦客户端（如 `clarity-cli`）向守护进程发请求解决，不允许 Clarity 内核支持 oneshot 模式。
 
@@ -33,64 +37,66 @@ tags: [architecture]
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Layer 1: 开发工具层 (External)                                   │
-│  Kimi CLI  ·  Claude Code  ·  编辑器                            │
-│  关系：操作 Clarity 源码，不进入运行时                             │
+│ Layer 1: 用户入口层（Clarity 自身）                               │
+│  clarity-egui  ·  clarity-tui  ·  clarity-gateway  ·             │
+│  clarity-claw  ·  clarity-headless                              │
+│  职责：提供 GUI / TUI / Web / 托盘 / CLI 多种入口                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ 操作源码/编译
+                              ▼ 统一协议
 ┌─────────────────────────────────────────────────────────────────┐
-│ Layer 2: 产品应用层 (Product)                                    │
-│  OpenClaw (TS/Node)  ·  egui GUI  ·  未来 Tauri/Web 前端         │
-│  接口：Gateway HTTP / WebSocket / MCP                           │
-│  职责：用户交互、多通道消息、业务编排                               │
+│ Layer 2: 协议与契约层                                            │
+│  clarity-wire（SPMC 事件总线）  ·  clarity-contract（共享类型）   │
+│  职责：前端 ↔ 核心解耦；跨 crate 共享 trait 与错误类型             │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ Gateway/MCP
+                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ Layer 3: Clarity 运行时（守护进程，唯一生命周期）                    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ clarity-claw 联邦协调器                                  │   │
-│  │  Coordinator  ·  Registry  ·  FederationRouter          │   │
-│  │  CoreNode(LLM/Agent)  ·  MemoryNode  ·  GatewayNode      │   │
-│  │  契约：clarity-contract (FederationMessage)              │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│  状态：系统托盘常驻 / systemd 服务 / 后台进程                      │
-│  记忆：PersistentMemoryStore（BM25 + Vector）持久化               │
+│ Layer 3: Clarity 运行时核心                                      │
+│  clarity-core（ReAct/Plan Agent、审批、Skill、后台任务集成）       │
+│  状态：当前为单进程；联邦/节点化（CoreNode/MemoryNode/GatewayNode） │
+│        与 FederationRouter 为长期愿景，尚未实现                   │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ MCP
+                              ▼ 注入/调用
 ┌─────────────────────────────────────────────────────────────────┐
-│ Layer 4: 领域知识层 (Knowledge)                                  │
-│  devbase (MCP Server)  ·  agri-paper  ·  其他 MCP Servers       │
-│  职责：领域知识供给、长期记忆外部化、专业工具包                      │
+│ Layer 4: 基础设施层                                              │
+│  clarity-memory · clarity-llm · clarity-mcp · clarity-tools     │
+│  clarity-channels · clarity-secrets · clarity-thread-store      │
+│  clarity-rollout · clarity-telemetry · clarity-subagents        │
+│  职责：记忆、LLM、MCP、工具、通道、加密、Thread/Rollout、遥测、子代理 │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ 只读参考
+                              ▼ MCP（可选外部服务器示例）
 ┌─────────────────────────────────────────────────────────────────┐
-│ Layer 5: 参考/竞品层 (Reference)                                 │
-│  ZeroClaw v0.7.4 — Rust 微内核 · 18 crates · 硬件/固件/30+通道   │
-│  规则：可以抄思想，不能抄代码；可以问"ZeroClaw 怎么解决的"         │
-│        不能把 zeroclaw-runtime 作为 Clarity 的依赖               │
+│ Layer 5: 外部参考/竞品/潜在对接方（非依赖）                        │
+│  Kimi CLI · Claude Code · ZeroClaw · OpenClaw · devbase ·        │
+│  Anthropic Managed Agents · 其他 MCP Servers                     │
+│  规则：可以借鉴思想，不能抄代码；不能把外部项目作为 Clarity 依赖    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 三、项目角色矩阵
+## 三、外部项目角色矩阵（仅作参考，不构成依赖）
 
-| 项目 | 路径 | 层级 | 角色 | 与 Clarity 的关系 |
-|------|------|------|------|------------------|
-| **Clarity** | `dev/third_party/clarity/` | Layer 3 | 主战场 | 自身 |
-| **OpenClaw** | `Desktop/openclaw/` 或类似 | Layer 2 | 产品参考 | 未来可通过 Gateway 对接 |
-| **ZeroClaw** | `Desktop/zeroclaw-master/` | Layer 5 | 只读参考 | 独立竞品，不合并 |
-| **devbase** | `dev/third_party/devbase/` | Layer 4 | MCP 知识库 | Clarity 通过 MCP 连接 |
-| **Kimi CLI** | `AppData/Roaming/uv/tools/kimi-cli/` | Layer 1 | 开发工具 | 操作 Clarity 源码，不进入运行时 |
-| **agri-paper** | `dev/third_party/agri-paper/` | Layer 4 | 领域配置 | 可选 MCP 接入 |
+| 项目 | 类别 | 与 Clarity 的关系 |
+|------|------|------------------|
+| **Clarity** | 自身 | 本仓库主体 |
+| **OpenClaw** | 外部产品参考 | 命名/功能有概念呼应；Clarity 不依赖其代码，未来对接仅属愿景 |
+| **ZeroClaw** | 外部竞品/参考 | 独立项目，不合并；仅可借鉴设计思想 |
+| **devbase** | 外部 MCP Server 示例 | 可选通过 MCP 协议连接；不是 Clarity 内部组件 |
+| **Kimi CLI** | 外部 CLI 工具参考 | 功能对比对象；不进入 Clarity 运行时 |
+| **agri-paper** | 外部领域配置参考 | 可选 MCP 接入示例 |
+| **Anthropic Managed Agents** | 外部架构参考 | 部署形态不同，仅作为 Brain/Hands/Session 解耦的思想参照 |
+
+> 注：上表中的本地路径（如 `Desktop/openclaw/`、`AppData/Roaming/uv/tools/kimi-cli/`）属于个人开发环境，不代表项目依赖关系，已从本文件移除。
 
 ---
 
 ## 四、Kimi CLI vs Clarity：非生命周期能力差异
+
+> Kimi CLI 是外部 CLI 工具，与 Clarity 不存在代码依赖或运行时关系。本节仅作为功能对比参考。
 
 用户的直觉正确：两者有生命周期以外的能力差异。以下差异必须被后续 Agent 知晓。
 
@@ -254,11 +260,13 @@ Clarity 的 **Hybrid UI（egui GUI + tui TUI 共享后端）** 与 Anthropic 的
 - [x] MemoryNode 接入 egui
 - [ ] MCP 配置热重载
 
-### Phase 4：联邦化（中长期，1+ 月）
+### Phase 4：联邦化（长期愿景 / 未实现）
 - [ ] CoreNode 拆为独立进程
 - [ ] egui 通过本地 IPC/WebSocket 连接守护进程
 - [ ] CoreNode + MemoryNode + GatewayNode 形成单机集群
 - [ ] FederationRouter 上升到主线
+
+> 当前 `Soul` / `TierBus` / `Hub` 为实验性模块，尚未接入主 ReAct/Plan 循环。本节描述的是演进方向，不是当前架构。
 
 > 具体 commit hash 与 sprint 完成日期请查阅 `CHANGELOG.md` 与 `docs/planning/sprint-archive.md`，本节只描述阶段意图。
 

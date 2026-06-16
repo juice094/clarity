@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use crate::zeroclaw::wechat::WeChatChannel;
-use crate::zeroclaw::wechat::types::{AccountData, SyncData};
+use crate::chkit::wechat::WeChatChannel;
+use crate::chkit::wechat::types::{AccountData, SyncData};
 
 impl WeChatChannel {
     /// Load persisted token and cursor from state_dir.
@@ -19,9 +19,9 @@ impl WeChatChannel {
                     *t = Some(token.clone());
                     crate::record!(
                         INFO,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         ),
                         "loaded persisted bot token"
                     );
@@ -42,10 +42,7 @@ impl WeChatChannel {
                 *self.cursor.lock() = sync.get_updates_buf;
                 crate::record!(
                     INFO,
-                    crate::zeroclaw::log::Event::new(
-                        module_path!(),
-                        crate::zeroclaw::log::Action::Note
-                    ),
+                    crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note),
                     "loaded persisted sync cursor"
                 );
             }
@@ -53,10 +50,7 @@ impl WeChatChannel {
                 *self.context_tokens.lock() = sync.context_tokens;
                 crate::record!(
                     INFO,
-                    crate::zeroclaw::log::Event::new(
-                        module_path!(),
-                        crate::zeroclaw::log::Action::Note
-                    ),
+                    crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note),
                     "loaded persisted context tokens"
                 );
             }
@@ -68,12 +62,9 @@ impl WeChatChannel {
         if let Err(e) = std::fs::create_dir_all(&self.state_dir) {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "failed to create state dir"
             );
             return;
@@ -91,11 +82,11 @@ impl WeChatChannel {
                 if let Err(e) = write_private(&path, json.as_bytes()) {
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
+                        .with_outcome(crate::chkit::log::EventOutcome::Unknown)
                         .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                         "failed to write account data"
                     );
@@ -103,12 +94,9 @@ impl WeChatChannel {
             }
             Err(e) => crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "failed to serialize account data"
             ),
         }
@@ -119,12 +107,9 @@ impl WeChatChannel {
         if let Err(e) = std::fs::create_dir_all(&self.state_dir) {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "failed to create state dir"
             );
             return;
@@ -139,11 +124,11 @@ impl WeChatChannel {
                 if let Err(e) = write_private(&path, json.as_bytes()) {
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
+                        .with_outcome(crate::chkit::log::EventOutcome::Unknown)
                         .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                         "failed to write sync data"
                     );
@@ -151,12 +136,9 @@ impl WeChatChannel {
             }
             Err(e) => crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "failed to serialize sync data"
             ),
         }
@@ -171,12 +153,11 @@ impl WeChatChannel {
         if let Err(e) = std::fs::create_dir_all(&self.state_dir) {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"identity": identity, "error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(
+                        ::serde_json::json!({"identity": identity, "error": format!("{}", e)})
+                    ),
                 "failed to create state dir for allowed users"
             );
             anyhow::bail!("failed to create state dir: {e}");

@@ -6,7 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "JSONL rollout persistence for Clarity threads - ported from OpenAI Codex rollout"
+description = "JSONL rollout persistence for Clarity threads (design inspired by OpenAI Codex)"
 
 [dependencies]
 clarity-contract = { path = "../clarity-contract" }

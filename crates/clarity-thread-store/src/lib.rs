@@ -1,9 +1,9 @@
 //! `clarity-thread-store` — Thread persistence abstraction for Clarity.
 //!
 //! This crate provides a storage-neutral `ThreadStore` trait and several
-//! implementations. The design is ported from the OpenAI Codex
-//! `codex_thread_store` crate and adapted for Clarity. Codex is licensed under
-//! Apache-2.0; see `NOTICES.md` for attribution.
+//! implementations. The API shape is inspired by the OpenAI Codex
+//! `codex_thread_store` crate (Apache-2.0); the implementation is original to
+//! Clarity. See `NOTICES.md` for attribution.
 //!
 //! ## Crate topology
 //!

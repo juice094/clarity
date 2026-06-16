@@ -1,9 +1,9 @@
 //! `clarity-rollout` — JSONL rollout persistence for Clarity threads.
 //!
 //! This crate writes canonical, append-only JSONL event logs that form the
-//! durable replay history of a thread. The design is ported from the OpenAI
-//! Codex `codex_rollout` crate and adapted for Clarity. Codex is licensed under
-//! Apache-2.0; see `NOTICES.md` for attribution.
+//! durable replay history of a thread. The concept is inspired by the OpenAI
+//! Codex `codex_rollout` crate (Apache-2.0); the implementation is original to
+//! Clarity. See `NOTICES.md` for attribution.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 

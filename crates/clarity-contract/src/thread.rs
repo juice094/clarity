@@ -1,8 +1,8 @@
 //! Thread and session identifiers.
 //!
-//! These identifiers are ported from the OpenAI Codex `codex_protocol` crate and
-//! adapted for the Clarity codebase. Codex is licensed under Apache-2.0; see
-//! `crates/clarity-contract/NOTICES.md` for attribution.
+//! The `ThreadId` / `SessionId` API shape is inspired by the OpenAI Codex
+//! `codex_protocol` crate (Apache-2.0); the implementation is original to
+//! Clarity. See `crates/clarity-contract/NOTICES.md` for attribution.
 
 use std::fmt::Display;
 

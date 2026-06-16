@@ -8,7 +8,7 @@ tags: [architecture]
 # Clarity Architecture
 
 > Code-accurate architecture reference | Last updated: 2026-06-06
-> Reflects Phase 0-3 + 4.1~4.3 delivery: 14 crates, 27 core modules, 106 new tests
+> Reflects v0.3.x delivery: 19 active crates + 1 archived (`clarity-tauri`) ≈ 20 crate directories
 
 ---
 
@@ -16,7 +16,7 @@ tags: [architecture]
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 14 independent crates; `clarity-core` is a ~30k-line god crate pending decomposition |
+| **Single Responsibility** | 19 active independent crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -56,28 +56,39 @@ tags: [architecture]
           │       clarity-core        │
           │  • Agent (ReAct / Plan)   │
           │  • Adaptive (ModelRouter) │
-          │  • Soul / TierBus / Hub   │
           │  • ToolRegistry           │
-          │  • LLM Providers          │
-          │  • MCP Client (stdio/SSE) │
+          │  • LLM Provider bindings  │
+          │  • MCP Client integration │
           │  • Background Tasks       │
-          │  • Subagents / Teams      │
           │  • Skills (Markdown+YAML) │
-          │  • Approval (3 modes)     │
+          │  • Approval (4 modes)     │
           │  • CompactionService      │
+          │  • Thread lifecycle       │
           └─────────────┬─────────────┘
                         │
-          ┌─────────────┴─────────────────────┐
-          │          Storage Layer            │
-          ├──────────┬──────────┬─────────────┤
-          │clarity-  │clarity-  │  clarity-   │
-          │memory    │telemetry │  memory     │
-          │          │          │  (legacy)   │
-          │• SQLite  │• WideEvt│  • BM25      │
-          │• SessionV2• SQLite  │  • Vector    │
-          │• FTS5    │• Greptime│  • Chunking  │
-          │• BM25    │  (opt)  │  • Compile   │
-          └──────────┴──────────┴─────────────┘
+          ┌─────────────┴───────────────────────────────────────────────┐
+          │              Shared Infrastructure Layer                     │
+          ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
+          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
+          │contract  │memory    │mcp       │llm       │  tools          │
+          │          │          │          │          │                 │
+          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │
+          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search  │
+          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task  │
+          │  trait   │• chunking│• WS      │• local   │                 │
+          └──────────┴──────────┴──────────┴──────────┴─────────────────┘
+          ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
+          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
+          │wire      │channels  │secrets   │thread-   │  telemetry      │
+          │          │          │          │  store   │                 │
+          │• SPMC    │• Discord │• enc2:   │• Thread  │  • WideEvent    │
+          │  events  │• Slack   │  secrets │  Store   │  • SQLite sink  │
+          │• ViewCmd │• Webhook │          │• rollout │  • ConfigAudit  │
+          └──────────┴──────────┴──────────┴──────────┴─────────────────┘
+          ┌─────────────────────────────────────────────────────────────┐
+          │  clarity-subagents  — consumes clarity-core                  │
+          │  (spawn / team / parallel execution)                         │
+          └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.1a Code Health Metrics (v0.3.0 baseline)
@@ -95,20 +106,35 @@ tags: [architecture]
 ### 2.1 Crate Dependency Graph
 
 ```
-clarity-core
-    ├── clarity-memory (BM25, vector, chunking)
-    └── clarity-wire   (SPMC event bus)
-
-clarity-gateway ──→ clarity-core
-clarity-egui  ────→ clarity-core + clarity-wire
-clarity-tui ──────→ clarity-core + clarity-wire
-clarity-claw ─────→ clarity-core
-clarity-headless ─→ clarity-core
+clarity-contract
+    ▲
+    ├── clarity-wire      (SPMC event bus)
+    ├── clarity-memory    (SQLite + BM25 + vector)
+    ├── clarity-mcp       (MCP client transports)
+    ├── clarity-llm       (provider bindings)
+    ├── clarity-tools     (built-in tools)
+    ├── clarity-channels  (Discord / Slack / Telegram / Webhook)
+    ├── clarity-secrets   (ChaCha20-Poly1305 secret store)
+    ├── clarity-rollout   (JSONL rollout persistence)
+    └── clarity-thread-store (ThreadStore trait + implementations)
+            │
+            ▼
+      clarity-core
+            │
+            ├── clarity-subagents  (spawn / team / parallel)
+            │
+            ▼
+    ┌───────────────────────────────────────┐
+    │  clarity-egui / clarity-tui           │
+    │  clarity-gateway / clarity-claw       │
+    │  clarity-headless                     │
+    └───────────────────────────────────────┘
 ```
 
 **Reusability rating**:
-- `clarity-wire` / `clarity-memory`: **A+** — minimal deps, clean interfaces, ready for crates.io
-- `clarity-core`: **B** — strong trait boundaries (`LlmProvider`, `Tool`, `MemoryStore`) but 27k lines and high `unwrap()` density (~1,069) limit downstream reliability
+- `clarity-contract` / `clarity-wire` / `clarity-memory`: **A+** — minimal deps, clean interfaces, ready for crates.io
+- `clarity-mcp` / `clarity-llm` / `clarity-tools`: **A** — self-contained, useful independently
+- `clarity-core`: **B** — strong trait boundaries (`LlmProvider`, `Tool`, `MemoryStore`) but still the largest crate; ongoing decomposition
 - Application crates (`gateway`, `egui`, `tui`, `claw`, `headless`): **D** — thin shells, not intended as libraries
 
 **Invariant**: `clarity-core` has **zero** dependencies on any frontend or network crate.
@@ -117,15 +143,26 @@ clarity-headless ─→ clarity-core
 
 | Crate | Lines (~) | Tests | Key Types |
 |-------|-----------|-------|-----------|
-| `clarity-core` | ~30,000 | 400+ | `Agent`, `ToolRegistry`, `LlmProvider`, `AdaptiveModelRouter`, `SoulManager`, `TierBus`, `HubScheduler` |
-| `clarity-telemetry` | ~1,400 | 8 | `WideEvent`, `EventSink`, `SqliteBackend`, `GreptimeBackend`, `ConfigAudit` |
-| `clarity-memory` | ~3,600 | 86+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler`, `SessionStoreV2` |
-| `clarity-wire` | ~400 | 8 | `WireMessage`, `WireBroadcaster` |
-| `clarity-gateway` | ~3,600 | 47+ | `AppState`, `PersistentSessionStore`, API handlers, `GatewayHealthMonitor` |
-| `clarity-egui` | ~4,600 | 66+ | egui app, `ViewState`, panels, widgets, theme, `WindowManager` |
-| `clarity-tui` | ~1,800 | 6+ | `App`, `ui()`, command registry |
-| `clarity-claw` | ~600 | 6+ | Tray monitor, `notify` watcher |
-| `clarity-headless` | ~380 | 10+ | CLI args, `build_provider()` |
+| `clarity-contract` | ~700 | 47+ | `LlmProvider`, `Tool`, `AgentError`, `ThreadId`, `RolloutItem` |
+| `clarity-core` | ~30,000 | 557+ | `Agent`, `ToolRegistry`, `LlmProvider`, `AdaptiveModelRouter` |
+| `clarity-subagents` | ~2,500 | 37+ | `SubAgentManager`, `AgentPool`, `Team`, `Token` |
+| `clarity-llm` | ~3,500 | 63+ | `LlmFactory`, `ModelRegistry`, `LocalGgufProvider` |
+| `clarity-mcp` | ~2,000 | 37+ | `McpClient`, `McpRegistry`, `McpTransport` |
+| `clarity-tools` | ~4,500 | 99+ | `FileReadTool`, `BashTool`, `WebSearchTool`, `TaskCreateTool` |
+| `clarity-memory` | ~3,600 | 97+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
+| `clarity-thread-store` | ~1,200 | 13+ | `ThreadStore`, `LocalThreadStore`, `LiveThread` |
+| `clarity-rollout` | ~800 | 6+ | `RolloutRecorder`, `RolloutItem`, `SessionMeta` |
+| `clarity-channels` | ~2,000 | 49+ | `ChannelSendTool`, channel adapters |
+| `clarity-secrets` | ~400 | 5+ | `SecretStore`, `enc2:` encryption |
+| `clarity-telemetry` | ~1,400 | 8+ | `WideEvent`, `EventSink`, `SqliteBackend`, `ConfigAudit` |
+| `clarity-wire` | ~400 | 13+ | `WireMessage`, `WireBroadcaster`, `ViewCommand` |
+| `clarity-gateway` | ~3,600 | 62+ | `AppState`, `PersistentSessionStore`, API handlers |
+| `clarity-egui` | ~4,600 | 116+ | egui app, `ViewState`, panels, widgets, theme |
+| `clarity-tui` | ~1,800 | 46+ | `App`, `ui()`, command registry |
+| `clarity-claw` | ~600 | 18+ | Tray monitor, `notify` watcher |
+| `clarity-headless` | ~380 | 16+ | CLI args, `build_provider()` |
+| `clarity-slint` | — | — | Experimental Slint GUI stack (excluded from default CI) |
+| `clarity-tauri` | — | — | **Archived** React+Vite frontend (excluded from workspace) |
 
 ---
 
@@ -246,6 +283,21 @@ pub struct ViewState {
 **Key ADRs**: ADR-014 (right-panel Tab consolidation + Skill/Mcp relocation), ADR-013 (focus-aware shortcut routing).
 
 **Detailed docs**: `docs/architecture/viewstate-migration.md` | `docs/architecture/shortcut-focus-routing.md`
+
+### 3.8 Experimental Agent OS Modules (`src/soul/`, `src/tier_bus/`, `src/hub/`)
+
+> **Status: EXPERIMENTAL / not integrated.** These modules sketch a future
+> multi-soul, hub-worker Agent OS. They are exposed as `pub mod` for the
+> `clarity-egui::window_manager` staging work, but they are **not wired into
+> the main ReAct/Plan agent loop** and their APIs are not stable.
+
+| Module | Purpose | Stability |
+|--------|---------|-----------|
+| `soul/` | Persistent agent identity + hibernation | Experimental |
+| `tier_bus/` | Hierarchical parent/child/peer messaging | Experimental |
+| `hub/` | Skill-based task dispatch to worker souls | Experimental |
+
+See `docs/visions/AGENT_OS_VISION.md` for the long-term direction.
 
 ---
 

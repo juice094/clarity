@@ -1,10 +1,9 @@
 //! Rollout persistence types.
 //!
 //! Rollouts are append-only JSONL event logs that form the durable replay history
-//! of a thread. The types in this module are ported from the OpenAI Codex
-//! `codex_protocol` and `codex_rollout` crates and adapted for Clarity. Codex is
-//! licensed under Apache-2.0; see `crates/clarity-contract/NOTICES.md` for
-//! attribution.
+//! of a thread. The vocabulary is inspired by the OpenAI Codex `codex_protocol`
+//! and `codex_rollout` crates (Apache-2.0); the types are original to Clarity.
+//! See `crates/clarity-contract/NOTICES.md` for attribution.
 
 use std::path::PathBuf;
 

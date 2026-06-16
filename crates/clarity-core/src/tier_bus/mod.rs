@@ -1,4 +1,7 @@
-//! TierBus — hierarchical communication for the Agent OS.
+//! **EXPERIMENTAL** TierBus — hierarchical communication for the Agent OS.
+//!
+//! This module is part of the Agent OS vision and is not yet integrated with
+//! the main ReAct/Plan agent loop. API stability is not guaranteed.
 //!
 //! Provides three communication patterns:
 //!

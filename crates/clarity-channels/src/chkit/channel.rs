@@ -1,9 +1,7 @@
-//! ZeroClaw-compatible channel primitives.
+//! Reusable channel primitives for chat-platform adapters.
 //!
-//! This module mirrors the `zeroclaw_api::channel` surface used by the
-//! in-tree WeChat iLink implementation. It intentionally keeps the same
-//! shape so that the battle-tested channel logic can be adopted without
-//! re-architecting every platform.
+//! Provides message/attachment types and traits used by the in-tree WeChat
+//! iLink implementation and future channel adapters.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

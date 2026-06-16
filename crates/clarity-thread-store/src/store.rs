@@ -1,7 +1,8 @@
 //! Storage-neutral thread persistence boundary.
 //!
-//! Modeled after `codex_thread_store::ThreadStore` from the OpenAI Codex
-//! project, licensed under Apache-2.0. See `NOTICES.md` for attribution.
+//! The `ThreadStore` API is inspired by `codex_thread_store::ThreadStore` from
+//! the OpenAI Codex project (Apache-2.0); the implementation is original to
+//! Clarity. See `NOTICES.md` for attribution.
 
 use std::any::Any;
 use std::future::Future;

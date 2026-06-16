@@ -1,8 +1,7 @@
-//! ZeroClaw-compatible channel primitives and utilities.
+//! Shared channel primitives and utilities for Clarity channels.
 //!
-//! This module ports the battle-tested channel infrastructure from
-//! ZeroClaw into Clarity without depending on the transitional
-//! `zeroclaw-runtime` crate.
+//! This module contains reusable building blocks used by the WeChat iLink
+//! implementation and other channel adapters.
 
 pub mod allowlist;
 pub mod channel;

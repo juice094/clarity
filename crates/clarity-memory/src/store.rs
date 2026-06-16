@@ -51,7 +51,7 @@ pub fn compute_decay_weight(created_at: chrono::DateTime<chrono::Utc>, decay: &D
 /// By default this uses the SQLite backend when the `sqlite` feature is
 /// enabled. Other backends (file, hybrid, hermes) can be selected through
 /// [`BackendConfig`] / [`StorageFactory`] or dedicated constructors such as
-/// [`Self::new_hermes`].
+/// `new_hermes` (requires the `hermes` feature).
 #[derive(Debug, Clone)]
 pub struct MemoryStore {
     inner: Arc<dyn StorageBackend>,

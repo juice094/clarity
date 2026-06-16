@@ -5,9 +5,8 @@
 //! External communication channels for Clarity.
 //!
 //! This crate provides a pluggable channel abstraction for messaging
-//! platforms (WeChat, Telegram, Discord, etc.). The `zeroclaw` module
-//! hosts the ZeroClaw-compatible channel primitives and the migrated
-//! WeChat iLink implementation.
+//! platforms (WeChat, Telegram, Discord, etc.). The `chkit` module hosts
+//! shared channel primitives and the WeChat iLink implementation.
 //!
 //! Design goals:
 //! - Zero frontend dependency.
@@ -26,29 +25,27 @@ pub mod retry;
 /// Re-export the retry policy and error classifier.
 pub use retry::{RetryPolicy, RetryableError};
 
-/// ZeroClaw-compatible channel primitives and the migrated WeChat iLink
-/// implementation. This module is the target surface for the migration.
-pub mod zeroclaw;
+/// Shared channel primitives and the WeChat iLink implementation.
+pub mod chkit;
 
 /// Emit a structured log record through `tracing`.
 ///
-/// This is a lightweight port of `zeroclaw_log::record!`. It expects
-/// severity literals `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` and a
-/// `zeroclaw::log::Event` payload.
+/// Expects severity literals `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` and an
+/// `chkit::log::Event` payload.
 #[macro_export]
 macro_rules! record {
     ($level:ident, $event:expr, $msg:expr $(,)?) => {{
-        let __zc_event: $crate::zeroclaw::log::Event = $event;
-        let __zc_outcome = __zc_event.outcome.unwrap_or($crate::zeroclaw::log::EventOutcome::Unknown);
+        let __ch_event: $crate::chkit::log::Event = $event;
+        let __ch_outcome = __ch_event.outcome.unwrap_or($crate::chkit::log::EventOutcome::Unknown);
         ::tracing::event!(
             target: "clarity_channels_event",
             ::tracing::Level::$level,
-            zc_name = %__zc_event.name,
-            zc_action = %__zc_event.action.as_str(),
-            zc_outcome = %__zc_outcome.as_str(),
-            zc_attrs = %__zc_event.attrs,
-            zc_file = %file!(),
-            zc_line = %line!(),
+            ch_name = %__ch_event.name,
+            ch_action = %__ch_event.action.as_str(),
+            ch_outcome = %__ch_outcome.as_str(),
+            ch_attrs = %__ch_event.attrs,
+            ch_file = %file!(),
+            ch_line = %line!(),
             message = %$msg,
         );
     }};

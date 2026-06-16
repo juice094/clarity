@@ -1,9 +1,8 @@
-//! Minimal i18n stub for migrated ZeroClaw strings.
+//! Minimal i18n stub for channel user-facing CLI strings.
 //!
-//! ZeroClaw uses Fluent for user-facing CLI strings. During the migration
-//! we replace the Fluent lookup with a hardcoded key→message map so the
-//! channel can operate without pulling in the full Fluent infrastructure.
-//! A future iteration can re-introduce localization.
+//! Uses a hardcoded key→message map so the channel can operate without
+//! pulling in a full localization framework. A future iteration can
+//! re-introduce Fluent or another i18n system.
 
 /// Return a required CLI string by key.
 pub fn get_required_cli_string(key: &str) -> String {

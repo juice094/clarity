@@ -6,7 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Thread persistence abstraction for Clarity - ported from OpenAI Codex thread-store"
+description = "Thread persistence abstraction for Clarity (API design inspired by OpenAI Codex)"
 
 [dependencies]
 clarity-contract = { path = "../clarity-contract" }

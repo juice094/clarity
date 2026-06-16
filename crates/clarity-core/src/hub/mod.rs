@@ -1,4 +1,7 @@
-//! Hub-Worker scheduler — distribute tasks across souls based on skill mastery.
+//! **EXPERIMENTAL** Hub-Worker scheduler — distribute tasks across souls based on skill mastery.
+//!
+//! This module is part of the Agent OS vision and is not yet integrated with
+//! the main ReAct/Plan agent loop. API stability is not guaranteed.
 //!
 //! The [`HubScheduler`] maintains a registry of available Worker souls and
 //! routes incoming tasks to the one with the highest estimated fitness.

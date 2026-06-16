@@ -1,9 +1,9 @@
 //! JSONL rollout recorder.
 //!
 //! Writes canonical session rollout items to `.jsonl` files so sessions can be
-//! replayed or inspected later. Modeled after `codex_rollout::recorder` from
-//! the OpenAI Codex project, licensed under Apache-2.0. See `NOTICES.md` for
-//! attribution.
+//! replayed or inspected later. The design is inspired by `codex_rollout::recorder`
+//! from the OpenAI Codex project (Apache-2.0); the implementation is original to
+//! Clarity. See `NOTICES.md` for attribution.
 
 use std::path::{Path, PathBuf};
 

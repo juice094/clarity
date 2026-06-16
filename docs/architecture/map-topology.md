@@ -15,69 +15,99 @@ tags: [architecture]
 ## 1. Crate 依赖图
 
 ```
-                    ┌─────────────────┐
-                    │  tests/integration│
-                    │   (集成测试)      │
-                    └────────┬────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-┌───────▼──────┐    ┌────────▼────────┐   ┌──────▼──────┐
-│clarity-gateway│    │  clarity-egui   │   │ clarity-tui │
-│   (HTTP API)  │    │   (主力 GUI)     │   │  (备用 TUI) │
-└───────┬───────┘    └────────┬────────┘   └──────┬──────┘
-        │                     │                   │
-        │    ┌────────────────┘                   │
-        │    │                                    │
-        │    │         ┌──────────────────────────┘
-        │    │         │
-        │    │    ┌────▼────┐
-        │    │    │clarity-wire│
-        │    │    │ (协议层)  │
-        │    │    └────┬────┘
-        │    │         │
-        └────┼─────────┘
+                         ┌─────────────────┐
+                         │  tests/integration│
+                         │   (集成测试)      │
+                         └────────┬────────┘
+                                  │
+        ┌─────────────────────────┼─────────────────────────┐
+        │                         │                         │
+┌───────▼──────┐    ┌──────────────▼──────────────┐   ┌──────▼──────┐
+│clarity-gateway│    │        clarity-egui         │   │ clarity-tui │
+│   (HTTP API)  │    │        （主力 GUI）          │   │  (备用 TUI) │
+└───────┬───────┘    └──────────────┬──────────────┘   └──────┬──────┘
+        │                           │                        │
+        │    ┌──────────────────────┘                        │
+        │    │                                               │
+        │    │              ┌────────────────────────────────┘
+        │    │              │
+        │    │         ┌────▼────┐
+        │    │         │clarity-wire│
+        │    │         │ (协议层)  │
+        │    │         └────┬────┘
+        │    │              │
+        └────┼──────────────┘
              │
     ┌────────▼────────┐
     │  clarity-core   │
     │   (核心运行时)   │
     └────────┬────────┘
              │
-    ┌────────▼────────┐
-    │ clarity-memory  │
-    │ (持久化记忆层)   │
-    └─────────────────┘
+    ┌────────┴────────┬───────────────┐
+    ▼                 ▼               ▼
+clarity-thread-store clarity-subagents clarity-telemetry
+    │
+    ▼
+clarity-rollout
+    │
+    ▼
+clarity-contract
+    ▲
+    ├── clarity-wire
+    ├── clarity-memory
+    ├── clarity-mcp
+    ├── clarity-llm
+    ├── clarity-tools
+    ├── clarity-channels
+    └── clarity-secrets
 
-旁路 crate（不活跃/归档）：
-  clarity-claw     → CLI 入口，待激活
-  clarity-headless → 无头模式，待激活
+旁路 crate：
+  clarity-claw     → 系统托盘监控（激活中）
+  clarity-headless → 无头 CLI（激活中）
+  clarity-slint    → 实验性 Slint GUI（不参与默认 CI）
+  clarity-tauri    → 已归档，被 workspace 排除
 ```
 
 ### 1.1 依赖明细
 
 | Crate | 内部依赖 | 外部关键依赖 | 说明 |
 |-------|---------|-------------|------|
-| `clarity-core` | 无 | tokio, reqwest, serde, candle-core(opt) | **唯一真相源**。禁止其他 crate 被 core 依赖，避免循环 |
-| `clarity-wire` | 无 | serde, tokio | 纯协议，无业务逻辑，可被任意前端引用 |
-| `clarity-memory` | 无 | rusqlite, ndarray, tantivy(opt) | 独立存储层，gateway 直接引用；core/egui 通过 factory 间接使用 |
-| `clarity-egui` | core, wire | eframe 0.31, egui 0.31 | 主力 GUI。禁止直接依赖 memory（通过 core 的 MemoryFactoryFn 注入） |
-| `clarity-gateway` | core, wire, memory | axum, tokio | HTTP API + WebSocket。memory 直接引用用于 API 端点 |
-| `clarity-tui` | core | ratatui, crossterm | TUI 前端。依赖少于 egui，作为 GUI 崩溃时的 fallback |
+| `clarity-contract` | 无 | serde, uuid, chrono | 共享契约层；零内部依赖 |
+| `clarity-wire` | contract | serde, tokio | 纯协议，无业务逻辑，可被任意前端引用 |
+| `clarity-memory` | contract | rusqlite, ndarray, tantivy(opt) | 独立存储层；gateway 直接引用；core 通过 factory 注入 |
+| `clarity-mcp` | contract, wire | serde_json, tokio | MCP client；被 `clarity-llm` 使用 |
+| `clarity-llm` | contract, mcp, memory, secrets | reqwest, candle-core(opt) | Provider 绑定层 |
+| `clarity-tools` | contract, memory | regex, glob | 内置工具库；从 `clarity-core` 拆出 |
+| `clarity-channels` | contract | reqwest | 外部消息通道适配器 |
+| `clarity-secrets` | contract | chacha20poly1305 | 加密 Secret 存储 |
+| `clarity-rollout` | contract | serde_json, tokio | JSONL rollout 持久化 |
+| `clarity-thread-store` | contract, rollout | rusqlite, tokio | Thread 持久化抽象；被 `clarity-core` 使用 |
+| `clarity-subagents` | core | — | 消费 `clarity-core`；子代理/团队/并行执行 |
+| `clarity-telemetry` | contract | chrono, serde | 当前由 `clarity-gateway` 使用 |
+| `clarity-core` | contract, wire, memory, mcp, llm, tools, channels, secrets, thread-store | tokio, reqwest | **禁止任何内部 crate 反向依赖 core**，避免循环 |
+| `clarity-egui` | core, wire | eframe 0.31, egui 0.31 | 主力 GUI。禁止直接依赖 memory |
+| `clarity-gateway` | core, wire, memory, telemetry | axum, tokio | HTTP API + WebSocket |
+| `clarity-tui` | core, wire | ratatui, crossterm | TUI 前端 |
+| `clarity-claw` | core | notify, tray-icon | 系统托盘监控 |
+| `clarity-headless` | core | clap | 无头 CLI |
 
 ---
 
 ## 2. clarity-core 模块拓扑
 
+> 说明：以下仅描述 `crates/clarity-core/src/` 内部模块。大量能力已拆分为独立 crate，见 §1.1 依赖明细。
+
 ```
 agent/                    ← 运行时核心（Agent, Controller, Op, Plan）
-  ├── controller.rs       → AgentController: 调度 Agent 生命周期
-  ├── driver.rs           → 主驱动循环（streaming 事件分发）
+  ├── mod.rs              → Agent 主入口
+  ├── controller.rs       → AgentController / Op / ControllerEvent
+  ├── driver.rs           → streaming 事件分发
   ├── execution.rs        → 工具执行 + 风险评级 + 审批触发
-  ├── prompt.rs           → SystemPrompt 构建（8 个组件）
+  ├── prompt.rs           → SystemPrompt 构建
   ├── plan.rs             → Plan 解析 + 步骤执行
-  ├── ops.rs              → Op 枚举（Agent 内部操作原语）
+  ├── ops.rs              → Agent 内部操作原语
   ├── enhanced.rs         → 增强消息 + 上下文注入
-  ├── compaction_service.rs→ 对话压缩服务
+  ├── compaction_service.rs → 对话压缩服务
   ├── construct.rs        → Agent 构造器
   └── config.rs           → AgentConfig
 
@@ -85,45 +115,12 @@ approval/                 ← 审批运行时
   ├── mod.rs              → ApprovalRuntime trait + 数据结构
   └── rules.rs            → 风险规则引擎
 
-llm/                      ← LLM 抽象层
-  ├── mod.rs              → LlmProvider trait + 通用类型
-  ├── model_registry.rs   → 模型注册表（Sprint 9 新增）
-  ├── deepseek.rs         → DeepSeek Provider
-  ├── ollama.rs           → Ollama Provider
-  ├── local_gguf.rs       → 本地 GGUF Provider
-  └── openai.rs           → OpenAI-compatible Provider
-
-tools/                    ← 16 个内置工具
-  ├── mod.rs              → Tool trait + 注册
-  ├── file.rs             → file_read / file_write / file_edit
-  ├── shell.rs            → shell / bash / powershell
-  ├── web.rs              → web_search / web_fetch
-  ├── web_browser.rs      → web_browser（需审批）
-  ├── ask_user.rs         → ask_user
-  ├── plan.rs             → plan_create / plan_list / plan_delete
-  ├── todo.rs             → todo_add / todo_list / todo_complete / todo_delete
-  ├── cron.rs             → schedule_cron / list_cron / cancel_cron
-  ├── channel.rs          → notify_channel（钉钉/飞书/Slack/Webhook）
-  ├── notify.rs           → notify（桌面通知）
-  ├── search.rs           → grep / glob
-  ├── think.rs            → think（思维链）
-  └── team.rs             → team_create / team_list
-
-subagents/                ← 子代理系统
-  ├── mod.rs              → SubAgentManager
-  ├── builder.rs          → SubAgent 构造
-  ├── runner.rs           → 执行 + Git 上下文注入
-  ├── parallel.rs         → 并行子代理批处理
-  ├── team.rs             → 子代理团队 / Mailbox
-  ├── token.rs            → 权限 Token（verify_allowed_tool 等）
-  └── registry.rs         → 子代理类型注册表
-
-background/               ← 背景任务
+background/               ← 后台任务
   ├── mod.rs              → BackgroundTaskManager
   ├── cron.rs             → Cron 调度器
   ├── worker.rs           → Worker Pool
   ├── store.rs            → 任务存储（SQLite）
-  └── agent_executor.rs   → Agent 执行器（后台运行 Agent）
+  └── agent_executor.rs   → 后台运行 Agent
 
 skills/                   ← Skill 系统
   ├── mod.rs
@@ -131,35 +128,61 @@ skills/                   ← Skill 系统
   ├── loader.rs           → SKILL.md 解析
   └── registry.rs         → Skill 注册与激活
 
-mcp/                      ← MCP 客户端
+thread/                   ← Thread / Session 生命周期集成
+  └── manager.rs          → ThreadManager（消费 clarity-thread-store）
+
+memory/                   ← 内存级记忆集成
+  ├── mod.rs              → Memory trait / in-memory facade
+  └── store.rs            → InMemoryStore
+
+mcp/                      ← MCP 集成层（client 由 clarity-mcp 提供）
   ├── mod.rs              → Manager
   ├── enhanced.rs         → 增强 MCP 能力
   └── config.rs           → mcp.json 解析
 
-memory/                   ← 内存级记忆（clarity-core 内）
-  ├── mod.rs              → Memory trait
-  └── store.rs            → InMemoryStore
+ui/                       ← 跨前端共享 UI 状态机
+  └── view_state.rs       → ViewState / SidePanel / ModalType / TurnState
 
 view_models/              ← UI 视图模型
   ├── mod.rs
   └── settings.rs         → GuiSettings / SettingsEdit / Model 选择
 
+实验性 / 演进中模块（未与主 ReAct/Plan 循环集成）：
+  soul/                   → Soul / SoulManager（持久 Agent 身份）
+  tier_bus/               → TierBus（层级消息总线）
+  hub/                    → HubScheduler（Hub-Worker 调度器）
+
 其他支撑模块：
-  capability.rs           → 表面能力发现（Sprint 10）
+  activity.rs             → 活动日志
+  adaptive/               → 自适应模型路由与预测
+  capability.rs           → 表面能力发现
   compaction.rs           → 压缩策略
   config.rs               → TOML 配置
   daemon.rs               → 守护进程锁
-  diff.rs                 → Diff 计算与解析
-  error.rs                → AgentError 枚举
+  diff.rs                 → Diff 计算与解析（re-export from clarity-tools）
+  endpoint.rs             → 端点描述符抽象
+  error.rs                → AgentError / ToolError
   hooks.rs                → 钩子注册表
+  logging/                → 日志与脱敏
   model_download.rs       → HuggingFace 模型下载
   notifications.rs        → 通知广播
   personality.rs          → 人格/角色系统
-  registry.rs             → 工具注册表
-  server.rs               → stdio server（MCP 用）
-  types.rs                → 共享类型（Message, ToolCall 等）
-  activity.rs             → 活动日志
+  registry.rs             → 工具注册表（聚合 clarity-tools 与 MCP 工具）
+  server.rs               → stdio server
+  session/                → Session 模型
+  types.rs                → 共享类型
 ```
+
+### 2.1 已拆分为独立 crate 的能力
+
+| 原 core 模块 | 现 crate | 集成方式 |
+|-------------|---------|---------|
+| `llm/` | `clarity-llm` | core 通过 `clarity_llm::LlmFactory` 创建 provider |
+| `tools/` | `clarity-tools` | core 通过 `ToolRegistry` 注册内置工具 |
+| `subagents/` | `clarity-subagents` | 消费 core；不被 core 依赖 |
+| `memory/` 持久化实现 | `clarity-memory` | core 通过 factory / 注入使用 |
+| MCP client transport | `clarity-mcp` | core 只做集成与配置管理 |
+| Thread / Rollout | `clarity-thread-store` / `clarity-rollout` | core 通过 `thread::manager` 集成 |
 
 ---
 

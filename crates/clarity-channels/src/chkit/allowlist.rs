@@ -1,6 +1,4 @@
-//! Shared `allowed_users` matching used by every chat channel.
-//!
-//! Mirrors the ZeroClaw `zeroclaw-channels::allowlist` surface.
+//! Shared `allowed_users` matching used by chat channels.
 
 /// Case-sensitivity selector for the allowlist comparison.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

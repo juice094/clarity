@@ -1,9 +1,8 @@
 //! Gateway/user pairing — first-connect authentication.
 //!
-//! Adapted from `zeroclaw-config::pairing`. The guard generates a one-time
-//! pairing code; the first user presents it (e.g. via `/bind <code>` in
-//! WeChat) and is issued a bearer token. Token hashes are persisted across
-//! restarts.
+//! The guard generates a one-time pairing code; the first user presents it
+//! (e.g. via `/bind <code>` in WeChat) and is issued a bearer token. Token
+//! hashes are persisted across restarts.
 
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};

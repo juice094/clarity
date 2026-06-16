@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use base64::Engine;
 
-use crate::zeroclaw::wechat::{
+use crate::chkit::wechat::{
     WeChatChannel,
     parsing::markdown_to_plain_text,
     types::{
@@ -54,8 +54,8 @@ fn render_login_qr(code: &str) -> anyhow::Result<String> {
     let qr = qrcode::QrCode::new(payload.as_bytes()).map_err(|err| {
         crate::record!(
             ERROR,
-            crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Fail)
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
+            crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Fail)
+                .with_outcome(crate::chkit::log::EventOutcome::Failure)
                 .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
             "Failed to encode WeChat QR payload"
         );
@@ -150,11 +150,11 @@ impl WeChatChannel {
                 Err(err) => {
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
+                        .with_outcome(crate::chkit::log::EventOutcome::Unknown)
                         .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
                         "failed to render terminal QR code"
                     )
@@ -198,9 +198,9 @@ impl WeChatChannel {
                     Ok(Err(e)) => {
                         crate::record!(
                             DEBUG,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Note
+                                crate::chkit::log::Action::Note
                             )
                             .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                             "QR poll error"
@@ -219,9 +219,9 @@ impl WeChatChannel {
                     Err(e) => {
                         crate::record!(
                             DEBUG,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Note
+                                crate::chkit::log::Action::Note
                             )
                             .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                             "QR poll parse error"
@@ -283,9 +283,9 @@ impl WeChatChannel {
                     other => {
                         crate::record!(
                             DEBUG,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Note
+                                crate::chkit::log::Action::Note
                             )
                             .with_attrs(::serde_json::json!({"other": other})),
                             "QR status"
@@ -308,7 +308,7 @@ impl WeChatChannel {
 
         crate::record!(
             INFO,
-            crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Note),
+            crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note),
             "no persisted token, starting QR login..."
         );
         let (token, account_id, user_id) = self.qr_login().await?;
@@ -327,12 +327,9 @@ impl WeChatChannel {
         {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e), "uid": uid})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e), "uid": uid})),
                 "failed to persist scanned identity"
             );
         }
@@ -351,14 +348,14 @@ impl WeChatChannel {
     ) -> anyhow::Result<()> {
         let token = self.get_token().context("not logged in, cannot send")?;
 
-        let client_id = format!("zeroclaw-{}", uuid::Uuid::new_v4());
+        let client_id = format!("clarity-{}", uuid::Uuid::new_v4());
         let body = serde_json::json!({
             "msg": {
                 "from_user_id": "",
                 "to_user_id": to,
                 "client_id": client_id,
-                "message_type": crate::zeroclaw::wechat::types::MESSAGE_TYPE_BOT,
-                "message_state": crate::zeroclaw::wechat::types::MESSAGE_STATE_FINISH,
+                "message_type": crate::chkit::wechat::types::MESSAGE_TYPE_BOT,
+                "message_state": crate::chkit::wechat::types::MESSAGE_STATE_FINISH,
                 "item_list": item_list,
                 "context_token": context_token.unwrap_or("")
             },
@@ -503,16 +500,16 @@ impl WeChatChannel {
                 match pairing.try_pair(code, from_user_id).await {
                     Ok(Some(_token)) => {
                         if let Err(e) = self.persist_allowed_identity(from_user_id).await {
-                            crate::record!(WARN, crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Note).with_outcome(crate::zeroclaw::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"from_user_id": from_user_id, "e": e.to_string()})), "failed to persist bound identity");
+                            crate::record!(WARN, crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note).with_outcome(crate::chkit::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"from_user_id": from_user_id, "e": e.to_string()})), "failed to persist bound identity");
                         }
                         let ctx = self.get_context_token(from_user_id);
                         let reply = wechat_cli_string("cli-wechat-bound-success");
                         let _ = self.send_text(from_user_id, &reply, ctx.as_deref()).await;
                         crate::record!(
                             INFO,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Note
+                                crate::chkit::log::Action::Note
                             )
                             .with_attrs(::serde_json::json!({"from_user_id": from_user_id})),
                             "user bound via pairing code"
@@ -526,11 +523,11 @@ impl WeChatChannel {
                     Err(e) => {
                         crate::record!(
                             WARN,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Note
+                                crate::chkit::log::Action::Note
                             )
-                            .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
+                            .with_outcome(crate::chkit::log::EventOutcome::Unknown)
                             .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                             "pairing error"
                         );
@@ -540,11 +537,8 @@ impl WeChatChannel {
         } else {
             crate::record!(
                 DEBUG,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_attrs(::serde_json::json!({"from_user_id": from_user_id})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_attrs(::serde_json::json!({"from_user_id": from_user_id})),
                 "ignoring unauthorized message from"
             );
         }

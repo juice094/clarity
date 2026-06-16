@@ -7,9 +7,13 @@ tags: [document]
 
 # Clarity 竞品分析报告
 
-> 分析范围：`C:\Users\22414\dev\third_party` 36 个开源项目
+> 分析范围：`C:\Users\22414\dev\third_party` 36 个开源项目（外部本地目录，仅作参考）
 > 分析日期：2026-04-15
 > Clarity 版本：主干同期
+>
+> **声明**：devbase、OpenClaw、ZeroClaw、Kimi CLI、codex-rs 等均为外部项目。本文中的
+> "联动"、"共享"、"怎么吃"等表述指产品/架构层面的潜在借鉴或未来对接可能性，
+> **不代表 Clarity 当前代码依赖这些项目**。
 
 ---
 

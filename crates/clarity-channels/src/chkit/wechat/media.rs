@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use base64::Engine;
 
-use crate::zeroclaw::wechat::{
+use crate::chkit::wechat::{
     WeChatChannel,
     crypto::{self, aes_ecb_padded_size, encrypt_aes_ecb},
     parsing::{find_inbound_attachment, format_attachment_content},
@@ -63,11 +63,8 @@ impl WeChatChannel {
         {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown),
                 &format!(
                     "attachment path {} escapes workspace {}, rejected",
                     canonical.display(),
@@ -230,13 +227,13 @@ impl WeChatChannel {
             "filesize": aes_ecb_padded_size(payload.bytes.len()),
             "no_need_thumb": true,
             "aeskey": hex::encode(aes_key),
-            "base_info": crate::zeroclaw::wechat::types::build_base_info()
+            "base_info": crate::chkit::wechat::types::build_base_info()
         });
 
         let resp = self
             .client
             .post(self.api_url("getuploadurl"))
-            .headers(crate::zeroclaw::wechat::api::build_headers(Some(&token)))
+            .headers(crate::chkit::wechat::api::build_headers(Some(&token)))
             .json(&body)
             .timeout(API_TIMEOUT)
             .send()
@@ -291,11 +288,11 @@ impl WeChatChannel {
                     let body = resp.text().await.unwrap_or_default();
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Fail
+                            crate::chkit::log::Action::Fail
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
+                        .with_outcome(crate::chkit::log::EventOutcome::Failure)
                         .with_attrs(::serde_json::json!({
                             "attempt": attempt,
                             "status": status.as_u16(),
@@ -315,11 +312,11 @@ impl WeChatChannel {
                 Err(err) => {
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Fail
+                            crate::chkit::log::Action::Fail
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
+                        .with_outcome(crate::chkit::log::EventOutcome::Failure)
                         .with_attrs(::serde_json::json!({
                             "attempt": attempt,
                             "phase": "cdn_upload",
@@ -337,12 +334,9 @@ impl WeChatChannel {
         Err(last_error.unwrap_or_else(|| {
             crate::record!(
                 ERROR,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Fail
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"phase": "cdn_upload"})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Fail)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"phase": "cdn_upload"})),
                 "wechat: CDN upload exhausted retries"
             );
             anyhow::Error::msg("CDN upload failed")
@@ -419,12 +413,9 @@ impl WeChatChannel {
             Err(err) => {
                 crate::record!(
                     WARN,
-                    crate::zeroclaw::log::Event::new(
-                        module_path!(),
-                        crate::zeroclaw::log::Action::Note
-                    )
-                    .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                    .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
+                    crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                        .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                        .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
                     "attachment download skipped"
                 );
                 return None;
@@ -435,12 +426,9 @@ impl WeChatChannel {
         if let Err(err) = tokio::fs::create_dir_all(&save_dir).await {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", err)})),
                 "Failed to create WeChat attachment dir"
             );
             return None;
@@ -450,11 +438,8 @@ impl WeChatChannel {
         if let Err(err) = tokio::fs::write(&local_path, bytes).await {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown),
                 &format!(
                     "Failed to save WeChat attachment to {}: {err}",
                     local_path.display()

@@ -1,9 +1,9 @@
 //! WeChat iLink Bot channel adapter for Clarity Gateway.
 //!
-//! Wraps `clarity_channels::zeroclaw::wechat::WeChatChannel` so it
-//! implements the gateway's `Channel` trait. This adapter adopts the
-//! ZeroClaw channel design: dynamic `/bind <code>` pairing, media
-//! attachments, typing indicators, and structured logging.
+//! Wraps `clarity_channels::chkit::wechat::WeChatChannel` so it
+//! implements the gateway's `Channel` trait. The WeChat iLink implementation
+//! supports dynamic `/bind <code>` pairing, media attachments, typing
+//! indicators, and structured logging.
 //!
 //! Configuration is read from the channel's `extra` JSON:
 //! - `alias`: channel alias used in logs and state file names.
@@ -25,8 +25,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tracing::{error, info, warn};
 
-use clarity_channels::zeroclaw::channel::{Channel as ZcChannel, ChannelMessage, SendMessage};
-use clarity_channels::zeroclaw::wechat::WeChatChannel;
+use clarity_channels::chkit::channel::{Channel as ChkitChannel, ChannelMessage, SendMessage};
+use clarity_channels::chkit::wechat::WeChatChannel;
 use clarity_core::Agent;
 
 use super::{Channel, ChannelConfig, ChannelError};

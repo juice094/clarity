@@ -5,7 +5,7 @@ External communication channels for Clarity — a pluggable, platform-agnostic m
 ## 职责
 
 - **Channel trait** — async abstraction for sending/receiving messages across platforms
-- **WeChat iLink** — migrated ZeroClaw-compatible implementation with QR login, AES encryption, and HMAC auth
+- **WeChat iLink** — personal iLink bot implementation with QR login, AES encryption, and HMAC auth
 - **Platform stubs** — Discord / Slack / Telegram webhook/bot adapters (to be hardened)
 - **Retry / backoff** — shared retry policy for HTTP-based channels
 
@@ -14,7 +14,7 @@ External communication channels for Clarity — a pluggable, platform-agnostic m
 - `Channel` — async trait implemented by every messaging backend
 - `ChannelMessage` / `Attachment` / `AttachmentKind` — normalized message model
 - `ChannelError` — unified error enum for all platforms
-- `zeroclaw::WeChatChannel` — WeChat iLink channel implementation
+- `chkit::wechat::WeChatChannel` — WeChat iLink channel implementation
 - `retry::RetryPolicy` — exponential backoff helper
 
 ## 测试

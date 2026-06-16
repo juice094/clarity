@@ -1,7 +1,7 @@
-//! Sanctioned interface against `tokio::spawn`.
+//! Span-preserving `tokio::spawn` wrapper for channel tasks.
 //!
-//! Mirrors `zeroclaw_spawn::spawn!`: propagates the current tracing span
-//! and emits a lifecycle record when the task completes.
+//! Propagates the current tracing span and emits a lifecycle record when the
+//! spawned task completes.
 
 /// Event name used for task spawn/completion lifecycle records.
 pub const TASK_EVENT_NAME: &str = "runtime.task.spawn";
@@ -11,18 +11,18 @@ pub const TASK_EVENT_NAME: &str = "runtime.task.spawn";
 macro_rules! spawn {
     ($body:expr) => {{
         use ::tracing::Instrument as _;
-        use $crate::zeroclaw::log::{Action, Event, EventOutcome};
+        use $crate::chkit::log::{Action, Event, EventOutcome};
 
-        const __ZC_TASK_MODULE: &'static str = module_path!();
-        const __ZC_TASK_FILE: &'static str = file!();
-        const __ZC_TASK_LINE: u32 = line!();
+        const __CH_TASK_MODULE: &'static str = module_path!();
+        const __CH_TASK_FILE: &'static str = file!();
+        const __CH_TASK_LINE: u32 = line!();
 
         $crate::record!(
             INFO,
-            Event::new($crate::zeroclaw::spawn::TASK_EVENT_NAME, Action::Spawn)
+            Event::new($crate::chkit::spawn::TASK_EVENT_NAME, Action::Spawn)
                 .with_attrs(::serde_json::json!({
-                    "task_site": format!("{}:{}", __ZC_TASK_FILE, __ZC_TASK_LINE),
-                    "task_module": __ZC_TASK_MODULE,
+                    "task_site": format!("{}:{}", __CH_TASK_FILE, __CH_TASK_LINE),
+                    "task_module": __CH_TASK_MODULE,
                 })),
             "task spawned"
         );
@@ -33,11 +33,11 @@ macro_rules! spawn {
             let __zc_task_elapsed_ms = __zc_task_started_at.elapsed().as_millis() as u64;
             $crate::record!(
                 INFO,
-                Event::new($crate::zeroclaw::spawn::TASK_EVENT_NAME, Action::Complete)
+                Event::new($crate::chkit::spawn::TASK_EVENT_NAME, Action::Complete)
                     .with_outcome(EventOutcome::Success)
                     .with_attrs(::serde_json::json!({
-                        "task_site": format!("{}:{}", __ZC_TASK_FILE, __ZC_TASK_LINE),
-                        "task_module": __ZC_TASK_MODULE,
+                        "task_site": format!("{}:{}", __CH_TASK_FILE, __CH_TASK_LINE),
+                        "task_module": __CH_TASK_MODULE,
                         "duration_ms": __zc_task_elapsed_ms,
                     })),
                 "task completed"
@@ -49,6 +49,6 @@ macro_rules! spawn {
     }};
 }
 
-/// Re-export the macro at the `zeroclaw::spawn` path.
+/// Re-export the macro at the `chkit::spawn` path.
 #[doc(hidden)]
 pub use crate::spawn;

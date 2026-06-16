@@ -1,4 +1,7 @@
-//! Soul — persistent agent identity for the Agent OS.
+//! **EXPERIMENTAL** Soul — persistent agent identity for the Agent OS.
+//!
+//! This module is part of the Agent OS vision and is not yet integrated with
+//! the main ReAct/Plan agent loop. API stability is not guaranteed.
 //!
 //! A Soul is a high-personality agent instance that outlives individual sessions.
 //! It carries its own memory, growth profile, and capability set, and can be

@@ -7,8 +7,8 @@ tags: [architecture]
 
 # Clarity 架构地图 · 总览
 
-> 北极星：替代 Kimi CLI（MVP）
-> 范围：仅 clarity（devbase 为对侧团队责任，本侧通过 MCP 接口使用）
+> 北极星：本地优先的个人 AI 运行时
+> 范围：本仓库 `clarity/`（外部项目仅作为设计参考，不构成依赖）
 > 更新触发：模块新增/删除、trait 签名变更、crate 依赖变更
 
 ---
@@ -175,7 +175,7 @@ pub fn unbind_llm(agent: &Agent);
 ## 4. 安全撤退路径（全局）
 
 ```bash
-cd C:\Users\22414\dev\third_party\clarity
+cd C:\Users\22414\dev\clarity
 
 # 1. 改代码前标记锚点
 git stash push -m "WIP: <模块名>"
@@ -188,9 +188,9 @@ cargo fmt --all -- --check
 # 3. 任一失败 → 撤退
 git stash pop   # 或 git checkout -- <file>
 
-# 4. 全绿后提交
+# 4. 全绿后提交（使用你自己的 git config）
 git add -A
-git -c user.email="160722440+juice094@users.noreply.github.com" -c user.name="juice094" commit -m "..."
+git commit -m "..."
 ```
 
 详细验证矩阵见 [验证层](map-verification.md)。

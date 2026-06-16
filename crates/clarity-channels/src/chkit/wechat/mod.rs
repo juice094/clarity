@@ -1,7 +1,7 @@
 //! WeChat personal iLink Bot channel.
 //!
 //! Note: the iLink consent screen ("Connect X to Weixin") shows the bot name
-//! from the iLink developer portal, not from ZeroClaw config. Users who
+//! from the iLink developer portal, not from Clarity config. Users who
 //! register their own iLink bot will see their own name there.
 
 mod api;
@@ -18,9 +18,9 @@ use std::sync::{Arc, RwLock};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
-use crate::zeroclaw::channel::{Channel, ChannelMessage, SendMessage};
-use crate::zeroclaw::pairing::PairingGuard;
-use crate::zeroclaw::wechat::types::{
+use crate::chkit::channel::{Channel, ChannelMessage, SendMessage};
+use crate::chkit::pairing::PairingGuard;
+use crate::chkit::wechat::types::{
     CDN_BASE_URL, DEFAULT_API_BASE_URL, LONG_POLL_TIMEOUT_MS, https_base_url,
     wechat_cli_string_with_args,
 };
@@ -89,10 +89,7 @@ impl WeChatChannel {
                     "     {}",
                     wechat_cli_string_with_args(
                         "cli-wechat-send-bind-command",
-                        &[(
-                            "command",
-                            crate::zeroclaw::wechat::types::WECHAT_BIND_COMMAND
-                        )],
+                        &[("command", crate::chkit::wechat::types::WECHAT_BIND_COMMAND)],
                     )
                 );
             }
@@ -155,17 +152,17 @@ impl WeChatChannel {
 
     pub(crate) fn is_user_allowed(&self, user_id: &str) -> bool {
         let peers = (self.peer_resolver)();
-        crate::zeroclaw::allowlist::is_user_allowed(
+        crate::chkit::allowlist::is_user_allowed(
             &peers,
             user_id,
-            crate::zeroclaw::allowlist::Match::Sensitive,
+            crate::chkit::allowlist::Match::Sensitive,
         )
     }
 
     pub(crate) fn extract_bind_code(text: &str) -> Option<&str> {
         let mut parts = text.split_whitespace();
         let command = parts.next()?;
-        if command != crate::zeroclaw::wechat::types::WECHAT_BIND_COMMAND {
+        if command != crate::chkit::wechat::types::WECHAT_BIND_COMMAND {
             return None;
         }
         parts.next().map(str::trim).filter(|code| !code.is_empty())
@@ -180,24 +177,21 @@ impl Channel for WeChatChannel {
 
     async fn send(&self, message: &SendMessage) -> anyhow::Result<()> {
         let recipient = &message.recipient;
-        let content = crate::zeroclaw::util::strip_tool_call_tags(&message.content);
+        let content = crate::chkit::util::strip_tool_call_tags(&message.content);
         let context_token = self.get_context_token(recipient);
 
         if context_token.is_none() {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Note
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
-                .with_attrs(::serde_json::json!({"recipient": recipient})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note)
+                    .with_outcome(crate::chkit::log::EventOutcome::Unknown)
+                    .with_attrs(::serde_json::json!({"recipient": recipient})),
                 "no context_token for , message may fail to associate"
             );
         }
 
         let (text_without_markers, attachments) =
-            crate::zeroclaw::wechat::parsing::parse_attachment_markers(&content);
+            crate::chkit::wechat::parsing::parse_attachment_markers(&content);
         if !attachments.is_empty() {
             if !text_without_markers.is_empty() {
                 self.send_text(recipient, &text_without_markers, context_token.as_deref())
@@ -212,7 +206,7 @@ impl Channel for WeChatChannel {
         }
 
         if let Some(attachment) =
-            crate::zeroclaw::wechat::parsing::parse_path_only_attachment(&content)
+            crate::chkit::wechat::parsing::parse_path_only_attachment(&content)
         {
             return self
                 .send_attachment(recipient, &attachment, context_token.as_deref())
@@ -229,7 +223,7 @@ impl Channel for WeChatChannel {
 
         crate::record!(
             INFO,
-            crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Note),
+            crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note),
             "channel listening for messages..."
         );
 
@@ -243,31 +237,31 @@ impl Channel for WeChatChannel {
                 None => {
                     crate::record!(
                         ERROR,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Fail
+                            crate::chkit::log::Action::Fail
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Failure),
+                        .with_outcome(crate::chkit::log::EventOutcome::Failure),
                         "token lost, attempting re-login..."
                     );
                     if let Err(e) = self.ensure_logged_in().await {
                         crate::record!(
                             ERROR,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Fail
+                                crate::chkit::log::Action::Fail
                             )
-                            .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
+                            .with_outcome(crate::chkit::log::EventOutcome::Failure)
                             .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                             "re-login failed"
                         );
-                        tokio::time::sleep(crate::zeroclaw::wechat::types::BACKOFF_DELAY).await;
+                        tokio::time::sleep(crate::chkit::wechat::types::BACKOFF_DELAY).await;
                         continue;
                     }
                     match self.get_token() {
                         Some(t) => t,
                         None => {
-                            tokio::time::sleep(crate::zeroclaw::wechat::types::BACKOFF_DELAY).await;
+                            tokio::time::sleep(crate::chkit::wechat::types::BACKOFF_DELAY).await;
                             continue;
                         }
                     }
@@ -276,14 +270,14 @@ impl Channel for WeChatChannel {
 
             let body = serde_json::json!({
                 "get_updates_buf": cursor,
-                "base_info": crate::zeroclaw::wechat::types::build_base_info()
+                "base_info": crate::chkit::wechat::types::build_base_info()
             });
 
             let result = tokio::time::timeout(
-                crate::zeroclaw::wechat::types::long_poll_client_timeout(long_poll_timeout_ms),
+                crate::chkit::wechat::types::long_poll_client_timeout(long_poll_timeout_ms),
                 self.client
                     .post(self.api_url("getupdates"))
-                    .headers(crate::zeroclaw::wechat::api::build_headers(Some(&token)))
+                    .headers(crate::chkit::wechat::api::build_headers(Some(&token)))
                     .json(&body)
                     .timeout(std::time::Duration::from_millis(long_poll_timeout_ms))
                     .send(),
@@ -294,14 +288,13 @@ impl Channel for WeChatChannel {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => {
                     consecutive_failures += 1;
-                    crate::record!(WARN, crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Note).with_outcome(crate::zeroclaw::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"consecutive_failures": consecutive_failures, "MAX_CONSECUTIVE_FAILURES": crate::zeroclaw::wechat::types::MAX_CONSECUTIVE_FAILURES, "e": e.to_string()})), "getUpdates error (/)");
-                    if consecutive_failures
-                        >= crate::zeroclaw::wechat::types::MAX_CONSECUTIVE_FAILURES
+                    crate::record!(WARN, crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note).with_outcome(crate::chkit::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"consecutive_failures": consecutive_failures, "MAX_CONSECUTIVE_FAILURES": crate::chkit::wechat::types::MAX_CONSECUTIVE_FAILURES, "e": e.to_string()})), "getUpdates error (/)");
+                    if consecutive_failures >= crate::chkit::wechat::types::MAX_CONSECUTIVE_FAILURES
                     {
                         consecutive_failures = 0;
-                        tokio::time::sleep(crate::zeroclaw::wechat::types::BACKOFF_DELAY).await;
+                        tokio::time::sleep(crate::chkit::wechat::types::BACKOFF_DELAY).await;
                     } else {
-                        tokio::time::sleep(crate::zeroclaw::wechat::types::RETRY_DELAY).await;
+                        tokio::time::sleep(crate::chkit::wechat::types::RETRY_DELAY).await;
                     }
                     continue;
                 }
@@ -309,9 +302,9 @@ impl Channel for WeChatChannel {
                     // Client-side timeout — normal for long-poll, just retry
                     crate::record!(
                         DEBUG,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         ),
                         "getUpdates: client-side timeout, retrying"
                     );
@@ -325,21 +318,20 @@ impl Channel for WeChatChannel {
                     consecutive_failures += 1;
                     crate::record!(
                         WARN,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Unknown)
+                        .with_outcome(crate::chkit::log::EventOutcome::Unknown)
                         .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                         "getUpdates parse error"
                     );
-                    if consecutive_failures
-                        >= crate::zeroclaw::wechat::types::MAX_CONSECUTIVE_FAILURES
+                    if consecutive_failures >= crate::chkit::wechat::types::MAX_CONSECUTIVE_FAILURES
                     {
                         consecutive_failures = 0;
-                        tokio::time::sleep(crate::zeroclaw::wechat::types::BACKOFF_DELAY).await;
+                        tokio::time::sleep(crate::chkit::wechat::types::BACKOFF_DELAY).await;
                     } else {
-                        tokio::time::sleep(crate::zeroclaw::wechat::types::RETRY_DELAY).await;
+                        tokio::time::sleep(crate::chkit::wechat::types::RETRY_DELAY).await;
                     }
                     continue;
                 }
@@ -351,20 +343,20 @@ impl Channel for WeChatChannel {
             let is_error = ret != 0 || errcode != 0;
 
             if is_error {
-                if errcode == crate::zeroclaw::wechat::types::SESSION_EXPIRED_ERRCODE
-                    || ret == crate::zeroclaw::wechat::types::SESSION_EXPIRED_ERRCODE
+                if errcode == crate::chkit::wechat::types::SESSION_EXPIRED_ERRCODE
+                    || ret == crate::chkit::wechat::types::SESSION_EXPIRED_ERRCODE
                 {
                     crate::record!(
                         ERROR,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Fail
+                            crate::chkit::log::Action::Fail
                         )
-                        .with_outcome(crate::zeroclaw::log::EventOutcome::Failure),
+                        .with_outcome(crate::chkit::log::EventOutcome::Failure),
                         &format!(
                             "session expired (errcode {}), pausing for {} min",
-                            crate::zeroclaw::wechat::types::SESSION_EXPIRED_ERRCODE,
-                            crate::zeroclaw::wechat::types::SESSION_PAUSE_DURATION.as_secs() / 60
+                            crate::chkit::wechat::types::SESSION_EXPIRED_ERRCODE,
+                            crate::chkit::wechat::types::SESSION_PAUSE_DURATION.as_secs() / 60
                         )
                     );
                     // Clear token so we re-login after pause
@@ -373,17 +365,16 @@ impl Channel for WeChatChannel {
                     }
                     self.context_tokens.lock().clear();
                     self.save_sync_data();
-                    tokio::time::sleep(crate::zeroclaw::wechat::types::SESSION_PAUSE_DURATION)
-                        .await;
+                    tokio::time::sleep(crate::chkit::wechat::types::SESSION_PAUSE_DURATION).await;
                     // Try to re-login
                     if let Err(e) = self.ensure_logged_in().await {
                         crate::record!(
                             ERROR,
-                            crate::zeroclaw::log::Event::new(
+                            crate::chkit::log::Event::new(
                                 module_path!(),
-                                crate::zeroclaw::log::Action::Fail
+                                crate::chkit::log::Action::Fail
                             )
-                            .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
+                            .with_outcome(crate::chkit::log::EventOutcome::Failure)
                             .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                             "re-login after session expiry failed"
                         );
@@ -394,13 +385,12 @@ impl Channel for WeChatChannel {
 
                 consecutive_failures += 1;
                 let errmsg = data.get("errmsg").and_then(|v| v.as_str()).unwrap_or("");
-                crate::record!(WARN, crate::zeroclaw::log::Event::new(module_path!(), crate::zeroclaw::log::Action::Note).with_outcome(crate::zeroclaw::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"ret": ret, "errcode": errcode, "errmsg": errmsg, "consecutive_failures": consecutive_failures, "MAX_CONSECUTIVE_FAILURES": crate::zeroclaw::wechat::types::MAX_CONSECUTIVE_FAILURES})), "getUpdates failed: ret= errcode= errmsg= (/)");
-                if consecutive_failures >= crate::zeroclaw::wechat::types::MAX_CONSECUTIVE_FAILURES
-                {
+                crate::record!(WARN, crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Note).with_outcome(crate::chkit::log::EventOutcome::Unknown).with_attrs(::serde_json::json!({"ret": ret, "errcode": errcode, "errmsg": errmsg, "consecutive_failures": consecutive_failures, "MAX_CONSECUTIVE_FAILURES": crate::chkit::wechat::types::MAX_CONSECUTIVE_FAILURES})), "getUpdates failed: ret= errcode= errmsg= (/)");
+                if consecutive_failures >= crate::chkit::wechat::types::MAX_CONSECUTIVE_FAILURES {
                     consecutive_failures = 0;
-                    tokio::time::sleep(crate::zeroclaw::wechat::types::BACKOFF_DELAY).await;
+                    tokio::time::sleep(crate::chkit::wechat::types::BACKOFF_DELAY).await;
                 } else {
-                    tokio::time::sleep(crate::zeroclaw::wechat::types::RETRY_DELAY).await;
+                    tokio::time::sleep(crate::chkit::wechat::types::RETRY_DELAY).await;
                 }
                 continue;
             }
@@ -461,7 +451,7 @@ impl Channel for WeChatChannel {
                     .map(|id| id.to_string())
                     .unwrap_or_else(|| format!("wechat_{}", uuid::Uuid::new_v4()));
 
-                let text = crate::zeroclaw::wechat::parsing::extract_text_from_items(&items);
+                let text = crate::chkit::wechat::parsing::extract_text_from_items(&items);
 
                 // Check authorization
                 if !self.is_user_allowed(from_user_id) {
@@ -501,9 +491,9 @@ impl Channel for WeChatChannel {
                 if tx.send(channel_msg).await.is_err() {
                     crate::record!(
                         INFO,
-                        crate::zeroclaw::log::Event::new(
+                        crate::chkit::log::Event::new(
                             module_path!(),
-                            crate::zeroclaw::log::Action::Note
+                            crate::chkit::log::Action::Note
                         ),
                         "channel receiver dropped, stopping"
                     );

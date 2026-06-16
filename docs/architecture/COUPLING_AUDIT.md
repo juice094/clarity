@@ -7,6 +7,8 @@ tags: [architecture]
 
 # 分发与解耦健康度排查报告
 
+> **ARCHIVED / 历史审计**：本报告生成于 2026-05-01，部分结论（如 `clarity-core` 无法独立编译、MCP/subagents 仍在 core 内）已不适用于当前代码。当前 crate 拓扑请以 [`ARCHITECTURE.md`](./ARCHITECTURE.md) 和 [`map-topology.md`](./map-topology.md) 为准。保留本文件仅作为历史参考。
+
 > 生成时间：2026-05-01  
 > 方法：提取演习（不真发布，只检查能否拆）  
 > 标准：§9 架构健康纪律（AGENTS.md）

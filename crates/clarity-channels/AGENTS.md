@@ -16,9 +16,9 @@ cargo test -p clarity-channels --lib
 
 - `src/lib.rs` — `Channel` trait, `ChannelMessage`, `ChannelError`
 - `src/retry.rs` — exponential backoff `RetryPolicy` + `RetryableError`
-- `src/zeroclaw/mod.rs` — ZeroClaw-compatible channel primitives
-- `src/zeroclaw/wechat.rs` — WeChat iLink implementation
-- `src/zeroclaw/channel.rs` — channel state machine helpers
+- `src/chkit/mod.rs` — shared channel primitives
+- `src/chkit/wechat/` — WeChat iLink implementation
+- `src/chkit/channel.rs` — channel adapter types
 
 ## 约定
 

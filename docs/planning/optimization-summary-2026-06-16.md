@@ -51,13 +51,13 @@
 | `clarity-gateway/src/handlers/tasks.rs` | 10 | 任务 CRUD、并行任务、404/400 错误 |
 | `clarity-gateway/src/ws.rs` | 7 | WebSocket 消息序列化、upgrade、ping/pong |
 | `clarity-gateway/src/handlers/mcp.rs` | 8 | MCP 服务器 CRUD、配置路径解析 |
-| `clarity-channels/src/zeroclaw/util.rs` | 11 | `strip_tool_call_tags` 各种输入 |
+| `clarity-channels/src/chkit/util.rs` | 11 | `strip_tool_call_tags` 各种输入 |
 | `clarity-telemetry/src/tracing_layer.rs` | 9 | 事件类型推断、span ID 转换、Layer 端到端 |
 | `clarity-core/src/tools/task.rs` | 8 | 任务工具元数据、错误路径 |
 | `clarity-core/src/mcp/tools.rs` | 5 | McpToolWrapper 元数据与执行错误 |
 
 ### 6. 超大文件拆分
-- ✅ 将 `crates/clarity-channels/src/zeroclaw/wechat.rs`（~2,932 行）拆分为：
+- ✅ 将 `crates/clarity-channels/src/chkit/wechat.rs`（~2,932 行）拆分为：
   - `wechat/mod.rs` — 公共 `WeChatChannel` 与 `Channel` trait 实现
   - `wechat/types.rs` — 常量、类型、辅助枚举
   - `wechat/crypto.rs` — AES/ECB 加解密

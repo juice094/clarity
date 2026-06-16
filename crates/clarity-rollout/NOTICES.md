@@ -2,20 +2,13 @@
 
 ## OpenAI Codex
 
-This crate is derived from the OpenAI Codex project
-(`https://github.com/openai/codex`), which is licensed under the Apache
-License, Version 2.0.
+The JSONL rollout persistence concept and event vocabulary in this crate were
+inspired by the OpenAI Codex project (`https://github.com/openai/codex`),
+which is licensed under the Apache License, Version 2.0.
 
-The original Codex source files that inspired this port include:
-
-- `codex-rs/rollout/src/config.rs`
-- `codex-rs/rollout/src/policy.rs`
-- `codex-rs/rollout/src/recorder.rs`
-- `codex-rs/rollout/src/lib.rs`
-
-This derivative work is licensed under the AGPL-3.0-or-later license that
-applies to the rest of the Clarity project. The Apache-2.0 licensed Codex code
-remains available under its original license.
+Clarity does not incorporate Codex source code. The implementation here is
+original and is licensed under the AGPL-3.0-or-later license that applies to
+the rest of the Clarity project.
 
 ```text
 Copyright 2025 OpenAI

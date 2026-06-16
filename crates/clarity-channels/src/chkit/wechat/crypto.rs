@@ -19,12 +19,9 @@ pub(crate) fn encrypt_aes_ecb(plaintext: &[u8], key: &[u8; 16]) -> anyhow::Resul
         .map_err(|e| {
             crate::record!(
                 ERROR,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Fail
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Fail)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "media encrypt failed"
             );
             anyhow::Error::msg(format!("media encrypt failed: {e}"))
@@ -40,12 +37,9 @@ pub(crate) fn decrypt_aes_ecb(ciphertext: &[u8], key: &[u8; 16]) -> anyhow::Resu
         .map_err(|e| {
             crate::record!(
                 ERROR,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Fail
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Fail)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "wechat: media decrypt failed"
             );
             anyhow::Error::msg(format!("media decrypt failed: {e}"))
@@ -58,12 +52,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         let bytes = hex::decode(raw).map_err(|e| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "media hex aes_key invalid"
             );
             anyhow::Error::msg(format!("media hex aes_key invalid: {e}"))
@@ -71,12 +62,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         return <[u8; 16]>::try_from(bytes.as_slice()).map_err(|_| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"key_kind": "hex", "expected_bytes": 16})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"key_kind": "hex", "expected_bytes": 16})),
                 "wechat: media hex aes_key has wrong byte length"
             );
             anyhow::Error::msg("media hex aes_key must be 16 bytes")
@@ -88,12 +76,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         .map_err(|e| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "media base64 aes_key invalid"
             );
             anyhow::Error::msg(format!("media base64 aes_key invalid: {e}"))
@@ -103,12 +88,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         return <[u8; 16]>::try_from(decoded.as_slice()).map_err(|_| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"key_kind": "base64", "expected_bytes": 16})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"key_kind": "base64", "expected_bytes": 16})),
                 "wechat: media base64 aes_key has wrong byte length"
             );
             anyhow::Error::msg("media base64 aes_key must be 16 bytes")
@@ -119,12 +101,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         let hex_text = std::str::from_utf8(&decoded).map_err(|e| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "media aes_key utf8 invalid"
             );
             anyhow::Error::msg(format!("media aes_key utf8 invalid: {e}"))
@@ -132,12 +111,9 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         let bytes = hex::decode(hex_text).map_err(|e| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(::serde_json::json!({"error": format!("{}", e)})),
                 "media nested hex aes_key invalid"
             );
             anyhow::Error::msg(format!("media nested hex aes_key invalid: {e}"))
@@ -145,12 +121,11 @@ pub(crate) fn parse_aes_key(raw: &str) -> anyhow::Result<[u8; 16]> {
         return <[u8; 16]>::try_from(bytes.as_slice()).map_err(|_| {
             crate::record!(
                 WARN,
-                crate::zeroclaw::log::Event::new(
-                    module_path!(),
-                    crate::zeroclaw::log::Action::Reject
-                )
-                .with_outcome(crate::zeroclaw::log::EventOutcome::Failure)
-                .with_attrs(::serde_json::json!({"key_kind": "nested_hex", "expected_bytes": 16})),
+                crate::chkit::log::Event::new(module_path!(), crate::chkit::log::Action::Reject)
+                    .with_outcome(crate::chkit::log::EventOutcome::Failure)
+                    .with_attrs(
+                        ::serde_json::json!({"key_kind": "nested_hex", "expected_bytes": 16})
+                    ),
                 "wechat: media nested hex aes_key has wrong byte length"
             );
             anyhow::Error::msg("media nested hex aes_key must be 16 bytes")

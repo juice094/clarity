@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::LazyLock;
 
-use crate::zeroclaw::wechat::types::{
+use crate::chkit::wechat::types::{
     ITEM_TYPE_FILE, ITEM_TYPE_IMAGE, ITEM_TYPE_TEXT, ITEM_TYPE_VIDEO, ITEM_TYPE_VOICE,
     InboundAttachmentSpec, WeChatAttachment, WeChatAttachmentKind, sanitize_attachment_filename,
 };
@@ -110,7 +110,7 @@ pub(crate) fn parse_path_only_attachment(message: &str) -> Option<WeChatAttachme
     let candidate = candidate.strip_prefix("file://").unwrap_or(candidate);
     let kind = infer_attachment_kind_from_target(candidate)?;
 
-    if !crate::zeroclaw::wechat::types::is_remote_url(candidate) && !Path::new(candidate).exists() {
+    if !crate::chkit::wechat::types::is_remote_url(candidate) && !Path::new(candidate).exists() {
         return None;
     }
 

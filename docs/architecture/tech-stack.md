@@ -34,17 +34,19 @@ tags: [architecture, tech-stack, crates]
 
 | Crate | 类型 | 职责 | 关键说明 |
 |-------|------|------|----------|
-| `clarity-contract` | lib | 共享契约层：`LlmProvider`、`Tool`、`AgentError`、`FederationMessage` | 零内部依赖 |
+| `clarity-contract` | lib | 共享契约层：`LlmProvider`、`Tool`、`AgentError`、`FederationMessage`、`ThreadId`、`RolloutItem` | 零内部依赖 |
 | `clarity-wire` | lib | UI ↔ Agent 事件总线（SPMC）、`ViewCommand`/`WireMessage` | 跨前端通信唯一通道 |
 | `clarity-memory` | lib | SQLite/文件/混合记忆、BM25+向量、chunking、四级压缩 | feature `sqlite` / `embedding` |
 | `clarity-mcp` | lib | MCP 客户端：stdio / SSE / HTTP / WebSocket | 含命令校验安全层 |
 | `clarity-llm` | lib | LLM provider 抽象 + 内置 provider + Candle GGUF | feature `local-llm` / `local-llm-cuda` |
-| `clarity-tools` | lib | 内置工具库：file / shell / web / devkit / … | 从 `clarity-core` 拆出 |
+| `clarity-tools` | lib | 内置工具库：file / shell / web / devkit / team / task / … | 从 `clarity-core` 拆出 |
 | `clarity-secrets` | lib | ChaCha20-Poly1305 加密 Secret 存储（`enc2:`） | 用于 `models.toml` 加密 key |
 | `clarity-channels` | lib | 外部消息通道：Discord / Slack / Telegram / Webhook / 微信 iLink | Discord/Telegram 默认禁用 |
 | `clarity-subagents` | lib | 子代理执行器、并行调度、团队协调 | 消费 `clarity-core` |
-| `clarity-core` | lib | Agent 循环（ReAct/Plan）、Approval、Skill、MCP 集成 | **零前端/网络依赖** |
-| `clarity-telemetry` | lib | 统一遥测：WideEvent、metrics、traces、config audit | feature `sqlite` / `greptime` |
+| `clarity-thread-store` | lib | Thread 持久化抽象：`ThreadStore` trait（API 设计受 Codex 启发） | 依赖 `clarity-rollout` |
+| `clarity-rollout` | lib | JSONL rollout 持久化：事件日志、压缩、回放（设计受 Codex 启发） | 仅依赖 `clarity-contract` |
+| `clarity-core` | lib | Agent 循环（ReAct/Plan）、Approval、Skill、MCP 集成、Thread 生命周期 | **零前端/网络依赖** |
+| `clarity-telemetry` | lib | 统一遥测：WideEvent、metrics、traces、config audit | feature `sqlite` / `greptime`；当前由 `clarity-gateway` 使用 |
 | `clarity-gateway` | bin/lib | Axum HTTP/WebSocket 服务端、Web IDE、session store | 双端口：18790 公共 / 18800 管理 |
 | `clarity-egui` | bin | 桌面 GUI（主前端栈），eframe + egui 纯 Rust | 替代已归档的 Tauri |
 | `clarity-tui` | bin | ratatui 终端界面 | 远程/SSH 优选 |
@@ -58,10 +60,30 @@ tags: [architecture, tech-stack, crates]
 ## 架构依赖方向
 
 ```text
-contract ← {wire, memory, mcp, llm, tools, channels} ← core ← {gateway, egui, tui, claw, headless}
-                                                          ↑
-                                                    subagents（消费 core）
-                                                    telemetry（横切关注）
+                         ┌──────────────────────────────────────┐
+                         │         clarity-contract             │
+                         │       （零内部依赖 · 共享契约）         │
+                         └──────────────────┬───────────────────┘
+                                            ▲
+    ┌───────────┬──────────┬─────────┬──────┴──────┬──────────┬──────────┐
+    ▼           ▼          ▼         ▼             ▼          ▼          ▼
+clarity-wire clarity-memory clarity-mcp clarity-llm clarity-tools clarity-channels
+clarity-secrets clarity-rollout
+    │
+    ▼
+clarity-thread-store
+    │
+    ▼
+clarity-core
+    │
+    ├── clarity-subagents（消费 core）
+    │
+    ▼
+{clarity-egui, clarity-tui, clarity-gateway, clarity-claw, clarity-headless}
+
+clarity-telemetry：当前由 clarity-gateway 使用
+clarity-slint：实验栈，不参与默认 CI
+clarity-tauri：已归档，被 workspace 排除
 ```
 
 **不可违反的不变量**：

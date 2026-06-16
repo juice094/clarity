@@ -2,23 +2,13 @@
 
 ## OpenAI Codex
 
-Portions of this crate, specifically the `thread` and `rollout` modules, are
-derived from the OpenAI Codex project (`https://github.com/openai/codex`),
+The naming and API shape of the `thread` and `rollout` modules in this crate
+were informed by the OpenAI Codex project (`https://github.com/openai/codex`),
 which is licensed under the Apache License, Version 2.0.
 
-The original Codex source files that inspired this port include:
-
-- `codex-rs/protocol/src/thread_id.rs`
-- `codex-rs/protocol/src/session_id.rs`
-- `codex-rs/protocol/src/protocol.rs` (SessionMeta, RolloutItem, RolloutLine, TurnContextItem)
-- `codex-rs/rollout/src/config.rs`
-- `codex-rs/rollout/src/policy.rs`
-- `codex-rs/thread-store/src/store.rs`
-- `codex-rs/thread-store/src/types.rs`
-
-This derivative work is licensed under the AGPL-3.0-or-later license that
-applies to the rest of the Clarity project. The Apache-2.0 licensed Codex code
-remains available under its original license.
+Clarity does not incorporate Codex source code. The implementation here is
+original and is licensed under the AGPL-3.0-or-later license that applies to
+the rest of the Clarity project.
 
 ```text
 Copyright 2025 OpenAI
