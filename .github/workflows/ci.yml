@@ -26,6 +26,22 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --lib --bins --exclude clarity-slint
 
+  hermes-feature-check:
+    name: Hermes Feature Check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --lib --bins --exclude clarity-slint --features hermes
+
   test:
     name: Test
     strategy:
@@ -85,6 +101,23 @@ jobs:
         with:
           key: ci-fix-2026-05-06-v2
       - run: cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2
+
+  session-migration-test:
+    name: Session Migration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgtk-3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-fix-2026-05-06-v2
+      - run: cargo clippy -p clarity-core --features session-migration --lib --tests -- -D warnings
+      - run: cargo clippy -p clarity-headless --features session-migration --bins --tests -- -D warnings
+      - run: cargo test -p clarity-core --features session-migration --lib
+      - run: cargo test -p clarity-headless --features session-migration --bins -- --test-threads=2
 
   clippy:
     name: Clippy
