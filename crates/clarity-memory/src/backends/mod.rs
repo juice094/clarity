@@ -11,11 +11,15 @@ use crate::types::{Fact, Result};
 use async_trait::async_trait;
 
 mod file;
+#[cfg(feature = "hermes")]
+mod hermes;
 mod hybrid;
 #[cfg(feature = "sqlite")]
 mod sqlite;
 
 pub use file::FileStore;
+#[cfg(feature = "hermes")]
+pub use hermes::HermesMemoryAdapter;
 pub use hybrid::HybridStore;
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteStore;
@@ -63,6 +67,16 @@ pub trait StorageBackend: Send + Sync + std::fmt::Debug {
 
     /// Clear all facts
     async fn clear_all(&self) -> Result<usize>;
+
+    /// Save a session note section (only supported by some backends).
+    async fn save_session_note(
+        &self,
+        _session_id: &str,
+        _section: &str,
+        _content: &str,
+    ) -> Result<()> {
+        Ok(())
+    }
 
     /// Get facts by IDs
     async fn get_facts_by_ids(&self, ids: &[i64]) -> Result<Vec<Fact>> {
@@ -140,6 +154,12 @@ pub enum BackendConfig {
         /// Interval in seconds between cache-to-disk syncs
         sync_interval_secs: u64,
     },
+    /// Hermes-memory SQLite storage configuration
+    #[cfg(feature = "hermes")]
+    Hermes {
+        /// Path to the hermes SQLite database file
+        db_path: std::path::PathBuf,
+    },
 }
 
 impl BackendConfig {
@@ -196,6 +216,11 @@ impl StorageFactory {
             } => {
                 let store = HybridStore::new(cache_size, cold_dir, sync_interval_secs).await?;
                 Ok(Box::new(store))
+            }
+            #[cfg(feature = "hermes")]
+            BackendConfig::Hermes { db_path } => {
+                let adapter = HermesMemoryAdapter::new(db_path).await?;
+                Ok(Box::new(adapter))
             }
         }
     }

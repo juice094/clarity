@@ -1,3 +1,4 @@
+use crate::design_system::{self, Space, Status, Text};
 use crate::theme::Theme;
 
 /// Sidebar category card.
@@ -57,30 +58,27 @@ pub fn sidebar_card(
                                 .color(text_color),
                         );
 
-                        ui.add_space(theme.space_4);
+                        design_system::gap(ui, Space::S0);
 
                         // ---- Text stack ----
                         ui.vertical(|ui| {
                             // Title
-                            ui.label(
-                                egui::RichText::new(title)
-                                    .font(theme.font_bold(theme.text_base))
-                                    .color(text_color),
+                            design_system::text(
+                                ui,
+                                title,
+                                if is_active {
+                                    Text::BodyStrong
+                                } else {
+                                    Text::Body
+                                },
                             );
 
                             // Subtitle with status dot
                             if let Some(sub) = subtitle {
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("●")
-                                            .size(theme.text_xs * 1.2)
-                                            .color(theme.status_online),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(sub)
-                                            .font(theme.font(theme.text_xs))
-                                            .color(theme.text_dim),
-                                    );
+                                    design_system::status_dot(ui, Status::Online);
+                                    design_system::gap(ui, Space::S0);
+                                    design_system::text(ui, sub, Text::Caption);
                                 });
                             }
 
@@ -92,11 +90,8 @@ pub fn sidebar_card(
                                             .size(4.0)
                                             .color(theme.border.linear_multiply(0.6)),
                                     );
-                                    ui.label(
-                                        egui::RichText::new(badge_text)
-                                            .font(theme.font(theme.text_xs))
-                                            .color(theme.text_dim),
-                                    );
+                                    design_system::gap(ui, Space::S0);
+                                    design_system::text(ui, badge_text, Text::Caption);
                                 });
                             }
                         });

@@ -1,6 +1,12 @@
 #![cfg_attr(
     test,
-    allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        missing_docs,
+        unsafe_code
+    )
 )]
 //! Binary entry point for the Clarity Gateway server.
 use std::sync::Arc;
@@ -184,7 +190,7 @@ You are a methodological query assistant. When answering:
     let memory_db = clarity_dir.join("memory.db");
     let _ = tokio::fs::create_dir_all(&clarity_dir).await;
 
-    let memory_store = Arc::new(match PersistentMemoryStore::new(&memory_db).await {
+    let memory_store = Arc::new(match PersistentMemoryStore::new_auto(&memory_db).await {
         Ok(store) => store,
         Err(e) => {
             warn!(
@@ -579,8 +585,38 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn test_gray_workspace_loaded() {
+        // Create a self-contained Gray workspace so the test does not depend on
+        // the user's home directory.
+        let tmp = tempfile::tempdir().expect("failed to create temp dir");
+        let workspace = tmp.path();
+        let agent_yaml = r#"
+version: 1
+agent:
+  name: "gray"
+  system_prompt_path: "system.md"
+"#;
+        std::fs::write(workspace.join("agent.yaml"), agent_yaml)
+            .expect("failed to write agent.yaml");
+        std::fs::write(workspace.join("system.md"), "You are Gray (格雷).")
+            .expect("failed to write system.md");
+
+        // The environment variable is read by create_agent(). Serialize this
+        // test with other tests that call create_agent() to avoid races.
+        let _guard = GRAY_WORKSPACE_LOCK.lock().await;
+        // SAFETY: test-only mutation of an environment variable that is not
+        // read by any other concurrently-running test while the lock is held.
+        unsafe {
+            std::env::set_var("GRAY_WORKSPACE", workspace.as_os_str());
+        }
         let agent = create_agent().await.expect("agent should be created");
+        // SAFETY: paired with the set_var above; restores the prior state.
+        unsafe {
+            std::env::remove_var("GRAY_WORKSPACE");
+        }
+        drop(_guard);
+
         let config = agent.config();
         assert_eq!(config.name.as_deref(), Some("gray"));
         assert!(
@@ -588,4 +624,6 @@ mod tests {
             "Gray system prompt should be loaded from workspace"
         );
     }
+
+    static GRAY_WORKSPACE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 }

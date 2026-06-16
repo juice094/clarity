@@ -148,6 +148,55 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
     });
     ui.add_space(theme.space_16);
 
+    // ── Layout Debug Overlay ──
+    ui.label(
+        egui::RichText::new(app.t("Layout Debug"))
+            .size(theme.text_sm)
+            .color(theme.text)
+            .strong(),
+    );
+    ui.add_space(theme.space_4);
+    let mut debug_overlay = app.view_state.debug_layout_overlay;
+    if ui
+        .checkbox(
+            &mut debug_overlay,
+            app.t("Show green/blue/red/yellow layout diagnostics (Ctrl+Shift+L)"),
+        )
+        .changed()
+    {
+        app.view_state.debug_layout_overlay = debug_overlay;
+        app.persist_layout_settings();
+    }
+
+    ui.add_space(theme.space_16);
+
+    // ── Pretext PoC Probe ──
+    ui.label(
+        egui::RichText::new(app.t("Pretext Probe"))
+            .size(theme.text_sm)
+            .color(theme.text)
+            .strong(),
+    );
+    ui.add_space(theme.space_4);
+    if ui
+        .button(egui::RichText::new("Open Pretext Measurement Probe").size(theme.text_sm))
+        .clicked()
+    {
+        app.ui_store.pretext_probe_open = true;
+    }
+    let mut pretext_estimate = app.ui_store.pretext_estimate_enabled;
+    if ui
+        .checkbox(
+            &mut pretext_estimate,
+            egui::RichText::new("Use pretext for message height estimation (Phase 1 PoC)"),
+        )
+        .changed()
+    {
+        app.ui_store.pretext_estimate_enabled = pretext_estimate;
+    }
+
+    ui.add_space(theme.space_16);
+
     // ── Language ──
     ui.label(
         egui::RichText::new(app.t("Language"))

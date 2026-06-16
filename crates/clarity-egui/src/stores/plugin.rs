@@ -3,6 +3,10 @@
 //! S6 Phase C: the left-rail Plugins panel exposes user-customisable shortcuts
 //! that can be reordered in layout-edit mode.  Plugins may come from built-in
 //! actions, active skills, connected MCP tools, or persisted web tabs.
+//!
+//! Note: currently staged; not yet wired into App. Kept for upcoming
+//! left-rail plugin integration.
+#![allow(dead_code)]
 
 use crate::settings::GuiSettings;
 use crate::stores::McpStore;

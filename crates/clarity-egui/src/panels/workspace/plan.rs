@@ -45,7 +45,7 @@ pub fn render_workspace_plan(app: &mut App, ui: &mut egui::Ui) {
             .color(theme.text),
     )
     .id_salt("workspace_plan_fold")
-    .open(Some(app.ui_store.workspace_plan_expanded));
+    .open(Some(app.view_state.expansions.workspace_plan));
 
     let resp = header.show(ui, |ui| {
         ui.add_space(theme.space_8);
@@ -59,8 +59,9 @@ pub fn render_workspace_plan(app: &mut App, ui: &mut egui::Ui) {
 
     // Toggle expansion on header click; track manual collapse
     if resp.header_response.clicked() {
-        app.ui_store.workspace_plan_expanded = !app.ui_store.workspace_plan_expanded;
-        app.ui_store.workspace_plan_manually_collapsed = !app.ui_store.workspace_plan_expanded;
+        app.view_state.expansions.workspace_plan = !app.view_state.expansions.workspace_plan;
+        app.view_state.expansions.workspace_plan_manually_collapsed =
+            !app.view_state.expansions.workspace_plan;
     }
 }
 
@@ -170,7 +171,7 @@ fn render_plan_review(app: &mut App, ui: &mut egui::Ui) {
         });
         let state = app.state.clone();
         let tx = app.ui_tx.clone();
-        app.chat_store.is_loading = true;
+        app.view_state.turn = clarity_core::ui::TurnState::Loading;
         app.chat_store.agent_status = AgentStatus::Busy;
         app.runtime.spawn(async move {
             match state.agent.execute_plan(&plan).await {

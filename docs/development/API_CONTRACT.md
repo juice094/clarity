@@ -112,6 +112,69 @@ POST /api/search
 }
 ```
 
+### 2.10 V2 线程（Threads / Rollouts）
+
+> 线程是 Clarity v0.3.x 引入的持久对话单元，每个线程对应一份 JSONL rollout 日志。
+
+```http
+POST /api/v2/threads
+GET  /api/v2/threads?limit=20&include_archived=false
+GET  /api/v2/threads/:id?include_history=true
+PATCH /api/v2/threads/:id
+POST /api/v2/threads/:id/archive
+POST /api/v2/threads/:id/unarchive
+DELETE /api/v2/threads/:id
+POST /api/v2/threads/:id/fork
+```
+
+创建线程请求：
+
+```http
+POST /api/v2/threads
+Content-Type: application/json
+
+{
+  "title": "My conversation"
+}
+```
+
+在线程内聊天（流式 SSE，协议与 `/v1/chat/completions` 相同）：
+
+```http
+POST /api/v2/threads/:id/chat
+Content-Type: application/json
+
+{
+  "model": "default",
+  "messages": [{"role": "user", "content": "Hello"}],
+  "stream": true
+}
+```
+
+**响应**：SSE stream，与 `/v1/chat/completions` 一致。
+
+Fork 线程请求：
+
+```http
+POST /api/v2/threads/:id/fork
+Content-Type: application/json
+
+{
+  "snapshot": { "kind": "interrupted" }
+}
+```
+
+或使用 `truncate_before_nth_user_message` 在指定用户消息前截断：
+
+```http
+POST /api/v2/threads/:id/fork
+Content-Type: application/json
+
+{
+  "snapshot": { "kind": "truncate_before_nth_user_message", "n": 3 }
+}
+```
+
 ---
 
 ## 3. WebSocket 协议

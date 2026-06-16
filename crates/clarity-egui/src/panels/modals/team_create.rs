@@ -4,7 +4,7 @@ use clarity_core::tools::Tool;
 
 /// Renders the team create modal UI.
 pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
-    if !app.team_store.create_modal_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::TeamCreate) {
         return;
     }
 
@@ -265,8 +265,8 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
         app.team_store.create_members.clear();
         app.team_store.create_max_concurrency = 4;
         app.team_store.create_timeout_secs = 300;
-        app.team_store.create_modal_open = false;
+        app.view_state.close_modal();
     } else if close_requested {
-        app.team_store.create_modal_open = false;
+        app.view_state.close_modal();
     }
 }

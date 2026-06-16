@@ -8,15 +8,11 @@ use crate::ui::types::*;
 pub struct ChatStore {
     pub input: String,
     pub attachments: Vec<Attachment>,
-    pub is_loading: bool,
     pub agent_status: AgentStatus,
     pub gateway_status: crate::ui::types::GatewayStatus,
     pub tool_calls: Vec<ToolCallInfo>,
-    pub compacting: bool,
     /// Queued message to auto-send when current streaming finishes.
     pub pending_send: Option<(String, Vec<Attachment>)>,
-    /// Visual flag: user pressed Enter while streaming; cancellation is in-flight.
-    pub stopping: bool,
     /// Latest token usage for the active session.
     pub last_usage: Option<(u32, u32, u32)>,
     /// Pending plan for user review (Plan mode).

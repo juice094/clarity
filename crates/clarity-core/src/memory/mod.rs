@@ -72,6 +72,9 @@ pub struct MemoryConfig {
     pub importance_threshold: f32,
     /// Format string for memory display
     pub memory_format: String,
+    /// Which low-level storage backend to use
+    #[serde(default)]
+    pub backend: MemoryBackend,
 }
 
 impl Default for MemoryConfig {
@@ -80,7 +83,38 @@ impl Default for MemoryConfig {
             max_memories: 100,
             importance_threshold: 0.3,
             memory_format: String::from("[{timestamp}] {content}"),
+            backend: MemoryBackend::default(),
         }
+    }
+}
+
+/// Which low-level storage backend backs the persistent memory store.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryBackend {
+    /// Native SQLite/FTS5 backend (default).
+    #[default]
+    Sqlite,
+    /// Hermes-memory SQLite backend.
+    #[cfg(feature = "hermes")]
+    Hermes,
+}
+
+impl MemoryBackend {
+    /// Parse a backend name. Unknown values fall back to `Sqlite`.
+    pub fn from_name(name: &str) -> Self {
+        match name.to_ascii_lowercase().as_str() {
+            #[cfg(feature = "hermes")]
+            "hermes" => Self::Hermes,
+            _ => Self::Sqlite,
+        }
+    }
+
+    /// Read `CLARITY_MEMORY_BACKEND` from the environment, defaulting to `Sqlite`.
+    pub fn from_env() -> Self {
+        std::env::var("CLARITY_MEMORY_BACKEND")
+            .map(|v| Self::from_name(&v))
+            .unwrap_or_default()
     }
 }
 
@@ -99,14 +133,32 @@ pub struct PersistentMemoryStore {
 }
 
 impl PersistentMemoryStore {
-    /// Create a new persistent memory store
+    /// Create a new persistent memory store using the default SQLite backend.
     pub async fn new(db_path: &std::path::Path) -> anyhow::Result<Self> {
-        let inner = clarity_memory::MemoryStore::new(db_path).await?;
+        Self::new_with_backend(db_path, MemoryBackend::Sqlite).await
+    }
+
+    /// Create a new persistent memory store with the requested backend.
+    pub async fn new_with_backend(
+        db_path: &std::path::Path,
+        backend: MemoryBackend,
+    ) -> anyhow::Result<Self> {
+        let inner = match backend {
+            MemoryBackend::Sqlite => clarity_memory::MemoryStore::new(db_path).await?,
+            #[cfg(feature = "hermes")]
+            MemoryBackend::Hermes => clarity_memory::MemoryStore::new_hermes(db_path).await?,
+        };
         Ok(Self {
             inner,
             config: MemoryConfig::default(),
             importance_scores: Arc::new(RwLock::new(HashMap::new())),
         })
+    }
+
+    /// Create a new persistent memory store, choosing the backend from
+    /// `CLARITY_MEMORY_BACKEND` and falling back to SQLite.
+    pub async fn new_auto(db_path: &std::path::Path) -> anyhow::Result<Self> {
+        Self::new_with_backend(db_path, MemoryBackend::from_env()).await
     }
 
     /// Create an in-memory persistent store for testing
@@ -124,7 +176,7 @@ impl PersistentMemoryStore {
         db_path: &std::path::Path,
         config: MemoryConfig,
     ) -> anyhow::Result<Self> {
-        let mut store = Self::new(db_path).await?;
+        let mut store = Self::new_with_backend(db_path, config.backend).await?;
         store.config = config;
         Ok(store)
     }
@@ -233,6 +285,29 @@ fn uuid() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_memory_backend_from_name() {
+        assert_eq!(MemoryBackend::from_name("sqlite"), MemoryBackend::Sqlite);
+        assert_eq!(MemoryBackend::from_name("SQLITE"), MemoryBackend::Sqlite);
+        assert_eq!(MemoryBackend::from_name("unknown"), MemoryBackend::Sqlite);
+        #[cfg(feature = "hermes")]
+        assert_eq!(MemoryBackend::from_name("hermes"), MemoryBackend::Hermes);
+    }
+
+    #[tokio::test]
+    async fn test_persistent_memory_store_with_backend() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = PersistentMemoryStore::new_with_backend(
+            temp_dir.path().join("memory.db").as_path(),
+            MemoryBackend::Sqlite,
+        )
+        .await
+        .unwrap();
+
+        store.store(Memory::new("backend selection")).await.unwrap();
+        assert_eq!(store.count().await.unwrap(), 1);
+    }
 
     #[test]
     fn test_memory_creation() {

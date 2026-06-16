@@ -50,6 +50,17 @@ pub enum DraftEvent {
     },
 }
 
+/// A lightweight thread summary suitable for UI lists.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ThreadSummary {
+    /// Thread identifier (UUID).
+    pub thread_id: String,
+    /// Optional human-readable title.
+    pub title: Option<String>,
+    /// ISO-8601 update timestamp.
+    pub updated_at: Option<String>,
+}
+
 /// Core message types flowing through the Wire.
 ///
 /// These messages represent the lifecycle of a conversation turn,
@@ -190,6 +201,38 @@ pub enum WireMessage {
         /// Identifier of the skipped step.
         step_id: String,
     },
+
+    /// The active thread has changed (e.g. user switched or a new thread was created).
+    ThreadActive {
+        /// Identifier of the active thread.
+        thread_id: String,
+        /// Optional human-readable title.
+        title: Option<String>,
+    },
+
+    /// The list of recent threads has been refreshed.
+    ThreadList {
+        /// Recent thread summaries.
+        threads: Vec<ThreadSummary>,
+    },
+
+    /// A new thread was created.
+    ThreadCreated {
+        /// Identifier of the new thread.
+        thread_id: String,
+        /// Optional human-readable title.
+        title: Option<String>,
+    },
+
+    /// Thread metadata was updated (title, archive state, etc.).
+    ThreadUpdated {
+        /// Identifier of the updated thread.
+        thread_id: String,
+        /// Optional new title.
+        title: Option<String>,
+        /// Optional new archived state.
+        archived: Option<bool>,
+    },
 }
 
 // ADR-006 Phase C.1 (2026-05-11): event.rs / Event / EventBus / EventMsg
@@ -217,6 +260,10 @@ impl WireMessage {
             WireMessage::PlanStepBegin { turn_id: t, .. } => *t = turn_id,
             WireMessage::PlanStepEnd { turn_id: t, .. } => *t = turn_id,
             WireMessage::PlanStepSkipped { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ThreadActive { .. }
+            | WireMessage::ThreadList { .. }
+            | WireMessage::ThreadCreated { .. }
+            | WireMessage::ThreadUpdated { .. } => {}
         }
         self
     }

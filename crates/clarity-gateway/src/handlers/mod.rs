@@ -23,6 +23,10 @@ pub mod tasks;
 /// Telemetry endpoint handlers (requires the `telemetry-api` feature).
 #[cfg(feature = "telemetry-api")]
 pub mod telemetry;
+/// Thread-scoped chat completion handler (v2 sessions).
+pub mod thread_chat;
+/// Thread management handlers (v2 sessions).
+pub mod threads;
 
 /// Trait abstracting the agent operations required by HTTP handlers.
 ///
@@ -55,7 +59,7 @@ mod tests {
     use std::sync::Arc;
     use tower::util::ServiceExt;
 
-    async fn test_state() -> Arc<AppState> {
+    pub(crate) async fn test_state() -> Arc<AppState> {
         let registry = ToolRegistry::with_builtin_tools();
         let config = AgentConfig::new()
             .with_max_iterations(5)
@@ -71,7 +75,11 @@ mod tests {
             temp.join("context"),
         ));
 
-        Arc::new(AppState::new(agent, task_manager).await.unwrap())
+        Arc::new(
+            AppState::new_with_home(agent, task_manager, temp.join(".clarity"))
+                .await
+                .unwrap(),
+        )
     }
 
     // ==================== Security tests (preserved) ====================

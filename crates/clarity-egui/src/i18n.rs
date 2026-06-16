@@ -162,6 +162,11 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("About", "关于");
     m.insert("Theme", "主题");
     m.insert("Language", "语言");
+    m.insert("Layout Debug", "布局调试");
+    m.insert(
+        "Show green/blue/red/yellow layout diagnostics (Ctrl+Shift+L)",
+        "显示绿/蓝/红/黄布局诊断覆盖层（Ctrl+Shift+L）",
+    );
     m.insert("Model", "模型");
     m.insert("API Key", "API 密钥");
     m.insert("Approval Mode", "审批模式");

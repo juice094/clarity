@@ -3,7 +3,7 @@
  * Features: Command Palette, Theme Switch, Onboarding, Model Popover
  */
 
-import { store, loadSessions, addSession, getActiveSession } from './store.js';
+import { store, addSession, getActiveSession } from './store.js';
 import * as api from './api.js';
 import * as chat from './chat.js';
 import * as editor from './editor.js';
@@ -714,12 +714,6 @@ setInterval(refreshTaskBadge, 5000);
 async function init() {
     // Apply saved theme
     applyTheme(currentTheme);
-
-    // Load persisted sessions
-    loadSessions();
-    if (store.sessions.length === 0) {
-        addSession('新对话');
-    }
 
     // Check connection
     await checkConnection();

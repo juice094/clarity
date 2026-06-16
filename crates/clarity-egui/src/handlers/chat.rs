@@ -7,9 +7,8 @@ use crate::ui::types::{
 
 /// Handles the done event.
 pub fn on_done(app: &mut crate::App) {
-    app.chat_store.is_loading = false;
+    app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
-    app.chat_store.stopping = false;
     app.state.agent.reset();
     // Trigger deferred markdown parse now that streaming is complete.
     if let Some(session) = app.session_store.active_session_mut() {
@@ -33,9 +32,9 @@ pub fn on_done(app: &mut crate::App) {
 
 /// Handles the error event.
 pub fn on_error(app: &mut crate::App, msg: String) {
-    app.chat_store.is_loading = false;
+    app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
-    app.chat_store.stopping = false;
+    app.view_state.turn = clarity_core::ui::TurnState::Idle;
     crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
     // Release queued message back to input so user can retry.
     if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {
@@ -240,13 +239,13 @@ pub fn on_tool_result(
 }
 
 /// Handles the compaction begin event.
-pub fn on_compaction_begin(chat_store: &mut ChatStore) {
-    chat_store.compacting = true;
+pub fn on_compaction_begin(view_state: &mut clarity_core::ui::ViewState) {
+    view_state.turn = clarity_core::ui::TurnState::Compacting;
 }
 
 /// Handles the compaction end event.
-pub fn on_compaction_end(chat_store: &mut ChatStore) {
-    chat_store.compacting = false;
+pub fn on_compaction_end(view_state: &mut clarity_core::ui::ViewState) {
+    view_state.turn = clarity_core::ui::TurnState::Idle;
 }
 
 /// Handles the usage event.
@@ -260,8 +259,12 @@ pub fn on_usage(
 }
 
 /// Handles the plan ready event.
-pub fn on_plan_ready(chat_store: &mut ChatStore, plan: clarity_core::agent::Plan) {
-    chat_store.is_loading = false;
+pub fn on_plan_ready(
+    chat_store: &mut ChatStore,
+    view_state: &mut clarity_core::ui::ViewState,
+    plan: clarity_core::agent::Plan,
+) {
+    view_state.turn = clarity_core::ui::TurnState::Idle;
     chat_store.agent_status = AgentStatus::Online;
     chat_store.pending_plan = Some(plan);
 }

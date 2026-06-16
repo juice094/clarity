@@ -29,7 +29,7 @@ scraper = "0.19"
 similar = "2"
 dirs = "5.0"
 parking_lot = "0.12"
-base64 = "0.22"
+base64 = { workspace = true }
 hmac = "0.12"
 sha2 = "0.10"
 anyhow = { workspace = true }

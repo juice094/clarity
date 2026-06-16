@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clarity UI Annotator</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --surface: #252525;
+      --surface-hover: #333;
+      --text: #e6e6e6;
+      --text-dim: #999;
+      --accent: #c98a5e;
+      --border: #444;
+      --red: #ff3c3c;
+      --green: #00ff00;
+      --blue: #00a0ff;
+      --yellow: #ffdc00;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+    }
+    .app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+    .canvas-wrap {
+      flex: 1;
+      position: relative;
+      background: #111;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+    .canvas-wrap.panning { cursor: grabbing; }
+    .canvas-wrap.moving { cursor: move; }
+    canvas {
+      display: block;
+    }
+    .overlay-hint {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0,0,0,0.7);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-dim);
+      pointer-events: none;
+      line-height: 1.5;
+    }
+    .size-hint {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0,0,0,0.8);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--yellow);
+      pointer-events: none;
+      display: none;
+    }
+    .sidebar {
+      width: 280px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .panel {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel h2 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button, .file-label {
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover, .file-label:hover { background: #444; }
+    button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #111;
+      font-weight: 600;
+    }
+    button.danger { color: var(--red); border-color: var(--red); }
+    .file-label { display: inline-block; }
+    input[type="file"] { display: none; }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+    input[type="text"], select, textarea {
+      width: 100%;
+      background: #111;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    textarea { min-height: 60px; resize: vertical; }
+    .color-dots {
+      display: flex;
+      gap: 8px;
+    }
+    .color-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .color-dot.selected { border-color: #fff; }
+    .list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+    .list-item {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .list-item:hover { background: var(--surface-hover); }
+    .list-item.selected { background: rgba(201,138,94,0.2); }
+    .list-item .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .empty {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    .status {
+      padding: 10px 16px;
+      font-size: 12px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="canvas"></canvas>
+      <div class="overlay-hint" id="hint">
+        左键拖拽画框 · 拖拽框体移动 · 拖拽四角/边缩放 · 滚轮缩放 · 空格+拖拽平移 · Delete 删除
+      </div>
+      <div class="size-hint" id="sizeHint">0 × 0</div>
+    </div>
+    <div class="sidebar">
+      <div class="panel">
+        <h2>工具</h2>
+        <div class="toolbar">
+          <label class="file-label">
+            加载图片
+            <input type="file" id="imageInput" accept="image/*">
+          </label>
+          <button id="btnSelect" class="active">选择</button>
+          <button id="btnDraw">画框</button>
+          <button id="btnImport">导入 JSON</button>
+          <button id="btnExport">导出 JSON</button>
+          <button id="btnClear" class="danger">清空</button>
+        </div>
+      </div>
+      <div class="panel" id="propertiesPanel" style="display:none;">
+        <h2>属性</h2>
+        <div class="form-group">
+          <label>Label</label>
+          <input type="text" id="propLabel" placeholder="例如 right_rail_toggle">
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="propRole">
+            <option value="chrome">chrome（标题栏/边栏/输入栏）</option>
+            <option value="content">content（主内容区）</option>
+            <option value="rail">rail（左右抽屉）</option>
+            <option value="floating">floating（浮层/警告）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="propPriority">
+            <option value="fixed">fixed（固定尺寸）</option>
+            <option value="stretch">stretch（撑满）</option>
+            <option value="remainder">remainder（占剩余空间）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>颜色</label>
+          <div class="color-dots" id="colorDots">
+            <div class="color-dot selected" data-color="red" style="background:var(--red)"></div>
+            <div class="color-dot" data-color="green" style="background:var(--green)"></div>
+            <div class="color-dot" data-color="blue" style="background:var(--blue)"></div>
+            <div class="color-dot" data-color="yellow" style="background:var(--yellow)"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea id="propNote" placeholder="给 AI 的说明"></textarea>
+        </div>
+        <button id="btnDelete" class="danger" style="width:100%; margin-top:8px;">删除选中框</button>
+      </div>
+      <div class="panel">
+        <h2>标注列表</h2>
+      </div>
+      <div class="list" id="annotationList"></div>
+      <div class="status" id="status">就绪</div>
+    </div>
+  </div>
+
+  <input type="file" id="jsonInput" accept="application/json" style="display:none;">
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const wrap = document.getElementById('canvasWrap');
+    const sizeHint = document.getElementById('sizeHint');
+    const hint = document.getElementById('hint');
+    const statusEl = document.getElementById('status');
+
+    const ROLE_COLORS = {
+      chrome: '#ff3c3c',
+      content: '#00ff00',
+      rail: '#00a0ff',
+      floating: '#ffdc00',
+    };
+
+    const COLOR_MAP = {
+      red: '#ff3c3c',
+      green: '#00ff00',
+      blue: '#00a0ff',
+      yellow: '#ffdc00',
+    };
+
+    let state = {
+      image: null,
+      imageName: '',
+      imageWidth: 0,
+      imageHeight: 0,
+      annotations: [],
+      selectedId: null,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      mode: 'select', // 'select' | 'draw' | 'pan'
+      isDragging: false,
+      dragAction: null, // 'move' | 'resize' | 'draw' | 'pan'
+      dragStart: { x: 0, y: 0 },
+      dragRectStart: null,
+      resizeHandle: null, // 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
+      newRect: null,
+      isSpacePressed: false,
+    };
+
+    const STORAGE_KEY = 'clarity_ui_annotator_state';
+
+    function generateId() {
+      return 'ann_' + Math.random().toString(36).slice(2, 9);
+    }
+
+    function fitImage() {
+      if (!state.image) return;
+      const rect = wrap.getBoundingClientRect();
+      const pad = 40;
+      const availW = rect.width - pad * 2;
+      const availH = rect.height - pad * 2;
+      const scale = Math.min(availW / state.imageWidth, availH / state.imageHeight, 1);
+      state.scale = scale;
+      state.offsetX = (rect.width - state.imageWidth * scale) / 2;
+      state.offsetY = (rect.height - state.imageHeight * scale) / 2;
+    }
+
+    function resizeCanvas() {
+      const rect = wrap.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      if (!state.image) {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      render();
+    }
+
+    function screenToImage(sx, sy) {
+      return {
+        x: (sx - state.offsetX) / state.scale,
+        y: (sy - state.offsetY) / state.scale,
+      };
+    }
+
+    function imageToScreen(ix, iy) {
+      return {
+        x: ix * state.scale + state.offsetX,
+        y: iy * state.scale + state.offsetY,
+      };
+    }
+
+    function clampToImage(x, y, w, h) {
+      x = Math.max(0, Math.min(x, state.imageWidth));
+      y = Math.max(0, Math.min(y, state.imageHeight));
+      w = Math.max(1, Math.min(w, state.imageWidth - x));
+      h = Math.max(1, Math.min(h, state.imageHeight - y));
+      return { x, y, w, h };
+    }
+
+    function getHandleAt(x, y, ann) {
+      const s = imageToScreen(ann.x, ann.y);
+      const e = imageToScreen(ann.x + ann.w, ann.y + ann.h);
+      const r = 6;
+      const handles = [
+        { name: 'nw', x: s.x, y: s.y },
+        { name: 'n', x: (s.x + e.x) / 2, y: s.y },
+        { name: 'ne', x: e.x, y: s.y },
+        { name: 'e', x: e.x, y: (s.y + e.y) / 2 },
+        { name: 'se', x: e.x, y: e.y },
+        { name: 's', x: (s.x + e.x) / 2, y: e.y },
+        { name: 'sw', x: s.x, y: e.y },
+        { name: 'w', x: s.x, y: (s.y + e.y) / 2 },
+      ];
+      for (const h of handles) {
+        if (Math.abs(x - h.x) <= r && Math.abs(y - h.y) <= r) return h.name;
+      }
+      return null;
+    }
+
+    function getAnnotationAt(x, y) {
+      for (let i = state.annotations.length - 1; i >= 0; i--) {
+        const ann = state.annotations[i];
+        const s = imageToScreen(ann.x, ann.y);
+        const e = imageToScreen(ann.x + ann.w, ann.y + ann.h);
+        if (x >= s.x && x <= e.x && y >= s.y && y <= e.y) return ann;
+      }
+      return null;
+    }
+
+    function normalizeRect(x1, y1, x2, y2) {
+      return {
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        w: Math.abs(x2 - x1),
+        h: Math.abs(y2 - y1),
+      };
+    }
+
+    function applySnap(value, edges, threshold) {
+      for (const e of edges) {
+        if (Math.abs(value - e) <= threshold) return e;
+      }
+      return value;
+    }
+
+    function snapRect(rect) {
+      if (!state.image) return rect;
+      const threshold = 10 / state.scale;
+      const edges = [0, state.imageWidth, state.imageHeight];
+      state.annotations.forEach(a => {
+        if (a.id === state.selectedId) return;
+        edges.push(a.x, a.x + a.w, a.y, a.y + a.h);
+      });
+      rect.x = applySnap(rect.x, edges, threshold);
+      rect.y = applySnap(rect.y, edges, threshold);
+      rect.w = applySnap(rect.w, edges, threshold); // simplistic
+      rect.h = applySnap(rect.h, edges, threshold);
+      return rect;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!state.image) {
+        ctx.fillStyle = '#666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('请加载图片或拖拽图片到此处', canvas.width / 2, canvas.height / 2);
+        return;
+      }
+
+      ctx.save();
+      ctx.translate(state.offsetX, state.offsetY);
+      ctx.scale(state.scale, state.scale);
+
+      // image
+      ctx.drawImage(state.image, 0, 0);
+
+      // grid overlay when zoomed
+      if (state.scale > 2) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.lineWidth = 1 / state.scale;
+        for (let x = 0; x <= state.imageWidth; x += 10) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, state.imageHeight); ctx.stroke();
+        }
+        for (let y = 0; y <= state.imageHeight; y += 10) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(state.imageWidth, y); ctx.stroke();
+        }
+      }
+
+      // annotations
+      state.annotations.forEach(ann => {
+        const color = COLOR_MAP[ann.color] || ROLE_COLORS[ann.role] || '#fff';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 / state.scale;
+        ctx.strokeRect(ann.x, ann.y, ann.w, ann.h);
+
+        if (ann.id === state.selectedId) {
+          ctx.fillStyle = color + '22';
+          ctx.fillRect(ann.x, ann.y, ann.w, ann.h);
+
+          // handles
+          ctx.fillStyle = '#fff';
+          const hs = 4 / state.scale;
+          const corners = [
+            [ann.x, ann.y], [ann.x + ann.w / 2, ann.y], [ann.x + ann.w, ann.y],
+            [ann.x + ann.w, ann.y + ann.h / 2], [ann.x + ann.w, ann.y + ann.h],
+            [ann.x + ann.w / 2, ann.y + ann.h], [ann.x, ann.y + ann.h], [ann.x, ann.y + ann.h / 2]
+          ];
+          corners.forEach(([hx, hy]) => {
+            ctx.beginPath();
+            ctx.arc(hx, hy, hs, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // label
+        if (ann.label) {
+          ctx.font = `${12 / state.scale}px sans-serif`;
+          ctx.fillStyle = color;
+          ctx.textBaseline = 'top';
+          ctx.fillText(ann.label, ann.x + 2 / state.scale, ann.y + 2 / state.scale);
+        }
+      });
+
+      // drawing preview
+      if (state.newRect) {
+        const r = state.newRect;
+        ctx.strokeStyle = '#fff';
+        ctx.setLineDash([5 / state.scale, 5 / state.scale]);
+        ctx.lineWidth = 1 / state.scale;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.setLineDash([]);
+      }
+
+      ctx.restore();
+    }
+
+    function updateSidebar() {
+      const panel = document.getElementById('propertiesPanel');
+      const ann = state.annotations.find(a => a.id === state.selectedId);
+      if (ann) {
+        panel.style.display = 'block';
+        document.getElementById('propLabel').value = ann.label;
+        document.getElementById('propRole').value = ann.role;
+        document.getElementById('propPriority').value = ann.priority;
+        document.getElementById('propNote').value = ann.note || '';
+        document.querySelectorAll('.color-dot').forEach(d => {
+          d.classList.toggle('selected', d.dataset.color === ann.color);
+        });
+      } else {
+        panel.style.display = 'none';
+      }
+      renderList();
+      saveState();
+    }
+
+    function renderList() {
+      const list = document.getElementById('annotationList');
+      list.innerHTML = '';
+      if (state.annotations.length === 0) {
+        list.innerHTML = '<div class="empty">暂无标注</div>';
+        return;
+      }
+      state.annotations.forEach(ann => {
+        const color = COLOR_MAP[ann.color] || ROLE_COLORS[ann.role] || '#fff';
+        const item = document.createElement('div');
+        item.className = 'list-item' + (ann.id === state.selectedId ? ' selected' : '');
+        item.innerHTML = `<div class="swatch" style="background:${color}"></div><div><div>${ann.label || '(未命名)'}</div><div style="font-size:11px;color:#999">${ann.role} · ${Math.round(ann.w)}×${Math.round(ann.h)}</div></div>`;
+        item.addEventListener('click', () => {
+          state.selectedId = ann.id;
+          updateSidebar();
+          render();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    function updateStatus() {
+      const count = state.annotations.length;
+      const img = state.imageName || '无图片';
+      statusEl.textContent = `${img} · ${count} 个标注 · 缩放 ${Math.round(state.scale * 100)}%`;
+    }
+
+    function saveState() {
+      const save = {
+        imageName: state.imageName,
+        imageWidth: state.imageWidth,
+        imageHeight: state.imageHeight,
+        annotations: state.annotations,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        state.imageName = saved.imageName || '';
+        state.imageWidth = saved.imageWidth || 0;
+        state.imageHeight = saved.imageHeight || 0;
+        state.annotations = saved.annotations || [];
+        state.selectedId = null;
+        if (state.imageName) {
+          // try to load from same directory
+          const img = new Image();
+          img.onload = () => {
+            state.image = img;
+            state.imageWidth = img.naturalWidth;
+            state.imageHeight = img.naturalHeight;
+            fitImage();
+            render();
+            updateSidebar();
+            updateStatus();
+          };
+          img.onerror = () => {
+            state.image = null;
+            render();
+            updateStatus();
+          };
+          img.src = state.imageName;
+        }
+      } catch (e) {
+        console.error('loadState failed', e);
+      }
+    }
+
+    function setImage(file) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        state.image = img;
+        state.imageName = file.name;
+        state.imageWidth = img.naturalWidth;
+        state.imageHeight = img.naturalHeight;
+        state.annotations = [];
+        state.selectedId = null;
+        fitImage();
+        render();
+        updateSidebar();
+        updateStatus();
+        saveState();
+      };
+      img.src = url;
+    }
+
+    function exportJSON() {
+      if (!state.image) return alert('请先加载图片');
+      const data = {
+        image: state.imageName,
+        image_width: state.imageWidth,
+        image_height: state.imageHeight,
+        annotations: state.annotations,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `ui-annotations-${Date.now()}.json`;
+      a.click();
+    }
+
+    function importJSON(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data.annotations)) throw new Error('invalid format');
+          state.annotations = data.annotations.map(a => ({
+            id: a.id || generateId(),
+            label: a.label || '',
+            role: a.role || 'content',
+            priority: a.priority || 'fixed',
+            color: a.color || 'green',
+            note: a.note || '',
+            x: a.x || 0, y: a.y || 0, w: a.w || 0, h: a.h || 0,
+          }));
+          state.selectedId = null;
+          updateSidebar();
+          render();
+          updateStatus();
+          saveState();
+        } catch (err) {
+          alert('JSON 解析失败: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function addAnnotation(rect) {
+      const ann = {
+        id: generateId(),
+        label: '',
+        role: 'content',
+        priority: 'fixed',
+        color: 'green',
+        note: '',
+        ...rect,
+      };
+      state.annotations.push(ann);
+      state.selectedId = ann.id;
+      updateSidebar();
+      render();
+      updateStatus();
+      saveState();
+    }
+
+    // Event handlers
+    document.getElementById('imageInput').addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) setImage(e.target.files[0]);
+    });
+
+    document.getElementById('jsonInput').addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) importJSON(e.target.files[0]);
+    });
+
+    wrap.addEventListener('dragover', e => { e.preventDefault(); wrap.style.background = '#1a1a1a'; });
+    wrap.addEventListener('dragleave', () => { wrap.style.background = '#111'; });
+    wrap.addEventListener('drop', e => {
+      e.preventDefault();
+      wrap.style.background = '#111';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) setImage(file);
+      else if (file && file.name.endsWith('.json')) importJSON(file);
+    });
+
+    document.getElementById('btnSelect').addEventListener('click', () => {
+      state.mode = 'select';
+      updateModeButtons();
+    });
+    document.getElementById('btnDraw').addEventListener('click', () => {
+      state.mode = 'draw';
+      updateModeButtons();
+    });
+    document.getElementById('btnExport').addEventListener('click', exportJSON);
+    document.getElementById('btnImport').addEventListener('click', () => document.getElementById('jsonInput').click());
+    document.getElementById('btnClear').addEventListener('click', () => {
+      if (confirm('确定清空所有标注？')) {
+        state.annotations = [];
+        state.selectedId = null;
+        updateSidebar();
+        render();
+        updateStatus();
+        saveState();
+      }
+    });
+    document.getElementById('btnDelete').addEventListener('click', () => {
+      if (state.selectedId) {
+        state.annotations = state.annotations.filter(a => a.id !== state.selectedId);
+        state.selectedId = null;
+        updateSidebar();
+        render();
+        updateStatus();
+        saveState();
+      }
+    });
+
+    function updateModeButtons() {
+      document.getElementById('btnSelect').classList.toggle('active', state.mode === 'select');
+      document.getElementById('btnDraw').classList.toggle('active', state.mode === 'draw');
+      wrap.classList.remove('panning', 'moving');
+      if (state.mode === 'select') wrap.style.cursor = 'default';
+      else if (state.mode === 'draw') wrap.style.cursor = 'crosshair';
+    }
+
+    // Property inputs
+    document.getElementById('propLabel').addEventListener('input', e => {
+      const ann = state.annotations.find(a => a.id === state.selectedId);
+      if (ann) { ann.label = e.target.value; renderList(); render(); saveState(); }
+    });
+    document.getElementById('propRole').addEventListener('change', e => {
+      const ann = state.annotations.find(a => a.id === state.selectedId);
+      if (ann) { ann.role = e.target.value; render(); saveState(); }
+    });
+    document.getElementById('propPriority').addEventListener('change', e => {
+      const ann = state.annotations.find(a => a.id === state.selectedId);
+      if (ann) { ann.priority = e.target.value; saveState(); }
+    });
+    document.getElementById('propNote').addEventListener('input', e => {
+      const ann = state.annotations.find(a => a.id === state.selectedId);
+      if (ann) { ann.note = e.target.value; saveState(); }
+    });
+    document.querySelectorAll('.color-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+        dot.classList.add('selected');
+        const ann = state.annotations.find(a => a.id === state.selectedId);
+        if (ann) { ann.color = dot.dataset.color; render(); saveState(); }
+      });
+    });
+
+    // Mouse interactions
+    wrap.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      if (state.mode === 'pan' || state.isSpacePressed) {
+        state.isDragging = true;
+        state.dragAction = 'pan';
+        state.dragStart = { x: sx, y: sy };
+        wrap.classList.add('panning');
+        return;
+      }
+
+      if (state.mode === 'draw') {
+        const img = screenToImage(sx, sy);
+        state.isDragging = true;
+        state.dragAction = 'draw';
+        state.dragStart = img;
+        state.newRect = { x: img.x, y: img.y, w: 0, h: 0 };
+        return;
+      }
+
+      // select mode: check handles, then rect, then background
+      const clicked = getAnnotationAt(sx, sy);
+      if (clicked) {
+        state.selectedId = clicked.id;
+        const handle = getHandleAt(sx, sy, clicked);
+        if (handle) {
+          state.isDragging = true;
+          state.dragAction = 'resize';
+          state.resizeHandle = handle;
+          state.dragRectStart = { ...clicked };
+        } else {
+          state.isDragging = true;
+          state.dragAction = 'move';
+          state.dragStart = screenToImage(sx, sy);
+          state.dragRectStart = { ...clicked };
+          wrap.classList.add('moving');
+        }
+        updateSidebar();
+        render();
+        return;
+      }
+
+      state.selectedId = null;
+      updateSidebar();
+      render();
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!state.isDragging) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        if (state.mode === 'draw' && state.newRect) {
+          // do nothing here, preview handled in mousemove during drag
+        }
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      if (state.dragAction === 'draw') {
+        const img = screenToImage(sx, sy);
+        const r = normalizeRect(state.dragStart.x, state.dragStart.y, img.x, img.y);
+        state.newRect = clampToImage(r.x, r.y, r.w, r.h);
+        sizeHint.style.display = 'block';
+        sizeHint.textContent = `${Math.round(state.newRect.w)} × ${Math.round(state.newRect.h)}`;
+        render();
+      } else if (state.dragAction === 'move') {
+        const img = screenToImage(sx, sy);
+        const dx = img.x - state.dragStart.x;
+        const dy = img.y - state.dragStart.y;
+        const ann = state.annotations.find(a => a.id === state.selectedId);
+        if (ann) {
+          ann.x = state.dragRectStart.x + dx;
+          ann.y = state.dragRectStart.y + dy;
+          const clamped = clampToImage(ann.x, ann.y, ann.w, ann.h);
+          ann.x = clamped.x;
+          ann.y = clamped.y;
+          render();
+        }
+      } else if (state.dragAction === 'resize') {
+        const img = screenToImage(sx, sy);
+        const ann = state.annotations.find(a => a.id === state.selectedId);
+        if (ann) {
+          let { x, y, w, h } = state.dragRectStart;
+          const handle = state.resizeHandle;
+          if (handle.includes('e')) w = img.x - x;
+          if (handle.includes('w')) { w = (x + w) - img.x; x = img.x; }
+          if (handle.includes('s')) h = img.y - y;
+          if (handle.includes('n')) { h = (y + h) - img.y; y = img.y; }
+          const clamped = clampToImage(x, y, w, h);
+          ann.x = clamped.x; ann.y = clamped.y; ann.w = clamped.w; ann.h = clamped.h;
+          render();
+        }
+      } else if (state.dragAction === 'pan') {
+        const dx = sx - state.dragStart.x;
+        const dy = sy - state.dragStart.y;
+        state.offsetX += dx;
+        state.offsetY += dy;
+        state.dragStart = { x: sx, y: sy };
+        render();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (state.dragAction === 'draw' && state.newRect) {
+        if (state.newRect.w > 5 && state.newRect.h > 5) {
+          addAnnotation(state.newRect);
+        }
+        state.newRect = null;
+        sizeHint.style.display = 'none';
+      }
+      state.isDragging = false;
+      state.dragAction = null;
+      state.resizeHandle = null;
+      state.dragRectStart = null;
+      wrap.classList.remove('panning', 'moving');
+      render();
+      updateStatus();
+      saveState();
+    });
+
+    wrap.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const imgBefore = screenToImage(sx, sy);
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      state.scale *= factor;
+      state.scale = Math.max(0.1, Math.min(state.scale, 10));
+      const imgAfter = screenToImage(sx, sy);
+      state.offsetX += (imgAfter.x - imgBefore.x) * state.scale;
+      state.offsetY += (imgAfter.y - imgBefore.y) * state.scale;
+      render();
+      updateStatus();
+    }, { passive: false });
+
+    window.addEventListener('keydown', e => {
+      if (e.code === 'Space' && !state.isSpacePressed) {
+        e.preventDefault();
+        state.isSpacePressed = true;
+        wrap.classList.add('panning');
+        wrap.style.cursor = 'grab';
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (state.selectedId) {
+          state.annotations = state.annotations.filter(a => a.id !== state.selectedId);
+          state.selectedId = null;
+          updateSidebar();
+          render();
+          updateStatus();
+          saveState();
+        }
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      if (e.code === 'Space') {
+        state.isSpacePressed = false;
+        wrap.classList.remove('panning');
+        updateModeButtons();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      fitImage();
+      render();
+    });
+
+    // Init
+    resizeCanvas();
+    loadState();
+    updateModeButtons();
+    updateStatus();
+    render();
+  </script>
+</body>
+</html>

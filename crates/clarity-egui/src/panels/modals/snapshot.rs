@@ -10,7 +10,7 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Renders the snapshot modal UI.
 pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
-    if !app.snapshot_store.modal_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::Snapshot) {
         return;
     }
 
@@ -36,7 +36,7 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
 
     // ESC closes modal
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-        app.snapshot_store.modal_open = false;
+        app.view_state.close_modal();
         app.snapshot_store.confirm_restore_id = None;
         app.snapshot_store.selected_id = None;
         return;
@@ -78,7 +78,7 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
                         )
                         .clicked()
                     {
-                        app.snapshot_store.modal_open = false;
+                        app.view_state.close_modal();
                         app.snapshot_store.confirm_restore_id = None;
                         app.snapshot_store.selected_id = None;
                     }
@@ -213,7 +213,7 @@ fn render_snapshot_row(
                 if restore_btn.clicked() {
                     if is_confirming {
                         // Execute restore
-                        app.snapshot_store.restoring = true;
+                        app.view_state.turn = clarity_core::ui::TurnState::Restoring;
                         app.snapshot_store.confirm_restore_id = None;
                         let agent = app.state.agent.clone();
                         let tx = app.ui_tx.clone();

@@ -9,13 +9,11 @@ repository.workspace = true
 description = "Advanced memory storage system for Clarity - SQLite, File, Hybrid backends with vector search"
 
 [features]
-default = ["sqlite", "embedding"]
+default = ["sqlite"]
 # SQLite backend with FTS5 support
 sqlite = ["rusqlite"]
-# Vector search capabilities (TF-IDF based)
-embedding = []
-# All storage backends
-full = ["sqlite", "embedding"]
+# Hermes-memory backend integration
+hermes = ["dep:hermes-memory-core", "dep:hermes-memory-store", "dep:hermes-memory-search", "dep:ulid"]
 
 [dependencies]
 # Workspace dependencies
@@ -39,6 +37,12 @@ md5 = "0.7"
 dashmap = "6"
 parking_lot = "0.12"
 regex = "1"
+
+# Hermes-memory integration (optional, gated by the `hermes` feature)
+hermes-memory-core = { path = "../../../hermes-memory/crates/hermes-memory-core", version = "0.1.0-dev", optional = true }
+hermes-memory-store = { path = "../../../hermes-memory/crates/hermes-memory-store", version = "0.1.0-dev", optional = true }
+hermes-memory-search = { path = "../../../hermes-memory/crates/hermes-memory-search", version = "0.1.0-dev", optional = true, default-features = false }
+ulid = { version = "1", features = ["serde"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

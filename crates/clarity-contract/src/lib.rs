@@ -46,7 +46,9 @@ pub mod capability;
 pub mod error;
 pub mod federation;
 pub mod llm;
+pub mod rollout;
 pub mod subagent;
+pub mod thread;
 pub mod tool;
 
 // ============================================================================
@@ -177,6 +179,11 @@ pub use federation::{
     ToolSpec,
 };
 pub use llm::{LlmProvider, LlmResponse};
+pub use rollout::{
+    CompactedItem, CreateRolloutParams, GitInfo, ResumeRolloutParams, RolloutEventMsg, RolloutItem,
+    RolloutLine, RolloutResponseItem, SessionMeta, SessionMetaLine, SessionSource, ThreadSource,
+    TurnContextItem,
+};
 pub use subagent::{
     AgentTeam, AgentTypeDefinition, BatchProgress, BatchProgressHandle, BatchStatus,
     CapabilityToken, ExecutionStatus, GitContext, LaborMarket, Mailbox, MailboxError,
@@ -184,6 +191,7 @@ pub use subagent::{
     SubagentOrchestrator, SubagentProgressEvent, SubagentResult, SubagentState, SubagentStatus,
     TeamResult, TokenError, collect_git_context,
 };
+pub use thread::{SessionId, ThreadId};
 pub use tool::{ApprovalMode, BoxedTool, IntoSharedTool, SharedTool, Tool, ToolContext};
 
 #[cfg(test)]

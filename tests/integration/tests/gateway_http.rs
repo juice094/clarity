@@ -303,6 +303,10 @@ async fn test_tui_wire_to_gateway_websocket() {
             WireMessage::PlanStepEnd { .. } => "plan_step_end",
             WireMessage::DraftEvent { .. } => "draft_event",
             WireMessage::PlanStepSkipped { .. } => "plan_step_skipped",
+            WireMessage::ThreadActive { .. } => "thread_active",
+            WireMessage::ThreadList { .. } => "thread_list",
+            WireMessage::ThreadCreated { .. } => "thread_created",
+            WireMessage::ThreadUpdated { .. } => "thread_updated",
         };
         wire_types.push(msg_type.to_string());
         if msg_type == "turn_end" {

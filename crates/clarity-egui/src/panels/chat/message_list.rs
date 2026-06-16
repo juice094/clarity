@@ -19,7 +19,7 @@ struct PendingActions {
 /// Renders the message list UI.
 pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height();
-    let is_loading = app.chat_store.is_loading;
+    let is_loading = app.view_state.turn == clarity_core::ui::TurnState::Loading;
     let theme = app.ui_store.theme.clone();
     let max_w = app.ui_store.content_max_width;
     let active_id = app.session_store.active_session_id.clone();
@@ -27,6 +27,10 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let agent_turn_style = app.ui_store.agent_turn_style;
     let agent_turn_glass = app.ui_store.agent_turn_glass;
     let kimi_conversation_style = app.ui_store.kimi_conversation_style;
+    let pretext_enabled = app.ui_store.pretext_estimate_enabled;
+    let pretext_metrics = app.pretext_metrics.clone();
+    let metrics = &pretext_metrics;
+    let render_metrics = pretext_enabled.then_some(metrics);
     #[cfg(feature = "line-mode")]
     let line_cursor_selected = app.ui_store.line_cursor_selected;
     #[cfg(not(feature = "line-mode"))]
@@ -64,6 +68,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                         &session.messages[u.start],
                                         max_w,
                                         &theme,
+                                        metrics,
                                     )
                                 });
                             if editing {
@@ -82,7 +87,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                         crate::components::agent_turn::AgentTurn::from_messages(
                                             &session.messages[u.start..u.end],
                                         );
-                                    turn.estimate_height(max_w, &theme)
+                                    turn.estimate_height(max_w, &theme, metrics)
                                 })
                                 + 28.0 // action bar
                         }
@@ -97,7 +102,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                     .map(|(i, m)| {
                         let editing = app.chat_store.editing_message_idx == Some(i);
                         let bubble_h = m.cached_height.unwrap_or_else(|| {
-                            crate::ui::render::estimate_height(m, max_w, &theme)
+                            crate::ui::render::estimate_height(m, max_w, &theme, metrics)
                         });
                         if editing && m.role == Role::User {
                             bubble_h + 80.0
@@ -146,6 +151,17 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                 };
                 #[cfg(not(feature = "line-mode"))]
                 let msg_line_offsets: Vec<usize> = Vec::new();
+
+                // Phase 1 pretext PoC: pre-populate cached heights with pretext
+                // measurements so the virtual list and stick-to-bottom use stable
+                // first-frame estimates.
+                for m in &mut session.messages {
+                    if m.cached_height.is_none() {
+                        m.cached_height = Some(crate::ui::render::estimate_height(
+                            m, max_w, &theme, metrics,
+                        ));
+                    }
+                }
 
                 if session.messages.is_empty() && !is_loading {
                     ui.vertical_centered(|ui| {
@@ -236,6 +252,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                             &session.messages[u.start],
                                             max_w,
                                             &theme,
+                                            metrics,
                                         )
                                     });
                                 if editing {
@@ -254,7 +271,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                             crate::components::agent_turn::AgentTurn::from_messages(
                                                 &session.messages[u.start..u.end],
                                             );
-                                        turn.estimate_height(max_w, &theme)
+                                        turn.estimate_height(max_w, &theme, metrics)
                                     })
                                     + 28.0
                             }
@@ -321,6 +338,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                     &mut pending.retry_error_idx,
                                     &mut pending.switch_model,
                                     sel,
+                                    render_metrics,
                                 )
                             };
                             session.messages[unit.start].cached_height = Some(bubble_h);
@@ -463,7 +481,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         .map(|(i, m)| {
                             let editing = app.chat_store.editing_message_idx == Some(i);
                             let bubble_h = m.cached_height.unwrap_or_else(|| {
-                                crate::ui::render::estimate_height(m, max_w, &theme)
+                                crate::ui::render::estimate_height(m, max_w, &theme, metrics)
                             });
                             if editing && m.role == Role::User {
                                 bubble_h + 80.0
@@ -546,6 +564,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                                 &mut pending.retry_error_idx,
                                 &mut pending.switch_model,
                                 sel,
+                                render_metrics,
                             )
                         };
                         session.messages[i].cached_height = Some(bubble_h);

@@ -5,6 +5,7 @@
 //! remain available for callers that need them (e.g. the custom titlebar).
 
 use crate::App;
+use crate::theme::{ICON_CHAT, ICON_FILE, ICON_SETTINGS, ICON_WRENCH};
 use crate::ui::types::Session;
 use clarity_core::ui::RightRailContext;
 
@@ -33,9 +34,9 @@ pub fn available_contexts(session: Option<&Session>) -> Vec<RightRailContext> {
 
 fn context_icon(ctx: RightRailContext) -> &'static str {
     match ctx {
-        RightRailContext::Session => crate::theme::ICON_CHAT,
-        RightRailContext::Claw => crate::theme::ICON_WRENCH,
-        RightRailContext::Project => crate::theme::ICON_FILE,
+        RightRailContext::Session => ICON_CHAT,
+        RightRailContext::Claw => ICON_WRENCH,
+        RightRailContext::Project => ICON_FILE,
     }
 }
 
@@ -218,82 +219,91 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
     let active_session = app.session_store.active_session().cloned();
     let contexts = available_contexts(active_session.as_ref());
 
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = theme.space_8;
+    // Header row: bot identity on the left, right-rail controls on the right.
+    // The frame adds horizontal padding so the row doesn't touch the side rails.
+    egui::Frame::new()
+        .inner_margin(egui::Margin::symmetric(12, 8))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = theme.space_8;
 
-        // ── Left: bot avatar + name ──
-        let bot_name = app
-            .settings_store
-            .settings_edit
-            .active_persona_id
-            .as_deref()
-            .unwrap_or("Clarity");
-        let initial = bot_name.chars().next().unwrap_or('C').to_string();
-        crate::widgets::avatar::avatar(
-            ui,
-            &initial,
-            &theme,
-            Some(theme.accent.linear_multiply(0.25)),
-            Some(theme.accent),
-        );
-        ui.label(
-            egui::RichText::new(bot_name)
-                .size(theme.text_base)
-                .strong()
-                .color(theme.text_strong),
-        );
+                // ── Left: bot avatar + name ──
+                let bot_name = app
+                    .settings_store
+                    .settings_edit
+                    .active_persona_id
+                    .as_deref()
+                    .unwrap_or("Clarity");
+                let initial = bot_name.chars().next().unwrap_or('C').to_string();
+                crate::widgets::avatar::avatar(
+                    ui,
+                    &initial,
+                    &theme,
+                    Some(theme.accent.linear_multiply(0.25)),
+                    Some(theme.accent),
+                );
+                ui.label(
+                    egui::RichText::new(bot_name)
+                        .size(theme.text_base)
+                        .strong()
+                        .color(theme.text_strong),
+                );
 
-        // ── Right: context toggles + drawer expand ──
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = theme.space_4;
+                // ── Right-rail context toggles pushed to the far right ──
+                // S6-C3: this now lives in the full-width chat column, so right
+                // alignment is reliable (it was clipped when rendered inside the
+                // narrower centered-content Ui).
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = theme.space_4;
 
-            // Expand / collapse right rail.
-            let expand_label = if app.view_state.right_rail_visible {
-                "Collapse right rail"
-            } else {
-                "Open right rail"
-            };
-            if crate::widgets::icon_button_toolbar(
-                ui,
-                crate::theme::ICON_LIST,
-                theme.text_base,
-                &theme,
-            )
-            .on_hover_text(expand_label)
-            .clicked()
-            {
-                app.view_state.right_rail_visible = !app.view_state.right_rail_visible;
-                app.persist_layout_settings();
-            }
-
-            // Context toggles (rendered right-to-left, so reverse for stable order).
-            for ctx in contexts.iter().rev() {
-                let active = app.view_state.right_rail_context == *ctx;
-                let (fg, bg) = if active {
-                    (theme.text, theme.surface_strong)
-                } else {
-                    (theme.text_dim, theme.surface)
-                };
-                let resp = ui
-                    .add_sized(
-                        egui::vec2(32.0, 32.0),
-                        egui::Button::new(
-                            egui::RichText::new(context_icon(*ctx))
-                                .size(theme.text_base)
-                                .color(fg),
-                        )
-                        .fill(bg)
-                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                    // Drawer expand/collapse icon (rightmost).
+                    if crate::widgets::icon_button(
+                        ui,
+                        ICON_SETTINGS,
+                        theme.text_md,
+                        theme.accent.linear_multiply(0.25),
+                        egui::CornerRadius::same(theme.radius_sm as u8),
+                        &theme,
                     )
-                    .on_hover_text(context_tooltip(*ctx));
-                if resp.clicked() {
-                    app.view_state.set_right_rail_context(*ctx);
-                    app.persist_layout_settings();
-                }
-            }
-        });
-    });
+                    .on_hover_text("展开/折叠右栏")
+                    .clicked()
+                    {
+                        app.view_state.right_rail_visible = !app.view_state.right_rail_visible;
+                        app.persist_layout_settings();
+                    }
 
+                    // Context switcher: one icon per available context.
+                    for ctx in &contexts {
+                        let is_active = app.view_state.right_rail_context == *ctx
+                            && app.view_state.right_rail_visible;
+                        let icon = context_icon(*ctx);
+                        let fill = if is_active {
+                            theme.accent.linear_multiply(0.2)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        if crate::widgets::icon_button(
+                            ui,
+                            icon,
+                            theme.text_md,
+                            fill,
+                            egui::CornerRadius::same(theme.radius_sm as u8),
+                            &theme,
+                        )
+                        .on_hover_text(context_tooltip(*ctx))
+                        .clicked()
+                        {
+                            if is_active {
+                                app.view_state.right_rail_visible = false;
+                            } else {
+                                app.view_state.set_right_rail_context(*ctx);
+                            }
+                            app.persist_layout_settings();
+                        }
+                    }
+                });
+            });
+        });
     ui.add_space(theme.space_4);
 
     if let Some(banner) = app.ui_store.network_banner.clone() {
@@ -312,7 +322,7 @@ pub fn render_header(app: &mut App, ui: &mut egui::Ui) {
         ui.separator();
     }
 
-    if app.chat_store.compacting {
+    if app.view_state.turn == clarity_core::ui::TurnState::Compacting {
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("Compacting conversation history…")

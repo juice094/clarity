@@ -61,7 +61,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .add(new_session_btn)
                             .on_hover_text("New session (Ctrl+N)")
                             .clicked()
-                            && !app.chat_store.is_loading
+                            && app.view_state.turn != clarity_core::ui::TurnState::Loading
                         {
                             app.new_session();
                         }
@@ -238,7 +238,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                             .iter()
                             .filter(|b| b.status == "Running")
                             .count();
-                    let subagents_expanded = app.ui_store.subagents_expanded;
+                    let subagents_expanded = app.view_state.expansions.subagents;
 
                     ui.horizontal(|ui| {
                         ui.label(
@@ -267,7 +267,7 @@ pub fn render_sidebar(app: &mut App, ctx: &egui::Context) {
                                 &app.ui_store.theme,
                             );
                             if chevron_resp.clicked() {
-                                app.ui_store.subagents_expanded = !subagents_expanded;
+                                app.view_state.expansions.subagents = !subagents_expanded;
                             }
                         });
                     });

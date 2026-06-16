@@ -10,11 +10,12 @@ use clarity_core::agent::{
     AgentController, ControllerEvent, Message as AgentMessage, MessageRole, Op,
     driver::ConversationChatDriver,
 };
-use futures::stream;
+use futures::{Stream, stream};
 use serde::{Deserialize, Serialize};
 
 use std::convert::Infallible;
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::{debug, info, warn};
 
 use crate::handlers::AgentHandle;
@@ -119,6 +120,126 @@ pub struct Usage {
     pub completion_tokens: u32,
     /// Total tokens consumed.
     pub total_tokens: u32,
+}
+
+/// Build an OpenAI-compatible SSE stream from agent controller events.
+///
+/// The `on_complete` callback is invoked with the final assistant message when
+/// a [`ControllerEvent::Complete`] is observed. It is typically used to persist
+/// the turn to a session or thread store without blocking the SSE stream.
+pub(crate) fn chat_completion_sse_stream<F>(
+    model: String,
+    event_rx: UnboundedReceiver<ControllerEvent>,
+    on_complete: F,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>>
+where
+    F: Fn(String) + Send + Sync + 'static,
+{
+    let created = chrono::Utc::now().timestamp();
+    let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
+    let on_complete = Arc::new(on_complete);
+
+    let sse_stream = stream::unfold((event_rx, 0u8), move |(mut rx, step)| {
+        let model = model.clone();
+        let id = id.clone();
+        let on_complete = on_complete.clone();
+        async move {
+            if step == 2 {
+                return None;
+            }
+            if step == 1 {
+                let event = SseEvent::default().data("[DONE]");
+                return Some((Ok::<_, Infallible>(event), (rx, 2)));
+            }
+            match rx.recv().await {
+                Some(ControllerEvent::Chunk(text)) => {
+                    let data = serde_json::json!({
+                        "id": &id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": &model,
+                        "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 0)))
+                }
+                Some(ControllerEvent::ToolCallStart {
+                    id: tc_id,
+                    name,
+                    arguments,
+                }) => {
+                    let args_str = arguments.to_string();
+                    let data = serde_json::json!({
+                        "id": &id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": &model,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {
+                                "tool_calls": [{
+                                    "index": 0,
+                                    "id": tc_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": name,
+                                        "arguments": args_str
+                                    }
+                                }]
+                            },
+                            "finish_reason": null
+                        }]
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 0)))
+                }
+                Some(ControllerEvent::ToolResult { id: tc_id, result }) => {
+                    let data = serde_json::json!({
+                        "object": "clarity.event",
+                        "type": "tool_result",
+                        "id": tc_id,
+                        "result": result
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 0)))
+                }
+                Some(ControllerEvent::StepBegin { tool_name }) => {
+                    let data = serde_json::json!({
+                        "object": "clarity.event",
+                        "type": "step_begin",
+                        "tool_name": tool_name
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 0)))
+                }
+                Some(ControllerEvent::Complete(final_text)) => {
+                    on_complete(final_text.clone());
+                    let data = serde_json::json!({
+                        "id": &id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": &model,
+                        "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 1)))
+                }
+                Some(ControllerEvent::Error(_)) | None => {
+                    let data = serde_json::json!({
+                        "id": &id,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": &model,
+                        "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
+                    });
+                    let event = SseEvent::default().data(data.to_string());
+                    Some((Ok(event), (rx, 1)))
+                }
+            }
+        }
+    });
+
+    Sse::new(sse_stream)
 }
 
 /// OpenAI-compatible chat completions endpoint.
@@ -260,11 +381,7 @@ pub async fn chat_completions(
     }
 
     if req.stream {
-        let model = req.model.clone();
-        let created = chrono::Utc::now().timestamp();
-        let id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
-
-        // Clone session store for background persistence in streaming mode
+        // Clone session store for background persistence in streaming mode.
         let store = state.session_store.clone();
         let sid = session_id.clone();
         let last_user_content = req
@@ -274,128 +391,24 @@ pub async fn chat_completions(
             .find(|m| m.role == "user")
             .map(|m| m.content.clone());
 
-        let sse_stream = stream::unfold((event_rx, 0u8), move |(mut rx, step)| {
-            let model = model.clone();
-            let id = id.clone();
-            let store = store.clone();
-            let sid = sid.clone();
-            let last_user_content = last_user_content.clone();
-            async move {
-                if step == 2 {
-                    return None;
-                }
-                if step == 1 {
-                    let event = SseEvent::default().data("[DONE]");
-                    return Some((Ok::<_, Infallible>(event), (rx, 2)));
-                }
-                match rx.recv().await {
-                    Some(ControllerEvent::Chunk(text)) => {
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{"index":0,"delta":{"content":text},"finish_reason":null}]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 0)))
-                    }
-                    Some(ControllerEvent::ToolCallStart {
-                        id: tc_id,
-                        name,
-                        arguments,
-                    }) => {
-                        let args_str = arguments.to_string();
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{
-                                "index": 0,
-                                "delta": {
-                                    "tool_calls": [{
-                                        "index": 0,
-                                        "id": tc_id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": name,
-                                            "arguments": args_str
-                                        }
-                                    }]
-                                },
-                                "finish_reason": null
-                            }]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 0)))
-                    }
-                    Some(ControllerEvent::ToolResult { id: tc_id, result }) => {
-                        let data = serde_json::json!({
-                            "object": "clarity.event",
-                            "type": "tool_result",
-                            "id": tc_id,
-                            "result": result
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 0)))
-                    }
-                    Some(ControllerEvent::StepBegin { tool_name }) => {
-                        let data = serde_json::json!({
-                            "object": "clarity.event",
-                            "type": "step_begin",
-                            "tool_name": tool_name
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 0)))
-                    }
-                    Some(ControllerEvent::Complete(final_text)) => {
-                        // Persist the turn in the background
-                        if let (Some(s), Some(uc)) = (sid, last_user_content) {
-                            tokio::spawn(async move {
-                                let _ = store
-                                    .append_message(
-                                        &s,
-                                        &crate::session_store::SessionMessage::new("user", &uc),
-                                    )
-                                    .await;
-                                let _ = store
-                                    .append_message(
-                                        &s,
-                                        &crate::session_store::SessionMessage::new(
-                                            "assistant",
-                                            &final_text,
-                                        ),
-                                    )
-                                    .await;
-                            });
-                        }
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 1)))
-                    }
-                    Some(ControllerEvent::Error(_)) | None => {
-                        let data = serde_json::json!({
-                            "id": &id,
-                            "object": "chat.completion.chunk",
-                            "created": created,
-                            "model": &model,
-                            "choices": [{"index":0,"delta":{},"finish_reason":"stop"}]
-                        });
-                        let event = SseEvent::default().data(data.to_string());
-                        Some((Ok(event), (rx, 1)))
-                    }
-                }
+        let on_complete = move |final_text: String| {
+            if let (Some(s), Some(uc)) = (sid.clone(), last_user_content.clone()) {
+                let store = store.clone();
+                tokio::spawn(async move {
+                    let _ = store
+                        .append_message(&s, &crate::session_store::SessionMessage::new("user", &uc))
+                        .await;
+                    let _ = store
+                        .append_message(
+                            &s,
+                            &crate::session_store::SessionMessage::new("assistant", &final_text),
+                        )
+                        .await;
+                });
             }
-        });
+        };
 
-        Sse::new(sse_stream).into_response()
+        chat_completion_sse_stream(req.model.clone(), event_rx, on_complete).into_response()
     } else {
         // Non-streaming: accumulate chunks until Complete/Error.
         let mut content = String::new();

@@ -4,7 +4,7 @@ use crate::App;
 /// Displays live tool call activity from `chat_store.tool_calls`.
 pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme;
-    let expanded = app.ui_store.thinking_log_expanded;
+    let expanded = app.view_state.expansions.thinking_log;
 
     // ── Header bar ──
     ui.horizontal(|ui| {
@@ -43,7 +43,7 @@ pub fn render_thinking_log(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.ui_store.thinking_log_expanded = !expanded;
+                app.view_state.expansions.thinking_log = !expanded;
             }
         });
     });

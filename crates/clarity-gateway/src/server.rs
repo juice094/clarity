@@ -7,6 +7,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::{RwLock, Semaphore};
@@ -23,6 +24,9 @@ use clarity_contract::subagent::BatchProgress;
 use clarity_core::activity::ActivityLogger;
 use clarity_core::agent::Agent;
 use clarity_core::background::BackgroundTaskManager;
+use clarity_core::thread::ThreadManager;
+use clarity_rollout::RolloutConfig;
+use clarity_thread_store::{InMemoryThreadStore, LocalThreadStore, ThreadStore};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
@@ -41,6 +45,10 @@ pub struct AppState {
     pub agent: Arc<Agent>,
     /// Persistent SQLite session store.
     pub session_store: Arc<PersistentSessionStore>,
+    /// Thread store (v2 session persistence).
+    pub thread_store: Arc<dyn ThreadStore>,
+    /// Thread manager helper.
+    pub thread_manager: ThreadManager,
     /// Background task manager.
     pub task_manager: Arc<BackgroundTaskManager>,
     /// Activity/event logger.
@@ -56,7 +64,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Create a new shared application state.
+    /// Create a new shared application state using the current working directory
+    /// as the Clarity home.
     ///
     /// Falls back to an in-memory session store if the persistent SQLite store
     /// cannot be opened. Returns an error only if both attempts fail.
@@ -64,10 +73,20 @@ impl AppState {
         agent: Arc<Agent>,
         task_manager: Arc<BackgroundTaskManager>,
     ) -> Result<Self, SessionStoreError> {
-        let db_path = std::env::current_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            .join(".clarity")
-            .join("sessions.db");
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::new_with_home(agent, task_manager, cwd.join(".clarity")).await
+    }
+
+    /// Create a new shared application state with an explicit Clarity home.
+    ///
+    /// This is used by tests to avoid shared-disk state between parallel runs.
+    pub async fn new_with_home(
+        agent: Arc<Agent>,
+        task_manager: Arc<BackgroundTaskManager>,
+        clarity_home: impl AsRef<Path>,
+    ) -> Result<Self, SessionStoreError> {
+        let clarity_home = clarity_home.as_ref().to_path_buf();
+        let db_path = clarity_home.join("sessions.db");
 
         let session_store = match PersistentSessionStore::new(&db_path).await {
             Ok(store) => {
@@ -86,12 +105,55 @@ impl AppState {
             }
         };
 
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let rollout_config = RolloutConfig {
+            clarity_home: clarity_home.clone(),
+            sqlite_home: clarity_home.clone(),
+            cwd: cwd.clone(),
+            model_provider_id: String::new(),
+            generate_memories: false,
+        };
+
+        let thread_store: Arc<dyn ThreadStore> = match tokio::task::spawn_blocking({
+            let config = rollout_config.clone();
+            move || {
+                LocalThreadStore::new(
+                    config.clone(),
+                    LocalThreadStore::default_state_db_path(&config),
+                )
+            }
+        })
+        .await
+        {
+            Ok(Ok(store)) => {
+                info!("Local thread store initialized at {:?}", clarity_home);
+                Arc::new(store)
+            }
+            Ok(Err(e)) => {
+                warn!(
+                    "Failed to create local thread store at {:?}: {}. Falling back to in-memory store.",
+                    clarity_home, e
+                );
+                Arc::new(InMemoryThreadStore::new())
+            }
+            Err(e) => {
+                warn!(
+                    "Thread store initialization panicked: {}. Falling back to in-memory store.",
+                    e
+                );
+                Arc::new(InMemoryThreadStore::new())
+            }
+        };
+        let thread_manager = ThreadManager::new(thread_store.clone());
+
         let oauth_service = Arc::new(clarity_llm::auth::OAuthService::new());
         oauth_service.register_kimi_code();
 
         Ok(Self {
             agent: agent.clone(),
             session_store,
+            thread_store,
+            thread_manager,
             task_manager,
             activity_logger: ActivityLogger::new(),
             started_at: Utc::now(),
@@ -317,6 +379,32 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             delete(handlers::cron::delete_cron_task),
         )
         .route("/api/search", post(handlers::memory::search_memory))
+        .route(
+            "/api/v2/threads",
+            post(handlers::threads::create_thread).get(handlers::threads::list_threads),
+        )
+        .route(
+            "/api/v2/threads/:id",
+            get(handlers::threads::get_thread)
+                .patch(handlers::threads::update_thread)
+                .delete(handlers::threads::delete_thread),
+        )
+        .route(
+            "/api/v2/threads/:id/archive",
+            post(handlers::threads::archive_thread),
+        )
+        .route(
+            "/api/v2/threads/:id/unarchive",
+            post(handlers::threads::unarchive_thread),
+        )
+        .route(
+            "/api/v2/threads/:id/fork",
+            post(handlers::threads::fork_thread),
+        )
+        .route(
+            "/api/v2/threads/:id/chat",
+            post(handlers::thread_chat::thread_chat),
+        )
         .route("/ws", get(crate::ws::ws_handler))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

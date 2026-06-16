@@ -86,6 +86,8 @@ pub mod ids {
     pub const TOGGLE_TEAM_PANEL: &str = "toggle-team-panel";
     /// `TOGGLE_DASHBOARD` constant.
     pub const TOGGLE_DASHBOARD: &str = "toggle-dashboard";
+    /// `TOGGLE_LAYOUT_DEBUG` constant.
+    pub const TOGGLE_LAYOUT_DEBUG: &str = "toggle-layout-debug";
 
     // ── Input / Palette ──
     /// `FOCUS_INPUT` constant.
@@ -189,6 +191,16 @@ pub mod built_in {
         .with_shortcut("Ctrl+Shift+D")
     }
 
+    /// `toggle_layout_debug`.
+    pub fn toggle_layout_debug() -> CommandItem {
+        CommandItem::new(
+            ids::TOGGLE_LAYOUT_DEBUG,
+            "Toggle Layout Debug",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+Shift+L")
+    }
+
     /// `toggle_command_palette`.
     pub fn toggle_command_palette() -> CommandItem {
         CommandItem::new(
@@ -212,6 +224,7 @@ pub mod built_in {
             toggle_skill_panel(),
             toggle_team_panel(),
             toggle_dashboard(),
+            toggle_layout_debug(),
             toggle_command_palette(),
         ]
     }

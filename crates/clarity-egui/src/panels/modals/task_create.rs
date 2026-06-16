@@ -4,7 +4,7 @@ use crate::ui::types::UiEvent;
 
 /// Renders the task create modal UI.
 pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
-    if !app.task_store.task_create_modal_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::TaskCreate) {
         return;
     }
     let mut created = false;
@@ -170,8 +170,8 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
         app.task_store.task_create_desc.clear();
         app.task_store.task_create_prompt.clear();
         app.task_store.task_create_priority = 2;
-        app.task_store.task_create_modal_open = false;
+        app.view_state.close_modal();
     } else if close_requested {
-        app.task_store.task_create_modal_open = false;
+        app.view_state.close_modal();
     }
 }

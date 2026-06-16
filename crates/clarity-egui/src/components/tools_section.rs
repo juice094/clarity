@@ -4,7 +4,7 @@ use crate::App;
 /// Visual style mirrors the old toolbar.rs panel: large header, status dots, accent button.
 pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme;
-    let expanded = app.ui_store.tools_expanded;
+    let expanded = app.view_state.expansions.tools;
 
     // ── Header bar (always visible) ──
     let active_tasks = app
@@ -52,7 +52,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.ui_store.tools_expanded = !expanded;
+                app.view_state.expansions.tools = !expanded;
             }
         });
     });
@@ -119,6 +119,7 @@ pub fn render_tools_section(app: &mut App, ui: &mut egui::Ui) {
         )
         .clicked()
     {
-        app.task_store.task_create_modal_open = true;
+        app.view_state
+            .open_modal(clarity_core::ui::ModalType::TaskCreate);
     }
 }

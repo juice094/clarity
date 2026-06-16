@@ -149,7 +149,8 @@ pub fn render_subagent_progress(app: &mut App, ui: &mut egui::Ui) {
                             .clicked()
                         {
                             app.subagent_store.viewing_subagent_id = Some(agent_id.clone());
-                            app.subagent_store.subagent_view_modal_open = true;
+                            app.view_state
+                                .open_modal(clarity_core::ui::ModalType::SubAgentView);
                         }
                         ui.add_space(theme.space_4);
                     }

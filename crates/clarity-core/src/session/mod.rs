@@ -2,3 +2,5 @@
 
 #[cfg(feature = "session-migration")]
 pub mod migration;
+#[cfg(feature = "session-migration")]
+pub mod thread_migration;

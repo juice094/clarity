@@ -14,5 +14,7 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
 parking_lot = "0.12"
 dirs = "5.0"

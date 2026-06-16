@@ -4,18 +4,28 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+clarity-contract = { path = "../clarity-contract" }
 clarity-core = { path = "../clarity-core" }
 clarity-llm = { path = "../clarity-llm" }
+clarity-thread-store = { path = "../clarity-thread-store" }
 tokio = { version = "1", features = ["full"] }
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = "1.0"
+chrono = { workspace = true }
 anyhow = "1.0"
 tracing = "0.1"
 dirs = "5.0"
 
+[dev-dependencies]
+tempfile = "3.9"
+serde_json = "1.0"
+
 [features]
 default = []
 local-llm = ["clarity-core/local-llm"]
+session-migration = ["clarity-core/session-migration"]
+hermes = ["clarity-core/hermes"]
 
 [[bin]]
 name = "clarity-headless"

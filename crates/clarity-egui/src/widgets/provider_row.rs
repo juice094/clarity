@@ -21,6 +21,7 @@
 //! the canonical "custom widget in widgets/" exemption per `EGUI_LAYOUT.md` §RULE 4.
 //! Callers only see the idiomatic `Response` return.
 
+use crate::design_system::{self, Space, Status, Text};
 use crate::theme::Theme;
 
 /// Render a single provider list row.
@@ -71,8 +72,6 @@ pub fn provider_row(
         egui::Stroke::NONE
     };
 
-    let text_color = if is_active { theme.accent } else { theme.text };
-
     // Paint the frame and place content inside.
     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
         egui::Frame::new()
@@ -83,20 +82,21 @@ pub fn provider_row(
             .show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
                 ui.horizontal_centered(|ui| {
-                    crate::widgets::status_dot(ui, has_key, theme);
-                    ui.add_space(theme.space_8);
-                    ui.label(
-                        egui::RichText::new(label)
-                            .font(theme.font(theme.text_base))
-                            .color(text_color),
+                    let status = if has_key {
+                        Status::Online
+                    } else {
+                        Status::Offline
+                    };
+                    design_system::status_dot(ui, status);
+                    design_system::gap(ui, Space::S1);
+                    design_system::text(
+                        ui,
+                        label,
+                        if is_active { Text::Accent } else { Text::Body },
                     );
                     if model_count > 0 {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(format!("{}", model_count))
-                                    .font(theme.font(theme.text_xs))
-                                    .color(theme.text_muted),
-                            );
+                            design_system::text(ui, format!("{}", model_count), Text::Small);
                         });
                     }
                 });

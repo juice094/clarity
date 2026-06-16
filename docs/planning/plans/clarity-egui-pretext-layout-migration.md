@@ -5,6 +5,14 @@
 > 范围：`crates/clarity-egui`  
 > 目标：在保留现有功能的前提下，把当前"标题栏 + 侧边栏 + 主视图 + 浮动右侧面板"的架构，迁移为概念图所示的"左侧边栏 + 中主内容区 + 右工具栏 + 浮动操作轨"三栏单页面布局，并明确 pretext-rust 的接入点。
 
+## 当前状态（2026-06-13）
+
+- **Phase A 新版布局外壳**：✅ 已完成。`layout.rs` 已接入 `App::render_layout_shell()`，形成左 icon rail + 中主舞台 + 右抽屉 rail 的三栏外壳。
+- **Phase B 右侧面板整合**：✅ 已完成。`panels/right_rail/` 已接入 Status / Tools / Subagents / Memory cards；`legacy/task.rs` 与 `legacy/team.rs` 已删除。
+- **Phase C 左侧边栏双层化**：✅ 已完成。当前 `panels/sidebar/` 已实现 icon rail + 可展开列表；`size_sidebar` 调整为 200px（含 rail 后总宽约 236px）。
+- **S6-C3 布局几何精化**：✅ 已完成。基于用户提供的 Kimi 参考截图与手绘概念图，调整默认窗口为 1280×800、`size_input` 88px；`CentralPanel` 水平内边距清零，`chat_header` 撑满中间列全宽，消息列表/输入栏仍居中；header 右栏切换按钮 far-right 定位问题修复。
+- **人机协作标注器**：✅ 已完成。新增 `assets/ui_annotator.html` + `assets/ui-annotator-schema.md` + `assets/render_annotations.py`，支持用户框选 UI 元素并导出 JSON，AI 读取后可直接转译为 egui 布局代码。
+
 ---
 
 ## 一、概念图结构解读
@@ -99,7 +107,7 @@ pub enum RightRailSection {
 
 ## 四、分阶段迁移路线
 
-### Phase A — 新版布局外壳（1~2 天）
+### Phase A — 新版布局外壳（1~2 天） ✅ 已完成
 
 1. 扩展 `layout.rs`
    - 新增 `ThreeColumnLayout` 计算：左 rail 宽度、左列表宽度、中内容区最小宽度、右 rail 宽度。
@@ -112,7 +120,7 @@ pub enum RightRailSection {
    - 浮动：右侧快捷操作轨（`ActionRail`）。
 3. 保留所有现有 render 方法作为内容实现，仅调整容器。
 
-### Phase B — 右侧面板整合（1~2 天）
+### Phase B — 右侧面板整合（1~2 天） ✅ 已完成
 
 1. 新建 `panels/right_rail/mod.rs`
    - 包含 `StatusCard`、`ToolsCard`、`SubagentCard`、`MemoryCard`。
@@ -121,14 +129,17 @@ pub enum RightRailSection {
 4. 把 `legacy/mcp.rs`、`legacy/skill.rs` 迁入 `ToolsCard`。
 5. 删除 `legacy/` 目录（确认无调用后）。
 
-### Phase C — 左侧边栏双层化（1 天）
+### Phase C — 左侧边栏双层化（1 天） ✅ 已完成
 
 1. 把当前 `panels/sidebar/mod.rs` 拆为：
    - `sidebar/rail.rs`：icon-only 垂直 rail。
    - `sidebar/panel.rs`：可展开的会话/分类/插件列表。
 2. `panels/workspace/` 作为 `LeftRailSection::Workspace` 的内容，或保留为独立左中列（概念图中 workspace 更像左侧面板）。
 
-### Phase D — 聊天区域 pretext 升级（2~3 天）
+### Phase D — 聊天区域 pretext 升级（2~3 天）🟡 PoC 待决策
+
+> **前置 PoC 计划书**：`docs/planning/plans/pretext-poc-plan.md`  
+> 必须先完成 PoC 并确认“继续 / 折中 / 回退”后，再推进 Phase D 主线。
 
 1. 新建 `widgets/message_bubble.rs` 或 `panels/chat/bubble.rs`
    - 使用 `pretext_core::rich_inline` 解析消息内容为 items（普通文本、mention、code span、图片占位）。

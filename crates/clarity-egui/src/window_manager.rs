@@ -1,7 +1,10 @@
-#![allow(dead_code)]
-
 //! Window Manager — multi-window lifecycle for the Agent OS (egui path A).
 //!
+//! This module is staged for the multi-window Agent OS path and is not yet
+//! wired into the main App loop. The dead_code allowance is temporary while
+//! the Soul → Window binding and WmCommand dispatch are being integrated.
+#![allow(dead_code)]
+
 //! Path A: single process with multiple `eframe` windows.
 //! Each window is bound to a Soul and communicates via the TierBus.
 //!

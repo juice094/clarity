@@ -198,7 +198,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         };
         ui.horizontal(|ui| {
             if ui.add(theme.primary_button(&login_label)).clicked() {
-                app.settings_store.kimi_code_login_open = true;
+                app.view_state
+                    .open_modal(clarity_core::ui::ModalType::KimiCodeLogin);
                 app.settings_store.kimi_code_login_state = crate::stores::KimiCodeLoginState::Idle;
             }
             if has_token {

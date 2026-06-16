@@ -4,7 +4,7 @@ use crate::App;
 
 /// Renders the subagent view modal UI.
 pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
-    if !app.subagent_store.subagent_view_modal_open {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::SubAgentView) {
         return;
     }
 
@@ -137,7 +137,7 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
         });
 
     if close_requested {
-        app.subagent_store.subagent_view_modal_open = false;
+        app.view_state.close_modal();
         app.subagent_store.viewing_subagent_id = None;
     }
 }

@@ -11,7 +11,11 @@ use crate::App;
 use clarity_core::ui::SidePanel;
 
 /// Computed widths for the main screen regions.
+///
+/// The public fields are exposed for callers that need geometry; some are not
+/// yet read by the current layout shell but are part of the stable API.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct LayoutMetrics {
     /// Width of the icon-only left rail.
     pub left_rail_w: f32,

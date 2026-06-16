@@ -4,7 +4,7 @@ use crate::ui::types::{UiEvent, WebTab};
 /// Render a collapsible Web Tabs panel for the left sidebar.
 pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
     let theme = &app.ui_store.theme;
-    let expanded = app.ui_store.web_tabs_expanded;
+    let expanded = app.view_state.expansions.web_tabs;
 
     // ── Header bar ──
     ui.horizontal(|ui| {
@@ -40,7 +40,7 @@ pub fn render_web_tabs(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.ui_store.web_tabs_expanded = !expanded;
+                app.view_state.expansions.web_tabs = !expanded;
             }
         });
     });

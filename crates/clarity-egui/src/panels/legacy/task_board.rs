@@ -32,7 +32,8 @@ pub fn render_task_board(app: &mut App, ctx: &egui::Context) {
                         )
                         .clicked()
                     {
-                        app.task_store.task_create_modal_open = true;
+                        app.view_state
+                            .open_modal(clarity_core::ui::ModalType::TaskCreate);
                     }
                 });
             });

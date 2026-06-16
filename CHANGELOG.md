@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **S6-C3 Pretext 布局几何精化与人机协作标注器（2026-06-13）**
+  - 新增 `assets/ui_annotator.html`：单文件零依赖浏览器图片标注器，支持拖拽图片、拖框创建/移动/缩放标注、属性编辑（label / role / priority / color / note）、JSON 导入导出、`localStorage` 自动保存；颜色语义与 `EGUI_LAYOUT_DEBUG.md` 对齐（绿=content、蓝=rail、红=chrome、黄=floating）。
+  - 新增 `assets/ui-annotator-schema.md` 与 `assets/render_annotations.py`：定义标注 JSON schema 并提供批量渲染脚本，支持中文系统字体回退，实现“用户框选 → 结构化 JSON → AI 转译 egui 代码”的协作闭环。
+  - 布局 token 调整：`size_sidebar` 220→200、`size_input` 72→88、`window_default_w/h` 900×700→1280×800，默认窗口比例更接近手绘概念图与 Kimi 参考截图。
+  - 聊天区结构重构：`crates/clarity-egui/src/panels/chat/mod.rs` 的 `CentralPanel` 水平内边距清零；`chat_header` 撑满中间列全宽；消息列表与输入栏仍通过 `content_max_width` 居中。
+  - Header 右栏切换按钮修复：`crates/clarity-egui/src/panels/chat/header.rs` 使用 `right_to_left` 布局将右栏抽屉与上下文切换图标推至最右侧，解决了此前在居中内容 Ui 内部右对齐被 `clip_rect` 裁剪的问题。
+  - 新增 `crates/clarity-egui/src/ui/debug_overlay.rs` 红/绿/蓝/黄布局诊断覆盖层，统一可视化 `max_rect`、`clip_rect`、控件锚点与警告；`ViewState` 与 `GuiSettings` 新增 `debug_layout_overlay` 持久化开关；快捷键 `Ctrl+Shift+L`、Command Palette 与 Settings → Interface 均可切换。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1099 passed / 0 failed / 8 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（152 passed / 0 failed）。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

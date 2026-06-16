@@ -78,18 +78,28 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
         .frame(
             egui::Frame::central_panel(&ctx.style())
                 .fill(app.ui_store.theme.bg)
-                .inner_margin(egui::Margin::symmetric(
-                    app.ui_store.theme.space_20 as i8,
-                    app.ui_store.theme.space_16 as i8,
-                )),
+                // The chat column itself has no horizontal padding; the header spans the
+                // full width between the left/right rails, and the message list is
+                // centered below it via `with_centered_content`.
+                .inner_margin(egui::Margin::ZERO),
         )
         .show(ctx, |ui| {
+            if crate::ui::debug_overlay::is_enabled(ui.ctx()) {
+                crate::ui::debug_overlay::show_layout_state(ui, "chat-area");
+            }
             // Hard minimum to prevent layout collapse when side panels are wide.
             ui.set_min_size(egui::vec2(360.0, 200.0));
-            // Kimi-style: entire chat area (header + messages) constrained to 800px max
-            // and centered, with generous side padding on wide screens.
+
+            // S6-C3: Header spans the full chat column so right-rail toggles can be
+            // pushed to the far right without being clipped by the centered content Ui.
+            // Only the message list is constrained to content_max_width.
+            ui.add_space(app.ui_store.theme.space_12);
+            render_header(app, ui);
+            ui.add_space(app.ui_store.theme.space_4);
             with_centered_content(ui, app.ui_store.content_max_width, |ui| {
-                render_header(app, ui);
+                if crate::ui::debug_overlay::is_enabled(ui.ctx()) {
+                    crate::ui::debug_overlay::show_layout_state(ui, "chat-content");
+                }
                 render_message_list(app, ui);
             });
         });

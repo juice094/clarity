@@ -1,6 +1,7 @@
 //! Right rail — Memory / Teams card.
 
 use crate::App;
+use crate::design_system::{self, ButtonStyle, Space, Surface, Text};
 use crate::ui::types::ToastLevel;
 use clarity_core::tools::Tool;
 
@@ -8,39 +9,25 @@ use clarity_core::tools::Tool;
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
 
-    ui.label(
-        egui::RichText::new("Teams & Memory")
-            .size(theme.text_base)
-            .strong()
-            .color(theme.text),
-    );
-    ui.add_space(theme.space_12);
+    design_system::text(ui, "Teams & Memory", Text::BodyStrong);
+    design_system::gap(ui, Space::S2);
 
     // New team button
+    let mut new_team_clicked = false;
     ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .button(
-                    egui::RichText::new("+ New Team")
-                        .size(theme.text_xs)
-                        .color(theme.text),
-                )
-                .clicked()
-            {
-                app.team_store.create_modal_open = true;
-            }
-        });
+        design_system::push_right(ui);
+        new_team_clicked = design_system::btn(ui, "+ New Team", ButtonStyle::Secondary).clicked();
     });
-    ui.add_space(theme.space_8);
+    if new_team_clicked {
+        app.view_state
+            .open_modal(clarity_core::ui::ModalType::TeamCreate);
+    }
+    design_system::gap(ui, Space::S1);
 
     if app.team_store.teams.is_empty() {
-        ui.vertical_centered(|ui| {
-            ui.add_space(theme.space_40);
-            ui.label(
-                egui::RichText::new("No teams yet")
-                    .size(theme.text_base)
-                    .color(theme.text_dim),
-            );
+        design_system::center(ui, |ui| {
+            design_system::gap(ui, Space::S6);
+            design_system::text(ui, "No teams yet", Text::BodyMuted);
         });
         return;
     }
@@ -50,130 +37,74 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (i, team) in app.team_store.teams.iter().enumerate() {
-            egui::Frame::new()
-                .fill(theme.surface)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .stroke(egui::Stroke::new(1.0_f32, theme.border))
-                .inner_margin(egui::Margin::same(10))
-                .show(ui, |ui| {
-                    ui.set_min_width(ui.available_width());
+            design_system::surface(ui, Surface::Card, |ui| {
+                ui.set_min_width(ui.available_width());
 
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(&team.name)
-                                .size(theme.text_sm)
-                                .strong()
-                                .color(theme.text),
-                        );
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("Delete").size(theme.text_xs),
-                                    )
-                                    .fill(theme.danger.linear_multiply(0.25))
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                                )
-                                .clicked()
-                            {
-                                to_delete = Some(i);
-                            }
-                            ui.add_space(theme.space_4);
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("Run").size(theme.text_xs),
-                                    )
-                                    .fill(theme.accent.linear_multiply(0.25))
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                                )
-                                .clicked()
-                            {
-                                to_run = Some(i);
-                            }
-                        });
-                    });
-
-                    if !team.goal.is_empty() {
-                        ui.label(
-                            egui::RichText::new(&team.goal)
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
+                ui.horizontal(|ui| {
+                    design_system::text(ui, &team.name, Text::BodyStrong);
+                    design_system::push_right(ui);
+                    if design_system::btn(ui, "Run", ButtonStyle::Primary).clicked() {
+                        to_run = Some(i);
                     }
-
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(format!("{} members", team.members.len()))
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
-                        ui.label(
-                            egui::RichText::new("•")
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("max {} concurrent", team.max_concurrency))
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
-                        ui.label(
-                            egui::RichText::new("•")
-                                .size(theme.text_xs)
-                                .color(theme.text_dim),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("{}s timeout", team.timeout_secs))
-                                .size(theme.text_xs)
-                                .color(theme.text_muted),
-                        );
-                    });
-
-                    ui.add_space(theme.space_8);
-
-                    ui.collapsing(
-                        egui::RichText::new(format!("Members ({})", team.members.len()))
-                            .size(theme.text_sm)
-                            .color(theme.text),
-                        |ui| {
-                            ui.add_space(theme.space_4);
-                            for member in &team.members {
-                                egui::Frame::new()
-                                    .fill(theme.glass)
-                                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                                    .inner_margin(egui::Margin::same(8))
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(&member.name)
-                                                    .size(theme.text_sm)
-                                                    .strong()
-                                                    .color(theme.text),
-                                            );
-                                            ui.label(
-                                                egui::RichText::new(format!(
-                                                    "({})",
-                                                    member.agent_type
-                                                ))
-                                                .size(theme.text_xs)
-                                                .color(theme.text_muted),
-                                            );
-                                        });
-                                        if !member.description.is_empty() {
-                                            ui.label(
-                                                egui::RichText::new(&member.description)
-                                                    .size(theme.text_xs)
-                                                    .color(theme.text_dim),
-                                            );
-                                        }
-                                    });
-                                ui.add_space(theme.space_4);
-                            }
-                        },
-                    );
+                    design_system::gap(ui, Space::S0);
+                    if design_system::btn(ui, "Delete", ButtonStyle::Danger).clicked() {
+                        to_delete = Some(i);
+                    }
                 });
-            ui.add_space(theme.space_8);
+
+                if !team.goal.is_empty() {
+                    design_system::text(ui, &team.goal, Text::BodyMuted);
+                }
+
+                design_system::row(ui, |ui| {
+                    design_system::text(ui, format!("{} members", team.members.len()), Text::Small);
+                    design_system::gap(ui, Space::S0);
+                    design_system::text(ui, "•", Text::Small);
+                    design_system::gap(ui, Space::S0);
+                    design_system::text(
+                        ui,
+                        format!("max {} concurrent", team.max_concurrency),
+                        Text::Small,
+                    );
+                    design_system::gap(ui, Space::S0);
+                    design_system::text(ui, "•", Text::Small);
+                    design_system::gap(ui, Space::S0);
+                    design_system::text(ui, format!("{}s timeout", team.timeout_secs), Text::Small);
+                });
+
+                design_system::gap(ui, Space::S1);
+
+                ui.collapsing(
+                    egui::RichText::new(format!("Members ({})", team.members.len()))
+                        .size(theme.text_sm)
+                        .color(theme.text),
+                    |ui| {
+                        design_system::gap(ui, Space::S0);
+                        for member in &team.members {
+                            egui::Frame::new()
+                                .fill(theme.glass)
+                                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                                .inner_margin(egui::Margin::same(8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        design_system::text(ui, &member.name, Text::BodyStrong);
+                                        design_system::gap(ui, Space::S0);
+                                        design_system::text(
+                                            ui,
+                                            format!("({})", member.agent_type),
+                                            Text::Small,
+                                        );
+                                    });
+                                    if !member.description.is_empty() {
+                                        design_system::text(ui, &member.description, Text::Caption);
+                                    }
+                                });
+                            design_system::gap(ui, Space::S0);
+                        }
+                    },
+                );
+            });
+            design_system::gap(ui, Space::S1);
         }
     });
 

@@ -158,7 +158,7 @@ async fn create_agent() -> Result<(Arc<Agent>, String, Option<SkillRegistry>)> {
         .parent()
         .ok_or_else(|| anyhow::anyhow!("invalid memory db path"))?;
     std::fs::create_dir_all(memory_parent)?;
-    let memory_store = Arc::new(PersistentMemoryStore::new(&memory_db_path).await?);
+    let memory_store = Arc::new(PersistentMemoryStore::new_auto(&memory_db_path).await?);
 
     // 创建记忆触发器（每 5 轮对话触发一次）
     let compiled_dir = memory_parent.join("compiled");

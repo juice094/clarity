@@ -8,8 +8,11 @@
 
 use crate::types::{Fact, Result};
 use std::path::Path;
+use std::sync::Arc;
 
 // Re-export backends for convenience
+#[cfg(feature = "hermes")]
+pub use crate::backends::HermesMemoryAdapter;
 #[cfg(feature = "sqlite")]
 pub use crate::backends::SqliteStore;
 pub use crate::backends::{BackendConfig, StorageBackend, StorageFactory};
@@ -43,27 +46,27 @@ pub fn compute_decay_weight(created_at: chrono::DateTime<chrono::Utc>, decay: &D
     (-lambda * age_days).exp()
 }
 
-/// SQLite-based fact store with FTS5 full-text search
+/// Fact store with pluggable storage backends.
 ///
-/// This is the primary storage implementation used by clarity-memory.
-/// It provides efficient full-text search and structured storage.
+/// By default this uses the SQLite backend when the `sqlite` feature is
+/// enabled. Other backends (file, hybrid, hermes) can be selected through
+/// [`BackendConfig`] / [`StorageFactory`] or dedicated constructors such as
+/// [`Self::new_hermes`].
 #[derive(Debug, Clone)]
 pub struct MemoryStore {
-    #[cfg(feature = "sqlite")]
-    inner: SqliteStore,
-    #[cfg(not(feature = "sqlite"))]
-    inner: FileStore,
+    inner: Arc<dyn StorageBackend>,
     decay_config: DecayConfig,
 }
 
 impl MemoryStore {
-    /// Create a new MemoryStore at the given database path
+    /// Create a new MemoryStore at the given database path.
     ///
-    /// If the database doesn't exist, it will be created with the proper schema.
+    /// Uses the SQLite backend when the `sqlite` feature is enabled, otherwise
+    /// falls back to the file backend.
     pub async fn new(db_path: impl AsRef<Path>) -> Result<Self> {
         #[cfg(feature = "sqlite")]
         {
-            let inner = SqliteStore::new(db_path).await?;
+            let inner = Arc::new(SqliteStore::new(db_path).await?);
             Ok(Self {
                 inner,
                 decay_config: DecayConfig::default(),
@@ -71,7 +74,7 @@ impl MemoryStore {
         }
         #[cfg(not(feature = "sqlite"))]
         {
-            let inner = FileStore::new(db_path).await?;
+            let inner = Arc::new(FileStore::new(db_path).await?);
             Ok(Self {
                 inner,
                 decay_config: DecayConfig::default(),
@@ -87,7 +90,7 @@ impl MemoryStore {
     pub fn new_in_memory() -> Result<Self> {
         #[cfg(feature = "sqlite")]
         {
-            let inner = SqliteStore::new_in_memory()?;
+            let inner = Arc::new(SqliteStore::new_in_memory()?);
             Ok(Self {
                 inner,
                 decay_config: DecayConfig::default(),
@@ -101,13 +104,43 @@ impl MemoryStore {
                 std::env::temp_dir().join(format!("clarity_memory_{}", std::process::id()));
             std::fs::create_dir_all(&temp_dir).map_err(crate::types::MemoryError::Io)?;
 
-            let inner = tokio::task::block_in_place(|| {
+            let inner = Arc::new(tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(FileStore::new(&temp_dir))
-            })?;
+            })?);
             Ok(Self {
                 inner,
                 decay_config: DecayConfig::default(),
             })
+        }
+    }
+
+    /// Create a MemoryStore backed by hermes-memory.
+    ///
+    /// Available only when the `hermes` feature is enabled.
+    #[cfg(feature = "hermes")]
+    pub async fn new_hermes(db_path: impl AsRef<Path>) -> Result<Self> {
+        let inner = Arc::new(HermesMemoryAdapter::new(db_path).await?);
+        Ok(Self {
+            inner,
+            decay_config: DecayConfig::default(),
+        })
+    }
+
+    /// Create a MemoryStore, choosing the backend from `CLARITY_MEMORY_BACKEND`.
+    ///
+    /// Falls back to the default SQLite backend when the variable is unset,
+    /// unknown, or requests hermes without the `hermes` feature.
+    pub async fn new_auto(db_path: impl AsRef<Path>) -> Result<Self> {
+        match std::env::var("CLARITY_MEMORY_BACKEND").as_deref() {
+            #[cfg(feature = "hermes")]
+            Ok("hermes") => Self::new_hermes(db_path).await,
+            Ok(value) if value.eq_ignore_ascii_case("hermes") => {
+                tracing::warn!(
+                    "CLARITY_MEMORY_BACKEND=hermes requested but the `hermes` feature is disabled; falling back to sqlite"
+                );
+                Self::new(db_path).await
+            }
+            _ => Self::new(db_path).await,
         }
     }
 
@@ -204,7 +237,6 @@ impl MemoryStore {
     }
 
     /// Save a session note section to the store.
-    #[cfg(feature = "sqlite")]
     pub async fn save_session_note(
         &self,
         session_id: &str,
