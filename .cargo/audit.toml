@@ -5,4 +5,11 @@ ignore = [
     # clarity-claw is a system-tray utility; this unsound path is not reachable in our usage.
     # Tracked upstream in tao/tray-icon ecosystems.
     "RUSTSEC-2024-0429",
+
+    # proc-macro-error 1.0.4: crate is unmaintained.
+    # Pulled in via clarity-claw / clarity-egui → tao / tray-icon → gtk 0.18.2 → glib-macros / gtk3-macros.
+    # tao has an open GTK4 migration PR (tauri-apps/tao#1104) which will remove this dependency.
+    # Until tray-icon/tao release GTK4-based versions, this advisory cannot be resolved transitively.
+    # It is a build-time/unmaintained warning with no known exploitable vulnerability in Clarity's usage.
+    "RUSTSEC-2024-0370",
 ]
