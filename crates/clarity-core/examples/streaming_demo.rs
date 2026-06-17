@@ -12,8 +12,9 @@
 
 use clarity_core::ToolRegistry;
 use clarity_core::agent::{Agent, AgentConfig, MockLlm};
-use parking_lot::Mutex;
+use clarity_wire::{Wire, WireMessage};
 use std::sync::Arc;
+use tokio::time::{Duration, timeout};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,20 +31,35 @@ async fn main() -> anyhow::Result<()> {
     println!("👤 User: {}", query);
     println!("🤖 Assistant: ",);
 
-    let streamed = Arc::new(Mutex::new(Vec::new()));
-    let streamed_clone = streamed.clone();
+    let wire = Wire::new();
+    let mut ui_side = wire.ui_side(false);
 
-    let response = agent
-        .run_streaming(query, move |chunk| {
-            streamed_clone.lock().push(chunk.to_string());
-            print!("{}", chunk);
-            let _ = std::io::Write::flush(&mut std::io::stdout());
-        })
-        .await?;
+    let agent = agent.with_wire(Arc::new(wire));
+
+    let response_handle = tokio::spawn({
+        let agent = agent.clone();
+        let query = query.to_string();
+        async move { agent.run_streaming(&query).await }
+    });
+
+    let mut streamed = Vec::new();
+    loop {
+        match timeout(Duration::from_millis(500), ui_side.recv()).await {
+            Ok(Some(WireMessage::ContentPart { text, .. })) => {
+                streamed.push(text.clone());
+                print!("{}", text);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            }
+            Ok(Some(_)) => continue,
+            _ => break,
+        }
+    }
+
+    let response = response_handle.await??;
 
     println!(
         "\n\n✅ Final response matches streamed text: {}",
-        response == streamed.lock().join("")
+        response == streamed.join("")
     );
     Ok(())
 }

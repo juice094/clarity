@@ -200,13 +200,10 @@ impl App {
         cc.egui_ctx.set_style(style);
 
         let settings_edit = GuiSettings::load();
-        let web_tabs = settings_edit.web_tabs.clone();
-        let font_scale = settings_edit.font_scale.unwrap_or(1.0);
-        let content_width = settings_edit.content_width.unwrap_or(800.0);
-        let active_persona_id = settings_edit
-            .active_persona_id
-            .clone()
-            .unwrap_or_else(|| "kin".to_string());
+        let font_scale = settings_edit
+            .font_scale
+            .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
+        let content_width = settings_edit.content_width.unwrap_or(600.0);
         let right_rail_visible = settings_edit.right_rail_visible;
         let right_rail_context = settings_edit.right_rail_context;
         let right_rail_card_order = settings_edit.right_rail_card_order.clone();
@@ -277,6 +274,7 @@ impl App {
                 last_snapshot: None,
                 input_history: Vec::new(),
                 input_history_idx: None,
+                draft_status: crate::ui::types::DraftStatus::None,
             },
             settings_store: crate::stores::SettingsStore {
                 settings_edit,
@@ -319,29 +317,18 @@ impl App {
                 start: now,
                 theme,
                 content_max_width: content_width,
+                right_rail_width: None,
                 locale: crate::i18n::Locale::default(),
                 last_scroll_offset: 0.0,
                 preview_item: None,
-                preview_drawer_open: false,
                 last_input_modified: now,
-                web_tabs,
-                web_tabs_add_visible: false,
-                thinking_log_show_all: false,
                 pending_approvals: Vec::new(),
                 toasts: vec![],
-                editing_session_id: None,
-                editing_title: String::new(),
                 focus_input_requested: false,
-                agent_turn_style: true,
-                agent_turn_glass: false,
                 kimi_conversation_style: true,
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
-                titlebar_right_width: 260.0,
                 shell_prompt: String::new(),
-                endpoint_registry: clarity_core::endpoint::default_clarity_personas(),
-                active_persona_id,
-                persona_switcher_open: false,
                 active_project: None,
                 pretext_probe_open: false,
                 pretext_probe_wrap_width: 400.0,
@@ -419,6 +406,7 @@ impl App {
                     create_timeout_secs: 300,
                 }
             },
+            project_store: crate::stores::ProjectStore::new(),
             snapshot_store: crate::stores::SnapshotStore::default(),
             gateway_manager,
             skill_watcher,
@@ -434,8 +422,6 @@ impl App {
                 vs.right_rail_visible = right_rail_visible;
                 vs.right_rail_context = right_rail_context;
                 vs.debug_layout_overlay = debug_layout_overlay;
-                // Legacy expansion defaults: most collapsed, web tabs open.
-                vs.expansions.web_tabs = true;
                 if right_rail_card_order.is_empty() {
                     vs.right_rail_card_order = vec![
                         clarity_core::ui::RightRailCard::Progress,
@@ -575,6 +561,7 @@ impl App {
         }
     }
     /// Switch category.
+    #[allow(dead_code)]
     pub(crate) fn switch_category(&mut self, category: &str) {
         if self.session_store.active_category == category {
             return;
@@ -731,6 +718,7 @@ impl App {
     }
 
     /// S6 Phase C: persist the current plugin order.
+    #[allow(dead_code)]
     pub(crate) fn persist_plugin_order(&mut self, order: Vec<String>) {
         self.settings_store.settings_edit.plugin_order = order;
         if let Err(e) = self.commit_settings() {
@@ -784,6 +772,42 @@ impl App {
         if let Err(e) = self.commit_settings() {
             tracing::error!("Failed to save settings: {}", e);
         }
+    }
+
+    /// Increase the global font scale by one step, persist, and re-apply the theme.
+    pub(crate) fn increase_font_scale(&mut self) {
+        let current = self
+            .settings_store
+            .settings_edit
+            .font_scale
+            .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
+        let next = (current + crate::theme::Theme::FONT_SCALE_STEP)
+            .min(crate::theme::Theme::MAX_FONT_SCALE);
+        self.set_font_scale(next);
+    }
+
+    /// Decrease the global font scale by one step, persist, and re-apply the theme.
+    pub(crate) fn decrease_font_scale(&mut self) {
+        let current = self
+            .settings_store
+            .settings_edit
+            .font_scale
+            .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
+        let next = (current - crate::theme::Theme::FONT_SCALE_STEP)
+            .max(crate::theme::Theme::MIN_FONT_SCALE);
+        self.set_font_scale(next);
+    }
+
+    /// Set the font scale to an explicit value and persist it.
+    pub(crate) fn set_font_scale(&mut self, scale: f32) {
+        self.settings_store.settings_edit.font_scale = Some(scale);
+        let theme_name = self.settings_store.settings_edit.theme.clone();
+        self.ui_store.theme = if theme_name == "light" {
+            crate::theme::Theme::light().with_font_scale(scale)
+        } else {
+            crate::theme::Theme::dark().with_font_scale(scale)
+        };
+        self.auto_save_settings();
     }
 
     /// Delete session.

@@ -50,6 +50,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
 
+    // Outer padding around the floating composer card.
+    ui.add_space(theme.space_8);
+
     // ── Attachment chips (above the composer) ──
     if !app.chat_store.attachments.is_empty() || app.chat_store.last_snapshot.is_some() {
         ui.horizontal_wrapped(|ui| {
@@ -97,11 +100,18 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     }
 
     // ── Composer card ──
+    // Compact card hugging the top of the bottom panel. Top padding is removed
+    // so the text area sits flush with the old separator line.
     let composer_frame = egui::Frame::new()
         .fill(theme.input_bg)
-        .corner_radius(egui::CornerRadius::same(16))
+        .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
         .stroke(egui::Stroke::new(1.0, theme.border))
-        .inner_margin(egui::Margin::symmetric(16, 12));
+        .inner_margin(egui::Margin {
+            left: 12,
+            right: 12,
+            top: 6,
+            bottom: 10,
+        });
 
     composer_frame.show(ui, |ui| {
         ui.set_min_width(ui.available_width());
@@ -110,12 +120,13 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         let hint = composer_hint(app);
         let prev_input = app.chat_store.input.clone();
         let line_count = app.chat_store.input.matches('\n').count() + 1;
-        let input_height = (line_count as f32 * 22.0 + 12.0).clamp(28.0, 120.0);
+        // Compact single-line baseline; expands smoothly with Shift+Enter.
+        let input_height = (line_count as f32 * 20.0 + 10.0).clamp(24.0, 100.0);
 
         let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
             .desired_rows(line_count.max(1))
             .hint_text(hint)
-            .margin(egui::vec2(0.0, 2.0))
+            .margin(egui::vec2(0.0, 1.0))
             .frame(false);
         let response = ui.add_sized(egui::vec2(ui.available_width(), input_height), text_edit);
 
@@ -128,11 +139,11 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         }
         handle_tui_keys(app, ui, &response, &prev_input);
 
-        ui.add_space(theme.space_8);
+        ui.add_space(theme.space_4);
 
         // ── Bottom toolbar ──
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.spacing_mut().item_spacing.x = 6.0;
 
             // Left: add attachment / agent buttons
             if crate::widgets::icon_button_toolbar(
@@ -159,18 +170,18 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
 
             let agent_btn = egui::Button::new(
                 egui::RichText::new("Agent")
-                    .size(theme.text_sm)
+                    .size(theme.text_xs)
                     .color(theme.text_muted),
             )
             .fill(theme.bg_hover)
-            .corner_radius(egui::CornerRadius::same(8));
+            .corner_radius(egui::CornerRadius::same(6));
             if ui.add(agent_btn).on_hover_text("Agent mode").clicked() {
                 // TODO: toggle agent mode
             }
 
             // Right: model selector + send button
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = 6.0;
 
                 // Send button (or stop spinner when loading)
                 if app.view_state.turn == clarity_core::ui::TurnState::Loading {

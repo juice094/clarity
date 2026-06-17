@@ -8,7 +8,7 @@
 //! `clarity_core::background::TaskStore` so the UI never breaks when the
 //! Gateway is offline.
 
-use clarity_core::background::{TaskId, TaskInfo, TaskResult, TaskSpec};
+use clarity_core::background::{TaskId, TaskInfo, TaskSpec};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_GATEWAY: &str = "http://127.0.0.1:18790";
@@ -22,7 +22,6 @@ struct TaskDetailDto {
     pub prompt: String,
     pub created_at: u64,
     pub updated_at: u64,
-    pub result: Option<TaskResult>,
 }
 
 impl TaskDetailDto {
@@ -128,38 +127,6 @@ impl GatewayTaskClient {
         }
         let body: CreateTaskResponse = resp.json().await.map_err(|e| e.to_string())?;
         Ok(body.task_id)
-    }
-
-    /// `GET /v1/tasks/{id}`
-    pub async fn get_task(&self, task_id: &str) -> Result<(TaskInfo, Option<TaskResult>), String> {
-        let url = format!("{}/v1/tasks/{}", self.base_url, task_id);
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        if !resp.status().is_success() {
-            return Err(format!("Gateway returned {}", resp.status()));
-        }
-        let dto: TaskDetailDto = resp.json().await.map_err(|e| e.to_string())?;
-        let result = dto.result.clone();
-        Ok((dto.into_task_info(), result))
-    }
-
-    /// `DELETE /v1/tasks/{id}`
-    pub async fn cancel_task(&self, task_id: &str) -> Result<(), String> {
-        let url = format!("{}/v1/tasks/{}", self.base_url, task_id);
-        let resp = self
-            .client
-            .delete(&url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        if !resp.status().is_success() {
-            return Err(format!("Gateway returned {}", resp.status()));
-        }
-        Ok(())
     }
 }
 

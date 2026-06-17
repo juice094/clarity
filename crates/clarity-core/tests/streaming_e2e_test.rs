@@ -12,11 +12,12 @@
 
 use clarity_core::agent::AgentConfig;
 use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
-use parking_lot::Mutex;
+use clarity_wire::{Wire, WireMessage};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tokio::time::{Duration, timeout};
 
 async fn run_mock_server(port: u16, mut shutdown: oneshot::Receiver<()>) -> Vec<String> {
     let listener = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
@@ -78,18 +79,14 @@ async fn test_openai_streaming_e2e() {
         format!("http://127.0.0.1:{}", port),
         "mock-model",
     );
-    let agent =
-        Agent::with_config(ToolRegistry::new(), AgentConfig::default()).with_llm(Arc::new(llm));
+    let wire = Wire::new();
+    let mut ui_side = wire.ui_side(false);
 
-    let chunks = Arc::new(Mutex::new(Vec::new()));
-    let chunks_clone = chunks.clone();
+    let agent = Agent::with_config(ToolRegistry::new(), AgentConfig::default())
+        .with_llm(Arc::new(llm))
+        .with_wire(Arc::new(wire));
 
-    let result = agent
-        .run_streaming("test query", move |chunk: &str| {
-            assert!(!chunk.is_empty(), "chunk should not be empty");
-            chunks_clone.lock().push(chunk.to_string());
-        })
-        .await;
+    let result = agent.run_streaming("test query").await;
 
     // 允许 server 优雅退出
     let _ = tx.send(());
@@ -98,7 +95,19 @@ async fn test_openai_streaming_e2e() {
     assert!(result.is_ok(), "run_streaming failed: {:?}", result);
     assert_eq!(result.unwrap(), "Hello world");
 
-    let received = chunks.lock().clone();
+    // Collect ContentPart chunks emitted through the wire.
+    let mut received = Vec::new();
+    loop {
+        match timeout(Duration::from_millis(500), ui_side.recv()).await {
+            Ok(Some(WireMessage::ContentPart { text, .. })) => {
+                assert!(!text.is_empty(), "chunk should not be empty");
+                received.push(text);
+            }
+            Ok(Some(_)) => continue,
+            _ => break,
+        }
+    }
+
     assert!(!received.is_empty(), "should receive at least one chunk");
     assert_eq!(received.join(""), "Hello world");
     // Verify chunks appear in order without gaps or overlaps

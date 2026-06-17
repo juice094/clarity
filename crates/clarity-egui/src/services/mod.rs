@@ -6,4 +6,3 @@ pub mod gateway_task_client;
 pub mod message_actions;
 pub mod task_service;
 pub mod tray;
-pub mod web_fetch;

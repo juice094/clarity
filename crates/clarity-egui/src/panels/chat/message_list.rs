@@ -21,12 +21,12 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     let available_height = ui.available_height();
     let is_loading = app.view_state.turn == clarity_core::ui::TurnState::Loading;
     let theme = app.ui_store.theme.clone();
-    let max_w = app.ui_store.content_max_width;
+    // The parent (ScrollArea) already constrains the content column width.
+    // Use the actual available width so cached heights and estimates stay
+    // consistent when the window is narrower than `content_max_width`.
+    let max_w = ui.available_width();
     let active_id = app.session_store.active_session_id.clone();
     let scroll_y = app.ui_store.last_scroll_offset;
-    let agent_turn_style = app.ui_store.agent_turn_style;
-    let agent_turn_glass = app.ui_store.agent_turn_glass;
-    let kimi_conversation_style = app.ui_store.kimi_conversation_style;
     let pretext_enabled = app.ui_store.pretext_estimate_enabled;
     let pretext_metrics = app.pretext_metrics.clone();
     let metrics = &pretext_metrics;
@@ -54,651 +54,325 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             } else {
                 0.0
             };
-            if agent_turn_style {
-                let units = aggregate_turns(&session.messages);
-                let estimates: Vec<f32> = units
-                    .iter()
-                    .enumerate()
-                    .map(|(i, u)| {
-                        let editing = app.chat_store.editing_message_idx == Some(u.start);
-                        if u.is_user {
-                            let bubble_h =
-                                session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                    ui::render::estimate_height(
-                                        &session.messages[u.start],
-                                        max_w,
-                                        &theme,
-                                        metrics,
-                                    )
-                                });
-                            if editing {
-                                bubble_h + 80.0 // approximate edit controls height
-                            } else {
-                                bubble_h + 28.0 // action bar
-                            }
+            let units = aggregate_turns(&session.messages);
+            let estimates: Vec<f32> = units
+                .iter()
+                .enumerate()
+                .map(|(i, u)| {
+                    let editing = app.chat_store.editing_message_idx == Some(u.start);
+                    if u.is_user {
+                        let bubble_h =
+                            session.messages[u.start].cached_height.unwrap_or_else(|| {
+                                ui::render::estimate_height(
+                                    &session.messages[u.start],
+                                    max_w,
+                                    &theme,
+                                    metrics,
+                                )
+                            });
+                        if editing {
+                            bubble_h + 80.0 // approximate edit controls height
                         } else {
-                            session
-                                .turn_heights
-                                .get(i)
-                                .copied()
-                                .flatten()
-                                .unwrap_or_else(|| {
-                                    let turn =
-                                        crate::components::agent_turn::AgentTurn::from_messages(
-                                            &session.messages[u.start..u.end],
-                                        );
-                                    turn.estimate_height(max_w, &theme, metrics)
-                                })
-                                + 28.0 // action bar
+                            bubble_h + 28.0 // action bar
                         }
-                    })
-                    .collect();
-                estimates.iter().sum::<f32>() + typing_h
-            } else {
-                session
-                    .messages
-                    .iter()
-                    .enumerate()
-                    .map(|(i, m)| {
-                        let editing = app.chat_store.editing_message_idx == Some(i);
-                        let bubble_h = m.cached_height.unwrap_or_else(|| {
-                            crate::ui::render::estimate_height(m, max_w, &theme, metrics)
-                        });
-                        if editing && m.role == Role::User {
-                            bubble_h + 80.0
-                        } else {
-                            bubble_h + 28.0
-                        }
-                    })
-                    .sum::<f32>()
-                    + typing_h
-            }
+                    } else {
+                        session
+                            .turn_heights
+                            .get(i)
+                            .copied()
+                            .flatten()
+                            .unwrap_or_else(|| {
+                                let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                                    &session.messages[u.start..u.end],
+                                );
+                                turn.estimate_height(max_w, &theme, metrics)
+                            })
+                            + 28.0 // action bar
+                    }
+                })
+                .collect();
+            estimates.iter().sum::<f32>() + typing_h
         }
     } else {
         0.0
     };
-    let should_stick = app.chat_store.stick_to_bottom && total_estimated >= available_height;
+    let _should_stick = app.chat_store.stick_to_bottom && total_estimated >= available_height;
 
     let mut scroll_up = false;
-    let output = egui::ScrollArea::vertical()
-        .id_salt("chat_scroll")
-        .auto_shrink([false; 2])
-        .scroll_bar_visibility(
-            egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-        )
-        .stick_to_bottom(should_stick)
-        .auto_shrink([false; 2])
-        .max_height(available_height)
-        .show(ui, |ui| {
-            let mut pending = PendingActions::default();
+    // The ScrollArea has been moved up to `chat/mod.rs::render_chat_area` so
+    // the scrollbar rides the right edge of the full chat_content area (Kimi
+    // style). This function receives the already-scrollable inner Ui.
+    let mut pending = PendingActions::default();
 
-            if let Some(session) = app
-                .session_store
-                .sessions
-                .iter_mut()
-                .find(|s| s.id == active_id)
-            {
-                #[cfg(feature = "line-mode")]
-                let msg_line_offsets: Vec<usize> = {
-                    let mut v = Vec::with_capacity(session.messages.len());
-                    let mut acc = 0;
-                    for msg in &session.messages {
-                        v.push(acc);
-                        acc += msg.lines.len();
-                    }
-                    app.ui_store.line_cursor_total_lines = acc;
-                    v
-                };
-                #[cfg(not(feature = "line-mode"))]
-                let msg_line_offsets: Vec<usize> = Vec::new();
+    if let Some(session) = app
+        .session_store
+        .sessions
+        .iter_mut()
+        .find(|s| s.id == active_id)
+    {
+        #[cfg(feature = "line-mode")]
+        let msg_line_offsets: Vec<usize> = {
+            let mut v = Vec::with_capacity(session.messages.len());
+            let mut acc = 0;
+            for msg in &session.messages {
+                v.push(acc);
+                acc += msg.lines.len();
+            }
+            app.ui_store.line_cursor_total_lines = acc;
+            v
+        };
+        #[cfg(not(feature = "line-mode"))]
+        let msg_line_offsets: Vec<usize> = Vec::new();
 
-                // Phase 1 pretext PoC: pre-populate cached heights with pretext
-                // measurements so the virtual list and stick-to-bottom use stable
-                // first-frame estimates.
-                for m in &mut session.messages {
-                    if m.cached_height.is_none() {
-                        m.cached_height = Some(crate::ui::render::estimate_height(
-                            m, max_w, &theme, metrics,
-                        ));
+        // Phase 1 pretext PoC: pre-populate cached heights with pretext
+        // measurements so the virtual list and stick-to-bottom use stable
+        // first-frame estimates.
+        for m in &mut session.messages {
+            if m.cached_height.is_none() {
+                m.cached_height = Some(crate::ui::render::estimate_height(
+                    m, max_w, &theme, metrics,
+                ));
+            }
+        }
+
+        if session.messages.is_empty() && !is_loading {
+            // Empty state is rendered by `render_chat_area` so the composer is
+            // centered vertically instead of pinned to the bottom.
+            return;
+        }
+
+        // --- AgentTurn aggregation mode (single unified path) ---
+        let units = aggregate_turns(&session.messages);
+        if session.turn_heights.len() < units.len() {
+            session.turn_heights.resize(units.len(), None);
+        }
+
+        let estimates: Vec<f32> = units
+            .iter()
+            .enumerate()
+            .map(|(i, u)| {
+                let editing = app.chat_store.editing_message_idx == Some(u.start);
+                if u.is_user {
+                    let bubble_h = session.messages[u.start].cached_height.unwrap_or_else(|| {
+                        ui::render::estimate_height(
+                            &session.messages[u.start],
+                            max_w,
+                            &theme,
+                            metrics,
+                        )
+                    });
+                    if editing {
+                        bubble_h + 80.0
+                    } else {
+                        bubble_h + 28.0
                     }
+                } else {
+                    session
+                        .turn_heights
+                        .get(i)
+                        .copied()
+                        .flatten()
+                        .unwrap_or_else(|| {
+                            let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                                &session.messages[u.start..u.end],
+                            );
+                            turn.estimate_height(max_w, &theme, metrics)
+                        })
+                        + 28.0
                 }
+            })
+            .collect();
 
-                if session.messages.is_empty() && !is_loading {
-                    ui.vertical_centered(|ui| {
-                        let empty_state_offset = (ui.available_height() / 3.0).max(120.0);
-                        ui.add_space(empty_state_offset);
+        let mut cumulative = 0.0;
+        let mut start_idx = 0;
+        let mut end_idx = units.len();
 
-                        // Large brand mark (Kimi-style centered logo)
-                        ui.label(
-                            egui::RichText::new("Clarity")
-                                .size(48.0)
-                                .strong()
-                                .color(theme.text_strong),
-                        );
-                        ui.add_space(theme.space_16);
+        for (i, h) in estimates.iter().enumerate() {
+            if cumulative + h >= scroll_y && start_idx == 0 {
+                start_idx = i.saturating_sub(3);
+            }
+            cumulative += h;
+            if cumulative >= scroll_y + available_height && end_idx == units.len() {
+                end_idx = (i + 3).min(units.len());
+                break;
+            }
+        }
 
-                        // Subtitle hint
-                        ui.label(
-                            egui::RichText::new("在下方输入框开始对话")
-                                .size(theme.text_sm)
-                                .color(theme.text_dim),
-                        );
-                        ui.add_space(theme.space_24);
+        if start_idx > 0 {
+            let top = estimates[..start_idx].iter().sum::<f32>();
+            ui.allocate_space(egui::vec2(ui.available_width(), top));
+        }
 
-                        // Quick-start hints (vertical stack to avoid overflow)
-                        let hints = [
-                            ("/coder", "代码助手"),
-                            ("/plan", "任务规划"),
-                            ("/review", "代码审查"),
-                        ];
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = theme.space_8;
-                            ui.set_max_width(280.0);
-                            for (cmd, desc) in hints {
-                                let chip = egui::Frame::new()
-                                    .fill(theme.bg_hover)
-                                    .corner_radius(egui::CornerRadius::same(8))
-                                    .inner_margin(egui::Margin::symmetric(16, 10))
-                                    .show(ui, |ui| {
-                                        ui.set_min_width(ui.available_width());
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new(cmd)
-                                                    .size(theme.text_sm)
-                                                    .monospace()
-                                                    .color(theme.accent),
-                                            );
-                                            ui.add_space(8.0);
-                                            ui.label(
-                                                egui::RichText::new(desc)
-                                                    .size(theme.text_sm)
-                                                    .color(theme.text_muted),
-                                            );
-                                            ui.with_layout(
-                                                egui::Layout::right_to_left(egui::Align::Center),
-                                                |ui| {
-                                                    ui.label(
-                                                        egui::RichText::new("→")
-                                                            .font(theme.font_icon(theme.text_sm))
-                                                            .color(theme.text_dim),
-                                                    );
-                                                },
-                                            );
-                                        });
-                                    });
-                                if chip.response.clicked() {
-                                    app.chat_store.input = format!("{} ", cmd);
-                                    app.ui_store.focus_input_requested = true;
+        for (i, unit) in units
+            .iter()
+            .enumerate()
+            .skip(start_idx)
+            .take(end_idx - start_idx)
+        {
+            if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
+                continue;
+            }
+            if unit.is_user {
+                let editing = app.chat_store.editing_message_idx == Some(unit.start);
+                let bubble_h = if editing {
+                    let (h, save, cancel) =
+                        render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
+                    if save {
+                        pending.save_edit = true;
+                    }
+                    if cancel {
+                        pending.cancel_edit = true;
+                    }
+                    h
+                } else {
+                    let sel = line_cursor_selected.and_then(|g| {
+                        let start = msg_line_offsets[unit.start];
+                        let end = start + session.messages[unit.start].lines.len();
+                        if g >= start && g < end {
+                            Some(g - start)
+                        } else {
+                            None
+                        }
+                    });
+                    ui::render::message_bubble(
+                        ui,
+                        &session.messages[unit.start],
+                        &theme,
+                        true,
+                        unit.start,
+                        &mut pending.retry_error_idx,
+                        &mut pending.switch_model,
+                        sel,
+                        render_metrics,
+                    )
+                };
+                session.messages[unit.start].cached_height = Some(bubble_h);
+
+                if !editing {
+                    ui.horizontal(|ui| {
+                        if let Some(msg) = session.messages.get(unit.start) {
+                            if let Some(ts) = format_relative_time(msg.timestamp) {
+                                ui.label(
+                                    egui::RichText::new(ts)
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
+                                );
+                            }
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add_space(theme.space_8);
+                            let edit_btn = egui::Button::new(
+                                egui::RichText::new(crate::theme::ICON_EDIT)
+                                    .font(theme.font_icon(theme.text_sm))
+                                    .color(theme.text_muted),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
+                                pending.edit_idx = Some(unit.start);
+                            }
+                            ui.add_space(4.0);
+                            let copy_btn = egui::Button::new(
+                                egui::RichText::new(crate::theme::ICON_COPY)
+                                    .font(theme.font_icon(theme.text_sm))
+                                    .color(theme.text_muted),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                                if let Some(msg) = session.messages.get(unit.start) {
+                                    ui.ctx().copy_text(msg.content.clone());
+                                    pending.copy_content = Some(msg.content.clone());
                                 }
                             }
                         });
                     });
-                } else if agent_turn_style && !kimi_conversation_style {
-                    // --- AgentTurn aggregation mode ---
-                    let units = aggregate_turns(&session.messages);
-                    if session.turn_heights.len() < units.len() {
-                        session.turn_heights.resize(units.len(), None);
-                    }
+                    ui.add_space(theme.space_8);
+                }
+            } else {
+                let mut turn = crate::components::agent_turn::AgentTurn::from_messages(
+                    &session.messages[unit.start..unit.end],
+                );
+                let bubble_h =
+                    crate::render::turn_renderer::render_agent_turn(ui, &mut turn, &theme, i);
+                session.turn_heights[i] = Some(bubble_h);
 
-                    let estimates: Vec<f32> = units
-                        .iter()
-                        .enumerate()
-                        .map(|(i, u)| {
-                            let editing = app.chat_store.editing_message_idx == Some(u.start);
-                            if u.is_user {
-                                let bubble_h =
-                                    session.messages[u.start].cached_height.unwrap_or_else(|| {
-                                        ui::render::estimate_height(
-                                            &session.messages[u.start],
-                                            max_w,
-                                            &theme,
-                                            metrics,
-                                        )
-                                    });
-                                if editing {
-                                    bubble_h + 80.0
-                                } else {
-                                    bubble_h + 28.0
-                                }
-                            } else {
-                                session
-                                    .turn_heights
-                                    .get(i)
-                                    .copied()
-                                    .flatten()
-                                    .unwrap_or_else(|| {
-                                        let turn =
-                                            crate::components::agent_turn::AgentTurn::from_messages(
-                                                &session.messages[u.start..u.end],
-                                            );
-                                        turn.estimate_height(max_w, &theme, metrics)
-                                    })
-                                    + 28.0
-                            }
-                        })
-                        .collect();
-
-                    let mut cumulative = 0.0;
-                    let mut start_idx = 0;
-                    let mut end_idx = units.len();
-
-                    for (i, h) in estimates.iter().enumerate() {
-                        if cumulative + h >= scroll_y && start_idx == 0 {
-                            start_idx = i.saturating_sub(3);
-                        }
-                        cumulative += h;
-                        if cumulative >= scroll_y + available_height && end_idx == units.len() {
-                            end_idx = (i + 3).min(units.len());
-                            break;
-                        }
-                    }
-
-                    if start_idx > 0 {
-                        let top = estimates[..start_idx].iter().sum::<f32>();
-                        ui.allocate_space(egui::vec2(ui.available_width(), top));
-                    }
-
-                    for (i, unit) in units
-                        .iter()
-                        .enumerate()
-                        .skip(start_idx)
-                        .take(end_idx - start_idx)
-                    {
-                        if unit.is_user && session.messages[unit.start].content.trim().is_empty() {
-                            continue;
-                        }
-                        if unit.is_user {
-                            let editing = app.chat_store.editing_message_idx == Some(unit.start);
-                            let bubble_h = if editing {
-                                let (h, save, cancel) =
-                                    render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
-                                if save {
-                                    pending.save_edit = true;
-                                }
-                                if cancel {
-                                    pending.cancel_edit = true;
-                                }
-                                h
-                            } else {
-                                let sel = line_cursor_selected.and_then(|g| {
-                                    let start = msg_line_offsets[unit.start];
-                                    let end = start + session.messages[unit.start].lines.len();
-                                    if g >= start && g < end {
-                                        Some(g - start)
-                                    } else {
-                                        None
-                                    }
-                                });
-                                ui::render::message_bubble(
-                                    ui,
-                                    &session.messages[unit.start],
-                                    &theme,
-                                    true,
-                                    unit.start,
-                                    &mut pending.retry_error_idx,
-                                    &mut pending.switch_model,
-                                    sel,
-                                    render_metrics,
-                                )
-                            };
-                            session.messages[unit.start].cached_height = Some(bubble_h);
-
-                            if !editing {
-                                ui.horizontal(|ui| {
-                                    if let Some(msg) = session.messages.get(unit.start) {
-                                        if let Some(ts) = format_relative_time(msg.timestamp) {
-                                            ui.label(
-                                                egui::RichText::new(ts)
-                                                    .size(theme.text_xs)
-                                                    .color(theme.text_dim),
-                                            );
-                                        }
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.add_space(theme.space_8);
-                                            let edit_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_EDIT)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                                                pending.edit_idx = Some(unit.start);
-                                            }
-                                            ui.add_space(4.0);
-                                            let copy_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_COPY)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                                if let Some(msg) = session.messages.get(unit.start)
-                                                {
-                                                    ui.ctx().copy_text(msg.content.clone());
-                                                    pending.copy_content =
-                                                        Some(msg.content.clone());
-                                                }
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.add_space(theme.space_8);
-                            }
-                        } else {
-                            let mut turn = crate::components::agent_turn::AgentTurn::from_messages(
-                                &session.messages[unit.start..unit.end],
+                ui.horizontal(|ui| {
+                    if let Some(msg) = session.messages.get(unit.start) {
+                        if let Some(ts) = format_relative_time(msg.timestamp) {
+                            ui.label(
+                                egui::RichText::new(ts)
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim),
                             );
-                            let bubble_h = if agent_turn_glass {
-                                crate::render::turn_renderer::render_agent_turn_glass(
-                                    ui, &mut turn, &theme, i,
-                                )
-                            } else {
-                                crate::render::turn_renderer::render_agent_turn(
-                                    ui, &mut turn, &theme, i,
-                                )
-                            };
-                            session.turn_heights[i] = Some(bubble_h);
-
-                            ui.horizontal(|ui| {
-                                if let Some(msg) = session.messages.get(unit.start) {
-                                    if let Some(ts) = format_relative_time(msg.timestamp) {
-                                        ui.label(
-                                            egui::RichText::new(ts)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_dim),
-                                        );
-                                    }
-                                }
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.add_space(theme.space_8);
-                                        let regen_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_REFRESH)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(
-                                            theme.radius_sm as u8,
-                                        ));
-                                        if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
-                                            pending.regenerate_idx = Some(unit.start);
-                                        }
-                                        ui.add_space(4.0);
-                                        let copy_btn = egui::Button::new(
-                                            egui::RichText::new(crate::theme::ICON_COPY)
-                                                .font(theme.font_icon(theme.text_sm))
-                                                .color(theme.text_muted),
-                                        )
-                                        .fill(egui::Color32::TRANSPARENT)
-                                        .corner_radius(egui::CornerRadius::same(
-                                            theme.radius_sm as u8,
-                                        ));
-                                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                            let content: String = session.messages
-                                                [unit.start..unit.end]
-                                                .iter()
-                                                .map(|m| m.content.as_str())
-                                                .collect::<Vec<_>>()
-                                                .join("\n\n");
-                                            ui.ctx().copy_text(content.clone());
-                                            pending.copy_content = Some(content);
-                                        }
-                                    },
-                                );
-                            });
-                            ui.add_space(theme.space_8);
                         }
                     }
-
-                    if end_idx < units.len() {
-                        let bottom = estimates[end_idx..].iter().sum::<f32>();
-                        ui.allocate_space(egui::vec2(ui.available_width(), bottom));
-                    }
-
-                    if is_loading
-                        && session.messages.last().is_none_or(|m| m.role == Role::User)
-                        && app.chat_store.tool_calls.is_empty()
-                    {
-                        ui::render::typing_indicator(ui, &theme);
-                    }
-                } else {
-                    // --- Legacy virtualized message list ---
-                    let estimates: Vec<f32> = session
-                        .messages
-                        .iter()
-                        .enumerate()
-                        .map(|(i, m)| {
-                            let editing = app.chat_store.editing_message_idx == Some(i);
-                            let bubble_h = m.cached_height.unwrap_or_else(|| {
-                                crate::ui::render::estimate_height(m, max_w, &theme, metrics)
-                            });
-                            if editing && m.role == Role::User {
-                                bubble_h + 80.0
-                            } else {
-                                bubble_h + 28.0
-                            }
-                        })
-                        .collect();
-
-                    let mut cumulative = 0.0;
-                    let mut start_idx = 0;
-                    let mut end_idx = session.messages.len();
-
-                    for (i, h) in estimates.iter().enumerate() {
-                        if cumulative + h >= scroll_y && start_idx == 0 {
-                            start_idx = i.saturating_sub(3);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(theme.space_8);
+                        let regen_btn = egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_REFRESH)
+                                .font(theme.font_icon(theme.text_sm))
+                                .color(theme.text_muted),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(regen_btn).on_hover_text("Regenerate").clicked() {
+                            pending.regenerate_idx = Some(unit.start);
                         }
-                        cumulative += h;
-                        if cumulative >= scroll_y + available_height
-                            && end_idx == session.messages.len()
-                        {
-                            end_idx = (i + 3).min(session.messages.len());
-                            break;
+                        ui.add_space(4.0);
+                        let copy_btn = egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_COPY)
+                                .font(theme.font_icon(theme.text_sm))
+                                .color(theme.text_muted),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
+                        if ui.add(copy_btn).on_hover_text("Copy").clicked() {
+                            let content: String = session.messages[unit.start..unit.end]
+                                .iter()
+                                .map(|m| m.content.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n\n");
+                            ui.ctx().copy_text(content.clone());
+                            pending.copy_content = Some(content);
                         }
-                    }
+                    });
+                });
+                ui.add_space(theme.space_8);
+            }
+        }
 
-                    if start_idx > 0 {
-                        let top = estimates[..start_idx].iter().sum::<f32>();
-                        ui.allocate_space(egui::vec2(ui.available_width(), top));
-                    }
+        if end_idx < units.len() {
+            let bottom = estimates[end_idx..].iter().sum::<f32>();
+            ui.allocate_space(egui::vec2(ui.available_width(), bottom));
+        }
 
-                    #[allow(clippy::needless_range_loop)]
-                    for i in start_idx..end_idx {
-                        if session.messages[i].content.trim().is_empty() {
-                            continue;
-                        }
-                        let editing = app.chat_store.editing_message_idx == Some(i);
-                        let show_header = if session.messages[i].role == Role::Agent {
-                            i == 0 || session.messages[i - 1].role != Role::Agent
-                        } else {
-                            true
-                        };
-                        let bubble_h = if editing && session.messages[i].role == Role::User {
-                            let (h, save, cancel) =
-                                render_edit_bubble(ui, &mut app.chat_store.edit_buffer, &theme);
-                            if save {
-                                pending.save_edit = true;
-                            }
-                            if cancel {
-                                pending.cancel_edit = true;
-                            }
-                            h
-                        } else if kimi_conversation_style {
-                            crate::components::chat::conversation::message_bubble(
-                                ui,
-                                &theme,
-                                &session.messages[i],
-                                i,
-                                is_loading,
-                                &mut pending.copy_content,
-                                &mut pending.edit_idx,
-                                &mut pending.regenerate_idx,
-                            )
-                        } else {
-                            let sel = line_cursor_selected.and_then(|g| {
-                                let start = msg_line_offsets[i];
-                                let end = start + session.messages[i].lines.len();
-                                if g >= start && g < end {
-                                    Some(g - start)
-                                } else {
-                                    None
-                                }
-                            });
-                            ui::render::message_bubble(
-                                ui,
-                                &session.messages[i],
-                                &theme,
-                                show_header,
-                                i,
-                                &mut pending.retry_error_idx,
-                                &mut pending.switch_model,
-                                sel,
-                                render_metrics,
-                            )
-                        };
-                        session.messages[i].cached_height = Some(bubble_h);
-
-                        if !editing && !kimi_conversation_style {
-                            if session.messages[i].role == Role::User {
-                                ui.horizontal(|ui| {
-                                    if let Some(ts) =
-                                        format_relative_time(session.messages[i].timestamp)
-                                    {
-                                        ui.label(
-                                            egui::RichText::new(ts)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_dim),
-                                        );
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.add_space(theme.space_8);
-                                            let edit_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_EDIT)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui.add(edit_btn).on_hover_text("Edit").clicked() {
-                                                pending.edit_idx = Some(i);
-                                            }
-                                            ui.add_space(4.0);
-                                            let copy_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_COPY)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                                ui.ctx()
-                                                    .copy_text(session.messages[i].content.clone());
-                                                pending.copy_content =
-                                                    Some(session.messages[i].content.clone());
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.add_space(theme.space_8);
-                            } else {
-                                ui.horizontal(|ui| {
-                                    if let Some(ts) =
-                                        format_relative_time(session.messages[i].timestamp)
-                                    {
-                                        ui.label(
-                                            egui::RichText::new(ts)
-                                                .size(theme.text_xs)
-                                                .color(theme.text_dim),
-                                        );
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.add_space(theme.space_8);
-                                            let regen_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_REFRESH)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui
-                                                .add(regen_btn)
-                                                .on_hover_text("Regenerate")
-                                                .clicked()
-                                            {
-                                                pending.regenerate_idx = Some(i);
-                                            }
-                                            ui.add_space(4.0);
-                                            let copy_btn = egui::Button::new(
-                                                egui::RichText::new(crate::theme::ICON_COPY)
-                                                    .font(theme.font_icon(theme.text_sm))
-                                                    .color(theme.text_muted),
-                                            )
-                                            .fill(egui::Color32::TRANSPARENT)
-                                            .corner_radius(egui::CornerRadius::same(
-                                                theme.radius_sm as u8,
-                                            ));
-                                            if ui.add(copy_btn).on_hover_text("Copy").clicked() {
-                                                ui.ctx()
-                                                    .copy_text(session.messages[i].content.clone());
-                                                pending.copy_content =
-                                                    Some(session.messages[i].content.clone());
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.add_space(theme.space_8);
-                            }
-                        }
-                    }
-
-                    if end_idx < session.messages.len() {
-                        let bottom = estimates[end_idx..].iter().sum::<f32>();
-                        ui.allocate_space(egui::vec2(ui.available_width(), bottom));
-                    }
-
-                    if is_loading
-                        && session.messages.last().is_none_or(|m| m.role == Role::User)
-                        && app.chat_store.tool_calls.is_empty()
-                    {
-                        ui::render::typing_indicator(ui, &theme);
-                    }
+        if is_loading
+            && session.messages.last().is_none_or(|m| m.role == Role::User)
+            && app.chat_store.tool_calls.is_empty()
+        {
+            // Prefer the new draft indicator when the backend has emitted one.
+            // Falls back to the legacy typing indicator so the UI never goes blank.
+            if !crate::widgets::draft_indicator::draft_indicator(
+                ui,
+                &theme,
+                &app.chat_store.draft_status,
+            ) {
+                ui::render::typing_indicator(ui, &theme);
+            }
+        }
+    }
+    // Detect user scroll-up intent to release stick-to-bottom.
+    ui.input(|i| {
+        for event in &i.events {
+            if let egui::Event::MouseWheel { delta, .. } = event {
+                if delta.y > 0.0 {
+                    scroll_up = true;
                 }
             }
-            // Detect user scroll-up intent to release stick-to-bottom.
-            ui.input(|i| {
-                for event in &i.events {
-                    if let egui::Event::MouseWheel { delta, .. } = event {
-                        if delta.y > 0.0 {
-                            scroll_up = true;
-                        }
-                    }
-                }
-            });
-            pending
-        });
+        }
+    });
 
-    let pending = output.inner;
     if pending.save_edit {
         app.commit_edit();
     }
@@ -724,7 +398,70 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
     if scroll_up {
         app.chat_store.stick_to_bottom = false;
     }
-    app.ui_store.last_scroll_offset = output.state.offset.y;
+}
+
+/// Estimate the total rendered height of the message list content, including
+/// inter-unit spacing and the typing indicator, without doing any actual layout.
+///
+/// This is used by `render_chat_area` to decide whether the conversation is
+/// tall enough to need a scrollable area. It intentionally uses only the
+/// current-width estimate so that cached heights from previous frames do not
+/// inflate the value after a resize.
+pub fn estimate_total_height(app: &crate::App, content_max_width: f32) -> f32 {
+    let max_w = content_max_width;
+    let theme = app.ui_store.theme.clone();
+    let metrics = &app.pretext_metrics;
+    let is_loading = app.view_state.turn == clarity_core::ui::TurnState::Loading;
+    let active_id = app.session_store.active_session_id.clone();
+
+    let Some(session) = app
+        .session_store
+        .sessions
+        .iter()
+        .find(|s| s.id == active_id)
+    else {
+        return 0.0;
+    };
+    if session.messages.is_empty() && !is_loading {
+        return 0.0;
+    }
+
+    let units = aggregate_turns(&session.messages);
+    let mut total = 0.0_f32;
+    for u in units.iter() {
+        let editing = app.chat_store.editing_message_idx == Some(u.start);
+        let h = if u.is_user {
+            let bubble_h = crate::ui::render::estimate_height(
+                &session.messages[u.start],
+                max_w,
+                &theme,
+                metrics,
+            );
+            if editing {
+                bubble_h + 80.0
+            } else {
+                bubble_h + 28.0
+            }
+        } else {
+            let turn = crate::components::agent_turn::AgentTurn::from_messages(
+                &session.messages[u.start..u.end],
+            );
+            let turn_h = turn.estimate_height(max_w, &theme, metrics);
+            turn_h + 28.0
+        };
+        total += h;
+    }
+    // Each unit adds `space_8` before the action bar and `space_8` after it.
+    // The +28 action-bar height is already included in the per-unit estimate.
+    total += units.len() as f32 * theme.space_8 * 2.0;
+
+    if is_loading
+        && session.messages.last().is_none_or(|m| m.role == Role::User)
+        && app.chat_store.tool_calls.is_empty()
+    {
+        total += 60.0;
+    }
+    total
 }
 
 // ============================================================================

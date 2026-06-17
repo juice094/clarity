@@ -133,6 +133,9 @@ impl AgentController {
         tokio::spawn(async move {
             while let Some(msg) = wire_ui.recv().await {
                 let event = match msg {
+                    clarity_wire::WireMessage::ContentPart { text, .. } => {
+                        Some(ControllerEvent::Chunk(text))
+                    }
                     clarity_wire::WireMessage::ToolCall {
                         id,
                         name,
@@ -230,8 +233,7 @@ impl AgentController {
                             debug!("Controller: UserTurn (len={})", prompt.len());
                             self.agent.reset();
                             let agent = self.agent.clone();
-                            let event_tx = self.event_tx.clone();
-                            let event_tx2 = event_tx.clone();
+                            let event_tx2 = self.event_tx.clone();
                             let thread_manager = self.thread_manager.clone();
                             let thread_id = self.thread_id;
                             let handle = if let (Some(tm), Some(id)) = (thread_manager, thread_id) {
@@ -268,11 +270,7 @@ impl AgentController {
                                     };
 
                                     let prompt_for_history = prompt.clone();
-                                    let result = agent.run_streaming_with_messages(messages, move |chunk| {
-                                        if let Some(ref tx) = event_tx {
-                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
-                                        }
-                                    }).await;
+                                    let result = agent.run_streaming_with_messages(messages).await;
 
                                     if let Some(ref tx) = event_tx2 {
                                         match &result {
@@ -297,11 +295,7 @@ impl AgentController {
                                 let (static_prompt, dynamic_prompt) = self.agent.build_system_prompt_split_raw();
                                 let messages = driver.build_messages_split(&prompt, &static_prompt, &dynamic_prompt);
                                 tokio::spawn(async move {
-                                    let result = agent.run_streaming_with_messages(messages, move |chunk| {
-                                        if let Some(ref tx) = event_tx {
-                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
-                                        }
-                                    }).await;
+                                    let result = agent.run_streaming_with_messages(messages).await;
 
                                     if let Some(ref tx) = event_tx2 {
                                         match &result {
@@ -318,11 +312,7 @@ impl AgentController {
                                 })
                             } else {
                                 tokio::spawn(async move {
-                                    let result = agent.run_streaming(&prompt, move |chunk| {
-                                        if let Some(ref tx) = event_tx {
-                                            let _ = tx.send(ControllerEvent::Chunk(chunk.to_string()));
-                                        }
-                                    }).await;
+                                    let result = agent.run_streaming(&prompt).await;
 
                                     if let Some(ref tx) = event_tx2 {
                                         match &result {
@@ -531,7 +521,6 @@ mod tests {
                 ControllerEvent::Complete(text) => {
                     assert_eq!(text, "This is a mock response");
                     saw_complete = true;
-                    break;
                 }
                 _ => panic!("unexpected event: {:?}", event),
             }

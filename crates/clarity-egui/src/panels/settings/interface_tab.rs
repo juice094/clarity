@@ -79,8 +79,17 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .strong(),
     );
     ui.add_space(theme.space_4);
-    let scales = [(0.9, "Small"), (1.0, "Medium"), (1.15, "Large")];
-    let current_scale = app.settings_store.settings_edit.font_scale.unwrap_or(1.0);
+    let scales = [
+        (0.775, "Compact"),
+        (0.85, "Small"),
+        (1.0, "Medium"),
+        (1.15, "Large"),
+    ];
+    let current_scale = app
+        .settings_store
+        .settings_edit
+        .font_scale
+        .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
     ui.horizontal(|ui| {
         for (val, label) in &scales {
             let active = (current_scale - val).abs() < 0.01;
@@ -97,14 +106,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.settings_store.settings_edit.font_scale = Some(*val);
-                let theme_name = app.settings_store.settings_edit.theme.clone();
-                app.ui_store.theme = if theme_name == "light" {
-                    Theme::light().with_font_scale(*val)
-                } else {
-                    Theme::dark().with_font_scale(*val)
-                };
-                app.auto_save_settings();
+                app.set_font_scale(*val);
             }
         }
     });
@@ -118,12 +120,12 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .strong(),
     );
     ui.add_space(theme.space_4);
-    let widths = [(600.0, "Narrow"), (720.0, "Medium"), (900.0, "Wide")];
+    let widths = [(520.0, "Narrow"), (600.0, "Medium"), (760.0, "Wide")];
     let current_width = app
         .settings_store
         .settings_edit
         .content_width
-        .unwrap_or(720.0);
+        .unwrap_or(600.0);
     ui.horizontal(|ui| {
         for (val, label) in &widths {
             let active = (current_width - val).abs() < 1.0;
@@ -178,6 +180,26 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .strong(),
     );
     ui.add_space(theme.space_4);
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(app.t("Zoom"))
+                .size(theme.text_sm)
+                .color(theme.text_muted),
+        );
+        if ui
+            .button(egui::RichText::new("Ctrl + -").size(theme.text_sm))
+            .clicked()
+        {
+            app.decrease_font_scale();
+        }
+        if ui
+            .button(egui::RichText::new("Ctrl + +").size(theme.text_sm))
+            .clicked()
+        {
+            app.increase_font_scale();
+        }
+    });
+    ui.add_space(theme.space_8);
     if ui
         .button(egui::RichText::new("Open Pretext Measurement Probe").size(theme.text_sm))
         .clicked()
@@ -205,6 +227,14 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             .strong(),
     );
     ui.add_space(theme.space_4);
+    // ── Zoom shortcuts hint ──
+    ui.label(
+        egui::RichText::new(app.t("Use Ctrl + +/- to adjust zoom anytime"))
+            .size(theme.text_xs)
+            .color(theme.text_dim),
+    );
+    ui.add_space(theme.space_16);
+
     ui.horizontal(|ui| {
         let en = matches!(app.ui_store.locale, crate::i18n::Locale::EnUS);
         let zh = matches!(app.ui_store.locale, crate::i18n::Locale::ZhCN);
@@ -243,7 +273,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
 
 fn set_theme(app: &mut App, name: &str) {
     app.settings_store.settings_edit.theme = name.to_string();
-    let scale = app.settings_store.settings_edit.font_scale.unwrap_or(1.0);
+    let scale = app
+        .settings_store
+        .settings_edit
+        .font_scale
+        .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
     app.ui_store.theme = if name == "light" {
         Theme::light().with_font_scale(scale)
     } else {

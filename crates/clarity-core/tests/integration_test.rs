@@ -194,18 +194,9 @@ async fn test_streaming_api_integration() {
 
     let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
 
-    let chunk_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let chunk_count_clone = chunk_count.clone();
-
-    let result = agent
-        .run_streaming("Test query", move |_chunk| {
-            chunk_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        })
-        .await;
+    let result = agent.run_streaming("Test query").await;
 
     assert!(result.is_ok());
-    // MockLlm sends at least one chunk
-    assert!(chunk_count.load(std::sync::atomic::Ordering::SeqCst) >= 1);
 }
 
 // ==================== Cross-Crate Type Compatibility ====================

@@ -32,9 +32,49 @@ pub fn avatar(
     const SIZE: f32 = 28.0;
     let bg = bg.unwrap_or(theme.surface_strong);
     let fg = fg.unwrap_or(theme.text_strong);
-
-    // Reserve space + register hover hit-test (RULE 4 exemption for widgets/).
     let (rect, response) = ui.allocate_exact_size(egui::vec2(SIZE, SIZE), egui::Sense::hover());
+
+    if !ui.is_rect_visible(rect) {
+        return response;
+    }
+
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        egui::Frame::new()
+            .fill(bg)
+            .corner_radius(egui::CornerRadius::same(255))
+            .show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                ui.with_layout(
+                    egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new(label)
+                                .font(egui::FontId::proportional(theme.text_sm))
+                                .color(fg),
+                        );
+                    },
+                );
+            });
+    });
+
+    response
+}
+
+/// Render a circular avatar with an explicit font size for the label.
+///
+/// The widget size is derived from the font size so callers can create compact
+/// avatars (e.g. in the Bot bar) without changing the default 28 px avatar.
+pub fn avatar_sized(
+    ui: &mut egui::Ui,
+    label: &str,
+    theme: &Theme,
+    font_size: f32,
+    bg: Option<egui::Color32>,
+    fg: egui::Color32,
+) -> egui::Response {
+    let bg = bg.unwrap_or(theme.surface_strong);
+    let size = (font_size * 1.6).ceil().max(20.0);
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
 
     if !ui.is_rect_visible(rect) {
         return response;
@@ -52,7 +92,7 @@ pub fn avatar(
                     |ui| {
                         ui.label(
                             egui::RichText::new(label)
-                                .font(egui::FontId::proportional(theme.text_sm))
+                                .font(egui::FontId::proportional(font_size))
                                 .color(fg),
                         );
                     },

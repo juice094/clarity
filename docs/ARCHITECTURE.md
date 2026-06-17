@@ -557,6 +557,15 @@ cargo run -p clarity-egui
 
 ---
 
+## 10. Protocol Layer Reference
+
+For backend-to-frontend protocol design, WireMessage → RenderLine mapping, ViewState synchronization, and Gateway WebSocket extension specs, see:
+
+- [`docs/architecture/protocol-layer.md`](architecture/protocol-layer.md) — Three-layer protocol stack (Transport / Semantic / Presentation), complete variant inventory, and frontend integration checklist.
+- [`docs/architecture/lifecycle-diagrams.md`](architecture/lifecycle-diagrams.md) — Mermaid-based architecture diagrams: turn lifecycle sequence, data flow pipeline, RenderLine rendering pipeline, state machine, and Gateway upgrade path.
+
+---
+
 *This document is the single source of truth for Clarity architecture. If you modify crate boundaries, module structures, or key types, update this file.*
 
 ---

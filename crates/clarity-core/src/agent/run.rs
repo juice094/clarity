@@ -256,37 +256,27 @@ impl Agent {
     }
 
     /// Run the agent with streaming response.
-    pub async fn run_streaming<F>(
-        &self,
-        query: impl AsRef<str>,
-        on_chunk: F,
-    ) -> Result<String, AgentError>
-    where
-        F: FnMut(&str) + Send + 'static,
-    {
+    ///
+    /// Streaming chunks are emitted through the agent's [`clarity_wire::Wire`]
+    /// channel as [`clarity_wire::WireMessage::ContentPart`] events.
+    pub async fn run_streaming(&self, query: impl AsRef<str>) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
         let messages = self.build_messages_with_cache(query.as_ref()).await?;
-        self.run_streaming_turn(messages, query.as_ref(), on_chunk)
-            .await
+        self.run_streaming_turn(messages, query.as_ref()).await
     }
 
     /// Run the streaming agent loop with a pre-built message list.
-    pub(crate) async fn run_streaming_with_messages<F>(
+    pub(crate) async fn run_streaming_with_messages(
         &self,
         messages: Vec<Message>,
-        on_chunk: F,
-    ) -> Result<String, AgentError>
-    where
-        F: FnMut(&str) + Send + 'static,
-    {
+    ) -> Result<String, AgentError> {
         let query_hint = messages
             .iter()
             .rev()
             .find(|m| m.role == MessageRole::User)
             .map(|m| m.content.clone())
             .unwrap_or_default();
-        self.run_streaming_turn(messages, &query_hint, on_chunk)
-            .await
+        self.run_streaming_turn(messages, &query_hint).await
     }
 
     // ------------------------------------------------------------------

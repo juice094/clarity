@@ -18,16 +18,12 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-struct StreamingLoop<'a, F> {
-    on_chunk: &'a mut F,
+struct StreamingLoop {
     was_streamed: bool,
 }
 
 #[async_trait::async_trait]
-impl<F> AgentLoop for StreamingLoop<'_, F>
-where
-    F: FnMut(&str) + Send + 'static,
-{
+impl AgentLoop for StreamingLoop {
     async fn before_iteration(
         &mut self,
         agent: &Agent,
@@ -86,7 +82,6 @@ where
                         Ok(delta) => {
                             if let Some(content) = delta.content {
                                 accumulated.push_str(&content);
-                                (self.on_chunk)(&content);
                                 if !draft_cleared {
                                     agent.send_wire_message(WireMessage::DraftEvent {
                                         turn_id: String::new(),
@@ -96,7 +91,13 @@ where
                                 }
                                 agent.send_wire_message(WireMessage::DraftEvent {
                                     turn_id: String::new(),
-                                    event: DraftEvent::Content { text: content },
+                                    event: DraftEvent::Content {
+                                        text: content.clone(),
+                                    },
+                                });
+                                agent.send_wire_message(WireMessage::ContentPart {
+                                    turn_id: String::new(),
+                                    text: content,
                                 });
                             }
                             for call in delta.tool_calls {
@@ -185,14 +186,10 @@ where
 
     async fn handle_final_response(&mut self, agent: &Agent, response: &str, _iteration: usize) {
         if !self.was_streamed && !response.is_empty() {
-            for c in response.chars() {
-                let chunk = c.to_string();
-                (self.on_chunk)(&chunk);
-                agent.send_wire_message(WireMessage::ContentPart {
-                    turn_id: String::new(),
-                    text: chunk.clone(),
-                });
-            }
+            agent.send_wire_message(WireMessage::ContentPart {
+                turn_id: String::new(),
+                text: response.to_string(),
+            });
         }
     }
 
@@ -220,7 +217,6 @@ where
             Err(e) => {
                 warn!("Tool execution failed in stream: {}", e);
                 let error_text = format!("\n⚠️ Tool execution failed: {}\n", e);
-                (self.on_chunk)(&error_text);
                 agent.send_wire_message(WireMessage::ContentPart {
                     turn_id: String::new(),
                     text: error_text.clone(),
@@ -235,19 +231,14 @@ where
 }
 
 impl Agent {
-    async fn run_streaming_loop<F>(
+    async fn run_streaming_loop(
         &self,
         messages: &mut Vec<Message>,
         tools: &serde_json::Value,
         llm: Arc<dyn LlmProvider>,
-        on_chunk: &mut F,
         cancel_token: &CancellationToken,
-    ) -> Result<(String, bool), AgentError>
-    where
-        F: FnMut(&str) + Send + 'static,
-    {
+    ) -> Result<(String, bool), AgentError> {
         let mut loop_impl = StreamingLoop {
-            on_chunk,
             was_streamed: false,
         };
         let LoopOutcome {
@@ -256,32 +247,24 @@ impl Agent {
             ..
         } = run_loop_iterations(self, &mut loop_impl, messages, tools, llm, cancel_token).await?;
 
-        // If the final response came from fallback (not streamed), simulate
-        // streaming from the complete() response for smooth UI.
+        // If the final response came from fallback (not streamed), emit it as a
+        // single ContentPart so the UI still receives the text through the wire.
         if completed && !loop_impl.was_streamed && !final_response.is_empty() {
-            for c in final_response.chars() {
-                let chunk = c.to_string();
-                (loop_impl.on_chunk)(&chunk);
-                self.send_wire_message(WireMessage::ContentPart {
-                    turn_id: String::new(),
-                    text: chunk.clone(),
-                });
-            }
+            self.send_wire_message(WireMessage::ContentPart {
+                turn_id: String::new(),
+                text: final_response.clone(),
+            });
         }
 
         Ok((final_response, completed))
     }
 
     /// Shared orchestration for a streaming turn: setup → loop → teardown.
-    pub(crate) async fn run_streaming_turn<F>(
+    pub(crate) async fn run_streaming_turn(
         &self,
         messages: Vec<Message>,
         query_hint: &str,
-        on_chunk: F,
-    ) -> Result<String, AgentError>
-    where
-        F: FnMut(&str) + Send + 'static,
-    {
+    ) -> Result<String, AgentError> {
         self.refresh_context().await;
 
         let cancel_token = self.begin_turn()?;
@@ -308,9 +291,8 @@ impl Agent {
         });
 
         let mut messages = messages;
-        let mut on_chunk = on_chunk;
         let loop_result = self
-            .run_streaming_loop(&mut messages, &tools, llm, &mut on_chunk, &cancel_token)
+            .run_streaming_loop(&mut messages, &tools, llm, &cancel_token)
             .await;
 
         self.maybe_snapshot_post_turn().await;

@@ -1,0 +1,91 @@
+{
+  "image": "屏幕截图 2026-06-16 184233.png",
+  "image_width": 1758,
+  "image_height": 1235,
+  "annotations": [
+    {
+      "id": "ann_jqpcgi9",
+      "label": "chat_content",
+      "role": "content",
+      "priority": "fixed",
+      "color": "green",
+      "note": "",
+      "x": 291.7177177953915,
+      "y": 62.91570857017944,
+      "w": 1451.8566416432177,
+      "h": 1166.8708711815661
+    },
+    {
+      "id": "ann_vqfl0kc",
+      "label": "titlebar",
+      "role": "chrome",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 3.288176191828178,
+      "y": 5.194590465374522,
+      "w": 1747.6656459566768,
+      "h": 52.61081906925085
+    },
+    {
+      "id": "ann_fs7opaq",
+      "label": "left_rail",
+      "role": "rail",
+      "priority": "fixed",
+      "color": "blue",
+      "note": "",
+      "x": 1.644088095914089,
+      "y": 52.873145246883105,
+      "w": 289.3595048808797,
+      "h": 1180.455252866316
+    },
+    {
+      "id": "ann_re3e4ux",
+      "label": "bot_bar",
+      "role": "chrome",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 291.00359297679375,
+      "y": 57.805409534625376,
+      "w": 1455.017964883969,
+      "h": 62.475347644735386
+    },
+    {
+      "id": "ann_ewxcf0t",
+      "label": "message_bubble_short",
+      "role": "content",
+      "priority": "fixed",
+      "color": "green",
+      "note": "",
+      "x": 603.3803312004707,
+      "y": 266.6045977157147,
+      "w": 879.5871313140378,
+      "h": 506.37913354153943
+    },
+    {
+      "id": "ann_jvcvq6f",
+      "label": "input_bar",
+      "role": "content",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 544.1931597475635,
+      "y": 1039.3260027953365,
+      "w": 935.4861265751166,
+      "h": 156.18836911183848
+    },
+    {
+      "id": "ann_w2jxgog",
+      "label": "message_bubble_long",
+      "role": "content",
+      "priority": "fixed",
+      "color": "green",
+      "note": "",
+      "x": 542.5490716516495,
+      "y": 120.28075717936076,
+      "w": 942.062478958773,
+      "h": 876.2989551222095
+    }
+  ]
+}

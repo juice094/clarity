@@ -37,6 +37,10 @@ pub enum ShortcutAction {
     ToggleDashboardPanel,
     /// Toggle the layout debug overlay (green/blue/red/yellow diagnostic rects).
     ToggleLayoutDebug,
+    /// Increase UI font scale (Ctrl + Plus / Equals).
+    IncreaseFontScale,
+    /// Decrease UI font scale (Ctrl + Minus).
+    DecreaseFontScale,
     /// Line-mode: move cursor down one line (`j`).
     #[allow(dead_code)] // only constructed when line-mode feature is enabled
     NavigateDown,
@@ -69,6 +73,8 @@ impl ShortcutAction {
             ShortcutAction::ToggleCommandPalette => ids::TOGGLE_COMMAND_PALETTE,
             ShortcutAction::ToggleDashboardPanel => ids::TOGGLE_DASHBOARD,
             ShortcutAction::ToggleLayoutDebug => ids::TOGGLE_LAYOUT_DEBUG,
+            ShortcutAction::IncreaseFontScale => ids::INCREASE_FONT_SCALE,
+            ShortcutAction::DecreaseFontScale => ids::DECREASE_FONT_SCALE,
             ShortcutAction::NavigateDown => ids::NAVIGATE_DOWN,
             ShortcutAction::NavigateUp => ids::NAVIGATE_UP,
             ShortcutAction::NavigateTop => ids::NAVIGATE_TOP,
@@ -140,6 +146,17 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl && i.modifiers.shift) {
         actions.push(ShortcutAction::ToggleLayoutDebug);
+    }
+
+    // Use Equals (not Plus) for zoom-in: on most layouts the `=`/`+` key is the
+    // same physical key, and egui may report both symbols for one event, causing
+    // a single Ctrl++ press to trigger twice when both Plus and Equals are bound.
+    if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Equals)) {
+        actions.push(ShortcutAction::IncreaseFontScale);
+    }
+
+    if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Minus)) {
+        actions.push(ShortcutAction::DecreaseFontScale);
     }
 
     // ── Line-mode navigation (S7 Phase 2D) ──

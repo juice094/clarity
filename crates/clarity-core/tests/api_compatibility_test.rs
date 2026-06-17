@@ -61,16 +61,12 @@ async fn test_agent_run_api() {
 
 #[tokio::test]
 async fn test_agent_run_streaming_api() {
-    // Test: Agent::run_streaming<F>(&self, query, on_chunk) -> Result<String, AgentError>
+    // Test: Agent::run_streaming(&self, query) -> Result<String, AgentError>
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
     let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
 
-    let result = agent
-        .run_streaming("test", |chunk: &str| {
-            println!("{}", chunk);
-        })
-        .await;
+    let result = agent.run_streaming("test").await;
 
     assert!(result.is_ok());
 }

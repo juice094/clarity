@@ -1,0 +1,79 @@
+{
+  "image": "屏幕截图 2026-06-16 184214.png",
+  "image_width": 1758,
+  "image_height": 1228,
+  "annotations": [
+    {
+      "id": "ann_gk21n7j",
+      "label": "titlebar",
+      "role": "chrome",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 0,
+      "y": 0,
+      "w": 1758,
+      "h": 69.00560747663552
+    },
+    {
+      "id": "ann_2r93q0i",
+      "label": "left_rail",
+      "role": "rail",
+      "priority": "fixed",
+      "color": "blue",
+      "note": "",
+      "x": 0,
+      "y": 65.62119461879574,
+      "w": 319.95599479238285,
+      "h": 1162.3788053812043
+    },
+    {
+      "id": "ann_virnm7k",
+      "label": "bot_bar",
+      "role": "chrome",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 318.3151948190886,
+      "y": 62.3395946722072,
+      "w": 1439.6848051809113,
+      "h": 113.21519815730471
+    },
+    {
+      "id": "ann_zlcx9dc",
+      "label": "chat_content",
+      "role": "content",
+      "priority": "fixed",
+      "color": "green",
+      "note": "",
+      "x": 319.95599479238285,
+      "y": 170.6323929096291,
+      "w": 1437.3407766057815,
+      "h": 910.6439851783207
+    },
+    {
+      "id": "ann_56z6460",
+      "label": "input_bar",
+      "role": "chrome",
+      "priority": "fixed",
+      "color": "red",
+      "note": "",
+      "x": 410.1999933235678,
+      "y": 1081.2763780879498,
+      "w": 1263.4159794365887,
+      "h": 144.3903976498957
+    },
+    {
+      "id": "ann_kkm03q7",
+      "label": "message_bubble",
+      "role": "content",
+      "priority": "fixed",
+      "color": "green",
+      "note": "",
+      "x": 410.1999933235678,
+      "y": 288.7699909868166,
+      "w": 1266.697579383177,
+      "h": 787.5839871812502
+    }
+  ]
+}

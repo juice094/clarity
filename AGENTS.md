@@ -390,12 +390,15 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 ## 11. 当前工作与已知限制
 
-- **S6 Pretext 三栏布局迁移**：左 icon rail + 中主舞台 + 右工具 rail 的单页面外壳已落地；右 rail 卡片（Status / Tools / Subagents / Memory）已接入真实内容；`legacy/task.rs` 与 `legacy/team.rs` 已删除；布局几何精化（默认窗口 1280×800、sidebar 200px、header 全宽、内容居中）已完成。
+- **S6 Pretext 三栏布局迁移**：固定宽左导航树（`size_sidebar = text_base * 17`，≈238 px）+ 极简标题栏 + Bot 栏 + 统一会话中栏 + IDE 式压缩右栏已落地；旧 `panels/sidebar/`、`panels/workspace/`、`panels/left_rail/`、`panels/right_rail/` 及 `panels/chat/header.rs` 等 obsolete 模块已删除；布局几何随字体缩放同步。
 - **Pretext 文字测量接入**：`clarity-egui` 已接入 `pretext-core` / `pretext-fontdb`；`MessageBubble` 已迁移为 pretext-aware；默认启用 pretext 高度估算；回归测试与 release 性能基准通过。
 - **Phase 1.5 状态机迁移已完成**：所有遗留 boolean modal / turn / expansion 标志已迁移到 `view_state.modal` / `view_state.turn` / `view_state.expansions`；`clarity-egui` 全局 `#![allow(dead_code)]` 已移除。
-- **Phase E 设计系统替换已完成**：`design_system` 语义原语已落地到右 rail 全部卡片（status / tools / subagent / memory / context / progress）及关键 widgets（provider_row / sidebar_card / user_avatar）；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
+- **Phase E 设计系统替换已完成**：`design_system` 语义原语已落地到关键 widgets（provider_row / user_avatar）；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
 - **布局诊断覆盖层**：`clarity-egui/src/ui/debug_overlay.rs` 提供红/绿/蓝/黄布局诊断，快捷键 `Ctrl+Shift+L`。详见 `crates/clarity-egui/EGUI_LAYOUT_DEBUG.md`。
 - **人机协作图片标注器**：新增 `assets/ui_annotator.html` + schema + `render_annotations.py`，建立“用户框选 → JSON → AI 生成/修正 egui 代码”的协作闭环。
+- **S6 清理与国际化**：`cargo clippy -p clarity-egui --bins --tests -- -D warnings` 与 `cargo fmt --all -- --check` 通过；新增导航树、Bot 栏、右栏占位面板等所有用户可见字符串已接入 `t!()` / `app.t()` 国际化。
+- **Phase 7 项目模型与上下文驱动**：`Session` 已新增 `project_id` / `context` / `lifecycle` / `archived`；`SessionContext` / `SessionLifecycle` 支持序列化并随会话 JSON 持久化；Bot 栏优先使用 `session.context` 驱动右栏按钮；导航树按 `project_id` 真实分组，项目下展示所属会话，归档会话可点击还原；无项目会话单独显示在 `Chats` 分组。
+- **输入框位置修复**：空状态时隐藏底部 `TopBottomPanel` 输入栏，将 Composer 居中置于大 Logo 与快捷提示下方；非空状态时恢复底部固定输入栏。同时把右栏渲染提前到底部输入栏与中栏之前，避免展开右栏时输入框/中栏与其重叠。
 - **已知限制**：
   - Discord/Telegram 默认禁用，等待上游 `rustls-webpki` 修复。
   - Gateway HTTP Chat Completions 默认无状态；完整 session 请用 WebSocket 或传 `session_id`。
@@ -418,6 +421,8 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 | 安全与运维 | [`docs/security/operations.md`](docs/security/operations.md) |
 | 贡献指南 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | 变更日志 | [`CHANGELOG.md`](CHANGELOG.md) |
+| **协议层设计与映射** | [`docs/architecture/protocol-layer.md`](docs/architecture/protocol-layer.md) |
+| **生命周期与管线图例** | [`docs/architecture/lifecycle-diagrams.md`](docs/architecture/lifecycle-diagrams.md) |
 
 ---
 

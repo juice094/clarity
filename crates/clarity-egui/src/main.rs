@@ -19,7 +19,6 @@
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1–§6.
 
 use eframe::egui;
-use egui_extras::{Size, StripBuilder};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -77,6 +76,7 @@ pub(crate) struct App {
     pub(crate) mcp_store: stores::McpStore,
     pub(crate) onboarding_store: stores::OnboardingStore,
     pub(crate) team_store: stores::TeamStore,
+    pub(crate) project_store: stores::ProjectStore,
     pub(crate) snapshot_store: stores::SnapshotStore,
     /// Gateway process manager (auto-start + manual control).
     #[allow(dead_code)]
@@ -136,7 +136,8 @@ impl App {
             } else {
                 "unknown panic".to_string()
             };
-            tracing::error!("Panel '{}' panicked: {}", name, payload);
+            let msg = format!("PANIC in panel '{}': {}", name, payload);
+            tracing::error!("{}", msg);
             self.push_toast(format!("UI error in {} panel", name), ToastLevel::Error);
         }
     }
@@ -148,9 +149,21 @@ impl App {
     ///   [left icon rail + expanded list] [main stage] [right utility rail]
     /// The titlebar, input bar, overlays and modals are rendered on top.
     fn render_layout_shell(&mut self, ctx: &egui::Context) {
+        // Draw the unified background first so that titlebar/left-rail panels are
+        // visually on top of it. This prevents the base painter from accidentally
+        // overpainting the left sidebar content when panels and painter share the
+        // same layer.
+        self.render_safe(ctx, "main_frame", |app, ctx| {
+            app.render_main_stage_border(ctx);
+        });
+
         // ── Base chrome (always rendered) ──
         self.render_safe(ctx, "titlebar", |app, ctx| app.render_titlebar(ctx));
         self.render_safe(ctx, "left_rail", |app, ctx| app.render_left_rail(ctx));
+
+        // Right rail is declared early so the bottom input bar and central
+        // stage are sized within the remaining width and cannot overlap it.
+        self.render_safe(ctx, "right_rail", |app, ctx| app.render_right_rail(ctx));
 
         // Input bar must be declared before the central/main stage so egui
         // reserves the correct bottom area.
@@ -158,9 +171,6 @@ impl App {
 
         // ── Main stage (mutually exclusive) ──
         self.render_safe(ctx, "main_stage", |app, ctx| app.render_main_stage(ctx));
-
-        // ── Right utility rail ──
-        self.render_safe(ctx, "right_rail", |app, ctx| app.render_right_rail(ctx));
 
         // ── Overlay panels ──
         self.render_safe(ctx, "skill", |app, ctx| app.render_skill_panel(ctx));
@@ -220,103 +230,114 @@ impl App {
         matches!(self.view_state.turn, clarity_core::ui::TurnState::Loading)
     }
 
-    /// Render the left icon rail and, when expanded, the associated list panel.
+    /// Render the left navigation tree.
+    ///
+    /// S6 Phase D: the left chrome is now a single fixed-width tree. The old
+    /// 36px icon rail and the conditional expanded panel have been replaced by
+    /// `panels::navigation_tree`.
     fn render_left_rail(&mut self, ctx: &egui::Context) {
-        let theme = self.ui_store.theme.clone();
-
-        // ── Icon rail (always visible) ──
-        egui::SidePanel::left("left_rail")
-            .exact_width(theme.size_sidebar_collapsed)
-            .resizable(false)
-            .frame(
-                egui::Frame::side_top_panel(&ctx.style())
-                    .fill(theme.surface)
-                    .stroke(egui::Stroke::NONE)
-                    .inner_margin(egui::Margin::same(6)),
-            )
-            .show(ctx, |ui| {
-                if crate::ui::debug_overlay::is_enabled(ctx) {
-                    crate::ui::debug_overlay::show_layout_state(ui, "left-rail-icon");
-                }
-                ui.vertical_centered(|ui| {
-                    ui.add_space(theme.space_12);
-
-                    let rail_btn = |ui: &mut egui::Ui, icon: &str, active: bool, tooltip: &str| {
-                        let (fg, bg) = if active {
-                            (theme.text, theme.surface_strong)
-                        } else {
-                            (theme.text_dim, theme.surface)
-                        };
-                        ui.add_sized(
-                            egui::vec2(theme.size_sidebar_collapsed - 12.0, 32.0),
-                            egui::Button::new(
-                                egui::RichText::new(icon).size(theme.text_base).color(fg),
-                            )
-                            .fill(bg)
-                            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
-                        )
-                        .on_hover_text(tooltip)
-                    };
-
-                    use clarity_core::ui::LeftRailSection;
-                    if rail_btn(
-                        ui,
-                        crate::theme::ICON_CHAT,
-                        self.view_state.left_rail == LeftRailSection::Sessions,
-                        "Sessions",
-                    )
-                    .clicked()
-                    {
-                        self.view_state.toggle_left_rail(LeftRailSection::Sessions);
-                    }
-                    ui.add_space(theme.space_8);
-                    if rail_btn(
-                        ui,
-                        crate::theme::ICON_FILE,
-                        self.view_state.left_rail == LeftRailSection::Workspace,
-                        "Workspace",
-                    )
-                    .clicked()
-                    {
-                        self.view_state.toggle_left_rail(LeftRailSection::Workspace);
-                    }
-                    ui.add_space(theme.space_8);
-                    if rail_btn(
-                        ui,
-                        crate::theme::ICON_BOOK,
-                        self.view_state.left_rail == LeftRailSection::Plugins,
-                        "Plugins",
-                    )
-                    .clicked()
-                    {
-                        self.view_state.toggle_left_rail(LeftRailSection::Plugins);
-                    }
-                });
-            });
-
-        // ── Expanded list panel (conditional) ──
-        // Phase A scaffold: reuse the existing sidebar/workspace panels as the
-        // expanded content. Phase C will flatten these into native rail sections.
         if self.view_state.left_rail_expanded {
-            match self.view_state.left_rail {
-                clarity_core::ui::LeftRailSection::Sessions => {
-                    self.render_sidebar(ctx);
-                }
-                clarity_core::ui::LeftRailSection::Workspace => {
-                    let screen_w = ctx.screen_rect().width();
-                    if screen_w >= theme.breakpoint_medium || self.ui_store.preview_item.is_some() {
-                        self.render_workspace_panel(ctx);
-                    }
-                }
-                _ => {
-                    crate::panels::left_rail::render_plugins_panel(self, ctx);
-                }
-            }
+            crate::panels::navigation_tree::render_left_navigation_tree(self, ctx);
         }
+    }
+
+    /// Render the unified outer border around the chat stage + right rail + input bar.
+    ///
+    /// The individual panels already fill themselves with `theme.bg`; this helper
+    /// only draws the outer rounded stroke so there is no mismatch/black gap
+    /// between a painter fill and the panel fills. The border is inset a few
+    /// pixels from the window edges and from the left sidebar for a cleaner,
+    /// Kimi-style floating-stage look.
+    fn render_main_stage_border(&self, ctx: &egui::Context) {
+        let theme = self.ui_store.theme.clone();
+        let left_w = if self.view_state.left_rail_expanded {
+            theme.size_sidebar
+        } else {
+            0.0
+        };
+        let right_w = if self.view_state.right_rail_visible {
+            self.ui_store
+                .right_rail_width
+                .unwrap_or(theme.size_panel_right)
+        } else {
+            0.0
+        };
+
+        let screen = ctx.screen_rect();
+        let titlebar_h = theme.size_titlebar;
+        let inset = theme.space_4;
+
+        // Layer 1 — base: fills the entire area below the titlebar all the way
+        // to the window edges, including the left-rail region. This makes
+        // titlebar and left rail share one continuous background.
+        let base_rect = egui::Rect::from_min_max(
+            egui::pos2(0.0, titlebar_h),
+            egui::pos2(screen.max.x, screen.max.y),
+        );
+        if base_rect.width() <= 0.0 || base_rect.height() <= 0.0 {
+            return;
+        }
+
+        // Layer 2 — inner surface: inset from the base, with rounded corners and border.
+        let surface_rect = egui::Rect::from_min_max(
+            egui::pos2(left_w + inset, titlebar_h + inset),
+            egui::pos2(screen.max.x - inset, screen.max.y - inset),
+        );
+
+        let painter = ctx.layer_painter(egui::LayerId::background());
+        let radius = theme.radius_sm as u8;
+        let corner_radius = egui::CornerRadius::same(radius);
+
+        painter.rect_filled(base_rect, egui::CornerRadius::ZERO, theme.bg);
+        painter.rect_filled(surface_rect, corner_radius, theme.bg);
+
+        // Right-rail surface: paint the rail with the same rounded corners as
+        // the main stage so its right edge seamlessly meets the outer border.
+        // The divider line is drawn by the panel after its contents so the
+        // native resize hover/drag line can be hidden.
+        if right_w > 0.0 {
+            let rail_w = right_w.min(surface_rect.width());
+            let rail_rect = egui::Rect::from_min_max(
+                egui::pos2(surface_rect.max.x - rail_w, surface_rect.min.y),
+                surface_rect.max,
+            );
+            painter.rect_filled(rail_rect, corner_radius, theme.bg);
+        }
+
+        painter.rect_stroke(
+            surface_rect,
+            corner_radius,
+            egui::Stroke::new(1.0_f32, theme.border),
+            egui::StrokeKind::Inside,
+        );
     }
 
     /// Render the main stage (mutually exclusive central view).
     fn render_main_stage(&mut self, ctx: &egui::Context) {
+        // Views that do not render their own CentralPanel would otherwise expose
+        // the raw window background (black on decorated-less Windows windows).
+        // Fill the stage with `theme.bg` first; Chat/TaskBoard/Work already do
+        // this themselves, so skip them to avoid double CentralPanel.
+        let self_renders_central = matches!(
+            self.view_state.main,
+            clarity_core::ui::AppView::Chat
+                | clarity_core::ui::AppView::TaskBoard
+                | clarity_core::ui::AppView::Work
+        );
+        if !self_renders_central {
+            // The unified background painter already fills the main stage; only
+            // guarantee a transparent central panel exists for child widgets.
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::new()
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .inner_margin(egui::Margin::ZERO)
+                        .outer_margin(egui::Margin::ZERO),
+                )
+                .show(ctx, |_ui| {});
+        }
+
         match self.view_state.main {
             clarity_core::ui::AppView::Chat => self.render_chat_area(ctx),
             clarity_core::ui::AppView::Settings => self.render_settings_panel(ctx),
@@ -327,113 +348,16 @@ impl App {
         }
     }
 
-    /// Human-readable label for the active right rail drawer context.
-    fn right_rail_context_label(ctx: clarity_core::ui::RightRailContext) -> &'static str {
-        match ctx {
-            clarity_core::ui::RightRailContext::Session => "会话上下文",
-            clarity_core::ui::RightRailContext::Claw => "Claw",
-            clarity_core::ui::RightRailContext::Project => "项目资源",
-        }
-    }
-
-    /// Render the right utility rail as a drawer with stacked cards.
+    /// Render the IDE-style right rail panel.
+    ///
+    /// S6 Phase D: the right rail is now a single functional panel selected by
+    /// the Bot bar. The old stacked-card content lives in `panels::right_rail`
+    /// and will be migrated into the new IDE panels over the next iterations.
     fn render_right_rail(&mut self, ctx: &egui::Context) {
         if !self.view_state.right_rail_visible {
             return;
         }
-        let theme = self.ui_store.theme.clone();
-        egui::SidePanel::right("right_rail")
-            .default_width(theme.size_panel_right)
-            .min_width(180.0)
-            .max_width(360.0)
-            .resizable(true)
-            .frame(
-                egui::Frame::side_top_panel(&ctx.style())
-                    .fill(theme.bg)
-                    .stroke(egui::Stroke::NONE)
-                    .inner_margin(egui::Margin::symmetric(12, 16)),
-            )
-            .show(ctx, |ui| {
-                if crate::ui::debug_overlay::is_enabled(ctx) {
-                    crate::ui::debug_overlay::show_layout_state(ui, "right-rail");
-                }
-                ui.set_min_width(ui.available_width());
-
-                // ── Drawer header ──
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(Self::right_rail_context_label(
-                            self.view_state.right_rail_context,
-                        ))
-                        .size(theme.text_base)
-                        .strong()
-                        .color(theme.text_strong),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if crate::widgets::icon_button_toolbar(
-                            ui,
-                            crate::theme::ICON_X,
-                            theme.text_base,
-                            &theme,
-                        )
-                        .on_hover_text("Collapse right rail")
-                        .clicked()
-                        {
-                            self.view_state.right_rail_visible = false;
-                            self.persist_layout_settings();
-                        }
-                    });
-                });
-                ui.add_space(theme.space_12);
-
-                // ── Stacked cards ──
-                use clarity_core::ui::RightRailCard;
-                for (i, card) in self
-                    .view_state
-                    .right_rail_card_order
-                    .clone()
-                    .iter()
-                    .enumerate()
-                {
-                    if i > 0 {
-                        ui.add_space(theme.space_12);
-                    }
-                    egui::Frame::new()
-                        .fill(theme.surface)
-                        .stroke(egui::Stroke::new(1.0, theme.border))
-                        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-                        .inner_margin(egui::Margin::same(12))
-                        .show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            ui.label(
-                                egui::RichText::new(match card {
-                                    RightRailCard::Progress => "进度",
-                                    RightRailCard::Context => "上下文",
-                                })
-                                .size(theme.text_sm)
-                                .strong()
-                                .color(theme.text),
-                            );
-                            ui.add_space(theme.space_8);
-                            match card {
-                                RightRailCard::Progress => {
-                                    crate::panels::right_rail::render_progress_card(
-                                        self,
-                                        ui,
-                                        self.view_state.right_rail_context,
-                                    )
-                                }
-                                RightRailCard::Context => {
-                                    crate::panels::right_rail::render_context_card(
-                                        self,
-                                        ui,
-                                        self.view_state.right_rail_context,
-                                    )
-                                }
-                            }
-                        });
-                }
-            });
+        crate::panels::right_ide_panel::render_right_ide_panel(self, ctx);
     }
 
     /// Handle system tray events: show/hide window and menu actions.
@@ -482,11 +406,20 @@ impl App {
         }
     }
 
+    /// Render the minimal custom titlebar.
+    ///
+    /// S6 Phase D: the titlebar is stripped down to a single sidebar toggle on
+    /// the left and the window control buttons on the right. The previous
+    /// brand, session tabs, persona switcher, model indicator, and status
+    /// capsules have been removed from the chrome; they will resurface in the
+    /// Bot bar, the right rail, or the bottom composer.
     fn render_titlebar(&mut self, ctx: &egui::Context) {
         let theme = self.ui_store.theme.clone();
 
         egui::TopBottomPanel::top("titlebar")
             .exact_height(theme.size_titlebar)
+            .resizable(false)
+            .show_separator_line(false)
             .frame(
                 egui::Frame::new()
                     .fill(theme.bg)
@@ -496,8 +429,8 @@ impl App {
             .show(ctx, |ui| {
                 let titlebar_rect = ui.max_rect();
 
-                // Fix 3 (官方范式): 整个 titlebar 作为拖拽热区，先注册后覆盖。
-                // 按钮在后续代码中渲染，其交互会自动覆盖同一 rect 上的拖拽。
+                // Register the entire titlebar as a drag region first; buttons
+                // rendered afterwards automatically override this hitbox.
                 let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                 let drag_resp = ui.interact(
                     titlebar_rect,
@@ -511,375 +444,82 @@ impl App {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                 }
 
-                // ── TitleBar three-zone layout via egui_extras::StripBuilder ──
-                //   LEFT  : sidebar toggle (when collapsed) + brand
-                //   CENTER: session tabs + model indicator (drag handled globally above)
-                //   RIGHT : window controls + status capsules
-                let show_status_labels = ctx.screen_rect().width() >= theme.breakpoint_compact;
-                let right_w = self.ui_store.titlebar_right_width.max(180.0);
-                // 溢出保护：RIGHT zone 不得超过当前可用宽度的 45%，防止挤压 CENTER
-                let max_right = ui.available_width() * 0.45;
-                let right_w = right_w.min(max_right.max(180.0));
-                // LEFT zone 动态化：左 rail 折叠时需要 toggle + brand，否则仅 brand
-                let left_w = if !self.view_state.left_rail_expanded {
-                    theme.titlebar_left_w
-                } else {
-                    68.0
-                };
+                ui.horizontal(|ui| {
+                    // Sidebar toggle.
+                    let sidebar_tooltip = if self.view_state.left_rail_expanded {
+                        "Collapse sidebar"
+                    } else {
+                        "Expand sidebar"
+                    };
+                    if crate::widgets::icon_button_toolbar(
+                        ui,
+                        crate::theme::ICON_LIST,
+                        theme.text_base,
+                        &theme,
+                    )
+                    .on_hover_text(sidebar_tooltip)
+                    .clicked()
+                    {
+                        self.view_state.left_rail_expanded = !self.view_state.left_rail_expanded;
+                    }
 
-                StripBuilder::new(ui)
-                    .size(Size::exact(left_w))
-                    .size(Size::remainder().at_least(40.0))
-                    .size(Size::exact(right_w))
-                    .horizontal(|mut strip| {
-                        // ── LEFT zone: sidebar toggle + brand ──
-                        strip.cell(|ui| {
-                            ui.set_min_height(theme.size_titlebar);
-                            ui.horizontal_centered(|ui| {
-                                if !self.view_state.left_rail_expanded {
-                                    if crate::widgets::icon_button_toolbar(
-                                        ui,
-                                        crate::theme::ICON_LIST,
-                                        theme.text_base,
-                                        &theme,
-                                    )
-                                    .on_hover_text("Expand sidebar")
-                                    .clicked()
-                                    {
-                                        self.view_state.left_rail_expanded = true;
-                                    }
-                                    ui.add_space(8.0);
-                                }
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new("Clarity")
-                                            .size(theme.text_base)
-                                            .color(theme.text_strong),
-                                    )
-                                    .sense(egui::Sense::empty()),
-                                );
-                                ui.add_space(theme.space_12);
+                    // Right-aligned window controls.
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
 
-                                // ── Chat / Work pill toggle (OpenClaw dual-mode) ──
-                                let is_chat =
-                                    matches!(self.view_state.main, clarity_core::ui::AppView::Chat);
-                                let (chat_bg, chat_fg) = if is_chat {
-                                    (theme.surface_strong, theme.text)
-                                } else {
-                                    (theme.bg_hover, theme.text_dim)
-                                };
-                                let (work_bg, work_fg) = if !is_chat {
-                                    (theme.surface_strong, theme.text)
-                                } else {
-                                    (theme.bg_hover, theme.text_dim)
-                                };
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 0.0;
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new("Chat")
-                                                    .size(theme.text_sm)
-                                                    .color(chat_fg),
-                                            )
-                                            .fill(chat_bg)
-                                            .corner_radius(egui::CornerRadius {
-                                                nw: theme.radius_sm as u8,
-                                                ne: 0,
-                                                sw: theme.radius_sm as u8,
-                                                se: 0,
-                                            }),
-                                        )
-                                        .clicked()
-                                    {
-                                        self.view_state.main = clarity_core::ui::AppView::Chat;
-                                    }
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new("Work")
-                                                    .size(theme.text_sm)
-                                                    .color(work_fg),
-                                            )
-                                            .fill(work_bg)
-                                            .corner_radius(egui::CornerRadius {
-                                                nw: 0,
-                                                ne: theme.radius_sm as u8,
-                                                sw: 0,
-                                                se: theme.radius_sm as u8,
-                                            }),
-                                        )
-                                        .clicked()
-                                    {
-                                        self.view_state.main = clarity_core::ui::AppView::Work;
-                                    }
-                                });
-                            });
+                        // Close.
+                        let close = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_X,
+                            &theme,
+                            theme.danger.linear_multiply(0.25),
+                            egui::Color32::WHITE,
+                            theme.text,
+                        )
+                        .on_hover_text("Close window");
+                        if close.clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                        }
+
+                        // Maximize / restore.
+                        let max_icon = if is_maximized {
+                            crate::theme::ICON_COPY
+                        } else {
+                            crate::theme::ICON_SQUARE
+                        };
+                        let max = crate::widgets::window_control_button(
+                            ui,
+                            max_icon,
+                            &theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            theme.text,
+                        )
+                        .on_hover_text(if is_maximized {
+                            "Restore window"
+                        } else {
+                            "Maximize window"
                         });
+                        if max.clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
+                        }
 
-                        // ── CENTER zone: tabs + model ──
-                        // Drag 已由 titlebar 全局 interact 处理，不再需要在 CENTER
-                        // 内部放置 drag filler，避免与 RIGHT zone 按钮产生 hitbox 重叠。
-                        strip.cell(|ui| {
-                            ui.set_min_height(theme.size_titlebar);
-                            ui.horizontal_centered(|ui| {
-                                // S8 P3B.1: Persona switcher pill (Top Bar per ADR-014).
-                                self.render_persona_switcher(ui, &theme);
-                                ui.add_space(theme.space_8);
-
-                                crate::panels::chat::header::render_session_tabs(self, ui);
-
-                                // Model context indicator (Pretext UI mid-zone)
-                                // 仅当剩余空间充足时才渲染，防止与 RIGHT zone 按钮溢出重叠。
-                                let model_name = self.settings_store.settings_edit.model.trim();
-                                if !model_name.is_empty() {
-                                    let remaining = ui.available_width();
-                                    if remaining >= 60.0 {
-                                        ui.add_space(8.0);
-                                        let label_w = remaining.min(120.0);
-                                        ui.add_sized(
-                                            egui::vec2(label_w, theme.size_titlebar),
-                                            egui::Label::new(
-                                                egui::RichText::new(model_name)
-                                                    .size(theme.text_xs)
-                                                    .color(theme.text_muted),
-                                            )
-                                            .truncate()
-                                            .sense(egui::Sense::empty()),
-                                        );
-                                    }
-                                }
-                            });
-                        });
-
-                        // ── RIGHT zone: window controls + status capsules ──
-                        strip.cell(|ui| {
-                            ui.set_min_height(theme.size_titlebar);
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    self.render_titlebar_right(
-                                        ui,
-                                        ctx,
-                                        show_status_labels,
-                                        is_maximized,
-                                        &theme,
-                                    );
-                                },
-                            );
-                        });
+                        // Minimize.
+                        let min = crate::widgets::window_control_button(
+                            ui,
+                            crate::theme::ICON_MINUS,
+                            &theme,
+                            theme.overlay_medium,
+                            theme.text,
+                            theme.text,
+                        )
+                        .on_hover_text("Minimize to taskbar");
+                        if min.clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        }
                     });
+                });
             });
-    }
-
-    /// S8 P3B.1: Render the persona switcher pill in the titlebar's CENTER
-    /// zone (left edge, before session tabs). Mutates `ui_store.active_persona_id`
-    /// on selection and persists to `settings_edit.active_persona_id`.
-    fn render_persona_switcher(&mut self, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-        let resp = crate::widgets::persona_switcher(
-            ui,
-            theme,
-            &self.ui_store.endpoint_registry,
-            &self.ui_store.active_persona_id,
-            self.ui_store.persona_switcher_open,
-        );
-        if resp.toggle_clicked {
-            self.ui_store.persona_switcher_open = !self.ui_store.persona_switcher_open;
-        }
-        if let Some(new_id) = resp.selected {
-            if new_id != self.ui_store.active_persona_id {
-                self.ui_store.active_persona_id = new_id.clone();
-                self.settings_store.settings_edit.active_persona_id = Some(new_id.clone());
-                if let Err(e) = self.settings_store.settings_edit.save() {
-                    tracing::warn!("failed to persist active_persona_id: {}", e);
-                }
-                let descriptor_name = self
-                    .ui_store
-                    .endpoint_registry
-                    .get(&new_id)
-                    .map(|d| d.display_name.as_str().to_string())
-                    .unwrap_or_else(|| new_id.clone());
-                self.push_toast(
-                    format!("Switched persona: {}", descriptor_name),
-                    crate::ui::types::ToastLevel::Info,
-                );
-            }
-        }
-        if resp.close_requested {
-            self.ui_store.persona_switcher_open = false;
-        }
-    }
-
-    /// Render the right section of the titlebar (window controls + status capsules).
-    /// Returns the actual width consumed in right-to-left layout.
-    fn render_titlebar_right(
-        &mut self,
-        ui: &mut egui::Ui,
-        ctx: &egui::Context,
-        show_status_labels: bool,
-        is_maximized: bool,
-        theme: &crate::theme::Theme,
-    ) -> f32 {
-        // In RTL, cursor.max.x shrinks leftward as widgets are placed.
-        // Width = start_max_x - end_max_x.
-        let start_max_x = ui.cursor().max.x;
-        let available_w = ui.available_width();
-        // 严格优先级：空间不足时从低优先级开始隐藏，确保 close/max/min/settings 始终可见
-        let show_labels = show_status_labels && available_w >= 240.0;
-        let show_capsules = available_w >= 160.0;
-        let show_settings = available_w >= 120.0;
-        ui.spacing_mut().item_spacing.x = 0.0;
-        // Close (P0 — never hide)
-        let close_resp = crate::widgets::window_control_button(
-            ui,
-            crate::theme::ICON_X,
-            theme,
-            theme.danger.linear_multiply(0.25),
-            egui::Color32::WHITE,
-            theme.text,
-        )
-        .on_hover_text("Close window");
-        if close_resp.clicked() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        }
-
-        // Maximize / Restore (P0)
-        let max_icon = if is_maximized {
-            crate::theme::ICON_COPY
-        } else {
-            crate::theme::ICON_SQUARE
-        };
-        let max_resp = crate::widgets::window_control_button(
-            ui,
-            max_icon,
-            theme,
-            theme.overlay_medium,
-            theme.text,
-            theme.text,
-        )
-        .on_hover_text(if is_maximized {
-            "Restore window"
-        } else {
-            "Maximize window"
-        });
-        if max_resp.clicked() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
-        }
-
-        // Minimize (P0)
-        let min_resp = crate::widgets::window_control_button(
-            ui,
-            crate::theme::ICON_MINUS,
-            theme,
-            theme.overlay_medium,
-            theme.text,
-            theme.text,
-        )
-        .on_hover_text("Minimize to taskbar");
-        if min_resp.clicked() {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-        }
-
-        if show_settings {
-            // Separator between system buttons and indicators
-            ui.add_space(8.0);
-
-            // Settings button (P1)
-            let settings_resp = crate::widgets::window_control_button(
-                ui,
-                crate::theme::ICON_SETTINGS,
-                theme,
-                theme.overlay_medium,
-                theme.text,
-                theme.text,
-            )
-            .on_hover_text("Open Settings (Esc to close)");
-            if settings_resp.clicked() {
-                self.view_state.main = clarity_core::ui::AppView::Settings;
-            }
-        }
-
-        if show_capsules {
-            // Connection status capsule (P2)
-            let (conn_label, conn_color) = match self.chat_store.agent_status {
-                AgentStatus::Online => ("Online", theme.status_online),
-                AgentStatus::Busy => ("Busy", theme.status_busy),
-                AgentStatus::Offline | AgentStatus::Unconfigured => ("断开", theme.status_offline),
-            };
-            let conn_resp = crate::widgets::status_capsule(
-                ui,
-                conn_color,
-                if show_labels { conn_label } else { "" },
-                conn_color,
-                false,
-                theme,
-            );
-            conn_resp.on_hover_text("Agent connection status");
-            ui.add_space(4.0);
-
-            // Gateway capsule (P2)
-            let gw_dot_color = match self.chat_store.gateway_status {
-                crate::ui::types::GatewayStatus::Online => theme.status_online,
-                crate::ui::types::GatewayStatus::Offline => theme.status_offline,
-                crate::ui::types::GatewayStatus::Checking => theme.status_busy,
-            };
-            let gw_resp = crate::widgets::status_capsule(
-                ui,
-                gw_dot_color,
-                if show_labels { "Gateway" } else { "" },
-                theme.text_muted,
-                true,
-                theme,
-            )
-            .on_hover_text("Click to start/stop Gateway");
-            if gw_resp.clicked() {
-                match self.chat_store.gateway_status {
-                    crate::ui::types::GatewayStatus::Online => {
-                        if let Some(ref gm) = self.gateway_manager {
-                            match gm.stop() {
-                                Ok(_) => self.push_toast(
-                                    "Gateway stopping...".to_string(),
-                                    crate::ui::types::ToastLevel::Info,
-                                ),
-                                Err(e) => self.push_toast(
-                                    format!("Gateway stop failed: {}", e),
-                                    crate::ui::types::ToastLevel::Error,
-                                ),
-                            }
-                        } else {
-                            self.push_toast(
-                                "Gateway manager not available".to_string(),
-                                crate::ui::types::ToastLevel::Warn,
-                            );
-                        }
-                    }
-                    _ => {
-                        if let Some(ref gm) = self.gateway_manager {
-                            match gm.start_if_needed() {
-                                Ok(_) => self.push_toast(
-                                    "Gateway starting...".to_string(),
-                                    crate::ui::types::ToastLevel::Info,
-                                ),
-                                Err(e) => self.push_toast(
-                                    format!("Gateway start failed: {}", e),
-                                    crate::ui::types::ToastLevel::Error,
-                                ),
-                            }
-                        } else {
-                            self.push_toast(
-                                "Gateway manager not available".to_string(),
-                                crate::ui::types::ToastLevel::Warn,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // RTL layout: cursor.max.x moved leftward; consumed width = start - end.
-        let measured = start_max_x - ui.cursor().max.x;
-        self.ui_store.titlebar_right_width = measured;
-        measured
     }
 
     fn handle_window_resize(&mut self, ctx: &egui::Context) {
@@ -1071,6 +711,14 @@ impl App {
                 // Actual copy is handled in App::update() where egui::Context is available.
                 true
             }
+            ids::INCREASE_FONT_SCALE => {
+                self.increase_font_scale();
+                true
+            }
+            ids::DECREASE_FONT_SCALE => {
+                self.decrease_font_scale();
+                true
+            }
             other => {
                 tracing::warn!("dispatch_command: unknown command id '{}'", other);
                 false
@@ -1124,14 +772,6 @@ impl App {
 
     fn render_input_panel(&mut self, ctx: &egui::Context) {
         panels::chat::render_input_panel(self, ctx);
-    }
-
-    fn render_sidebar(&mut self, ctx: &egui::Context) {
-        panels::sidebar::render_sidebar(self, ctx);
-    }
-
-    fn render_workspace_panel(&mut self, ctx: &egui::Context) {
-        panels::workspace::render_workspace_panel(self, ctx);
     }
 
     fn render_mcp_panel(&mut self, ctx: &egui::Context) {

@@ -78,24 +78,34 @@ async fn test_agent_lazy_llm_factory() {
 
 #[tokio::test]
 async fn test_agent_run_streaming() {
-    use parking_lot::Mutex;
+    use clarity_wire::WireMessage;
     use std::sync::Arc;
+    use tokio::time::{Duration, timeout};
+
+    let wire = clarity_wire::Wire::new();
+    let mut ui_side = wire.ui_side(false);
 
     let registry = ToolRegistry::new();
     let config = AgentConfig::new();
-    let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlm));
+    let agent = Agent::with_config(registry, config)
+        .with_llm(Arc::new(MockLlm))
+        .with_wire(Arc::new(wire));
 
-    let chunks = Arc::new(Mutex::new(Vec::new()));
-    let chunks_clone = chunks.clone();
-    let result = agent
-        .run_streaming("Hello", move |chunk| {
-            chunks_clone.lock().push(chunk.to_string());
-        })
-        .await;
+    let result = agent.run_streaming("Hello").await;
 
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "This is a mock response");
-    assert_eq!(*chunks.lock(), vec!["This is a mock response"]);
+
+    // Collect ContentPart chunks emitted through the wire.
+    let mut chunks = Vec::new();
+    loop {
+        match timeout(Duration::from_millis(500), ui_side.recv()).await {
+            Ok(Some(WireMessage::ContentPart { text, .. })) => chunks.push(text),
+            Ok(Some(_)) => continue,
+            _ => break,
+        }
+    }
+    assert_eq!(chunks, vec!["This is a mock response"]);
 }
 
 #[tokio::test]
@@ -422,9 +432,7 @@ async fn test_agent_run_with_wire() {
 #[tokio::test]
 async fn test_agent_run_streaming_with_wire() {
     use clarity_wire::{DraftEvent, Wire};
-    use parking_lot::Mutex;
     use std::sync::Arc;
-    use std::sync::Arc as StdArc;
     use tokio::time::{Duration, timeout};
 
     // Create Wire
@@ -439,15 +447,7 @@ async fn test_agent_run_streaming_with_wire() {
         .with_wire(Arc::new(wire));
 
     // Run Agent in background with streaming
-    let chunks = StdArc::new(Mutex::new(Vec::new()));
-    let chunks_clone = chunks.clone();
-    let handle = tokio::spawn(async move {
-        agent
-            .run_streaming("streaming test", move |chunk| {
-                chunks_clone.lock().push(chunk.to_string());
-            })
-            .await
-    });
+    let handle = tokio::spawn(async move { agent.run_streaming("streaming test").await });
 
     // Verify UI side receives TurnBegin
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())

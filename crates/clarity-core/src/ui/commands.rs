@@ -94,6 +94,10 @@ pub mod ids {
     pub const FOCUS_INPUT: &str = "focus-input";
     /// `TOGGLE_COMMAND_PALETTE` constant.
     pub const TOGGLE_COMMAND_PALETTE: &str = "toggle-command-palette";
+    /// `INCREASE_FONT_SCALE` constant.
+    pub const INCREASE_FONT_SCALE: &str = "increase-font-scale";
+    /// `DECREASE_FONT_SCALE` constant.
+    pub const DECREASE_FONT_SCALE: &str = "decrease-font-scale";
 
     // ── Line-mode navigation (S7 Phase 2D) ──
     /// `NAVIGATE_DOWN` constant.
@@ -211,6 +215,26 @@ pub mod built_in {
         .with_shortcut("Ctrl+Shift+P")
     }
 
+    /// `increase_font_scale`.
+    pub fn increase_font_scale() -> CommandItem {
+        CommandItem::new(
+            ids::INCREASE_FONT_SCALE,
+            "Increase Font Size",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+=")
+    }
+
+    /// `decrease_font_scale`.
+    pub fn decrease_font_scale() -> CommandItem {
+        CommandItem::new(
+            ids::DECREASE_FONT_SCALE,
+            "Decrease Font Size",
+            CommandScope::Global,
+        )
+        .with_shortcut("Ctrl+-")
+    }
+
     /// 返回所有内置命令列表。
     pub fn all() -> Vec<CommandItem> {
         vec![
@@ -226,6 +250,8 @@ pub mod built_in {
             toggle_dashboard(),
             toggle_layout_debug(),
             toggle_command_palette(),
+            increase_font_scale(),
+            decrease_font_scale(),
         ]
     }
 }

@@ -361,6 +361,18 @@ impl App {
                 let mut wire_ui = wire.ui_side(false);
                 while let Some(msg) = wire_ui.recv().await {
                     let event = match msg {
+                        clarity_wire::WireMessage::ContentPart { text, .. } => {
+                            Some(UiEvent::Chunk(text))
+                        }
+                        clarity_wire::WireMessage::DraftEvent { event, .. } => match event {
+                            clarity_wire::DraftEvent::Progress { text } => {
+                                Some(UiEvent::DraftProgress { text })
+                            }
+                            clarity_wire::DraftEvent::Clear => Some(UiEvent::DraftClear),
+                            clarity_wire::DraftEvent::Content { text } => {
+                                Some(UiEvent::DraftContent { text })
+                            }
+                        },
                         clarity_wire::WireMessage::ToolCall {
                             id,
                             name,
@@ -412,14 +424,7 @@ impl App {
                 }
             });
 
-            let tx_chunk = tx.clone();
-            let result = agent
-                .run_streaming(&enriched_query, move |chunk: &str| {
-                    if let Err(e) = tx_chunk.send(UiEvent::Chunk(chunk.to_string())) {
-                        tracing::warn!("Failed to send Chunk: {}", e);
-                    }
-                })
-                .await;
+            let result = agent.run_streaming(&enriched_query).await;
 
             match result {
                 Ok(final_response) => {

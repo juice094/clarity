@@ -342,6 +342,31 @@ pub enum RightRailCard {
     Context,
 }
 
+/// IDE-style right rail panel for the Pretext layout.
+///
+/// S6 Phase D: the right rail is now an IDE-style compressed panel that shows
+/// one of the function panels at a time. This enum replaces the stacked-card
+/// `RightRailSection` for the new panel-driven right rail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RightRailPanel {
+    /// No panel is selected; the right rail is collapsed.
+    #[default]
+    None,
+    /// Share / export panel.
+    Share,
+    /// Console / task log panel.
+    Console,
+    /// File explorer / workspace files panel.
+    Files,
+    /// Claw remote device settings panel.
+    ClawSettings,
+    /// Project knowledge base panel.
+    KnowledgeBase,
+    /// Template / preset injection panel.
+    Templates,
+}
+
 /// Physical panel identifier — used by [`FocusScope::Panel`] to discriminate
 /// which panel currently owns keyboard input.
 ///
@@ -484,6 +509,9 @@ pub struct ViewState {
     /// Display order of stacked cards inside the right rail drawer (S6 Phase C).
     #[serde(default)]
     pub right_rail_card_order: Vec<RightRailCard>,
+    /// IDE-style right rail panel (S6 Phase D).
+    #[serde(default)]
+    pub right_rail_panel: RightRailPanel,
     /// Whether the UI is in layout edit mode (unlocks drag reordering, S6 Phase C).
     #[serde(default)]
     pub layout_edit_mode: bool,
@@ -587,6 +615,25 @@ impl ViewState {
     /// Collapse the right utility rail.
     pub fn collapse_right_rail(&mut self) {
         self.right_rail_visible = false;
+    }
+
+    /// Open a specific IDE-style right rail panel.
+    ///
+    /// If `panel` is `RightRailPanel::None`, the rail is collapsed.
+    pub fn set_right_rail_panel(&mut self, panel: RightRailPanel) {
+        self.right_rail_panel = panel;
+        self.right_rail_visible = panel != RightRailPanel::None;
+    }
+
+    /// Toggle an IDE-style right rail panel. Tapping the active panel collapses the rail.
+    pub fn toggle_right_rail_panel(&mut self, panel: RightRailPanel) {
+        if self.right_rail_panel == panel && panel != RightRailPanel::None {
+            self.right_rail_panel = RightRailPanel::None;
+            self.right_rail_visible = false;
+        } else {
+            self.right_rail_panel = panel;
+            self.right_rail_visible = true;
+        }
     }
 
     /// Switch the right rail drawer context.
@@ -1325,5 +1372,53 @@ mod tests {
         vs.toggle_left(SidePanel::Workspace); // toggles off
         assert!(vs.left.is_none());
         assert_eq!(vs.right, Some(SidePanel::Task));
+    }
+
+    #[test]
+    fn right_rail_panel_default_is_none() {
+        let vs = ViewState::new();
+        assert_eq!(vs.right_rail_panel, RightRailPanel::None);
+        assert!(!vs.right_rail_visible);
+    }
+
+    #[test]
+    fn set_right_rail_panel_opens_rail() {
+        let mut vs = ViewState::new();
+        vs.set_right_rail_panel(RightRailPanel::Console);
+        assert_eq!(vs.right_rail_panel, RightRailPanel::Console);
+        assert!(vs.right_rail_visible);
+
+        vs.set_right_rail_panel(RightRailPanel::None);
+        assert!(!vs.right_rail_visible);
+    }
+
+    #[test]
+    fn toggle_right_rail_panel_is_mutually_exclusive() {
+        let mut vs = ViewState::new();
+        vs.toggle_right_rail_panel(RightRailPanel::Files);
+        assert_eq!(vs.right_rail_panel, RightRailPanel::Files);
+        assert!(vs.right_rail_visible);
+
+        // Toggling the same panel collapses the rail.
+        vs.toggle_right_rail_panel(RightRailPanel::Files);
+        assert_eq!(vs.right_rail_panel, RightRailPanel::None);
+        assert!(!vs.right_rail_visible);
+
+        // Toggling a different panel opens it.
+        vs.toggle_right_rail_panel(RightRailPanel::KnowledgeBase);
+        assert_eq!(vs.right_rail_panel, RightRailPanel::KnowledgeBase);
+        assert!(vs.right_rail_visible);
+    }
+
+    #[test]
+    fn right_rail_panel_roundtrips_through_json() {
+        let mut vs = ViewState::new();
+        vs.right_rail_panel = RightRailPanel::ClawSettings;
+        vs.right_rail_visible = true;
+
+        let json = serde_json::to_string(&vs).unwrap();
+        let restored: ViewState = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.right_rail_panel, RightRailPanel::ClawSettings);
+        assert!(restored.right_rail_visible);
     }
 }

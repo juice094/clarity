@@ -55,6 +55,7 @@ pub fn message_bubble(
             let _ = selected_idx;
             match msg.role {
                 Role::User => user_bubble(ui, msg, theme, metrics),
+                // AI messages are left-aligned in the same content column.
                 Role::Agent => agent_message(ui, msg, theme, show_header, metrics),
             }
         }
@@ -379,14 +380,17 @@ fn user_bubble(
     let start_y = ui.cursor().min.y;
     let max_width = (ui.available_width() * 0.72).max(280.0);
 
-    ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+    // User messages: right-aligned within the content column, with a small
+    // inset from the right edge so the bubble clearly reads as "sent".
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+        ui.add_space(theme.space_8);
         ui.set_max_width(max_width);
         egui::Frame::new()
             .fill(theme.user_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::NONE)
             .shadow(egui::Shadow::NONE)
-            .inner_margin(egui::Margin::symmetric(18, 14))
+            .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
                     ui.set_min_width(48.0);
@@ -416,6 +420,7 @@ fn user_bubble(
                     }
                 });
             });
+        ui.add_space(theme.space_8);
     });
     ui.add_space(theme.space_16);
     ui.cursor().min.y - start_y

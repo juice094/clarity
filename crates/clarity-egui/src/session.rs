@@ -1,6 +1,6 @@
 //! Session persistence — load/save chat history to JSON files.
 
-use crate::ui::types::{ContentBlock, Message, Role, Session};
+use crate::ui::types::{ContentBlock, Message, Role, Session, SessionContext, SessionLifecycle};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -64,6 +64,10 @@ pub fn load_sessions() -> Vec<Session> {
                             id: data.id,
                             title: data.title,
                             category: data.category.unwrap_or_else(|| "engineering".to_string()),
+                            project_id: data.project_id,
+                            context: data.context,
+                            lifecycle: data.lifecycle,
+                            archived: data.archived,
                             messages,
                             updated_at: data.updated_at,
                             turn_heights: vec![],
@@ -94,6 +98,10 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
         id: session.id.clone(),
         title: session.title.clone(),
         category: Some(session.category.clone()),
+        project_id: session.project_id.clone(),
+        context: session.context.clone(),
+        lifecycle: session.lifecycle,
+        archived: session.archived,
         created_at: session.updated_at,
         updated_at: now_millis(),
         messages: session
@@ -131,10 +139,24 @@ pub fn new_session(category: &str, index: usize) -> Session {
     } else {
         format!("New {} {}", base, index + 1)
     };
+    let context = match category {
+        "claw" => SessionContext::Claw {
+            device_id: String::new(),
+        },
+        "project" => SessionContext::Project {
+            project_id: String::new(),
+            has_workspace: true,
+        },
+        _ => SessionContext::Chat,
+    };
     Session {
         id: id.clone(),
         title,
         category: category.into(),
+        project_id: None,
+        context,
+        lifecycle: SessionLifecycle::Temporary,
+        archived: false,
         messages: vec![],
         updated_at: now_millis(),
         turn_heights: vec![],
@@ -154,6 +176,14 @@ struct SessionData {
     id: String,
     title: String,
     category: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    context: SessionContext,
+    #[serde(default)]
+    lifecycle: SessionLifecycle,
+    #[serde(default)]
+    archived: bool,
     created_at: u64,
     updated_at: u64,
     messages: Vec<MessageData>,
@@ -165,4 +195,77 @@ struct MessageData {
     content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     blocks: Option<Vec<ContentBlock>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::types::{SessionContext, SessionLifecycle};
+
+    #[test]
+    fn new_session_defaults_to_chat_context() {
+        let s = new_session("engineering", 0);
+        assert_eq!(s.context, SessionContext::Chat);
+        assert_eq!(s.lifecycle, SessionLifecycle::Temporary);
+        assert!(!s.archived);
+        assert!(s.project_id.is_none());
+    }
+
+    #[test]
+    fn new_session_infers_project_context_from_category() {
+        let s = new_session("project", 0);
+        assert!(
+            matches!(
+                s.context,
+                SessionContext::Project {
+                    has_workspace: true,
+                    ..
+                }
+            ),
+            "project category should create a Project context"
+        );
+    }
+
+    #[test]
+    fn new_session_infers_claw_context_from_category() {
+        let s = new_session("claw", 0);
+        assert!(
+            matches!(s.context, SessionContext::Claw { .. }),
+            "claw category should create a Claw context"
+        );
+    }
+
+    #[test]
+    fn session_data_roundtrips_phase7_fields() {
+        let data = SessionData {
+            id: "s-1".into(),
+            title: "test".into(),
+            category: Some("engineering".into()),
+            project_id: Some("p-1".into()),
+            context: SessionContext::Project {
+                project_id: "p-1".into(),
+                has_workspace: true,
+            },
+            lifecycle: SessionLifecycle::ProjectBound,
+            archived: true,
+            created_at: 0,
+            updated_at: 1,
+            messages: vec![],
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        let restored: SessionData = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.project_id, Some("p-1".into()));
+        assert_eq!(restored.lifecycle, SessionLifecycle::ProjectBound);
+        assert!(restored.archived);
+    }
+
+    #[test]
+    fn session_data_defaults_missing_phase7_fields() {
+        let json = r#"{"id":"s-legacy","title":"legacy","category":"engineering","created_at":0,"updated_at":1,"messages":[]}"#;
+        let restored: SessionData = serde_json::from_str(json).unwrap();
+        assert!(restored.project_id.is_none());
+        assert_eq!(restored.context, SessionContext::Chat);
+        assert_eq!(restored.lifecycle, SessionLifecycle::Temporary);
+        assert!(!restored.archived);
+    }
 }

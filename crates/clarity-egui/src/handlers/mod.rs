@@ -13,7 +13,9 @@ use crate::ui::types::{ContentBlock, Message, Role, UiEvent};
 pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
         match event {
-            UiEvent::Chunk(text) => chat::on_chunk(&mut app.session_store, text),
+            UiEvent::Chunk(text) => {
+                chat::on_chunk(&mut app.session_store, &mut app.chat_store, text)
+            }
             UiEvent::ToolStart {
                 id,
                 name,
@@ -48,6 +50,13 @@ pub fn process_events(app: &mut App) {
             }
             UiEvent::CompactionBegin => chat::on_compaction_begin(&mut app.view_state),
             UiEvent::CompactionEnd => chat::on_compaction_end(&mut app.view_state),
+            UiEvent::DraftProgress { text } => {
+                chat::on_draft_progress(&mut app.chat_store, text);
+            }
+            UiEvent::DraftClear => chat::on_draft_clear(&mut app.chat_store),
+            UiEvent::DraftContent { text } => {
+                chat::on_draft_content(&mut app.chat_store, text);
+            }
             UiEvent::Done => chat::on_done(app),
             UiEvent::Error(msg) => chat::on_error(app, msg),
             UiEvent::Fallback { fallback, reason } => {

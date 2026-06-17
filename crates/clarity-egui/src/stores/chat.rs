@@ -27,6 +27,9 @@ pub struct ChatStore {
     pub edit_buffer: String,
     /// Snapshot created by the most recently completed agent turn.
     pub last_snapshot: Option<clarity_core::agent::snapshot::SnapshotInfo>,
+    /// Transient draft/thinking indicator for the current agent turn.
+    /// Cleared automatically when the turn ends or real content arrives.
+    pub draft_status: DraftStatus,
     /// Input history for ↑↓ recall (TUI-style input box Phase 1).
     pub input_history: Vec<String>,
     /// Cursor into `input_history`. None = editing current draft.

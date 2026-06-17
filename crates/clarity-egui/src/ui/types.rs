@@ -33,6 +33,16 @@ pub enum UiEvent {
     },
     CompactionBegin,
     CompactionEnd,
+    /// Transient draft/thinking indicator shown while the model is preparing a response.
+    DraftProgress {
+        text: String,
+    },
+    /// Clear the transient draft indicator (the model is about to emit real content).
+    DraftClear,
+    /// Optional reasoning/thinking content (e.g. <think> blocks from reasoning models).
+    DraftContent {
+        text: String,
+    },
     Done,
     Error(String),
     Fallback {
@@ -58,10 +68,12 @@ pub enum UiEvent {
         success: bool,
     },
     /// A plan step was skipped by user request.
+    #[allow(dead_code)]
     PlanSkip {
         step_id: String,
     },
     /// Retry a failed plan step.
+    #[allow(dead_code)]
     PlanRetry {
         step_id: String,
     },
@@ -83,6 +95,7 @@ pub enum UiEvent {
         models: Vec<String>,
     },
     /// Async web page fetch completed — payload delivered to chat preview area.
+    #[allow(dead_code)]
     WebPageFetched {
         title: String,
         url: String,
@@ -149,6 +162,7 @@ pub enum UiEvent {
         error: Option<String>,
     },
     /// Task result loaded from background store (async callback).
+    #[allow(dead_code)]
     TaskResultLoaded {
         task_id: String,
         result: clarity_core::background::TaskResult,
@@ -161,8 +175,27 @@ pub enum UiEvent {
     },
 }
 
+/// Transient draft indicator state for the current agent turn.
+///
+/// This is intentionally separate from `Message` so the UI team can decide
+/// later whether to render it inside the agent bubble, above the composer,
+/// or in a side panel — without touching event/handler code.
+#[derive(Clone, Debug, Default)]
+pub enum DraftStatus {
+    /// No draft indicator is currently shown.
+    #[default]
+    None,
+    /// Model is still preparing a response. `text` is a short label such as
+    /// "thinking...", "analyzing...", or "searching...".
+    Progress { text: String },
+    /// Optional reasoning content emitted by the model before the final answer.
+    /// The UI may choose to show this inline, collapsed, or not at all.
+    Content { text: String },
+}
+
 /// Progress summary for a parallel batch of subagents.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct SubAgentProgress {
     pub batch_id: String,
     pub total: usize,
@@ -199,7 +232,6 @@ pub struct PlanExecutionTracker {
 pub struct PlanStepTracker {
     pub id: String,
     pub description: String,
-    pub tool_name: String,
     pub status: PlanStepStatus,
 }
 
@@ -219,9 +251,17 @@ pub struct Session {
     pub id: String,
     pub title: String,
     pub category: String,
+    /// Optional project binding.
+    pub project_id: Option<String>,
+    /// Conversation context that drives the Bot bar and right rail.
+    pub context: SessionContext,
+    /// Lifecycle category.
+    pub lifecycle: SessionLifecycle,
+    /// Whether the session is archived.
+    pub archived: bool,
     pub messages: Vec<Message>,
     pub updated_at: u64,
-    /// Cached heights for aggregated agent turns (used when agent_turn_style is enabled).
+    /// Cached heights for aggregated agent turns.
     pub turn_heights: Vec<Option<f32>>,
 }
 
@@ -361,6 +401,53 @@ pub enum GatewayStatus {
     Online,
     Offline,
     Checking,
+}
+
+// ============================================================================
+// Session / Project context (S6 Phase D)
+// ============================================================================
+
+/// Conversation context that drives the Bot bar and right rail panels.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum SessionContext {
+    /// Plain conversation without project or device binding.
+    #[default]
+    Chat,
+    /// Project-bound conversation.
+    Project {
+        /// Project identifier.
+        project_id: String,
+        /// Whether the project has a local workspace (affects compute source).
+        has_workspace: bool,
+    },
+    /// Claw remote-device conversation.
+    Claw {
+        /// Remote device identifier.
+        device_id: String,
+    },
+}
+
+/// Session lifecycle category.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
+pub enum SessionLifecycle {
+    /// Temporary problem-oriented chat.
+    #[default]
+    Temporary,
+    /// Bound to a project lifecycle.
+    ProjectBound,
+    /// Long-lived, bound to the user (e.g. Claw device).
+    UserBound,
+}
+
+/// Project descriptor.
+#[derive(Clone, Debug)]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub archived: bool,
+    /// Whether the project has a local workspace (API + compute tools available).
+    pub has_workspace: bool,
 }
 
 /// Holds tool call info state.
@@ -556,5 +643,29 @@ mod tests {
             result: None,
         };
         assert_eq!(tc.inferred_status(), ToolCallStatus::Warning);
+    }
+
+    #[test]
+    fn session_context_default_is_chat() {
+        let ctx = SessionContext::default();
+        assert_eq!(ctx, SessionContext::Chat);
+    }
+
+    #[test]
+    fn session_lifecycle_default_is_temporary() {
+        assert_eq!(SessionLifecycle::default(), SessionLifecycle::Temporary);
+    }
+
+    #[test]
+    fn project_has_expected_fields() {
+        let p = Project {
+            id: "p-1".into(),
+            name: "ui refactor".into(),
+            archived: false,
+            has_workspace: true,
+        };
+        assert_eq!(p.name, "ui refactor");
+        assert!(p.has_workspace);
+        assert!(!p.archived);
     }
 }

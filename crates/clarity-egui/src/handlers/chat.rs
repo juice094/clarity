@@ -2,13 +2,33 @@ use std::time::Instant;
 
 use crate::stores::{ChatStore, SessionStore};
 use crate::ui::types::{
-    AgentStatus, ContentBlock, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
+    AgentStatus, ContentBlock, DraftStatus, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
 };
+
+/// Handles the draft progress event.
+pub fn on_draft_progress(chat_store: &mut ChatStore, text: String) {
+    chat_store.draft_status = DraftStatus::Progress { text };
+}
+
+/// Handles the draft clear event.
+pub fn on_draft_clear(chat_store: &mut ChatStore) {
+    chat_store.draft_status = DraftStatus::None;
+}
+
+/// Handles the draft content event (reasoning/thinking blocks).
+pub fn on_draft_content(chat_store: &mut ChatStore, text: String) {
+    // Accumulate reasoning content if multiple chunks arrive.
+    match &mut chat_store.draft_status {
+        DraftStatus::Content { text: existing } => existing.push_str(&text),
+        _ => chat_store.draft_status = DraftStatus::Content { text },
+    }
+}
 
 /// Handles the done event.
 pub fn on_done(app: &mut crate::App) {
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
+    app.chat_store.draft_status = DraftStatus::None;
     app.state.agent.reset();
     // Trigger deferred markdown parse now that streaming is complete.
     if let Some(session) = app.session_store.active_session_mut() {
@@ -34,7 +54,7 @@ pub fn on_done(app: &mut crate::App) {
 pub fn on_error(app: &mut crate::App, msg: String) {
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
-    app.view_state.turn = clarity_core::ui::TurnState::Idle;
+    app.chat_store.draft_status = DraftStatus::None;
     crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
     // Release queued message back to input so user can retry.
     if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {
@@ -63,7 +83,10 @@ pub fn on_error(app: &mut crate::App, msg: String) {
 }
 
 /// Handles the chunk event.
-pub fn on_chunk(session_store: &mut SessionStore, text: String) {
+pub fn on_chunk(session_store: &mut SessionStore, chat_store: &mut ChatStore, text: String) {
+    // Real content has arrived — clear any transient draft indicator.
+    chat_store.draft_status = DraftStatus::None;
+
     if let Some(session) = session_store.active_session_mut() {
         if let Some(last) = session.messages.last_mut() {
             if last.role == Role::Agent {

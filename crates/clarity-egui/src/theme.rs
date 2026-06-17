@@ -8,13 +8,11 @@ use eframe::egui;
 // ============================================================================
 pub const ICON_SEND: &str = "\u{e152}"; // Lucide: Send
 pub const ICON_SETTINGS: &str = "\u{e154}"; // Lucide: Settings
-pub const ICON_PLAY: &str = "\u{e13c}"; // Lucide: Play
 pub const ICON_HOURGLASS: &str = "\u{e296}"; // Lucide: Hourglass
 pub const ICON_CHECK: &str = "\u{e06c}"; // Lucide: Check
 pub const ICON_X: &str = "\u{e1b2}"; // Lucide: X
 pub const ICON_WARNING: &str = "\u{e193}"; // Lucide: AlertTriangle
 pub const ICON_LIST: &str = "\u{e106}"; // Lucide: List
-pub const ICON_ARROW_LEFT: &str = "\u{e048}"; // Lucide: ArrowLeft
 pub const ICON_PROHIBIT: &str = "\u{e051}"; // Lucide: Ban
 pub const ICON_COPY: &str = "\u{e09e}"; // Lucide: Copy
 pub const ICON_EDIT: &str = "\u{e1f9}"; // Lucide: Pencil
@@ -26,14 +24,20 @@ pub const ICON_CARET_DOWN: &str = "\u{e06d}"; // Lucide: ChevronDown
 pub const ICON_CARET_RIGHT: &str = "\u{e06f}"; // Lucide: ChevronRight
 pub const ICON_MINUS: &str = "\u{e11c}"; // Lucide: Minus
 pub const ICON_SQUARE: &str = "\u{e167}"; // Lucide: Square
-pub const ICON_CIRCLE: &str = "\u{e076}"; // Lucide: Circle
 pub const ICON_FILE: &str = "\u{e0d9}"; // Lucide: File
-pub const ICON_FILE_TEXT: &str = "\u{e0cc}"; // Lucide: FileText
 pub const ICON_GLOBE: &str = "\u{e0e8}"; // Lucide: Globe
-pub const ICON_TABLE: &str = "\u{e17d}"; // Lucide: Table
-pub const ICON_PRESENTATION: &str = "\u{e4ae}"; // Lucide: Presentation
 pub const ICON_MAXIMIZE: &str = "\u{e112}"; // Lucide: Maximize
 pub const ICON_MINIMIZE: &str = "\u{e11a}"; // Lucide: Minimize
+pub const ICON_PLUS: &str = "\u{e13d}"; // Lucide: Plus
+pub const ICON_TERMINAL: &str = "\u{e181}"; // Lucide: Terminal
+pub const ICON_FOLDER_OPEN: &str = "\u{e247}"; // Lucide: FolderOpen
+pub const ICON_LAYOUT_TEMPLATE: &str = "\u{e207}"; // Lucide: LayoutTemplate
+pub const ICON_SHARE: &str = "\u{e155}"; // Lucide: Share
+pub const ICON_CPU: &str = "\u{e0a9}"; // Lucide: Cpu
+pub const ICON_MONITOR: &str = "\u{e11d}"; // Lucide: Monitor
+pub const ICON_FILE_CODE: &str = "\u{e0c3}"; // Lucide: FileCode
+pub const ICON_LAYERS: &str = "\u{e529}"; // Lucide: Layers
+pub const ICON_BOOK_OPEN: &str = "\u{e05f}"; // Lucide: BookOpen
 
 // ============================================================================
 // Design Token System — Phase A Foundation
@@ -162,6 +166,7 @@ pub struct Theme {
     pub size_panel_right: f32,
     pub size_statusbar: f32,
     pub size_input: f32,
+    pub size_bot_bar: f32,
     pub content_min_width: f32,
 
     // --- Chrome dimensions (P0.5.F.1 tokenization) ---
@@ -360,12 +365,17 @@ impl Theme {
             duration_slow: 0.30,
 
             // Layout dimensions
-            size_titlebar: 36.0,
-            size_sidebar: 200.0,
+            size_titlebar: 32.0,
+            // S6 layout: sidebar width tracks text_base so it stays proportional
+            // under font scaling (see `with_font_scale`). The effective width must
+            // also accommodate the widest content row inside the left navigation
+            // tree (multi-button bars, device rows, chat items).
+            size_sidebar: 14.0 * 15.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
             size_input: 88.0,
+            size_bot_bar: 44.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1)
@@ -535,12 +545,17 @@ impl Theme {
             duration_slow: 0.30,
 
             // Layout dimensions (shared across dark/oled)
-            size_titlebar: 36.0,
-            size_sidebar: 200.0,
+            size_titlebar: 32.0,
+            // S6 layout: sidebar width tracks text_base so it stays proportional
+            // under font scaling (see `with_font_scale`). The effective width must
+            // also accommodate the widest content row inside the left navigation
+            // tree (multi-button bars, device rows, chat items).
+            size_sidebar: 14.0 * 15.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
             size_input: 88.0,
+            size_bot_bar: 44.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1, shared)
@@ -697,12 +712,17 @@ impl Theme {
             duration_slow: 0.30,
 
             // Layout dimensions (shared)
-            size_titlebar: 36.0,
-            size_sidebar: 200.0,
+            size_titlebar: 32.0,
+            // S6 layout: sidebar width tracks text_base so it stays proportional
+            // under font scaling (see `with_font_scale`). The effective width must
+            // also accommodate the widest content row inside the left navigation
+            // tree (multi-button bars, device rows, chat items).
+            size_sidebar: 14.0 * 15.0,
             size_workspace: 280.0,
             size_panel_right: 240.0,
             size_statusbar: 24.0,
             size_input: 88.0,
+            size_bot_bar: 44.0,
             content_min_width: 480.0,
 
             // Chrome dimensions (P0.5.F.1, shared)
@@ -861,6 +881,9 @@ impl Theme {
     }
 
     /// Scale all typography tokens by a factor (e.g. 0.9 for compact, 1.15 for large).
+    ///
+    /// Layout dimensions that are derived from `text_base` are re-computed so the
+    /// UI remains proportional after font scaling.
     pub fn with_font_scale(mut self, scale: f32) -> Self {
         self.font_scale = scale;
         self.text_xs *= scale;
@@ -870,8 +893,20 @@ impl Theme {
         self.text_lg *= scale;
         self.text_xl *= scale;
         self.text_2xl *= scale;
+        // S6: sidebar width is fixed at `text_base * 15` and must follow font scale.
+        self.size_sidebar = self.text_base * 15.0;
         self
     }
+
+    /// Default font scale for first launch — two notches smaller than the
+    /// unscaled token scale (1.0), matching the visual density target.
+    pub const DEFAULT_FONT_SCALE: f32 = 0.85;
+    /// Single Ctrl + +/- step in the UI.
+    pub const FONT_SCALE_STEP: f32 = 0.075;
+    /// Lower bound for user-driven font scaling.
+    pub const MIN_FONT_SCALE: f32 = 0.7;
+    /// Upper bound for user-driven font scaling.
+    pub const MAX_FONT_SCALE: f32 = 1.3;
 
     /// Icon font at the given semantic size token (requires Lucide icon font registered via `lucide-icons` crate; see ADR-010).
     pub fn font_icon(&self, size: f32) -> egui::FontId {
@@ -1056,5 +1091,31 @@ mod tests {
         let mut style = egui::Style::default();
         t.apply(&mut style);
         assert_eq!(style.visuals.override_text_color, Some(t.text));
+    }
+
+    #[test]
+    fn sidebar_width_is_text_base_times_fifteen() {
+        let t = Theme::dark();
+        assert!((t.size_sidebar - t.text_base * 15.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn font_scale_updates_sidebar_width() {
+        let t = Theme::dark().with_font_scale(1.5);
+        assert!((t.size_sidebar - t.text_base * 15.0).abs() < f32::EPSILON);
+        assert!(t.size_sidebar > Theme::dark().size_sidebar);
+    }
+
+    #[test]
+    fn default_font_scale_matches_layout_target() {
+        // DEFAULT_FONT_SCALE is a compile-time constant; verify it is neither
+        // the old 1.0 default nor below the minimum zoom bound.
+        assert!((Theme::DEFAULT_FONT_SCALE - 0.85).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn bot_bar_has_positive_height() {
+        let t = Theme::dark();
+        assert!(t.size_bot_bar > 0.0);
     }
 }

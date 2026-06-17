@@ -64,13 +64,26 @@ impl Locale {
 static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut m = HashMap::new();
 
-    // ── App / sidebar ──
+    // ── App / sidebar / navigation tree ──
     m.insert("Clarity", "Clarity");
     m.insert("Files", "文件");
     m.insert("Skills", "技能");
     m.insert("Tools", "工具");
     m.insert("Tasks", "任务");
     m.insert("Settings", "设置");
+    m.insert("New Session", "新建会话");
+    m.insert("New session (Ctrl+N)", "新建会话（Ctrl+N）");
+    m.insert("New cron schedule", "新建定时任务");
+    m.insert("Web", "网页");
+    m.insert("Docs", "文档");
+    m.insert("GitHub", "GitHub");
+    m.insert("Claw", "Claw");
+    m.insert("No devices", "暂无设备");
+    m.insert("Projects", "项目");
+    m.insert("No projects yet", "暂无项目");
+    m.insert("Archived", "已归档");
+    m.insert("Chats", "对话");
+    m.insert("No sessions", "暂无会话");
     m.insert("New Background Task", "新建后台任务");
     m.insert("Create Task", "创建任务");
     m.insert("+ Create Task", "+ 创建任务");
@@ -100,11 +113,31 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
         "消息已排队，将在当前回复结束后发送…",
     );
     m.insert("Local-first AI agent runtime", "本地优先的 AI 代理运行环境");
+    m.insert("Start conversation below", "在下方输入框开始对话");
+    m.insert("Code assistant", "代码助手");
+    m.insert("Task planning", "任务规划");
+    m.insert("Code review", "代码审查");
     m.insert("Preview", "预览");
     m.insert("Configure Settings", "配置设置");
     m.insert("Tool Call Approval", "工具调用审批");
     m.insert("Send message", "发送消息");
     m.insert("Stop generating (Ctrl+C)", "停止生成（Ctrl+C）");
+
+    // ── Bot bar / Right rail ──
+    m.insert("Share", "分享");
+    m.insert("Console", "控制台");
+    m.insert("Knowledge", "知识库");
+    m.insert("Remote", "远程");
+    m.insert("Local", "本地");
+    m.insert("Templates", "模板");
+    m.insert("Collapse right rail", "折叠右栏");
+    m.insert("Select a panel from the Bot bar", "从 Bot 栏选择一个面板");
+    m.insert("Panel", "面板");
+    m.insert("Claw remote settings", "Claw 远程设置");
+    m.insert("Console / task log", "控制台 / 任务日志");
+    m.insert("Files / workspace", "文件 / 工作区");
+    m.insert("Knowledge base", "知识库");
+    m.insert("Share conversation", "分享会话");
 
     // ── MCP ──
     m.insert("No MCP servers configured", "未配置 MCP 服务器");
@@ -166,6 +199,11 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert(
         "Show green/blue/red/yellow layout diagnostics (Ctrl+Shift+L)",
         "显示绿/蓝/红/黄布局诊断覆盖层（Ctrl+Shift+L）",
+    );
+    m.insert("Zoom", "缩放");
+    m.insert(
+        "Use Ctrl + +/- to adjust zoom anytime",
+        "使用 Ctrl + +/- 随时调整缩放",
     );
     m.insert("Model", "模型");
     m.insert("API Key", "API 密钥");

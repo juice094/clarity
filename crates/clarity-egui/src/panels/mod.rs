@@ -1,29 +1,28 @@
 //! egui UI panels organized by physical screen region.
 //!
 //! Layout topology:
-//!   - `chat/`       — center main view (chat stream + input)
-//!   - `work/`       — center main view (OpenClaw project orchestration)
-//!   - `settings/`   — center modal (settings tabs)
-//!   - `sidebar/`    — left navigation rail
-//!   - `workspace/`  — right side panel
-//!   - `right_rail/` — right utility rail cards (Pretext)
-//!   - `modals/`     — top-layer blocking dialogs
-//!   - `system/`     — global overlays (toast, dashboard)
-//!   - `legacy/`     — panels awaiting redesign or integration into the new layout
+//!   - `navigation_tree/` — left navigation rail (S6 Pretext)
+//!   - `chat/`            — center main view (chat stream + input)
+//!   - `work/`            — center main view (OpenClaw project orchestration)
+//!   - `bot_bar/`         — bottom context bar
+//!   - `right_ide_panel/` — right utility rail (IDE-style panels)
+//!   - `settings/`        — center modal (settings tabs)
+//!   - `modals/`          — top-layer blocking dialogs
+//!   - `system/`          — global overlays (toast, dashboard)
+//!   - `legacy/`          — panels awaiting redesign or integration into the new layout
 //!
 //! Backward-compatibility re-exports are provided at the bottom so existing
 //! call sites (e.g. `panels::approval`) keep compiling during migration.
 
+pub mod bot_bar;
 pub mod chat;
-pub mod left_rail;
 pub mod legacy;
 pub mod modals;
-pub mod right_rail;
+pub mod navigation_tree;
+pub mod right_ide_panel;
 pub mod settings;
-pub mod sidebar;
 pub mod system;
 pub mod work;
-pub mod workspace;
 
 // -----------------------------------------------------------------------------
 // Backward-compatibility re-exports (remove once all call sites are migrated)

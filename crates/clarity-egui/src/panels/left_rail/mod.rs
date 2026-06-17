@@ -5,5 +5,3 @@
 //! continues.
 
 pub mod plugins;
-
-pub use plugins::render_plugins_panel;

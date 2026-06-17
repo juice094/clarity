@@ -17,5 +17,5 @@ pub use render_line::{
 pub use shortcut::{KeyEvent, ShortcutBinding, ShortcutRegistry};
 pub use view_state::{
     AppView, FocusScope, LeftRailSection, ModalType, PanelExpansion, PanelKind, RightRailCard,
-    RightRailContext, RightRailSection, SidePanel, TurnState, ViewState,
+    RightRailContext, RightRailPanel, RightRailSection, SidePanel, TurnState, ViewState,
 };
