@@ -1,10 +1,12 @@
 /**
- * Clarity Chat Module - SSE streaming, message rendering, tool cards
+ * Clarity Chat Module - SSE / WebSocket streaming, message rendering, tool cards
  */
 
 import { store, addMessage, getActiveSession, addSession, loadSessions } from './store.js';
 import * as api from './api.js';
 import { toast } from './app.js';
+import * as ws from './ws-client.js';
+import { renderWireMessage, resetRenderer, setCurrentAssistantBubble } from './wire-render.js';
 
 // ==================== DOM Refs ====================
 
@@ -172,8 +174,25 @@ async function sendMessage() {
     sendBtn.disabled = true;
     sendBtn.innerHTML = '⏹';
 
-    // Create assistant placeholder
+    // Create assistant placeholder for both WebSocket and SSE paths.
     const { bubble, meta } = createMessageElement('assistant', '', true);
+
+    // Prefer WebSocket if available; fall back to SSE otherwise.
+    if (ws.isOpen()) {
+        try {
+            resetRenderer();
+            setCurrentAssistantBubble(bubble, meta);
+            ws.sendChat(text, true);
+            return;
+        } catch (err) {
+            console.warn('WebSocket send failed, falling back to SSE:', err);
+        }
+    }
+
+    await sendMessageSSE(session, bubble, meta);
+}
+
+async function sendMessageSSE(session, bubble, meta) {
     let assistantText = '';
     const toolCards = new Map();
 
@@ -244,6 +263,14 @@ function stopGeneration() {
     if (abortController) {
         abortController.abort();
     }
+}
+
+export function resetInputState() {
+    store.isGenerating = false;
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+    `;
 }
 
 // ==================== Input Handling ====================
@@ -464,6 +491,17 @@ export async function init() {
     await initializeThread();
     renderThreadList();
 
+    // Connect WebSocket and route wire messages to the renderer.
+    ws.on('wire_message', renderWireMessage);
+    ws.on('error_response', (data) => {
+        resetInputState();
+        addSystemMessage(`❌ 请求失败: ${data.error || 'unknown error'}`);
+    });
+    ws.connect();
+
+    // Keep connection alive.
+    setInterval(() => ws.ping(), 30000);
+
     // Watch session changes
     let lastSessionId = store.activeSessionId;
     setInterval(() => {
@@ -473,3 +511,7 @@ export async function init() {
         }
     }, 100);
 }
+
+// ==================== Exports for wire-render.js ====================
+
+export { createMessageElement, updateMessageBubble, finalizeMessage, createToolCard, updateToolResult };
