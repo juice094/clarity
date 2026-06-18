@@ -66,6 +66,8 @@ fn classify_error(err: &AgentError) -> ErrorClass {
         || msg.contains("too many tokens")
         || msg.contains("token limit")
         || msg.contains("context overflow")
+        || msg.contains("total message size")
+        || msg.contains("exceeds limit")
     {
         return ErrorClass::ContextWindowExceeded;
     }

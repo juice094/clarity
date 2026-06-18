@@ -146,6 +146,47 @@ fn shared_http_client() -> reqwest::Client {
         .clone()
 }
 
+/// Maximum content bytes to send in a single LLM request.
+///
+/// Providers such as DeepSeek and Kimi reject request bodies larger than ~2MB.
+/// We budget 1.5MB for message content to leave room for JSON framing, tools,
+/// and provider metadata.
+const MAX_MESSAGE_BODY_BYTES: usize = 1_500_000;
+
+/// Truncate message history to fit within a byte budget while preserving the
+/// system prompt and the most recent user/assistant exchanges.
+///
+/// This is a last-line-of-defense guard for providers that enforce a maximum
+/// request body size. It drops oldest non-system messages until the total
+/// content size is below `max_bytes`, always keeping the final user message.
+pub fn truncate_messages_by_bytes(messages: &[Message], max_bytes: usize) -> Vec<Message> {
+    let total: usize = messages.iter().map(|m| m.content.len()).sum();
+    if total <= max_bytes {
+        return messages.to_vec();
+    }
+
+    let mut result = Vec::new();
+    let mut start = 0;
+    if !messages.is_empty() && messages[0].role == MessageRole::System {
+        result.push(messages[0].clone());
+        start = 1;
+    }
+
+    let mut kept = messages[start..].to_vec();
+    let budget = max_bytes.saturating_sub(result.iter().map(|m| m.content.len()).sum::<usize>());
+
+    while kept.len() > 1 {
+        let current: usize = kept.iter().map(|m| m.content.len()).sum();
+        if current <= budget {
+            break;
+        }
+        kept.remove(0);
+    }
+
+    result.extend(kept);
+    result
+}
+
 // ==================== OpenAI Compatible API Types ====================
 
 #[derive(Debug, Serialize)]
@@ -296,8 +337,10 @@ impl LlmProvider for OpenAiCompatibleLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
+        // Guard against providers that reject oversized request bodies.
+        let messages = truncate_messages_by_bytes(messages, MAX_MESSAGE_BODY_BYTES);
         // Convert internal Message to API message format
-        let api_messages = convert_api_messages(messages);
+        let api_messages = convert_api_messages(&messages);
 
         let tools_opt = tools
             .as_array()
@@ -410,7 +453,9 @@ impl LlmProvider for OpenAiCompatibleLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        let api_messages = convert_api_messages(messages);
+        // Guard against providers that reject oversized request bodies.
+        let messages = truncate_messages_by_bytes(messages, MAX_MESSAGE_BODY_BYTES);
+        let api_messages = convert_api_messages(&messages);
 
         let tools_opt = tools
             .as_array()
