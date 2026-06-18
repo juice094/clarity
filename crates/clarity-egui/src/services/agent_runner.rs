@@ -311,7 +311,7 @@ impl App {
             }
 
             // Retrieve relevant long-term memories and enrich the query.
-            let enriched_query = if let Some(ref store) = state.memory_store {
+            let enriched_query = if let Some(store) = state.memory_store.get() {
                 match store.search_fulltext(&query, 5).await {
                     Ok(facts) if !facts.is_empty() => {
                         let memory_context = facts
@@ -335,7 +335,7 @@ impl App {
             };
 
             // Fire-and-forget: save the user query as a memory fact.
-            if let Some(ref store) = state.memory_store {
+            if let Some(store) = state.memory_store.get() {
                 let store = store.clone();
                 let q = enriched_query.clone();
                 tokio::spawn(async move {
@@ -404,6 +404,65 @@ impl App {
                         clarity_wire::WireMessage::PlanStepSkipped { step_id, .. } => {
                             Some(UiEvent::PlanStepSkipped { step_id })
                         }
+                        clarity_wire::WireMessage::TurnBegin { user_input, .. } => {
+                            Some(UiEvent::TurnStart { user_input })
+                        }
+                        clarity_wire::WireMessage::TurnEnd { .. } => Some(UiEvent::TurnEnd),
+                        clarity_wire::WireMessage::StatusUpdate { message, .. } => {
+                            Some(UiEvent::StatusUpdate { message })
+                        }
+                        clarity_wire::WireMessage::ViewStateUpdate { turn, .. } => {
+                            Some(UiEvent::ViewStateUpdate {
+                                turn: turn.map(Into::into),
+                            })
+                        }
+                        clarity_wire::WireMessage::ThreadActive {
+                            thread_id, title, ..
+                        } => Some(UiEvent::ThreadActive { thread_id, title }),
+                        clarity_wire::WireMessage::ThreadList { threads, .. } => {
+                            let sessions = threads
+                                .into_iter()
+                                .map(|t| crate::ui::types::Session {
+                                    id: t.thread_id,
+                                    title: t.title.unwrap_or_default(),
+                                    category: "engineering".to_string(),
+                                    project_id: None,
+                                    context: crate::ui::types::SessionContext::default(),
+                                    lifecycle: crate::ui::types::SessionLifecycle::default(),
+                                    archived: false,
+                                    messages: Vec::new(),
+                                    updated_at: crate::session::now_millis(),
+                                    turn_heights: Vec::new(),
+                                })
+                                .collect();
+                            Some(UiEvent::ThreadList { threads: sessions })
+                        }
+                        clarity_wire::WireMessage::ThreadCreated {
+                            thread_id, title, ..
+                        } => Some(UiEvent::ThreadCreated {
+                            session: crate::ui::types::Session {
+                                id: thread_id,
+                                title: title.unwrap_or_default(),
+                                category: "engineering".to_string(),
+                                project_id: None,
+                                context: crate::ui::types::SessionContext::default(),
+                                lifecycle: crate::ui::types::SessionLifecycle::default(),
+                                archived: false,
+                                messages: Vec::new(),
+                                updated_at: crate::session::now_millis(),
+                                turn_heights: Vec::new(),
+                            },
+                        }),
+                        clarity_wire::WireMessage::ThreadUpdated {
+                            thread_id,
+                            title,
+                            archived,
+                            ..
+                        } => Some(UiEvent::ThreadUpdated {
+                            thread_id,
+                            title,
+                            archived,
+                        }),
                         clarity_wire::WireMessage::Usage {
                             prompt_tokens,
                             completion_tokens,
@@ -414,7 +473,6 @@ impl App {
                             completion_tokens,
                             total_tokens,
                         }),
-                        _ => None,
                     };
                     if let Some(ev) = event {
                         if let Err(e) = tx_wire.send(ev) {
@@ -429,7 +487,7 @@ impl App {
             match result {
                 Ok(final_response) => {
                     // Fire-and-forget: save a turn summary to long-term memory.
-                    if let Some(ref store) = state.memory_store {
+                    if let Some(store) = state.memory_store.get() {
                         let store = store.clone();
                         let summary = format!(
                             "Turn summary —\nUser: {}\nAgent: {}",

@@ -289,6 +289,10 @@ impl Agent {
             turn_id: String::new(),
             user_input: query_hint.to_string(),
         });
+        self.send_wire_message(WireMessage::ViewStateUpdate {
+            turn_id: String::new(),
+            turn: Some(clarity_wire::TurnState::Loading),
+        });
 
         let mut messages = messages;
         let loop_result = self
@@ -305,6 +309,10 @@ impl Agent {
         let (final_response, completed) = loop_result?;
 
         // Teardown
+        self.send_wire_message(WireMessage::ViewStateUpdate {
+            turn_id: String::new(),
+            turn: Some(clarity_wire::TurnState::Idle),
+        });
         self.send_wire_message(WireMessage::TurnEnd {
             turn_id: String::new(),
         });

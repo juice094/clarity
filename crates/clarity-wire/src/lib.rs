@@ -50,6 +50,26 @@ pub enum DraftEvent {
     },
 }
 
+/// Agent turn lifecycle state mirrored from `clarity_core::ui::TurnState`.
+///
+/// Kept in `clarity-wire` so the wire protocol remains decoupled from the
+/// core UI module while still carrying typed turn state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnState {
+    /// No active turn.
+    #[default]
+    Idle,
+    /// LLM generation in progress.
+    Loading,
+    /// Context compaction running.
+    Compacting,
+    /// User-initiated stop in progress.
+    Stopping,
+    /// Session restore from snapshot in progress.
+    Restoring,
+}
+
 /// A lightweight thread summary suitable for UI lists.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ThreadSummary {
@@ -233,6 +253,18 @@ pub enum WireMessage {
         /// Optional new archived state.
         archived: Option<bool>,
     },
+
+    /// Delta update for the frontend view state.
+    ///
+    /// Only fields that changed are present; absent fields must be ignored by
+    /// consumers. Initially only `turn` is authoritative from the backend.
+    ViewStateUpdate {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Updated agent turn lifecycle state, if it changed.
+        turn: Option<TurnState>,
+    },
 }
 
 // ADR-006 Phase C.1 (2026-05-11): event.rs / Event / EventBus / EventMsg
@@ -264,6 +296,7 @@ impl WireMessage {
             | WireMessage::ThreadList { .. }
             | WireMessage::ThreadCreated { .. }
             | WireMessage::ThreadUpdated { .. } => {}
+            WireMessage::ViewStateUpdate { turn_id: t, .. } => *t = turn_id,
         }
         self
     }

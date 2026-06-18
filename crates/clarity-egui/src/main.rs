@@ -1149,6 +1149,7 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result {
+    let startup_t0 = Instant::now();
     clarity_core::logging::init();
     std::panic::set_hook(Box::new(|info| {
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
@@ -1208,17 +1209,27 @@ fn main() -> eframe::Result {
         }
     };
 
+    let pre_window_elapsed = startup_t0.elapsed();
+    tracing::info!("Startup: pre-window init took {:?}", pre_window_elapsed);
+
     eframe::run_native(
         "Clarity",
         options,
         Box::new(move |cc| {
+            let app_creation_t0 = Instant::now();
             #[cfg(windows)]
             let _ = platform::windows::apply_rounded_corners(cc);
             let tray_manager = crate::services::tray::TrayManager::new();
             if tray_manager.is_none() {
                 tracing::warn!("Failed to initialize system tray icon");
             }
-            Ok(Box::new(App::new(cc, gateway_manager, tray_manager)?))
+            let app = Box::new(App::new(cc, gateway_manager, tray_manager)?);
+            tracing::info!(
+                "Startup: App creation took {:?} (total {:?})",
+                app_creation_t0.elapsed(),
+                startup_t0.elapsed()
+            );
+            Ok(app)
         }),
     )
 }

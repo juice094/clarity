@@ -292,22 +292,30 @@ fn discover_local_openclaw(
 // ── Source 3: Remote OpenClaw (cloud via Tailscale) ───────────────────
 
 fn discover_remote_openclaw(state: &DeviceState, _hostname: &str) {
-    // Read remote gateway config from env or use the known Tailscale address.
-    let remote_url =
-        std::env::var("OPENCLAW_REMOTE_URL").unwrap_or_else(|_| "ws://100.69.11.71:18789".into());
-    // Cloud Gateway token — set via OPENCLAW_REMOTE_TOKEN env, or use
-    // the confirmed token from Gray-Cloud's gateway config.
-    let remote_token = std::env::var("OPENCLAW_REMOTE_TOKEN")
-        .unwrap_or_else(|_| "2eb7587dddfb65708397adaf1b23abcb06a0cb46f48a28f5".into());
-    let token = remote_token;
+    // Remote OpenClaw is configured purely through environment variables.
+    // No defaults are baked in, to avoid leaking gateway addresses or tokens.
+    let Ok(remote_url) = std::env::var("OPENCLAW_REMOTE_URL") else {
+        return;
+    };
+    let remote_token = std::env::var("OPENCLAW_REMOTE_TOKEN").unwrap_or_default();
+
+    // Derive a display host from the URL for terminal/workspace labels.
+    let host = remote_url
+        .trim_start_matches("wss://")
+        .trim_start_matches("ws://")
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split_once(':')
+        .map(|(h, _)| h.to_string())
+        .unwrap_or_else(|| remote_url.clone());
 
     let gateway_id = "openclaw-remote-gray";
     state.register(
         BotInstance {
             id: gateway_id.into(),
             name: "Gray-Cloud (OpenClaw)".into(),
-            device_id: "100.69.11.71:18789".into(),
-            status: if token.is_empty() {
+            device_id: remote_url.clone(),
+            status: if remote_token.is_empty() {
                 BotStatus::Offline
             } else {
                 BotStatus::Online
@@ -318,9 +326,9 @@ fn discover_remote_openclaw(state: &DeviceState, _hostname: &str) {
         ClawConnection {
             claw_type: ClawType::OpenClaw,
             gateway_url: remote_url,
-            gateway_token: token,
+            gateway_token: remote_token,
             workspace_root: PathBuf::from("."), // remote — accessed via Gateway API
-            host: "100.69.11.71".into(),
+            host,
         },
     );
 }

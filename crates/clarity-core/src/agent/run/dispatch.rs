@@ -29,6 +29,14 @@ impl Agent {
         let mut did_compact = false;
         if let Some(ref service) = self.compaction_service {
             if service.needs_compaction(messages) {
+                self.send_wire_message(WireMessage::ViewStateUpdate {
+                    turn_id: String::new(),
+                    turn: Some(clarity_wire::TurnState::Compacting),
+                });
+                self.send_wire_message(WireMessage::StatusUpdate {
+                    turn_id: String::new(),
+                    message: "Compacting context...".to_string(),
+                });
                 self.send_wire_message(WireMessage::CompactionBegin {
                     turn_id: String::new(),
                 });
@@ -63,6 +71,10 @@ impl Agent {
             self.send_wire_message(WireMessage::CompactionEnd {
                 turn_id: String::new(),
             });
+            self.send_wire_message(WireMessage::ViewStateUpdate {
+                turn_id: String::new(),
+                turn: Some(clarity_wire::TurnState::Loading),
+            });
         }
     }
 
@@ -86,6 +98,12 @@ impl Agent {
         if cancel_token.is_cancelled() {
             tracing::warn!("dispatch_tool_calls cancelled before starting");
             return Err(AgentError::Cancelled);
+        }
+        if !tool_calls.is_empty() {
+            self.send_wire_message(WireMessage::StatusUpdate {
+                turn_id: String::new(),
+                message: format!("Executing {} tool(s)...", tool_calls.len()),
+            });
         }
         let mut tool_names = Vec::new();
         let mut ask_user_question: Option<String> = None;

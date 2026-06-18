@@ -24,11 +24,30 @@ pub fn on_draft_content(chat_store: &mut ChatStore, text: String) {
     }
 }
 
+/// Handles the turn start event.
+pub fn on_turn_start(_chat_store: &mut ChatStore, _user_input: String) {
+    // Reserved for telemetry, turn attribution, or marking the start of a new
+    // streamed response. The user message has already been inserted locally.
+}
+
+/// Handles the turn end event.
+pub fn on_turn_end(app: &mut crate::App) {
+    // Delegate to the existing done handler for now. Over time this should
+    // become the canonical turn-completion signal and Done can be retired.
+    on_done(app);
+}
+
+/// Handles the backend status update event.
+pub fn on_status_update(chat_store: &mut ChatStore, message: String) {
+    chat_store.status_message = Some(message);
+}
+
 /// Handles the done event.
 pub fn on_done(app: &mut crate::App) {
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
     app.chat_store.draft_status = DraftStatus::None;
+    app.chat_store.status_message = None;
     app.state.agent.reset();
     // Trigger deferred markdown parse now that streaming is complete.
     if let Some(session) = app.session_store.active_session_mut() {
@@ -55,6 +74,7 @@ pub fn on_error(app: &mut crate::App, msg: String) {
     app.view_state.turn = clarity_core::ui::TurnState::Idle;
     app.chat_store.agent_status = AgentStatus::Online;
     app.chat_store.draft_status = DraftStatus::None;
+    app.chat_store.status_message = None;
     crate::handlers::system::push_toast(&mut app.ui_store, &msg, ToastLevel::Error);
     // Release queued message back to input so user can retry.
     if let Some((text, mut attachments)) = app.chat_store.pending_send.take() {
@@ -84,8 +104,9 @@ pub fn on_error(app: &mut crate::App, msg: String) {
 
 /// Handles the chunk event.
 pub fn on_chunk(session_store: &mut SessionStore, chat_store: &mut ChatStore, text: String) {
-    // Real content has arrived — clear any transient draft indicator.
+    // Real content has arrived — clear any transient draft/status indicator.
     chat_store.draft_status = DraftStatus::None;
+    chat_store.status_message = None;
 
     if let Some(session) = session_store.active_session_mut() {
         if let Some(last) = session.messages.last_mut() {

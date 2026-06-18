@@ -43,6 +43,48 @@ pub enum UiEvent {
     DraftContent {
         text: String,
     },
+    /// A new agent turn has begun. Carries the user input for confirmation / telemetry.
+    TurnStart {
+        user_input: String,
+    },
+    /// The current agent turn has ended. Replaces the legacy `Done` event over time.
+    TurnEnd,
+    /// Backend status text update (e.g. "Executing tools...", "Compacting context...").
+    StatusUpdate {
+        message: String,
+    },
+    /// Delta update for the frontend view state.
+    ///
+    /// Only fields that changed are present; absent fields must be ignored.
+    /// Initially only `turn` is authoritative from the backend.
+    ViewStateUpdate {
+        turn: Option<clarity_core::ui::TurnState>,
+    },
+    /// A thread/session became active (e.g. user switched or backend promoted one).
+    ThreadActive {
+        thread_id: String,
+        #[allow(dead_code)]
+        title: Option<String>,
+    },
+    /// The list of recent threads/sessions has been refreshed.
+    ThreadList {
+        threads: Vec<Session>,
+    },
+    /// A new thread/session was created.
+    ThreadCreated {
+        session: Session,
+    },
+    /// Thread/session metadata was updated (title, archive state, etc.).
+    ThreadUpdated {
+        thread_id: String,
+        title: Option<String>,
+        archived: Option<bool>,
+    },
+    /// A thread/session was deleted.
+    #[allow(dead_code)]
+    ThreadDeleted {
+        thread_id: String,
+    },
     Done,
     Error(String),
     Fallback {
@@ -265,6 +307,20 @@ pub struct Session {
     pub turn_heights: Vec<Option<f32>>,
 }
 
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("id", &self.id)
+            .field("title", &self.title)
+            .field("category", &self.category)
+            .field("project_id", &self.project_id)
+            .field("archived", &self.archived)
+            .field("messages", &self.messages.len())
+            .field("updated_at", &self.updated_at)
+            .finish_non_exhaustive()
+    }
+}
+
 /// content block variants.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -303,7 +359,7 @@ pub enum ContentBlock {
 }
 
 /// Holds message state.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Message {
     pub role: Role,
     pub content: String,

@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod cron;
+pub mod session;
 pub mod settings;
 pub mod subagent;
 pub mod system;
@@ -56,6 +57,37 @@ pub fn process_events(app: &mut App) {
             UiEvent::DraftClear => chat::on_draft_clear(&mut app.chat_store),
             UiEvent::DraftContent { text } => {
                 chat::on_draft_content(&mut app.chat_store, text);
+            }
+            UiEvent::TurnStart { user_input } => {
+                chat::on_turn_start(&mut app.chat_store, user_input);
+            }
+            UiEvent::TurnEnd => chat::on_turn_end(app),
+            UiEvent::StatusUpdate { message } => {
+                chat::on_status_update(&mut app.chat_store, message);
+            }
+            UiEvent::ViewStateUpdate { turn } => {
+                if let Some(turn) = turn {
+                    app.view_state.turn = turn;
+                }
+            }
+            UiEvent::ThreadActive { thread_id, .. } => {
+                session::on_thread_active(&mut app.session_store, thread_id);
+            }
+            UiEvent::ThreadList { threads } => {
+                session::on_thread_list(&mut app.session_store, threads);
+            }
+            UiEvent::ThreadCreated { session } => {
+                session::on_thread_created(&mut app.session_store, session);
+            }
+            UiEvent::ThreadUpdated {
+                thread_id,
+                title,
+                archived,
+            } => {
+                session::on_thread_updated(&mut app.session_store, thread_id, title, archived);
+            }
+            UiEvent::ThreadDeleted { thread_id } => {
+                session::on_thread_deleted(&mut app.session_store, thread_id);
             }
             UiEvent::Done => chat::on_done(app),
             UiEvent::Error(msg) => chat::on_error(app, msg),

@@ -67,13 +67,13 @@ Clarity 采用**三层协议栈**实现后端到前端的通信解耦：
 
 | 变体 | 生产者 | 消费者 | 语义 | 当前接入状态 |
 |------|--------|--------|------|-------------|
-| `TurnBegin { turn_id, user_input }` | `Agent::run()` | egui (丢弃) | 新回合开始，携带用户输入 | ⚠️ **未接入** — 前端未消费 |
+| `TurnBegin { turn_id, user_input }` | `Agent::run()` | `agent_runner.rs` → `UiEvent::TurnStart` | 新回合开始，携带用户输入 | ✅ 已接入 — 保留给确认/埋点 |
 | `ContentPart { turn_id, text }` | `run_sync_loop` / `run_streaming` | `agent_runner.rs` → `UiEvent::Chunk` | LLM 输出文本块 | ✅ 已接入 — `run_streaming` callback 已移除 |
 | `DraftEvent { turn_id, event }` | `run_sync_loop` / `run_streaming` | `agent_runner.rs` → `UiEvent::Draft*` | 流式草稿生命周期（Clear/Progress/Content） | ✅ 已接入 — 组件化 widget，视觉样式待设计 |
 | `ToolCall { turn_id, id, name, arguments }` | `ToolParser` | `agent_runner.rs` → `UiEvent::ToolStart` | 模型请求调用工具 | ✅ 已接入 |
 | `ToolResult { turn_id, id, result }` | `ToolExecutor` | `agent_runner.rs` → `UiEvent::ToolResult` | 工具执行结果 | ✅ 已接入 |
 | `StepBegin { turn_id, tool_name }` | `Agent::run_sync_loop` | `agent_runner.rs` → `UiEvent::StepBegin` | 单步执行开始 | ✅ 已接入 |
-| `TurnEnd { turn_id }` | `Agent::finalize_sync_turn` | egui (丢弃) | 回合结束 | ⚠️ **未接入** — 前端靠 `UiEvent::Done` 判断 |
+| `TurnEnd { turn_id }` | `Agent::finalize_sync_turn` | `agent_runner.rs` → `UiEvent::TurnEnd` | 回合结束 | ✅ 已接入 — 委托给 `chat::on_done` |
 | `Usage { turn_id, prompt_tokens, completion_tokens, total_tokens }` | `Agent::finalize_sync_turn` | `agent_runner.rs` → `UiEvent::Usage` | Token 用量报告 | ✅ 已接入 |
 
 ### 2.2 Plan 模式变体（计划执行路径）
@@ -88,7 +88,8 @@ Clarity 采用**三层协议栈**实现后端到前端的通信解耦：
 
 | 变体 | 生产者 | 消费者 | 语义 | 当前接入状态 |
 |------|--------|--------|------|-------------|
-| `StatusUpdate { turn_id, message }` | `Agent::run_sync_loop` | egui (丢弃) | 通用状态文本 | ⚠️ **未接入** |
+| `StatusUpdate { turn_id, message }` | `Agent::dispatch_tool_calls` / `maybe_compact_turn` | `agent_runner.rs` → `UiEvent::StatusUpdate` | 通用状态文本 | ✅ 已接入 — `widgets::status_message` 显示 |
+| `ViewStateUpdate { turn_id, turn }` | `Agent::run` / `run_streaming_turn` / `dispatch_tool_calls` | `agent_runner.rs` → `UiEvent::ViewStateUpdate` | 后端权威 view state delta | ✅ 已接入 — 同步 `view_state.turn` |
 | `CompactionBegin { turn_id }` | `CompactionService` | `agent_runner.rs` → `UiEvent::CompactionBegin` | 上下文压缩开始 | ✅ 已接入 |
 | `CompactionEnd { turn_id }` | `CompactionService` | `agent_runner.rs` → `UiEvent::CompactionEnd` | 上下文压缩结束 | ✅ 已接入 |
 
@@ -110,17 +111,20 @@ Clarity 采用**三层协议栈**实现后端到前端的通信解耦：
 **当前映射（存在缺口）**：
 
 ```text
-WireMessage::TurnBegin  ──►  (丢弃)  ──►  —
+WireMessage::TurnBegin  ──►  UiEvent::TurnStart  ──►  确认/埋点（用户消息已本地插入）
 WireMessage::ContentPart  ──►  UiEvent::Chunk  ──►  追加到当前 Agent message content
 WireMessage::DraftEvent   ──►  UiEvent::DraftProgress / DraftClear / DraftContent  ──►  `ChatStore.draft_status` → `widgets::draft_indicator`
 WireMessage::ToolCall     ──►  UiEvent::ToolStart  ──►  Message.blocks.push(ToolCall)
 WireMessage::ToolResult   ──►  UiEvent::ToolResult  ──►  ChatStore.tool_calls[idx].result = ...
 WireMessage::StepBegin    ──►  UiEvent::StepBegin  ──►  (无 UI 反馈)
-WireMessage::TurnEnd      ──►  (丢弃)  ──►  —
+WireMessage::TurnEnd      ──►  UiEvent::TurnEnd  ──►  调用 `chat::on_done`（`Done` 事件的替代）
 WireMessage::Usage        ──►  UiEvent::Usage  ──►  状态栏显示
 WireMessage::Compaction*  ──►  UiEvent::Compaction*  ──►  view_state.turn = Compacting
 WireMessage::PlanStep*    ──►  UiEvent::PlanStep*  ──►  ChatStore.plan_tracker
-WireMessage::StatusUpdate ──►  (丢弃)  ──►  —
+WireMessage::StatusUpdate ──►  UiEvent::StatusUpdate  ──►  `ChatStore.status_message` → `widgets::status_message`
+WireMessage::ViewStateUpdate { turn }
+  └──► UiEvent::ViewStateUpdate { turn }
+       └──► 更新 `app.view_state.turn`（仅后端权威字段）
 WireMessage::Thread*      ──►  (丢弃)  ──►  —
 ```
 
@@ -160,14 +164,19 @@ WireMessage::StepBegin { tool_name }
        └──► RenderLine::StatusLine { kind: Spinner, content: tool_name, transient: true }
 
 WireMessage::TurnEnd { }
-  └──► UiEvent::Done
-       └──► Message::prepare()（最终解析）
-       └──► view_state.turn = Idle
+  └──► UiEvent::TurnEnd
+       └──► 当前委托给 `UiEvent::Done` 处理：Message::prepare()、view_state.turn = Idle
+       └──► 长期目标：`Done` 退休，`TurnEnd` 成为唯一回合结束标志
 
 WireMessage::StatusUpdate { message }
   └──► UiEvent::StatusUpdate { message }
-       └──► RenderLine::StatusLine { kind: Spinner, content: message, transient: true }
-       └──► 或 Toast 通知（非持久）
+       └──► 更新 `ChatStore.status_message`，由 `widgets::status_message` 渲染
+       └──► 真实内容到达或回合结束时清除
+
+WireMessage::ViewStateUpdate { turn }
+  └──► UiEvent::ViewStateUpdate { turn }
+       └──► 仅更新 `app.view_state.turn` 等后端权威字段
+       └──► 面板开关 / modal / focus 等前端本地状态不上传，避免循环
 
 WireMessage::ThreadActive { thread_id, title }
   └──► UiEvent::ThreadSwitched { thread_id, title }
@@ -328,15 +337,16 @@ function handleWsMessage(msg: WsResponse) {
 
 | WireMessage 变体 | 前端对应功能 | 当前是否接入 | 缺口说明 | 优先级 |
 |-----------------|-------------|------------|---------|--------|
-| `TurnBegin` | 用户消息渲染 | ❌ 未接入 | 用户输入已直接插入 `Message`，不依赖 wire | P2 |
+| `TurnBegin` | 用户消息渲染 | ✅ 已接入 | `UiEvent::TurnStart`，保留给确认/埋点 | — |
 | `ContentPart` | Agent 流式输出 | ✅ 已接入 | `agent_runner.rs` 映射为 `UiEvent::Chunk` | — |
 | `DraftEvent` | 思考过程/进度指示 | ✅ 已接入 | `widgets::draft_indicator` 已接入，视觉样式待设计 | — |
 | `ToolCall` | 工具调用卡片 | ✅ 已接入 | `UiEvent::ToolStart` → `ContentBlock::ToolCall` | — |
 | `ToolResult` | 工具结果展示 | ✅ 已接入 | `UiEvent::ToolResult` → `ChatStore.tool_calls` | — |
 | `StepBegin` | 单步状态栏 | ⚠️ 部分接入 | 只发 `UiEvent`，无 RenderLine 映射 | P1 |
-| `TurnEnd` | 回合结束标志 | ❌ 未接入 | 靠 `UiEvent::Done` 间接判断 | P2 |
+| `TurnEnd` | 回合结束标志 | ✅ 已接入 | `UiEvent::TurnEnd` 委托给 `on_done` | — |
 | `Usage` | Token 用量显示 | ✅ 已接入 | 状态栏显示 | — |
-| `StatusUpdate` | 全局状态通知 | ❌ 未接入 | 无 Toast/StatusLine 映射 | P1 |
+| `StatusUpdate` | 全局状态通知 | ✅ 已接入 | `ChatStore.status_message` + `widgets::status_message` | — |
+| `ViewStateUpdate` | 后端 view state 同步 | ✅ 已接入 | 当前同步 `turn` 字段 | — |
 | `CompactionBegin/End` | 压缩动画 | ✅ 已接入 | `view_state.turn` 切换 | — |
 | `PlanStep*` | 计划执行跟踪 | ✅ 已接入 | `ChatStore.plan_tracker` | — |
 | `ThreadActive` | 会话切换高亮 | ❌ 未接入 | 前端直接操作 `session_store` | P2 |

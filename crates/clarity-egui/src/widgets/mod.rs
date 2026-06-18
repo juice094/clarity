@@ -7,6 +7,7 @@ pub mod interactive_row;
 pub mod pretext_probe;
 pub mod provider_row;
 pub mod rich_paragraph;
+pub mod status_message;
 pub mod theme_card;
 pub mod user_avatar;
 pub mod window_control;

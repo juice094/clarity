@@ -353,11 +353,17 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
         {
             // Prefer the new draft indicator when the backend has emitted one.
             // Falls back to the legacy typing indicator so the UI never goes blank.
-            if !crate::widgets::draft_indicator::draft_indicator(
+            let mut any_indicator = crate::widgets::draft_indicator::draft_indicator(
                 ui,
                 &theme,
                 &app.chat_store.draft_status,
-            ) {
+            );
+            any_indicator |= crate::widgets::status_message::status_message(
+                ui,
+                &theme,
+                app.chat_store.status_message.as_deref().unwrap_or(""),
+            );
+            if !any_indicator {
                 ui::render::typing_indicator(ui, &theme);
             }
         }

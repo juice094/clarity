@@ -385,7 +385,9 @@ fn render_table(
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::same(8))
         .show(ui, |ui| {
-            egui::Grid::new(ui.id().with(idx))
+            // Namespace the grid id to avoid collisions with other grids that may
+            // share the same parent id and numeric index.
+            egui::Grid::new(ui.id().with(("md_table", idx)))
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
                     // Header row

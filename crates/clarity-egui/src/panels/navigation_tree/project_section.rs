@@ -196,9 +196,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         app.project_store.selected_project_id = Some(pid);
     }
     for id in unarchive_session_ids {
-        if let Some(s) = app.session_store.sessions.iter_mut().find(|s| s.id == id) {
-            s.archived = false;
-        }
+        app.set_session_archived(id, false);
     }
     for id in unarchive_project_ids {
         app.project_store.unarchive(&id);

@@ -404,6 +404,19 @@ async fn test_agent_run_with_wire() {
         .expect("channel closed");
     assert!(matches!(msg, WireMessage::TurnBegin { user_input, .. } if user_input == "test query"));
 
+    // Verify ViewStateUpdate(Loading) is received
+    let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+        .await
+        .expect("timeout waiting for ViewStateUpdate")
+        .expect("channel closed");
+    assert!(matches!(
+        msg,
+        WireMessage::ViewStateUpdate {
+            turn: Some(clarity_wire::TurnState::Loading),
+            ..
+        }
+    ));
+
     // Verify ContentPart is received
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
         .await
@@ -412,6 +425,19 @@ async fn test_agent_run_with_wire() {
     assert!(
         matches!(msg, WireMessage::ContentPart { text, .. } if text == "This is a mock response")
     );
+
+    // Verify ViewStateUpdate(Idle) is received before TurnEnd
+    let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+        .await
+        .expect("timeout waiting for ViewStateUpdate")
+        .expect("channel closed");
+    assert!(matches!(
+        msg,
+        WireMessage::ViewStateUpdate {
+            turn: Some(clarity_wire::TurnState::Idle),
+            ..
+        }
+    ));
 
     // Verify TurnEnd is received
     let msg = timeout(Duration::from_millis(1000), ui_side.recv())
@@ -456,6 +482,23 @@ async fn test_agent_run_streaming_with_wire() {
         .expect("channel closed");
     assert!(
         matches!(msg, WireMessage::TurnBegin { user_input, .. } if user_input == "streaming test")
+    );
+
+    // Verify ViewStateUpdate(Loading) is received
+    let msg = timeout(Duration::from_millis(1000), ui_side.recv())
+        .await
+        .expect("timeout waiting for ViewStateUpdate")
+        .expect("channel closed");
+    assert!(
+        matches!(
+            msg,
+            WireMessage::ViewStateUpdate {
+                turn: Some(clarity_wire::TurnState::Loading),
+                ..
+            }
+        ),
+        "Expected ViewStateUpdate(Loading), got {:?}",
+        msg
     );
 
     // Verify DraftEvent::Progress is received (loading indicator)
@@ -507,6 +550,7 @@ async fn test_agent_run_streaming_with_wire() {
                     event: DraftEvent::Content { .. },
                     ..
                 } => {}
+                WireMessage::ViewStateUpdate { .. } => {}
                 WireMessage::TurnEnd { .. } => break,
                 _ => {}
             },

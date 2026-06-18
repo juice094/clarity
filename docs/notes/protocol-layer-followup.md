@@ -17,9 +17,9 @@
 
 | 任务 | 优先级 | 依赖 | 说明 |
 |------|--------|------|------|
-| A2. 接入 `DraftEvent` | **P0** | A1 | 骨架已完成：`UiEvent::Draft*`、`ChatStore.draft_status`、`widgets::draft_indicator` 已接入；视觉样式待设计 |
-| B1. 接入 `StatusUpdate` / `TurnBegin` / `TurnEnd` | **P1** | A2 | 精确追踪 turn 边界，提供全局状态反馈 |
-| B2. 引入 `WireMessage::ViewStateUpdate` | **P1** | A2 | 让后端驱动 `ViewState.turn` 等状态同步 |
+| A2. 接入 `DraftEvent` | **P0** | A1 | 已完成 |
+| B1. 接入 `StatusUpdate` / `TurnBegin` / `TurnEnd` | **P1** | A2 | 已完成 |
+| B2. 引入 `WireMessage::ViewStateUpdate` | **P1** | A2 | 已完成 |
 | C. Thread 管理事件驱动化 | **P2** | B2 | `Thread*` 变体接入，导航树从直接 store 操作改为事件驱动 |
 | D. Gateway WebSocket 协议升级 | **P2** | B2 + C | Web IDE 接收工具卡片 / RenderLine 流 / ViewState 更新 |
 
@@ -31,15 +31,16 @@
 
 | WireMessage 变体 | 是否已映射到 UiEvent | 是否有 Handler | 已有可查询存储 | 缺口说明 |
 |---|---|---|---|---|
-| `TurnBegin` | ❌ | ❌ | `SessionStore.sessions[].messages` | 用户消息由前端本地插入 |
+| `TurnBegin` | ✅ `UiEvent::TurnStart` | ✅ `chat::on_turn_start` | `SessionStore.sessions[].messages` | A1/B1 已完成 |
 | `ContentPart` | ✅ `UiEvent::Chunk` | ✅ `chat::on_chunk` | `Session.messages[].content` / `blocks` | **A1 已完成** |
-| `DraftEvent` | ✅ `UiEvent::Draft*` | ✅（骨架） | `ChatStore.draft_status` | 组件已接入，`widgets::draft_indicator` 视觉样式待设计 |
+| `DraftEvent` | ✅ `UiEvent::Draft*` | ✅ | `ChatStore.draft_status` | A2 已完成，`widgets::draft_indicator` 视觉样式待设计 |
 | `ToolCall` | ✅ `UiEvent::ToolStart` | ✅ `chat::on_tool_start` | `ChatStore.tool_calls[]` / `Session.messages[].blocks` | 已接入 |
 | `ToolResult` | ✅ `UiEvent::ToolResult` | ✅ `chat::on_tool_result` | 同上 | 已接入 |
 | `StepBegin` | ✅ `UiEvent::StepBegin` | ⚠️ 仅 `tracing` | 无独立存储 | 有事件但无 UI 反馈 |
-| `TurnEnd` | ❌（由返回值触发 `UiEvent::Done`） | ✅ `chat::on_done` | `ViewState.turn = Idle` | 未直接使用 wire 标志 |
+| `TurnEnd` | ✅ `UiEvent::TurnEnd` | ✅ `chat::on_turn_end` | `ViewState.turn = Idle` | B1 已完成，当前委托给 `on_done` |
 | `Usage` | ✅ `UiEvent::Usage` | ✅ `chat::on_usage` | `ChatStore.last_usage` | 已接入 |
-| `StatusUpdate` | ❌ | ❌ | 无 | 无全局状态通知/Toast |
+| `StatusUpdate` | ✅ `UiEvent::StatusUpdate` | ✅ `chat::on_status_update` | `ChatStore.status_message` | B1 已完成 |
+| `ViewStateUpdate` | ✅ `UiEvent::ViewStateUpdate` | ✅ handlers/mod.rs | `ViewState.turn` | B2 已完成 |
 | `CompactionBegin` | ✅ `UiEvent::CompactionBegin` | ✅ `chat::on_compaction_begin` | `ViewState.turn = Compacting` | 已接入 |
 | `CompactionEnd` | ✅ `UiEvent::CompactionEnd` | ✅ `chat::on_compaction_end` | `ViewState.turn = Idle` | 已接入 |
 | `PlanStepBegin` | ✅ `UiEvent::PlanStepBegin` | ✅ `chat::on_plan_step_begin` | `ChatStore.plan_tracker` | 已接入 |
@@ -81,14 +82,26 @@
 - `panels/chat/message_list.rs` 在 loading 时优先显示 draft indicator，回退到 legacy typing indicator。
 - 不需要新增持久化存储。
 
-### B1. StatusUpdate / TurnBegin / TurnEnd
-- `StatusUpdate` → 复用 `UiStore.toasts` 队列。
-- `TurnEnd` → 新增 `UiEvent::TurnEnd`，handler 调用现有 `chat::on_done` 逻辑。
-- `TurnBegin` → 仅用于确认/埋点，不重复插入用户消息。
+### B1. StatusUpdate / TurnBegin / TurnEnd（已完成）
+- `WireMessage::TurnBegin` → `UiEvent::TurnStart { user_input }` → `chat::on_turn_start`。
+- `WireMessage::TurnEnd` → `UiEvent::TurnEnd` → `chat::on_turn_end` → 委托给 `on_done`。
+- `WireMessage::StatusUpdate` → `UiEvent::StatusUpdate { message }` → `chat::on_status_update` → `ChatStore.status_message`。
+- `StatusUpdate` 当前发送点：
+  - `dispatch_tool_calls` 开始时："Executing N tool(s)..."
+  - `maybe_compact_turn` 开始时："Compacting context..."
+- `ChatStore.status_message` 在真实内容到达、回合结束或出错时自动清除。
+- 新增组件 `widgets::status_message`，视觉样式待设计。
 
-### B2. ViewStateUpdate
-- 仅同步后端权威字段（如 `turn`）。
-- 面板开关等前端本地状态不上传，避免循环。
+### B2. ViewStateUpdate（已完成）
+- `clarity-wire` 新增 `TurnState` 枚举和 `WireMessage::ViewStateUpdate { turn }`。
+- `clarity_core::ui::TurnState` 与 `clarity_wire::TurnState` 实现双向 `From` 转换。
+- 后端发送点：
+  - `Agent::run` / `run_streaming_turn` 开始时 → `Loading`
+  - `maybe_compact_turn` 开始时 → `Compacting`，结束后恢复 `Loading`
+  - `finish_and_deliver` / 回合结束时 → `Idle`
+- 前端 `agent_runner.rs` 映射为 `UiEvent::ViewStateUpdate { turn }`。
+- `handlers/mod.rs` 更新 `app.view_state.turn`。
+- 仅同步后端权威字段（`turn`）；面板开关 / modal / focus 等前端本地状态不上传，避免循环。
 
 ### C. Thread 事件驱动化
 - 复用 `SessionStore`，将 UI 层直接 store 操作改为事件处理函数。

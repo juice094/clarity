@@ -170,6 +170,10 @@ impl Agent {
         if let Some(ref hooks) = self.hook_registry {
             response = hooks.run_pre_delivery(&response, tier).await?;
         }
+        self.send_wire_message(WireMessage::ViewStateUpdate {
+            turn_id: String::new(),
+            turn: Some(clarity_wire::TurnState::Idle),
+        });
         self.send_wire_message(WireMessage::TurnEnd {
             turn_id: String::new(),
         });

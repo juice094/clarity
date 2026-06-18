@@ -220,6 +220,30 @@ impl TurnState {
     }
 }
 
+impl From<TurnState> for clarity_wire::TurnState {
+    fn from(state: TurnState) -> Self {
+        match state {
+            TurnState::Idle => Self::Idle,
+            TurnState::Loading => Self::Loading,
+            TurnState::Compacting => Self::Compacting,
+            TurnState::Stopping => Self::Stopping,
+            TurnState::Restoring => Self::Restoring,
+        }
+    }
+}
+
+impl From<clarity_wire::TurnState> for TurnState {
+    fn from(state: clarity_wire::TurnState) -> Self {
+        match state {
+            clarity_wire::TurnState::Idle => Self::Idle,
+            clarity_wire::TurnState::Loading => Self::Loading,
+            clarity_wire::TurnState::Compacting => Self::Compacting,
+            clarity_wire::TurnState::Stopping => Self::Stopping,
+            clarity_wire::TurnState::Restoring => Self::Restoring,
+        }
+    }
+}
+
 /// Collapse/expand state for in-panel regions — replaces the seven legacy
 /// expansion booleans found in the audit.
 ///

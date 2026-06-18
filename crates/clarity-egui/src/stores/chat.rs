@@ -30,6 +30,9 @@ pub struct ChatStore {
     /// Transient draft/thinking indicator for the current agent turn.
     /// Cleared automatically when the turn ends or real content arrives.
     pub draft_status: DraftStatus,
+    /// Transient backend status message for the current agent turn.
+    /// Examples: "Executing 3 tool(s)...", "Compacting context...".
+    pub status_message: Option<String>,
     /// Input history for ↑↓ recall (TUI-style input box Phase 1).
     pub input_history: Vec<String>,
     /// Cursor into `input_history`. None = editing current draft.

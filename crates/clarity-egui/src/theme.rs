@@ -972,7 +972,26 @@ fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
 }
 
 /// Installs custom fonts into the egui context.
+///
+/// Embedded fonts are set synchronously so the first frame can render
+/// immediately. The (potentially large) system CJK font is loaded in a
+/// background thread and applied once available.
 pub fn setup_fonts(ctx: &egui::Context) {
+    ctx.set_fonts(build_font_definitions(false));
+
+    // Load the system CJK fallback without blocking window creation.
+    let ctx = ctx.clone();
+    std::thread::spawn(move || {
+        let fonts = build_font_definitions(true);
+        ctx.set_fonts(fonts);
+        ctx.request_repaint();
+    });
+}
+
+/// Build the full font stack. When `include_system_cjk` is `true`, the function
+/// attempts to read a system CJK font from disk; this is intentionally done in
+/// a helper so it can be deferred to a background thread.
+fn build_font_definitions(include_system_cjk: bool) -> egui::FontDefinitions {
     let mut fonts = egui::FontDefinitions::default();
 
     // ------------------------------------------------------------------
@@ -1007,48 +1026,50 @@ pub fn setup_fonts(ctx: &egui::Context) {
     // ------------------------------------------------------------------
     // 3b. System CJK font — runtime fallback for full Chinese chat coverage
     // ------------------------------------------------------------------
-    let system_cjk_paths: &[&str] = if cfg!(windows) {
-        &[
-            // Static fonts first — Variable Fonts may not be fully supported by ttf-parser
-            r"C:\Windows\Fonts\msyh.ttc",
-            r"C:\Windows\Fonts\simsun.ttc",
-            r"C:\Windows\Fonts\NotoSansSC-VF.ttf",
-        ]
-    } else if cfg!(target_os = "macos") {
-        &[
-            "/System/Library/Fonts/PingFang.ttc",
-            "/System/Library/Fonts/STHeiti Light.ttc",
-        ]
-    } else {
-        &[
-            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        ]
-    };
+    if include_system_cjk {
+        let system_cjk_paths: &[&str] = if cfg!(windows) {
+            &[
+                // Static fonts first — Variable Fonts may not be fully supported by ttf-parser
+                r"C:\Windows\Fonts\msyh.ttc",
+                r"C:\Windows\Fonts\simsun.ttc",
+                r"C:\Windows\Fonts\NotoSansSC-VF.ttf",
+            ]
+        } else if cfg!(target_os = "macos") {
+            &[
+                "/System/Library/Fonts/PingFang.ttc",
+                "/System/Library/Fonts/STHeiti Light.ttc",
+            ]
+        } else {
+            &[
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            ]
+        };
 
-    for path in system_cjk_paths {
-        if let Ok(data) = std::fs::read(path) {
-            fonts.font_data.insert(
-                "noto-sc-system".into(),
-                egui::FontData::from_owned(data).into(),
-            );
-            fonts
-                .families
-                .entry(egui::FontFamily::Proportional)
-                .or_default()
-                .push("noto-sc-system".into());
-            fonts
-                .families
-                .entry(egui::FontFamily::Monospace)
-                .or_default()
-                .push("noto-sc-system".into());
-            fonts
-                .families
-                .entry(egui::FontFamily::Name("bold".into()))
-                .or_default()
-                .push("noto-sc-system".into());
-            break;
+        for path in system_cjk_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "noto-sc-system".into(),
+                    egui::FontData::from_owned(data).into(),
+                );
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .push("noto-sc-system".into());
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .push("noto-sc-system".into());
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Name("bold".into()))
+                    .or_default()
+                    .push("noto-sc-system".into());
+                break;
+            }
         }
     }
 
@@ -1087,7 +1108,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
         .or_default()
         .push("lucide".into());
 
-    ctx.set_fonts(fonts);
+    fonts
 }
 
 // ============================================================================

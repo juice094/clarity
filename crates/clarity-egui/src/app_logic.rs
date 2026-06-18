@@ -15,10 +15,19 @@ impl App {
         gateway_manager: Option<crate::services::gateway_manager::GatewayManager>,
         tray_manager: Option<crate::services::tray::TrayManager>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let startup_t0 = Instant::now();
+        let mark = |label: &str| {
+            tracing::info!("Startup: {} took {:?}", label, startup_t0.elapsed());
+        };
+
         crate::theme::setup_fonts(&cc.egui_ctx);
+        mark("setup_fonts");
+
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        let mut state = AppState::default();
+        mark("tokio_runtime");
+
+        let state = AppState::default();
 
         // Load persisted cron tasks into the scheduler
         let bg_manager = Arc::clone(&state.bg_manager);
@@ -27,25 +36,35 @@ impl App {
                 tracing::warn!("Failed to load cron tasks: {}", e);
             }
         });
+        mark("load_cron_tasks");
 
-        // Initialize long-term memory store
+        // Initialize long-term memory store lazily so it does not block window
+        // creation. The first memory-dependent operation will use `.get()` and
+        // simply skip enrichment until the store is ready.
         let memory_db = dirs::data_dir()
             .map(|d| d.join("clarity").join("memory.db"))
             .unwrap_or_else(|| std::path::PathBuf::from("memory.db"));
-        state.memory_store = runtime.block_on(async {
+
+        let state = Arc::new(state);
+        mark("arc_state");
+
+        // Memory store initialization runs in the background.
+        let state_for_memory = Arc::clone(&state);
+        runtime.spawn(async move {
             match clarity_memory::MemoryStore::new_auto(&memory_db).await {
                 Ok(store) => {
-                    tracing::info!("MemoryStore initialized at {:?}", memory_db);
-                    Some(store)
+                    if state_for_memory.memory_store.set(store).is_err() {
+                        tracing::debug!("MemoryStore was already initialized");
+                    } else {
+                        tracing::info!("MemoryStore initialized at {:?}", memory_db);
+                    }
                 }
                 Err(e) => {
                     tracing::warn!("Failed to initialize MemoryStore: {}", e);
-                    None
                 }
             }
         });
-
-        let state = Arc::new(state);
+        mark("memory_store_spawn");
         let (ui_tx, ui_rx) = channel::<UiEvent>();
 
         let state_for_monitor = state.clone();
@@ -193,6 +212,7 @@ impl App {
             let id = loaded[0].id.clone();
             (loaded, id)
         };
+        mark("load_sessions");
 
         let theme = Theme::default();
         let mut style = (*cc.egui_ctx.style()).clone();
@@ -229,6 +249,8 @@ impl App {
             &settings_snapshot,
             profile_list,
         );
+        mark("settings_load");
+
         let initial_mcp_mtime = clarity_core::mcp::config::default_config_path()
             .ok()
             .and_then(|p| std::fs::metadata(&p).ok())
@@ -247,6 +269,7 @@ impl App {
         } else {
             None
         };
+        mark("skill_watcher");
 
         let mut app = Self {
             state,
@@ -276,6 +299,7 @@ impl App {
                 input_history: Vec::new(),
                 input_history_idx: None,
                 draft_status: crate::ui::types::DraftStatus::None,
+                status_message: None,
             },
             settings_store: crate::stores::SettingsStore {
                 settings_edit,
@@ -425,6 +449,7 @@ impl App {
             claw_ws: None,
             claw_ws_device_id: String::new(),
         };
+        mark("app_struct_init");
 
         // Seed default work templates on first launch.
         // Templates are empty shells — users are expected to rename and
@@ -455,6 +480,7 @@ impl App {
             app.settings_store.settings_edit.plugin_order = plugin_order;
         }
         app.refresh_tasks();
+        mark("App::new complete");
         Ok(app)
     }
 
@@ -590,7 +616,9 @@ impl App {
             .map(|s| s.messages.is_empty())
             .unwrap_or(false);
         if was_empty {
-            self.session_store.sessions.retain(|s| s.id != old_id);
+            let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadDeleted {
+                thread_id: old_id.clone(),
+            });
             self.session_store.drafts.remove(&old_id);
         } else {
             self.save_current_session();
@@ -604,14 +632,28 @@ impl App {
         }
 
         self.session_store.active_category = category.to_string();
-        // Find an existing session of this category, or create one.
-        if let Some(s) = self
-            .session_store
-            .sessions
-            .iter()
-            .find(|s| s.category == category)
-        {
-            self.session_store.active_session_id = s.id.clone();
+
+        // Emotion is singleton: refuse to create multiple emotion sessions.
+        let target = if category == "emotion" {
+            self.session_store
+                .sessions
+                .iter()
+                .find(|s| s.category == "emotion")
+                .cloned()
+        } else {
+            self.session_store
+                .sessions
+                .iter()
+                .find(|s| s.category == category)
+                .cloned()
+        };
+
+        if let Some(s) = target {
+            let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadActive {
+                thread_id: s.id.clone(),
+                title: Some(s.title.clone()),
+            });
+            self.process_events();
             self.chat_store.input = self.session_store.drafts.remove(&s.id).unwrap_or_default();
             self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         } else {
@@ -622,9 +664,10 @@ impl App {
                 .filter(|s| s.category == category)
                 .count();
             let s = new_session(category, count);
-            let id = s.id.clone();
-            self.session_store.sessions.push(s);
-            self.session_store.active_session_id = id.clone();
+            let _ = self
+                .ui_tx
+                .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
+            self.process_events();
             self.chat_store.input = String::new();
         }
         self.chat_store.last_usage = None;
@@ -682,8 +725,14 @@ impl App {
             .count();
         let s = new_session(&category, count);
         let id = s.id.clone();
-        self.session_store.sessions.push(s);
-        self.session_store.active_session_id = id.clone();
+
+        // Emit event-driven session creation so navigation and future backend
+        // Thread* wire messages converge on the same path.
+        let _ = self
+            .ui_tx
+            .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
+        self.process_events();
+
         self.chat_store.input = self.session_store.drafts.remove(&id).unwrap_or_default();
         self.chat_store.last_usage = None;
     }
@@ -780,7 +829,15 @@ impl App {
         } else {
             self.session_store.drafts.remove(&old_id);
         }
-        self.session_store.active_session_id = session_id.clone();
+
+        // Event-driven activation: the centralized handler updates SessionStore
+        // so future backend ThreadActive wire messages use the same path.
+        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadActive {
+            thread_id: session_id.clone(),
+            title: None,
+        });
+        self.process_events();
+
         // SAFE: unwrap_or_default is acceptable — a missing draft means the
         // session input was empty, which is the expected default.
         let active_id = self.session_store.active_session_id.clone();
@@ -896,25 +953,45 @@ impl App {
     /// Delete session.
     #[allow(dead_code)]
     pub(crate) fn delete_session(&mut self, id: String) {
-        self.session_store.sessions.retain(|s| s.id != id);
+        // Event-driven deletion: the centralized handler updates SessionStore so
+        // future backend ThreadDeleted wire messages use the same path.
+        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadDeleted {
+            thread_id: id.clone(),
+        });
+        self.process_events();
+
         self.session_store.drafts.remove(&id);
         if let Err(e) = std::fs::remove_file(session_path(&id)) {
             tracing::warn!("Failed to remove session file: {}", e);
         }
         if self.session_store.sessions.is_empty() {
             self.new_session();
-        } else if self.session_store.active_session_id == id {
-            let new_id = self.session_store.sessions[0].id.clone();
-            self.session_store.active_session_id = new_id.clone();
-            // Only restore draft if user is not actively typing (prevents race).
-            if self.chat_store.input.is_empty() {
-                self.chat_store.input = self
-                    .session_store
-                    .drafts
-                    .remove(&new_id)
-                    .unwrap_or_default();
-            }
+            return;
         }
+
+        // If the handler moved activation to a different session, restore its
+        // draft only when the user is not actively typing (prevents race).
+        let active_id = self.session_store.active_session_id.clone();
+        if active_id != id && self.chat_store.input.is_empty() {
+            self.chat_store.input = self
+                .session_store
+                .drafts
+                .remove(&active_id)
+                .unwrap_or_default();
+        }
+    }
+
+    /// Set a session's archived flag.
+    #[allow(dead_code)]
+    pub(crate) fn set_session_archived(&mut self, id: String, archived: bool) {
+        // Event-driven archive update so backend ThreadUpdated wire messages use
+        // the same centralized SessionStore mutation path.
+        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadUpdated {
+            thread_id: id,
+            title: None,
+            archived: Some(archived),
+        });
+        self.process_events();
     }
 }
 

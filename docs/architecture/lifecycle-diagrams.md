@@ -83,7 +83,9 @@ sequenceDiagram
 - 虚线箭头 `-->>` = 异步回调/流式返回
 - `Wire` 是 tokio broadcast 通道，支持多消费者（egui + tui + claw + gateway 可同时订阅）
 - `ContentPart` 已统一走 `clarity-wire`（`run_streaming` callback 已移除）
-- `DraftEvent` 已映射为 `UiEvent::Draft*` 并接入 `widgets::draft_indicator`（视觉样式待设计）
+- `DraftEvent` / `TurnBegin` / `TurnEnd` / `StatusUpdate` 已映射为对应 `UiEvent`
+- `ViewStateUpdate` 已引入，当前同步 `turn` 字段
+- `TurnEnd` 当前委托给 `UiEvent::Done`，长期将替代 `Done` 成为唯一回合结束标志
 
 ---
 

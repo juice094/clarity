@@ -40,6 +40,10 @@ impl Agent {
             turn_id: String::new(),
             user_input: query.as_ref().to_string(),
         });
+        self.send_wire_message(WireMessage::ViewStateUpdate {
+            turn_id: String::new(),
+            turn: Some(clarity_wire::TurnState::Loading),
+        });
         let (final_response, completed, tool_names) = self
             .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
             .await?;

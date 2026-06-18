@@ -6,6 +6,7 @@ use crate::settings::GuiSettings;
 use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
 /// Parse approval mode string from settings into core enum.
@@ -43,7 +44,8 @@ pub struct AppState {
         >,
     >,
     /// Long-term memory store for cross-session fact retrieval.
-    pub memory_store: Option<clarity_memory::MemoryStore>,
+    /// Initialized lazily in the background so it does not block window creation.
+    pub memory_store: OnceLock<clarity_memory::MemoryStore>,
 }
 
 impl Default for AppState {
@@ -157,7 +159,7 @@ impl Default for AppState {
             task_store: clarity_core::background::TaskStore::new(task_dir),
             bg_manager,
             mode_aware_approval_runtime: mode_aware_rt,
-            memory_store: None,
+            memory_store: OnceLock::new(),
         }
     }
 }

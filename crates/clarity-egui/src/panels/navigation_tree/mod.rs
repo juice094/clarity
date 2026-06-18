@@ -41,9 +41,14 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                 crate::ui::debug_overlay::show_layout_state(ui, "left-nav-tree");
             }
 
+            // Bottom cell fits the user avatar row without reserving excessive
+            // height, preventing dead space or clipping at the bottom of the rail.
+            let footer_height = theme
+                .size_bot_bar
+                .max(theme.space_12 + 28.0 + theme.space_12);
             StripBuilder::new(ui)
                 .size(Size::remainder())
-                .size(Size::exact(theme.size_bot_bar + theme.space_16))
+                .size(Size::exact(footer_height))
                 .vertical(|mut strip| {
                     strip.cell(|ui| {
                         egui::ScrollArea::vertical()
