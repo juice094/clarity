@@ -7,9 +7,17 @@
 //!
 //! # Protocol (confirmed by Gray-Cloud)
 //!
-//! 1. Connect: `{"type":"req","method":"connect","params":{"role":"operator","auth":{"token":"..."}}}`
-//! 2. Send:   `{"type":"req","id":"uuid","method":"sessions.send","params":{"sessionKey":"agent:main:main","message":"..."}}`
-//! 3. Reply:  `{"type":"res","id":"uuid","ok":true,"payload":{...}}`
+//! 1. Connect:
+//!    `{"type":"req","id":"1","method":"connect","params":{
+//!       "minProtocol":3,"maxProtocol":3,
+//!       "client":{"id":"clarity-egui","version":"0.1.0","platform":"windows","mode":"operator"},
+//!       "role":"operator","scopes":["operator.read","operator.write"],
+//!       "auth":{"token":"..."}}}`
+//! 2. The Gateway may emit a routine `connect.challenge` event first; token-only
+//!    clients ignore it and proceed with the authenticated connect request.
+//! 3. Send:   `{"type":"req","id":"uuid","method":"sessions.send","params":{"sessionKey":"agent:main:main","message":"..."}}`
+//! 4. Reply:  `{"type":"res","id":"uuid","ok":true,"payload":{...}}` or
+//!    `{"type":"event","event":"hello-ok","payload":{...}}`
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -168,9 +176,19 @@ async fn run_connection(
     // ── Step 1: Authenticate ──────────────────────────────────────
     let connect_req = serde_json::json!({
         "type": "req",
+        "id": "1",
         "method": "connect",
         "params": {
+            "minProtocol": 3,
+            "maxProtocol": 3,
+            "client": {
+                "id": "clarity-egui",
+                "version": "0.1.0",
+                "platform": "windows",
+                "mode": "operator"
+            },
             "role": "operator",
+            "scopes": ["operator.read", "operator.write"],
             "auth": { "token": token }
         }
     });
@@ -180,44 +198,54 @@ async fn run_connection(
         return;
     }
 
-    // Wait for auth response.
-    match tokio::time::timeout(Duration::from_secs(10), read.next()).await {
-        Ok(Some(Ok(Message::Text(text)))) => {
-            if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
-                if resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-                    let _ = resp_tx.send(ClawResponse::Connected {
-                        gateway_url: gateway_url.into(),
-                    });
-                } else {
-                    let err = resp
-                        .get("error")
-                        .and_then(|e| e.as_str())
-                        .unwrap_or("unknown auth error");
-                    let _ = resp_tx.send(ClawResponse::Error(format!("Auth failed: {}", err)));
-                    return;
+    // Wait for auth response. The Gateway emits a routine connect.challenge
+    // event on every connection; token-only clients ignore it.
+    let auth_ok = loop {
+        match tokio::time::timeout(Duration::from_secs(10), read.next()).await {
+            Ok(Some(Ok(Message::Text(text)))) => {
+                if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let msg_type = resp.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    let event = resp.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                    if msg_type == "event" && event == "connect.challenge" {
+                        tracing::debug!("Ignoring routine OpenClaw connect.challenge");
+                        continue;
+                    }
+                    let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
+                        || (msg_type == "event" && event == "hello-ok");
+                    break ok;
                 }
+                break false;
+            }
+            Ok(Some(Ok(other))) => {
+                let _ = resp_tx.send(ClawResponse::Error(format!(
+                    "Unexpected auth response: {:?}",
+                    other
+                )));
+                return;
+            }
+            Ok(Some(Err(e))) => {
+                let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket error: {}", e)));
+                return;
+            }
+            Ok(None) => {
+                let _ = resp_tx.send(ClawResponse::Error("Connection closed during auth".into()));
+                return;
+            }
+            Err(_) => {
+                let _ = resp_tx.send(ClawResponse::Error("Auth timeout".into()));
+                return;
             }
         }
-        Ok(Some(Ok(other))) => {
-            let _ = resp_tx.send(ClawResponse::Error(format!(
-                "Unexpected auth response: {:?}",
-                other
-            )));
-            return;
-        }
-        Ok(Some(Err(e))) => {
-            let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket error: {}", e)));
-            return;
-        }
-        Ok(None) => {
-            let _ = resp_tx.send(ClawResponse::Error("Connection closed during auth".into()));
-            return;
-        }
-        Err(_) => {
-            let _ = resp_tx.send(ClawResponse::Error("Auth timeout".into()));
-            return;
-        }
     };
+
+    if auth_ok {
+        let _ = resp_tx.send(ClawResponse::Connected {
+            gateway_url: gateway_url.into(),
+        });
+    } else {
+        let _ = resp_tx.send(ClawResponse::Error("Auth failed".into()));
+        return;
+    }
 
     // ── Step 2: Bridge sync mpsc to async ─────────────────────────
     let (async_tx, mut async_rx) = tokio::sync::mpsc::channel::<ClawCommand>(32);

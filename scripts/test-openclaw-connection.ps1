@@ -130,16 +130,69 @@ $client = New-Object System.Net.WebSockets.ClientWebSocket
 $cts = New-Object System.Threading.CancellationTokenSource
 $ct = $cts.Token
 
+function Receive-Json {
+    param([int]$TimeoutSeconds = 10)
+    $buffer = New-Object byte[] 4096
+    $seg = New-Object System.ArraySegment[byte](, $buffer)
+    $recvTask = $client.ReceiveAsync($seg, $ct)
+    if (-not $recvTask.Wait([System.TimeSpan]::FromSeconds($TimeoutSeconds))) {
+        return $null
+    }
+    $result = $recvTask.Result
+    if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+        return @{ __close = $true }
+    }
+    $text = [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+    try {
+        return $text | ConvertFrom-Json
+    } catch {
+        return @{ __raw = $text; __error = $_.Exception.Message }
+    }
+}
+
 try {
     $connectTask = $client.ConnectAsync([System.Uri]$wsUrl, $ct)
     $connectTask.Wait()
     Write-Ok "WebSocket 连接已建立。"
 
+    # OpenClaw Gateway sends a routine connect.challenge on every connection.
+    # Token-only clients do not answer the challenge; simply ignore it and
+    # proceed with the authenticated connect request.
+    $challenge = Receive-Json -TimeoutSeconds 5
+    if ($null -eq $challenge) {
+        Write-Fail "等待 challenge 响应超时。"
+        $client.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "timeout", $ct).Wait()
+        exit 1
+    }
+    if ($challenge.__close) {
+        Write-Fail "Gateway 在 challenge 阶段关闭了连接。"
+        exit 1
+    }
+    if ($challenge.__raw) {
+        Write-Fail "challenge 响应不是合法 JSON: $($challenge.__error)"
+        exit 1
+    }
+    if ($challenge.type -eq "event" -and $challenge.event -eq "connect.challenge") {
+        Write-Info "收到例行 connect.challenge，token-only 客户端忽略它。"
+    } else {
+        Write-Info "收到非 challenge 消息: $($challenge | ConvertTo-Json -Depth 5 -Compress)"
+    }
+
     $connectReq = @{
         type = "req"
+        id = "1"
         method = "connect"
         params = @{
+            minProtocol = 3
+            maxProtocol = 3
+            client = @{
+                id = "clarity-egui"
+                version = "0.1.0"
+                platform = "windows"
+                mode = "operator"
+            }
             role = "operator"
+            scopes = @("operator.read", "operator.write")
             auth = @{ token = $remoteToken }
         }
     } | ConvertTo-Json -Depth 10 -Compress
@@ -150,31 +203,39 @@ try {
     $sendTask.Wait()
     Write-Ok "已发送 connect 请求。"
 
-    $buffer = New-Object byte[] 4096
-    $seg = New-Object System.ArraySegment[byte](, $buffer)
-    $recvTask = $client.ReceiveAsync($seg, $ct)
-    if (-not $recvTask.Wait([System.TimeSpan]::FromSeconds(10))) {
+    $authResp = Receive-Json -TimeoutSeconds 10
+    if ($null -eq $authResp) {
         Write-Fail "等待 connect 响应超时。"
         $client.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "timeout", $ct).Wait()
         exit 1
     }
+    if ($authResp.__close) {
+        Write-Fail "Gateway 在认证阶段关闭了连接。"
+        exit 1
+    }
+    if ($authResp.__raw) {
+        Write-Fail "认证响应不是合法 JSON: $($authResp.__error)"
+        exit 1
+    }
 
-    $result = $recvTask.Result
-    $text = [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
-    Write-Info "收到响应: $text"
+    Write-Info "收到响应: $($authResp | ConvertTo-Json -Depth 5 -Compress)"
 
-    try {
-        $json = $text | ConvertFrom-Json
-        if ($json.ok -eq $true) {
-            Write-Ok "OpenClaw 认证成功。"
-        } else {
-            $errorMsg = $json.error
-            if ([string]::IsNullOrWhiteSpace($errorMsg)) { $errorMsg = "unknown auth error" }
-            Write-Fail "认证失败: $errorMsg"
-            exit 1
+    $ok = $false
+    if ($authResp.type -eq "res" -and $authResp.ok -eq $true) {
+        $ok = $true
+    } elseif ($authResp.type -eq "event" -and $authResp.event -eq "hello-ok") {
+        $ok = $true
+    }
+
+    if ($ok) {
+        Write-Ok "OpenClaw 认证成功。"
+    } else {
+        $errorMsg = $authResp.error
+        if ([string]::IsNullOrWhiteSpace($errorMsg) -and $authResp.payload) {
+            $errorMsg = $authResp.payload | ConvertTo-Json -Depth 3 -Compress
         }
-    } catch {
-        Write-Fail "响应不是合法 JSON: $_"
+        if ([string]::IsNullOrWhiteSpace($errorMsg)) { $errorMsg = "unknown auth error" }
+        Write-Fail "认证失败: $errorMsg"
         exit 1
     }
 
