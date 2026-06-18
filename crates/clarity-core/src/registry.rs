@@ -1,9 +1,44 @@
-//! Tool Registry for discovering and executing tools
+//! Tool Registry for discovering and executing tools.
 //!
 //! The `ToolRegistry` manages all available tools and provides:
 //! - Tool registration and lookup
 //! - LLM-compatible tool discovery (JSON Schema)
 //! - Batch execution capabilities
+//!
+//! # Current architecture (imperative registration)
+//!
+//! Tools are registered imperatively via two hardcoded factory methods:
+//! `with_builtin_tools()` (~25 tools) and `with_egui_safe_tools()` (~20 tools).
+//! Each factory manually calls `registry.register(FooTool::new())` for every
+//! tool variant. Adding a tool requires editing the factory method and
+//! recompiling.
+//!
+//! # Declarative path (planned)
+//!
+//! Reference: marktoflow's `marktoflow.yaml` → `tool-registry.ts` pattern,
+//! where tool metadata (name, description, JSON Schema, platform constraints)
+//! lives in config files and the registry loads them dynamically.
+//!
+//! Three insertion points:
+//!
+//! **(A) Per-tool descriptors.** Each tool's LLM-facing metadata (name,
+//! description, parameters JSON Schema, `requires_approval`, platform gates)
+//! could move from inline Rust `json!()` calls into `tools.d/*.toml` files.
+//! Only `execute()` remains Rust code. This makes tool schemas authorable
+//! without touching Rust.
+//!
+//! **(B) Registry manifest.** Replace the two factory methods with
+//! `ToolRegistry::from_manifest(path)` reading a `tools.toml` that lists
+//! enabled tool modules, per-tool overrides (timeout, enabled), and platform
+//! filters. Subsumes the current `agent.yaml` + `tool_map.rs` +
+//! `filter_registry()` chain.
+//!
+//! **(C) Plugin loading.** A `tools.d/` directory scanned at startup could
+//! register external tools without recompiling clarity-core. Requires a
+//! trait-object dispatch model. The existing skill-system loader
+//! (`skills/discovery.rs`) demonstrates the directory-scan pattern.
+//!
+//! Migration sequence: (A) → (B) → (C). Each step is independently shippable.
 
 use crate::error::{AgentError, ToolError};
 use crate::tools::{SharedTool, Tool, ToolContext, ToolResult};

@@ -1,23 +1,24 @@
 //! Fixed-width left navigation tree.
 //!
-//! S6 Phase D: this replaces the old 36px icon rail + collapsible sidebar with
-//! a single fixed-width tree that contains quick actions, Claw devices, project
-//! tree, unprojected chats, and a bottom-aligned user avatar.
+//! S6 Phase D→E: single fixed-width tree containing work/chat toggle,
+//! navigation items, collapsible web bookmarks, work templates, Claw devices,
+//! project tree, history/sessions, and a bottom-aligned user avatar.
 //!
 //! Design note on width: `theme.size_sidebar` must stay wide enough for the
 //! widest row inside this panel (e.g. multi-button action bars, device rows,
 //! chat items). If the container is narrowed without also compressing those
-//! rows, egui may expose unpainted/overflow areas. Future narrowing should be
-//! paired with a responsive internal layout: icon-only secondary actions,
-//! wrapping chips, or an overflow menu.
+//! rows, egui may expose unpainted/overflow areas.
 
 use crate::App;
 use egui_extras::{Size, StripBuilder};
 
 pub mod claw_section;
-pub mod project_tree;
-pub mod quick_actions;
-pub mod unprojected_chats;
+pub mod history_section;
+pub mod nav_items;
+pub mod project_section;
+pub mod web_section;
+pub mod work_chat_toggle;
+pub mod work_templates;
 
 /// Render the left navigation tree.
 pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
@@ -29,13 +30,10 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
         .show_separator_line(false)
         .frame(
             egui::Frame::new()
-                // Use the same background as the unified base painter; this keeps
-                // the left rail visually continuous with the rest of the chrome.
                 .fill(theme.bg)
                 .stroke(egui::Stroke::NONE)
                 .shadow(egui::Shadow::NONE)
                 .inner_margin(egui::Margin::symmetric(8, 12))
-                // Align the left rail vertically with the right rail / inner surface.
                 .outer_margin(egui::Margin::symmetric(0, theme.space_4 as i8)),
         )
         .show(ctx, |ui| {
@@ -43,7 +41,6 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                 crate::ui::debug_overlay::show_layout_state(ui, "left-nav-tree");
             }
 
-            // Use a vertical strip so the avatar stays pinned to the bottom.
             StripBuilder::new(ui)
                 .size(Size::remainder())
                 .size(Size::exact(theme.size_bot_bar + theme.space_16))
@@ -53,13 +50,46 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                             .id_salt("left_nav_scroll")
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                                quick_actions::render_quick_actions(app, ui);
-                                ui.add_space(theme.space_16);
+                                // 1. Work/Chat toggle
+                                work_chat_toggle::render_work_chat_toggle(app, ui);
+                                ui.add_space(theme.space_12);
+
+                                // 2. Navigation items (New Task, Skills, Plugins)
+                                nav_items::render_nav_items(app, ui);
+                                ui.add_space(theme.space_12);
+
+                                // 3. Web bookmarks (chat context)
+                                web_section::render_web_section(
+                                    app,
+                                    ui,
+                                    "nav_web_chat",
+                                    web_section::WebSectionContext::Chat,
+                                );
+                                ui.add_space(theme.space_8);
+
+                                // 4. Work templates
+                                work_templates::render_work_templates(app, ui);
+                                ui.add_space(theme.space_12);
+
+                                // 5. Web bookmarks (work context)
+                                web_section::render_web_section(
+                                    app,
+                                    ui,
+                                    "nav_web_work",
+                                    web_section::WebSectionContext::Work,
+                                );
+                                ui.add_space(theme.space_8);
+
+                                // 6. Projects
+                                project_section::render_project_section(app, ui);
+                                ui.add_space(theme.space_8);
+
+                                // 7. Claw devices
                                 claw_section::render_claw_section(app, ui);
-                                ui.add_space(theme.space_16);
-                                project_tree::render_project_tree(app, ui);
-                                ui.add_space(theme.space_16);
-                                unprojected_chats::render_unprojected_chats(app, ui);
+                                ui.add_space(theme.space_8);
+
+                                // 8. History / sessions
+                                history_section::render_history_section(app, ui);
                             });
                     });
 

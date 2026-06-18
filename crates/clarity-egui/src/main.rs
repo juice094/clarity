@@ -24,6 +24,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 mod app_state;
+pub(crate) mod claw;
+pub(crate) mod claw_client;
 mod components;
 mod design_system;
 mod error;
@@ -98,6 +100,14 @@ pub(crate) struct App {
     pub(crate) view_state: clarity_core::ui::ViewState,
     /// Pretext text measurement backend backed by egui fonts.
     pub(crate) pretext_metrics: crate::pretext::EguiFontMetrics,
+    /// S6 navigation tree: work/chat context (GUI-local; not persisted to ViewState).
+    pub(crate) nav_context: crate::settings::NavContext,
+    /// Live Claw device list polled from Gateway (replaces hardcoded mock data).
+    pub(crate) device_state: crate::claw::DeviceState,
+    /// Active WebSocket connection to the selected Claw Gateway.
+    pub(crate) claw_ws: Option<crate::claw_client::ClawClient>,
+    /// Track which device the current WebSocket is connected to.
+    pub(crate) claw_ws_device_id: String,
 }
 
 mod app_logic;
@@ -190,9 +200,11 @@ impl App {
                 ModalType::SubAgentView => "subagent_view",
                 ModalType::TeamCreate => "team_create",
                 ModalType::KimiCodeLogin => "kimi_login",
+                ModalType::ManageWebLinksChat => "manage_web_links_chat",
+                ModalType::ManageWebLinksWork => "manage_web_links_work",
+                ModalType::ManageWorkTemplates => "manage_work_templates",
                 ModalType::Skill | ModalType::Mcp | ModalType::Login | ModalType::AddProvider => {
-                    // Skill/Mcp are overlay panels handled above; Login/AddProvider
-                    // are not currently used as top modals.
+                    // Skill/Mcp are overlay panels; Login/AddProvider not yet wired.
                     ""
                 }
             };
@@ -211,6 +223,19 @@ impl App {
                             ctx,
                             &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
                         );
+                    }
+                    ModalType::ManageWebLinksChat => {
+                        crate::panels::modals::manage_web_links::render_manage_web_links_modal(
+                            app, ctx, true,
+                        );
+                    }
+                    ModalType::ManageWebLinksWork => {
+                        crate::panels::modals::manage_web_links::render_manage_web_links_modal(
+                            app, ctx, false,
+                        );
+                    }
+                    ModalType::ManageWorkTemplates => {
+                        crate::panels::modals::manage_work_templates::render_manage_work_templates_modal(app, ctx);
                     }
                     _ => {}
                 });
@@ -284,12 +309,12 @@ impl App {
             egui::pos2(screen.max.x - inset, screen.max.y - inset),
         );
 
-        let painter = ctx.layer_painter(egui::LayerId::background());
+        let bg_painter = ctx.layer_painter(egui::LayerId::background());
         let radius = theme.radius_sm as u8;
         let corner_radius = egui::CornerRadius::same(radius);
 
-        painter.rect_filled(base_rect, egui::CornerRadius::ZERO, theme.bg);
-        painter.rect_filled(surface_rect, corner_radius, theme.bg);
+        bg_painter.rect_filled(base_rect, egui::CornerRadius::ZERO, theme.bg);
+        bg_painter.rect_filled(surface_rect, corner_radius, theme.bg);
 
         // Right-rail surface: paint the rail with the same rounded corners as
         // the main stage so its right edge seamlessly meets the outer border.
@@ -301,10 +326,16 @@ impl App {
                 egui::pos2(surface_rect.max.x - rail_w, surface_rect.min.y),
                 surface_rect.max,
             );
-            painter.rect_filled(rail_rect, corner_radius, theme.bg);
+            bg_painter.rect_filled(rail_rect, corner_radius, theme.bg);
         }
 
-        painter.rect_stroke(
+        // Paint the border stroke on the tooltip layer so it sits above the
+        // right-rail cover that hides the native resize hover/drag line.
+        let border_painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::new("main_stage_border"),
+        ));
+        border_painter.rect_stroke(
             surface_rect,
             corner_radius,
             egui::Stroke::new(1.0_f32, theme.border),
@@ -853,6 +884,112 @@ impl eframe::App for App {
                 self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
             self.ui_store.frame_count = 0;
             self.ui_store.last_fps_time = now;
+        }
+
+        // Sync live Claw device list (~2 Hz — cheap snapshot of pre-fetched data).
+        if self.ui_store.frame_count % 30 == 0 {
+            let devices = self.device_state.snapshot();
+            if !devices.is_empty() {
+                self.ui_store.bot_instances = devices;
+                // If the previously-active bot disappeared, reset selection.
+                if !self
+                    .ui_store
+                    .bot_instances
+                    .iter()
+                    .any(|b| b.id == self.ui_store.active_bot_id)
+                {
+                    self.ui_store.active_bot_id = self
+                        .ui_store
+                        .bot_instances
+                        .first()
+                        .map(|b| b.id.clone())
+                        .unwrap_or_default();
+                }
+            }
+
+            // Manage WebSocket connection: connect/reconnect when the active
+            // Claw device changes or when the connection drops.
+            let active_id = &self.ui_store.active_bot_id;
+            if active_id != &self.claw_ws_device_id || self.claw_ws.is_none() {
+                if let Some(conn) = self.device_state.connection(active_id) {
+                    if !conn.gateway_token.is_empty() {
+                        let gw_url = conn.gateway_url.clone();
+                        if !gw_url.starts_with("ws://") && !gw_url.starts_with("wss://") {
+                            // Convert HTTP URL to WebSocket URL.
+                            let ws_url = gw_url
+                                .replace("http://", "ws://")
+                                .replace("https://", "wss://");
+                            self.claw_ws = Some(crate::claw_client::ClawClient::connect(
+                                &ws_url,
+                                &conn.gateway_token,
+                            ));
+                        } else {
+                            self.claw_ws = Some(crate::claw_client::ClawClient::connect(
+                                &gw_url,
+                                &conn.gateway_token,
+                            ));
+                        }
+                        self.claw_ws_device_id = active_id.clone();
+                    }
+                }
+            }
+
+            // Drain WebSocket responses (clone handle to avoid borrow conflicts).
+            {
+                let responses = self
+                    .claw_ws
+                    .as_ref()
+                    .map(|ws| ws.drain())
+                    .unwrap_or_default();
+                let ws_handle = self.claw_ws.clone();
+
+                for resp in responses {
+                    match resp {
+                        crate::claw_client::ClawResponse::Connected { gateway_url } => {
+                            self.push_toast(
+                                format!("Connected to Claw Gateway: {}", gateway_url),
+                                crate::ui::types::ToastLevel::Info,
+                            );
+                            // Auto-fetch session history after connect.
+                            if let Some(ref ws) = ws_handle {
+                                ws.fetch_history("agent:main:main");
+                            }
+                        }
+                        crate::claw_client::ClawResponse::HistoryLoaded {
+                            session_key: _,
+                            messages,
+                        } => {
+                            let count = messages.len();
+                            self.push_toast(
+                                format!("Loaded {} messages from session", count),
+                                crate::ui::types::ToastLevel::Info,
+                            );
+                            self.ui_store.claw_history = messages
+                                .iter()
+                                .map(|m| format!("[{}] {}", m.role, m.content))
+                                .collect();
+                        }
+                        crate::claw_client::ClawResponse::Reply {
+                            id: _,
+                            ok: _,
+                            payload,
+                        } => {
+                            if let Some(text) = payload.get("text").and_then(|v| v.as_str()) {
+                                self.push_toast(
+                                    format!("Gray: {}", text),
+                                    crate::ui::types::ToastLevel::Info,
+                                );
+                            }
+                        }
+                        crate::claw_client::ClawResponse::Error(e) => {
+                            tracing::warn!("Claw WebSocket error: {}", e);
+                            self.claw_ws = None;
+                            self.claw_ws_device_id.clear();
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         // Refresh shell prompt (~1 Hz) to track cwd / git branch changes.

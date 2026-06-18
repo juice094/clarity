@@ -245,6 +245,75 @@ pub async fn create_remote_thread(
     Ok(thread_id)
 }
 
+/// Register this Claw instance as a device with the Gateway and maintain
+/// a heartbeat. Returns the device id on first registration.
+pub async fn register_device(gateway_url: &str) -> anyhow::Result<String> {
+    let hostname = get_hostname();
+    let device_id = format!("claw-{}", hostname);
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    let payload = serde_json::json!({
+        "id": device_id,
+        "name": hostname,
+        "host": hostname,
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+
+    let url = format!("{}/api/v1/claw/devices", gateway_url);
+    client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    tracing::info!(
+        device_id = %device_id,
+        gateway_url = %gateway_url,
+        "Claw device registered with Gateway"
+    );
+    Ok(device_id)
+}
+
+/// Send a heartbeat to keep the device alive in the Gateway registry.
+pub async fn send_heartbeat(gateway_url: &str, device_id: &str) -> anyhow::Result<()> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()?;
+
+    let payload = serde_json::json!({
+        "id": device_id,
+        "name": get_hostname(),
+        "host": get_hostname(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+
+    let url = format!("{}/api/v1/claw/devices", gateway_url);
+    client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+
+    tracing::debug!(device_id = %device_id, "Claw heartbeat sent");
+    Ok(())
+}
+
+/// Best-effort hostname resolution. Falls back to "unknown" if the OS
+/// doesn't expose a hostname.
+fn get_hostname() -> String {
+    // SAFETY: these env-var reads are infallible — None maps to the default.
+    if cfg!(target_os = "windows") {
+        std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown".into())
+    } else {
+        std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".into())
+    }
+}
+
 // ------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------

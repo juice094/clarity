@@ -133,6 +133,12 @@ pub enum ModalType {
     Skill,
     /// MCP server configuration modal (P1.5.4 relocation from SidePanel per ADR-014).
     Mcp,
+    /// Manage chat-context web link bookmarks (S6 navigation tree).
+    ManageWebLinksChat,
+    /// Manage work-context web link bookmarks (S6 navigation tree).
+    ManageWebLinksWork,
+    /// Manage custom work templates (S6 navigation tree).
+    ManageWorkTemplates,
 }
 
 impl ModalType {
@@ -246,6 +252,22 @@ pub struct PanelExpansion {
     /// Sticky flag preventing auto-expansion of workspace plan.
     #[serde(default)]
     pub workspace_plan_manually_collapsed: bool,
+    // --- S6 navigation tree collapsible sections ---
+    /// Web bookmarks section expanded (Chat context).
+    #[serde(default)]
+    pub nav_web_chat: bool,
+    /// Web bookmarks section expanded (Work context).
+    #[serde(default)]
+    pub nav_web_work: bool,
+    /// Project section expanded.
+    #[serde(default)]
+    pub nav_projects: bool,
+    /// Claw device list expanded.
+    #[serde(default)]
+    pub nav_claw: bool,
+    /// History / session list expanded.
+    #[serde(default)]
+    pub nav_history: bool,
 }
 
 impl PanelExpansion {
@@ -271,6 +293,11 @@ impl PanelExpansion {
             subagents,
             workspace_plan,
             workspace_plan_manually_collapsed,
+            nav_web_chat: false,
+            nav_web_work: false,
+            nav_projects: false,
+            nav_claw: false,
+            nav_history: false,
         }
     }
 }
@@ -361,6 +388,12 @@ pub enum RightRailPanel {
     Files,
     /// Claw remote device settings panel.
     ClawSettings,
+    /// Claw workspace file tree panel.
+    ClawWorkspace,
+    /// Claw SSH terminal panel.
+    ClawTerminal,
+    /// Claw embedded web / code viewer panel.
+    ClawWebBridge,
     /// Project knowledge base panel.
     KnowledgeBase,
     /// Template / preset injection panel.
@@ -949,6 +982,9 @@ mod tests {
             ModalType::KimiCodeLogin,
             ModalType::Skill,
             ModalType::Mcp,
+            ModalType::ManageWebLinksChat,
+            ModalType::ManageWebLinksWork,
+            ModalType::ManageWorkTemplates,
         ] {
             let s = serde_json::to_string(&modal).unwrap();
             let deserialized: ModalType = serde_json::from_str(&s).unwrap();

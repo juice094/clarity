@@ -51,8 +51,13 @@ pub fn interactive_row<R>(
             ui.set_min_width(available_rect.width());
 
             let is_hovered = ui.rect_contains_pointer(ui.max_rect());
-            let fill = if is_selected || is_hovered {
-                theme.bg_hover
+            // Selected rows get a subtle accent tint; hovered rows get a
+            // neutral background. This distinguishes "you are here" from
+            // "you might click here" without adding extra chrome.
+            let fill = if is_selected {
+                theme.nav_row_selected
+            } else if is_hovered {
+                theme.nav_row_hover
             } else {
                 egui::Color32::TRANSPARENT
             };

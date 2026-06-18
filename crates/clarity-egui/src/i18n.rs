@@ -73,11 +73,26 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Settings", "设置");
     m.insert("New Session", "新建会话");
     m.insert("New session (Ctrl+N)", "新建会话（Ctrl+N）");
+    m.insert("New Task", "新建任务");
     m.insert("New cron schedule", "新建定时任务");
+    m.insert("Plugins", "插件");
+    m.insert("Work", "工作");
+    m.insert("Chat", "聊天");
+    m.insert("History", "历史会话");
+    m.insert("Work Templates", "工作模板");
+    m.insert("No bookmarks", "暂无书签");
+    m.insert("No templates", "暂无模板");
+    m.insert("Add", "添加");
+    m.insert("Close", "关闭");
+    m.insert("Manage bookmarks", "管理书签");
+    m.insert("Manage templates", "管理模板");
     m.insert("Web", "网页");
     m.insert("Docs", "文档");
     m.insert("GitHub", "GitHub");
     m.insert("Claw", "Claw");
+    m.insert("Workspace", "工作空间");
+    m.insert("Terminal", "终端");
+    m.insert("WebBridge", "网页桥");
     m.insert("No devices", "暂无设备");
     m.insert("Projects", "项目");
     m.insert("No projects yet", "暂无项目");
@@ -177,6 +192,7 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Name", "名称");
     m.insert("Description", "描述");
     m.insert("Prompt", "提示词");
+    m.insert("URL", "链接");
     m.insert("Priority", "优先级");
     m.insert("Tool:", "工具：");
     m.insert("Arguments:", "参数：");
@@ -213,7 +229,6 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Delete", "删除");
     m.insert("+ Add Custom Provider", "+ 添加自定义服务商");
     m.insert("Add Custom Provider", "添加自定义服务商");
-    m.insert("Name", "名称");
     m.insert("Clear Batch Grants", "清除批量授权");
     m.insert("No custom providers configured.", "未配置自定义服务商。");
 

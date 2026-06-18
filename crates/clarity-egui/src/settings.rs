@@ -22,6 +22,36 @@ struct ProfilesFile {
     profiles: HashMap<String, AgentProfile>,
 }
 
+/// Session initialization context set by the Work/Chat toggle.
+///
+/// **Not a sidebar filter.** Both modes display the same sidebar sections
+/// (web bookmarks, templates, projects, claw, history). The context only
+/// affects `new_session()` behaviour: default system prompt, tool presets,
+/// and project association.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NavContext {
+    /// Chat mode — casual conversation defaults.
+    #[default]
+    Chat,
+    /// Work mode — project-oriented defaults (workspace plan, file tools).
+    Work,
+}
+
+/// A user-defined web bookmark shown in the left sidebar web section.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct WebLink {
+    pub name: String,
+    pub url: String,
+}
+
+/// A user-defined work template that launches a new session with a pre-filled prompt.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct WorkTemplate {
+    pub name: String,
+    pub prompt: String,
+}
+
 /// Holds gui settings state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GuiSettings {
@@ -66,6 +96,21 @@ pub struct GuiSettings {
     /// S6 Phase C3: show the layout debug overlay (green/blue/red/yellow diagnostic rects).
     #[serde(default)]
     pub debug_layout_overlay: bool,
+    /// S6 navigation tree: work/chat context toggle state.
+    #[serde(default)]
+    pub nav_context: NavContext,
+    /// S6 navigation tree: custom work templates.
+    #[serde(default)]
+    pub work_templates: Vec<WorkTemplate>,
+    /// S6 navigation tree: web bookmarks for chat context.
+    #[serde(default)]
+    pub web_links_chat: Vec<WebLink>,
+    /// S6 navigation tree: web bookmarks for work context.
+    #[serde(default)]
+    pub web_links_work: Vec<WebLink>,
+    /// S6 navigation tree: set to true after default templates are seeded on first launch.
+    #[serde(default)]
+    pub work_templates_initialized: bool,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -253,6 +298,11 @@ impl Default for GuiSettings {
                 "ppt".to_string(),
             ],
             debug_layout_overlay: false,
+            nav_context: NavContext::default(),
+            work_templates: Vec::new(),
+            web_links_chat: Vec::new(),
+            web_links_work: Vec::new(),
+            work_templates_initialized: false,
             profiles: HashMap::new(),
         }
     }

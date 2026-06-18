@@ -61,6 +61,8 @@ pub struct AppState {
     pub chat_sem: Arc<Semaphore>,
     /// Unified OAuth service for providers that use OAuth device flow.
     pub oauth_service: Arc<clarity_llm::auth::OAuthService>,
+    /// Registry of connected Claw daemon instances (heartbeat-based liveness).
+    pub device_registry: crate::handlers::claw::DeviceRegistry,
 }
 
 impl AppState {
@@ -160,6 +162,7 @@ impl AppState {
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
             chat_sem: Arc::new(Semaphore::new(32)),
             oauth_service,
+            device_registry: crate::handlers::claw::DeviceRegistry::new(),
         })
     }
 }
@@ -379,6 +382,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             delete(handlers::cron::delete_cron_task),
         )
         .route("/api/search", post(handlers::memory::search_memory))
+        .route(
+            "/api/v1/claw/devices",
+            get(handlers::claw::list_devices).post(handlers::claw::register_device),
+        )
         .route(
             "/api/v2/threads",
             post(handlers::threads::create_thread).get(handlers::threads::list_threads),

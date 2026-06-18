@@ -9,6 +9,9 @@ use crate::App;
 use clarity_core::ui::RightRailPanel;
 
 pub mod claw_settings_panel;
+pub mod claw_terminal_panel;
+pub mod claw_webbridge_panel;
+pub mod claw_workspace_panel;
 pub mod console_panel;
 pub mod files_panel;
 pub mod knowledge_panel;
@@ -82,6 +85,9 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
                 RightRailPanel::Console => console_panel::render(app, ui),
                 RightRailPanel::Files => files_panel::render(app, ui),
                 RightRailPanel::ClawSettings => claw_settings_panel::render(app, ui),
+                RightRailPanel::ClawWorkspace => claw_workspace_panel::render(app, ui),
+                RightRailPanel::ClawTerminal => claw_terminal_panel::render(app, ui),
+                RightRailPanel::ClawWebBridge => claw_webbridge_panel::render(app, ui),
                 RightRailPanel::KnowledgeBase => knowledge_panel::render(app, ui),
                 RightRailPanel::Templates => template_panel::render(app, ui),
                 RightRailPanel::None => {
@@ -104,9 +110,13 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
     let screen = ctx.screen_rect();
     let surface_top = theme.size_titlebar + theme.space_4;
     let surface_bottom = screen.max.y - theme.space_4;
+    // The native resize hover/drag line can extend all the way from the
+    // titlebar to the window bottom, even though the panel content is inset by
+    // `space_4`. Cover the full vertical range so nothing leaks outside the
+    // rounded main-stage surface.
     let cover = egui::Rect::from_min_max(
-        egui::pos2(panel_rect.left() - 1.0, surface_top),
-        egui::pos2(panel_rect.left() + 1.0, surface_bottom),
+        egui::pos2(panel_rect.left() - 2.0, theme.size_titlebar),
+        egui::pos2(panel_rect.left() + 2.0, screen.max.y),
     );
     // Paint on the foreground layer so the cover and divider sit on top of the
     // native resize hover line that egui draws even with
@@ -116,18 +126,15 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
         egui::Id::new("right_rail_divider"),
     ));
     painter.rect_filled(cover, egui::CornerRadius::ZERO, theme.bg);
-    let radius = theme.radius_sm;
-    let divider_top = surface_top + radius;
-    let divider_bottom = surface_bottom - radius;
-    if divider_bottom > divider_top {
-        painter.line_segment(
-            [
-                egui::pos2(panel_rect.left(), divider_top),
-                egui::pos2(panel_rect.left(), divider_bottom),
-            ],
-            egui::Stroke::new(1.0, theme.border),
-        );
-    }
+    // Draw the divider all the way from the top of the rounded main-stage
+    // surface to the bottom so it visually connects with the outer border.
+    painter.line_segment(
+        [
+            egui::pos2(panel_rect.left(), surface_top),
+            egui::pos2(panel_rect.left(), surface_bottom),
+        ],
+        egui::Stroke::new(1.0, theme.border),
+    );
 }
 
 fn panel_title(panel: RightRailPanel, app: &crate::App) -> &'static str {
@@ -137,6 +144,9 @@ fn panel_title(panel: RightRailPanel, app: &crate::App) -> &'static str {
         RightRailPanel::Console => app.t("Console"),
         RightRailPanel::Files => app.t("Files"),
         RightRailPanel::ClawSettings => app.t("Claw"),
+        RightRailPanel::ClawWorkspace => app.t("Workspace"),
+        RightRailPanel::ClawTerminal => app.t("Terminal"),
+        RightRailPanel::ClawWebBridge => app.t("WebBridge"),
         RightRailPanel::KnowledgeBase => app.t("Knowledge"),
         RightRailPanel::Templates => app.t("Templates"),
     }

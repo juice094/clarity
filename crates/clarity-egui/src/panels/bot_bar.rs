@@ -113,21 +113,27 @@ fn bot_bar_buttons(ctx: &crate::ui::types::SessionContext) -> Vec<BotBarButton> 
         }
         crate::ui::types::SessionContext::Claw { .. } => vec![
             BotBarButton {
-                icon: crate::theme::ICON_MONITOR,
-                tooltip: "Remote",
+                icon: crate::theme::ICON_SETTINGS,
+                tooltip: "Settings",
                 panel: RightRailPanel::ClawSettings,
                 context: RightRailContext::Claw,
             },
             BotBarButton {
-                icon: crate::theme::ICON_FILE_CODE,
-                tooltip: "Files",
-                panel: RightRailPanel::Files,
+                icon: crate::theme::ICON_FOLDER_OPEN,
+                tooltip: "Workspace",
+                panel: RightRailPanel::ClawWorkspace,
                 context: RightRailContext::Claw,
             },
             BotBarButton {
-                icon: crate::theme::ICON_LAYERS,
-                tooltip: "Templates",
-                panel: RightRailPanel::Templates,
+                icon: crate::theme::ICON_TERMINAL,
+                tooltip: "Terminal",
+                panel: RightRailPanel::ClawTerminal,
+                context: RightRailContext::Claw,
+            },
+            BotBarButton {
+                icon: crate::theme::ICON_GLOBE,
+                tooltip: "WebBridge",
+                panel: RightRailPanel::ClawWebBridge,
                 context: RightRailContext::Claw,
             },
         ],

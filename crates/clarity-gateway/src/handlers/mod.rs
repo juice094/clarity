@@ -6,6 +6,8 @@
 pub mod admin;
 /// OpenAI-compatible chat completion handler.
 pub mod chat;
+/// Claw device registry handlers.
+pub mod claw;
 /// Provider and alias configuration handlers.
 pub mod config;
 /// Scheduled cron task handlers.

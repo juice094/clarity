@@ -48,6 +48,8 @@ pub struct UiStore {
     pub bot_instances: Vec<BotInstance>,
     /// OpenClaw: currently active bot instance id.
     pub active_bot_id: String,
+    /// Claw Gateway: session history lines loaded from the Gateway.
+    pub claw_history: Vec<String>,
     /// Pretext PoC: whether the text-measurement probe window is open.
     pub pretext_probe_open: bool,
     /// Pretext PoC: wrap-preview max width in the probe window.

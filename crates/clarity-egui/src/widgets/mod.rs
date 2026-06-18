@@ -1,4 +1,5 @@
 pub mod avatar;
+pub mod collapsible_section;
 pub mod command_palette;
 pub mod draft_indicator;
 pub mod icon_button;

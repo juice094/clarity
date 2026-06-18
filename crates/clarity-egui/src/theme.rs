@@ -38,6 +38,8 @@ pub const ICON_MONITOR: &str = "\u{e11d}"; // Lucide: Monitor
 pub const ICON_FILE_CODE: &str = "\u{e0c3}"; // Lucide: FileCode
 pub const ICON_LAYERS: &str = "\u{e529}"; // Lucide: Layers
 pub const ICON_BOOK_OPEN: &str = "\u{e05f}"; // Lucide: BookOpen
+pub const ICON_INFO: &str = "\u{e0f4}"; // Lucide: Info
+pub const ICON_ARCHIVE: &str = "\u{e052}"; // Lucide: Archive
 
 // ============================================================================
 // Design Token System — Phase A Foundation
@@ -139,6 +141,19 @@ pub struct Theme {
     pub radius_lg: f32,
     pub radius_xl: f32,
     pub radius_full: f32,
+
+    // --- Navigation (sidebar component-level tokens, inspired by gpui-component's
+    //     per-component ThemeColor system) ---
+    /// Text color on accent-filled CTA buttons (e.g. "New Task").
+    pub nav_cta_text: egui::Color32,
+    /// Navigation row background on hover.
+    pub nav_row_hover: egui::Color32,
+    /// Navigation row background when selected / active.
+    pub nav_row_selected: egui::Color32,
+    /// Collapsible section header background when expanded.
+    pub nav_section_expanded: egui::Color32,
+    /// Text color on the active segment of the Work/Chat toggle.
+    pub toggle_active_text: egui::Color32,
 
     // --- Semantic surface (content-type backgrounds beyond chat bubbles) ---
     /// Tool call lifecycle indicator bg (distinct from chat bubbles).
@@ -328,6 +343,13 @@ impl Theme {
             radius_xl: 36.0,
             radius_full: 999.0,
 
+            // Navigation (component-level)
+            nav_cta_text: hex("#ffffff"),
+            nav_row_hover: hex("#2a2a2a"),
+            nav_row_selected: rgba(26, 136, 255, 0.12),
+            nav_section_expanded: hex("#2a2a2a"),
+            toggle_active_text: hex("#ffffff"),
+
             // Semantic surfaces
             tool_call_bg: rgba(26, 136, 255, 0.08),
             code_block_bg: hex("#0d0d0d"),
@@ -508,6 +530,13 @@ impl Theme {
             radius_xl: 36.0,
             radius_full: 999.0,
 
+            // Navigation (component-level)
+            nav_cta_text: hex("#ffffff"),
+            nav_row_hover: rgba(45, 45, 62, 0.65),
+            nav_row_selected: rgba(91, 141, 239, 0.14),
+            nav_section_expanded: rgba(45, 45, 62, 0.65),
+            toggle_active_text: hex("#ffffff"),
+
             // Semantic surfaces
             tool_call_bg: rgba(91, 141, 239, 0.08),
             code_block_bg: rgba(0, 0, 0, 0.40),
@@ -675,6 +704,13 @@ impl Theme {
             radius_lg: 12.0,
             radius_xl: 36.0,
             radius_full: 9999.0,
+
+            // Navigation (component-level)
+            nav_cta_text: hex("#ffffff"),
+            nav_row_hover: hex("#d0d4e0"),
+            nav_row_selected: hex_alpha("#c98a5e", 0.10),
+            nav_section_expanded: hex("#d0d4e0"),
+            toggle_active_text: hex("#ffffff"),
 
             // Semantic surfaces
             tool_call_bg: hex_alpha("#c98a5e", 0.06),

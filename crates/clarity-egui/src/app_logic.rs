@@ -209,6 +209,7 @@ impl App {
         let right_rail_card_order = settings_edit.right_rail_card_order.clone();
         let plugin_order = settings_edit.plugin_order.clone();
         let debug_layout_overlay = settings_edit.debug_layout_overlay;
+        let nav_context = settings_edit.nav_context;
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -333,25 +334,11 @@ impl App {
                 pretext_probe_open: false,
                 pretext_probe_wrap_width: 400.0,
                 pretext_estimate_enabled: true,
-                bot_instances: vec![
-                    crate::stores::BotInstance {
-                        id: "gray-cloud".into(),
-                        name: "Gray-Cloud".into(),
-                        device_id: "100.69.11.71".into(),
-                        status: crate::stores::BotStatus::Online,
-                        version: "2026.4.14".into(),
-                        last_backup: "2026-06-06".into(),
-                    },
-                    crate::stores::BotInstance {
-                        id: "gray-desktop".into(),
-                        name: "Gray-Desktop".into(),
-                        device_id: "100.69.11.72".into(),
-                        status: crate::stores::BotStatus::Offline,
-                        version: "2026.4.14".into(),
-                        last_backup: "2026-06-05".into(),
-                    },
-                ],
-                active_bot_id: "gray-cloud".into(),
+                // Populated at runtime by device_state.snapshot() — see
+                // the frame-loop sync in update().
+                bot_instances: Vec::new(),
+                active_bot_id: String::new(),
+                claw_history: Vec::new(),
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],
@@ -433,7 +420,34 @@ impl App {
                 vs
             },
             pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
+            nav_context,
+            device_state: crate::claw::discover(),
+            claw_ws: None,
+            claw_ws_device_id: String::new(),
         };
+
+        // Seed default work templates on first launch.
+        // Templates are empty shells — users are expected to rename and
+        // populate them. Names use the locale-aware "Work Templates" label
+        // as a prefix so they read naturally in any language.
+        if !app.settings_store.settings_edit.work_templates_initialized {
+            let base = app.t("Work Templates");
+            app.settings_store.settings_edit.work_templates = vec![
+                crate::settings::WorkTemplate {
+                    name: format!("{} 1", base),
+                    prompt: String::new(),
+                },
+                crate::settings::WorkTemplate {
+                    name: format!("{} 2", base),
+                    prompt: String::new(),
+                },
+                crate::settings::WorkTemplate {
+                    name: format!("{} 3", base),
+                    prompt: String::new(),
+                },
+            ];
+            app.settings_store.settings_edit.work_templates_initialized = true;
+        }
 
         // Sync the initial plugin order back into settings so that new defaults
         // are persisted on first run.
@@ -703,8 +717,8 @@ impl App {
     /// S6 Phase C: mirror layout state into `settings_edit` and persist.
     ///
     /// Call this whenever the right rail visibility, active context, card order,
-    /// or plugin order changes.  Errors are logged but not surfaced as toasts to
-    /// avoid spamming the user every frame.
+    /// plugin order, or nav_context changes. Errors are logged but not surfaced
+    /// as toasts to avoid spamming the user every frame.
     pub(crate) fn persist_layout_settings(&mut self) {
         self.settings_store.settings_edit.right_rail_visible = self.view_state.right_rail_visible;
         self.settings_store.settings_edit.right_rail_context = self.view_state.right_rail_context;
@@ -712,8 +726,77 @@ impl App {
             self.view_state.right_rail_card_order.clone();
         self.settings_store.settings_edit.debug_layout_overlay =
             self.view_state.debug_layout_overlay;
+        self.settings_store.settings_edit.nav_context = self.nav_context;
         if let Err(e) = self.commit_settings() {
             tracing::warn!("Failed to persist layout settings: {}", e);
+        }
+    }
+
+    /// Open a URL in the system browser.
+    ///
+    /// The URL is validated to prevent command injection through shell
+    /// metacharacters before being passed to platform-specific openers.
+    pub(crate) fn open_web_link(&self, url: &str) {
+        if !is_safe_url(url) {
+            tracing::warn!("Refusing to open unsafe URL: {}", url);
+            return;
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // Use rundll32 to avoid cmd.exe shell metacharacter interpretation.
+            let _ = std::process::Command::new("rundll32.exe")
+                .args(["url.dll,FileProtocolHandler", url])
+                .spawn();
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("open").arg(url).spawn();
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+        }
+    }
+
+    /// Create a new session and pre-fill the chat input with the given prompt.
+    pub(crate) fn new_session_with_prompt(&mut self, prompt: &str) {
+        if self.view_state.turn == clarity_core::ui::TurnState::Loading {
+            return;
+        }
+        self.new_session();
+        self.chat_store.input = prompt.to_string();
+    }
+
+    /// Switch the active session, preserving the current session's draft and
+    /// restoring the target session's input and tool-call state.
+    pub(crate) fn switch_to_session(&mut self, session_id: String) {
+        self.save_current_session();
+        let old_id = self.session_store.active_session_id.clone();
+        if !self.chat_store.input.trim().is_empty() {
+            self.session_store
+                .drafts
+                .insert(old_id, self.chat_store.input.clone());
+        } else {
+            self.session_store.drafts.remove(&old_id);
+        }
+        self.session_store.active_session_id = session_id.clone();
+        // SAFE: unwrap_or_default is acceptable — a missing draft means the
+        // session input was empty, which is the expected default.
+        let active_id = self.session_store.active_session_id.clone();
+        self.chat_store.input = self
+            .session_store
+            .drafts
+            .remove(&active_id)
+            .unwrap_or_default();
+        if let Some(s) = self
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| s.id == active_id)
+            .cloned()
+        {
+            self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         }
     }
 
@@ -833,4 +916,14 @@ impl App {
             }
         }
     }
+}
+
+/// Returns true if `url` has a safe scheme and contains no shell metacharacters.
+fn is_safe_url(url: &str) -> bool {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return false;
+    }
+    // Reject shell metacharacters to prevent command injection when the URL
+    // is passed to platform-specific openers.
+    !url.contains(['&', '|', '<', '>', '^', '%', '!', '$', '`', '\n', '\r'])
 }
