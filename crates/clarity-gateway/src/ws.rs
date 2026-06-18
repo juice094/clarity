@@ -148,14 +148,24 @@ async fn handle_chat_with_wire(
     let merge_tx_wire = merge_tx.clone();
     let wire_task = tokio::spawn(async move {
         while let Some(msg) = ui_side.recv().await {
-            match serde_json::to_string(&msg) {
+            // Wrap every streaming WireMessage in the unified WsResponse envelope
+            // so the WebSocket always emits a single schema.
+            let payload = match serde_json::to_value(&msg) {
+                Ok(value) => value,
+                Err(e) => {
+                    error!("Failed to serialize wire message: {}", e);
+                    continue;
+                }
+            };
+            let envelope = WsResponse::WireMessage { payload };
+            match serde_json::to_string(&envelope) {
                 Ok(json) => {
                     if merge_tx_wire.send(json).is_err() {
                         break;
                     }
                 }
                 Err(e) => {
-                    error!("Failed to serialize wire message: {}", e);
+                    error!("Failed to serialize wire envelope: {}", e);
                 }
             }
         }
@@ -261,6 +271,11 @@ pub enum WsResponse {
     Error {
         /// Error message.
         error: String,
+    },
+    /// A wrapped `clarity_wire::WireMessage` streamed during a wire chat.
+    WireMessage {
+        /// The original WireMessage payload.
+        payload: serde_json::Value,
     },
 }
 
@@ -499,6 +514,34 @@ mod tests {
         assert_eq!(json["messages"][0]["role"], "user");
         assert_eq!(json["messages"][0]["content"], "hi");
         assert_eq!(json["messages"][0]["timestamp"], "2024-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_wire_message() {
+        let payload = serde_json::json!({
+            "type": "content_part",
+            "turn_id": "turn-1",
+            "text": "hello"
+        });
+        let resp = WsResponse::WireMessage { payload };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "wire_message");
+        assert_eq!(json["payload"]["type"], "content_part");
+        assert_eq!(json["payload"]["turn_id"], "turn-1");
+        assert_eq!(json["payload"]["text"], "hello");
+    }
+
+    #[test]
+    fn test_ws_response_deserialization_wire_message() {
+        let json = r#"{"type":"wire_message","payload":{"type":"turn_begin","turn_id":"t1","user_input":"hi"}}"#;
+        let resp: WsResponse = serde_json::from_str(json).unwrap();
+        match resp {
+            WsResponse::WireMessage { payload } => {
+                assert_eq!(payload["type"], "turn_begin");
+                assert_eq!(payload["user_input"], "hi");
+            }
+            _ => panic!("expected WireMessage variant"),
+        }
     }
 
     #[tokio::test]

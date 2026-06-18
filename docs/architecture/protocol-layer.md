@@ -238,11 +238,11 @@ pub enum WireMessage {
 
 ---
 
-## 5. Gateway WebSocket 协议扩展
+## 5. Gateway WebSocket 协议
 
-当前 `clarity-gateway::ws` 的 `WsResponse` 只暴露了 5 个变体：`Welcome`、`Chat`、`Pong`、`History`、`Error`。这不足以支撑 Web IDE 的完整功能。
+`clarity-gateway::ws` 的 `WsResponse` 当前包含 6 个变体：`Welcome`、`Chat`、`Pong`、`History`、`Error`、`WireMessage`。当 `WsRequest::Chat { use_wire: true }` 时，所有 streaming `clarity_wire::WireMessage` 统一包装为 `WsResponse::WireMessage { payload }`，不再直接转发原始 WireMessage JSON。
 
-### 5.1 建议的 WsResponse 扩展
+### 5.1 当前 `WsResponse` 定义
 
 ```rust
 // crates/clarity-gateway/src/ws.rs
@@ -250,81 +250,52 @@ pub enum WireMessage {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum WsResponse {
-    // --- 现有变体 ---
     Welcome { session_id: String, message: String },
     Chat { message: String, tool_calls: Option<Vec<ToolCall>> },
     Pong,
     History { messages: Vec<ChatMessage> },
     Error { error: String },
-
-    // --- 新增：WireMessage 透传层 ---
-    WireMessage {
-        /// 原始 WireMessage JSON payload.
-        payload: serde_json::Value,
-    },
-
-    // --- 新增：ViewState 同步 ---
-    ViewState {
-        /// 完整或增量 ViewState JSON.
-        delta: serde_json::Value,
-        /// true = 完整状态替换; false = 增量合并.
-        is_full: bool,
-    },
-
-    // --- 新增：RenderLine 流（替代纯文本 Chunk）---
-    RenderLines {
-        /// 新增/替换的 RenderLine 数组.
-        lines: Vec<serde_json::Value>,
-        /// 目标 message index in the session.
-        message_index: usize,
-        /// true = 最终渲染; false = 增量追加.
-        is_final: bool,
-    },
+    WireMessage { payload: serde_json::Value },
 }
 ```
 
-### 5.2 客户端接入建议（Web IDE）
+### 5.2 已落地 vs 长期规划
+
+| 扩展 | 状态 | 说明 |
+|------|------|------|
+| `WireMessage` envelope | ✅ 已落地 | 所有 streaming 事件统一走 `WsResponse::WireMessage` |
+| `ViewState` 独立同步 | 愿景 | 当前通过 `WireMessage::ViewStateUpdate` 透传，未来需要时再提升为独立 `WsResponse` 变体 |
+| `RenderLines` 流 | 愿景 | v0.4.0+ 考虑将 `RenderLine` 作为独立流变体 |
+
+### 5.3 客户端接入（Web IDE）
+
+TypeScript 类型定义位于 `crates/clarity-gateway/static/types/protocol.ts`。
 
 ```typescript
-// 前端 TypeScript 类型定义（建议放入 web-ide/src/types/protocol.ts）
+import { WsResponse, isWireMessage, WireMessagePayload } from './types/protocol';
 
-interface WsResponse {
-  type: 'welcome' | 'chat' | 'pong' | 'history' | 'error'
-       | 'wire_message' | 'view_state' | 'render_lines';
-}
-
-interface WireMessagePayload {
-  type: 'turn_begin' | 'content_part' | 'draft_event' | 'tool_call' | 'tool_result'
-      | 'turn_end' | 'usage' | 'status_update' | 'compaction_begin' | 'compaction_end'
-      | 'plan_step_begin' | 'plan_step_end' | 'plan_step_skipped'
-      | 'thread_active' | 'thread_list' | 'thread_created' | 'thread_updated';
-  turn_id?: string;
-  // ... variant-specific fields
-}
-
-interface ViewStateDelta {
-  turn?: 'idle' | 'loading' | 'compacting' | 'stopping' | 'restoring';
-  left?: string | null;
-  right?: string | null;
-  modal?: string | null;
-  focus?: { kind: string; value?: string };
-}
-
-// 消息处理器路由
 function handleWsMessage(msg: WsResponse) {
+  if (isWireMessage(msg)) {
+    const wire = msg.payload as WireMessagePayload;
+    dispatchWireMessage(wire);
+    return;
+  }
+
   switch (msg.type) {
-    case 'wire_message':
-      const wire = msg.payload as WireMessagePayload;
-      dispatchWireMessage(wire);   // 映射到 React store
+    case 'welcome':
+      initSession(msg.session_id);
       break;
-    case 'view_state':
-      const delta = msg.delta as ViewStateDelta;
-      updateViewState(delta, msg.is_full);
+    case 'chat':
+      appendAssistantMessage(msg.message, msg.tool_calls);
       break;
-    case 'render_lines':
-      appendRenderLines(msg.message_index, msg.lines, msg.is_final);
+    case 'history':
+      loadHistory(msg.messages);
       break;
-    // ... existing cases
+    case 'error':
+      showError(msg.error);
+      break;
+    case 'pong':
+      break;
   }
 }
 ```

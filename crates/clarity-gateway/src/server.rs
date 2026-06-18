@@ -443,10 +443,15 @@ async fn admin_auth(req: Request<Body>, next: Next) -> Response {
 
 /// 创建 Admin 路由器
 pub fn create_admin_router(state: Arc<AppState>) -> Router {
+    let assets_dir =
+        std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/static/assets"));
+
     Router::new()
         .route("/", get(serve_index))
         .route("/index.html", get(serve_index))
         .route("/chat.html", get(serve_chat))
+        .route("/ws", get(crate::ws::ws_handler))
+        .nest_service("/assets", ServeDir::new(assets_dir))
         .route("/api/stats", get(handlers::admin::admin_stats))
         .route("/api/tools", get(handlers::admin::admin_tools))
         .route("/api/models", get(handlers::admin::admin_models))
