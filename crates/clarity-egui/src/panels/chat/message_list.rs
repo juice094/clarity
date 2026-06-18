@@ -347,23 +347,28 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
             ui.allocate_space(egui::vec2(ui.available_width(), bottom));
         }
 
+        // Always show a transient status message while the agent is working,
+        // even when tool calls are in flight (StepBegin / StatusUpdate).
+        if is_loading && app.chat_store.status_message.is_some() {
+            crate::widgets::status_message::status_message(
+                ui,
+                &theme,
+                app.chat_store.status_message.as_deref().unwrap_or(""),
+            );
+        }
+
         if is_loading
             && session.messages.last().is_none_or(|m| m.role == Role::User)
             && app.chat_store.tool_calls.is_empty()
         {
             // Prefer the new draft indicator when the backend has emitted one.
             // Falls back to the legacy typing indicator so the UI never goes blank.
-            let mut any_indicator = crate::widgets::draft_indicator::draft_indicator(
+            let rendered = crate::widgets::draft_indicator::draft_indicator(
                 ui,
                 &theme,
                 &app.chat_store.draft_status,
             );
-            any_indicator |= crate::widgets::status_message::status_message(
-                ui,
-                &theme,
-                app.chat_store.status_message.as_deref().unwrap_or(""),
-            );
-            if !any_indicator {
+            if !rendered {
                 ui::render::typing_indicator(ui, &theme);
             }
         }

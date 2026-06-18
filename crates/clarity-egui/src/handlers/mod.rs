@@ -47,7 +47,7 @@ pub fn process_events(app: &mut App) {
                 );
             }
             UiEvent::StepBegin { tool_name } => {
-                system::on_step_begin(tool_name);
+                system::on_step_begin(&mut app.chat_store, tool_name);
             }
             UiEvent::CompactionBegin => chat::on_compaction_begin(&mut app.view_state),
             UiEvent::CompactionEnd => chat::on_compaction_end(&mut app.view_state),

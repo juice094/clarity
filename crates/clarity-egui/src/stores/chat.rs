@@ -38,3 +38,27 @@ pub struct ChatStore {
     /// Cursor into `input_history`. None = editing current draft.
     pub input_history_idx: Option<usize>,
 }
+
+impl Default for ChatStore {
+    fn default() -> Self {
+        Self {
+            input: String::new(),
+            attachments: Vec::new(),
+            agent_status: AgentStatus::Online,
+            gateway_status: GatewayStatus::Online,
+            tool_calls: Vec::new(),
+            pending_send: None,
+            last_usage: None,
+            pending_plan: None,
+            plan_tracker: None,
+            stick_to_bottom: true,
+            editing_message_idx: None,
+            edit_buffer: String::new(),
+            last_snapshot: None,
+            draft_status: DraftStatus::None,
+            status_message: None,
+            input_history: Vec::new(),
+            input_history_idx: None,
+        }
+    }
+}
