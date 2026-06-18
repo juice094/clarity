@@ -186,10 +186,10 @@ try {
             minProtocol = 3
             maxProtocol = 3
             client = @{
-                id = "clarity-egui"
+                id = "gateway-client"
                 version = "0.1.0"
                 platform = "windows"
-                mode = "operator"
+                mode = "cli"
             }
             role = "operator"
             scopes = @("operator.read", "operator.write")

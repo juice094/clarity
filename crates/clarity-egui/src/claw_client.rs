@@ -10,7 +10,7 @@
 //! 1. Connect:
 //!    `{"type":"req","id":"1","method":"connect","params":{
 //!       "minProtocol":3,"maxProtocol":3,
-//!       "client":{"id":"clarity-egui","version":"0.1.0","platform":"windows","mode":"operator"},
+//!       "client":{"id":"gateway-client","version":"0.1.0","platform":"windows","mode":"cli"},
 //!       "role":"operator","scopes":["operator.read","operator.write"],
 //!       "auth":{"token":"..."}}}`
 //! 2. The Gateway may emit a routine `connect.challenge` event first; token-only
@@ -182,10 +182,10 @@ async fn run_connection(
             "minProtocol": 3,
             "maxProtocol": 3,
             "client": {
-                "id": "clarity-egui",
+                "id": "gateway-client",
                 "version": "0.1.0",
                 "platform": "windows",
-                "mode": "operator"
+                "mode": "cli"
             },
             "role": "operator",
             "scopes": ["operator.read", "operator.write"],
