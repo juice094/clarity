@@ -134,15 +134,31 @@ function Receive-Json {
     param([int]$TimeoutSeconds = 10)
     $buffer = New-Object byte[] 4096
     $seg = New-Object System.ArraySegment[byte](, $buffer)
-    $recvTask = $client.ReceiveAsync($seg, $ct)
-    if (-not $recvTask.Wait([System.TimeSpan]::FromSeconds($TimeoutSeconds))) {
-        return $null
+    $ms = New-Object System.IO.MemoryStream
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        if ($sw.Elapsed.TotalSeconds -gt $TimeoutSeconds) {
+            $ms.Dispose()
+            return $null
+        }
+        $remaining = [Math]::Max(0, $TimeoutSeconds - $sw.Elapsed.TotalSeconds)
+        $recvTask = $client.ReceiveAsync($seg, $ct)
+        if (-not $recvTask.Wait([System.TimeSpan]::FromSeconds($remaining))) {
+            $ms.Dispose()
+            return $null
+        }
+        $result = $recvTask.Result
+        if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+            $ms.Dispose()
+            return @{ __close = $true }
+        }
+        $ms.Write($buffer, 0, $result.Count)
+        if ($result.EndOfMessage) {
+            break
+        }
     }
-    $result = $recvTask.Result
-    if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
-        return @{ __close = $true }
-    }
-    $text = [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+    $text = [System.Text.Encoding]::UTF8.GetString($ms.ToArray())
+    $ms.Dispose()
     try {
         return $text | ConvertFrom-Json
     } catch {
