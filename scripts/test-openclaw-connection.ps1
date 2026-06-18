@@ -49,11 +49,25 @@ if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
     Write-Info "请先执行: `$env:OPENCLAW_REMOTE_URL=`"ws://<gray-cloud-ip>:18789`""
     exit 1
 }
+
+# 检测占位符
+if ($remoteUrl -match '<[^>]+>') {
+    Write-Fail "OPENCLAW_REMOTE_URL 仍包含占位符 ($remoteUrl)。"
+    Write-Info "请把 <gray-cloud-tailscale-ip> 替换为 Gray-Cloud 真实的 Tailscale IP 或主机名。"
+    exit 1
+}
 Write-Ok "OPENCLAW_REMOTE_URL = $remoteUrl"
 
 if ([string]::IsNullOrWhiteSpace($remoteToken)) {
     Write-Fail "OPENCLAW_REMOTE_TOKEN 未设置。"
     Write-Info "请先执行: `$env:OPENCLAW_REMOTE_TOKEN=`"<your-token>`""
+    exit 1
+}
+
+# 检测 token 占位符
+if ($remoteToken -match '<[^>]+>' -or $remoteToken -eq 'your-token' -or $remoteToken -eq '<token>') {
+    Write-Fail "OPENCLAW_REMOTE_TOKEN 仍包含占位符。"
+    Write-Info "请把 <token> 替换为 Gray-Cloud 上配置的真实 OpenClaw token。"
     exit 1
 }
 Write-Ok "OPENCLAW_REMOTE_TOKEN 已设置 (长度: $($remoteToken.Length))"
@@ -73,9 +87,19 @@ if (-not ($wsUrl -match "^(ws|wss)://")) {
 Write-Info "规范化后的 WebSocket URL: $wsUrl"
 
 # 解析 host/port
-$uri = [System.Uri]$wsUrl
+try {
+    $uri = [System.Uri]$wsUrl
+} catch {
+    Write-Fail "无法解析 URL '$wsUrl'：$($_.Exception.Message)"
+    exit 1
+}
 $hostName = $uri.Host
 $port = $uri.Port
+
+if ([string]::IsNullOrWhiteSpace($hostName)) {
+    Write-Fail "无法从 URL 解析主机名。"
+    exit 1
+}
 
 # ── L1: TCP 可达性 ───────────────────────────────────────────────────────
 Write-Step "L1: TCP 端口可达性探测 ($hostName`:$port)"
