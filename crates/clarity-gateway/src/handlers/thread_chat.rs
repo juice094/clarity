@@ -21,6 +21,7 @@ use tracing::{debug, info, warn};
 use crate::handlers::AgentHandle;
 use crate::handlers::chat::{
     ChatCompletionResponse, Choice, Message as ResponseMessage, Usage, chat_completion_sse_stream,
+    truncate_messages_by_bytes,
 };
 use crate::server::AppState;
 
@@ -173,6 +174,18 @@ pub async fn thread_chat(
         warn!(
             "Gateway thread_chat running with Yolo approval mode — \
              tool calls will execute without user confirmation"
+        );
+    }
+
+    const MAX_BODY_BYTES: usize = 1_500_000;
+    let original_count = messages.len();
+    messages = truncate_messages_by_bytes(messages, MAX_BODY_BYTES);
+    if messages.len() < original_count {
+        warn!(
+            "Truncated thread context from {} to {} messages to fit {} byte budget",
+            original_count,
+            messages.len(),
+            MAX_BODY_BYTES
         );
     }
 

@@ -353,6 +353,20 @@ pub async fn chat_completions(
         });
     }
 
+    // Guard against providers that reject oversized request bodies (e.g. DeepSeek's
+    // 2MB limit). Drop oldest non-system messages while keeping the current query.
+    const MAX_BODY_BYTES: usize = 1_500_000;
+    let original_count = messages.len();
+    messages = truncate_messages_by_bytes(messages, MAX_BODY_BYTES);
+    if messages.len() < original_count {
+        warn!(
+            "Truncated chat context from {} to {} messages to fit {} byte budget",
+            original_count,
+            messages.len(),
+            MAX_BODY_BYTES
+        );
+    }
+
     // Pre-calculate token estimate before messages are moved into the controller.
     let prompt_tokens = messages.iter().map(|m| m.content.len()).sum::<usize>() as u32 / 4;
 
@@ -485,5 +499,97 @@ pub async fn chat_completions(
         };
 
         (StatusCode::OK, Json(response)).into_response()
+    }
+}
+
+/// Truncate message history to fit within a byte budget while preserving the
+/// system prompt and the most recent user/assistant exchanges.
+///
+/// Providers such as DeepSeek reject request bodies larger than ~2MB. This
+/// function drops oldest non-system messages until the total content size is
+/// below `max_bytes`, always keeping the final user message.
+pub fn truncate_messages_by_bytes(
+    messages: Vec<AgentMessage>,
+    max_bytes: usize,
+) -> Vec<AgentMessage> {
+    let total: usize = messages.iter().map(|m| m.content.len()).sum();
+    if total <= max_bytes {
+        return messages;
+    }
+
+    let mut result = Vec::new();
+    let mut start = 0;
+    if !messages.is_empty() && messages[0].role == MessageRole::System {
+        result.push(messages[0].clone());
+        start = 1;
+    }
+
+    let mut kept = messages[start..].to_vec();
+    let budget = max_bytes.saturating_sub(result.iter().map(|m| m.content.len()).sum::<usize>());
+
+    while kept.len() > 1 {
+        let current: usize = kept.iter().map(|m| m.content.len()).sum();
+        if current <= budget {
+            break;
+        }
+        kept.remove(0);
+    }
+
+    result.extend(kept);
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn msg(role: MessageRole, content: &str) -> AgentMessage {
+        AgentMessage {
+            role,
+            content: content.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    #[test]
+    fn no_truncation_when_under_budget() {
+        let messages = vec![
+            msg(MessageRole::System, "sys"),
+            msg(MessageRole::User, "hi"),
+        ];
+        let out = truncate_messages_by_bytes(messages.clone(), 1000);
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn drops_oldest_non_system_messages() {
+        let messages = vec![
+            msg(MessageRole::System, "sys"),
+            msg(MessageRole::User, "first"),
+            msg(MessageRole::Assistant, "second"),
+            msg(MessageRole::User, "last"),
+        ];
+        let out = truncate_messages_by_bytes(messages, 12);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].role, MessageRole::System);
+        assert_eq!(out[1].content, "last");
+    }
+
+    #[test]
+    fn keeps_last_message_even_if_oversized() {
+        let messages = vec![
+            msg(MessageRole::System, "sys"),
+            msg(
+                MessageRole::User,
+                "a very long message that exceeds the budget",
+            ),
+        ];
+        let out = truncate_messages_by_bytes(messages, 5);
+        assert_eq!(out.len(), 2);
+        assert_eq!(
+            out[1].content,
+            "a very long message that exceeds the budget"
+        );
     }
 }
