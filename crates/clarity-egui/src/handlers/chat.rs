@@ -48,6 +48,7 @@ pub fn on_done(app: &mut crate::App) {
     app.chat_store.agent_status = AgentStatus::Online;
     app.chat_store.draft_status = DraftStatus::None;
     app.chat_store.status_message = None;
+    app.chat_store.chunks_since_save = 0;
     app.state.agent.reset();
     // Trigger deferred markdown parse now that streaming is complete.
     if let Some(session) = app.session_store.active_session_mut() {
@@ -107,6 +108,7 @@ pub fn on_chunk(session_store: &mut SessionStore, chat_store: &mut ChatStore, te
     // Real content has arrived — clear any transient draft/status indicator.
     chat_store.draft_status = DraftStatus::None;
     chat_store.status_message = None;
+    chat_store.chunks_since_save += 1;
 
     if let Some(session) = session_store.active_session_mut() {
         if let Some(last) = session.messages.last_mut() {

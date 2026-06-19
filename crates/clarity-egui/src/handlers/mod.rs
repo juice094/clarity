@@ -15,7 +15,14 @@ pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
         match event {
             UiEvent::Chunk(text) => {
-                chat::on_chunk(&mut app.session_store, &mut app.chat_store, text)
+                chat::on_chunk(&mut app.session_store, &mut app.chat_store, text);
+                // Incrementally persist the session during long streams so a
+                // crash before UiEvent::Done does not lose the entire response.
+                const CHUNKS_PER_SAVE: usize = 10;
+                if app.chat_store.chunks_since_save >= CHUNKS_PER_SAVE {
+                    app.save_current_session();
+                    app.chat_store.chunks_since_save = 0;
+                }
             }
             UiEvent::ToolStart {
                 id,

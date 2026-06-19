@@ -122,7 +122,11 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
             .collect(),
     };
     let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+    // Write to a temp file and rename into place so a crash during write does
+    // not leave a half-written session file.
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, content).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 /// Creates a new session.
