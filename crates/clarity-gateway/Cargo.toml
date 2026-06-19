@@ -26,6 +26,7 @@ clarity-channels = { path = "../clarity-channels" }
 clarity-contract = { path = "../clarity-contract" }
 clarity-core = { workspace = true }
 clarity-llm = { path = "../clarity-llm" }
+clarity-mcp = { path = "../clarity-mcp" }
 clarity-memory = { path = "../clarity-memory", features = ["sqlite"] }
 clarity-rollout = { path = "../clarity-rollout" }
 clarity-secrets = { path = "../clarity-secrets" }

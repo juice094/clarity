@@ -1,21 +1,23 @@
 //! MCP-native LLM provider.
 //!
-//! Implements `LlmProvider` by calling an MCP server's `chat_completion` tool.
-//! This allows any MCP-compliant LLM server (including the mesh server example)
-//! to be used as a backend for the Clarity Agent.
+//! Implements `clarity_contract::llm::LlmProvider` by calling an MCP server's
+//! `chat_completion` tool. This allows any MCP-compliant LLM server (including
+//! the mesh server example) to be used as a backend for the Clarity Agent.
 
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 
-use crate::{LlmProvider, LlmResponse, ProviderCapabilities, StreamDelta};
-use clarity_contract::{AgentError, Message};
-use clarity_mcp::McpClient;
+use crate::{McpClient, McpClientBuilder, McpClientInstance, ToolContent};
+use clarity_contract::{
+    AgentError, Message, StreamDelta,
+    llm::{LlmProvider, LlmResponse, ProviderCapabilities},
+};
 
 /// LLM provider backed by an MCP server.
 pub struct McpLlmProvider {
-    client: Arc<tokio::sync::Mutex<clarity_mcp::McpClientInstance>>,
+    client: Arc<tokio::sync::Mutex<McpClientInstance>>,
     tool_name: String,
 }
 
@@ -25,7 +27,7 @@ impl McpLlmProvider {
     /// `command` is the executable path (e.g. `cargo` or a compiled binary).
     /// `args` are passed to the command (e.g. `["run", "--example", "mcp_llm_stdio_server"]`).
     pub async fn connect_stdio(command: &str, args: &[String]) -> Result<Self, AgentError> {
-        let mut builder = clarity_mcp::McpClientBuilder::stdio("llm-mcp", command);
+        let mut builder = McpClientBuilder::stdio("llm-mcp", command);
         for arg in args {
             builder = builder.arg(arg);
         }
@@ -65,7 +67,7 @@ impl LlmProvider for McpLlmProvider {
             .content
             .iter()
             .filter_map(|c| match c {
-                clarity_mcp::ToolContent::Text { text } => Some(text.clone()),
+                ToolContent::Text { text } => Some(text.clone()),
                 _ => None,
             })
             .collect::<Vec<_>>()

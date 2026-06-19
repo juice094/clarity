@@ -123,7 +123,7 @@ async fn create_agent() -> anyhow::Result<Arc<Agent>> {
     // 创建工具注册表
     let registry = ToolRegistry::with_builtin_tools();
 
-    // 配置 Agent（window 入口：方法论驱动，或被 Gray workspace 覆盖）
+    // 配置 Agent（window 入口：方法论驱动，或被外部 agent workspace 覆盖）
     let window_context = r#"# Methodology
 You are a methodological query assistant. When answering:
 1. Clarify the scope of the question first
@@ -136,8 +136,8 @@ You are a methodological query assistant. When answering:
         .with_read_only(false)
         .with_entry_context(window_context);
 
-    // 如果存在 Gray workspace，加载其 agent.yaml 作为人格/记忆入口
-    let gray_workspace = std::env::var("GRAY_WORKSPACE")
+    // 如果存在外部 agent workspace，加载其 agent.yaml 作为人格/记忆入口
+    let agent_workspace = std::env::var("CLARITY_AGENT_WORKSPACE")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             dirs::home_dir()
@@ -146,32 +146,29 @@ You are a methodological query assistant. When answering:
                 .join("workspace")
         });
 
-    if gray_workspace.join("agent.yaml").exists() {
-        match clarity_core::agent::definition::load_agent_definition(&gray_workspace) {
+    if agent_workspace.join("agent.yaml").exists() {
+        match clarity_core::agent::definition::load_agent_definition(&agent_workspace) {
             Ok(def) => {
-                info!(
-                    "Loaded Gray agent definition from {}",
-                    gray_workspace.display()
-                );
+                info!("Loaded agent definition from {}", agent_workspace.display());
                 if let Err(e) = clarity_core::agent::definition::apply_to_config(&def, &mut config)
                 {
-                    warn!("Failed to apply Gray agent definition: {}", e);
+                    warn!("Failed to apply agent definition: {}", e);
                 }
-                // Gray 工作区内的相对路径（SOUL.md / MEMORY.md 等）应以工作区为基准
-                config = config.with_working_dir(&gray_workspace);
+                // Workspace 内的相对路径（SOUL.md / MEMORY.md 等）应以工作区为基准
+                config = config.with_working_dir(&agent_workspace);
             }
             Err(e) => {
-                warn!("Gray workspace agent.yaml found but failed to load: {}", e);
+                warn!("Agent workspace agent.yaml found but failed to load: {}", e);
             }
         }
     } else {
         info!(
-            "No Gray workspace agent.yaml found at {}, using default methodology",
-            gray_workspace.display()
+            "No agent workspace agent.yaml found at {}, using default methodology",
+            agent_workspace.display()
         );
     }
 
-    // 使用加密 registry 中的 active alias 作为 model_alias，覆盖 Gray agent.yaml 中的默认值，
+    // 使用加密 registry 中的 active alias 作为 model_alias，覆盖 agent.yaml 中的默认值，
     // 确保 Agent 实际调用的模型与当前选中的 LLM provider 一致。
     if let Some(alias) = clarity_gateway::handlers::config::load_active_alias().await
         && !alias.is_empty()
@@ -327,7 +324,7 @@ async fn load_llm_mcp() -> Option<Arc<dyn clarity_llm::api::LlmProvider>> {
         .collect::<Vec<_>>();
 
     info!("Attempting MCP LLM connection: {} {:?}", command, args);
-    match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&command, &args).await {
+    match clarity_mcp::McpLlmProvider::connect_stdio(&command, &args).await {
         Ok(provider) => {
             info!("MCP LLM provider connected successfully");
             Some(Arc::new(provider))
@@ -586,44 +583,44 @@ mod tests {
 
     #[tokio::test]
     #[allow(clippy::await_holding_lock)]
-    async fn test_gray_workspace_loaded() {
-        // Create a self-contained Gray workspace so the test does not depend on
+    async fn test_agent_workspace_loaded() {
+        // Create a self-contained agent workspace so the test does not depend on
         // the user's home directory.
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let workspace = tmp.path();
         let agent_yaml = r#"
 version: 1
 agent:
-  name: "gray"
+  name: "test-agent"
   system_prompt_path: "system.md"
 "#;
         std::fs::write(workspace.join("agent.yaml"), agent_yaml)
             .expect("failed to write agent.yaml");
-        std::fs::write(workspace.join("system.md"), "You are Gray (格雷).")
+        std::fs::write(workspace.join("system.md"), "You are a test assistant.")
             .expect("failed to write system.md");
 
         // The environment variable is read by create_agent(). Serialize this
         // test with other tests that call create_agent() to avoid races.
-        let _guard = GRAY_WORKSPACE_LOCK.lock().await;
+        let _guard = AGENT_WORKSPACE_LOCK.lock().await;
         // SAFETY: test-only mutation of an environment variable that is not
         // read by any other concurrently-running test while the lock is held.
         unsafe {
-            std::env::set_var("GRAY_WORKSPACE", workspace.as_os_str());
+            std::env::set_var("CLARITY_AGENT_WORKSPACE", workspace.as_os_str());
         }
         let agent = create_agent().await.expect("agent should be created");
         // SAFETY: paired with the set_var above; restores the prior state.
         unsafe {
-            std::env::remove_var("GRAY_WORKSPACE");
+            std::env::remove_var("CLARITY_AGENT_WORKSPACE");
         }
         drop(_guard);
 
         let config = agent.config();
-        assert_eq!(config.name.as_deref(), Some("gray"));
+        assert_eq!(config.name.as_deref(), Some("test-agent"));
         assert!(
-            config.system_prompt.contains("格雷") || config.system_prompt.contains("Gray"),
-            "Gray system prompt should be loaded from workspace"
+            config.system_prompt.contains("test assistant"),
+            "Test system prompt should be loaded from workspace"
         );
     }
 
-    static GRAY_WORKSPACE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    static AGENT_WORKSPACE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 }

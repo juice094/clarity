@@ -55,6 +55,8 @@ pub mod config;
 pub mod devkit;
 /// Enhanced MCP client with multiple transports.
 pub mod enhanced;
+/// LLM provider backed by an MCP server.
+pub mod llm_provider;
 /// Minimal MCP server infrastructure.
 pub mod server;
 
@@ -74,6 +76,9 @@ pub use server::{McpServer, StdioMcpServer};
 
 // Re-export from devkit module
 pub use devkit::{DevkitAsset, DevkitProjectContextResult, DevkitRepo, DevkitVaultNote};
+
+// Re-export LLM provider backed by MCP.
+pub use llm_provider::McpLlmProvider;
 
 // =============================================================================
 // Legacy Types (for backward compatibility)

@@ -199,7 +199,7 @@ pub(crate) async fn admin_switch_provider(
         let cmd = cmd.to_string();
         let args = req.args.unwrap_or_default();
         info!("MCP LLM switch: command={}, args={:?}", cmd, args);
-        match clarity_llm::mcp_llm_provider::McpLlmProvider::connect_stdio(&cmd, &args).await {
+        match clarity_mcp::McpLlmProvider::connect_stdio(&cmd, &args).await {
             Ok(provider) => {
                 state.set_llm(Arc::new(provider));
                 state.set_provider_label(format!("mcp:{}", cmd));
