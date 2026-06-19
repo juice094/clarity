@@ -256,9 +256,9 @@ try {
     }
 
     # ── L3: Optional send probe ─────────────────────────────────────────────
-    # Some Gateways reject sessions.send with method-not-implemented or a
-    # schema error. This probe sends a harmless test message and prints the
-    # raw response to aid debugging.
+    # Some Gateways acknowledge sessions.send with an empty res and then push
+    # the actual reply as session.message / chat events. This probe sends a
+    # harmless test message and drains events for a few seconds.
     $probe = $env:OPENCLAW_SEND_PROBE
     if (-not [string]::IsNullOrWhiteSpace($probe)) {
         Write-Step "L3: 发送测试消息探测 (sessions.send)"
@@ -276,11 +276,47 @@ try {
         $client.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait()
         Write-Info "已发送: $sendReq"
 
-        $sendResp = Receive-Json -TimeoutSeconds 15
-        if ($null -eq $sendResp) {
-            Write-Fail "等待 send 响应超时。"
-        } else {
-            Write-Info "收到 send 响应: $($sendResp | ConvertTo-Json -Depth 5 -Compress)"
+        $deadline = [DateTime]::UtcNow.AddSeconds(15)
+        $gotContent = $false
+        while ([DateTime]::UtcNow -lt $deadline) {
+            $remaining = [Math]::Max(1, ($deadline - [DateTime]::UtcNow).TotalSeconds)
+            $sendResp = Receive-Json -TimeoutSeconds ([int]$remaining)
+            if ($null -eq $sendResp) {
+                break
+            }
+            if ($sendResp.__close) {
+                Write-Fail "Gateway 在 send 阶段关闭了连接。"
+                break
+            }
+            if ($sendResp.__raw) {
+                Write-Info "收到非 JSON: $($sendResp.__raw)"
+                continue
+            }
+
+            $msgType = $sendResp.type
+            $event = $sendResp.event
+            Write-Info "收到消息 ($msgType/$event): $($sendResp | ConvertTo-Json -Depth 3 -Compress)"
+
+            if ($msgType -eq "evt" -and ($event -eq "session.message" -or $event -eq "chat")) {
+                $gotContent = $true
+                $payload = $sendResp.payload
+                $content = $null
+                if ($payload.content) { $content = $payload.content }
+                elseif ($payload.message -and $payload.message.content) { $content = $payload.message.content }
+                elseif ($payload.text) { $content = $payload.text }
+                if (-not [string]::IsNullOrWhiteSpace($content)) {
+                    Write-Ok "收到 OpenClaw 回复: $content"
+                }
+            } elseif ($msgType -eq "res" -and $sendResp.id -eq "2") {
+                if ($sendResp.ok -eq $false) {
+                    Write-Fail "sessions.send 返回失败: $($sendResp | ConvertTo-Json -Depth 3 -Compress)"
+                    break
+                }
+                # ok=true with no content is normal; keep waiting for events.
+            }
+        }
+        if (-not $gotContent) {
+            Write-Info "15 秒内未收到 session.message/chat 事件。可能回复延迟或格式不同。"
         }
     }
 

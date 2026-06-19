@@ -999,6 +999,22 @@ impl eframe::App for App {
                                 let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(msg));
                             }
                         }
+                        crate::claw_client::ClawResponse::SessionMessage {
+                            role,
+                            content,
+                            finished,
+                        } => {
+                            let text = content.trim();
+                            if role == "user" {
+                                // User messages are already rendered optimistically
+                                // when send() was called; ignore echo events.
+                            } else if !text.is_empty() {
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(content));
+                            }
+                            if finished {
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                            }
+                        }
                         crate::claw_client::ClawResponse::Event {
                             event_type,
                             payload,

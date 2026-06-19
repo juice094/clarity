@@ -59,6 +59,13 @@ pub enum ClawResponse {
         event_type: String,
         payload: serde_json::Value,
     },
+    /// A message belonging to the active session (from `session.message` or
+    /// `chat` events). These should be rendered in the main chat stream.
+    SessionMessage {
+        role: String,
+        content: String,
+        finished: bool,
+    },
     /// Connection or authentication error.
     Error(String),
     /// Session message history loaded.
@@ -346,10 +353,27 @@ async fn run_connection(
                                     }
                                 }
                                 "evt" => {
-                                    let _ = resp_tx.send(ClawResponse::Event {
-                                        event_type: val["event"].as_str().unwrap_or("").into(),
-                                        payload: val.get("payload").cloned().unwrap_or_default(),
-                                    });
+                                    let event_type = val["event"].as_str().unwrap_or("").to_string();
+                                    let payload = val.get("payload").cloned().unwrap_or_default();
+
+                                    // Session messages and chat events carry actual
+                                    // assistant/user content for the main chat stream.
+                                    if event_type == "session.message" || event_type == "chat" {
+                                        if let Some((role, content, finished)) =
+                                            extract_session_message(&payload)
+                                        {
+                                            let _ = resp_tx.send(ClawResponse::SessionMessage {
+                                                role,
+                                                content,
+                                                finished,
+                                            });
+                                        }
+                                    } else {
+                                        let _ = resp_tx.send(ClawResponse::Event {
+                                            event_type,
+                                            payload,
+                                        });
+                                    }
                                 }
                                 _ => {
                                     tracing::debug!(?val, "Unexpected Gateway message");
@@ -397,6 +421,47 @@ fn extract_messages(payload: &serde_json::Value) -> Option<Vec<GatewayMessage>> 
     // Try data array.
     if let Some(items) = payload.get("data").and_then(|v| v.as_array()) {
         return Some(parse_message_list(items));
+    }
+    None
+}
+
+/// Extract a single session/chat message from an event payload.
+///
+/// Returns `(role, content, finished)`. The `finished` flag is true when the
+/// event signals the end of a streaming turn (e.g. `done: true`).
+fn extract_session_message(payload: &serde_json::Value) -> Option<(String, String, bool)> {
+    // Direct role/content object.
+    if let (Some(role), Some(content)) = (
+        payload.get("role").and_then(|v| v.as_str()),
+        payload.get("content").and_then(|v| v.as_str()),
+    ) {
+        return Some((role.into(), content.into(), false));
+    }
+    // Nested message object.
+    if let Some(msg) = payload.get("message").or_else(|| payload.get("delta")) {
+        if let (Some(role), Some(content)) = (
+            msg.get("role").and_then(|v| v.as_str()),
+            msg.get("content").and_then(|v| v.as_str()),
+        ) {
+            return Some((role.into(), content.into(), false));
+        }
+        if let Some(text) = msg.get("text").and_then(|v| v.as_str()) {
+            return Some(("assistant".into(), text.into(), false));
+        }
+    }
+    // Plain text / answer fields without role.
+    for key in ["text", "answer", "output", "message"] {
+        if let Some(text) = payload.get(key).and_then(|v| v.as_str()) {
+            return Some(("assistant".into(), text.into(), false));
+        }
+    }
+    // Done marker.
+    if payload
+        .get("done")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return Some(("assistant".into(), String::new(), true));
     }
     None
 }
