@@ -34,6 +34,13 @@ raw-window-handle = "0.6"
 rfd = "0.15"
 tray-icon = "0.24.1"
 
+# OpenClaw device pairing (Ed25519 challenge signing + device id hashing).
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+rand = "0.8"
+hex = "0.4"
+base64 = "0.22"
+
 # Internal crates
 clarity-core = { path = "../clarity-core" }
 clarity-contract = { path = "../clarity-contract" }

@@ -16,13 +16,31 @@
 //!       "auth":{"token":"..."}}}`
 //! 2. The Gateway may emit a routine `connect.challenge` event first; token-only
 //!    clients ignore it and proceed with the authenticated connect request.
+//!    Device-paired clients sign the challenge nonce with their Ed25519 key and
+//!    include a `device` block in the connect request.
 //! 3. Send:   `{"type":"req","id":"uuid","method":"sessions.send","params":{"sessionKey":"agent:main:main","message":"..."}}`
 //! 4. Reply:  `{"type":"res","id":"uuid","ok":true,"payload":{...}}` or
 //!    `{"type":"event","event":"hello-ok","payload":{...}}`
 
+use crate::claw_device::DeviceIdentity;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+
+/// Authentication mode for an OpenClaw connection.
+#[derive(Clone)]
+pub enum ClawAuth {
+    /// Plain token authentication (used by Gray-Cloud and unpaired local
+    /// Gateways that do not enforce device scopes).
+    TokenOnly { token: String },
+    /// Device-paired authentication. The device token authorizes the session;
+    /// the Ed25519 private key is used to sign the connect challenge.
+    #[allow(dead_code)] // Wired in main.rs once device-token config is exposed.
+    DevicePaired {
+        device: Box<DeviceIdentity>,
+        device_token: String,
+    },
+}
 
 /// A command queued from the UI thread to the WebSocket thread.
 #[derive(Debug)]
@@ -34,6 +52,18 @@ pub enum ClawCommand {
     },
     /// Fetch message history for a session.
     FetchHistory { session_key: String },
+    /// Request pairing for a new device. Used when the Gateway enforces
+    /// device scopes (e.g. local KimiClaw).
+    #[allow(dead_code)] // Pairing UI will send this once device pairing UX lands.
+    RequestPairing {
+        device_id: String,
+        public_key: String,
+        client_id: String,
+        client_mode: String,
+        platform: String,
+        role: String,
+        scopes: Vec<String>,
+    },
     /// Send raw JSON-RPC request (for future extensibility).
     #[allow(dead_code)]
     RawRequest {
@@ -67,6 +97,13 @@ pub enum ClawResponse {
         content: String,
         finished: bool,
     },
+    /// Device pairing result (approval or pending status).
+    PairingResult {
+        device_id: String,
+        approved: bool,
+        token: Option<String>,
+        scopes: Vec<String>,
+    },
     /// Connection or authentication error.
     Error(String),
     /// Session message history loaded.
@@ -95,17 +132,31 @@ pub struct ClawClient {
 }
 
 impl ClawClient {
-    /// Start the WebSocket connection in a background thread.
-    ///
-    /// Returns a `ClawClient` handle immediately. The connection
-    /// handshake runs asynchronously; `Connected` or `Error` will
-    /// arrive on the response channel when it completes.
+    /// Start a token-only WebSocket connection in a background thread.
     pub fn connect(gateway_url: &str, token: &str) -> Self {
+        Self::connect_with_auth(
+            gateway_url,
+            ClawAuth::TokenOnly {
+                token: token.into(),
+            },
+        )
+    }
+
+    /// Start a device-paired WebSocket connection in a background thread.
+    #[allow(dead_code)] // Used once device-token config is exposed in the UI.
+    pub fn connect_with_device(
+        gateway_url: &str,
+        device: DeviceIdentity,
+        device_token: &str,
+    ) -> Self {
+        Self::connect_with_auth(gateway_url, Self::device_auth(device, device_token.into()))
+    }
+
+    fn connect_with_auth(gateway_url: &str, auth: ClawAuth) -> Self {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<ClawCommand>();
         let (resp_tx, resp_rx) = std::sync::mpsc::channel::<ClawResponse>();
 
         let gw = gateway_url.to_string();
-        let tok = token.to_string();
         let resp = resp_tx.clone();
 
         std::thread::spawn(move || {
@@ -116,12 +167,20 @@ impl ClawClient {
                     return;
                 }
             };
-            rt.block_on(run_connection(&gw, &tok, cmd_rx, resp));
+            rt.block_on(run_connection(&gw, auth, cmd_rx, resp));
         });
 
         Self {
             tx: cmd_tx,
             rx: Arc::new(parking_lot::Mutex::new(resp_rx)),
+        }
+    }
+
+    /// Box a device identity for the [`ClawAuth::DevicePaired`] variant.
+    fn device_auth(device: DeviceIdentity, device_token: String) -> ClawAuth {
+        ClawAuth::DevicePaired {
+            device: Box::new(device),
+            device_token,
         }
     }
 
@@ -137,6 +196,31 @@ impl ClawClient {
     pub fn fetch_history(&self, session_key: &str) {
         let _ = self.tx.send(ClawCommand::FetchHistory {
             session_key: session_key.into(),
+        });
+    }
+
+    /// Request pairing for this device. Should be sent over the temporary
+    /// gateway-token connection before switching to device-token auth.
+    #[allow(dead_code)] // Used once the pairing UI is wired.
+    #[allow(clippy::too_many_arguments)] // Mirrors the OpenClaw protocol fields.
+    pub fn request_pairing(
+        &self,
+        device_id: &str,
+        public_key: &str,
+        client_id: &str,
+        client_mode: &str,
+        platform: &str,
+        role: &str,
+        scopes: &[String],
+    ) {
+        let _ = self.tx.send(ClawCommand::RequestPairing {
+            device_id: device_id.into(),
+            public_key: public_key.into(),
+            client_id: client_id.into(),
+            client_mode: client_mode.into(),
+            platform: platform.into(),
+            role: role.into(),
+            scopes: scopes.to_vec(),
         });
     }
 
@@ -161,7 +245,7 @@ impl ClawClient {
 
 async fn run_connection(
     gateway_url: &str,
-    token: &str,
+    auth: ClawAuth,
     cmd_rx: Receiver<ClawCommand>,
     resp_tx: Sender<ClawResponse>,
 ) {
@@ -182,30 +266,52 @@ async fn run_connection(
     let (mut write, mut read) = ws_stream.split();
 
     // ── Step 1: Authenticate ──────────────────────────────────────
+    let (token, device_block) = match &auth {
+        ClawAuth::TokenOnly { token } => (token.clone(), None),
+        ClawAuth::DevicePaired {
+            device,
+            device_token,
+        } => (
+            device_token.clone(),
+            Some(serde_json::json!({
+                "id": device.device_id(),
+                "publicKey": device.public_key()
+            })),
+        ),
+    };
+
+    let mut connect_params = serde_json::json!({
+        "minProtocol": 3,
+        "maxProtocol": 3,
+        "client": {
+            "id": "gateway-client",
+            "version": "0.1.0",
+            "platform": "windows",
+            "mode": "cli"
+        },
+        "role": "operator",
+        "scopes": [
+            "operator.admin",
+            "operator.read",
+            "operator.write",
+            "operator.approvals",
+            "operator.pairing",
+            "operator.talk.secrets"
+        ],
+        "auth": { "token": token }
+    });
+
+    if let Some(device) = device_block {
+        if let Some(obj) = connect_params.as_object_mut() {
+            obj.insert("device".to_string(), device);
+        }
+    }
+
     let connect_req = serde_json::json!({
         "type": "req",
         "id": "1",
         "method": "connect",
-        "params": {
-            "minProtocol": 3,
-            "maxProtocol": 3,
-            "client": {
-                "id": "gateway-client",
-                "version": "0.1.0",
-                "platform": "windows",
-                "mode": "cli"
-            },
-            "role": "operator",
-            "scopes": [
-                "operator.admin",
-                "operator.read",
-                "operator.write",
-                "operator.approvals",
-                "operator.pairing",
-                "operator.talk.secrets"
-            ],
-            "auth": { "token": token }
-        }
+        "params": connect_params
     });
 
     if let Err(e) = write.send(Message::Text(connect_req.to_string())).await {
@@ -213,20 +319,60 @@ async fn run_connection(
         return;
     }
 
-    // Wait for auth response. The Gateway emits a routine connect.challenge
-    // event on every connection; token-only clients ignore it.
+    // Wait for auth response. The Gateway may emit a `connect.challenge`
+    // event before the final hello-ok/ok response. Device-paired clients
+    // must sign the nonce; token-only clients ignore it.
+    let mut challenge_answered = false;
     let auth_ok = loop {
         match tokio::time::timeout(Duration::from_secs(10), read.next()).await {
             Ok(Some(Ok(Message::Text(text)))) => {
                 if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
                     let msg_type = resp.get("type").and_then(|v| v.as_str()).unwrap_or("");
                     let event = resp.get("event").and_then(|v| v.as_str()).unwrap_or("");
+
                     if msg_type == "event" && event == "connect.challenge" {
-                        tracing::debug!("Ignoring routine OpenClaw connect.challenge");
+                        if let ClawAuth::DevicePaired { device, .. } = &auth {
+                            if let Some(nonce) = resp
+                                .get("payload")
+                                .and_then(|p| p.get("nonce"))
+                                .and_then(|v| v.as_str())
+                            {
+                                let signature = device.sign_nonce(nonce);
+                                let challenge_req = serde_json::json!({
+                                    "type": "req",
+                                    "id": "2",
+                                    "method": "connect.challenge",
+                                    "params": {
+                                        "nonce": nonce,
+                                        "signature": signature
+                                    }
+                                });
+                                if let Err(e) =
+                                    write.send(Message::Text(challenge_req.to_string())).await
+                                {
+                                    let _ = resp_tx.send(ClawResponse::Error(format!(
+                                        "send challenge: {}",
+                                        e
+                                    )));
+                                    return;
+                                }
+                                challenge_answered = true;
+                            }
+                        } else {
+                            tracing::debug!("Ignoring routine OpenClaw connect.challenge");
+                        }
                         continue;
                     }
+
                     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
                         || (msg_type == "event" && event == "hello-ok");
+
+                    // For device-paired auth, if we already answered a
+                    // challenge, require a positive ok/hello-ok before
+                    // declaring success.
+                    if matches!(auth, ClawAuth::DevicePaired { .. }) && challenge_answered && !ok {
+                        continue;
+                    }
                     break ok;
                 }
                 break false;
@@ -315,6 +461,36 @@ async fn run_connection(
                             break;
                         }
                     }
+                    Some(ClawCommand::RequestPairing {
+                        device_id,
+                        public_key,
+                        client_id,
+                        client_mode,
+                        platform,
+                        role,
+                        scopes,
+                    }) => {
+                        req_id += 1;
+                        let id = req_id.to_string();
+                        let req = serde_json::json!({
+                            "type": "req",
+                            "id": &id,
+                            "method": "device.pair.request",
+                            "params": {
+                                "deviceId": &device_id,
+                                "publicKey": &public_key,
+                                "clientId": &client_id,
+                                "clientMode": &client_mode,
+                                "platform": &platform,
+                                "role": &role,
+                                "scopes": &scopes
+                            }
+                        });
+                        if let Err(e) = write.send(Message::Text(req.to_string())).await {
+                            let _ = resp_tx.send(ClawResponse::Error(format!("send pairing: {}", e)));
+                            break;
+                        }
+                    }
                     Some(ClawCommand::RawRequest { method, params }) => {
                         req_id += 1;
                         let id = req_id.to_string();
@@ -352,6 +528,8 @@ async fn run_connection(
                                             session_key: String::new(),
                                             messages: msgs,
                                         });
+                                    } else if let Some(pairing) = extract_pairing_result(&payload) {
+                                        let _ = resp_tx.send(pairing);
                                     } else {
                                         let _ = resp_tx.send(ClawResponse::Reply {
                                             id: val["id"].as_str().unwrap_or("").into(),
@@ -360,7 +538,7 @@ async fn run_connection(
                                         });
                                     }
                                 }
-                                "evt" => {
+                                "event" | "evt" => {
                                     let event_type = val["event"].as_str().unwrap_or("").to_string();
                                     let payload = val.get("payload").cloned().unwrap_or_default();
 
@@ -375,6 +553,12 @@ async fn run_connection(
                                                 content,
                                                 finished,
                                             });
+                                        }
+                                    } else if event_type == "device.pair.resolved"
+                                        || event_type == "device.pair.requested"
+                                    {
+                                        if let Some(pairing) = extract_pairing_result(&payload) {
+                                            let _ = resp_tx.send(pairing);
                                         }
                                     } else {
                                         let _ = resp_tx.send(ClawResponse::Event {
@@ -472,6 +656,42 @@ fn extract_session_message(payload: &serde_json::Value) -> Option<(String, Strin
         return Some(("assistant".into(), String::new(), true));
     }
     None
+}
+
+/// Try to extract a device pairing result from a Gateway payload.
+///
+/// Handles both the `device.pair.request` response and the
+/// `device.pair.resolved` / `device.pair.requested` event payloads.
+fn extract_pairing_result(payload: &serde_json::Value) -> Option<ClawResponse> {
+    let device_id = payload
+        .get("deviceId")
+        .or_else(|| payload.get("device_id"))
+        .and_then(|v| v.as_str())?
+        .to_string();
+    let approved = payload
+        .get("approved")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let token = payload
+        .get("token")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let scopes = payload
+        .get("scopes")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(ClawResponse::PairingResult {
+        device_id,
+        approved,
+        token,
+        scopes,
+    })
 }
 
 fn parse_message_list(items: &[serde_json::Value]) -> Vec<GatewayMessage> {

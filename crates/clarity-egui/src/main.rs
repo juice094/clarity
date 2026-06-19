@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 mod app_state;
 pub(crate) mod claw;
 pub(crate) mod claw_client;
+pub(crate) mod claw_device;
 mod components;
 mod design_system;
 mod error;
@@ -1028,6 +1029,38 @@ impl eframe::App for App {
                                 if !text.trim().is_empty() {
                                     let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
                                 }
+                            }
+                        }
+                        crate::claw_client::ClawResponse::PairingResult {
+                            device_id,
+                            approved,
+                            token,
+                            scopes,
+                        } => {
+                            if approved {
+                                self.push_toast(
+                                    format!(
+                                        "Claw device {} paired (scopes: {})",
+                                        &device_id[..device_id.len().min(8)],
+                                        scopes.join(",")
+                                    ),
+                                    crate::ui::types::ToastLevel::Info,
+                                );
+                                tracing::info!(
+                                    device_id = %device_id,
+                                    ?token,
+                                    ?scopes,
+                                    "OpenClaw pairing approved"
+                                );
+                            } else {
+                                self.push_toast(
+                                    format!(
+                                        "Claw device {} pairing pending approval",
+                                        &device_id[..device_id.len().min(8)]
+                                    ),
+                                    crate::ui::types::ToastLevel::Info,
+                                );
+                                tracing::info!(device_id = %device_id, "OpenClaw pairing pending");
                             }
                         }
                         crate::claw_client::ClawResponse::Error(e) => {
