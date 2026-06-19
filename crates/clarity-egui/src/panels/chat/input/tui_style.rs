@@ -33,7 +33,12 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             ui.set_min_width(ui.available_width());
             let hint = composer_hint(app);
             let prev_input = app.chat_store.input.clone();
+            let input_id = egui::Id::new(format!(
+                "composer_input_{}",
+                app.session_store.active_session_id
+            ));
             let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
+                .id(input_id)
                 .hint_text(hint)
                 .margin(egui::vec2(0.0, 0.0))
                 .frame(false);
@@ -123,7 +128,12 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         // Compact single-line baseline; expands smoothly with Shift+Enter.
         let input_height = (line_count as f32 * 20.0 + 10.0).clamp(24.0, 100.0);
 
+        let input_id = egui::Id::new(format!(
+            "composer_input_{}",
+            app.session_store.active_session_id
+        ));
         let text_edit = egui::TextEdit::multiline(&mut app.chat_store.input)
+            .id(input_id)
             .desired_rows(line_count.max(1))
             .hint_text(hint)
             .margin(egui::vec2(0.0, 1.0))

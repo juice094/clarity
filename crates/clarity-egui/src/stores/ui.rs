@@ -48,6 +48,10 @@ pub struct UiStore {
     pub bot_instances: Vec<BotInstance>,
     /// OpenClaw: currently active bot instance id.
     pub active_bot_id: String,
+    /// Tracks the active session id from the previous frame to detect switches.
+    pub last_active_session_id: String,
+    /// Set when a session switch or other state change requires an immediate repaint.
+    pub request_repaint: bool,
     /// Claw Gateway: session history lines loaded from the Gateway.
     pub claw_history: Vec<String>,
     /// Pretext PoC: whether the text-measurement probe window is open.

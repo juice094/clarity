@@ -1485,6 +1485,23 @@ impl eframe::App for App {
 
         self.process_events();
 
+        // Detect session switches and reset chat-local transient state so the
+        // new session's message list / input / scroll are rendered fresh.
+        let active_id = self.session_store.active_session_id.clone();
+        if self.ui_store.last_active_session_id != active_id {
+            self.ui_store.last_active_session_id = active_id;
+            self.ui_store.last_scroll_offset = 0.0;
+            self.chat_store.stick_to_bottom = true;
+            self.chat_store.editing_message_idx = None;
+            self.chat_store.edit_buffer.clear();
+            self.ui_store.focus_input_requested = true;
+            ctx.request_repaint();
+        }
+        if self.ui_store.request_repaint {
+            self.ui_store.request_repaint = false;
+            ctx.request_repaint();
+        }
+
         // Sync the layout debug overlay toggle from ViewState to egui memory.
         crate::ui::debug_overlay::sync_enabled(ctx, self.view_state.debug_layout_overlay);
 

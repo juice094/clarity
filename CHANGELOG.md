@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增 `KnowledgeStore` 单元测试；补充 Knowledge/Claw 相关中文 i18n 键。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1258 passed / 0 failed / 8 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（210 passed / 0 failed / 2 ignored）、`cargo test --workspace --doc --exclude clarity-slint` ✅（33 passed / 0 failed / 3 ignored）、`cargo test -p clarity-integration-tests --lib` ✅（26 passed / 0 failed / 0 ignored）。
 
+### Fixed
+
+- **会话切换 widget ID 冲突与状态残留（2026-06-19）**
+  - `chat/mod.rs`：ScrollArea `id_salt` 改为 `chat_scroll_{session_id}`，避免不同会话滚动状态复用。
+  - `chat/mod.rs`：消息列表渲染外层增加 `ui.push_id(&active_session_id)`，隔离消息气泡/按钮/菜单的 widget ID。
+  - `chat/input/tui_style.rs`：输入框 `TextEdit` 增加会话相关 `id`，切换会话后光标、选区、undo 状态不再残留。
+  - `main.rs` / `stores/ui.rs` / `app_logic.rs`：检测 `active_session_id` 变化，自动重置滚动偏移、清除编辑态、请求输入框聚焦并调用 `ctx.request_repaint()`。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

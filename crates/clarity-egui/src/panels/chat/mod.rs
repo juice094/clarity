@@ -22,24 +22,27 @@ fn is_empty_state(app: &crate::App) -> bool {
 /// Render the message list inside a content column of width `max_w` that is
 /// horizontally centered within the parent area.
 fn render_message_list_centered(app: &mut App, ui: &mut egui::Ui, max_w: f32) {
-    let inner_rect = ui.available_rect_before_wrap();
-    let inner_w = inner_rect.width();
-    let x_offset = (inner_w - max_w).max(0.0) / 2.0;
-    let content_rect = egui::Rect::from_min_size(
-        egui::pos2(inner_rect.min.x + x_offset, inner_rect.min.y),
-        egui::vec2(max_w.min(inner_w), inner_rect.height()),
-    );
-    ui.allocate_new_ui(
-        egui::UiBuilder::new()
-            .max_rect(content_rect)
-            .layout(egui::Layout::top_down(egui::Align::LEFT)),
-        |ui| {
-            if crate::ui::debug_overlay::is_enabled(ui.ctx()) {
-                crate::ui::debug_overlay::show_layout_state(ui, "chat-content");
-            }
-            render_message_list(app, ui);
-        },
-    );
+    let active_id = app.session_store.active_session_id.clone();
+    ui.push_id(&active_id, |ui| {
+        let inner_rect = ui.available_rect_before_wrap();
+        let inner_w = inner_rect.width();
+        let x_offset = (inner_w - max_w).max(0.0) / 2.0;
+        let content_rect = egui::Rect::from_min_size(
+            egui::pos2(inner_rect.min.x + x_offset, inner_rect.min.y),
+            egui::vec2(max_w.min(inner_w), inner_rect.height()),
+        );
+        ui.allocate_new_ui(
+            egui::UiBuilder::new()
+                .max_rect(content_rect)
+                .layout(egui::Layout::top_down(egui::Align::LEFT)),
+            |ui| {
+                if crate::ui::debug_overlay::is_enabled(ui.ctx()) {
+                    crate::ui::debug_overlay::show_layout_state(ui, "chat-content");
+                }
+                render_message_list(app, ui);
+            },
+        );
+    });
 }
 
 /// Render the bottom input/composer panel.
@@ -184,8 +187,9 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                 if app.chat_store.stick_to_bottom {
                     app.ui_store.last_scroll_offset = max_scroll;
                 }
+                let active_id = app.session_store.active_session_id.clone();
                 let output = egui::ScrollArea::vertical()
-                    .id_salt("chat_scroll")
+                    .id_salt(format!("chat_scroll_{}", active_id))
                     .auto_shrink([false; 2])
                     .scroll_bar_visibility(
                         egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,

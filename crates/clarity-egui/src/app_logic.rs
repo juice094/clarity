@@ -391,6 +391,8 @@ impl App {
                 // the frame-loop sync in update().
                 bot_instances: Vec::new(),
                 active_bot_id: String::new(),
+                last_active_session_id: String::new(),
+                request_repaint: false,
                 claw_history: Vec::new(),
             },
             subagent_store: crate::stores::SubAgentStore {
