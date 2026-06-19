@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `chat/mod.rs`：消息列表渲染外层增加 `ui.push_id(&active_session_id)`，隔离消息气泡/按钮/菜单的 widget ID。
   - `chat/input/tui_style.rs`：输入框 `TextEdit` 增加会话相关 `id`，切换会话后光标、选区、undo 状态不再残留。
   - `main.rs` / `stores/ui.rs` / `app_logic.rs`：检测 `active_session_id` 变化，自动重置滚动偏移、清除编辑态、请求输入框聚焦并调用 `ctx.request_repaint()`。
+
+- **左侧边栏 interactive_row widget ID 冲突与图标渲染（2026-06-19）**
+  - `widgets/interactive_row.rs`：每次调用使用 `ui.next_auto_id()` 生成唯一行 ID，并作为 `UiBuilder::id_salt` 与 `interact` 的 id source，消除左侧导航行重复的 `First use of widget ID` 警告与异常的“多选/悬浮选中”状态。
+  - `widgets/nav_icon_rail.rs`：图标标签改用 `theme.font_icon(theme.text_base)`，确保 Lucide 图标正确渲染，不再出现 `6` / `r` / `□` 等 fallback 字符。
+  - `navigation_tree/work_chat_toggle.rs`：Work/Chat 分段按钮使用 `LayoutJob` 分别设置图标字体与文本字体，修复图标乱码。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
 
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)

@@ -39,7 +39,8 @@ pub fn render_work_chat_toggle(app: &mut App, ui: &mut egui::Ui) {
         let work_resp = segment_button(
             ui,
             &theme,
-            &format!("{} {}", crate::theme::ICON_MONITOR, app.t("Work")),
+            crate::theme::ICON_MONITOR,
+            app.t("Work"),
             segment_w,
             segment_h,
             work_radius,
@@ -60,7 +61,8 @@ pub fn render_work_chat_toggle(app: &mut App, ui: &mut egui::Ui) {
         let chat_resp = segment_button(
             ui,
             &theme,
-            &format!("{} {}", crate::theme::ICON_CHAT, app.t("Chat")),
+            crate::theme::ICON_CHAT,
+            app.t("Chat"),
             segment_w,
             segment_h,
             chat_radius,
@@ -74,10 +76,12 @@ pub fn render_work_chat_toggle(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn segment_button(
     ui: &mut egui::Ui,
     theme: &crate::theme::Theme,
-    label: &str,
+    icon: &str,
+    text: &str,
     width: f32,
     height: f32,
     radius: egui::CornerRadius,
@@ -94,15 +98,32 @@ fn segment_button(
         theme.surface
     };
 
-    let button = egui::Button::new(
-        egui::RichText::new(label)
-            .size(theme.text_sm)
-            .color(text_color),
-    )
-    .fill(fill)
-    .stroke(egui::Stroke::NONE)
-    .corner_radius(radius)
-    .min_size(egui::vec2(width, height));
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        icon,
+        0.0,
+        egui::text::TextFormat {
+            font_id: theme.font_icon(theme.text_sm),
+            color: text_color,
+            ..Default::default()
+        },
+    );
+    job.append(" ", theme.space_4, egui::text::TextFormat::default());
+    job.append(
+        text,
+        0.0,
+        egui::text::TextFormat {
+            font_id: egui::FontId::new(theme.text_sm, egui::FontFamily::Proportional),
+            color: text_color,
+            ..Default::default()
+        },
+    );
+
+    let button = egui::Button::new(job)
+        .fill(fill)
+        .stroke(egui::Stroke::NONE)
+        .corner_radius(radius)
+        .min_size(egui::vec2(width, height));
 
     ui.add_sized([width, height], button)
 }

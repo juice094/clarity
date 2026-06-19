@@ -14,7 +14,11 @@ pub fn nav_icon_rail(ui: &mut egui::Ui, theme: &Theme, icon: &str, color: egui::
         egui::vec2(rail_w, row_h),
         egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
         |ui| {
-            ui.label(egui::RichText::new(icon).size(theme.text_base).color(color));
+            ui.label(
+                egui::RichText::new(icon)
+                    .font(theme.font_icon(theme.text_base))
+                    .color(color),
+            );
         },
     );
 }

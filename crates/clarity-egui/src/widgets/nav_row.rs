@@ -69,6 +69,7 @@ mod tests {
 
     fn run_in_frame<R>(f: impl FnOnce(&mut egui::Ui) -> R) -> R {
         let ctx = egui::Context::default();
+        crate::theme::setup_fonts(&ctx);
         let mut f_opt = Some(f);
         let mut output = None;
         let input = egui::RawInput {

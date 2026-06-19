@@ -35,11 +35,16 @@ pub fn interactive_row<R>(
     let available_rect = ui.available_rect_before_wrap();
     let row_h = theme.size_nav_row_h;
 
+    // Allocate a unique id for this row so repeated interactive rows in the same
+    // parent do not share widget ids and trigger egui's "ID clashes" debug warnings.
+    let row_id = ui.next_auto_id();
+
     // Create a child Ui sized to the full available width. We do not set a sense
     // on the builder; instead we use an explicit `interact` on the final rect so
     // the response rect is guaranteed to match the painted row.
     let mut child_ui = ui.new_child(
         egui::UiBuilder::new()
+            .id_salt(row_id)
             .max_rect(available_rect)
             .layout(*ui.layout()),
     );
@@ -69,7 +74,7 @@ pub fn interactive_row<R>(
     let row_rect = child_ui.min_rect();
 
     // Click/hover response for the full row.
-    let response = child_ui.interact(row_rect, child_ui.id(), egui::Sense::click());
+    let response = child_ui.interact(row_rect, row_id, egui::Sense::click());
 
     // Advance parent cursor so subsequent widgets are laid out correctly.
     ui.advance_cursor_after_rect(row_rect);
