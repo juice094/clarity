@@ -71,7 +71,7 @@ impl McpServer for LlmMcpServer {
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!([])),
         )
-        .map_err(|e| clarity_mcp::McpError::Serialization(e))?;
+        .map_err(clarity_mcp::McpError::Serialization)?;
 
         match self.mesh.complete(&messages, &Value::Null).await {
             Ok(resp) => Ok(ToolCallResult {

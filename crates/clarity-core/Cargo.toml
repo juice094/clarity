@@ -49,7 +49,6 @@ clarity-memory = { path = "../clarity-memory" }
 rusqlite = { version = "0.34", features = ["bundled-full"], optional = true }
 clarity-mcp = { path = "../clarity-mcp" }
 clarity-wire = { path = "../clarity-wire" }
-clarity-llm = { path = "../clarity-llm" }
 clarity-tools = { path = "../clarity-tools" }
 clarity-secrets = { path = "../clarity-secrets" }
 clarity-thread-store = { path = "../clarity-thread-store" }
@@ -61,11 +60,10 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio"] }
 clarity-rollout = { path = "../clarity-rollout" }
+clarity-llm = { path = "../clarity-llm" }
 
 [features]
-default = ["local-llm", "mcp"]
-local-llm = ["clarity-llm/local-llm"]
-local-llm-cuda = ["clarity-llm/local-llm-cuda"]
+default = ["mcp"]
 mcp = []
 session-migration = ["dep:rusqlite"]
 hermes = ["clarity-memory/hermes"]

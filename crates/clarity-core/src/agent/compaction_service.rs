@@ -4,7 +4,7 @@
 //! old messages before the conversation hits token limits.
 
 use crate::error::AgentError;
-use clarity_llm::api::{LlmProvider, Message, MessageRole};
+use clarity_contract::{LlmProvider, Message, MessageRole};
 use std::sync::Arc;
 
 /// Budget allocation for different message roles.
@@ -385,13 +385,13 @@ mod tests {
             _messages: &[Message],
             _tools: &Value,
         ) -> Result<
-            tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
+            tokio::sync::mpsc::Receiver<Result<clarity_contract::StreamDelta, AgentError>>,
             AgentError,
         > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
             tokio::spawn(async move {
                 let _ = tx
-                    .send(Ok(clarity_llm::StreamDelta {
+                    .send(Ok(clarity_contract::StreamDelta {
                         content: Some("chunk".to_string()),
                         tool_calls: vec![],
                     }))
@@ -420,7 +420,7 @@ mod tests {
             _messages: &[Message],
             _tools: &Value,
         ) -> Result<
-            tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
+            tokio::sync::mpsc::Receiver<Result<clarity_contract::StreamDelta, AgentError>>,
             AgentError,
         > {
             let (tx, rx) = tokio::sync::mpsc::channel(1);
@@ -802,13 +802,13 @@ mod tests {
                 _messages: &[Message],
                 _tools: &Value,
             ) -> Result<
-                tokio::sync::mpsc::Receiver<Result<clarity_llm::StreamDelta, AgentError>>,
+                tokio::sync::mpsc::Receiver<Result<clarity_contract::StreamDelta, AgentError>>,
                 AgentError,
             > {
                 let (tx, rx) = tokio::sync::mpsc::channel(1);
                 tokio::spawn(async move {
                     let _ = tx
-                        .send(Ok(clarity_llm::StreamDelta {
+                        .send(Ok(clarity_contract::StreamDelta {
                             content: Some("chunk".to_string()),
                             tool_calls: vec![],
                         }))

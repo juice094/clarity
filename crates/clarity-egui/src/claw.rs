@@ -22,7 +22,7 @@
 //! 4. **Remote OpenClaw (settings)** — user-configured `GuiSettings::openclaw_connections`
 //! 5. **Persisted pairing** — `~/.clarity/claw-device-token.json`
 
-use crate::settings::OpenClawConnection;
+use crate::settings::{GuiSettings, OpenClawAuthMode, OpenClawConnection};
 use crate::stores::ui::{BotInstance, BotStatus};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -133,6 +133,8 @@ pub fn discover(settings_connections: &[OpenClawConnection]) -> DeviceState {
                 gateway_token: String::new(),
                 workspace_root: std::env::current_dir().unwrap_or_default(),
                 host: "127.0.0.1".into(),
+                auth_mode: None,
+                device_token: None,
             },
         );
     }
@@ -163,6 +165,11 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
         };
         let host = gateway_host(&conn.gateway_url).unwrap_or_else(|| "openclaw".into());
         let id = format!("openclaw-settings-{}", host);
+        let auth_mode = Some(match conn.auth_mode {
+            OpenClawAuthMode::TokenOnly => "token_only".into(),
+            OpenClawAuthMode::TokenWithDevice => "token_with_device".into(),
+            OpenClawAuthMode::DevicePaired => "device_paired".into(),
+        });
         state.register(
             BotInstance {
                 id: id.clone(),
@@ -175,9 +182,12 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
             ClawConnection {
                 claw_type: ClawType::OpenClaw,
                 gateway_url: conn.gateway_url.clone(),
-                gateway_token: conn.token.clone(),
+                gateway_token: GuiSettings::resolve_api_key(&Some(conn.token.clone()))
+                    .unwrap_or_default(),
                 workspace_root: std::env::current_dir().unwrap_or_default(),
                 host,
+                auth_mode,
+                device_token: GuiSettings::resolve_api_key(&conn.device_token),
             },
         );
     }
@@ -223,6 +233,8 @@ fn discover_saved_openclaw(state: &DeviceState) {
             gateway_token: paired.auth_token().to_string(),
             workspace_root: std::env::current_dir().unwrap_or_default(),
             host,
+            auth_mode: Some("device_paired".into()),
+            device_token: None,
         },
     );
 }
@@ -260,6 +272,8 @@ fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
             gateway_token: String::new(),
             workspace_root: std::env::current_dir().unwrap_or_default(),
             host: hostname.into(),
+            auth_mode: None,
+            device_token: None,
         },
     );
 }
@@ -276,4 +290,51 @@ fn local_hostname() -> String {
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_else(|_| "unknown".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings::OpenClawAuthMode;
+
+    fn sample_settings_connection() -> OpenClawConnection {
+        OpenClawConnection {
+            name: "Gray-Cloud".into(),
+            gateway_url: "wss://gray-cloud.example:18789".into(),
+            token: "token-with-device".into(),
+            auth_mode: OpenClawAuthMode::TokenWithDevice,
+            enabled: true,
+            device_token: None,
+        }
+    }
+
+    #[test]
+    fn test_discover_settings_preserves_auth_mode() {
+        let conn = sample_settings_connection();
+        let state = discover(&[conn]);
+        let snapshot = state.snapshot();
+        let bot = snapshot
+            .iter()
+            .find(|b| b.name == "Gray-Cloud")
+            .expect("Gray-Cloud bot registered");
+        let c = state.connection(&bot.id).expect("connection exists");
+        assert_eq!(c.auth_mode.as_deref(), Some("token_with_device"));
+        assert_eq!(c.gateway_token, "token-with-device");
+    }
+
+    #[test]
+    fn test_discover_settings_device_paired() {
+        let mut conn = sample_settings_connection();
+        conn.auth_mode = OpenClawAuthMode::DevicePaired;
+        conn.device_token = Some("paired-device-token".into());
+        let state = discover(&[conn]);
+        let snapshot = state.snapshot();
+        let bot = snapshot
+            .iter()
+            .find(|b| b.name == "Gray-Cloud")
+            .expect("Gray-Cloud bot registered");
+        let c = state.connection(&bot.id).expect("connection exists");
+        assert_eq!(c.auth_mode.as_deref(), Some("device_paired"));
+        assert_eq!(c.device_token.as_deref(), Some("paired-device-token"));
+    }
 }

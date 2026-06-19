@@ -46,6 +46,7 @@ pub mod capability;
 pub mod error;
 pub mod federation;
 pub mod llm;
+pub mod reliable_provider;
 pub mod rollout;
 pub mod subagent;
 pub mod thread;
@@ -178,7 +179,8 @@ pub use federation::{
     Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus, TaskSpec,
     ToolSpec,
 };
-pub use llm::{LlmProvider, LlmResponse};
+pub use llm::{LlmProvider, LlmProviderFactory, LlmResponse, Pricing, ProviderCapabilities};
+pub use reliable_provider::ReliableProvider;
 pub use rollout::{
     CompactedItem, CreateRolloutParams, GitInfo, ResumeRolloutParams, RolloutEventMsg, RolloutItem,
     RolloutLine, RolloutResponseItem, SessionMeta, SessionMetaLine, SessionSource, ThreadSource,

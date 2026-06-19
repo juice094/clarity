@@ -41,9 +41,9 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                             crate::widgets::nav_status_dot(ui, &theme, dot_color);
                             ui.label(egui::RichText::new(&bot_name).size(theme.text_sm).color(
                                 if is_active {
-                                    theme.text
+                                    theme.text_strong
                                 } else {
-                                    theme.text_dim
+                                    theme.text
                                 },
                             ));
                         });

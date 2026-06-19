@@ -16,5 +16,6 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+tracing = { workspace = true }
 parking_lot = "0.12"
 dirs = "5.0"

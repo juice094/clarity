@@ -1,10 +1,11 @@
 use crate::theme::Theme;
 
-/// Interactive row — full-width clickable container with free child layout.
+/// Interactive row — full-width clickable container with hover / selected states.
 ///
-/// Replaces the anti-pattern of `ui.interact(Rect::from_min_size(...))` + manual
-/// painter overlay. Provides theme-consistent hover/selected backgrounds while
-/// allowing arbitrary child widgets inside the row.
+/// Renders a rounded rectangle background across the entire available width.
+/// Selected rows receive a neutral highlight; hovered rows get a subtle hover
+/// fill. This matches the flat, compact sidebar style used by modern reference
+/// UIs where the row itself is the only visual chrome.
 ///
 /// # Architecture note
 /// Uses `UiBuilder::sense(Sense::click())` to create a child Ui whose natural
@@ -34,74 +35,98 @@ pub fn interactive_row<R>(
     let available_rect = ui.available_rect_before_wrap();
     let row_h = theme.size_nav_row_h;
 
-    // Create a child Ui with built-in click sense.
-    // This is the canonical egui 0.31+ way to make an arbitrary region interactive
-    // without resorting to ui.interact(raw_rect).
+    // Create a child Ui sized to the full available width. We do not set a sense
+    // on the builder; instead we use an explicit `interact` on the final rect so
+    // the response rect is guaranteed to match the painted row.
     let mut child_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(available_rect)
-            .layout(*ui.layout())
-            .sense(egui::Sense::click()),
+            .layout(*ui.layout()),
     );
 
-    // Render background + contents inside the click-sensed child Ui.
+    let is_hovered = child_ui.rect_contains_pointer(available_rect);
+    let fill = if is_selected {
+        theme.nav_row_selected
+    } else if is_hovered {
+        theme.nav_row_hover
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+
+    // Render the row background across the full available width, then let the
+    // caller lay out icon + text inside. The symmetric horizontal inner margin
+    // gives the row a consistent left/right padding while keeping the highlight
+    // flush to the edges.
     let inner = egui::Frame::new()
-        .fill(egui::Color32::TRANSPARENT)
+        .fill(fill)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 0))
         .show(&mut child_ui, |ui| {
-            ui.set_min_width(available_rect.width());
             ui.set_min_height(row_h);
-
-            let is_hovered = ui.rect_contains_pointer(ui.max_rect());
-            // Selected rows get a subtle accent tint; hovered rows get a
-            // neutral background. This distinguishes "you are here" from
-            // "you might click here" without adding extra chrome.
-            let fill = if is_selected {
-                theme.nav_row_selected
-            } else if is_hovered {
-                theme.nav_row_hover
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-
-            // Layout: left accent bar (fixed column) + caller content.
-            // The accent bar column is always reserved so rows stay aligned
-            // whether selected or not.
-            egui::Frame::new()
-                .fill(fill)
-                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .show(ui, |ui| {
-                    ui.set_min_height(row_h);
-                    ui.horizontal(|ui| {
-                        let bar_w = theme.size_nav_accent_bar;
-                        let (bar_rect, _) =
-                            ui.allocate_exact_size(egui::vec2(bar_w, row_h), egui::Sense::hover());
-                        if is_selected {
-                            let bar_radius = (bar_w / 2.0).min(theme.radius_sm);
-                            ui.painter().rect_filled(
-                                bar_rect,
-                                egui::CornerRadius::same(bar_radius as u8),
-                                theme.accent,
-                            );
-                        }
-                        ui.add_space(theme.space_8);
-                        add_contents(ui)
-                    })
-                    .inner
-                })
-                .inner
+            add_contents(ui)
         });
 
-    // The child Ui accumulates a response from all widgets inside it.
-    // Because we set Sense::click() at construction, this response natively
-    // supports clicked(), hovered(), and focus ring — no ui.interact needed.
-    let response = child_ui.response();
+    let row_rect = child_ui.min_rect();
+
+    // Click/hover response for the full row.
+    let response = child_ui.interact(row_rect, child_ui.id(), egui::Sense::click());
 
     // Advance parent cursor so subsequent widgets are laid out correctly.
-    ui.advance_cursor_after_rect(child_ui.min_rect());
+    ui.advance_cursor_after_rect(row_rect);
 
     egui::InnerResponse {
         inner: inner.inner,
         response,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::Theme;
+
+    fn run_in_frame<R>(f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+        let ctx = egui::Context::default();
+        let mut f_opt = Some(f);
+        let mut output = None;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(400.0, 800.0),
+            )),
+            ..Default::default()
+        };
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if let Some(f) = f_opt.take() {
+                    output = Some(f(ui));
+                }
+            });
+        });
+        output.expect("CentralPanel should always run its closure")
+    }
+
+    #[test]
+    fn interactive_row_allocates_space_and_click_response() {
+        let theme = Theme::default();
+        let resp = run_in_frame(|ui| {
+            interactive_row(ui, false, &theme, |ui| {
+                ui.label("row");
+            })
+        });
+        assert!(resp.response.rect.width() > 0.0);
+        assert!(resp.response.rect.height() > 0.0);
+    }
+
+    #[test]
+    fn interactive_row_selected_returns_same_response_shape() {
+        let theme = Theme::default();
+        let resp = run_in_frame(|ui| {
+            interactive_row(ui, true, &theme, |ui| {
+                ui.label("row");
+            })
+        });
+        assert!(resp.response.rect.width() > 0.0);
+        assert!(resp.response.rect.height() > 0.0);
     }
 }

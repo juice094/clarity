@@ -1,6 +1,7 @@
 use crate::App;
 
 pub mod about_tab;
+pub mod claw_tab;
 pub mod interface_tab;
 pub mod ops_tab;
 pub mod provider_tab;
@@ -11,6 +12,7 @@ pub enum SettingsTab {
     Provider,
     Interface,
     Ops,
+    Claw,
     About,
 }
 
@@ -49,6 +51,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
         (SettingsTab::Provider, app.t("Provider")),
         (SettingsTab::Interface, app.t("Interface")),
         (SettingsTab::Ops, app.t("Ops")),
+        (SettingsTab::Claw, app.t("Claw")),
         (SettingsTab::About, app.t("About")),
     ];
     let mut at = app.settings_store.settings_active_tab;
@@ -120,6 +123,7 @@ pub fn render_settings_panel(app: &mut App, ctx: &egui::Context) {
                         SettingsTab::Provider => provider_tab::render_provider(app, ui),
                         SettingsTab::Interface => interface_tab::render_interface(app, ui),
                         SettingsTab::Ops => ops_tab::render_ops(app, ui),
+                        SettingsTab::Claw => claw_tab::render_claw(app, ui),
                         SettingsTab::About => about_tab::render_about(app, ui),
                     }
                 });

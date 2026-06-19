@@ -468,9 +468,9 @@ async fn main() {
             registry,
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
         );
-        // Attach ModelRegistry for per-task model selection
+        // Attach ModelRegistry as an LlmProviderFactory for per-task model selection
         if let Ok(model_registry) = clarity_llm::ModelRegistry::load_async().await {
-            executor = executor.with_registry(model_registry);
+            executor = executor.with_factory(Arc::new(model_registry));
         }
         let executor = Arc::new(executor);
 

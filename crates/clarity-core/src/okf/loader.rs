@@ -11,30 +11,49 @@ pub struct BundleLoader;
 impl BundleLoader {
     /// Load all `.md` files recursively from `root` into an [`OkfBundle`].
     ///
+    /// Files that do not satisfy OKF v0.1 structural rules are skipped with a
+    /// warning rather than failing the whole bundle. This makes it practical to
+    /// load real-world directories that contain a mix of OKF concepts and
+    /// plain Markdown notes.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the directory cannot be read or if any concept
-    /// violates OKF v0.1 structural rules.
+    /// Returns an error only if the directory cannot be read.
     pub fn load(root: impl AsRef<Path>) -> OkfResult<OkfBundle> {
         let root = root.as_ref().canonicalize()?;
         let mut concepts = HashMap::new();
-        Self::load_recursive(&root, &root, &mut concepts)?;
-        Ok(OkfBundle { root, concepts })
+        let mut warnings = Vec::new();
+        Self::load_recursive(&root, &root, &mut concepts, &mut warnings)?;
+        Ok(OkfBundle {
+            root,
+            concepts,
+            warnings,
+        })
     }
 
     fn load_recursive(
         bundle_root: &Path,
         dir: &Path,
         concepts: &mut HashMap<String, OkfConcept>,
+        warnings: &mut Vec<String>,
     ) -> OkfResult<()> {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                Self::load_recursive(bundle_root, &path, concepts)?;
+                Self::load_recursive(bundle_root, &path, concepts, warnings)?;
             } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                let concept = ConceptLoader::load(bundle_root, &path)?;
-                concepts.insert(concept.id.clone(), concept);
+                match ConceptLoader::load(bundle_root, &path) {
+                    Ok(concept) => {
+                        concepts.insert(concept.id.clone(), concept);
+                    }
+                    Err(e) => {
+                        let msg =
+                            format!("Skipping non-compliant OKF file {}: {}", path.display(), e);
+                        tracing::warn!("{}", msg);
+                        warnings.push(msg);
+                    }
+                }
             }
         }
         Ok(())
@@ -241,5 +260,25 @@ body
         let graph = bundle.into_graph();
         assert_eq!(graph.outgoing("index").len(), 1);
         assert_eq!(graph.outgoing("index")[0].target, "metrics/wau");
+    }
+
+    #[test]
+    fn test_load_bundle_skips_noncompliant_files() {
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+
+        let mut good = std::fs::File::create(root.join("good.md")).unwrap();
+        good.write_all(b"---\ntype: Concept\n---\n\nGood.").unwrap();
+
+        let mut bad = std::fs::File::create(root.join("bad.md")).unwrap();
+        bad.write_all(b"# Missing frontmatter\n").unwrap();
+
+        let bundle = BundleLoader::load(root).unwrap();
+        assert_eq!(bundle.len(), 1);
+        assert!(bundle.get("good").is_some());
+        assert!(bundle.get("bad").is_none());
     }
 }

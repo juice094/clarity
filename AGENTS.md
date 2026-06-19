@@ -212,15 +212,15 @@ cargo audit --deny unsound --deny yanked
 cargo doc --workspace --no-deps --exclude clarity-slint
 ```
 
-### 6.2 当前测试基线（2026-06-19，实机验证）
+### 6.2 当前测试基线（2026-06-16，实机验证）
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1231 | 0 | 8 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 201 | 0 | 2 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1258 | 0 | 8 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 210 | 0 | 2 |
 | `cargo test --workspace --doc --exclude clarity-slint` | 33 | 0 | 3 |
 | `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
-| `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
+| `cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
 | `cargo fmt --all -- --check` | pass | 0 | - |
 
 > `clarity-slint` 为实验栈，不参与默认 CI。提交前必须保证上述命令全部通过。
@@ -250,7 +250,7 @@ CUDA 构建示例（Windows）：
 
 ```powershell
 $env:NVCC_CCBIN="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.40.33807\bin\Hostx64\x64"
-cargo check -p clarity-core --features local-llm-cuda
+cargo check -p clarity-llm --features local-llm-cuda
 cargo run -p clarity-egui --features cuda
 ```
 

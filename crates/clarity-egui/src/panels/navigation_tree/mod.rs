@@ -4,6 +4,9 @@
 //! navigation items, collapsible web bookmarks, work templates, Claw devices,
 //! project tree, history/sessions, and a bottom-aligned user avatar.
 //!
+//! The visual style is intentionally flat: no card frames, no section dividers,
+//! and selected rows are highlighted by a full-width neutral background.
+//!
 //! Design note on width: `theme.size_sidebar` must stay wide enough for the
 //! widest row inside this panel (e.g. multi-button action bars, device rows,
 //! chat items). If the container is narrowed without also compressing those
@@ -58,79 +61,67 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                             .id_salt("left_nav_scroll")
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                                render_top_actions_card(app, ui, &theme);
-                                ui.add_space(theme.space_16);
-                                render_sections_card(app, ui, &theme);
+                                render_top_actions(app, ui, &theme);
+                                ui.add_space(theme.space_12);
+                                render_sections(app, ui, &theme);
                             });
                     });
 
                     strip.cell(|ui| {
                         ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                            render_user_avatar_card(app, ui, &theme);
+                            footer_separator(ui, &theme);
+                            render_user_avatar_row(app, ui, &theme);
                         });
                     });
                 });
         });
 }
 
-/// Top card: Work/Chat toggle + primary navigation actions.
-fn render_top_actions_card(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    egui::Frame::new()
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .inner_margin(egui::Margin::same(theme.space_8 as i8))
-        .show(ui, |ui| {
-            work_chat_toggle::render_work_chat_toggle(app, ui);
-            ui.add_space(theme.space_12);
-            nav_items::render_nav_items(app, ui);
-        });
+/// Top area: Work/Chat toggle + primary navigation actions.
+fn render_top_actions(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+    work_chat_toggle::render_work_chat_toggle(app, ui);
+    ui.add_space(theme.space_12);
+    nav_items::render_nav_items(app, ui);
 }
 
-/// Scrollable sections card: collapsible web/templates/projects/claw/history.
-fn render_sections_card(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    egui::Frame::new()
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .inner_margin(egui::Margin::same(theme.space_8 as i8))
-        .show(ui, |ui| {
-            // 1. Web bookmarks (chat context)
-            web_section::render_web_section(
-                app,
-                ui,
-                "nav_web_chat",
-                web_section::WebSectionContext::Chat,
-            );
-            section_divider(ui, theme);
+/// Scrollable sections: collapsible web/templates/projects/claw/history.
+fn render_sections(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+    // 1. Web bookmarks (chat context)
+    web_section::render_web_section(
+        app,
+        ui,
+        "nav_web_chat",
+        web_section::WebSectionContext::Chat,
+    );
+    ui.add_space(theme.space_12);
 
-            // 2. Work templates
-            work_templates::render_work_templates(app, ui);
-            section_divider(ui, theme);
+    // 2. Work templates
+    work_templates::render_work_templates(app, ui);
+    ui.add_space(theme.space_12);
 
-            // 3. Web bookmarks (work context)
-            web_section::render_web_section(
-                app,
-                ui,
-                "nav_web_work",
-                web_section::WebSectionContext::Work,
-            );
-            section_divider(ui, theme);
+    // 3. Web bookmarks (work context)
+    web_section::render_web_section(
+        app,
+        ui,
+        "nav_web_work",
+        web_section::WebSectionContext::Work,
+    );
+    ui.add_space(theme.space_12);
 
-            // 4. Projects
-            project_section::render_project_section(app, ui);
-            section_divider(ui, theme);
+    // 4. Projects
+    project_section::render_project_section(app, ui);
+    ui.add_space(theme.space_12);
 
-            // 5. Claw devices
-            claw_section::render_claw_section(app, ui);
-            section_divider(ui, theme);
+    // 5. Claw devices
+    claw_section::render_claw_section(app, ui);
+    ui.add_space(theme.space_12);
 
-            // 6. History / sessions
-            history_section::render_history_section(app, ui);
-        });
+    // 6. History / sessions
+    history_section::render_history_section(app, ui);
 }
 
-/// Subtle horizontal divider between sidebar sections.
-fn section_divider(ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    ui.add_space(theme.space_8);
+/// Subtle horizontal separator between the scrollable tree and the footer.
+fn footer_separator(ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     let available = ui.available_width();
     let stroke = egui::Stroke::new(1.0, theme.border);
     let left = ui.cursor().min.x;
@@ -141,16 +132,9 @@ fn section_divider(ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     ui.add_space(theme.space_8);
 }
 
-/// Bottom user avatar card showing the active user and current model.
-fn render_user_avatar_card(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+/// Bottom user avatar row showing the active user and current model.
+fn render_user_avatar_row(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     let model = app.settings_store.settings_edit.model.trim();
     let subtitle = if model.is_empty() { None } else { Some(model) };
-
-    egui::Frame::new()
-        .fill(theme.surface)
-        .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
-        .inner_margin(egui::Margin::same(theme.space_8 as i8))
-        .show(ui, |ui| {
-            let _ = crate::widgets::user_avatar_row(ui, "User", subtitle, theme);
-        });
+    let _ = crate::widgets::user_avatar_row(ui, "User", subtitle, theme);
 }

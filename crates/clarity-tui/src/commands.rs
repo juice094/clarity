@@ -128,7 +128,8 @@ pub struct SettingsCommand;
 impl CommandHandler for SettingsCommand {
     fn execute(&self, app: &mut App, _args: &[&str]) {
         use clarity_core::view_models::settings::SettingsViewModel;
-        let vm = SettingsViewModel::new();
+        let mut vm = SettingsViewModel::new();
+        vm.set_available_models(clarity_llm::get_available_models());
         app.cached_view_commands = vm.commands();
         app.settings_mode = true;
     }

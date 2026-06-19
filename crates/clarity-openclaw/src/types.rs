@@ -50,6 +50,11 @@ pub struct ClawConnection {
     pub workspace_root: PathBuf,
     /// Display hostname / IP (used for terminal/workspace labels).
     pub host: String,
+    /// Optional auth mode hint from the consumer (`token_only`, `token_with_device`,
+    /// `device_paired`). When `None`, the consumer should apply its default policy.
+    pub auth_mode: Option<String>,
+    /// Optional device-specific token for paired-device auth.
+    pub device_token: Option<String>,
 }
 
 /// A discovered device together with its connection parameters.

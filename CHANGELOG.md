@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增 `crates/clarity-egui/src/ui/debug_overlay.rs` 红/绿/蓝/黄布局诊断覆盖层，统一可视化 `max_rect`、`clip_rect`、控件锚点与警告；`ViewState` 与 `GuiSettings` 新增 `debug_layout_overlay` 持久化开关；快捷键 `Ctrl+Shift+L`、Command Palette 与 Settings → Interface 均可切换。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1099 passed / 0 failed / 8 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（152 passed / 0 failed）。
 
+- **方向 B1–B5 + C（OpenClaw 连接管理 & OKF 前端接入，2026-06-16）**
+  - 修复 `clarity-egui/examples/openclaw_pair.rs`：保存配对 token 时使用用户输入的 Gateway URL，不再硬编码 `localhost`。
+  - OpenClaw 设备 token 支持 `${env:VAR}` 环境变量解析；`OpenClawAuthMode` 在设备发现与 WebSocket 连接逻辑中生效。
+  - egui Settings 新增 **Claw** 标签页：可新增、编辑、删除 OpenClaw Gateway 远程连接。
+  - egui 内实现完整 OpenClaw 设备配对流程：临时 `ClawClient`、帧循环独立 drain、`PairingState` 状态机、超时处理、加密 token 持久化。
+  - OKF 前端接入：新增 `KnowledgeStore`；右 rail `Knowledge` 面板支持输入 OKF bundle 路径、Load/Reload、概念搜索、概念列表浏览与详情查看（frontmatter + Markdown 正文），后端通过 `OkfBundleCache::global().get_or_load()` 异步加载。
+  - 新增 `KnowledgeStore` 单元测试；补充 Knowledge/Claw 相关中文 i18n 键。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1258 passed / 0 failed / 8 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（210 passed / 0 failed / 2 ignored）、`cargo test --workspace --doc --exclude clarity-slint` ✅（33 passed / 0 failed / 3 ignored）、`cargo test -p clarity-integration-tests --lib` ✅（26 passed / 0 failed / 0 ignored）。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

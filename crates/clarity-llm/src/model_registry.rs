@@ -43,9 +43,11 @@
 
 use crate::api::LlmProvider;
 use crate::{LlamaServerProvider, OpenAiCompatibleLlm};
+use async_trait::async_trait;
 use clarity_contract::AgentError;
-use clarity_contract::llm::Pricing;
+use clarity_contract::llm::{LlmProviderFactory, Pricing};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -451,6 +453,25 @@ impl ModelRegistry {
     /// Get the raw configuration (for serialization / admin API)
     pub fn config(&self) -> &ModelConfigFile {
         &self.config
+    }
+}
+
+#[async_trait]
+impl LlmProviderFactory for ModelRegistry {
+    async fn build_for_alias(&self, alias: &str) -> Result<Arc<dyn LlmProvider>, AgentError> {
+        let entry = self.get(alias).ok_or_else(|| {
+            AgentError::Llm(format!("Model alias '{}' not found in registry", alias))
+        })?;
+        let provider_cfg = self.get_provider(&entry.provider).ok_or_else(|| {
+            AgentError::Llm(format!(
+                "Provider '{}' for model '{}' not found",
+                entry.provider, alias
+            ))
+        })?;
+        let secrets = default_secret_store().ok();
+        let provider =
+            build_provider_from_registry_entry(provider_cfg, entry, None, secrets.as_ref()).await?;
+        Ok(Arc::from(provider))
     }
 }
 

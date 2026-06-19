@@ -8,6 +8,8 @@
 //!   OPENCLAW_REMOTE_TOKEN=<token> \
 //!     cargo run -p clarity-openclaw --example remote_send
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use clarity_openclaw::DeviceIdentity;
 use clarity_openclaw::client::{ClawClient, ClawResponse};
 use std::time::Duration;

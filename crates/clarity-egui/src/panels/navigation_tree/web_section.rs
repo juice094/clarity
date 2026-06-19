@@ -47,41 +47,23 @@ pub fn render_web_section(
                 );
             } else {
                 for link in &links {
-                    let link_resp = crate::widgets::interactive_row(ui, false, &theme, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = theme.space_8;
-                            crate::widgets::nav_icon_rail(
-                                ui,
-                                &theme,
-                                crate::theme::ICON_GLOBE,
-                                theme.text_dim,
-                            );
-                            ui.label(
-                                egui::RichText::new(&link.name)
-                                    .size(theme.text_sm)
-                                    .color(theme.text),
-                            );
-                        });
-                    });
-                    if link_resp.response.clicked() {
+                    let resp = crate::widgets::nav_row(
+                        ui,
+                        &theme,
+                        crate::theme::ICON_GLOBE,
+                        &link.name,
+                        false,
+                    );
+                    if resp.clicked() {
                         app.open_web_link(&link.url);
                     }
                 }
             }
 
             ui.add_space(theme.space_4);
-            let add_btn = egui::Button::new(
-                egui::RichText::new(format!("{}  {}", crate::theme::ICON_PLUS, app.t("Add")))
-                    .size(theme.text_xs)
-                    .color(theme.text_dim),
-            )
-            .fill(theme.bg_hover)
-            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-            if ui
-                .add(add_btn)
-                .on_hover_text(app.t("Manage bookmarks"))
-                .clicked()
-            {
+            let add_resp =
+                crate::widgets::nav_row(ui, &theme, crate::theme::ICON_PLUS, app.t("Add"), false);
+            if add_resp.on_hover_text(app.t("Manage bookmarks")).clicked() {
                 let modal = match context {
                     WebSectionContext::Chat => clarity_core::ui::ModalType::ManageWebLinksChat,
                     WebSectionContext::Work => clarity_core::ui::ModalType::ManageWebLinksWork,

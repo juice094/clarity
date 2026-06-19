@@ -29,3 +29,12 @@ CLAUDE.md
 # Coverage artifacts
 coverage/
 coverage_summary.json
+
+# Android build artifacts
+/mobile/android/local.properties
+/mobile/android/.gradle/
+/mobile/android/app/build/
+/mobile/android/app/src/main/jniLibs/
+/mobile/android/app/src/main/java/uniffi/
+/mobile/android/gradle-8.9/
+/mobile/android/gradle-8.9-bin.zip

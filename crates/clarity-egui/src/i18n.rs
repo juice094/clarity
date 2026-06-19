@@ -73,6 +73,7 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Settings", "设置");
     m.insert("New Session", "新建会话");
     m.insert("New session (Ctrl+N)", "新建会话（Ctrl+N）");
+    m.insert("New Session Shortcut", "Ctrl+K");
     m.insert("New Task", "新建任务");
     m.insert("New cron schedule", "新建定时任务");
     m.insert("Plugins", "插件");
@@ -153,6 +154,22 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Files / workspace", "文件 / 工作区");
     m.insert("Knowledge base", "知识库");
     m.insert("Share conversation", "分享会话");
+    m.insert("Bundle path", "Bundle 路径");
+    m.insert("Load bundle", "加载 Bundle");
+    m.insert("Reload", "重新加载");
+    m.insert("Search concepts", "搜索概念");
+    m.insert("Concepts", "概念");
+    m.insert("Type", "类型");
+    m.insert("Tags", "标签");
+    m.insert("No concepts found", "未找到概念");
+    m.insert("Select a concept to view details", "选择一个概念查看详情");
+    m.insert("Failed to load bundle", "加载 Bundle 失败");
+    m.insert("Loading…", "加载中…");
+    m.insert("Path to OKF bundle directory", "OKF Bundle 目录路径");
+    m.insert(
+        "Enter a bundle path and click Load bundle",
+        "输入 Bundle 路径并点击加载",
+    );
 
     // ── MCP ──
     m.insert("No MCP servers configured", "未配置 MCP 服务器");
@@ -203,12 +220,32 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Enabled", "已启用");
     m.insert("Environment:", "环境变量：");
     m.insert("MCP Servers", "MCP 服务器");
+    m.insert("Pair", "配对");
+    m.insert("Pairing...", "正在配对…");
+    m.insert("Waiting for approval", "等待审批");
+    m.insert("Paired", "已配对");
+    m.insert("Pairing failed", "配对失败");
     m.insert("Compacting conversation history…", "正在压缩对话历史…");
     // ── Settings ──
     m.insert("General", "通用");
     m.insert("Provider", "服务商");
     m.insert("Interface", "界面");
     m.insert("About", "关于");
+    m.insert("Claw", "Claw");
+    m.insert(
+        "Manage OpenClaw Gateway connections",
+        "管理 OpenClaw 网关连接",
+    );
+    m.insert(
+        "No OpenClaw connections configured.",
+        "未配置 OpenClaw 连接。",
+    );
+    m.insert("Connection", "连接");
+    m.insert("Gateway URL", "网关 URL");
+    m.insert("Auth Mode", "认证模式");
+    m.insert("Device Token", "设备令牌");
+    m.insert("Enabled", "已启用");
+    m.insert("Update", "更新");
     m.insert("Theme", "主题");
     m.insert("Language", "语言");
     m.insert("Layout Debug", "布局调试");

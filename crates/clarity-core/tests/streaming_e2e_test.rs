@@ -11,7 +11,8 @@
 //! 验证 OpenAiCompatibleLlm + Agent::run_streaming 的完整网络链路。
 
 use clarity_core::agent::AgentConfig;
-use clarity_core::{Agent, OpenAiCompatibleLlm, ToolRegistry};
+use clarity_core::{Agent, ToolRegistry};
+use clarity_llm::OpenAiCompatibleLlm;
 use clarity_wire::{Wire, WireMessage};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

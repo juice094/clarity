@@ -604,4 +604,28 @@ mod tests {
         assert!(!registry.contains("file_read").unwrap());
         assert!(!registry.unregister("file_read").unwrap());
     }
+
+    #[test]
+    fn test_okf_tools_registered() {
+        let registry = ToolRegistry::with_builtin_tools();
+
+        for name in ["okf_load", "okf_search", "okf_read"] {
+            assert!(
+                registry.contains(name).unwrap(),
+                "built-in registry should contain {}",
+                name
+            );
+        }
+
+        let schemas = registry.get_tool_schemas().unwrap();
+        let names: Vec<&str> = schemas
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|s| s.pointer("/function/name").and_then(|v| v.as_str()))
+            .collect();
+        assert!(names.contains(&"okf_load"));
+        assert!(names.contains(&"okf_search"));
+        assert!(names.contains(&"okf_read"));
+    }
 }

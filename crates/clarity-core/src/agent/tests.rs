@@ -1145,10 +1145,10 @@ impl LlmProvider for BudgetMockLlm {
 
     fn set_prompt_cache_key(&self, _key: &str) {}
 
-    fn capabilities(&self) -> clarity_llm::api::ProviderCapabilities {
-        clarity_llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> clarity_contract::ProviderCapabilities {
+        clarity_contract::ProviderCapabilities {
             native_tool_calling: true,
-            pricing: Some(clarity_llm::api::Pricing {
+            pricing: Some(clarity_contract::Pricing {
                 input_per_1m: 200.0,
                 output_per_1m: 200.0,
             }),
@@ -1290,8 +1290,8 @@ impl LlmProvider for VisionTrackingMockLlm {
 
     fn set_prompt_cache_key(&self, _key: &str) {}
 
-    fn capabilities(&self) -> clarity_llm::api::ProviderCapabilities {
-        clarity_llm::api::ProviderCapabilities {
+    fn capabilities(&self) -> clarity_contract::ProviderCapabilities {
+        clarity_contract::ProviderCapabilities {
             vision: self.vision,
             ..Default::default()
         }

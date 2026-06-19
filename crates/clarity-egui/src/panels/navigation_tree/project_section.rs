@@ -95,31 +95,8 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         } else {
             crate::theme::ICON_GLOBE
         };
-        let resp = crate::widgets::interactive_row(ui, is_selected, theme, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = theme.space_8;
-                crate::widgets::nav_icon_rail(
-                    ui,
-                    theme,
-                    icon,
-                    if is_selected {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    },
-                );
-                ui.label(
-                    egui::RichText::new(name)
-                        .size(theme.text_sm)
-                        .color(if is_selected {
-                            theme.text_strong
-                        } else {
-                            theme.text
-                        }),
-                );
-            });
-        });
-        if resp.response.clicked() {
+        let resp = crate::widgets::nav_row(ui, theme, icon, &name, is_selected);
+        if resp.clicked() {
             selected_project = Some(project_id.clone());
         }
 
@@ -213,31 +190,8 @@ fn render_session_row(
         _ => crate::theme::ICON_WRENCH,
     };
     let title = truncate_session_title(&session.title);
-    let resp = crate::widgets::interactive_row(ui, is_active, theme, |ui| {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = theme.space_8;
-            crate::widgets::nav_icon_rail(
-                ui,
-                theme,
-                icon,
-                if is_active {
-                    theme.accent
-                } else {
-                    theme.text_dim
-                },
-            );
-            ui.label(
-                egui::RichText::new(title)
-                    .size(theme.text_sm)
-                    .color(if is_active {
-                        theme.text_strong
-                    } else {
-                        theme.text
-                    }),
-            );
-        });
-    });
-    if resp.response.clicked() && !is_active {
+    let resp = crate::widgets::nav_row(ui, theme, icon, &title, is_active);
+    if resp.clicked() && !is_active {
         app.switch_to_session(session.id.clone());
     }
 }

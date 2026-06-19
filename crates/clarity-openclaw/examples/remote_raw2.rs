@@ -11,6 +11,8 @@
 //!   OPENCLAW_REMOTE_TOKEN=<token> \
 //!     cargo run -p clarity-openclaw --example remote_raw2
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::{Message, http::Request};
 

@@ -12,6 +12,8 @@
 //!   OPENCLAW_REMOTE_TOKEN=<token> \
 //!     cargo run -p clarity-openclaw --example remote_chat
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use clarity_openclaw::client::{ClawClient, ClawResponse};
 use std::io::Write;
 use std::time::Duration;

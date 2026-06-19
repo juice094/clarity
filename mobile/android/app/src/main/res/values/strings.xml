@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Clarity</string>
+    <string name="rust_version_label">Rust core version:</string>
+    <string name="load_rust">Load Rust Core</string>
+    <string name="rust_not_loaded">Not loaded yet</string>
+</resources>

@@ -150,8 +150,6 @@ pub struct Theme {
     pub nav_row_hover: egui::Color32,
     /// Navigation row background when selected / active.
     pub nav_row_selected: egui::Color32,
-    /// Collapsible section header background when expanded.
-    pub nav_section_expanded: egui::Color32,
     /// Text color on the active segment of the Work/Chat toggle.
     pub toggle_active_text: egui::Color32,
 
@@ -160,8 +158,6 @@ pub struct Theme {
     pub size_nav_icon_rail: f32,
     /// Target height of a single navigation/bot/history row.
     pub size_nav_row_h: f32,
-    /// Width of the left accent bar shown on selected rows.
-    pub size_nav_accent_bar: f32,
 
     // --- Semantic surface (content-type backgrounds beyond chat bubbles) ---
     /// Tool call lifecycle indicator bg (distinct from chat bubbles).
@@ -353,15 +349,13 @@ impl Theme {
 
             // Navigation (component-level)
             nav_cta_text: hex("#ffffff"),
-            nav_row_hover: hex("#2a2a2a"),
-            nav_row_selected: rgba(26, 136, 255, 0.12),
-            nav_section_expanded: hex("#2a2a2a"),
+            nav_row_hover: rgba(255, 255, 255, 0.04),
+            nav_row_selected: rgba(255, 255, 255, 0.08),
             toggle_active_text: hex("#ffffff"),
 
             // Sidebar micro-layout
             size_nav_icon_rail: 24.0,
             size_nav_row_h: 32.0,
-            size_nav_accent_bar: 3.0,
 
             // Semantic surfaces
             tool_call_bg: rgba(26, 136, 255, 0.08),
@@ -545,15 +539,13 @@ impl Theme {
 
             // Navigation (component-level)
             nav_cta_text: hex("#ffffff"),
-            nav_row_hover: rgba(45, 45, 62, 0.65),
-            nav_row_selected: rgba(91, 141, 239, 0.14),
-            nav_section_expanded: rgba(45, 45, 62, 0.65),
+            nav_row_hover: rgba(255, 255, 255, 0.04),
+            nav_row_selected: rgba(255, 255, 255, 0.08),
             toggle_active_text: hex("#ffffff"),
 
             // Sidebar micro-layout
             size_nav_icon_rail: 24.0,
             size_nav_row_h: 32.0,
-            size_nav_accent_bar: 3.0,
 
             // Semantic surfaces
             tool_call_bg: rgba(91, 141, 239, 0.08),
@@ -725,15 +717,13 @@ impl Theme {
 
             // Navigation (component-level)
             nav_cta_text: hex("#ffffff"),
-            nav_row_hover: hex("#d0d4e0"),
-            nav_row_selected: hex_alpha("#c98a5e", 0.10),
-            nav_section_expanded: hex("#d0d4e0"),
+            nav_row_hover: rgba(0, 0, 0, 0.04),
+            nav_row_selected: rgba(0, 0, 0, 0.08),
             toggle_active_text: hex("#ffffff"),
 
             // Sidebar micro-layout
             size_nav_icon_rail: 24.0,
             size_nav_row_h: 32.0,
-            size_nav_accent_bar: 3.0,
 
             // Semantic surfaces
             tool_call_bg: hex_alpha("#c98a5e", 0.06),
@@ -1207,7 +1197,6 @@ mod tests {
         let t = Theme::dark();
         assert!(t.size_nav_icon_rail > 0.0);
         assert!(t.size_nav_row_h > 0.0);
-        assert!(t.size_nav_accent_bar > 0.0);
     }
 
     #[test]
@@ -1216,7 +1205,5 @@ mod tests {
         let scaled = Theme::dark().with_font_scale(1.5);
         assert!((scaled.size_nav_icon_rail - base.size_nav_icon_rail * 1.5).abs() < f32::EPSILON);
         assert!((scaled.size_nav_row_h - base.size_nav_row_h * 1.5).abs() < f32::EPSILON);
-        // Accent bar stays fixed for visual crispness.
-        assert!((scaled.size_nav_accent_bar - base.size_nav_accent_bar).abs() < f32::EPSILON);
     }
 }

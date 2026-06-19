@@ -1,0 +1,38 @@
+[package]
+name = "clarity-mobile-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Mobile FFI core for Clarity (Android/iOS)"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+uniffi = { version = "0.29", features = ["cli"] }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+parking_lot = "0.12"
+# Disable `local-llm` on mobile to avoid the `candle`/`gemm-f16` dependency chain,
+# which requires ARM fullfp16 support not enabled by default on Android ABIs.
+clarity-core = { path = "../clarity-core", default-features = false }
+clarity-wire = { path = "../clarity-wire" }
+clarity-memory = { path = "../clarity-memory" }
+clarity-contract = { path = "../clarity-contract" }
+clarity-llm = { path = "../clarity-llm", default-features = false }
+
+[build-dependencies]
+uniffi = { version = "0.29", features = ["build"] }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[lints]
+workspace = true

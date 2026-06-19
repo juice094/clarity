@@ -1,8 +1,8 @@
-//! Bridge between `clarity_llm::LlmProvider` and `clarity_memory::extractor::LlmClient`.
+//! Bridge between `clarity_contract::LlmProvider` and `clarity_memory::extractor::LlmClient`.
 
 use async_trait::async_trait;
-use clarity_llm::Message as LlmMessage;
-use clarity_llm::api::LlmProvider;
+use clarity_contract::LlmProvider;
+use clarity_contract::Message as LlmMessage;
 use std::sync::Arc;
 
 /// Bridges the core `LlmProvider` trait to the memory system's `LlmClient` trait.

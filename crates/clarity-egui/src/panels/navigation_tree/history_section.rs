@@ -70,31 +70,9 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                             _ => crate::theme::ICON_WRENCH,
                         };
 
-                        let resp = crate::widgets::interactive_row(ui, is_active, &theme, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = theme.space_8;
-                                crate::widgets::nav_icon_rail(
-                                    ui,
-                                    &theme,
-                                    icon,
-                                    if is_active {
-                                        theme.accent
-                                    } else {
-                                        theme.text_dim
-                                    },
-                                );
-                                ui.label(
-                                    egui::RichText::new(&session.title)
-                                        .size(theme.text_sm)
-                                        .color(if is_active {
-                                            theme.text_strong
-                                        } else {
-                                            theme.text
-                                        }),
-                                );
-                            });
-                        });
-                        if resp.response.clicked() && !session.is_active {
+                        let resp =
+                            crate::widgets::nav_row(ui, &theme, icon, &session.title, is_active);
+                        if resp.clicked() && !session.is_active {
                             clicked_id = Some(session.id.clone());
                         }
                     }

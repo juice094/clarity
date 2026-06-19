@@ -9,6 +9,8 @@
 //!   OPENCLAW_DEVICE_TOKEN=<device-token> \
 //!     cargo run -p clarity-openclaw --example remote_save_token
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use clarity_openclaw::PairedToken;
 
 fn main() {

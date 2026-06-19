@@ -263,10 +263,11 @@ impl App {
             .keys()
             .map(|k| (k.clone(), k.clone()))
             .collect();
-        let settings_vm = clarity_core::view_models::settings::SettingsViewModel::from_snapshot(
+        let mut settings_vm = clarity_core::view_models::settings::SettingsViewModel::from_snapshot(
             &settings_snapshot,
             profile_list,
         );
+        settings_vm.set_available_models(clarity_llm::get_available_models());
         mark("settings_load");
 
         let initial_mcp_mtime = clarity_core::mcp::config::default_config_path()
@@ -302,6 +303,8 @@ impl App {
             testing_provider: None,
             refreshing_provider: None,
             kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
+            claw_editing_index: None,
+            claw_form: crate::settings::OpenClawConnection::default(),
         };
         // Discover Claw devices after settings are loaded so user-configured
         // OpenClaw connections participate in the bot list.
@@ -484,6 +487,9 @@ impl App {
                 None
             }),
             claw_ws_uses_sessions_send: false,
+            claw_pairing_client: None,
+            claw_pairing_state: crate::PairingState::default(),
+            knowledge_store: crate::stores::KnowledgeStore::new(),
         };
         mark("app_struct_init");
 

@@ -13,7 +13,7 @@ use crate::agent::Agent;
 use crate::approval::ApprovalMode;
 use crate::error::AgentError;
 use crate::registry::ToolRegistry;
-use clarity_llm::api::{Message, MessageRole};
+use clarity_contract::{Message, MessageRole};
 use clarity_wire::WireMessage;
 use serde_json::Value;
 use std::sync::Arc;
@@ -298,7 +298,7 @@ impl Agent {
         (
             Vec<Message>,
             Value,
-            Arc<dyn clarity_llm::api::LlmProvider>,
+            Arc<dyn clarity_contract::LlmProvider>,
             CancellationToken,
         ),
         AgentError,
@@ -316,7 +316,7 @@ impl Agent {
     ) -> Result<
         (
             Value,
-            Arc<dyn clarity_llm::api::LlmProvider>,
+            Arc<dyn clarity_contract::LlmProvider>,
             CancellationToken,
         ),
         AgentError,

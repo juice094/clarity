@@ -215,6 +215,13 @@ pub enum UiEvent {
         output: String,
         exit_code: i32,
     },
+    /// OKF knowledge bundle finished loading.
+    KnowledgeLoaded {
+        /// Requested bundle path.
+        path: String,
+        /// Loaded bundle on success, error message on failure.
+        result: Result<clarity_core::okf::OkfBundle, String>,
+    },
 }
 
 /// Transient draft indicator state for the current agent turn.

@@ -314,12 +314,72 @@ impl ClawClient {
 
 // ── Connection loop ────────────────────────────────────────────────────
 
+/// Classification of why a single connection attempt ended.
+enum ConnectionExit {
+    /// Configuration or authentication error: do not retry.
+    Terminal(String),
+    /// Network or transient error: retry with exponential backoff.
+    Transient(String),
+}
+
+/// Compute the next exponential-backoff delay, capping at 30 seconds.
+///
+/// Sequence: 1s, 2s, 4s, 8s, 16s, 30s, 30s, ...
+fn next_backoff(current: Duration) -> Duration {
+    let next = current.saturating_mul(2);
+    let cap = Duration::from_secs(30);
+    if next > cap { cap } else { next }
+}
+
 async fn run_connection(
     gateway_url: &str,
     auth: ClawAuth,
     cmd_rx: Receiver<ClawCommand>,
     resp_tx: Sender<ClawResponse>,
 ) {
+    let (async_tx, mut async_rx) = tokio::sync::mpsc::unbounded_channel::<ClawCommand>();
+    tokio::task::spawn_blocking(move || {
+        while let Ok(cmd) = cmd_rx.recv() {
+            if async_tx.send(cmd).is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match run_single_connection(gateway_url, &auth, &mut async_rx, &resp_tx).await {
+            Ok(()) => break,
+            Err(ConnectionExit::Terminal(reason)) => {
+                let _ = resp_tx.send(ClawResponse::Error(reason));
+                break;
+            }
+            Err(ConnectionExit::Transient(reason)) => {
+                tracing::warn!(
+                    reason = %reason,
+                    delay = %delay.as_secs(),
+                    "OpenClaw connection transient failure; retrying"
+                );
+                let _ = resp_tx.send(ClawResponse::Event {
+                    event_type: "openclaw.reconnect_pending".to_string(),
+                    payload: serde_json::json!({
+                        "reason": reason,
+                        "seconds": delay.as_secs(),
+                    }),
+                });
+                tokio::time::sleep(delay).await;
+                delay = next_backoff(delay);
+            }
+        }
+    }
+}
+
+async fn run_single_connection(
+    gateway_url: &str,
+    auth: &ClawAuth,
+    async_rx: &mut tokio::sync::mpsc::UnboundedReceiver<ClawCommand>,
+    resp_tx: &Sender<ClawResponse>,
+) -> Result<(), ConnectionExit> {
     use base64::Engine as _;
     use futures_util::SinkExt;
     use futures_util::StreamExt;
@@ -333,8 +393,10 @@ async fn run_connection(
     let uri: tokio_tungstenite::tungstenite::http::Uri = match gateway_url.parse() {
         Ok(u) => u,
         Err(e) => {
-            let _ = resp_tx.send(ClawResponse::Error(format!("parse gateway url: {}", e)));
-            return;
+            return Err(ConnectionExit::Terminal(format!(
+                "parse gateway url: {}",
+                e
+            )));
         }
     };
     let host = uri.authority().map(|a| a.as_str()).unwrap_or(gateway_url);
@@ -367,16 +429,15 @@ async fn run_connection(
     }
     let request = match builder.body(()) {
         Ok(req) => req,
-        Err(e) => {
-            let _ = resp_tx.send(ClawResponse::Error(format!("build ws request: {}", e)));
-            return;
-        }
+        Err(e) => return Err(ConnectionExit::Terminal(format!("build ws request: {}", e))),
     };
     let ws_stream = match connect_async(request).await {
         Ok((ws, _)) => ws,
         Err(e) => {
-            let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket connect: {}", e)));
-            return;
+            return Err(ConnectionExit::Transient(format!(
+                "WebSocket connect: {}",
+                e
+            )));
         }
     };
 
@@ -386,7 +447,7 @@ async fn run_connection(
     // Token-only connections (remote Gateway admin token or local gateway
     // token) use the generic gateway client identity. Device-paired control-ui
     // connections must use the whitelisted control-ui identity.
-    let (client_id, client_mode) = match &auth {
+    let (client_id, client_mode) = match auth {
         ClawAuth::TokenOnly { .. } | ClawAuth::TokenWithDevice { .. } => ("gateway-client", "cli"),
         ClawAuth::DevicePaired { .. } => ("openclaw-control-ui", "webchat"),
     };
@@ -538,25 +599,23 @@ async fn run_connection(
                 }
             }
             Ok(Some(Ok(other))) => {
-                let _ = resp_tx.send(ClawResponse::Error(format!(
+                return Err(ConnectionExit::Terminal(format!(
                     "Unexpected pre-auth message: {:?}",
                     other
                 )));
-                return;
             }
             Ok(Some(Err(e))) => {
-                let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket error: {}", e)));
-                return;
+                return Err(ConnectionExit::Terminal(format!("WebSocket error: {}", e)));
             }
             Ok(None) => {
-                let _ = resp_tx.send(ClawResponse::Error(
+                return Err(ConnectionExit::Terminal(
                     "Connection closed before challenge".into(),
                 ));
-                return;
             }
             Err(_) => {
-                // No challenge received; fall through and try a token-only
-                // connect. Some gateways may not send one.
+                return Err(ConnectionExit::Terminal(
+                    "Pre-auth challenge timeout".into(),
+                ));
             }
         }
     }
@@ -566,7 +625,7 @@ async fn run_connection(
         ClawAuth::DevicePaired { .. } | ClawAuth::TokenWithDevice { .. }
     );
     let connect_req = build_connect_req(
-        &auth,
+        auth,
         client_id,
         client_mode,
         role,
@@ -576,8 +635,7 @@ async fn run_connection(
         with_device,
     );
     if let Err(e) = write.send(Message::Text(connect_req.to_string())).await {
-        let _ = resp_tx.send(ClawResponse::Error(format!("send connect: {}", e)));
-        return;
+        return Err(ConnectionExit::Transient(format!("send connect: {}", e)));
     }
 
     // Wait for auth response. The Gateway may emit a `connect.challenge`
@@ -607,7 +665,7 @@ async fn run_connection(
                                 .and_then(|v| v.as_str())
                             {
                                 let req = build_connect_req(
-                                    &auth,
+                                    auth,
                                     client_id,
                                     client_mode,
                                     role,
@@ -617,11 +675,10 @@ async fn run_connection(
                                     true,
                                 );
                                 if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                                    let _ = resp_tx.send(ClawResponse::Error(format!(
+                                    return Err(ConnectionExit::Transient(format!(
                                         "send challenge connect: {}",
                                         e
                                     )));
-                                    return;
                                 }
                                 challenge_answered = true;
                             }
@@ -650,47 +707,34 @@ async fn run_connection(
                 break false;
             }
             Ok(Some(Ok(other))) => {
-                let _ = resp_tx.send(ClawResponse::Error(format!(
+                return Err(ConnectionExit::Terminal(format!(
                     "Unexpected auth response: {:?}",
                     other
                 )));
-                return;
             }
             Ok(Some(Err(e))) => {
-                let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket error: {}", e)));
-                return;
+                return Err(ConnectionExit::Terminal(format!("WebSocket error: {}", e)));
             }
             Ok(None) => {
-                let _ = resp_tx.send(ClawResponse::Error("Connection closed during auth".into()));
-                return;
+                return Err(ConnectionExit::Terminal(
+                    "Connection closed during auth".into(),
+                ));
             }
             Err(_) => {
-                let _ = resp_tx.send(ClawResponse::Error("Auth timeout".into()));
-                return;
+                return Err(ConnectionExit::Terminal("Auth timeout".into()));
             }
         }
     };
 
-    if auth_ok {
-        let _ = resp_tx.send(ClawResponse::Connected {
-            gateway_url: gateway_url.into(),
-        });
-    } else {
-        let _ = resp_tx.send(ClawResponse::Error("Auth failed".into()));
-        return;
+    if !auth_ok {
+        return Err(ConnectionExit::Terminal("Auth failed".into()));
     }
 
-    // ── Step 2: Bridge sync mpsc to async ─────────────────────────
-    let (async_tx, mut async_rx) = tokio::sync::mpsc::channel::<ClawCommand>(32);
-    tokio::task::spawn_blocking(move || {
-        while let Ok(cmd) = cmd_rx.recv() {
-            if async_tx.blocking_send(cmd).is_err() {
-                break;
-            }
-        }
+    let _ = resp_tx.send(ClawResponse::Connected {
+        gateway_url: gateway_url.into(),
     });
 
-    // ── Step 3: Main loop — send commands, receive responses ─────
+    // ── Step 2: Main loop ─────────────────────────────────────────
     let mut req_id: u64 = 0;
     // Track pending request IDs so replies can be attributed to their original
     // method. This lets the UI decide whether an ok=false response should be
@@ -702,8 +746,18 @@ async fn run_connection(
     // deltas and does not duplicate content.
     let mut last_assistant_text = String::new();
 
+    let start = tokio::time::Instant::now() + Duration::from_secs(30);
+    let mut ping_interval = tokio::time::interval_at(start, Duration::from_secs(30));
+    ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
         tokio::select! {
+            _ = ping_interval.tick() => {
+                if let Err(e) = write.send(Message::Ping(Vec::new())).await {
+                    return Err(ConnectionExit::Transient(format!("ping send: {}", e)));
+                }
+            }
+
             cmd = async_rx.recv() => {
                 match cmd {
                     Some(ClawCommand::SendMessage { session_key, message }) => {
@@ -729,8 +783,7 @@ async fn run_connection(
                             }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("send: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("send: {}", e)));
                         }
                     }
                     Some(ClawCommand::FetchHistory { session_key }) => {
@@ -750,8 +803,7 @@ async fn run_connection(
                             }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("send history: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("send history: {}", e)));
                         }
                     }
                     Some(ClawCommand::SubscribeSession { key }) => {
@@ -766,8 +818,7 @@ async fn run_connection(
                             "params": { "key": &key }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("subscribe session: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("subscribe session: {}", e)));
                         }
                     }
                     Some(ClawCommand::SubscribeMessages { key }) => {
@@ -782,8 +833,7 @@ async fn run_connection(
                             "params": { "key": &key }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("subscribe messages: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("subscribe messages: {}", e)));
                         }
                     }
                     Some(ClawCommand::SendSessionMessage { key, message }) => {
@@ -808,8 +858,7 @@ async fn run_connection(
                             }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("send session message: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("send session message: {}", e)));
                         }
                     }
                     Some(ClawCommand::RequestPairing {
@@ -840,8 +889,7 @@ async fn run_connection(
                             }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("send pairing: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("send pairing: {}", e)));
                         }
                     }
                     Some(ClawCommand::RawRequest { id, method, params }) => {
@@ -853,13 +901,12 @@ async fn run_connection(
                             "params": &params
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            let _ = resp_tx.send(ClawResponse::Error(format!("send: {}", e)));
-                            break;
+                            return Err(ConnectionExit::Transient(format!("send: {}", e)));
                         }
                     }
                     None => {
                         // Channel closed — UI dropped the handle.
-                        break;
+                        return Ok(());
                     }
                 }
             }
@@ -953,17 +1000,17 @@ async fn run_connection(
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
-                        let _ = resp_tx.send(ClawResponse::Error("Gateway closed connection".into()));
-                        break;
+                        return Err(ConnectionExit::Transient("Gateway closed connection".into()));
                     }
                     Some(Ok(_)) => {
                         // Binary, Ping, Pong, Frame — ignored.
                     }
                     Some(Err(e)) => {
-                        let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket: {}", e)));
-                        break;
+                        return Err(ConnectionExit::Transient(format!("WebSocket: {}", e)));
                     }
-                    None => break,
+                    None => {
+                        return Err(ConnectionExit::Transient("WebSocket stream ended".into()));
+                    }
                 }
             }
         }
@@ -1147,7 +1194,9 @@ fn parse_message_list(items: &[serde_json::Value]) -> Vec<GatewayMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_agent_event;
+    use std::time::Duration;
+
+    use super::{extract_agent_event, next_backoff};
 
     #[test]
     fn extract_agent_event_assistant_chunk() {
@@ -1177,5 +1226,15 @@ mod tests {
     fn extract_agent_event_ignores_unknown_stream() {
         let payload = serde_json::json!({ "stream": "heartbeat" });
         assert!(extract_agent_event(&payload).is_none());
+    }
+
+    #[test]
+    fn backoff_progression_capped_at_thirty_seconds() {
+        let mut delay = Duration::from_secs(1);
+        let expected = [1, 2, 4, 8, 16, 30, 30];
+        for &secs in &expected {
+            assert_eq!(delay.as_secs(), secs);
+            delay = next_backoff(delay);
+        }
     }
 }

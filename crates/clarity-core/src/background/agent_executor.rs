@@ -7,11 +7,11 @@ use crate::agent::{Agent, AgentConfig, LlmProvider};
 use crate::background::{AgentTaskExecutor, TaskSpec};
 use crate::memory::MemoryStore;
 use crate::registry::ToolRegistry;
-use clarity_llm::{ModelRegistry, build_provider_from_registry_entry, default_secret_store};
 // P1-1: Import from `types` instead of `subagents::registry` to break the
 // background↔subagents circular dependency.
 use crate::types::{AgentTypeDefinition, LaborMarket};
 use async_trait::async_trait;
+use clarity_contract::LlmProviderFactory;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -23,7 +23,7 @@ pub struct DefaultAgentTaskExecutor {
     labor_market: LaborMarket,
     memory_store: Option<Arc<dyn MemoryStore>>,
     working_dir: std::path::PathBuf,
-    registry: Option<ModelRegistry>,
+    factory: Option<Arc<dyn LlmProviderFactory>>,
 }
 
 impl std::fmt::Debug for DefaultAgentTaskExecutor {
@@ -48,13 +48,13 @@ impl DefaultAgentTaskExecutor {
             labor_market: LaborMarket::new(),
             memory_store: None,
             working_dir: working_dir.into(),
-            registry: None,
+            factory: None,
         }
     }
 
-    /// 设置模型注册表（支持 model_alias 动态选择）
-    pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
-        self.registry = Some(registry);
+    /// Set the LLM provider factory (supports per-task model selection via alias).
+    pub fn with_factory(mut self, factory: Arc<dyn LlmProviderFactory>) -> Self {
+        self.factory = Some(factory);
         self
     }
 
@@ -115,48 +115,23 @@ impl AgentTaskExecutor for DefaultAgentTaskExecutor {
             agent = agent.with_memory(store.clone());
         }
 
-        // 根据 model_alias 动态选择 LLM
-        let secrets = default_secret_store().ok();
+        // Resolve model alias through the configured factory.
         if let Some(ref model_alias) = spec.model_alias {
-            if let Some(ref reg) = self.registry {
-                match reg.get(model_alias) {
-                    Some(entry) => {
-                        if let Some(provider_cfg) = reg.get_provider(&entry.provider) {
-                            match build_provider_from_registry_entry(
-                                provider_cfg,
-                                entry,
-                                None,
-                                secrets.as_ref(),
-                            )
-                            .await
-                            {
-                                Ok(new_llm) => {
-                                    agent.set_llm(Arc::from(new_llm));
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to build provider for model '{}': {}. Using default LLM.",
-                                        model_alias, e
-                                    );
-                                }
-                            }
-                        } else {
-                            warn!(
-                                "Provider '{}' for model '{}' not found. Using default LLM.",
-                                entry.provider, model_alias
-                            );
-                        }
+            if let Some(ref factory) = self.factory {
+                match factory.build_for_alias(model_alias).await {
+                    Ok(new_llm) => {
+                        agent.set_llm(new_llm);
                     }
-                    None => {
+                    Err(e) => {
                         warn!(
-                            "Model alias '{}' not found in registry. Using default LLM.",
-                            model_alias
+                            "Failed to build provider for model '{}': {}. Using default LLM.",
+                            model_alias, e
                         );
                     }
                 }
             } else {
                 warn!(
-                    "model_alias '{}' specified but no registry configured. Using default LLM.",
+                    "model_alias '{}' specified but no factory configured. Using default LLM.",
                     model_alias
                 );
             }

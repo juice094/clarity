@@ -8,11 +8,13 @@
 //! See <https://github.com/GoogleCloudPlatform/knowledge-catalog> for the
 //! OKF v0.1 specification.
 
+mod cache;
 mod graph;
 mod loader;
 
 use std::collections::HashMap;
 
+pub use cache::OkfBundleCache;
 pub use graph::{OkfGraph, OkfLink};
 pub use loader::{BundleLoader, ConceptLoader};
 
@@ -155,6 +157,10 @@ pub struct OkfBundle {
 
     /// All concepts indexed by their concept id.
     pub concepts: HashMap<String, OkfConcept>,
+
+    /// Non-fatal warnings collected while loading, e.g. files that could not
+    /// be parsed as OKF concepts.
+    pub warnings: Vec<String>,
 }
 
 impl OkfBundle {
@@ -163,6 +169,7 @@ impl OkfBundle {
         Self {
             root,
             concepts: HashMap::new(),
+            warnings: Vec::new(),
         }
     }
 

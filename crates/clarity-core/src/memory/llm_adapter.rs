@@ -1,7 +1,7 @@
-//! LLM adapter bridging `clarity_llm::LlmProvider` to `clarity_memory::extractor::LlmClient`.
+//! LLM adapter bridging `clarity_contract::LlmProvider` to `clarity_memory::extractor::LlmClient`.
 
 use async_trait::async_trait;
-use clarity_llm::api::{LlmProvider, Message};
+use clarity_contract::{LlmProvider, Message};
 use std::sync::Arc;
 
 /// `LlmProviderAdapter` configuration/state.

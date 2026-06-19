@@ -8,7 +8,7 @@
 //!
 //! ```rust,no_run
 //! use clarity_core::compaction::{CompactionConfig, SimpleCompaction, estimate_text_tokens};
-//! use clarity_llm::api::{Message, MessageRole};
+//! use clarity_contract::{Message, MessageRole};
 //!
 //! // Estimate token count for text
 //! let tokens = estimate_text_tokens("Hello, world!");
@@ -20,7 +20,7 @@
 
 use crate::error::AgentError;
 use async_trait::async_trait;
-use clarity_llm::api::{LlmProvider, Message, MessageRole};
+use clarity_contract::{LlmProvider, Message, MessageRole};
 use std::sync::OnceLock;
 
 /// Default trigger ratio for compaction (80% of max tokens)

@@ -2,6 +2,7 @@
 //!
 //! provider config, model selection, add-provider form
 
+use crate::settings::OpenClawConnection;
 use clarity_core::view_models::settings::SettingsViewModel;
 
 /// State variants for kimi code login.
@@ -36,4 +37,8 @@ pub struct SettingsStore {
     pub refreshing_provider: Option<String>,
     /// Current state of the Kimi Code OAuth login flow.
     pub kimi_code_login_state: KimiCodeLoginState,
+    /// Index of the OpenClaw connection currently being edited in settings.
+    pub claw_editing_index: Option<usize>,
+    /// Form state for adding or editing an OpenClaw connection.
+    pub claw_form: OpenClawConnection,
 }

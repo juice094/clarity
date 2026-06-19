@@ -4,7 +4,7 @@
 //! OKF represents knowledge as a directory of Markdown files with YAML
 //! frontmatter. See `crate::okf` for the consumer implementation.
 
-use crate::okf::{BundleLoader, OkfBundle};
+use crate::okf::OkfBundle;
 use crate::tools::{Tool, ToolContext, ToolResult};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -21,11 +21,16 @@ fn resolve_bundle_path(path: &str, working_dir: &Path) -> PathBuf {
     }
 }
 
-/// Load an OKF bundle from disk, running the blocking I/O on a worker thread.
+/// Load an OKF bundle, using the in-memory cache when available and running
+/// the blocking load on a worker thread.
 async fn load_bundle(path: PathBuf) -> ToolResult<OkfBundle> {
-    tokio::task::spawn_blocking(move || BundleLoader::load(&path).map_err(into_tool_error))
-        .await
-        .map_err(|e| clarity_contract::ToolError::execution_failed(format!("Join error: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        crate::okf::OkfBundleCache::global()
+            .get_or_load(&path)
+            .map_err(into_tool_error)
+    })
+    .await
+    .map_err(|e| clarity_contract::ToolError::execution_failed(format!("Join error: {e}")))?
 }
 
 /// Convert an OKF consumer error into a tool error.
@@ -96,11 +101,23 @@ impl Tool for OkfLoadTool {
             .map(|c| c.id.clone())
             .collect();
 
+        let skipped_count = bundle.warnings.len();
+        let skipped_files: Vec<&str> = bundle
+            .warnings
+            .iter()
+            .filter_map(|w| w.strip_prefix("Skipping non-compliant OKF file "))
+            .filter_map(|rest| rest.split_once(": "))
+            .map(|(path, _reason)| path)
+            .collect();
+
         Ok(json!({
             "root": bundle.root.to_string_lossy(),
             "concept_count": bundle.len(),
             "types": types,
             "reserved_files": reserved_files,
+            "skipped_count": skipped_count,
+            "skipped_files": skipped_files,
+            "warnings": bundle.warnings,
         }))
     }
 }
@@ -380,6 +397,58 @@ mod tests {
                 .unwrap()
                 .contains(&json!("index"))
         );
+    }
+
+    #[tokio::test]
+    async fn test_okf_load_tool_reports_skipped_files() {
+        let (dir, root) = create_test_bundle();
+        let mut bad = std::fs::File::create(root.join("draft.md")).unwrap();
+        bad.write_all(b"# Draft\nNo frontmatter yet.").unwrap();
+
+        let tool = OkfLoadTool::new();
+        let ctx = ToolContext {
+            working_dir: root.clone(),
+            ..Default::default()
+        };
+        let result = tool
+            .execute(json!({"path": root.to_string_lossy()}), ctx)
+            .await
+            .unwrap();
+        assert_eq!(result["concept_count"].as_u64().unwrap(), 3);
+        assert_eq!(result["skipped_count"].as_u64().unwrap(), 1);
+
+        let skipped = result["skipped_files"].as_array().unwrap();
+        assert!(
+            skipped
+                .iter()
+                .any(|s| s.as_str().unwrap().contains("draft.md"))
+        );
+
+        // Simulate agent auto-fix: prepend frontmatter to the skipped file.
+        let draft_path = root.join("draft.md");
+        let original = std::fs::read_to_string(&draft_path).unwrap();
+        let fixed = format!("---\ntype: note\ntitle: Draft\n---\n\n{}", original);
+        std::fs::write(&draft_path, fixed).unwrap();
+
+        // Invalidate the cache so the next load sees the fixed file.
+        crate::okf::OkfBundleCache::global()
+            .invalidate(&root)
+            .unwrap();
+
+        let ctx = ToolContext {
+            working_dir: root.clone(),
+            ..Default::default()
+        };
+        let result = tool
+            .execute(json!({"path": root.to_string_lossy()}), ctx)
+            .await
+            .unwrap();
+        assert_eq!(result["concept_count"].as_u64().unwrap(), 4);
+        assert_eq!(result["skipped_count"].as_u64().unwrap(), 0);
+        assert!(result["types"].as_array().unwrap().contains(&json!("note")));
+
+        // Keep the TempDir alive until the end of the test.
+        let _ = dir;
     }
 
     #[tokio::test]

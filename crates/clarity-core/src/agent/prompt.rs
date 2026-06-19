@@ -240,7 +240,7 @@ impl Agent {
     pub(crate) async fn build_messages_with_cache(
         &self,
         query: &str,
-    ) -> Result<Vec<clarity_llm::api::Message>, AgentError> {
+    ) -> Result<Vec<clarity_contract::Message>, AgentError> {
         let (static_prompt, dynamic_prompt) = build_system_prompt_split(self, query).await;
 
         let static_hash = {
@@ -265,14 +265,14 @@ impl Agent {
 
         Ok(if dynamic_prompt.is_empty() {
             vec![
-                clarity_llm::api::Message::system(static_prompt),
-                clarity_llm::api::Message::user(query),
+                clarity_contract::Message::system(static_prompt),
+                clarity_contract::Message::user(query),
             ]
         } else {
             vec![
-                clarity_llm::api::Message::system(static_prompt),
-                clarity_llm::api::Message::system(dynamic_prompt),
-                clarity_llm::api::Message::user(query),
+                clarity_contract::Message::system(static_prompt),
+                clarity_contract::Message::system(dynamic_prompt),
+                clarity_contract::Message::user(query),
             ]
         })
     }

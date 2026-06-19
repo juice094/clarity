@@ -3,7 +3,7 @@
 use crate::agent::Agent;
 use crate::error::AgentError;
 use crate::types::ToolCall;
-use clarity_llm::api::{LlmProvider, Message};
+use clarity_contract::{LlmProvider, Message};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -130,8 +130,8 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
             });
         }
 
-        messages.push(clarity_llm::api::Message {
-            role: clarity_llm::api::MessageRole::Assistant,
+        messages.push(clarity_contract::Message {
+            role: clarity_contract::MessageRole::Assistant,
             content: result.response_content,
             tool_calls: Some(result.tool_calls.clone()),
             tool_call_id: None,
@@ -221,7 +221,7 @@ mod tests {
     use crate::agent::{Agent, AgentConfig};
     use crate::registry::ToolRegistry;
     use crate::types::{FunctionCall, ToolCall};
-    use clarity_llm::api::{LlmProvider, LlmResponse, Message, StreamDelta};
+    use clarity_contract::{LlmProvider, LlmResponse, Message, StreamDelta};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

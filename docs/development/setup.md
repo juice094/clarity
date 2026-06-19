@@ -113,7 +113,7 @@ CUDA 构建示例（Windows）：
 
 ```powershell
 $env:NVCC_CCBIN="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.40.33807\bin\Hostx64\x64"
-cargo check -p clarity-core --features local-llm-cuda
+cargo check -p clarity-llm --features local-llm-cuda
 cargo run -p clarity-egui --features cuda
 ```
 

@@ -7,7 +7,7 @@ use crate::compaction::estimate_message_tokens;
 use crate::error::{AgentError, ToolError};
 use crate::tools::ToolContext;
 use crate::types::ToolCall;
-use clarity_llm::api::Message;
+use clarity_contract::Message;
 use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;

@@ -23,6 +23,8 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
+
 mod app_state;
 pub(crate) mod claw;
 mod components;
@@ -114,10 +116,42 @@ pub(crate) struct App {
     pub(crate) claw_device_identity: Option<clarity_openclaw::DeviceIdentity>,
     /// Cached paired-device token for the OpenClaw Gateway.
     pub(crate) claw_device_token: Option<clarity_openclaw::PairedToken>,
+    /// Temporary WebSocket client used only for in-app pairing.
+    pub(crate) claw_pairing_client: Option<clarity_openclaw::ClawClient>,
+    /// Current state of the in-app pairing flow.
+    pub(crate) claw_pairing_state: PairingState,
+    /// OKF knowledge bundle browser state.
+    pub(crate) knowledge_store: crate::stores::KnowledgeStore,
 }
 
 mod app_logic;
 mod onboarding;
+
+/// State of an in-app OpenClaw device-pairing flow.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) enum PairingState {
+    /// No pairing in progress.
+    #[default]
+    Idle,
+    /// Sending the pairing request.
+    Requesting,
+    /// Waiting for the user to approve the request in the Gateway UI.
+    Waiting {
+        /// Gateway URL being paired with.
+        gateway_url: String,
+        /// When the wait started.
+        since: std::time::Instant,
+    },
+    /// Pairing approved and token saved.
+    Approved {
+        /// Gateway URL that was paired.
+        gateway_url: String,
+        /// Device token returned by the Gateway.
+        token: String,
+    },
+    /// Pairing failed or timed out.
+    Error(String),
+}
 
 /// Normalize a Gateway URL so that 127.0.0.1 and localhost are treated as
 /// equivalent when matching a saved device token to a discovered connection.
@@ -885,6 +919,149 @@ impl App {
     fn render_work_panel(&mut self, ctx: &egui::Context) {
         panels::work::render_work_panel(self, ctx);
     }
+
+    /// Start an in-app OpenClaw pairing flow for the connection at `conn_idx`.
+    pub(crate) fn start_openclaw_pairing(&mut self, conn_idx: usize) {
+        let Some(conn) = self
+            .settings_store
+            .settings_edit
+            .openclaw_connections
+            .get(conn_idx)
+        else {
+            self.claw_pairing_state = PairingState::Error("Connection not found".to_string());
+            return;
+        };
+
+        if conn.token.is_empty() {
+            self.claw_pairing_state =
+                PairingState::Error("Gateway token is required to request pairing".to_string());
+            return;
+        }
+
+        let identity = self
+            .claw_device_identity
+            .clone()
+            .or_else(|| clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui").ok());
+        let Some(identity) = identity else {
+            self.claw_pairing_state =
+                PairingState::Error("Failed to load or generate device identity".to_string());
+            return;
+        };
+        self.claw_device_identity = Some(identity.clone());
+
+        let ws_url =
+            if conn.gateway_url.starts_with("ws://") || conn.gateway_url.starts_with("wss://") {
+                conn.gateway_url.clone()
+            } else {
+                conn.gateway_url
+                    .replace("http://", "ws://")
+                    .replace("https://", "wss://")
+            };
+
+        let token = crate::settings::GuiSettings::resolve_api_key(&Some(conn.token.clone()))
+            .unwrap_or_default();
+        self.claw_pairing_state = PairingState::Requesting;
+        let client = clarity_openclaw::ClawClient::connect(&ws_url, &token);
+        let scopes = vec![
+            "operator.admin".into(),
+            "operator.read".into(),
+            "operator.write".into(),
+            "operator.approvals".into(),
+            "operator.pairing".into(),
+            "operator.talk.secrets".into(),
+        ];
+        client.request_pairing(
+            &identity.device_id(),
+            &identity.public_key(),
+            "openclaw-control-ui",
+            "webchat",
+            "windows",
+            "operator",
+            &scopes,
+        );
+
+        self.claw_pairing_client = Some(client);
+        self.claw_pairing_state = PairingState::Waiting {
+            gateway_url: ws_url,
+            since: std::time::Instant::now(),
+        };
+        self.push_toast(
+            "Pairing request sent. Approve it in the Gateway UI.".to_string(),
+            ToastLevel::Info,
+        );
+    }
+
+    /// Cancel an in-progress pairing flow.
+    pub(crate) fn cancel_openclaw_pairing(&mut self) {
+        self.claw_pairing_client = None;
+        self.claw_pairing_state = PairingState::Idle;
+    }
+
+    /// Finish a successful pairing: save the device token to the matching
+    /// settings connection and optionally persist a global paired token.
+    fn finish_openclaw_pairing(&mut self, device_id: &str, token: &str, scopes: &[String]) {
+        let gateway_url = match &self.claw_pairing_state {
+            PairingState::Waiting { gateway_url, .. } => gateway_url.clone(),
+            _ => String::new(),
+        };
+
+        let mut saved = false;
+        for conn in &mut self.settings_store.settings_edit.openclaw_connections {
+            let conn_ws = if conn.gateway_url.starts_with("ws://")
+                || conn.gateway_url.starts_with("wss://")
+            {
+                conn.gateway_url.clone()
+            } else {
+                conn.gateway_url
+                    .replace("http://", "ws://")
+                    .replace("https://", "wss://")
+            };
+            if normalize_gateway_url(&conn_ws) == normalize_gateway_url(&gateway_url) {
+                conn.auth_mode = crate::settings::OpenClawAuthMode::DevicePaired;
+                conn.device_token = Some(token.to_string());
+                saved = true;
+                break;
+            }
+        }
+
+        // Also persist a global paired-token file as a fallback for discovery.
+        let paired = clarity_openclaw::PairedToken {
+            gateway_url: gateway_url.clone(),
+            token: token.into(),
+            device_token: Some(token.into()),
+            role: "operator".into(),
+            scopes: scopes.to_vec(),
+            paired_at_ms: Utc::now().timestamp_millis(),
+        };
+        if let Err(e) = clarity_openclaw::save_paired_token(&paired) {
+            tracing::warn!("Failed to save paired token: {}", e);
+        } else {
+            self.claw_device_token = Some(paired);
+        }
+
+        if saved {
+            self.auto_save_settings();
+            self.push_toast(
+                format!(
+                    "Device {} paired successfully (scopes: {})",
+                    &device_id[..device_id.len().min(8)],
+                    scopes.join(",")
+                ),
+                crate::ui::types::ToastLevel::Info,
+            );
+        } else {
+            self.push_toast(
+                "Pairing approved, but no matching settings connection was found.".to_string(),
+                crate::ui::types::ToastLevel::Warn,
+            );
+        }
+
+        self.claw_pairing_state = PairingState::Approved {
+            gateway_url,
+            token: token.into(),
+        };
+        self.claw_pairing_client = None;
+    }
 }
 
 impl eframe::App for App {
@@ -955,6 +1132,7 @@ impl eframe::App for App {
                         // record matches this Gateway URL and we have a device
                         // identity. Remote OpenClaw uses gateway-client/cli;
                         // local KimiClaw uses the control-ui/webchat identity.
+                        let identity = self.claw_device_identity.clone();
                         let saved_pairing = self.claw_device_token.as_ref().and_then(|record| {
                             if normalize_gateway_url(&record.gateway_url)
                                 == normalize_gateway_url(&ws_url)
@@ -967,25 +1145,79 @@ impl eframe::App for App {
 
                         self.claw_ws = if matches!(conn.claw_type, crate::claw::ClawType::OpenClaw)
                         {
-                            if let (Some(identity), Some(record)) =
-                                (self.claw_device_identity.clone(), saved_pairing)
-                            {
-                                let token = record.auth_token();
-                                if is_remote {
-                                    self.claw_ws_uses_sessions_send = true;
-                                    Some(clarity_openclaw::ClawClient::connect_with_remote_device(
-                                        &ws_url, token, identity,
-                                    ))
-                                } else {
-                                    Some(clarity_openclaw::ClawClient::connect_with_device(
-                                        &ws_url, identity, token,
-                                    ))
+                            match conn.auth_mode.as_deref() {
+                                Some("device_paired") => {
+                                    let token = conn
+                                        .device_token
+                                        .as_deref()
+                                        .or(saved_pairing.map(|r| r.auth_token()))
+                                        .unwrap_or(&conn.gateway_token);
+                                    if let Some(identity) = identity {
+                                        if is_remote {
+                                            Some(
+                                                clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                    &ws_url, token, identity,
+                                                ),
+                                            )
+                                        } else {
+                                            Some(clarity_openclaw::ClawClient::connect_with_device(
+                                                &ws_url, identity, token,
+                                            ))
+                                        }
+                                    } else {
+                                        Some(clarity_openclaw::ClawClient::connect(
+                                            &ws_url,
+                                            &conn.gateway_token,
+                                        ))
+                                    }
                                 }
-                            } else {
-                                Some(clarity_openclaw::ClawClient::connect(
-                                    &ws_url,
-                                    &conn.gateway_token,
-                                ))
+                                Some("token_with_device") => {
+                                    if let Some(identity) = identity {
+                                        if is_remote {
+                                            Some(
+                                                clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                    &ws_url, &conn.gateway_token, identity,
+                                                ),
+                                            )
+                                        } else {
+                                            Some(clarity_openclaw::ClawClient::connect_with_device(
+                                                &ws_url,
+                                                identity,
+                                                &conn.gateway_token,
+                                            ))
+                                        }
+                                    } else {
+                                        Some(clarity_openclaw::ClawClient::connect(
+                                            &ws_url,
+                                            &conn.gateway_token,
+                                        ))
+                                    }
+                                }
+                                _ => {
+                                    // Default policy: use a saved pairing record
+                                    // when its Gateway URL matches.
+                                    if let (Some(identity), Some(record)) =
+                                        (identity, saved_pairing)
+                                    {
+                                        let token = record.auth_token();
+                                        if is_remote {
+                                            Some(
+                                                clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                    &ws_url, token, identity,
+                                                ),
+                                            )
+                                        } else {
+                                            Some(clarity_openclaw::ClawClient::connect_with_device(
+                                                &ws_url, identity, token,
+                                            ))
+                                        }
+                                    } else {
+                                        Some(clarity_openclaw::ClawClient::connect(
+                                            &ws_url,
+                                            &conn.gateway_token,
+                                        ))
+                                    }
+                                }
                             }
                         } else {
                             Some(clarity_openclaw::ClawClient::connect(
@@ -994,11 +1226,7 @@ impl eframe::App for App {
                             ))
                         };
                         self.claw_ws_device_id = active_id.clone();
-                        // Reset the sessions-send flag when switching away from
-                        // a remote OpenClaw bot.
-                        if !is_remote {
-                            self.claw_ws_uses_sessions_send = false;
-                        }
+                        self.claw_ws_uses_sessions_send = is_remote;
                     }
                 }
             }
@@ -1192,6 +1420,60 @@ impl eframe::App for App {
                             self.claw_ws_device_id.clear();
                         }
                     }
+                }
+            }
+
+            // Drain the temporary pairing client.
+            if let Some(client) = self.claw_pairing_client.as_ref() {
+                for resp in client.drain() {
+                    match resp {
+                        clarity_openclaw::client::ClawResponse::PairingResult {
+                            device_id,
+                            approved,
+                            token,
+                            scopes,
+                        } => {
+                            if approved {
+                                if let Some(t) = token {
+                                    self.finish_openclaw_pairing(&device_id, &t, &scopes);
+                                } else {
+                                    self.claw_pairing_state = PairingState::Error(
+                                        "Pairing approved but no token returned".to_string(),
+                                    );
+                                    self.claw_pairing_client = None;
+                                }
+                            } else {
+                                self.push_toast(
+                                    format!(
+                                        "Device {} pairing pending approval",
+                                        &device_id[..device_id.len().min(8)]
+                                    ),
+                                    crate::ui::types::ToastLevel::Info,
+                                );
+                            }
+                        }
+                        clarity_openclaw::client::ClawResponse::Error(e) => {
+                            self.claw_pairing_state = PairingState::Error(e.clone());
+                            self.claw_pairing_client = None;
+                            self.push_toast(
+                                format!("Pairing failed: {}", e),
+                                crate::ui::types::ToastLevel::Error,
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Time out pairing requests after 120 seconds.
+            if let PairingState::Waiting { since, .. } = self.claw_pairing_state {
+                if since.elapsed() > std::time::Duration::from_secs(120) {
+                    self.claw_pairing_state = PairingState::Error("Pairing timed out".to_string());
+                    self.claw_pairing_client = None;
+                    self.push_toast(
+                        "Pairing timed out".to_string(),
+                        crate::ui::types::ToastLevel::Error,
+                    );
                 }
             }
         }

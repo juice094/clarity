@@ -1,0 +1,105 @@
+// Mobile FFI interface for Clarity.
+// This UDL describes the surface exposed to Kotlin (Android) and Swift (iOS).
+
+namespace clarity_mobile_core {
+    // Returns the runtime version string, useful as a first FFI smoke test.
+    string runtime_version();
+};
+
+// Supported cloud LLM providers.
+[Enum]
+interface ProviderType {
+    OpenAi();
+    Kimi();
+    Deepseek();
+    Anthropic();
+};
+
+// LLM provider profile.
+dictionary ProviderProfile {
+    ProviderType provider;
+    string model;
+    string api_key;
+    string? base_url;
+};
+
+// Runtime configuration passed from the mobile OS.
+dictionary MobileConfig {
+    // Absolute path to the app's private data directory.
+    string data_dir;
+    // Default provider profile used for new conversations.
+    ProviderProfile default_provider;
+};
+
+// Handle to the mobile Clarity runtime.
+interface MobileRuntime {
+    // Create a new runtime instance.
+    constructor(MobileConfig config);
+
+    // Crate version (matches workspace version).
+    string version();
+
+    // Human-readable runtime version.
+    string runtime_version();
+
+    // Create a new conversation thread. Returns the thread id.
+    string create_thread(string? title);
+
+    // List existing threads, most recently updated first.
+    sequence<ThreadSummary> list_threads();
+
+    // Switch the active thread.
+    void switch_thread(string thread_id);
+
+    // Get the active thread id.
+    string current_thread_id();
+
+    // Update the LLM provider used for subsequent turns.
+    void set_provider(ProviderProfile profile);
+
+    // Send a user message in the active thread. The response is delivered
+    // asynchronously via [pollEvent].
+    void send_message(string content);
+
+    // Poll for the next UI event. Blocks up to [timeout_ms] milliseconds.
+    // Returns null if no event arrived before the timeout.
+    UiEvent? poll_event(u64 timeout_ms);
+};
+
+// Summary of a conversation thread.
+dictionary ThreadSummary {
+    string thread_id;
+    string? title;
+    string updated_at;
+};
+
+// Events flowing from the Rust core to the mobile UI.
+[Enum]
+interface UiEvent {
+    // A new turn has started.
+    TurnBegin(string turn_id, string user_input);
+
+    // A text chunk from the assistant (streaming).
+    ContentPart(string turn_id, string text);
+
+    // The model wants to call a tool.
+    ToolCall(string turn_id, string id, string name, string arguments_json);
+
+    // A tool finished executing.
+    ToolResult(string turn_id, string id, string result_json);
+
+    // The current turn finished.
+    TurnEnd(string turn_id);
+
+    // Token usage report for the turn.
+    Usage(string turn_id, u32 prompt_tokens, u32 completion_tokens);
+
+    // Status update for the user (e.g. "thinking...").
+    StatusUpdate(string turn_id, string message);
+
+    // The active thread changed.
+    ThreadActive(string thread_id, string? title);
+
+    // Something went wrong.
+    Error(string code, string message);
+};

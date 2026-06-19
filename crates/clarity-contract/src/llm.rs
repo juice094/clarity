@@ -8,6 +8,7 @@ use crate::{AgentError, Message, StreamDelta, ToolCall};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 /// Pricing info for cost estimation.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
@@ -106,6 +107,16 @@ pub trait LlmProvider: Send + Sync {
             pricing: None,
         }
     }
+}
+
+/// Factory for building LLM providers from a model alias.
+///
+/// This trait lives in the contract layer so that `clarity-core` can accept a
+/// factory without depending on `clarity-llm` for provider construction.
+#[async_trait]
+pub trait LlmProviderFactory: Send + Sync {
+    /// Build an `LlmProvider` for the given model alias.
+    async fn build_for_alias(&self, alias: &str) -> Result<Arc<dyn LlmProvider>, AgentError>;
 }
 
 #[cfg(test)]

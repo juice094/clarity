@@ -284,7 +284,6 @@ impl GuiSettings {
     ///
     /// If the stored value matches `${env:VAR_NAME}`, reads the named environment variable.
     /// Otherwise returns the value as-is (backward compatible with plain keys).
-    #[allow(dead_code)]
     pub fn resolve_api_key(value: &Option<String>) -> Option<String> {
         let raw = value.as_ref()?;
         // Parse `${env:VAR_NAME}` without pulling in regex crate
@@ -406,7 +405,7 @@ mod tests {
 
     #[test]
     fn test_get_available_models_has_providers() {
-        let models = clarity_core::view_models::settings::get_available_models();
+        let models = clarity_llm::get_available_models();
         assert!(!models.is_empty());
         let keys: Vec<String> = models.iter().map(|(k, _, _)| k.clone()).collect();
         assert!(keys.contains(&"openai".to_string()));
@@ -415,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_get_available_models_local_label() {
-        let models = clarity_core::view_models::settings::get_available_models();
+        let models = clarity_llm::get_available_models();
         let local = models.iter().find(|(k, _, _)| k == "local");
         assert!(local.is_some());
         let (_, label, _) = local.unwrap();

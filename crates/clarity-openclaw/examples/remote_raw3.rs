@@ -9,14 +9,13 @@ use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::{Message, http::Request};
 
 #[tokio::main]
-async fn main() {
-    let gateway_url = std::env::var("OPENCLAW_REMOTE_URL")
-        .expect("set OPENCLAW_REMOTE_URL env var, e.g. ws://host:18789");
-    let token = std::env::var("OPENCLAW_REMOTE_TOKEN").expect("set OPENCLAW_REMOTE_TOKEN env var");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let gateway_url = std::env::var("OPENCLAW_REMOTE_URL")?;
+    let token = std::env::var("OPENCLAW_REMOTE_TOKEN")?;
     let session_key = "agent:main:main";
 
     let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-remote-example")
-        .expect("load or generate device identity");
+        .map_err(|e| format!("load or generate device identity: {}", e))?;
     println!("Device ID:  {}", device.device_id());
     println!("Public Key: {}", device.public_key());
 
@@ -35,12 +34,9 @@ async fn main() {
         .header("Upgrade", "websocket")
         .header("Sec-WebSocket-Version", "13")
         .header("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
-        .body(())
-        .unwrap();
+        .body(())?;
 
-    let (mut ws_stream, response) = tokio_tungstenite::connect_async(request)
-        .await
-        .expect("WebSocket connect failed");
+    let (mut ws_stream, response) = tokio_tungstenite::connect_async(request).await?;
     println!("HTTP status: {}", response.status());
 
     let scopes = [
@@ -73,15 +69,15 @@ async fn main() {
             Ok(Some(Ok(_))) => {}
             Ok(Some(Err(e))) => {
                 eprintln!("WS error: {}", e);
-                return;
+                return Ok(());
             }
             Ok(None) => {
                 eprintln!("Connection closed before challenge");
-                return;
+                return Ok(());
             }
             Err(_) => {
                 eprintln!("Challenge timeout");
-                return;
+                return Ok(());
             }
         }
     };
@@ -124,10 +120,7 @@ async fn main() {
         }
     });
     println!("\n>>> {}", connect);
-    ws_stream
-        .send(Message::Text(connect.to_string()))
-        .await
-        .unwrap();
+    ws_stream.send(Message::Text(connect.to_string())).await?;
 
     loop {
         match tokio::time::timeout(timeout, ws_stream.next()).await {
@@ -140,7 +133,7 @@ async fn main() {
                             break;
                         } else {
                             eprintln!("Auth failed");
-                            return;
+                            return Ok(());
                         }
                     }
                 }
@@ -148,15 +141,15 @@ async fn main() {
             Ok(Some(Ok(_))) => {}
             Ok(Some(Err(e))) => {
                 eprintln!("WS error: {}", e);
-                return;
+                return Ok(());
             }
             Ok(None) => {
                 eprintln!("Connection closed during auth");
-                return;
+                return Ok(());
             }
             Err(_) => {
                 eprintln!("Auth timeout");
-                return;
+                return Ok(());
             }
         }
     }
@@ -178,10 +171,7 @@ async fn main() {
         }
     });
     println!("\n>>> {}", send);
-    ws_stream
-        .send(Message::Text(send.to_string()))
-        .await
-        .unwrap();
+    ws_stream.send(Message::Text(send.to_string())).await?;
 
     println!("\nWaiting for replies/events...");
     let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(20);
@@ -202,4 +192,5 @@ async fn main() {
     }
 
     println!("Done.");
+    Ok(())
 }

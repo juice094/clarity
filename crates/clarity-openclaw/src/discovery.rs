@@ -101,6 +101,8 @@ fn discover_local_openclaw(
             gateway_token: token.clone(),
             workspace_root: workspace.clone(),
             host: "127.0.0.1".into(),
+            auth_mode: None,
+            device_token: None,
         },
     });
 
@@ -130,6 +132,8 @@ fn discover_local_openclaw(
                             gateway_token: token.clone(),
                             workspace_root: workspace.clone(),
                             host: pd.device_id,
+                            auth_mode: None,
+                            device_token: None,
                         },
                     });
                 }
@@ -171,6 +175,8 @@ fn discover_remote_openclaw(out: &mut Vec<DeviceRecord>) {
             gateway_token: remote_token,
             workspace_root: PathBuf::from("."),
             host,
+            auth_mode: None,
+            device_token: None,
         },
     });
 }

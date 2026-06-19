@@ -24,10 +24,12 @@ pub mod llama_server;
 #[cfg(feature = "local-llm")]
 pub mod local_gguf;
 pub mod mesh;
+pub mod model_listing;
 pub mod model_registry;
 pub mod ollama;
 pub mod policy;
 pub mod registry_table;
+/// Reliable provider with fallback and retry logic.
 pub mod reliable;
 pub mod runtime;
 pub mod runtime_router;
@@ -50,6 +52,8 @@ pub use model_registry::{
 };
 pub use ollama::OllamaProvider;
 pub use reliable::ReliableProvider;
+
+pub use model_listing::{get_available_models, scan_local_models};
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta};
 pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};

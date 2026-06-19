@@ -6,6 +6,7 @@
 
 pub mod chat;
 pub mod cron;
+pub mod knowledge;
 pub mod mcp;
 pub mod onboarding;
 pub mod plugin;
@@ -21,6 +22,7 @@ pub mod ui;
 
 pub use chat::*;
 pub use cron::*;
+pub use knowledge::*;
 pub use mcp::*;
 pub use onboarding::*;
 pub use project::*;

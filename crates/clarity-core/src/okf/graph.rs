@@ -87,6 +87,7 @@ impl OkfGraph {
         OkfBundle {
             root: std::path::PathBuf::new(),
             concepts: self.concepts,
+            warnings: Vec::new(),
         }
     }
 }

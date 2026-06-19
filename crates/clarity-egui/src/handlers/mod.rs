@@ -325,6 +325,19 @@ pub fn process_events(app: &mut App) {
                 app.save_current_session();
                 app.chat_store.stick_to_bottom = true;
             }
+            UiEvent::KnowledgeLoaded { path, result } => {
+                app.knowledge_store.loading = false;
+                app.knowledge_store.bundle_path = path;
+                match result {
+                    Ok(bundle) => {
+                        app.knowledge_store.set_bundle(bundle);
+                    }
+                    Err(err) => {
+                        app.knowledge_store.error = Some(err);
+                        app.knowledge_store.bundle = None;
+                    }
+                }
+            }
         }
     }
 }

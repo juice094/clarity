@@ -28,6 +28,8 @@ tags: [planning, status, current-phase]
 - **Pretext PoC Phase 1~5 已完成**：`clarity-egui` 已接入 `pretext-core` / `pretext-fontdb`；`pretext::EguiFontMetrics` 用 egui 字体栈作为 measurement backend；`MessageBubble` 已迁移为 pretext-aware（`widgets/rich_paragraph.rs`）；默认启用 pretext 高度估算；23 样本对齐回归测试与 1000 条消息 release 性能基准通过（聚合高度偏差 ≈ 1.45%，estimate ≈ 74.4 µs/msg，render ≈ 135.7 µs/msg）。下一步可考虑虚拟列表裁剪、富文本渲染扩展或三栏布局更深度的 pretext 集成。
 - **Phase 1.5 状态机迁移已完成**：所有遗留 boolean modal / turn / expansion 标志已迁移到 `view_state.modal` / `view_state.turn` / `view_state.expansions`；移除了 `clarity-egui` 全局 `#![allow(dead_code)]`。
 - **Phase E 设计系统替换已完成**：右 rail 全部卡片（status / tools / subagent / memory / context / progress）与关键 widgets（provider_row / sidebar_card / user_avatar）已使用 `design_system` 语义原语；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
+- **方向 B（OpenClaw 连接管理）**：修复 `openclaw_pair` 示例 token 保存 URL；token 支持 `${env:VAR}` 解析；`OpenClawAuthMode` 在发现与连接逻辑中生效；Settings 新增 **Claw** 标签页，支持增删改查远程连接；egui 内实现完整设备配对流程（请求 → 等待审批 → 保存 token）。
+- **方向 C（OKF 前端接入）**：新增 `KnowledgeStore`；右 rail `Knowledge` 面板支持输入 OKF bundle 路径、Load/Reload、搜索概念、浏览概念列表并查看详情（frontmatter + Markdown 正文）。
 
 ---
 
@@ -35,11 +37,11 @@ tags: [planning, status, current-phase]
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1147 | 0 | 8 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 171 | 0 | 2 |
-| `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1258 | 0 | 8 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 210 | 0 | 2 |
+| `cargo test --workspace --doc --exclude clarity-slint` | 33 | 0 | 3 |
 | `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
-| `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
+| `cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
 | `cargo fmt --all -- --check` | pass | 0 | - |
 
 ---
@@ -57,4 +59,4 @@ tags: [planning, status, current-phase]
 
 ---
 
-*最后更新：2026-06-13*
+*最后更新：2026-06-16*

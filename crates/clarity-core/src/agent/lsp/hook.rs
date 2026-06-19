@@ -9,7 +9,7 @@ use crate::agent::hooks::{AgentHook, HookResult};
 use crate::agent::lsp::client::LspClient;
 use crate::agent::lsp::config::LspClientConfig;
 use crate::types::ToolCall;
-use clarity_llm::api::Message;
+use clarity_contract::Message;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 

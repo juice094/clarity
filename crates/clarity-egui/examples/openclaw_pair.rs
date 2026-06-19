@@ -73,7 +73,7 @@ fn main() {
                             println!("Device ID:    {}", device_id);
                             println!("Device Token: {}", token);
                             println!("Scopes:       {:?}", scopes);
-                            save_device_token(&device_id, &token);
+                            save_device_token(&device_id, &token, gateway_url);
                             return;
                         }
                     } else {
@@ -107,7 +107,7 @@ fn main() {
     std::process::exit(1);
 }
 
-fn save_device_token(device_id: &str, token: &str) {
+fn save_device_token(device_id: &str, token: &str, gateway_url: &str) {
     let data_dir = dirs::data_dir().expect("cannot determine data directory");
     let dir = data_dir.join("clarity");
     std::fs::create_dir_all(&dir).expect("create clarity data dir");
@@ -115,7 +115,7 @@ fn save_device_token(device_id: &str, token: &str) {
     let value = serde_json::json!({
         "device_id": device_id,
         "token": token,
-        "gateway_url": "ws://127.0.0.1:18679"
+        "gateway_url": gateway_url
     });
     std::fs::write(&path, serde_json::to_string_pretty(&value).unwrap())
         .expect("write device token");

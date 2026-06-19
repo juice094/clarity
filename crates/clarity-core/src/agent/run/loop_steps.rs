@@ -3,7 +3,7 @@
 use crate::agent::Agent;
 use crate::error::AgentError;
 use crate::types::ToolCall;
-use clarity_llm::api::{LlmProvider, Message};
+use clarity_contract::{LlmProvider, Message};
 
 /// Run lifecycle hooks before LLM input.
 pub(crate) async fn run_hooks(agent: &Agent, messages: &mut Vec<Message>) {
@@ -50,7 +50,7 @@ pub(crate) fn record_cost(
 }
 
 /// Fallback: parse tool calls from content if native tool_calls are empty.
-pub(crate) fn parse_tool_calls(response: &clarity_llm::api::LlmResponse) -> Vec<ToolCall> {
+pub(crate) fn parse_tool_calls(response: &clarity_contract::LlmResponse) -> Vec<ToolCall> {
     if response.tool_calls.is_empty() && !response.content.is_empty() {
         if let Some(format) = crate::agent::tool_parser::detect_tool_format(&response.content) {
             tracing::info!(

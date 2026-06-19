@@ -22,8 +22,10 @@ pub fn collapsible_section<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<(bool, Option<R>)> {
     ui.push_id(stable_id, |ui| {
-        // Header row — full-width clickable with hover feedback from interactive_row.
-        let header_resp = interactive_row(ui, *is_expanded, theme, |ui| {
+        // Header row — full-width clickable with hover feedback.
+        // It is never shown as "selected"; the expand/collapse state is only
+        // communicated by the chevron direction.
+        let header_resp = interactive_row(ui, false, theme, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
 
@@ -59,7 +61,7 @@ pub fn collapsible_section<R>(
                 ui.label(
                     egui::RichText::new(title)
                         .size(theme.text_sm)
-                        .color(theme.text_strong),
+                        .color(theme.text),
                 );
             });
         });
@@ -70,14 +72,9 @@ pub fn collapsible_section<R>(
 
         let was_expanded = *is_expanded;
 
-        // Subtle separator between header and body when expanded.
-        if *is_expanded {
-            ui.add_space(theme.space_4);
-        }
-
         // Body: rows use the same interactive_row layout as the header, so they
-        // already share the left accent bar + icon rail grid. No extra indent is
-        // needed; this keeps the sidebar clean and maximizes usable width.
+        // already share the icon rail grid. No extra indent is needed; this
+        // keeps the sidebar flat and maximizes usable width.
         let body = if *is_expanded {
             Some(add_contents(ui))
         } else {
