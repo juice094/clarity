@@ -7,6 +7,8 @@
 //! Usage:
 //!   cargo run -p clarity-egui --example openclaw_approve_pair -- <gateway_url> <gateway_token>
 
+#![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+
 use std::thread;
 use std::time::Duration;
 
@@ -32,7 +34,7 @@ fn main() {
     let request_id = first["requestId"].as_str().expect("requestId");
     println!("Approving pairing request: {}", request_id);
 
-    let client = clarity_egui::claw_client::ClawClient::connect(&gateway_url, gateway_token);
+    let client = clarity_openclaw::ClawClient::connect(&gateway_url, gateway_token);
 
     thread::sleep(Duration::from_secs(1));
 
@@ -47,10 +49,15 @@ fn main() {
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_egui::claw_client::ClawResponse::Connected { .. } => {
+                clarity_openclaw::client::ClawResponse::Connected { .. } => {
                     println!("Connected to Gateway.");
                 }
-                clarity_egui::claw_client::ClawResponse::Reply { id, ok, payload } => {
+                clarity_openclaw::client::ClawResponse::Reply {
+                    id,
+                    method: _,
+                    ok,
+                    payload,
+                } => {
                     println!("Reply id={} ok={} payload={}", id, ok, payload);
                     if id == "approve-1" {
                         if ok {
@@ -62,7 +69,7 @@ fn main() {
                         }
                     }
                 }
-                clarity_egui::claw_client::ClawResponse::Error(e) => {
+                clarity_openclaw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

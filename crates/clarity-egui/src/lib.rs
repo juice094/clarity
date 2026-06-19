@@ -1,9 +1,4 @@
-//! Shared OpenClaw device identity and WebSocket client used by both the
-//! `clarity-egui` binary and helper utilities.
-
-// These modules were extracted from the binary and retain their original
-// internal documentation coverage.
-#[allow(missing_docs)]
-pub mod claw_client;
-#[allow(missing_docs)]
-pub mod claw_device;
+//! Shared library surface for the `clarity-egui` crate.
+//!
+//! Most OpenClaw functionality has moved to the dedicated `clarity-openclaw`
+//! crate; this lib is kept minimal for example/test helpers.

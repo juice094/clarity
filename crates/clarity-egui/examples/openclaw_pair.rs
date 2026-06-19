@@ -8,6 +8,8 @@
 //! for the user to approve the pairing in the KimiClaw UI. Once approved, it
 //! prints the device token and saves it to `~/.clarity/claw-device-token.json`.
 
+#![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+
 use std::thread;
 use std::time::Duration;
 
@@ -20,7 +22,7 @@ fn main() {
     let gateway_url = &args[1];
     let gateway_token = &args[2];
 
-    let device = clarity_egui::claw_device::DeviceIdentity::load_or_generate("clarity-egui")
+    let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui")
         .expect("failed to load/generate device identity");
 
     println!("Device ID:    {}", device.device_id());
@@ -28,7 +30,7 @@ fn main() {
     println!();
     println!("Connecting to {} to request pairing...", gateway_url);
 
-    let client = clarity_egui::claw_client::ClawClient::connect(gateway_url, gateway_token);
+    let client = clarity_openclaw::ClawClient::connect(gateway_url, gateway_token);
 
     let scopes = vec![
         "operator.admin".into(),
@@ -42,8 +44,8 @@ fn main() {
     client.request_pairing(
         &device.device_id(),
         &device.public_key(),
-        "clarity-egui",
-        "cli",
+        "openclaw-control-ui",
+        "webchat",
         "windows",
         "operator",
         &scopes,
@@ -56,10 +58,10 @@ fn main() {
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_egui::claw_client::ClawResponse::Connected { .. } => {
+                clarity_openclaw::client::ClawResponse::Connected { .. } => {
                     println!("Connected to Gateway.");
                 }
-                clarity_egui::claw_client::ClawResponse::PairingResult {
+                clarity_openclaw::client::ClawResponse::PairingResult {
                     device_id,
                     approved,
                     token,
@@ -78,16 +80,21 @@ fn main() {
                         println!("Pairing pending for device {}. Still waiting...", device_id);
                     }
                 }
-                clarity_egui::claw_client::ClawResponse::Event {
+                clarity_openclaw::client::ClawResponse::Event {
                     event_type,
                     payload,
                 } => {
                     println!("Gateway event: {} -> {}", event_type, payload);
                 }
-                clarity_egui::claw_client::ClawResponse::Reply { id, ok, payload } => {
+                clarity_openclaw::client::ClawResponse::Reply {
+                    id,
+                    method: _,
+                    ok,
+                    payload,
+                } => {
                     println!("Gateway reply: id={} ok={} payload={}", id, ok, payload);
                 }
-                clarity_egui::claw_client::ClawResponse::Error(e) => {
+                clarity_openclaw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

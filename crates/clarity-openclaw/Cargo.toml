@@ -1,0 +1,39 @@
+[package]
+name = "clarity-openclaw"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OpenClaw / KimiClaw Gateway client, device identity and discovery"
+
+[dependencies]
+# Async / WebSocket
+tokio = { workspace = true }
+tokio-tungstenite = { version = "0.24", features = ["__rustls-tls"] }
+futures-util = "0.3"
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+# Crypto / device identity
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+rand = "0.8"
+hex = "0.4"
+base64 = { workspace = true }
+
+# Paths / platform
+dirs = "5.0"
+
+# Observability
+tracing = { workspace = true }
+
+# Sync primitives
+parking_lot = "0.12"
+
+[lints]
+workspace = true

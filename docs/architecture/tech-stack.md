@@ -38,6 +38,7 @@ tags: [architecture, tech-stack, crates]
 | `clarity-wire` | lib | UI ↔ Agent 事件总线（SPMC）、`ViewCommand`/`WireMessage` | 跨前端通信唯一通道 |
 | `clarity-memory` | lib | SQLite/文件/混合记忆、BM25+向量、chunking、四级压缩 | feature `sqlite` / `embedding` |
 | `clarity-mcp` | lib | MCP 客户端：stdio / SSE / HTTP / WebSocket | 含命令校验安全层 |
+| `clarity-openclaw` | lib | OpenClaw/KimiClaw Gateway WebSocket 客户端、设备身份与发现 | 无前端依赖，可被多个入口复用 |
 | `clarity-llm` | lib | LLM provider 抽象 + 内置 provider + Candle GGUF | feature `local-llm` / `local-llm-cuda` |
 | `clarity-tools` | lib | 内置工具库：file / shell / web / devkit / team / task / … | 从 `clarity-core` 拆出 |
 | `clarity-secrets` | lib | ChaCha20-Poly1305 加密 Secret 存储（`enc2:`） | 用于 `models.toml` 加密 key |
@@ -67,7 +68,7 @@ tags: [architecture, tech-stack, crates]
                                             ▲
     ┌───────────┬──────────┬─────────┬──────┴──────┬──────────┬──────────┐
     ▼           ▼          ▼         ▼             ▼          ▼          ▼
-clarity-wire clarity-memory clarity-mcp clarity-llm clarity-tools clarity-channels
+clarity-wire clarity-memory clarity-mcp clarity-openclaw clarity-llm clarity-tools clarity-channels
 clarity-secrets clarity-rollout
     │
     ▼
@@ -81,6 +82,7 @@ clarity-core
     ▼
 {clarity-egui, clarity-tui, clarity-gateway, clarity-claw, clarity-headless}
 
+clarity-openclaw：OpenClaw 协议客户端；被 clarity-egui 等前端使用
 clarity-telemetry：当前由 clarity-gateway 使用
 clarity-slint：实验栈，不参与默认 CI
 clarity-tauri：已归档，被 workspace 排除
@@ -94,4 +96,4 @@ clarity-tauri：已归档，被 workspace 排除
 
 ---
 
-*最后更新：2026-06-13*
+*最后更新：2026-06-19*

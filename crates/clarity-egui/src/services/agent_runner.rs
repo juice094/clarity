@@ -596,10 +596,13 @@ impl App {
             }
         };
 
-        // Mark that an OpenClaw turn is in flight so the main loop knows to
-        // finalize the assistant message when the response arrives.
-        self.chat_store.pending_send = Some((full_message.clone(), Vec::new()));
-
-        ws.send_message("agent:main:main", &full_message);
+        // Responses arrive asynchronously via claw_ws.drain(); the main loop
+        // translates them into UiEvent::Chunk / UiEvent::Done and the chat
+        // handlers finalize the assistant message.
+        if self.claw_ws_uses_sessions_send {
+            ws.send_session_message("agent:main:main", &full_message);
+        } else {
+            ws.send_message("agent:main:main", &full_message);
+        }
     }
 }

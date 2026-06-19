@@ -7,8 +7,8 @@ tags: [architecture]
 
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-06-06
-> Reflects v0.3.x delivery: 19 active crates + 1 archived (`clarity-tauri`) ≈ 20 crate directories
+> Code-accurate architecture reference | Last updated: 2026-06-19
+> Reflects v0.3.x delivery: 20 active crates + 1 archived (`clarity-tauri`) ≈ 21 crate directories
 
 ---
 
@@ -16,7 +16,7 @@ tags: [architecture]
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 19 active independent crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
+| **Single Responsibility** | 20 active independent crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -69,13 +69,13 @@ tags: [architecture]
           ┌─────────────┴───────────────────────────────────────────────┐
           │              Shared Infrastructure Layer                     │
           ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
-          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
-          │contract  │memory    │mcp       │llm       │  tools          │
-          │          │          │          │          │                 │
-          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │
-          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search  │
-          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task  │
-          │  trait   │• chunking│• WS      │• local   │                 │
+          │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │clarity-  │
+          │contract  │memory    │mcp       │llm       │  tools          │openclaw  │
+          │          │          │          │          │                 │          │
+          │• shared  │• SQLite  │• stdio   │• OpenAI  │  • file / shell │• OpenClaw│
+          │  types   │• BM25    │• SSE     │• Anthropic│ • web / search │  Gateway │
+          │• Tool    │• vector  │• HTTP    │• Kimi    │  • team / task │• device  │
+          │  trait   │• chunking│• WS      │• local   │                 │  identity│
           └──────────┴──────────┴──────────┴──────────┴─────────────────┘
           ├──────────┬──────────┬──────────┬──────────┬─────────────────┤
           │clarity-  │clarity-  │clarity-  │clarity-  │  clarity-       │
@@ -111,6 +111,7 @@ clarity-contract
     ├── clarity-wire      (SPMC event bus)
     ├── clarity-memory    (SQLite + BM25 + vector)
     ├── clarity-mcp       (MCP client transports)
+    ├── clarity-openclaw  (OpenClaw Gateway client + device identity)
     ├── clarity-llm       (provider bindings)
     ├── clarity-tools     (built-in tools)
     ├── clarity-channels  (Discord / Slack / Telegram / Webhook)
@@ -148,6 +149,7 @@ clarity-contract
 | `clarity-subagents` | ~2,500 | 37+ | `SubAgentManager`, `AgentPool`, `Team`, `Token` |
 | `clarity-llm` | ~3,500 | 63+ | `LlmFactory`, `ModelRegistry`, `LocalGgufProvider` |
 | `clarity-mcp` | ~2,000 | 37+ | `McpClient`, `McpRegistry`, `McpTransport` |
+| `clarity-openclaw` | ~1,000 | 4+ | `ClawClient`, `DeviceIdentity`, device discovery |
 | `clarity-tools` | ~4,500 | 99+ | `FileReadTool`, `BashTool`, `WebSearchTool`, `TaskCreateTool` |
 | `clarity-memory` | ~3,600 | 97+ | `SqliteStore`, `HybridStore`, `Chunker`, `MemoryCompiler` |
 | `clarity-thread-store` | ~1,200 | 13+ | `ThreadStore`, `LocalThreadStore`, `LiveThread` |

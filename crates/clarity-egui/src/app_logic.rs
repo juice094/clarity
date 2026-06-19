@@ -289,6 +289,25 @@ impl App {
         };
         mark("skill_watcher");
 
+        let settings_store = crate::stores::SettingsStore {
+            settings_edit,
+            settings_vm,
+            settings_active_tab: 0,
+            show_add_provider: false,
+            add_provider_name: String::new(),
+            add_provider_url: String::new(),
+            add_provider_key: String::new(),
+            add_provider_format: "openai-completions".into(),
+            provider_registry: crate::provider::ProviderRegistry::load(),
+            testing_provider: None,
+            refreshing_provider: None,
+            kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
+        };
+        // Discover Claw devices after settings are loaded so user-configured
+        // OpenClaw connections participate in the bot list.
+        let device_state =
+            crate::claw::discover(&settings_store.settings_edit.openclaw_connections);
+
         let mut app = Self {
             state,
             runtime,
@@ -318,21 +337,10 @@ impl App {
                 input_history_idx: None,
                 draft_status: crate::ui::types::DraftStatus::None,
                 status_message: None,
+                chunks_since_save: 0,
             },
-            settings_store: crate::stores::SettingsStore {
-                settings_edit,
-                settings_vm,
-                settings_active_tab: 0,
-                show_add_provider: false,
-                add_provider_name: String::new(),
-                add_provider_url: String::new(),
-                add_provider_key: String::new(),
-                add_provider_format: "openai-completions".into(),
-                provider_registry: crate::provider::ProviderRegistry::load(),
-                testing_provider: None,
-                refreshing_provider: None,
-                kimi_code_login_state: crate::stores::KimiCodeLoginState::Idle,
-            },
+            settings_store,
+            device_state,
             task_store: crate::stores::TaskStore {
                 tasks: vec![],
                 last_task_refresh: now,
@@ -463,9 +471,19 @@ impl App {
             },
             pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
             nav_context,
-            device_state: crate::claw::discover(),
             claw_ws: None,
             claw_ws_device_id: String::new(),
+            claw_device_identity: clarity_openclaw::DeviceIdentity::load_existing().unwrap_or_else(
+                |e| {
+                    tracing::warn!("Failed to load Clarity device identity: {}", e);
+                    None
+                },
+            ),
+            claw_device_token: clarity_openclaw::load_paired_token().unwrap_or_else(|e| {
+                tracing::warn!("Failed to load Clarity device token: {}", e);
+                None
+            }),
+            claw_ws_uses_sessions_send: false,
         };
         mark("app_struct_init");
 

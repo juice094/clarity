@@ -52,6 +52,56 @@ pub struct WorkTemplate {
     pub prompt: String,
 }
 
+/// Authentication mode for a user-configured OpenClaw Gateway connection.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenClawAuthMode {
+    /// Plain token auth. Suitable for local or permissive Gateways.
+    #[default]
+    TokenOnly,
+    /// Remote admin/device token plus Ed25519 device attestation.
+    TokenWithDevice,
+    /// Device token returned by the Gateway after pairing.
+    DevicePaired,
+}
+
+/// A user-configured OpenClaw Gateway connection.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct OpenClawConnection {
+    /// Display name shown in the bot switcher.
+    pub name: String,
+    /// WebSocket URL of the Gateway, e.g. `ws://host:18789`.
+    pub gateway_url: String,
+    /// Admin or device token used for authentication.
+    pub token: String,
+    /// How the token is combined with the local device identity.
+    #[serde(default)]
+    pub auth_mode: OpenClawAuthMode,
+    /// Whether this connection should be discovered and offered in the UI.
+    #[serde(default = "default_openclaw_enabled")]
+    pub enabled: bool,
+    /// Optional device-specific token for `DevicePaired` mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_token: Option<String>,
+}
+
+fn default_openclaw_enabled() -> bool {
+    true
+}
+
+impl Default for OpenClawConnection {
+    fn default() -> Self {
+        Self {
+            name: "Remote OpenClaw".into(),
+            gateway_url: String::new(),
+            token: String::new(),
+            auth_mode: OpenClawAuthMode::default(),
+            enabled: true,
+            device_token: None,
+        }
+    }
+}
+
 /// Holds gui settings state.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GuiSettings {
@@ -111,6 +161,9 @@ pub struct GuiSettings {
     /// S6 navigation tree: set to true after default templates are seeded on first launch.
     #[serde(default)]
     pub work_templates_initialized: bool,
+    /// User-configured OpenClaw Gateway connections.
+    #[serde(default)]
+    pub openclaw_connections: Vec<OpenClawConnection>,
     #[serde(skip)]
     pub profiles: HashMap<String, AgentProfile>,
 }
@@ -303,6 +356,7 @@ impl Default for GuiSettings {
             web_links_chat: Vec::new(),
             web_links_work: Vec::new(),
             work_templates_initialized: false,
+            openclaw_connections: Vec::new(),
             profiles: HashMap::new(),
         }
     }
@@ -471,7 +525,7 @@ model = "gpt-4o"
 provider = "openai"
 approval_mode = "interactive"
 
-[profiles.greylocal]
+[profiles.local]
 model = "local-qwen"
 provider = "local"
 approval_mode = "yolo"
@@ -479,10 +533,10 @@ approval_mode = "yolo"
         let file: ProfilesFile = toml::from_str(toml).expect("parse profiles.toml");
         assert_eq!(file.profiles.len(), 2);
         assert!(file.profiles.contains_key("default"));
-        assert!(file.profiles.contains_key("greylocal"));
-        let greylocal = file.profiles.get("greylocal").unwrap();
-        assert_eq!(greylocal.provider, "local");
-        assert_eq!(greylocal.model, "local-qwen");
+        assert!(file.profiles.contains_key("local"));
+        let local = file.profiles.get("local").unwrap();
+        assert_eq!(local.provider, "local");
+        assert_eq!(local.model, "local-qwen");
     }
 
     #[test]
@@ -522,5 +576,43 @@ approval_mode = "yolo"
         let json = serde_json::to_string(&settings).expect("serialize");
         let deserialized: GuiSettings = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(deserialized.active_profile, Some("research".into()));
+    }
+
+    // ============================================================================
+    // OpenClaw connection configuration tests
+    // ============================================================================
+
+    #[test]
+    fn test_openclaw_connection_default() {
+        let conn = OpenClawConnection::default();
+        assert!(conn.enabled);
+        assert_eq!(conn.auth_mode, OpenClawAuthMode::TokenOnly);
+        assert!(conn.device_token.is_none());
+    }
+
+    #[test]
+    fn test_openclaw_connection_serde_roundtrip() {
+        let conn = OpenClawConnection {
+            name: "Remote Lab".into(),
+            gateway_url: "ws://openclaw.example.com:18789".into(),
+            token: "${env:OPENCLAW_REMOTE_TOKEN}".into(),
+            auth_mode: OpenClawAuthMode::TokenWithDevice,
+            enabled: true,
+            device_token: Some("device-token".into()),
+        };
+        let json = serde_json::to_string(&conn).expect("serialize");
+        let deserialized: OpenClawConnection = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(deserialized.name, conn.name);
+        assert_eq!(deserialized.gateway_url, conn.gateway_url);
+        assert_eq!(deserialized.token, conn.token);
+        assert_eq!(deserialized.auth_mode, conn.auth_mode);
+        assert_eq!(deserialized.enabled, conn.enabled);
+        assert_eq!(deserialized.device_token, conn.device_token);
+    }
+
+    #[test]
+    fn test_gui_settings_openclaw_connections_default_empty() {
+        let settings = GuiSettings::default_with_env();
+        assert!(settings.openclaw_connections.is_empty());
     }
 }

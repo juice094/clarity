@@ -6,6 +6,8 @@
 //! Usage:
 //!   cargo run -p clarity-egui --example openclaw_device_check
 
+#![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+
 use std::thread;
 use std::time::Duration;
 
@@ -21,31 +23,44 @@ fn main() {
         .replace("127.0.0.1", "localhost");
     let device_token = cfg["token"].as_str().expect("token");
 
-    let device = clarity_egui::claw_device::DeviceIdentity::load_or_generate("clarity-egui")
+    let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui")
         .expect("load device identity");
 
     println!("Connecting to {} with device auth...", gateway_url);
     println!("Device ID: {}", device.device_id());
 
-    let client = clarity_egui::claw_client::ClawClient::connect_with_device(
-        &gateway_url,
-        device,
-        device_token,
-    );
+    let client =
+        clarity_openclaw::ClawClient::connect_with_device(&gateway_url, device, device_token);
 
-    // Give auth time to complete, then list sessions and send a hello.
+    // Give auth time to complete, then probe sessions and send a hello.
     thread::sleep(Duration::from_secs(2));
 
+    client.send_raw_request("sessions-list-1", "sessions.list", serde_json::json!({}));
+    client.send_raw_request(
+        "chat-history-1",
+        "chat.history",
+        serde_json::json!({"sessionKey": "agent:main:main", "limit": 5}),
+    );
     client.send_message("agent:main:main", "hello from clarity device auth");
+    client.send_raw_request(
+        "chat-send-1",
+        "chat.send",
+        serde_json::json!({
+            "sessionKey": "agent:main:main",
+            "message": "hello from clarity device auth via chat.send",
+            "deliver": false,
+            "idempotencyKey": "clarity-test-1"
+        }),
+    );
 
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
     while std::time::Instant::now() < deadline {
         for resp in client.drain() {
             match resp {
-                clarity_egui::claw_client::ClawResponse::Connected { .. } => {
+                clarity_openclaw::client::ClawResponse::Connected { .. } => {
                     println!("Device auth connected.");
                 }
-                clarity_egui::claw_client::ClawResponse::SessionMessage {
+                clarity_openclaw::client::ClawResponse::SessionMessage {
                     role,
                     content,
                     finished,
@@ -55,16 +70,21 @@ fn main() {
                         role, finished, content
                     );
                 }
-                clarity_egui::claw_client::ClawResponse::Event {
+                clarity_openclaw::client::ClawResponse::Event {
                     event_type,
                     payload,
                 } => {
                     println!("event {} -> {}", event_type, payload);
                 }
-                clarity_egui::claw_client::ClawResponse::Reply { id, ok, payload } => {
+                clarity_openclaw::client::ClawResponse::Reply {
+                    id,
+                    method: _,
+                    ok,
+                    payload,
+                } => {
                     println!("reply id={} ok={} payload={}", id, ok, payload);
                 }
-                clarity_egui::claw_client::ClawResponse::Error(e) => {
+                clarity_openclaw::client::ClawResponse::Error(e) => {
                     eprintln!("Error: {}", e);
                 }
                 _ => {}

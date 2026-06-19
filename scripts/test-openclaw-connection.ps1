@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    验证 Clarity -> Gray-Cloud (OpenClaw) 远程连接。
+    验证 Clarity -> 远程 OpenClaw Gateway 连接。
 
 .DESCRIPTION
     该脚本执行分层验证：
@@ -46,14 +46,14 @@ $remoteToken = $env:OPENCLAW_REMOTE_TOKEN
 
 if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
     Write-Fail "OPENCLAW_REMOTE_URL 未设置。"
-    Write-Info "请先执行: `$env:OPENCLAW_REMOTE_URL=`"ws://<gray-cloud-ip>:18789`""
+    Write-Info "请先执行: `$env:OPENCLAW_REMOTE_URL=`"ws://<remote-host>:18789`""
     exit 1
 }
 
 # 检测占位符
 if ($remoteUrl -match '<[^>]+>') {
     Write-Fail "OPENCLAW_REMOTE_URL 仍包含占位符 ($remoteUrl)。"
-    Write-Info "请把 <gray-cloud-tailscale-ip> 替换为 Gray-Cloud 真实的 Tailscale IP 或主机名。"
+    Write-Info "请把 <remote-host> 替换为远程 Gateway 的真实 IP 或主机名。"
     exit 1
 }
 Write-Ok "OPENCLAW_REMOTE_URL = $remoteUrl"
@@ -67,7 +67,7 @@ if ([string]::IsNullOrWhiteSpace($remoteToken)) {
 # 检测 token 占位符
 if ($remoteToken -match '<[^>]+>' -or $remoteToken -eq 'your-token' -or $remoteToken -eq '<token>') {
     Write-Fail "OPENCLAW_REMOTE_TOKEN 仍包含占位符。"
-    Write-Info "请把 <token> 替换为 Gray-Cloud 上配置的真实 OpenClaw token。"
+    Write-Info "请把 <token> 替换为远程 Gateway 上配置的真实 OpenClaw token。"
     exit 1
 }
 Write-Ok "OPENCLAW_REMOTE_TOKEN 已设置 (长度: $($remoteToken.Length))"
@@ -337,4 +337,4 @@ try {
 }
 
 Write-Step "验证结果"
-Write-Ok "Gray-Cloud (OpenClaw) 连接验证全部通过。可以继续 L3 GUI 集成验证。"
+Write-Ok "远程 OpenClaw 连接验证全部通过。可以继续 L3 GUI 集成验证。"

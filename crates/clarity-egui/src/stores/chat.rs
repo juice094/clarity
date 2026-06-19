@@ -33,6 +33,8 @@ pub struct ChatStore {
     /// Transient backend status message for the current agent turn.
     /// Examples: "Executing 3 tool(s)...", "Compacting context...".
     pub status_message: Option<String>,
+    /// Counter for incremental session persistence during streaming.
+    pub chunks_since_save: usize,
     /// Input history for ↑↓ recall (TUI-style input box Phase 1).
     pub input_history: Vec<String>,
     /// Cursor into `input_history`. None = editing current draft.
@@ -57,6 +59,7 @@ impl Default for ChatStore {
             last_snapshot: None,
             draft_status: DraftStatus::None,
             status_message: None,
+            chunks_since_save: 0,
             input_history: Vec::new(),
             input_history_idx: None,
         }

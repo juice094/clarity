@@ -56,6 +56,7 @@ clarity-contract
     ├── clarity-wire
     ├── clarity-memory
     ├── clarity-mcp
+    ├── clarity-openclaw
     ├── clarity-llm
     ├── clarity-tools
     ├── clarity-channels
@@ -76,6 +77,7 @@ clarity-contract
 | `clarity-wire` | contract | serde, tokio | 纯协议，无业务逻辑，可被任意前端引用 |
 | `clarity-memory` | contract | rusqlite, ndarray, tantivy(opt) | 独立存储层；gateway 直接引用；core 通过 factory 注入 |
 | `clarity-mcp` | contract, wire | serde_json, tokio | MCP client；被 `clarity-llm` 使用 |
+| `clarity-openclaw` | — | tokio-tungstenite, ed25519-dalek | OpenClaw Gateway 客户端与设备身份 |
 | `clarity-llm` | contract, mcp, memory, secrets | reqwest, candle-core(opt) | Provider 绑定层 |
 | `clarity-tools` | contract, memory | regex, glob | 内置工具库；从 `clarity-core` 拆出 |
 | `clarity-channels` | contract | reqwest | 外部消息通道适配器 |

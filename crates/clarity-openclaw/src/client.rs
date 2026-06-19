@@ -5,7 +5,7 @@
 //! std::sync::mpsc channels — the UI sends commands and polls for
 //! responses without blocking the frame loop.
 //!
-//! # Protocol (confirmed by Gray-Cloud)
+//! # Protocol (confirmed against remote OpenClaw Gateways)
 //!
 //! 1. Connect:
 //!    `{"type":"req","id":"1","method":"connect","params":{
@@ -22,7 +22,9 @@
 //! 4. Reply:  `{"type":"res","id":"uuid","ok":true,"payload":{...}}` or
 //!    `{"type":"event","event":"hello-ok","payload":{...}}`
 
-use crate::claw_device::DeviceIdentity;
+#![allow(missing_docs)]
+
+use crate::device::DeviceIdentity;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -30,8 +32,8 @@ use std::time::Duration;
 /// Authentication mode for an OpenClaw connection.
 #[derive(Clone)]
 pub enum ClawAuth {
-    /// Plain token authentication (used by Gray-Cloud and unpaired local
-    /// Gateways that do not enforce device scopes).
+    /// Plain token authentication (used by remote OpenClaw Gateways and
+    /// unpaired local Gateways that do not enforce device scopes).
     TokenOnly { token: String },
     /// Device-paired authentication. The device token authorizes the session;
     /// the Ed25519 private key is used to sign the connect challenge.
@@ -39,6 +41,13 @@ pub enum ClawAuth {
     DevicePaired {
         device: Box<DeviceIdentity>,
         device_token: String,
+    },
+    /// Remote token + device attestation. Some Gateways clear scopes for
+    /// non-loopback token-only connections unless the client proves device
+    /// identity by signing the `connect.challenge` nonce.
+    TokenWithDevice {
+        token: String,
+        device: Box<DeviceIdentity>,
     },
 }
 
@@ -50,8 +59,14 @@ pub enum ClawCommand {
         session_key: String,
         message: String,
     },
+    /// Send a message via `sessions.send` (remote OpenClaw path).
+    SendSessionMessage { key: String, message: String },
     /// Fetch message history for a session.
     FetchHistory { session_key: String },
+    /// Subscribe to session-level events for a session.
+    SubscribeSession { key: String },
+    /// Subscribe to message-level events for a session.
+    SubscribeMessages { key: String },
     /// Request pairing for a new device. Used when the Gateway enforces
     /// device scopes (e.g. local KimiClaw).
     #[allow(dead_code)] // Pairing UI will send this once device pairing UX lands.
@@ -82,6 +97,8 @@ pub enum ClawResponse {
     #[allow(dead_code)]
     Reply {
         id: String,
+        /// The method of the original request, if it was tracked.
+        method: Option<String>,
         ok: bool,
         payload: serde_json::Value,
     },
@@ -153,6 +170,24 @@ impl ClawClient {
         Self::connect_with_auth(gateway_url, Self::device_auth(device, device_token.into()))
     }
 
+    /// Start a remote-token connection with a device attestation.
+    ///
+    /// The admin token is used for both authentication and as the signed
+    /// payload token. The Gateway must support the `connect.challenge` flow.
+    pub fn connect_with_remote_device(
+        gateway_url: &str,
+        token: &str,
+        device: DeviceIdentity,
+    ) -> Self {
+        Self::connect_with_auth(
+            gateway_url,
+            ClawAuth::TokenWithDevice {
+                token: token.into(),
+                device: Box::new(device),
+            },
+        )
+    }
+
     fn connect_with_auth(gateway_url: &str, auth: ClawAuth) -> Self {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<ClawCommand>();
         let (resp_tx, resp_rx) = std::sync::mpsc::channel::<ClawResponse>();
@@ -197,6 +232,31 @@ impl ClawClient {
     pub fn fetch_history(&self, session_key: &str) {
         let _ = self.tx.send(ClawCommand::FetchHistory {
             session_key: session_key.into(),
+        });
+    }
+
+    /// Subscribe to session-level events for a session.
+    pub fn subscribe_session(&self, key: &str) {
+        let _ = self
+            .tx
+            .send(ClawCommand::SubscribeSession { key: key.into() });
+    }
+
+    /// Subscribe to message-level events for a session.
+    pub fn subscribe_messages(&self, key: &str) {
+        let _ = self
+            .tx
+            .send(ClawCommand::SubscribeMessages { key: key.into() });
+    }
+
+    /// Send a message to a session using the Gateway's `sessions.send` method.
+    ///
+    /// This is the remote-OpenClaw path; local KimiClaw typically expects
+    /// `chat.send` via [`Self::send_message`].
+    pub fn send_session_message(&self, key: &str, message: &str) {
+        let _ = self.tx.send(ClawCommand::SendSessionMessage {
+            key: key.into(),
+            message: message.into(),
         });
     }
 
@@ -278,19 +338,18 @@ async fn run_connection(
         }
     };
     let host = uri.authority().map(|a| a.as_str()).unwrap_or(gateway_url);
-    let scheme = uri.scheme_str().unwrap_or("ws");
+    let _scheme = uri.scheme_str().unwrap_or("ws");
     let origin = if host.starts_with("127.0.0.1:")
         || host.starts_with("localhost:")
         || host == "127.0.0.1"
         || host == "localhost"
     {
+        // Local KimiClaw validates the Origin and expects the desktop app URI.
         Some("app://kimi-desktop".to_string())
     } else {
-        Some(format!(
-            "http{}://{}",
-            if scheme == "wss" { "s" } else { "" },
-            host
-        ))
+        // Remote Gateways reject synthetic non-local Origins like
+        // app://kimi-desktop, but accept a missing Origin header.
+        None
     };
     let mut key_bytes = [0u8; 16];
     rand::rngs::OsRng.fill(&mut key_bytes);
@@ -324,11 +383,11 @@ async fn run_connection(
     let (mut write, mut read) = ws_stream.split();
 
     // ── Step 1: Authenticate ──────────────────────────────────────
-    // Token-only connections (Gray-Cloud or local gateway admin) use the
-    // generic gateway client identity. Device-paired control-ui connections
-    // must use the whitelisted control-ui identity.
+    // Token-only connections (remote Gateway admin token or local gateway
+    // token) use the generic gateway client identity. Device-paired control-ui
+    // connections must use the whitelisted control-ui identity.
     let (client_id, client_mode) = match &auth {
-        ClawAuth::TokenOnly { .. } => ("gateway-client", "cli"),
+        ClawAuth::TokenOnly { .. } | ClawAuth::TokenWithDevice { .. } => ("gateway-client", "cli"),
         ClawAuth::DevicePaired { .. } => ("openclaw-control-ui", "webchat"),
     };
     let role = "operator";
@@ -385,13 +444,19 @@ async fn run_connection(
         with_device: bool,
     ) -> serde_json::Value {
         let token = match auth {
-            ClawAuth::TokenOnly { token } => token.clone(),
-            ClawAuth::DevicePaired { device_token, .. } => device_token.clone(),
+            ClawAuth::TokenOnly { token }
+            | ClawAuth::TokenWithDevice { token, .. }
+            | ClawAuth::DevicePaired {
+                device_token: token,
+                ..
+            } => token.clone(),
         };
 
         let device_block = match auth {
             ClawAuth::TokenOnly { .. } => None,
-            ClawAuth::DevicePaired { device, .. } if with_device => {
+            ClawAuth::TokenWithDevice { device, .. } | ClawAuth::DevicePaired { device, .. }
+                if with_device =>
+            {
                 let signed_at_ms = chrono::Utc::now().timestamp_millis();
                 let version = if nonce.is_some() { "v2" } else { "v1" };
                 let payload = build_device_signature_payload(
@@ -419,7 +484,7 @@ async fn run_connection(
                 }
                 Some(block)
             }
-            ClawAuth::DevicePaired { .. } => None,
+            ClawAuth::TokenWithDevice { .. } | ClawAuth::DevicePaired { .. } => None,
         };
 
         let mut params = serde_json::json!({
@@ -454,7 +519,10 @@ async fn run_connection(
     // device-paired control-ui clients. Read it before sending connect so the
     // v2 device attestation can include the server-provided nonce.
     let mut challenge_nonce: Option<String> = None;
-    if matches!(auth, ClawAuth::DevicePaired { .. }) {
+    if matches!(
+        auth,
+        ClawAuth::DevicePaired { .. } | ClawAuth::TokenWithDevice { .. }
+    ) {
         match tokio::time::timeout(Duration::from_secs(5), read.next()).await {
             Ok(Some(Ok(Message::Text(text)))) => {
                 if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
@@ -488,12 +556,15 @@ async fn run_connection(
             }
             Err(_) => {
                 // No challenge received; fall through and try a token-only
-                // connect. Gray-Cloud and older gateways may not send one.
+                // connect. Some gateways may not send one.
             }
         }
     }
 
-    let with_device = matches!(auth, ClawAuth::DevicePaired { .. });
+    let with_device = matches!(
+        auth,
+        ClawAuth::DevicePaired { .. } | ClawAuth::TokenWithDevice { .. }
+    );
     let connect_req = build_connect_req(
         &auth,
         client_id,
@@ -515,6 +586,9 @@ async fn run_connection(
     // challenge nonce; token-only clients ignore it.
     let mut challenge_answered = challenge_nonce.is_some();
     let auth_ok = loop {
+        // Token-only clients never read a pre-auth challenge, so there is
+        // nothing to answer. Device-attested clients set this to true once
+        // they have resent connect with the signed nonce.
         match tokio::time::timeout(Duration::from_secs(10), read.next()).await {
             Ok(Some(Ok(Message::Text(text)))) => {
                 if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
@@ -522,7 +596,11 @@ async fn run_connection(
                     let event = resp.get("event").and_then(|v| v.as_str()).unwrap_or("");
 
                     if msg_type == "event" && event == "connect.challenge" {
-                        if matches!(auth, ClawAuth::DevicePaired { .. }) && !challenge_answered {
+                        if matches!(
+                            auth,
+                            ClawAuth::DevicePaired { .. } | ClawAuth::TokenWithDevice { .. }
+                        ) && !challenge_answered
+                        {
                             if let Some(nonce) = resp
                                 .get("payload")
                                 .and_then(|p| p.get("nonce"))
@@ -556,10 +634,15 @@ async fn run_connection(
                     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
                         || (msg_type == "event" && event == "hello-ok");
 
-                    // For device-paired auth, if we already answered a
+                    // For device-attested auth, if we already answered a
                     // challenge, require a positive ok/hello-ok before
                     // declaring success.
-                    if matches!(auth, ClawAuth::DevicePaired { .. }) && challenge_answered && !ok {
+                    if matches!(
+                        auth,
+                        ClawAuth::DevicePaired { .. } | ClawAuth::TokenWithDevice { .. }
+                    ) && challenge_answered
+                        && !ok
+                    {
                         continue;
                     }
                     break ok;
@@ -609,6 +692,15 @@ async fn run_connection(
 
     // ── Step 3: Main loop — send commands, receive responses ─────
     let mut req_id: u64 = 0;
+    // Track pending request IDs so replies can be attributed to their original
+    // method. This lets the UI decide whether an ok=false response should be
+    // surfaced to the user or only logged.
+    let mut pending_methods: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    // KimiClaw/OpenClaw assistant streams send the cumulative message text
+    // on every chunk. Track the previous cumulative text so the UI receives
+    // deltas and does not duplicate content.
+    let mut last_assistant_text = String::new();
 
     loop {
         tokio::select! {
@@ -617,13 +709,23 @@ async fn run_connection(
                     Some(ClawCommand::SendMessage { session_key, message }) => {
                         req_id += 1;
                         let id = req_id.to_string();
+                        let method = "chat.send".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
+                        let idempotency_key = format!(
+                            "clarity-{}-{}",
+                            id,
+                            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                                .encode(rand::random::<[u8; 8]>())
+                        );
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,
-                            "method": "sessions.send",
+                            "method": &method,
                             "params": {
                                 "sessionKey": &session_key,
-                                "message": &message
+                                "message": &message,
+                                "deliver": false,
+                                "idempotencyKey": idempotency_key
                             }
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
@@ -636,10 +738,12 @@ async fn run_connection(
                         // fall back to sessions.list.
                         req_id += 1;
                         let id = req_id.to_string();
+                        let method = "threads.list".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,
-                            "method": "threads.list",
+                            "method": &method,
                             "params": {
                                 "sessionKey": &session_key,
                                 "limit": 50
@@ -647,6 +751,64 @@ async fn run_connection(
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
                             let _ = resp_tx.send(ClawResponse::Error(format!("send history: {}", e)));
+                            break;
+                        }
+                    }
+                    Some(ClawCommand::SubscribeSession { key }) => {
+                        req_id += 1;
+                        let id = req_id.to_string();
+                        let method = "sessions.subscribe".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
+                        let req = serde_json::json!({
+                            "type": "req",
+                            "id": &id,
+                            "method": &method,
+                            "params": { "key": &key }
+                        });
+                        if let Err(e) = write.send(Message::Text(req.to_string())).await {
+                            let _ = resp_tx.send(ClawResponse::Error(format!("subscribe session: {}", e)));
+                            break;
+                        }
+                    }
+                    Some(ClawCommand::SubscribeMessages { key }) => {
+                        req_id += 1;
+                        let id = req_id.to_string();
+                        let method = "sessions.messages.subscribe".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
+                        let req = serde_json::json!({
+                            "type": "req",
+                            "id": &id,
+                            "method": &method,
+                            "params": { "key": &key }
+                        });
+                        if let Err(e) = write.send(Message::Text(req.to_string())).await {
+                            let _ = resp_tx.send(ClawResponse::Error(format!("subscribe messages: {}", e)));
+                            break;
+                        }
+                    }
+                    Some(ClawCommand::SendSessionMessage { key, message }) => {
+                        req_id += 1;
+                        let id = req_id.to_string();
+                        let method = "sessions.send".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
+                        let idempotency_key = format!(
+                            "clarity-{}-{}",
+                            id,
+                            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                                .encode(rand::random::<[u8; 8]>())
+                        );
+                        let req = serde_json::json!({
+                            "type": "req",
+                            "id": &id,
+                            "method": &method,
+                            "params": {
+                                "key": &key,
+                                "message": &message,
+                                "idempotencyKey": idempotency_key
+                            }
+                        });
+                        if let Err(e) = write.send(Message::Text(req.to_string())).await {
+                            let _ = resp_tx.send(ClawResponse::Error(format!("send session message: {}", e)));
                             break;
                         }
                     }
@@ -661,10 +823,12 @@ async fn run_connection(
                     }) => {
                         req_id += 1;
                         let id = req_id.to_string();
+                        let method = "device.pair.request".to_string();
+                        pending_methods.insert(id.clone(), method.clone());
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,
-                            "method": "device.pair.request",
+                            "method": &method,
                             "params": {
                                 "deviceId": &device_id,
                                 "publicKey": &public_key,
@@ -681,6 +845,7 @@ async fn run_connection(
                         }
                     }
                     Some(ClawCommand::RawRequest { id, method, params }) => {
+                        pending_methods.insert(id.clone(), method.clone());
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,
@@ -718,8 +883,11 @@ async fn run_connection(
                                     } else if let Some(pairing) = extract_pairing_result(&payload) {
                                         let _ = resp_tx.send(pairing);
                                     } else {
+                                        let id = val["id"].as_str().unwrap_or("").to_string();
+                                        let method = pending_methods.remove(&id);
                                         let _ = resp_tx.send(ClawResponse::Reply {
-                                            id: val["id"].as_str().unwrap_or("").into(),
+                                            id,
+                                            method,
                                             ok: val["ok"].as_bool().unwrap_or(false),
                                             payload,
                                         });
@@ -729,8 +897,9 @@ async fn run_connection(
                                     let event_type = val["event"].as_str().unwrap_or("").to_string();
                                     let payload = val.get("payload").cloned().unwrap_or_default();
 
-                                    // Session messages and chat events carry actual
-                                    // assistant/user content for the main chat stream.
+                                    // Session messages, chat events, and OpenClaw/KimiClaw
+                                    // agent streaming events carry content for the main chat
+                                    // stream.
                                     if event_type == "session.message" || event_type == "chat" {
                                         if let Some((role, content, finished)) =
                                             extract_session_message(&payload)
@@ -740,6 +909,29 @@ async fn run_connection(
                                                 content,
                                                 finished,
                                             });
+                                        }
+                                    } else if event_type == "agent" {
+                                        if let Some((role, content, finished)) =
+                                            extract_agent_event(&payload)
+                                        {
+                                            // Convert cumulative assistant text into deltas.
+                                            let delta = if role == "assistant" && !finished {
+                                                compute_stream_delta(&last_assistant_text, &content)
+                                            } else {
+                                                content.clone()
+                                            };
+                                            if finished {
+                                                last_assistant_text.clear();
+                                            } else if role == "assistant" {
+                                                last_assistant_text.clone_from(&content);
+                                            }
+                                            if !delta.is_empty() || finished {
+                                                let _ = resp_tx.send(ClawResponse::SessionMessage {
+                                                    role,
+                                                    content: delta,
+                                                    finished,
+                                                });
+                                            }
                                         }
                                     } else if event_type == "device.pair.resolved"
                                         || event_type == "device.pair.requested"
@@ -845,6 +1037,51 @@ fn extract_session_message(payload: &serde_json::Value) -> Option<(String, Strin
     None
 }
 
+/// Compute the incremental delta between the previous cumulative stream text
+/// and the current cumulative stream text.
+///
+/// OpenClaw/KimiClaw assistant streams send the full cumulative text on every
+/// chunk. This helper returns only the newly appended suffix, or the full text
+/// when the stream backtracks or starts fresh.
+fn compute_stream_delta(prev: &str, current: &str) -> String {
+    if current.starts_with(prev) {
+        current.chars().skip(prev.chars().count()).collect()
+    } else {
+        current.to_string()
+    }
+}
+
+/// Extract a streaming agent event from OpenClaw/KimiClaw.
+///
+/// Assistant events have `"stream": "assistant"` with `"data": { "text": "..." }`.
+/// Lifecycle end events have `"stream": "lifecycle"` and `"data": { "phase": "end" }`.
+fn extract_agent_event(payload: &serde_json::Value) -> Option<(String, String, bool)> {
+    let stream = payload.get("stream").and_then(|v| v.as_str())?;
+    match stream {
+        "assistant" => {
+            let data = payload.get("data")?;
+            // Prefer the cumulative text; fall back to delta.
+            let text = data
+                .get("text")
+                .and_then(|v| v.as_str())
+                .or_else(|| data.get("delta").and_then(|v| v.as_str()))?;
+            Some(("assistant".into(), text.into(), false))
+        }
+        "lifecycle" => {
+            let phase = payload
+                .get("data")
+                .and_then(|d| d.get("phase"))
+                .and_then(|v| v.as_str());
+            if phase == Some("end") {
+                Some(("assistant".into(), String::new(), true))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Try to extract a device pairing result from a Gateway payload.
 ///
 /// Handles both the `device.pair.request` response and the
@@ -906,4 +1143,39 @@ fn parse_message_list(items: &[serde_json::Value]) -> Vec<GatewayMessage> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_agent_event;
+
+    #[test]
+    fn extract_agent_event_assistant_chunk() {
+        let payload = serde_json::json!({
+            "stream": "assistant",
+            "data": { "text": "hello" }
+        });
+        assert!(matches!(
+            extract_agent_event(&payload),
+            Some((ref role, ref text, false)) if role == "assistant" && text == "hello"
+        ));
+    }
+
+    #[test]
+    fn extract_agent_event_lifecycle_end() {
+        let payload = serde_json::json!({
+            "stream": "lifecycle",
+            "data": { "phase": "end" }
+        });
+        assert!(matches!(
+            extract_agent_event(&payload),
+            Some((ref role, ref text, true)) if role == "assistant" && text.is_empty()
+        ));
+    }
+
+    #[test]
+    fn extract_agent_event_ignores_unknown_stream() {
+        let payload = serde_json::json!({ "stream": "heartbeat" });
+        assert!(extract_agent_event(&payload).is_none());
+    }
 }
