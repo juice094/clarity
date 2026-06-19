@@ -78,6 +78,14 @@ impl App {
         if text.is_empty() && self.chat_store.attachments.is_empty() {
             return;
         }
+
+        // When an OpenClaw remote bot is selected, route the main chat message
+        // through the WebSocket gateway instead of the local Agent.
+        if self.is_claw_active() {
+            self.send_claw();
+            return;
+        }
+
         // Clear any stale plan tracker / snapshot hint from a previous turn.
         self.chat_store.plan_tracker = None;
         self.chat_store.last_snapshot = None;
@@ -523,5 +531,75 @@ impl App {
                 }
             }
         });
+    }
+
+    /// Send the current composer input through the active OpenClaw WebSocket.
+    ///
+    /// This mirrors the local-agent send path: the user message is appended to
+    /// the active session, the turn state becomes Loading, and the message is
+    /// forwarded to the remote Gateway. Responses arrive asynchronously via
+    /// `claw_ws.drain()` and are translated into `UiEvent`s in the main loop.
+    pub(crate) fn send_claw(&mut self) {
+        let text = self.chat_store.input.trim().to_string();
+        if text.is_empty() && self.chat_store.attachments.is_empty() {
+            return;
+        }
+
+        let mut full_message = text.clone();
+        for att in &self.chat_store.attachments {
+            if let Ok(content) = std::fs::read_to_string(&att.path) {
+                full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
+            } else {
+                full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
+            }
+        }
+        self.chat_store.attachments.clear();
+
+        if let Some(session) = self.session_store.active_session_mut() {
+            let mut msg = Message {
+                role: Role::User,
+                content: full_message.clone(),
+                blocks: vec![],
+                timestamp: Instant::now(),
+                parsed: vec![],
+                cached_height: None,
+                is_error: false,
+                lines: Vec::new(),
+            };
+            msg.prepare();
+            session.messages.push(msg);
+            session.updated_at = crate::session::now_millis();
+            if session.title.starts_with("New ") {
+                let trimmed = text.trim();
+                session.title = if trimmed.chars().count() > 20 {
+                    format!("{}…", trimmed.chars().take(20).collect::<String>())
+                } else {
+                    trimmed.to_string()
+                };
+            }
+        }
+        self.chat_store.input.clear();
+        self.session_store
+            .drafts
+            .remove(&self.session_store.active_session_id);
+        self.view_state.turn = clarity_core::ui::TurnState::Loading;
+        self.chat_store.agent_status = AgentStatus::Busy;
+        self.chat_store.tool_calls.clear();
+
+        let ws = match self.claw_ws {
+            Some(ref ws) => ws.clone(),
+            None => {
+                let _ = self.ui_tx.send(UiEvent::Error(
+                    "OpenClaw connection is not available".into(),
+                ));
+                return;
+            }
+        };
+
+        // Mark that an OpenClaw turn is in flight so the main loop knows to
+        // finalize the assistant message when the response arrives.
+        self.chat_store.pending_send = Some((full_message.clone(), Vec::new()));
+
+        ws.send_message("agent:main:main", &full_message);
     }
 }

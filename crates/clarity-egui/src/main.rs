@@ -969,24 +969,47 @@ impl eframe::App for App {
                                 .map(|m| format!("[{}] {}", m.role, m.content))
                                 .collect();
                         }
-                        crate::claw_client::ClawResponse::Reply {
-                            id: _,
-                            ok: _,
+                        crate::claw_client::ClawResponse::Reply { id: _, ok, payload } => {
+                            if let Some(text) = extract_claw_text(&payload) {
+                                if !text.trim().is_empty() {
+                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
+                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                                }
+                            } else if !ok {
+                                let err = payload
+                                    .get("error")
+                                    .and_then(|v| v.as_str())
+                                    .or_else(|| payload.get("message").and_then(|v| v.as_str()))
+                                    .unwrap_or("OpenClaw request failed");
+                                let _ = self
+                                    .ui_tx
+                                    .send(crate::ui::types::UiEvent::Error(err.into()));
+                            }
+                        }
+                        crate::claw_client::ClawResponse::Event {
+                            event_type,
                             payload,
                         } => {
-                            if let Some(text) = payload.get("text").and_then(|v| v.as_str()) {
-                                self.push_toast(
-                                    format!("Gray: {}", text),
-                                    crate::ui::types::ToastLevel::Info,
-                                );
+                            if matches!(
+                                event_type.as_str(),
+                                "done" | "finished" | "turn_end" | "message_end"
+                            ) {
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                            } else if let Some(text) = extract_claw_text(&payload) {
+                                if !text.trim().is_empty() {
+                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
+                                }
                             }
                         }
                         crate::claw_client::ClawResponse::Error(e) => {
                             tracing::warn!("Claw WebSocket error: {}", e);
+                            let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(format!(
+                                "OpenClaw connection error: {}",
+                                e
+                            )));
                             self.claw_ws = None;
                             self.claw_ws_device_id.clear();
                         }
-                        _ => {}
                     }
                 }
             }
@@ -1278,6 +1301,40 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
             format!("⤢ Block {block_id} ({line_count} lines)")
         }
     }
+}
+
+/// Try to extract human-readable text from an OpenClaw Gateway payload.
+///
+/// Different Gateway implementations emit responses under different keys, so
+/// this helper checks the common shapes without being tied to one schema.
+fn extract_claw_text(payload: &serde_json::Value) -> Option<String> {
+    // Direct string fields.
+    for key in ["text", "content", "message", "delta", "answer", "output"] {
+        if let Some(text) = payload.get(key).and_then(|v| v.as_str()) {
+            return Some(text.into());
+        }
+    }
+    // Nested message object.
+    if let Some(content) = payload
+        .get("message")
+        .or_else(|| payload.get("choices"))
+        .and_then(|v| v.get("content"))
+        .and_then(|v| v.as_str())
+    {
+        return Some(content.into());
+    }
+    // Array of content parts (OpenAI-style).
+    if let Some(parts) = payload.get("content_parts").and_then(|v| v.as_array()) {
+        let text: String = parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(|v| v.as_str()))
+            .collect::<Vec<_>>()
+            .join("");
+        if !text.is_empty() {
+            return Some(text);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

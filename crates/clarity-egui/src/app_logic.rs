@@ -9,6 +9,24 @@ use crate::settings::GuiSettings;
 use crate::theme::Theme;
 use crate::ui::types::*;
 impl App {
+    /// Returns true when the active bot is an OpenClaw remote device with a
+    /// live WebSocket connection. In this mode the main chat composer should
+    /// route messages through `claw_ws` instead of the local Agent.
+    pub(crate) fn is_claw_active(&self) -> bool {
+        if self.claw_ws.is_none() {
+            return false;
+        }
+        if self.ui_store.active_bot_id.is_empty() {
+            return false;
+        }
+        if self.ui_store.active_bot_id != self.claw_ws_device_id {
+            return false;
+        }
+        self.device_state
+            .connection(&self.ui_store.active_bot_id)
+            .is_some()
+    }
+
     /// Creates a new instance.
     pub(crate) fn new(
         cc: &eframe::CreationContext<'_>,
