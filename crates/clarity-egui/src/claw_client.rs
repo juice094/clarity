@@ -67,6 +67,7 @@ pub enum ClawCommand {
     /// Send raw JSON-RPC request (for future extensibility).
     #[allow(dead_code)]
     RawRequest {
+        id: String,
         method: String,
         params: serde_json::Value,
     },
@@ -224,6 +225,16 @@ impl ClawClient {
         });
     }
 
+    /// Send a raw JSON-RPC request to the Gateway.
+    #[allow(dead_code)] // Used by helper binaries until the UI wires pairing.
+    pub fn send_raw_request(&self, id: &str, method: &str, params: serde_json::Value) {
+        let _ = self.tx.send(ClawCommand::RawRequest {
+            id: id.into(),
+            method: method.into(),
+            params,
+        });
+    }
+
     /// Non-blocking poll for responses from the Gateway.
     #[allow(dead_code)]
     pub fn try_recv(&self) -> Option<ClawResponse> {
@@ -249,13 +260,60 @@ async fn run_connection(
     cmd_rx: Receiver<ClawCommand>,
     resp_tx: Sender<ClawResponse>,
 ) {
+    use base64::Engine as _;
     use futures_util::SinkExt;
     use futures_util::StreamExt;
+    use rand::Rng as _;
     use tokio_tungstenite::connect_async;
     use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::tungstenite::http::Request;
 
-    // Connect.
-    let ws_stream = match connect_async(gateway_url).await {
+    // Connect. Local KimiClaw validates the Origin header, so derive it from
+    // the Gateway URL (ws -> http, wss -> https).
+    let uri: tokio_tungstenite::tungstenite::http::Uri = match gateway_url.parse() {
+        Ok(u) => u,
+        Err(e) => {
+            let _ = resp_tx.send(ClawResponse::Error(format!("parse gateway url: {}", e)));
+            return;
+        }
+    };
+    let host = uri.authority().map(|a| a.as_str()).unwrap_or(gateway_url);
+    let scheme = uri.scheme_str().unwrap_or("ws");
+    let origin = if host.starts_with("127.0.0.1:")
+        || host.starts_with("localhost:")
+        || host == "127.0.0.1"
+        || host == "localhost"
+    {
+        Some("app://kimi-desktop".to_string())
+    } else {
+        Some(format!(
+            "http{}://{}",
+            if scheme == "wss" { "s" } else { "" },
+            host
+        ))
+    };
+    let mut key_bytes = [0u8; 16];
+    rand::rngs::OsRng.fill(&mut key_bytes);
+    let sec_key = base64::engine::general_purpose::STANDARD.encode(key_bytes);
+    let mut builder = Request::builder()
+        .method("GET")
+        .uri(gateway_url)
+        .header("Host", host)
+        .header("Connection", "Upgrade")
+        .header("Upgrade", "websocket")
+        .header("Sec-WebSocket-Version", "13")
+        .header("Sec-WebSocket-Key", sec_key);
+    if let Some(origin) = origin {
+        builder = builder.header("Origin", origin);
+    }
+    let request = match builder.body(()) {
+        Ok(req) => req,
+        Err(e) => {
+            let _ = resp_tx.send(ClawResponse::Error(format!("build ws request: {}", e)));
+            return;
+        }
+    };
+    let ws_stream = match connect_async(request).await {
         Ok((ws, _)) => ws,
         Err(e) => {
             let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket connect: {}", e)));
@@ -266,54 +324,186 @@ async fn run_connection(
     let (mut write, mut read) = ws_stream.split();
 
     // ── Step 1: Authenticate ──────────────────────────────────────
-    let (token, device_block) = match &auth {
-        ClawAuth::TokenOnly { token } => (token.clone(), None),
-        ClawAuth::DevicePaired {
-            device,
-            device_token,
-        } => (
-            device_token.clone(),
-            Some(serde_json::json!({
-                "id": device.device_id(),
-                "publicKey": device.public_key()
-            })),
-        ),
+    // Token-only connections (Gray-Cloud or local gateway admin) use the
+    // generic gateway client identity. Device-paired control-ui connections
+    // must use the whitelisted control-ui identity.
+    let (client_id, client_mode) = match &auth {
+        ClawAuth::TokenOnly { .. } => ("gateway-client", "cli"),
+        ClawAuth::DevicePaired { .. } => ("openclaw-control-ui", "webchat"),
     };
+    let role = "operator";
+    let scopes = vec![
+        "operator.admin",
+        "operator.read",
+        "operator.write",
+        "operator.approvals",
+        "operator.pairing",
+        "operator.talk.secrets",
+    ];
 
-    let mut connect_params = serde_json::json!({
-        "minProtocol": 3,
-        "maxProtocol": 3,
-        "client": {
-            "id": "gateway-client",
-            "version": "0.1.0",
-            "platform": "windows",
-            "mode": "cli"
-        },
-        "role": "operator",
-        "scopes": [
-            "operator.admin",
-            "operator.read",
-            "operator.write",
-            "operator.approvals",
-            "operator.pairing",
-            "operator.talk.secrets"
-        ],
-        "auth": { "token": token }
-    });
+    /// Build the signed device attestation payload used by KimiClaw.
+    #[allow(clippy::too_many_arguments)] // Mirrors the OpenClaw protocol fields.
+    fn build_device_signature_payload(
+        version: &str,
+        device_id: &str,
+        client_id: &str,
+        client_mode: &str,
+        role: &str,
+        scopes: &[&str],
+        signed_at_ms: i64,
+        token: &str,
+        nonce: Option<&str>,
+    ) -> String {
+        let mut parts = vec![
+            version.to_string(),
+            device_id.to_string(),
+            client_id.to_string(),
+            client_mode.to_string(),
+            role.to_string(),
+            scopes.join(","),
+            signed_at_ms.to_string(),
+            token.to_string(),
+        ];
+        if version == "v2" {
+            parts.push(nonce.unwrap_or("").to_string());
+        }
+        parts.join("|")
+    }
 
-    if let Some(device) = device_block {
-        if let Some(obj) = connect_params.as_object_mut() {
-            obj.insert("device".to_string(), device);
+    /// Build the JSON-RPC `connect` request. For device-paired auth this
+    /// includes a signed `device` attestation when `with_device` is true;
+    /// for token-only auth it is always omitted.
+    #[allow(clippy::too_many_arguments)] // Build helper fed by local constants.
+    fn build_connect_req(
+        auth: &ClawAuth,
+        client_id: &str,
+        client_mode: &str,
+        role: &str,
+        scopes: &[&str],
+        id: &str,
+        nonce: Option<&str>,
+        with_device: bool,
+    ) -> serde_json::Value {
+        let token = match auth {
+            ClawAuth::TokenOnly { token } => token.clone(),
+            ClawAuth::DevicePaired { device_token, .. } => device_token.clone(),
+        };
+
+        let device_block = match auth {
+            ClawAuth::TokenOnly { .. } => None,
+            ClawAuth::DevicePaired { device, .. } if with_device => {
+                let signed_at_ms = chrono::Utc::now().timestamp_millis();
+                let version = if nonce.is_some() { "v2" } else { "v1" };
+                let payload = build_device_signature_payload(
+                    version,
+                    &device.device_id(),
+                    client_id,
+                    client_mode,
+                    role,
+                    scopes,
+                    signed_at_ms,
+                    &token,
+                    nonce,
+                );
+                let signature = device.sign_payload(&payload);
+                let mut block = serde_json::json!({
+                    "id": device.device_id(),
+                    "publicKey": device.public_key(),
+                    "signature": signature,
+                    "signedAt": signed_at_ms,
+                });
+                if let Some(n) = nonce {
+                    if let Some(obj) = block.as_object_mut() {
+                        obj.insert("nonce".to_string(), serde_json::json!(n));
+                    }
+                }
+                Some(block)
+            }
+            ClawAuth::DevicePaired { .. } => None,
+        };
+
+        let mut params = serde_json::json!({
+            "minProtocol": 3,
+            "maxProtocol": 3,
+            "client": {
+                "id": client_id,
+                "version": env!("CARGO_PKG_VERSION"),
+                "platform": "windows",
+                "mode": client_mode,
+            },
+            "role": role,
+            "scopes": scopes.to_vec(),
+            "auth": { "token": token },
+            "caps": ["tool-events"],
+        });
+        if let Some(device) = device_block {
+            if let Some(obj) = params.as_object_mut() {
+                obj.insert("device".to_string(), device);
+            }
+        }
+
+        serde_json::json!({
+            "type": "req",
+            "id": id,
+            "method": "connect",
+            "params": params
+        })
+    }
+
+    // Local KimiClaw sends `connect.challenge` as the first message for
+    // device-paired control-ui clients. Read it before sending connect so the
+    // v2 device attestation can include the server-provided nonce.
+    let mut challenge_nonce: Option<String> = None;
+    if matches!(auth, ClawAuth::DevicePaired { .. }) {
+        match tokio::time::timeout(Duration::from_secs(5), read.next()).await {
+            Ok(Some(Ok(Message::Text(text)))) => {
+                if let Ok(resp) = serde_json::from_str::<serde_json::Value>(&text) {
+                    let msg_type = resp.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    let event = resp.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                    if msg_type == "event" && event == "connect.challenge" {
+                        challenge_nonce = resp
+                            .get("payload")
+                            .and_then(|p| p.get("nonce"))
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                    }
+                }
+            }
+            Ok(Some(Ok(other))) => {
+                let _ = resp_tx.send(ClawResponse::Error(format!(
+                    "Unexpected pre-auth message: {:?}",
+                    other
+                )));
+                return;
+            }
+            Ok(Some(Err(e))) => {
+                let _ = resp_tx.send(ClawResponse::Error(format!("WebSocket error: {}", e)));
+                return;
+            }
+            Ok(None) => {
+                let _ = resp_tx.send(ClawResponse::Error(
+                    "Connection closed before challenge".into(),
+                ));
+                return;
+            }
+            Err(_) => {
+                // No challenge received; fall through and try a token-only
+                // connect. Gray-Cloud and older gateways may not send one.
+            }
         }
     }
 
-    let connect_req = serde_json::json!({
-        "type": "req",
-        "id": "1",
-        "method": "connect",
-        "params": connect_params
-    });
-
+    let with_device = matches!(auth, ClawAuth::DevicePaired { .. });
+    let connect_req = build_connect_req(
+        &auth,
+        client_id,
+        client_mode,
+        role,
+        &scopes,
+        "1",
+        challenge_nonce.as_deref(),
+        with_device,
+    );
     if let Err(e) = write.send(Message::Text(connect_req.to_string())).await {
         let _ = resp_tx.send(ClawResponse::Error(format!("send connect: {}", e)));
         return;
@@ -321,8 +511,9 @@ async fn run_connection(
 
     // Wait for auth response. The Gateway may emit a `connect.challenge`
     // event before the final hello-ok/ok response. Device-paired clients
-    // must sign the nonce; token-only clients ignore it.
-    let mut challenge_answered = false;
+    // must re-send a connect request with a v2 signature that includes the
+    // challenge nonce; token-only clients ignore it.
+    let mut challenge_answered = challenge_nonce.is_some();
     let auth_ok = loop {
         match tokio::time::timeout(Duration::from_secs(10), read.next()).await {
             Ok(Some(Ok(Message::Text(text)))) => {
@@ -331,27 +522,25 @@ async fn run_connection(
                     let event = resp.get("event").and_then(|v| v.as_str()).unwrap_or("");
 
                     if msg_type == "event" && event == "connect.challenge" {
-                        if let ClawAuth::DevicePaired { device, .. } = &auth {
+                        if matches!(auth, ClawAuth::DevicePaired { .. }) && !challenge_answered {
                             if let Some(nonce) = resp
                                 .get("payload")
                                 .and_then(|p| p.get("nonce"))
                                 .and_then(|v| v.as_str())
                             {
-                                let signature = device.sign_nonce(nonce);
-                                let challenge_req = serde_json::json!({
-                                    "type": "req",
-                                    "id": "2",
-                                    "method": "connect.challenge",
-                                    "params": {
-                                        "nonce": nonce,
-                                        "signature": signature
-                                    }
-                                });
-                                if let Err(e) =
-                                    write.send(Message::Text(challenge_req.to_string())).await
-                                {
+                                let req = build_connect_req(
+                                    &auth,
+                                    client_id,
+                                    client_mode,
+                                    role,
+                                    &scopes,
+                                    "2",
+                                    Some(nonce),
+                                    true,
+                                );
+                                if let Err(e) = write.send(Message::Text(req.to_string())).await {
                                     let _ = resp_tx.send(ClawResponse::Error(format!(
-                                        "send challenge: {}",
+                                        "send challenge connect: {}",
                                         e
                                     )));
                                     return;
@@ -491,9 +680,7 @@ async fn run_connection(
                             break;
                         }
                     }
-                    Some(ClawCommand::RawRequest { method, params }) => {
-                        req_id += 1;
-                        let id = req_id.to_string();
+                    Some(ClawCommand::RawRequest { id, method, params }) => {
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,

@@ -25,8 +25,6 @@ use std::time::{Duration, Instant};
 
 mod app_state;
 pub(crate) mod claw;
-pub(crate) mod claw_client;
-pub(crate) mod claw_device;
 mod components;
 mod design_system;
 mod error;
@@ -106,7 +104,7 @@ pub(crate) struct App {
     /// Live Claw device list polled from Gateway (replaces hardcoded mock data).
     pub(crate) device_state: crate::claw::DeviceState,
     /// Active WebSocket connection to the selected Claw Gateway.
-    pub(crate) claw_ws: Option<crate::claw_client::ClawClient>,
+    pub(crate) claw_ws: Option<clarity_egui::claw_client::ClawClient>,
     /// Track which device the current WebSocket is connected to.
     pub(crate) claw_ws_device_id: String,
 }
@@ -920,12 +918,12 @@ impl eframe::App for App {
                             let ws_url = gw_url
                                 .replace("http://", "ws://")
                                 .replace("https://", "wss://");
-                            self.claw_ws = Some(crate::claw_client::ClawClient::connect(
+                            self.claw_ws = Some(clarity_egui::claw_client::ClawClient::connect(
                                 &ws_url,
                                 &conn.gateway_token,
                             ));
                         } else {
-                            self.claw_ws = Some(crate::claw_client::ClawClient::connect(
+                            self.claw_ws = Some(clarity_egui::claw_client::ClawClient::connect(
                                 &gw_url,
                                 &conn.gateway_token,
                             ));
@@ -946,7 +944,7 @@ impl eframe::App for App {
 
                 for resp in responses {
                     match resp {
-                        crate::claw_client::ClawResponse::Connected { gateway_url } => {
+                        clarity_egui::claw_client::ClawResponse::Connected { gateway_url } => {
                             self.push_toast(
                                 format!("Connected to Claw Gateway: {}", gateway_url),
                                 crate::ui::types::ToastLevel::Info,
@@ -956,7 +954,7 @@ impl eframe::App for App {
                                 ws.fetch_history("agent:main:main");
                             }
                         }
-                        crate::claw_client::ClawResponse::HistoryLoaded {
+                        clarity_egui::claw_client::ClawResponse::HistoryLoaded {
                             session_key: _,
                             messages,
                         } => {
@@ -970,7 +968,7 @@ impl eframe::App for App {
                                 .map(|m| format!("[{}] {}", m.role, m.content))
                                 .collect();
                         }
-                        crate::claw_client::ClawResponse::Reply { id: _, ok, payload } => {
+                        clarity_egui::claw_client::ClawResponse::Reply { id: _, ok, payload } => {
                             if ok {
                                 if let Some(text) = extract_claw_text(&payload) {
                                     if !text.trim().is_empty() {
@@ -1000,7 +998,7 @@ impl eframe::App for App {
                                 let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(msg));
                             }
                         }
-                        crate::claw_client::ClawResponse::SessionMessage {
+                        clarity_egui::claw_client::ClawResponse::SessionMessage {
                             role,
                             content,
                             finished,
@@ -1016,7 +1014,7 @@ impl eframe::App for App {
                                 let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
                             }
                         }
-                        crate::claw_client::ClawResponse::Event {
+                        clarity_egui::claw_client::ClawResponse::Event {
                             event_type,
                             payload,
                         } => {
@@ -1031,7 +1029,7 @@ impl eframe::App for App {
                                 }
                             }
                         }
-                        crate::claw_client::ClawResponse::PairingResult {
+                        clarity_egui::claw_client::ClawResponse::PairingResult {
                             device_id,
                             approved,
                             token,
@@ -1063,7 +1061,7 @@ impl eframe::App for App {
                                 tracing::info!(device_id = %device_id, "OpenClaw pairing pending");
                             }
                         }
-                        crate::claw_client::ClawResponse::Error(e) => {
+                        clarity_egui::claw_client::ClawResponse::Error(e) => {
                             tracing::warn!("Claw WebSocket error: {}", e);
                             let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(format!(
                                 "OpenClaw connection error: {}",

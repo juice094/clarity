@@ -112,6 +112,12 @@ impl DeviceIdentity {
         let signature = self.signing_key.sign(nonce.as_bytes());
         URL_SAFE_NO_PAD.encode(signature.to_bytes())
     }
+
+    /// Sign an arbitrary UTF-8 payload and return a base64url-encoded signature.
+    pub fn sign_payload(&self, payload: &str) -> String {
+        let signature = self.signing_key.sign(payload.as_bytes());
+        URL_SAFE_NO_PAD.encode(signature.to_bytes())
+    }
 }
 
 fn encode_public_key(key: VerifyingKey) -> String {
