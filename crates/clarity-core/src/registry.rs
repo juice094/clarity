@@ -86,10 +86,11 @@ impl ToolRegistry {
         use crate::tools::PowerShellTool;
         use crate::tools::{
             AskUserTool, CancelCronTool, ChannelSendTool, ComputerUseTool, FileEditTool,
-            FileReadTool, FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool,
-            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool, TaskOutputTool,
-            TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool, TodoTool,
-            WebBrowserTool, WebFetchTool, WebSearchTool,
+            FileReadTool, FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, OkfLoadTool,
+            OkfReadTool, OkfSearchTool, PlanTool, ReadMediaFileTool, ScheduleCronTool,
+            TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool, TeamCreateTool,
+            TeamDeleteTool, TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool,
+            WebSearchTool,
         };
 
         let registry = Self::new();
@@ -157,6 +158,11 @@ impl ToolRegistry {
         // Register media reading tool
         let _ = registry.register(ReadMediaFileTool::new());
 
+        // Register OKF knowledge tools
+        let _ = registry.register(OkfLoadTool::new());
+        let _ = registry.register(OkfSearchTool::new());
+        let _ = registry.register(OkfReadTool::new());
+
         registry
     }
 
@@ -169,10 +175,10 @@ impl ToolRegistry {
         use crate::tools::PowerShellTool;
         use crate::tools::{
             AskUserTool, CancelCronTool, ChannelSendTool, FileEditTool, FileReadTool,
-            FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, PlanTool,
-            ReadMediaFileTool, ScheduleCronTool, TaskCreateTool, TaskListTool, TaskOutputTool,
-            TaskStopTool, TeamCreateTool, TeamDeleteTool, TeamListTool, ThinkTool, TodoTool,
-            WebBrowserTool, WebFetchTool, WebSearchTool,
+            FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, OkfLoadTool, OkfReadTool,
+            OkfSearchTool, PlanTool, ReadMediaFileTool, ScheduleCronTool, TaskCreateTool,
+            TaskListTool, TaskOutputTool, TaskStopTool, TeamCreateTool, TeamDeleteTool,
+            TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
         };
 
         let registry = Self::new();
@@ -217,6 +223,11 @@ impl ToolRegistry {
         let _ = registry.register(ScheduleCronTool::new());
         let _ = registry.register(ListCronTool::new());
         let _ = registry.register(CancelCronTool::new());
+
+        // Register OKF knowledge tools
+        let _ = registry.register(OkfLoadTool::new());
+        let _ = registry.register(OkfSearchTool::new());
+        let _ = registry.register(OkfReadTool::new());
 
         registry
     }

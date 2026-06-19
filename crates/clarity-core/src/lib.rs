@@ -64,6 +64,7 @@ pub mod mcp;
 pub mod memory;
 pub mod model_download;
 pub mod notifications;
+pub mod okf;
 pub(crate) mod personality;
 pub mod registry;
 pub(crate) mod server;
