@@ -11,7 +11,8 @@
 //!    `{"type":"req","id":"1","method":"connect","params":{
 //!       "minProtocol":3,"maxProtocol":3,
 //!       "client":{"id":"gateway-client","version":"0.1.0","platform":"windows","mode":"cli"},
-//!       "role":"operator","scopes":["operator.read","operator.write"],
+//!       "role":"operator",
+//!       "scopes":["operator.admin","operator.read","operator.write","operator.approvals","operator.pairing","operator.talk.secrets"],
 //!       "auth":{"token":"..."}}}`
 //! 2. The Gateway may emit a routine `connect.challenge` event first; token-only
 //!    clients ignore it and proceed with the authenticated connect request.
@@ -195,7 +196,14 @@ async fn run_connection(
                 "mode": "cli"
             },
             "role": "operator",
-            "scopes": ["operator.read", "operator.write"],
+            "scopes": [
+                "operator.admin",
+                "operator.read",
+                "operator.write",
+                "operator.approvals",
+                "operator.pairing",
+                "operator.talk.secrets"
+            ],
             "auth": { "token": token }
         }
     });

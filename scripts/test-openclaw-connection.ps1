@@ -208,7 +208,14 @@ try {
                 mode = "cli"
             }
             role = "operator"
-            scopes = @("operator.read", "operator.write")
+            scopes = @(
+                "operator.admin",
+                "operator.read",
+                "operator.write",
+                "operator.approvals",
+                "operator.pairing",
+                "operator.talk.secrets"
+            )
             auth = @{ token = $remoteToken }
         }
     } | ConvertTo-Json -Depth 10 -Compress
