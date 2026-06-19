@@ -255,6 +255,35 @@ try {
         exit 1
     }
 
+    # ── L3: Optional send probe ─────────────────────────────────────────────
+    # Some Gateways reject sessions.send with method-not-implemented or a
+    # schema error. This probe sends a harmless test message and prints the
+    # raw response to aid debugging.
+    $probe = $env:OPENCLAW_SEND_PROBE
+    if (-not [string]::IsNullOrWhiteSpace($probe)) {
+        Write-Step "L3: 发送测试消息探测 (sessions.send)"
+        $sendReq = @{
+            type = "req"
+            id = "2"
+            method = "sessions.send"
+            params = @{
+                sessionKey = "agent:main:main"
+                message = $probe
+            }
+        } | ConvertTo-Json -Depth 10 -Compress
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($sendReq)
+        $segment = New-Object System.ArraySegment[byte](, $bytes)
+        $client.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct).Wait()
+        Write-Info "已发送: $sendReq"
+
+        $sendResp = Receive-Json -TimeoutSeconds 15
+        if ($null -eq $sendResp) {
+            Write-Fail "等待 send 响应超时。"
+        } else {
+            Write-Info "收到 send 响应: $($sendResp | ConvertTo-Json -Depth 5 -Compress)"
+        }
+    }
+
     $client.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "done", $ct).Wait()
 } catch {
     Write-Fail "WebSocket 握手异常: $_"

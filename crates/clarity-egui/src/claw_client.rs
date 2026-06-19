@@ -325,6 +325,7 @@ async fn run_connection(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
+                        tracing::debug!(text = %text, "OpenClaw received text");
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
                             let msg_type = val["type"].as_str().unwrap_or("");
                             match msg_type {

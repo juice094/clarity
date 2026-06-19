@@ -970,20 +970,33 @@ impl eframe::App for App {
                                 .collect();
                         }
                         crate::claw_client::ClawResponse::Reply { id: _, ok, payload } => {
-                            if let Some(text) = extract_claw_text(&payload) {
-                                if !text.trim().is_empty() {
-                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
-                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                            if ok {
+                                if let Some(text) = extract_claw_text(&payload) {
+                                    if !text.trim().is_empty() {
+                                        let _ =
+                                            self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
+                                        let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                                    }
                                 }
-                            } else if !ok {
+                            } else {
+                                tracing::warn!(?payload, "OpenClaw request returned ok=false");
                                 let err = payload
                                     .get("error")
                                     .and_then(|v| v.as_str())
                                     .or_else(|| payload.get("message").and_then(|v| v.as_str()))
-                                    .unwrap_or("OpenClaw request failed");
-                                let _ = self
-                                    .ui_tx
-                                    .send(crate::ui::types::UiEvent::Error(err.into()));
+                                    .map(|s| s.to_string());
+                                let detail = if payload.is_null()
+                                    || payload.as_object().map(|o| o.is_empty()).unwrap_or(false)
+                                {
+                                    "empty error payload".to_string()
+                                } else {
+                                    payload.to_string()
+                                };
+                                let msg = format!(
+                                    "OpenClaw request failed: {}",
+                                    err.as_deref().unwrap_or(&detail)
+                                );
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(msg));
                             }
                         }
                         crate::claw_client::ClawResponse::Event {
