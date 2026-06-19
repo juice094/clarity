@@ -13,7 +13,7 @@
 
 use crate::App;
 
-/// Render the work/chat segmented toggle as two equal-width pill segments.
+/// Render the work/chat segmented toggle as a single pill.
 ///
 /// Clicking a segment updates `app.nav_context` and persists the choice.
 /// Context-sensitive modals (web link / template editors) are closed on
@@ -23,60 +23,88 @@ pub fn render_work_chat_toggle(app: &mut App, ui: &mut egui::Ui) {
     let is_work = app.nav_context == crate::settings::NavContext::Work;
     let available = ui.available_width();
     let segment_w = (available - theme.space_4) / 2.0;
+    let segment_h = theme.size_nav_row_h;
+    let full = theme.radius_full as u8;
+    let inner = theme.radius_sm as u8;
 
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = theme.space_4;
+        ui.spacing_mut().item_spacing.x = 0.0;
 
-        // Work segment
-        let work_fill = if is_work {
-            theme.accent
-        } else {
-            theme.bg_hover
+        let work_radius = egui::CornerRadius {
+            nw: full,
+            ne: inner,
+            sw: full,
+            se: inner,
         };
-        let work_fg = if is_work {
-            theme.toggle_active_text
-        } else {
-            theme.text_dim
-        };
-        let work_btn = egui::Button::new(
-            egui::RichText::new(format!("{} {}", crate::theme::ICON_MONITOR, app.t("Work")))
-                .size(theme.text_sm)
-                .color(work_fg),
-        )
-        .fill(work_fill)
-        .min_size(egui::vec2(segment_w, 28.0))
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-        if ui.add(work_btn).clicked() && !is_work {
+        let work_resp = segment_button(
+            ui,
+            &theme,
+            &format!("{} {}", crate::theme::ICON_MONITOR, app.t("Work")),
+            segment_w,
+            segment_h,
+            work_radius,
+            is_work,
+        );
+        if work_resp.clicked() && !is_work {
             app.nav_context = crate::settings::NavContext::Work;
             close_context_sensitive_modals(app);
             app.persist_layout_settings();
         }
 
-        // Chat segment
-        let chat_fill = if !is_work {
-            theme.accent
-        } else {
-            theme.bg_hover
+        let chat_radius = egui::CornerRadius {
+            nw: inner,
+            ne: full,
+            sw: inner,
+            se: full,
         };
-        let chat_fg = if !is_work {
-            theme.toggle_active_text
-        } else {
-            theme.text_dim
-        };
-        let chat_btn = egui::Button::new(
-            egui::RichText::new(format!("{} {}", crate::theme::ICON_CHAT, app.t("Chat")))
-                .size(theme.text_sm)
-                .color(chat_fg),
-        )
-        .fill(chat_fill)
-        .min_size(egui::vec2(segment_w, 28.0))
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-        if ui.add(chat_btn).clicked() && is_work {
+        let chat_resp = segment_button(
+            ui,
+            &theme,
+            &format!("{} {}", crate::theme::ICON_CHAT, app.t("Chat")),
+            segment_w,
+            segment_h,
+            chat_radius,
+            !is_work,
+        );
+        if chat_resp.clicked() && is_work {
             app.nav_context = crate::settings::NavContext::Chat;
             close_context_sensitive_modals(app);
             app.persist_layout_settings();
         }
     });
+}
+
+fn segment_button(
+    ui: &mut egui::Ui,
+    theme: &crate::theme::Theme,
+    label: &str,
+    width: f32,
+    height: f32,
+    radius: egui::CornerRadius,
+    selected: bool,
+) -> egui::Response {
+    let text_color = if selected {
+        theme.toggle_active_text
+    } else {
+        theme.text_dim
+    };
+    let fill = if selected {
+        theme.accent
+    } else {
+        theme.surface
+    };
+
+    let button = egui::Button::new(
+        egui::RichText::new(label)
+            .size(theme.text_sm)
+            .color(text_color),
+    )
+    .fill(fill)
+    .stroke(egui::Stroke::NONE)
+    .corner_radius(radius)
+    .min_size(egui::vec2(width, height));
+
+    ui.add_sized([width, height], button)
 }
 
 /// Close any modal whose editing target no longer matches the current context.

@@ -155,6 +155,14 @@ pub struct Theme {
     /// Text color on the active segment of the Work/Chat toggle.
     pub toggle_active_text: egui::Color32,
 
+    // --- Sidebar micro-layout ---
+    /// Fixed width of the icon column in the left navigation tree.
+    pub size_nav_icon_rail: f32,
+    /// Target height of a single navigation/bot/history row.
+    pub size_nav_row_h: f32,
+    /// Width of the left accent bar shown on selected rows.
+    pub size_nav_accent_bar: f32,
+
     // --- Semantic surface (content-type backgrounds beyond chat bubbles) ---
     /// Tool call lifecycle indicator bg (distinct from chat bubbles).
     pub tool_call_bg: egui::Color32,
@@ -350,6 +358,11 @@ impl Theme {
             nav_section_expanded: hex("#2a2a2a"),
             toggle_active_text: hex("#ffffff"),
 
+            // Sidebar micro-layout
+            size_nav_icon_rail: 24.0,
+            size_nav_row_h: 32.0,
+            size_nav_accent_bar: 3.0,
+
             // Semantic surfaces
             tool_call_bg: rgba(26, 136, 255, 0.08),
             code_block_bg: hex("#0d0d0d"),
@@ -537,6 +550,11 @@ impl Theme {
             nav_section_expanded: rgba(45, 45, 62, 0.65),
             toggle_active_text: hex("#ffffff"),
 
+            // Sidebar micro-layout
+            size_nav_icon_rail: 24.0,
+            size_nav_row_h: 32.0,
+            size_nav_accent_bar: 3.0,
+
             // Semantic surfaces
             tool_call_bg: rgba(91, 141, 239, 0.08),
             code_block_bg: rgba(0, 0, 0, 0.40),
@@ -711,6 +729,11 @@ impl Theme {
             nav_row_selected: hex_alpha("#c98a5e", 0.10),
             nav_section_expanded: hex("#d0d4e0"),
             toggle_active_text: hex("#ffffff"),
+
+            // Sidebar micro-layout
+            size_nav_icon_rail: 24.0,
+            size_nav_row_h: 32.0,
+            size_nav_accent_bar: 3.0,
 
             // Semantic surfaces
             tool_call_bg: hex_alpha("#c98a5e", 0.06),
@@ -931,6 +954,9 @@ impl Theme {
         self.text_2xl *= scale;
         // S6: sidebar width is fixed at `text_base * 15` and must follow font scale.
         self.size_sidebar = self.text_base * 15.0;
+        // Sidebar micro-layout is driven by text/icon size, so it also scales.
+        self.size_nav_icon_rail *= scale;
+        self.size_nav_row_h *= scale;
         self
     }
 
@@ -1174,5 +1200,23 @@ mod tests {
     fn bot_bar_has_positive_height() {
         let t = Theme::dark();
         assert!(t.size_bot_bar > 0.0);
+    }
+
+    #[test]
+    fn nav_layout_tokens_are_positive() {
+        let t = Theme::dark();
+        assert!(t.size_nav_icon_rail > 0.0);
+        assert!(t.size_nav_row_h > 0.0);
+        assert!(t.size_nav_accent_bar > 0.0);
+    }
+
+    #[test]
+    fn font_scale_updates_nav_layout_tokens() {
+        let base = Theme::dark();
+        let scaled = Theme::dark().with_font_scale(1.5);
+        assert!((scaled.size_nav_icon_rail - base.size_nav_icon_rail * 1.5).abs() < f32::EPSILON);
+        assert!((scaled.size_nav_row_h - base.size_nav_row_h * 1.5).abs() < f32::EPSILON);
+        // Accent bar stays fixed for visual crispness.
+        assert!((scaled.size_nav_accent_bar - base.size_nav_accent_bar).abs() < f32::EPSILON);
     }
 }

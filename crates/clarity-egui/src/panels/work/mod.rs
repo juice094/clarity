@@ -145,7 +145,7 @@ fn render_center_zone(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Th
         });
 }
 
-fn render_task_pipeline(_app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+fn render_task_pipeline(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     ui.label(
         egui::RichText::new("任务管道")
             .size(theme.text_xs)
@@ -196,29 +196,38 @@ fn render_task_pipeline(_app: &mut App, ui: &mut egui::Ui, theme: &crate::theme:
     );
     ui.add_space(theme.space_8);
 
-    let agents = [
-        ("Gray-Cloud", "在线", theme.status_online),
-        ("Gray-Desktop", "空闲", theme.text_dim),
-    ];
-    for (name, status, color) in agents {
-        ui.horizontal(|ui| {
-            ui.painter()
-                .circle_filled(ui.cursor().min + egui::vec2(6.0, 8.0), 4.0, color);
-            ui.add_space(theme.space_12);
-            ui.label(
-                egui::RichText::new(name)
-                    .size(theme.text_sm)
-                    .color(theme.text),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+    if app.ui_store.bot_instances.is_empty() {
+        ui.label(
+            egui::RichText::new("暂无已发现 Agent")
+                .size(theme.text_sm)
+                .color(theme.text_dim),
+        );
+    } else {
+        for bot in &app.ui_store.bot_instances {
+            let (status, color) = match bot.status {
+                BotStatus::Online => ("在线", theme.status_online),
+                BotStatus::Syncing => ("同步中", theme.status_busy),
+                BotStatus::Offline => ("离线", theme.text_dim),
+            };
+            ui.horizontal(|ui| {
+                ui.painter()
+                    .circle_filled(ui.cursor().min + egui::vec2(6.0, 8.0), 4.0, color);
+                ui.add_space(theme.space_12);
                 ui.label(
-                    egui::RichText::new(status)
-                        .size(theme.text_xs)
-                        .color(theme.text_dim),
+                    egui::RichText::new(&bot.name)
+                        .size(theme.text_sm)
+                        .color(theme.text),
                 );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(status)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+                });
             });
-        });
-        ui.add_space(theme.space_4);
+            ui.add_space(theme.space_4);
+        }
     }
 }
 

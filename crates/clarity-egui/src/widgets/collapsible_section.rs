@@ -25,38 +25,41 @@ pub fn collapsible_section<R>(
         // Header row — full-width clickable with hover feedback from interactive_row.
         let header_resp = interactive_row(ui, *is_expanded, theme, |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = theme.space_8;
+                ui.spacing_mut().item_spacing.x = 0.0;
 
+                // Fixed-width icon rail: chevron + section icon centered so the
+                // title starts on the same grid as nav item text.
                 let chevron = if *is_expanded {
                     crate::theme::ICON_CARET_DOWN
                 } else {
                     crate::theme::ICON_CARET_RIGHT
                 };
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(chevron)
-                            .size(theme.text_sm)
-                            .color(theme.text_muted),
-                    )
-                    .selectable(false),
+                ui.allocate_ui_with_layout(
+                    egui::vec2(theme.size_nav_icon_rail, theme.size_nav_row_h),
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = theme.space_4;
+                            ui.label(
+                                egui::RichText::new(chevron)
+                                    .size(theme.text_sm)
+                                    .color(theme.text_muted),
+                            );
+                            ui.label(
+                                egui::RichText::new(icon)
+                                    .size(theme.text_sm)
+                                    .color(theme.text_dim),
+                            );
+                        });
+                    },
                 );
 
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(icon)
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
-                    )
-                    .selectable(false),
-                );
+                ui.add_space(theme.space_8);
 
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(title)
-                            .size(theme.text_sm)
-                            .color(theme.text_strong),
-                    )
-                    .selectable(false),
+                ui.label(
+                    egui::RichText::new(title)
+                        .size(theme.text_sm)
+                        .color(theme.text_strong),
                 );
             });
         });
@@ -72,18 +75,11 @@ pub fn collapsible_section<R>(
             ui.add_space(theme.space_4);
         }
 
-        // Body: conditionally rendered, indented for visual hierarchy.
+        // Body: rows use the same interactive_row layout as the header, so they
+        // already share the left accent bar + icon rail grid. No extra indent is
+        // needed; this keeps the sidebar clean and maximizes usable width.
         let body = if *is_expanded {
-            Some(
-                egui::Frame::new()
-                    .fill(egui::Color32::TRANSPARENT)
-                    .inner_margin(egui::Margin {
-                        left: theme.space_16 as i8,
-                        ..Default::default()
-                    })
-                    .show(ui, |ui| add_contents(ui))
-                    .inner,
-            )
+            Some(add_contents(ui))
         } else {
             None
         };

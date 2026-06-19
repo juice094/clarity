@@ -17,13 +17,13 @@ pub fn render_work_templates(app: &mut App, ui: &mut egui::Ui) {
     // Template action rows — one click = new session from template.
     for template in &templates {
         let resp = crate::widgets::interactive_row(ui, false, &theme, |ui| {
-            ui.add_space(theme.space_4);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = theme.space_8;
-                ui.label(
-                    egui::RichText::new(crate::theme::ICON_LAYOUT_TEMPLATE)
-                        .size(theme.text_sm)
-                        .color(theme.text_dim),
+                crate::widgets::nav_icon_rail(
+                    ui,
+                    &theme,
+                    crate::theme::ICON_LAYOUT_TEMPLATE,
+                    theme.text_dim,
                 );
                 ui.label(
                     egui::RichText::new(&template.name)
@@ -31,7 +31,6 @@ pub fn render_work_templates(app: &mut App, ui: &mut egui::Ui) {
                         .color(theme.text),
                 );
             });
-            ui.add_space(theme.space_4);
         });
         if resp.response.clicked() {
             app.new_session_with_prompt(&template.prompt);
@@ -40,21 +39,15 @@ pub fn render_work_templates(app: &mut App, ui: &mut egui::Ui) {
 
     // "Manage templates" entry — subtle link to the management modal.
     let manage_resp = crate::widgets::interactive_row(ui, false, &theme, |ui| {
-        ui.add_space(theme.space_4);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = theme.space_8;
-            ui.label(
-                egui::RichText::new(crate::theme::ICON_PLUS)
-                    .size(theme.text_sm)
-                    .color(theme.text_muted),
-            );
+            crate::widgets::nav_icon_rail(ui, &theme, crate::theme::ICON_PLUS, theme.text_muted);
             ui.label(
                 egui::RichText::new(app.t("Manage templates"))
                     .size(theme.text_sm)
                     .color(theme.text_muted),
             );
         });
-        ui.add_space(theme.space_4);
     });
     if manage_resp.response.clicked() {
         app.view_state

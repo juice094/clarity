@@ -5,8 +5,12 @@
 
 use crate::App;
 
-/// Estimated row height for virtualized rendering (text_sm + interactive_row padding).
-const EST_ROW_HEIGHT: f32 = 30.0;
+/// Estimated row height for virtualized rendering.
+///
+/// Kept in sync with `Theme::size_nav_row_h` at runtime; the constant only
+/// exists so the virtual item count can be computed before the theme is borrowed.
+// LAYOUT-EXEMPT: virtualization estimate mirroring Theme::size_nav_row_h.
+const EST_ROW_HEIGHT: f32 = 32.0;
 
 /// Render the collapsible history/sessions section.
 pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
@@ -52,7 +56,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
             let mut clicked_id: Option<String> = None;
             let count = sessions.len();
             // Cap visible body height so the sidebar scroll area handles overflow.
-            let max_h = (count as f32 * EST_ROW_HEIGHT).min(300.0);
+            let max_h = (count as f32 * EST_ROW_HEIGHT).min(theme.palette_max_h);
 
             egui::ScrollArea::vertical()
                 .max_height(max_h)
@@ -67,16 +71,18 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                         };
 
                         let resp = crate::widgets::interactive_row(ui, is_active, &theme, |ui| {
-                            ui.add_space(theme.space_4);
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = theme.space_8;
-                                ui.label(egui::RichText::new(icon).size(theme.text_sm).color(
+                                crate::widgets::nav_icon_rail(
+                                    ui,
+                                    &theme,
+                                    icon,
                                     if is_active {
                                         theme.accent
                                     } else {
                                         theme.text_dim
                                     },
-                                ));
+                                );
                                 ui.label(
                                     egui::RichText::new(&session.title)
                                         .size(theme.text_sm)
@@ -87,7 +93,6 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                                         }),
                                 );
                             });
-                            ui.add_space(theme.space_4);
                         });
                         if resp.response.clicked() && !session.is_active {
                             clicked_id = Some(session.id.clone());

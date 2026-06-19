@@ -48,13 +48,13 @@ pub fn render_web_section(
             } else {
                 for link in &links {
                     let link_resp = crate::widgets::interactive_row(ui, false, &theme, |ui| {
-                        ui.add_space(theme.space_4);
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = theme.space_8;
-                            ui.label(
-                                egui::RichText::new(crate::theme::ICON_GLOBE)
-                                    .size(theme.text_sm)
-                                    .color(theme.text_dim),
+                            crate::widgets::nav_icon_rail(
+                                ui,
+                                &theme,
+                                crate::theme::ICON_GLOBE,
+                                theme.text_dim,
                             );
                             ui.label(
                                 egui::RichText::new(&link.name)
@@ -62,7 +62,6 @@ pub fn render_web_section(
                                     .color(theme.text),
                             );
                         });
-                        ui.add_space(theme.space_4);
                     });
                     if link_resp.response.clicked() {
                         app.open_web_link(&link.url);

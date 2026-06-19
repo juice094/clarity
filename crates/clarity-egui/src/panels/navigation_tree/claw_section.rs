@@ -36,12 +36,9 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                     };
 
                     let resp = crate::widgets::interactive_row(ui, is_active, &theme, |ui| {
-                        ui.add_space(theme.space_4);
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = theme.space_8;
-                            let (rect, _) =
-                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                            ui.painter().circle_filled(rect.center(), 4.0, dot_color);
+                            crate::widgets::nav_status_dot(ui, &theme, dot_color);
                             ui.label(egui::RichText::new(&bot_name).size(theme.text_sm).color(
                                 if is_active {
                                     theme.text
@@ -50,7 +47,6 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                                 },
                             ));
                         });
-                        ui.add_space(theme.space_4);
                     });
 
                     if resp.response.clicked() {

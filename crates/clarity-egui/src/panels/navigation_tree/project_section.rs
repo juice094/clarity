@@ -96,17 +96,17 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
             crate::theme::ICON_GLOBE
         };
         let resp = crate::widgets::interactive_row(ui, is_selected, theme, |ui| {
-            ui.add_space(theme.space_4);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = theme.space_8;
-                ui.label(
-                    egui::RichText::new(icon)
-                        .size(theme.text_sm)
-                        .color(if is_selected {
-                            theme.accent
-                        } else {
-                            theme.text_dim
-                        }),
+                crate::widgets::nav_icon_rail(
+                    ui,
+                    theme,
+                    icon,
+                    if is_selected {
+                        theme.accent
+                    } else {
+                        theme.text_dim
+                    },
                 );
                 ui.label(
                     egui::RichText::new(name)
@@ -118,7 +118,6 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
                         }),
                 );
             });
-            ui.add_space(theme.space_4);
         });
         if resp.response.clicked() {
             selected_project = Some(project_id.clone());
@@ -146,13 +145,13 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         for session in archived_sessions {
             let title = truncate_session_title(&session.title);
             let resp = crate::widgets::interactive_row(ui, false, theme, |ui| {
-                ui.add_space(theme.space_4);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = theme.space_8;
-                    ui.label(
-                        egui::RichText::new(crate::theme::ICON_FOLDER_OPEN)
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
+                    crate::widgets::nav_icon_rail(
+                        ui,
+                        theme,
+                        crate::theme::ICON_FOLDER_OPEN,
+                        theme.text_dim,
                     );
                     ui.label(
                         egui::RichText::new(title)
@@ -160,7 +159,6 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
                             .color(theme.text_dim),
                     );
                 });
-                ui.add_space(theme.space_4);
             });
             if resp.response.clicked() {
                 unarchive_session_ids.push(session.id);
@@ -169,13 +167,13 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         for project in &app.project_store.archived_projects {
             let name = project.name.clone();
             let resp = crate::widgets::interactive_row(ui, false, theme, |ui| {
-                ui.add_space(theme.space_4);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = theme.space_8;
-                    ui.label(
-                        egui::RichText::new(crate::theme::ICON_FOLDER_OPEN)
-                            .size(theme.text_sm)
-                            .color(theme.text_dim),
+                    crate::widgets::nav_icon_rail(
+                        ui,
+                        theme,
+                        crate::theme::ICON_FOLDER_OPEN,
+                        theme.text_dim,
                     );
                     ui.label(
                         egui::RichText::new(name)
@@ -183,7 +181,6 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
                             .color(theme.text_dim),
                     );
                 });
-                ui.add_space(theme.space_4);
             });
             if resp.response.clicked() {
                 unarchive_project_ids.push(project.id.clone());
@@ -217,17 +214,17 @@ fn render_session_row(
     };
     let title = truncate_session_title(&session.title);
     let resp = crate::widgets::interactive_row(ui, is_active, theme, |ui| {
-        ui.add_space(theme.space_4);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = theme.space_8;
-            ui.label(
-                egui::RichText::new(icon)
-                    .size(theme.text_sm)
-                    .color(if is_active {
-                        theme.accent
-                    } else {
-                        theme.text_dim
-                    }),
+            crate::widgets::nav_icon_rail(
+                ui,
+                theme,
+                icon,
+                if is_active {
+                    theme.accent
+                } else {
+                    theme.text_dim
+                },
             );
             ui.label(
                 egui::RichText::new(title)
@@ -239,7 +236,6 @@ fn render_session_row(
                     }),
             );
         });
-        ui.add_space(theme.space_4);
     });
     if resp.response.clicked() && !is_active {
         app.switch_to_session(session.id.clone());

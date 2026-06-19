@@ -32,6 +32,7 @@ pub fn interactive_row<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
     let available_rect = ui.available_rect_before_wrap();
+    let row_h = theme.size_nav_row_h;
 
     // Create a child Ui with built-in click sense.
     // This is the canonical egui 0.31+ way to make an arbitrary region interactive
@@ -49,6 +50,7 @@ pub fn interactive_row<R>(
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .show(&mut child_ui, |ui| {
             ui.set_min_width(available_rect.width());
+            ui.set_min_height(row_h);
 
             let is_hovered = ui.rect_contains_pointer(ui.max_rect());
             // Selected rows get a subtle accent tint; hovered rows get a
@@ -62,11 +64,31 @@ pub fn interactive_row<R>(
                 egui::Color32::TRANSPARENT
             };
 
-            // Return the content directly so we get InnerResponse<R>, not nested.
+            // Layout: left accent bar (fixed column) + caller content.
+            // The accent bar column is always reserved so rows stay aligned
+            // whether selected or not.
             egui::Frame::new()
                 .fill(fill)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-                .show(ui, add_contents)
+                .show(ui, |ui| {
+                    ui.set_min_height(row_h);
+                    ui.horizontal(|ui| {
+                        let bar_w = theme.size_nav_accent_bar;
+                        let (bar_rect, _) =
+                            ui.allocate_exact_size(egui::vec2(bar_w, row_h), egui::Sense::hover());
+                        if is_selected {
+                            let bar_radius = (bar_w / 2.0).min(theme.radius_sm);
+                            ui.painter().rect_filled(
+                                bar_rect,
+                                egui::CornerRadius::same(bar_radius as u8),
+                                theme.accent,
+                            );
+                        }
+                        ui.add_space(theme.space_8);
+                        add_contents(ui)
+                    })
+                    .inner
+                })
                 .inner
         });
 
