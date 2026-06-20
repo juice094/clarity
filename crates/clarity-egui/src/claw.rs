@@ -34,6 +34,21 @@ pub use clarity_openclaw::types::{ClawConnection, ClawType};
 
 // ── DeviceState ────────────────────────────────────────────────────────
 
+/// Per-device health metrics used to rank online role instances.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DeviceHealth {
+    /// Number of successful interactions recorded for this device.
+    pub success_count: u32,
+    /// Number of failed interactions recorded for this device.
+    pub failure_count: u32,
+    /// Timestamp (ms since UNIX epoch) of the last recorded success.
+    pub last_success_at_ms: u64,
+    /// Timestamp (ms since UNIX epoch) of the last recorded failure.
+    pub last_failure_at_ms: u64,
+    /// EWMA latency in milliseconds; 0 means "unknown".
+    pub latency_ewma_ms: u64,
+}
+
 /// Aggregated device list + per-device connection parameters.
 ///
 /// Devices are stored grouped by their `role` so that role-based routing can
@@ -44,6 +59,10 @@ pub struct DeviceState {
     roles: Arc<RwLock<HashMap<String, Vec<BotInstance>>>>,
     /// device_id → connection info
     connections: Arc<RwLock<HashMap<String, ClawConnection>>>,
+    /// device_id → accumulated health metrics
+    health: Arc<RwLock<HashMap<String, DeviceHealth>>>,
+    /// role → most recently picked device_id
+    last_picked: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl Default for DeviceState {
@@ -51,6 +70,8 @@ impl Default for DeviceState {
         Self {
             roles: Arc::new(RwLock::new(HashMap::new())),
             connections: Arc::new(RwLock::new(HashMap::new())),
+            health: Arc::new(RwLock::new(HashMap::new())),
+            last_picked: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -114,13 +135,16 @@ impl DeviceState {
     /// Pick a bot instance for a Claw session according to the requested role
     /// and affinity.
     ///
-    /// - `Specific(device_id)`: returns the device with that id, preferring the
-    ///   requested role but falling back to a search across all roles. If the
-    ///   device is offline it is still returned in Stage 2.
-    /// - `AnyOnline`: returns the first device in the requested role whose
-    ///   status is `Online` or `Syncing`.
+    /// - `Specific(device_id)`: returns the device with that id if it is online
+    ///   or syncing, searching across roles. If the pinned device is offline or
+    ///   missing, falls back to the healthiest online/syncing instance of the
+    ///   requested role.
+    /// - `AnyOnline`: returns the healthiest online/syncing device in the
+    ///   requested role according to `best_in_role`.
     pub fn pick_instance(&self, role: &str, affinity: &DeviceAffinity) -> Option<BotInstance> {
         let guard = self.roles.read().ok()?;
+        let health = self.health.read().ok()?;
+        let last_picked = self.last_picked.read().ok()?;
         match affinity {
             DeviceAffinity::Specific(device_id) => {
                 // Prefer the requested device if it is still alive.
@@ -129,28 +153,57 @@ impl DeviceState {
                     .iter()
                     .filter(|(r, _)| r.as_str() != role)
                     .map(|(_, v)| v);
-                if let Some(device) = preferred
-                    .chain(others)
-                    .flat_map(|v| v.iter())
-                    .find(|b| b.id == *device_id && !matches!(b.status, BotStatus::Offline))
-                {
+                if let Some(device) = preferred.chain(others).flat_map(|v| v.iter()).find(|b| {
+                    b.id == *device_id && matches!(b.status, BotStatus::Online | BotStatus::Syncing)
+                }) {
                     return Some(device.clone());
                 }
-                // Pinned device is offline or missing — failover to any online/syncing
-                // instance of the requested role.
-                guard.get(role).and_then(|devices| {
-                    devices
-                        .iter()
-                        .find(|b| matches!(b.status, BotStatus::Online | BotStatus::Syncing))
-                        .cloned()
-                })
+                // Pinned device is offline or missing — failover to the best
+                // online/syncing instance of the requested role.
+                guard
+                    .get(role)
+                    .and_then(|devices| best_in_role(devices, &health, &last_picked, role))
             }
-            DeviceAffinity::AnyOnline => guard.get(role).and_then(|devices| {
-                devices
-                    .iter()
-                    .find(|b| matches!(b.status, BotStatus::Online | BotStatus::Syncing))
-                    .cloned()
-            }),
+            DeviceAffinity::AnyOnline => guard
+                .get(role)
+                .and_then(|devices| best_in_role(devices, &health, &last_picked, role)),
+        }
+    }
+
+    /// Record a successful interaction with a device and update EWMA latency.
+    pub fn record_success(&self, device_id: &str, latency_ms: u64) {
+        if let Ok(mut guard) = self.health.write() {
+            let now = crate::session::now_millis();
+            let h = guard.entry(device_id.into()).or_default();
+            h.success_count = h.success_count.saturating_add(1);
+            h.last_success_at_ms = now;
+            if latency_ms > 0 {
+                let alpha = 0.25;
+                if h.latency_ewma_ms == 0 {
+                    h.latency_ewma_ms = latency_ms;
+                } else {
+                    h.latency_ewma_ms = (alpha * latency_ms as f64
+                        + (1.0 - alpha) * h.latency_ewma_ms as f64)
+                        .round() as u64;
+                }
+            }
+        }
+    }
+
+    /// Record a failed interaction with a device.
+    pub fn record_failure(&self, device_id: &str) {
+        if let Ok(mut guard) = self.health.write() {
+            let now = crate::session::now_millis();
+            let h = guard.entry(device_id.into()).or_default();
+            h.failure_count = h.failure_count.saturating_add(1);
+            h.last_failure_at_ms = now;
+        }
+    }
+
+    /// Remember which device was most recently picked for a role.
+    pub fn set_last_picked(&self, role: &str, device_id: &str) {
+        if let Ok(mut guard) = self.last_picked.write() {
+            guard.insert(role.into(), device_id.into());
         }
     }
 
@@ -178,9 +231,75 @@ impl DeviceState {
                 .push(device.clone());
         }
         if let Ok(mut conns) = self.connections.write() {
-            conns.insert(device.id, conn);
+            conns.insert(device.id.clone(), conn);
+        }
+        if let Ok(mut health) = self.health.write() {
+            health.entry(device.id).or_default();
         }
     }
+}
+
+/// Select the healthiest online/syncing device in a role.
+///
+/// Score ordering is ascending; lower is better:
+///
+/// 1. Fewer recorded failures.
+/// 2. Lower EWMA latency (unknown latency is treated as `u64::MAX`).
+/// 3. More recent last success.
+/// 4. Device id matches the role's `last_picked` entry.
+/// 5. Stable registration order as a final tie-breaker.
+fn best_in_role(
+    role_devices: &[BotInstance],
+    health: &HashMap<String, DeviceHealth>,
+    last_picked: &HashMap<String, String>,
+    role: &str,
+) -> Option<BotInstance> {
+    let preferred = last_picked.get(role).cloned();
+    let mut candidates: Vec<(usize, &BotInstance)> = role_devices
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| matches!(b.status, BotStatus::Online | BotStatus::Syncing))
+        .collect();
+    candidates.sort_by(|(idx_a, a), (idx_b, b)| {
+        let ha = health.get(&a.id).copied().unwrap_or_default();
+        let hb = health.get(&b.id).copied().unwrap_or_default();
+
+        let latency_a = if ha.latency_ewma_ms == 0 {
+            u64::MAX
+        } else {
+            ha.latency_ewma_ms
+        };
+        let latency_b = if hb.latency_ewma_ms == 0 {
+            u64::MAX
+        } else {
+            hb.latency_ewma_ms
+        };
+
+        let score_a = (
+            ha.failure_count,
+            latency_a,
+            u64::MAX - ha.last_success_at_ms,
+            if preferred.as_ref() == Some(&a.id) {
+                0
+            } else {
+                1
+            },
+            *idx_a,
+        );
+        let score_b = (
+            hb.failure_count,
+            latency_b,
+            u64::MAX - hb.last_success_at_ms,
+            if preferred.as_ref() == Some(&b.id) {
+                0
+            } else {
+                1
+            },
+            *idx_b,
+        );
+        score_a.cmp(&score_b)
+    });
+    candidates.first().map(|(_, b)| (*b).clone())
 }
 
 // ── Discovery ──────────────────────────────────────────────────────────
@@ -599,5 +718,85 @@ mod tests {
         let c = state.connection(&bot.id).expect("connection exists");
         assert_eq!(c.auth_mode.as_deref(), Some("device_paired"));
         assert_eq!(c.device_token.as_deref(), Some("paired-device-token"));
+    }
+
+    #[test]
+    fn test_health_score_prefers_lower_failures() {
+        let state = DeviceState::default();
+        state.register(bot("a", "operator", BotStatus::Online), conn("a"));
+        state.register(bot("b", "operator", BotStatus::Online), conn("b"));
+        state.record_failure("a");
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::AnyOnline)
+            .expect("finds online device");
+        assert_eq!(picked.id, "b");
+    }
+
+    #[test]
+    fn test_health_score_prefers_lower_latency() {
+        let state = DeviceState::default();
+        state.register(bot("a", "operator", BotStatus::Online), conn("a"));
+        state.register(bot("b", "operator", BotStatus::Online), conn("b"));
+        state.record_success("a", 200);
+        state.record_success("b", 50);
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::AnyOnline)
+            .expect("finds online device");
+        assert_eq!(picked.id, "b");
+    }
+
+    #[test]
+    fn test_health_score_prefers_last_success() {
+        let state = DeviceState::default();
+        state.register(bot("a", "operator", BotStatus::Online), conn("a"));
+        state.register(bot("b", "operator", BotStatus::Online), conn("b"));
+        if let Ok(mut h) = state.health.write() {
+            h.insert(
+                "a".into(),
+                DeviceHealth {
+                    last_success_at_ms: 1000,
+                    ..Default::default()
+                },
+            );
+            h.insert(
+                "b".into(),
+                DeviceHealth {
+                    last_success_at_ms: 2000,
+                    ..Default::default()
+                },
+            );
+        }
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::AnyOnline)
+            .expect("finds online device");
+        assert_eq!(picked.id, "b");
+    }
+
+    #[test]
+    fn test_last_picked_tiebreaker() {
+        let state = DeviceState::default();
+        state.register(bot("a", "operator", BotStatus::Online), conn("a"));
+        state.register(bot("b", "operator", BotStatus::Online), conn("b"));
+        state.set_last_picked("operator", "b");
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::AnyOnline)
+            .expect("finds online device");
+        assert_eq!(picked.id, "b");
+    }
+
+    #[test]
+    fn test_specific_failover_uses_health_score() {
+        let state = DeviceState::default();
+        state.register(
+            bot("pinned", "operator", BotStatus::Offline),
+            conn("pinned"),
+        );
+        state.register(bot("a", "operator", BotStatus::Online), conn("a"));
+        state.register(bot("b", "operator", BotStatus::Online), conn("b"));
+        state.record_failure("a");
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::Specific("pinned".into()))
+            .expect("fails over to online device");
+        assert_eq!(picked.id, "b");
     }
 }

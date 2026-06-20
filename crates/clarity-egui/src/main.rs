@@ -1239,6 +1239,7 @@ impl eframe::App for App {
                                 format!("Connected to Claw Gateway: {}", gateway_url),
                                 crate::ui::types::ToastLevel::Info,
                             );
+                            self.device_state.record_success(&self.claw_ws_device_id, 0);
                             // Auto-subscribe and fetch history after connect.
                             // Use the active session's Claw session_key when available;
                             // fall back to the legacy fixed key for non-Claw sessions.
@@ -1266,6 +1267,16 @@ impl eframe::App for App {
                                     *affinity = crate::ui::types::DeviceAffinity::Specific(
                                         self.claw_ws_device_id.clone(),
                                     );
+                                }
+                            }
+                            // Remember this device as the last successful pick for
+                            // the active session's role.
+                            if let Some(session) = self.session_store.active_session() {
+                                if let crate::ui::types::SessionContext::Claw { role, .. } =
+                                    &session.context
+                                {
+                                    self.device_state
+                                        .set_last_picked(role, &self.claw_ws_device_id);
                                 }
                             }
                         }
@@ -1385,6 +1396,7 @@ impl eframe::App for App {
                             if event_type == "openclaw.reconnect_pending" {
                                 let failed_device = self.claw_ws_device_id.clone();
                                 if !failed_device.is_empty() {
+                                    self.device_state.record_failure(&failed_device);
                                     self.device_state.update_status(
                                         &failed_device,
                                         crate::stores::ui::BotStatus::Offline,
@@ -1451,6 +1463,9 @@ impl eframe::App for App {
                                 e
                             )));
                             let failed_device = self.claw_ws_device_id.clone();
+                            if !failed_device.is_empty() {
+                                self.device_state.record_failure(&failed_device);
+                            }
                             self.claw_ws = None;
                             self.claw_ws_device_id.clear();
                             if !failed_device.is_empty() {

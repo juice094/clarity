@@ -615,6 +615,7 @@ impl App {
                         if self.ui_store.active_bot_id != bot.id {
                             self.ui_store.active_bot_id = bot.id.clone();
                         }
+                        self.device_state.set_last_picked(role, &bot.id);
                         (session_key.clone(), bot.id.clone())
                     } else {
                         (session_key.clone(), self.ui_store.active_bot_id.clone())
