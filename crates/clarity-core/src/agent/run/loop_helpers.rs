@@ -99,6 +99,8 @@ pub(crate) fn scrub_credentials(input: &str) -> String {
     use regex::Regex;
     use std::sync::OnceLock;
 
+    // ponytail: 3 hardcoded regex patterns; migrate to a configurable secret-detection
+    // list if patterns exceed 5 or require provider-specific rules.
     static RE_KEYVAL: OnceLock<Regex> = OnceLock::new();
     static RE_BEARER: OnceLock<Regex> = OnceLock::new();
     static RE_SK: OnceLock<Regex> = OnceLock::new();
