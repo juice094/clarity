@@ -2,6 +2,7 @@ use crate::error::EguiError;
 use crate::llm_binder::{bind_llm, unbind_llm};
 use crate::llm_loader::load_llm;
 use crate::llm_policy::resolve_provider;
+use crate::provider::ProviderRegistry;
 use crate::settings::GuiSettings;
 use parking_lot::Mutex;
 use std::path::PathBuf;
@@ -273,6 +274,77 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         if binding_matches(&guard, &desired_provider, "") && state.agent.llm().is_some() {
             return Ok(());
         }
+    }
+
+    // ponytail: deepseek-device shortcut bypasses the generic runtime loader because
+    // credentials live in ProviderRegistry, not GuiSettings.api_key. Hardcoded
+    // client_version/device_id match the unofficial device API; unify this path
+    // when the registry-backed loader can read credentials itself.
+    if desired_provider == "deepseek-device" {
+        let registry = tokio::task::spawn_blocking(ProviderRegistry::load)
+            .await
+            .map_err(|e| {
+                EguiError::InvalidProvider(format!("Failed to load provider registry: {e}"))
+            })?;
+        let def = registry.get("deepseek-device").ok_or_else(|| {
+            EguiError::InvalidProvider(
+                "Built-in provider 'deepseek-device' is missing from registry.".into(),
+            )
+        })?;
+
+        let model_id = if settings.model.is_empty() {
+            "deepseek-chat".to_string()
+        } else {
+            settings.model.clone()
+        };
+        let options = clarity_llm::DeepSeekDeviceOptions::from_model_id(&model_id);
+
+        let provider = if def.auth_mode.is_password() {
+            let password = def.resolve_password().ok_or_else(|| {
+                EguiError::InvalidProvider(
+                    "DeepSeek (Device) password mode requires a saved password.".into(),
+                )
+            })?;
+            if def.mobile.is_empty() {
+                return Err(EguiError::InvalidProvider(
+                    "DeepSeek (Device) password login requires a mobile number.".into(),
+                ));
+            }
+            clarity_llm::DeepSeekDeviceProvider::new(clarity_llm::DeepSeekDeviceConfig {
+                base_url: def.base_url.clone(),
+                client_version: "2.1.8".into(),
+                device_id: "clarity-device".into(),
+                credentials: clarity_llm::DeepSeekDeviceCredentials::Password {
+                    mobile: def.mobile.clone(),
+                    password,
+                },
+                options,
+            })
+        } else {
+            let token = def.resolve_api_key().ok_or_else(|| {
+                EguiError::InvalidProvider(
+                    "DeepSeek (Device) token mode requires a device token. \
+                     Open Settings and configure credentials."
+                        .into(),
+                )
+            })?;
+            clarity_llm::DeepSeekDeviceProvider::new(clarity_llm::DeepSeekDeviceConfig {
+                credentials: clarity_llm::DeepSeekDeviceCredentials::Token(token),
+                options,
+                ..Default::default()
+            })
+        };
+
+        bind_llm(
+            &state.agent,
+            Arc::new(provider),
+            &format!("deepseek-device:{}", model_id),
+        );
+        *state.llm_binding.lock() = Some(LlmBinding {
+            provider: desired_provider,
+            local_model_path: String::new(),
+        });
+        return Ok(());
     }
 
     // Layer 1 — Policy: pure function decides which provider to load.
