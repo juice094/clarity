@@ -1,6 +1,6 @@
 use crate::App;
 use crate::provider::{ApiFormat, AuthMode, ProviderDefinition, ProviderRegistry};
-use crate::ui::types::{SessionContext, ToastLevel, UiEvent};
+use crate::ui::types::{ToastLevel, UiEvent};
 
 use clarity_llm::runtime::{
     RuntimeProviderConfig, list_models, set_provider_config, test_connection,
@@ -49,18 +49,15 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
     );
     ui.add_space(theme.space_12);
 
-    let active_context = app
-        .session_store
-        .active_session()
-        .map(|s| s.context.clone())
-        .unwrap_or(SessionContext::Chat);
-    let show_chat_only = matches!(active_context, SessionContext::Chat);
+    // Settings should always list every configured provider, including chat-only
+    // ones like deepseek-device. The active-session context only affects whether
+    // a chat-only provider can be *used* for the current turn, not whether the
+    // user is allowed to view or configure it.
     let all: Vec<ProviderDefinition> = app
         .settings_store
         .provider_registry
         .list()
         .into_iter()
-        .filter(|p| show_chat_only || !p.is_chat_only())
         .cloned()
         .collect();
     let current = app.settings_store.settings_edit.provider.clone();

@@ -222,12 +222,22 @@ impl App {
             .first()
             .map(|s| crate::stores::rebuild_tool_calls(&s.messages))
             .unwrap_or_default();
+        // Avoid reopening on a Claw session by default: if the most-recent
+        // session is bound to a Claw device, fall back to the most-recent
+        // plain Chat session so unreachable remote OpenClaw devices cannot
+        // block the UI before the user has a chance to switch context.
         let (sessions, active_id) = if loaded.is_empty() {
             let s = new_session(0, SessionContext::Chat);
             let id = s.id.clone();
             (vec![s], id)
         } else {
-            let id = loaded[0].id.clone();
+            let is_claw = |s: &Session| matches!(s.context, SessionContext::Claw { .. });
+            let id = loaded
+                .iter()
+                .find(|s| !is_claw(s))
+                .or_else(|| loaded.first())
+                .map(|s| s.id.clone())
+                .unwrap_or_else(|| loaded[0].id.clone());
             (loaded, id)
         };
         mark("load_sessions");

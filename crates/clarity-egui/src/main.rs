@@ -1086,20 +1086,35 @@ impl eframe::App for App {
             // Claw device changes or when the connection drops.
             //
             // For Claw sessions, use role-based routing to pick the best device
-            // and make it the active bot. Non-Claw sessions continue to use the
-            // flat active bot selection.
-            let active_id = &self.ui_store.active_bot_id;
-            let picked_id = self
+            // and make it the active bot. Non-Claw sessions must not keep a Claw
+            // WebSocket alive — unreachable remote OpenClaw devices can block the
+            // UI thread with synchronous TCP connects and prevent normal chat.
+            let active_session_is_claw = self
                 .session_store
                 .active_session()
-                .and_then(|s| match &s.context {
-                    crate::ui::types::SessionContext::Claw { role, affinity, .. } => self
-                        .device_state
-                        .pick_instance(role, affinity)
-                        .map(|b| b.id),
-                    _ => None,
-                })
-                .unwrap_or_else(|| active_id.clone());
+                .map(|s| matches!(s.context, crate::ui::types::SessionContext::Claw { .. }))
+                .unwrap_or(false);
+
+            if !active_session_is_claw && self.claw_ws.is_some() {
+                self.claw_ws = None;
+                self.claw_ws_device_id.clear();
+            }
+
+            let active_id = &self.ui_store.active_bot_id;
+            let picked_id = if active_session_is_claw {
+                self.session_store
+                    .active_session()
+                    .and_then(|s| match &s.context {
+                        crate::ui::types::SessionContext::Claw { role, affinity, .. } => self
+                            .device_state
+                            .pick_instance(role, affinity)
+                            .map(|b| b.id),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| active_id.clone())
+            } else {
+                String::new()
+            };
 
             // Only reconnect when there is no handle or the selected device changed.
             // If a handle already exists for the same device we keep it (OpenClaw has

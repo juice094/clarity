@@ -545,4 +545,53 @@ mod tests {
         assert!(!binding_matches(&binding, "local", "/models/deepseek.gguf"));
         assert!(!binding_matches(&binding, "ollama", "/models/qwen.gguf"));
     }
+
+    /// Temporary smoke test: verify deepseek-device can be bound to the Agent and
+    /// produce a streaming response through the same path used by the egui chat.
+    /// Ignored by default because it requires DEEPSEEK_DEVICE_TOKEN.
+    #[tokio::test]
+    #[ignore]
+    async fn test_deepseek_device_stream_via_agent() {
+        eprintln!("TEST: start");
+        let state = AppState::default();
+        eprintln!("TEST: ensure_llm begin");
+        ensure_llm(&state)
+            .await
+            .expect("ensure_llm should bind deepseek-device");
+        eprintln!("TEST: ensure_llm done");
+
+        // Mirror the egui path: attach a wire and drain UI-side messages in the
+        // background while the agent streams.
+        let wire = Arc::new(clarity_wire::Wire::new());
+        let agent = state.agent.clone().with_wire(wire.clone());
+        let mut ui = wire.ui_side(false);
+        eprintln!("TEST: wire receiver spawned");
+        let wire_handle = tokio::spawn(async move {
+            let mut chunks = 0;
+            while let Some(msg) = ui.recv().await {
+                if matches!(msg, clarity_wire::WireMessage::ContentPart { .. }) {
+                    chunks += 1;
+                }
+                eprintln!("TEST wire: {:?}", msg);
+            }
+            chunks
+        });
+
+        eprintln!("TEST: run_streaming begin");
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            agent.run_streaming("测试"),
+        )
+        .await
+        .expect("agent streaming should complete within 5s")
+        .expect("agent streaming returned error");
+        eprintln!("TEST: run_streaming done");
+        assert!(!response.is_empty(), "response should not be empty");
+        eprintln!("deepseek-device response: {}", response);
+
+        // Give the wire receiver a moment to drain, then check it saw something.
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let chunks = wire_handle.await.unwrap_or(0);
+        eprintln!("TEST: wire content chunks: {}", chunks);
+    }
 }
