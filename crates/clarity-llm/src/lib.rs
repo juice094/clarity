@@ -56,8 +56,7 @@ pub use reliable::ReliableProvider;
 pub use model_listing::{get_available_models, scan_local_models};
 
 pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta};
-pub use policy::{DefaultProviderSelectionPolicy, ProviderSelection, ProviderSelectionPolicy};
-pub use tool_payload::{NativeToolAdapter, PromptGuidedAdapter, ToolPayloadAdapter};
+pub use policy::{ProviderSelection, select_provider};
 
 use async_trait::async_trait;
 use clarity_contract::AgentError;
@@ -845,10 +844,8 @@ impl LlmProvider for AnthropicLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
-        use crate::tool_payload::PromptGuidedAdapter;
-        use crate::tool_payload::ToolPayloadAdapter;
-
-        let (adapted_messages, _adapted_tools) = PromptGuidedAdapter.adapt(messages, tools);
+        let (adapted_messages, _adapted_tools) =
+            crate::tool_payload::adapt_prompt_guided(messages, tools);
 
         // Extract system message if present
         let system_msg = adapted_messages
@@ -926,10 +923,8 @@ impl LlmProvider for AnthropicLlm {
         messages: &[Message],
         tools: &Value,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        use crate::tool_payload::PromptGuidedAdapter;
-        use crate::tool_payload::ToolPayloadAdapter;
-
-        let (adapted_messages, _adapted_tools) = PromptGuidedAdapter.adapt(messages, tools);
+        let (adapted_messages, _adapted_tools) =
+            crate::tool_payload::adapt_prompt_guided(messages, tools);
 
         // Extract system message if present
         let system_msg = adapted_messages

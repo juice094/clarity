@@ -4,52 +4,36 @@ use clarity_contract::{Message, MessageRole};
 use serde_json::Value;
 
 /// Adapts tool payloads for LLM providers that don't support native tool calling.
-pub trait ToolPayloadAdapter: Send + Sync {
-    /// Modify messages and tools for provider consumption.
-    /// Returns (adapted_messages, adapted_tools).
-    fn adapt(&self, messages: &[Message], tools: &Value) -> (Vec<Message>, Value);
-}
+///
+/// Injects tool descriptions into the system prompt and clears the tools array so
+/// the provider receives a prompt-guided representation instead of a structured
+/// tool schema.
+pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>, Value) {
+    let has_tools = tools.as_array().map(|a| !a.is_empty()).unwrap_or(false);
 
-/// Pass-through adapter for providers with native tool calling support.
-pub struct NativeToolAdapter;
-
-impl ToolPayloadAdapter for NativeToolAdapter {
-    fn adapt(&self, messages: &[Message], tools: &Value) -> (Vec<Message>, Value) {
-        (messages.to_vec(), tools.clone())
+    if !has_tools {
+        return (messages.to_vec(), tools.clone());
     }
-}
 
-/// Injects tool descriptions into the system prompt for prompt-guided providers.
-pub struct PromptGuidedAdapter;
+    let tool_text = format_tools_for_prompt(tools);
 
-impl ToolPayloadAdapter for PromptGuidedAdapter {
-    fn adapt(&self, messages: &[Message], tools: &Value) -> (Vec<Message>, Value) {
-        let has_tools = tools.as_array().map(|a| !a.is_empty()).unwrap_or(false);
-
-        if !has_tools {
-            return (messages.to_vec(), tools.clone());
-        }
-
-        let tool_text = format_tools_for_prompt(tools);
-
-        let adapted_messages: Vec<Message> = messages
-            .iter()
-            .map(|m| {
-                if m.role == MessageRole::System {
-                    Message {
-                        role: MessageRole::System,
-                        content: m.content.clone() + &tool_text,
-                        tool_calls: m.tool_calls.clone(),
-                        tool_call_id: m.tool_call_id.clone(),
-                    }
-                } else {
-                    m.clone()
+    let adapted_messages: Vec<Message> = messages
+        .iter()
+        .map(|m| {
+            if m.role == MessageRole::System {
+                Message {
+                    role: MessageRole::System,
+                    content: m.content.clone() + &tool_text,
+                    tool_calls: m.tool_calls.clone(),
+                    tool_call_id: m.tool_call_id.clone(),
                 }
-            })
-            .collect();
+            } else {
+                m.clone()
+            }
+        })
+        .collect();
 
-        (adapted_messages, Value::Array(vec![]))
-    }
+    (adapted_messages, Value::Array(vec![]))
 }
 
 /// Format a list of tools as a text block for prompt-guided tool calling.
