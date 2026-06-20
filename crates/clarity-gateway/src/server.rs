@@ -59,6 +59,8 @@ pub struct AppState {
     pub parallel_batches: Arc<RwLock<HashMap<String, Arc<Mutex<BatchProgress>>>>>,
     /// Concurrency limit for /v1/chat/completions to prevent unbounded spawn.
     pub chat_sem: Arc<Semaphore>,
+    /// Concurrency limit for /ws to prevent unbounded agent sessions.
+    pub ws_sem: Arc<Semaphore>,
     /// Unified OAuth service for providers that use OAuth device flow.
     pub oauth_service: Arc<clarity_llm::auth::OAuthService>,
     /// Registry of connected Claw daemon instances (heartbeat-based liveness).
@@ -161,6 +163,7 @@ impl AppState {
             started_at: Utc::now(),
             parallel_batches: Arc::new(RwLock::new(HashMap::new())),
             chat_sem: Arc::new(Semaphore::new(32)),
+            ws_sem: Arc::new(Semaphore::new(64)),
             oauth_service,
             device_registry: crate::handlers::claw::DeviceRegistry::new(),
         })

@@ -1101,8 +1101,22 @@ impl eframe::App for App {
                 })
                 .unwrap_or_else(|| active_id.clone());
 
-            if picked_id != self.claw_ws_device_id || self.claw_ws.is_none() {
-                if let Some(conn) = self.device_state.connection(&picked_id) {
+            let should_reconnect = self.claw_ws.is_none()
+                || picked_id != self.claw_ws_device_id
+                || matches!(
+                    self.claw_ws,
+                    Some(crate::claw::ClawClientHandle::Gateway(_))
+                );
+            if should_reconnect && !picked_id.is_empty() {
+                if let Some(remaining) = self.ui_store.is_in_backoff(&picked_id) {
+                    if self.ui_store.frame_count % 300 == 0 {
+                        tracing::debug!(
+                            device_id = %picked_id,
+                            ?remaining,
+                            "Claw device in reconnect backoff"
+                        );
+                    }
+                } else if let Some(conn) = self.device_state.connection(&picked_id) {
                     // GatewayWebSocket (ZeroClaw) connections do not require a
                     // token; OpenClaw still needs one.
                     let token_required =
@@ -1224,6 +1238,7 @@ impl eframe::App for App {
                             }
                         };
                         self.claw_ws_device_id = picked_id.clone();
+                        self.ui_store.clear_connect_backoff(&picked_id);
                         if self.ui_store.active_bot_id != picked_id {
                             self.ui_store.active_bot_id = picked_id.clone();
                         }
@@ -1231,6 +1246,8 @@ impl eframe::App for App {
                             == crate::claw::ClawProtocol::OpenClawJsonRpc
                             && is_remote;
                     }
+                } else {
+                    self.ui_store.record_connect_failure(&picked_id);
                 }
             }
 
@@ -1424,10 +1441,21 @@ impl eframe::App for App {
                             self.claw_ws = None;
                             self.claw_ws_device_id.clear();
                             if !failed_device.is_empty() {
-                                self.device_state.update_status(
-                                    &failed_device,
-                                    crate::stores::BotStatus::Offline,
-                                );
+                                let (count, _next) =
+                                    self.ui_store.record_connect_failure(&failed_device);
+                                if count >= 5 {
+                                    self.device_state.update_status(
+                                        &failed_device,
+                                        crate::stores::ui::BotStatus::Offline,
+                                    );
+                                    self.push_toast(
+                                        format!(
+                                            "Claw device {} failed 5 times; marked offline",
+                                            failed_device
+                                        ),
+                                        crate::ui::types::ToastLevel::Warn,
+                                    );
+                                }
                             }
                         }
                     }

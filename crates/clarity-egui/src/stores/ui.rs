@@ -3,7 +3,8 @@
 //! toasts, sidebar, theme, scroll, preview, approvals
 
 use crate::ui::types::*;
-use std::time::Instant;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 /// Holds ui UI state.
 pub struct UiStore {
@@ -62,6 +63,74 @@ pub struct UiStore {
     pub pretext_probe_wrap_width: f32,
     /// Pretext Phase 1: use pretext for `estimate_height` in the message list.
     pub pretext_estimate_enabled: bool,
+    /// Per-device connection failure backoff: device_id -> (failure_count, next_retry_at).
+    pub claw_connect_backoff: HashMap<String, (usize, Instant)>,
+}
+
+impl Default for UiStore {
+    fn default() -> Self {
+        let now = Instant::now();
+        Self {
+            network_banner: None,
+            frame_count: 0,
+            last_fps_time: 0.0,
+            fps: 0.0,
+            start: now,
+            locale: crate::i18n::Locale::default(),
+            theme: crate::theme::Theme::default(),
+            content_max_width: 0.0,
+            right_rail_width: None,
+            last_scroll_offset: 0.0,
+            preview_item: None,
+            last_input_modified: now,
+            pending_approvals: Vec::new(),
+            toasts: Vec::new(),
+            focus_input_requested: false,
+            kimi_conversation_style: false,
+            line_cursor_selected: None,
+            line_cursor_total_lines: 0,
+            shell_prompt: String::new(),
+            active_project: None,
+            bot_instances: Vec::new(),
+            active_bot_id: String::new(),
+            last_active_session_id: String::new(),
+            request_repaint: false,
+            claw_history: Vec::new(),
+            claw_gateway_session_id: String::new(),
+            pretext_probe_open: false,
+            pretext_probe_wrap_width: 400.0,
+            pretext_estimate_enabled: true,
+            claw_connect_backoff: HashMap::new(),
+        }
+    }
+}
+
+impl UiStore {
+    /// Check whether a device is currently in a connection backoff window.
+    pub fn is_in_backoff(&self, device_id: &str) -> Option<Duration> {
+        self.claw_connect_backoff
+            .get(device_id)
+            .and_then(|(_, instant)| instant.checked_duration_since(Instant::now()))
+    }
+
+    /// Record a connection failure for a device and return the failure count
+    /// and the next retry instant.
+    pub fn record_connect_failure(&mut self, device_id: &str) -> (usize, Instant) {
+        let now = Instant::now();
+        let (count, retry) = self
+            .claw_connect_backoff
+            .entry(device_id.into())
+            .or_insert((0, now));
+        *count = count.saturating_add(1);
+        let delay_secs = (2usize.saturating_pow(*count as u32)).min(30);
+        *retry = now + Duration::from_secs(delay_secs as u64);
+        (*count, *retry)
+    }
+
+    /// Clear backoff for a device after a successful connection.
+    pub fn clear_connect_backoff(&mut self, device_id: &str) {
+        self.claw_connect_backoff.remove(device_id);
+    }
 }
 
 /// Bot instance descriptor (OpenClaw — aligned to Kimi Desktop bot management).
@@ -84,4 +153,55 @@ pub enum BotStatus {
     Online,
     Offline,
     Syncing,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_connect_backoff_increases() {
+        let mut store = UiStore::default();
+        let (_, first) = store.record_connect_failure("dev");
+        let first_delay = first.duration_since(Instant::now());
+        let (_, second) = store.record_connect_failure("dev");
+        let second_delay = second.duration_since(Instant::now());
+        let (_, third) = store.record_connect_failure("dev");
+        let third_delay = third.duration_since(Instant::now());
+
+        assert!(second_delay >= first_delay, "delay should increase");
+        assert!(third_delay >= second_delay, "delay should keep increasing");
+        assert!(
+            store
+                .is_in_backoff("dev")
+                .expect("device should be in backoff")
+                .as_secs()
+                <= 30,
+            "delay should be capped at 30s"
+        );
+    }
+
+    #[test]
+    fn test_connect_backoff_cleared_on_success() {
+        let mut store = UiStore::default();
+        store.record_connect_failure("dev");
+        assert!(store.is_in_backoff("dev").is_some());
+        store.clear_connect_backoff("dev");
+        assert!(store.is_in_backoff("dev").is_none());
+    }
+
+    #[test]
+    fn test_connect_backoff_five_failures_offline() {
+        let mut store = UiStore::default();
+        let mut count = 0;
+        let mut last = Instant::now();
+        for _ in 0..5 {
+            let (c, next) = store.record_connect_failure("dev");
+            count = c;
+            last = next;
+        }
+        assert_eq!(count, 5);
+        let delay = last.duration_since(Instant::now());
+        assert!((29..=30).contains(&delay.as_secs()), "cap delay at 30s");
+    }
 }

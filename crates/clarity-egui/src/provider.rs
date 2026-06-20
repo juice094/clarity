@@ -136,6 +136,15 @@ pub struct ProviderDefinition {
     /// Capability / routing tags (e.g. "chat-only").
     #[serde(default)]
     pub tags: Vec<String>,
+
+    /// Mobile number for providers that support phone/password login (e.g. deepseek-device).
+    #[serde(default)]
+    pub mobile: String,
+
+    /// Encrypted password for phone/password login. Uses the project-wide
+    /// `clarity_secrets` store (`enc2:` prefix) so it is never persisted in plaintext.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_enc: Option<String>,
 }
 
 /// Top-level TOML structure for a provider config file.
@@ -229,6 +238,29 @@ impl ProviderDefinition {
     /// used in Work or Claw sessions.
     pub fn is_chat_only(&self) -> bool {
         self.tags.contains(&"chat-only".to_string())
+    }
+
+    /// Encrypt and store a login password using the project-wide SecretStore.
+    ///
+    /// Returns `Ok(())` on success, or an error message if the SecretStore cannot
+    /// be loaded (e.g. the OS keyring is unavailable).
+    pub fn set_password(&mut self, password: &str) -> Result<(), String> {
+        let store = clarity_llm::default_secret_store()
+            .map_err(|e| format!("Failed to load secret store: {e}"))?;
+        self.password_enc = Some(store.encrypt(password).map_err(|e| e.to_string())?);
+        Ok(())
+    }
+
+    /// Decrypt the stored password, if any.
+    pub fn resolve_password(&self) -> Option<String> {
+        let ciphertext = self.password_enc.as_ref()?;
+        let store = clarity_llm::default_secret_store().ok()?;
+        store.decrypt(ciphertext).ok()
+    }
+
+    /// Clear any stored password.
+    pub fn clear_password(&mut self) {
+        self.password_enc = None;
     }
 
     /// Validate that the resolved API key matches the expected prefix for this provider.
@@ -389,6 +421,8 @@ impl ProviderRegistry {
                 models: vec!["gpt-4o".into(), "gpt-4o-mini".into(), "gpt-4".into()],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "anthropic".into(),
@@ -401,6 +435,8 @@ impl ProviderRegistry {
                 models: vec!["claude-sonnet-4-20250514".into(), "claude-haiku-3-5".into()],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "deepseek".into(),
@@ -413,6 +449,8 @@ impl ProviderRegistry {
                 models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "deepseek-device".into(),
@@ -429,6 +467,8 @@ impl ProviderRegistry {
                 ],
                 builtin: true,
                 tags: vec!["chat-only".into()],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "kimi".into(),
@@ -441,6 +481,8 @@ impl ProviderRegistry {
                 models: vec!["kimi-k2-07132k".into()],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "kimi_code".into(),
@@ -453,6 +495,8 @@ impl ProviderRegistry {
                 models: vec!["kimi-k2.6".into()],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
             ProviderDefinition {
                 id: "local".into(),
@@ -465,6 +509,8 @@ impl ProviderRegistry {
                 models: vec![],
                 builtin: true,
                 tags: vec![],
+                mobile: String::new(),
+                password_enc: None,
             },
         ];
         for p in builtins {

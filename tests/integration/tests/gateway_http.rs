@@ -308,6 +308,7 @@ async fn test_tui_wire_to_gateway_websocket() {
             WireMessage::ThreadCreated { .. } => "thread_created",
             WireMessage::ThreadUpdated { .. } => "thread_updated",
             WireMessage::ViewStateUpdate { .. } => "view_state_update",
+            WireMessage::ReasoningPart { .. } => "reasoning_part",
         };
         wire_types.push(msg_type.to_string());
         if msg_type == "turn_end" {

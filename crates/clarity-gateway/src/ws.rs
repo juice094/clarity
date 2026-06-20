@@ -20,11 +20,23 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    // Enforce a hard ceiling on concurrent WebSocket sessions so a runaway
+    // client cannot spawn an unbounded number of agent runs.
+    match state.ws_sem.clone().try_acquire_owned() {
+        Ok(permit) => ws.on_upgrade(move |socket| handle_socket(socket, state, permit)),
+        Err(_) => {
+            warn!("WebSocket connection rejected: /ws concurrency limit reached");
+            axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response()
+        }
+    }
 }
 
 /// 处理 WebSocket 连接
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(
+    socket: WebSocket,
+    state: Arc<AppState>,
+    _permit: tokio::sync::OwnedSemaphorePermit,
+) {
     let session_id = SessionId::new();
     info!("WebSocket connected: session_id={}", session_id);
 
@@ -109,6 +121,19 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     info!("WebSocket disconnected: session_id={}", session_id);
+
+    // Reclaim the session store entry for transient WebSocket sessions so
+    // failed connections do not accumulate indefinitely.
+    if let Err(e) = state
+        .session_store
+        .delete_session(&session_id.to_string())
+        .await
+    {
+        warn!(
+            "Failed to delete WebSocket session {} on disconnect: {}",
+            session_id, e
+        );
+    }
 }
 
 /// Handle a Chat request with wire streaming.
@@ -382,6 +407,7 @@ mod tests {
     use clarity_core::registry::ToolRegistry;
     use futures::stream::StreamExt;
     use std::sync::Arc;
+    use tokio::sync::Semaphore;
     use tower::util::ServiceExt;
 
     async fn test_state() -> Arc<crate::server::AppState> {
@@ -643,5 +669,31 @@ mod tests {
             "expected client error for non-websocket request, got {:?}",
             response.status()
         );
+    }
+
+    #[tokio::test]
+    async fn test_ws_rejects_when_at_capacity() {
+        let mut state = test_state().await;
+        // Replace the semaphore with a zero-permit semaphore so the very next
+        // /ws upgrade is rejected.
+        let state_mut = Arc::get_mut(&mut state).expect("unique Arc in test");
+        state_mut.ws_sem = Arc::new(Semaphore::new(0));
+
+        let app = crate::server::create_api_router(state);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let url = format!("ws://127.0.0.1:{}/ws", port);
+        let result = tokio_tungstenite::connect_async(&url).await;
+        assert!(
+            result.is_err(),
+            "expected WebSocket upgrade to be rejected when at capacity"
+        );
+
+        server.abort();
     }
 }

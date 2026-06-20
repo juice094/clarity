@@ -99,6 +99,12 @@ impl App {
         // Chat/Work sessions must keep using the local agent even if a Claw bot
         // happens to be selected, avoiding mode confusion.
         if self.is_claw_active() && is_claw_session {
+            // Guard against rapid Enter presses while a Claw turn is already in
+            // flight. Unlike the local agent we cannot cancel a remote turn, so
+            // we simply drop the duplicate send.
+            if !is_turn_idle_for_send(&self.view_state.turn) {
+                return;
+            }
             self.send_claw();
             return;
         }
@@ -449,6 +455,10 @@ impl App {
     /// forwarded to the remote Gateway. Responses arrive asynchronously via
     /// `claw_ws.drain()` and are translated into `UiEvent`s in the main loop.
     pub(crate) fn send_claw(&mut self) {
+        if !is_turn_idle_for_send(&self.view_state.turn) {
+            return;
+        }
+
         let text = self.chat_store.input.trim().to_string();
         if text.is_empty() && self.chat_store.attachments.is_empty() {
             return;
@@ -555,5 +565,28 @@ impl App {
         // translates them into UiEvent::Chunk / UiEvent::Done and the chat
         // handlers finalize the assistant message.
         ws.send_chat(&session_key, &full_message, self.claw_ws_uses_sessions_send);
+    }
+}
+
+/// Return true only when the turn state is safe to start a new user send.
+///
+/// This helper is intentionally a free function so it can be unit-tested
+/// without constructing a full [`App`].
+pub(crate) fn is_turn_idle_for_send(turn: &clarity_core::ui::TurnState) -> bool {
+    matches!(turn, clarity_core::ui::TurnState::Idle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_turn_guard_allows_idle_only() {
+        use clarity_core::ui::TurnState;
+        assert!(is_turn_idle_for_send(&TurnState::Idle));
+        assert!(!is_turn_idle_for_send(&TurnState::Loading));
+        assert!(!is_turn_idle_for_send(&TurnState::Stopping));
+        assert!(!is_turn_idle_for_send(&TurnState::Compacting));
+        assert!(!is_turn_idle_for_send(&TurnState::Restoring));
     }
 }
