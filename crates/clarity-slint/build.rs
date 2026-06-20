@@ -9,5 +9,8 @@ fn main() {
 
     // 编译 ui/ 目录下的所有 .slint 文件为 Rust 模块。
     // 当前阶段仅包含最小桥接验证界面；后续按阶段扩展。
-    slint_build::compile_with_config("ui/app.slint", config).expect("Slint UI compilation failed");
+    if let Err(e) = slint_build::compile_with_config("ui/app.slint", config) {
+        eprintln!("Slint UI compilation failed: {e}");
+        std::process::exit(1);
+    }
 }
