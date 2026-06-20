@@ -22,7 +22,7 @@ fn main() {
     let gateway_url = &args[1];
     let gateway_token = &args[2];
 
-    let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui")
+    let device = clarity_openclaw::DeviceIdentity::load_or_generate()
         .expect("failed to load/generate device identity");
 
     println!("Device ID:    {}", device.device_id());

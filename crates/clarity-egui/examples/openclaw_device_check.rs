@@ -23,8 +23,8 @@ fn main() {
         .replace("127.0.0.1", "localhost");
     let device_token = cfg["token"].as_str().expect("token");
 
-    let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui")
-        .expect("load device identity");
+    let device =
+        clarity_openclaw::DeviceIdentity::load_or_generate().expect("load device identity");
 
     println!("Connecting to {} with device auth...", gateway_url);
     println!("Device ID: {}", device.device_id());

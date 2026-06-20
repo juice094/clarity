@@ -27,7 +27,7 @@
 use crate::device::DeviceIdentity;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 /// Authentication mode for an OpenClaw connection.
 #[derive(Clone)]
@@ -55,12 +55,15 @@ pub enum ClawAuth {
 #[derive(Debug)]
 pub enum ClawCommand {
     /// Send a chat message to the target session.
+    ///
+    /// Local KimiClaw uses `chat.send` with `sessionKey`; remote OpenClaw uses
+    /// `sessions.send` with `key`. The caller chooses the method via
+    /// [`ClawClient::send_message`] or [`ClawClient::send_session_message`].
     SendMessage {
-        session_key: String,
+        key: String,
         message: String,
+        method: SendMethod,
     },
-    /// Send a message via `sessions.send` (remote OpenClaw path).
-    SendSessionMessage { key: String, message: String },
     /// Fetch message history for a session.
     FetchHistory { session_key: String },
     /// Subscribe to session-level events for a session.
@@ -86,6 +89,15 @@ pub enum ClawCommand {
         method: String,
         params: serde_json::Value,
     },
+}
+
+/// Which JSON-RPC method a [`ClawCommand::SendMessage`] should use.
+#[derive(Debug)]
+pub enum SendMethod {
+    /// Local KimiClaw path: `chat.send` with `sessionKey`.
+    Chat,
+    /// Remote OpenClaw path: `sessions.send` with `key`.
+    Session,
 }
 
 /// A response from the WebSocket thread back to the UI thread.
@@ -220,11 +232,15 @@ impl ClawClient {
         }
     }
 
-    /// Send a message to the target agent session.
+    /// Send a message to the target agent session using `chat.send`.
+    ///
+    /// This is the local KimiClaw path; remote OpenClaw typically expects
+    /// `sessions.send` via [`Self::send_session_message`].
     pub fn send_message(&self, session_key: &str, message: &str) {
         let _ = self.tx.send(ClawCommand::SendMessage {
-            session_key: session_key.into(),
+            key: session_key.into(),
             message: message.into(),
+            method: SendMethod::Chat,
         });
     }
 
@@ -254,9 +270,10 @@ impl ClawClient {
     /// This is the remote-OpenClaw path; local KimiClaw typically expects
     /// `chat.send` via [`Self::send_message`].
     pub fn send_session_message(&self, key: &str, message: &str) {
-        let _ = self.tx.send(ClawCommand::SendSessionMessage {
+        let _ = self.tx.send(ClawCommand::SendMessage {
             key: key.into(),
             message: message.into(),
+            method: SendMethod::Session,
         });
     }
 
@@ -518,7 +535,10 @@ async fn run_single_connection(
             ClawAuth::TokenWithDevice { device, .. } | ClawAuth::DevicePaired { device, .. }
                 if with_device =>
             {
-                let signed_at_ms = chrono::Utc::now().timestamp_millis();
+                let signed_at_ms = std::time::SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as i64;
                 let version = if nonce.is_some() { "v2" } else { "v1" };
                 let payload = build_device_signature_payload(
                     version,
@@ -760,27 +780,40 @@ async fn run_single_connection(
 
             cmd = async_rx.recv() => {
                 match cmd {
-                    Some(ClawCommand::SendMessage { session_key, message }) => {
+                    Some(ClawCommand::SendMessage { key, message, method }) => {
                         req_id += 1;
                         let id = req_id.to_string();
-                        let method = "chat.send".to_string();
-                        pending_methods.insert(id.clone(), method.clone());
                         let idempotency_key = format!(
                             "clarity-{}-{}",
                             id,
                             base64::engine::general_purpose::URL_SAFE_NO_PAD
                                 .encode(rand::random::<[u8; 8]>())
                         );
+                        let (method, params) = match method {
+                            SendMethod::Chat => (
+                                "chat.send".to_string(),
+                                serde_json::json!({
+                                    "sessionKey": &key,
+                                    "message": &message,
+                                    "deliver": false,
+                                    "idempotencyKey": idempotency_key
+                                }),
+                            ),
+                            SendMethod::Session => (
+                                "sessions.send".to_string(),
+                                serde_json::json!({
+                                    "key": &key,
+                                    "message": &message,
+                                    "idempotencyKey": idempotency_key
+                                }),
+                            ),
+                        };
+                        pending_methods.insert(id.clone(), method.clone());
                         let req = serde_json::json!({
                             "type": "req",
                             "id": &id,
                             "method": &method,
-                            "params": {
-                                "sessionKey": &session_key,
-                                "message": &message,
-                                "deliver": false,
-                                "idempotencyKey": idempotency_key
-                            }
+                            "params": params
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
                             return Err(ConnectionExit::Transient(format!("send: {}", e)));
@@ -834,31 +867,6 @@ async fn run_single_connection(
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
                             return Err(ConnectionExit::Transient(format!("subscribe messages: {}", e)));
-                        }
-                    }
-                    Some(ClawCommand::SendSessionMessage { key, message }) => {
-                        req_id += 1;
-                        let id = req_id.to_string();
-                        let method = "sessions.send".to_string();
-                        pending_methods.insert(id.clone(), method.clone());
-                        let idempotency_key = format!(
-                            "clarity-{}-{}",
-                            id,
-                            base64::engine::general_purpose::URL_SAFE_NO_PAD
-                                .encode(rand::random::<[u8; 8]>())
-                        );
-                        let req = serde_json::json!({
-                            "type": "req",
-                            "id": &id,
-                            "method": &method,
-                            "params": {
-                                "key": &key,
-                                "message": &message,
-                                "idempotencyKey": idempotency_key
-                            }
-                        });
-                        if let Err(e) = write.send(Message::Text(req.to_string())).await {
-                            return Err(ConnectionExit::Transient(format!("send session message: {}", e)));
                         }
                     }
                     Some(ClawCommand::RequestPairing {

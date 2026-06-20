@@ -12,11 +12,6 @@ struct PairedDevice {
     platform: Option<String>,
     #[serde(rename = "clientId")]
     client_id: Option<String>,
-    #[serde(rename = "clientMode")]
-    #[allow(dead_code)]
-    client_mode: Option<String>,
-    #[allow(dead_code)]
-    role: Option<String>,
 }
 
 #[derive(Deserialize, Default)]

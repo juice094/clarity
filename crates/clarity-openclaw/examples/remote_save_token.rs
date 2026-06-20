@@ -34,7 +34,10 @@ fn main() {
             "operator.pairing".into(),
             "operator.talk.secrets".into(),
         ],
-        paired_at_ms: chrono::Utc::now().timestamp_millis(),
+        paired_at_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64,
     };
 
     clarity_openclaw::save_paired_token(&record).expect("save paired token");

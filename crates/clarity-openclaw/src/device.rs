@@ -19,32 +19,26 @@ struct DeviceIdentityFile {
     private_key: String,
     /// Base64url-encoded Ed25519 public key.
     public_key: String,
-    /// Human-readable label for this device.
-    label: String,
 }
 
 /// A Clarity-managed OpenClaw device identity.
 #[derive(Clone)]
 pub struct DeviceIdentity {
     signing_key: SigningKey,
-    /// Human-readable label persisted with the identity.
-    #[allow(dead_code)]
-    label: String,
 }
 
 impl DeviceIdentity {
     /// Generate a new in-memory identity without persisting it.
     #[cfg(test)]
-    fn generate_unpersisted(label: &str) -> Self {
+    fn generate_unpersisted() -> Self {
         let mut csprng = rand::rngs::OsRng;
         Self {
             signing_key: SigningKey::generate(&mut csprng),
-            label: label.into(),
         }
     }
 
     /// Load an existing identity from disk or generate a new one.
-    pub fn load_or_generate(label: &str) -> Result<Self, String> {
+    pub fn load_or_generate() -> Result<Self, String> {
         let path = device_identity_path()?;
         if path.exists() {
             let file =
@@ -61,18 +55,12 @@ impl DeviceIdentity {
             if encode_public_key(signing_key.verifying_key()) != stored.public_key {
                 return Err("stored public key does not match private key".into());
             }
-            return Ok(Self {
-                signing_key,
-                label: stored.label,
-            });
+            return Ok(Self { signing_key });
         }
 
         let mut csprng = rand::rngs::OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
-        let identity = Self {
-            signing_key,
-            label: label.into(),
-        };
+        let identity = Self { signing_key };
         identity.save()?;
         Ok(identity)
     }
@@ -87,7 +75,6 @@ impl DeviceIdentity {
         let file = DeviceIdentityFile {
             private_key: hex::encode(self.signing_key.to_bytes()),
             public_key: encode_public_key(self.signing_key.verifying_key()),
-            label: self.label.clone(),
         };
         let json = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
         std::fs::write(&path, json).map_err(|e| format!("write identity: {}", e))?;
@@ -104,12 +91,6 @@ impl DeviceIdentity {
     /// Base64url-encoded Ed25519 public key.
     pub fn public_key(&self) -> String {
         encode_public_key(self.signing_key.verifying_key())
-    }
-
-    /// Sign a UTF-8 nonce and return base64url-encoded signature.
-    pub fn sign_nonce(&self, nonce: &str) -> String {
-        let signature = self.signing_key.sign(nonce.as_bytes());
-        URL_SAFE_NO_PAD.encode(signature.to_bytes())
     }
 
     /// Sign an arbitrary UTF-8 payload and return a base64url-encoded signature.
@@ -135,10 +116,7 @@ impl DeviceIdentity {
         if encode_public_key(signing_key.verifying_key()) != stored.public_key {
             return Err("stored public key does not match private key".into());
         }
-        Ok(Some(Self {
-            signing_key,
-            label: stored.label,
-        }))
+        Ok(Some(Self { signing_key }))
     }
 }
 
@@ -258,9 +236,9 @@ mod tests {
 
     #[test]
     fn test_sign_and_verify() {
-        let identity = DeviceIdentity::generate_unpersisted("test");
+        let identity = DeviceIdentity::generate_unpersisted();
         let nonce = "hello-challenge";
-        let sig = identity.sign_nonce(nonce);
+        let sig = identity.sign_payload(nonce);
         assert!(!sig.is_empty());
         // Device id is deterministic for the same key.
         let id1 = identity.device_id();

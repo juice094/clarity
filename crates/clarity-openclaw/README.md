@@ -18,7 +18,7 @@ can be consumed by `clarity-egui`, `clarity-tui`, `clarity-gateway`, and
 ```rust
 use clarity_openclaw::{DeviceIdentity, OpenClawClient};
 
-let device = DeviceIdentity::load_or_generate("clarity-egui").unwrap();
+let device = DeviceIdentity::load_or_generate().unwrap();
 let client = OpenClawClient::connect_with_device(
     "ws://127.0.0.1:18679",
     device,

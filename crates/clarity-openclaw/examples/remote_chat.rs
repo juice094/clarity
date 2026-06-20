@@ -24,7 +24,7 @@ fn main() {
     let token = std::env::var("OPENCLAW_REMOTE_TOKEN").expect("set OPENCLAW_REMOTE_TOKEN env var");
     let session_key = "agent:main:main";
 
-    let device = clarity_openclaw::DeviceIdentity::load_or_generate("clarity-remote-example")
+    let device = clarity_openclaw::DeviceIdentity::load_or_generate()
         .expect("load or generate device identity");
     println!("Device ID: {}", device.device_id());
 

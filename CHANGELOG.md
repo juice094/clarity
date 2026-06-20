@@ -55,6 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 更新 `okf/tools.rs`、`cache.rs`、集成测试与文档测试。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --doc --exclude clarity-slint` ✅。
 
+- **OpenClaw 部分精简（2026-06-20）**
+  - 合并 `ClawCommand::SendMessage` / `SendSessionMessage` 为单一 `SendMessage { key, message, method }`，通过 `SendMethod` 区分 `chat.send` / `sessions.send`。
+  - 从 `clarity-openclaw` 移除 `chrono` 依赖，改用 `std::time::SystemTime`。
+  - 删除 `DeviceIdentity::sign_nonce` 与未使用的 `label` 字段；简化 `load_or_generate` / `generate_unpersisted` 签名。
+  - 删除 `PairedDevice` 未使用的 `client_mode` / `role` 字段。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

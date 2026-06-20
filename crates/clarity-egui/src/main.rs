@@ -928,7 +928,7 @@ impl App {
         let identity = self
             .claw_device_identity
             .clone()
-            .or_else(|| clarity_openclaw::DeviceIdentity::load_or_generate("clarity-egui").ok());
+            .or_else(|| clarity_openclaw::DeviceIdentity::load_or_generate().ok());
         let Some(identity) = identity else {
             self.claw_pairing_state =
                 PairingState::Error("Failed to load or generate device identity".to_string());
