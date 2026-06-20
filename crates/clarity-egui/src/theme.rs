@@ -34,7 +34,6 @@ pub const ICON_FOLDER_OPEN: &str = "\u{e247}"; // Lucide: FolderOpen
 pub const ICON_LAYOUT_TEMPLATE: &str = "\u{e207}"; // Lucide: LayoutTemplate
 pub const ICON_SHARE: &str = "\u{e155}"; // Lucide: Share
 pub const ICON_CPU: &str = "\u{e0a9}"; // Lucide: Cpu
-pub const ICON_MONITOR: &str = "\u{e11d}"; // Lucide: Monitor
 pub const ICON_FILE_CODE: &str = "\u{e0c3}"; // Lucide: FileCode
 pub const ICON_LAYERS: &str = "\u{e529}"; // Lucide: Layers
 pub const ICON_BOOK_OPEN: &str = "\u{e05f}"; // Lucide: BookOpen

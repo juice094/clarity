@@ -2,31 +2,11 @@
 
 use crate::App;
 
-/// Context for selecting which web link list to display/edit.
-#[derive(Clone, Copy)]
-pub enum WebSectionContext {
-    Chat,
-    Work,
-}
-
 /// Render a collapsible web bookmarks section.
-pub fn render_web_section(
-    app: &mut App,
-    ui: &mut egui::Ui,
-    section_stable_id: &str,
-    context: WebSectionContext,
-) {
+pub fn render_web_section(app: &mut App, ui: &mut egui::Ui, section_stable_id: &str) {
     let theme = app.ui_store.theme.clone();
-
-    let links: Vec<crate::settings::WebLink> = match context {
-        WebSectionContext::Chat => app.settings_store.settings_edit.web_links_chat.clone(),
-        WebSectionContext::Work => app.settings_store.settings_edit.web_links_work.clone(),
-    };
-
-    let mut expanded = match context {
-        WebSectionContext::Chat => app.view_state.expansions.nav_web_chat,
-        WebSectionContext::Work => app.view_state.expansions.nav_web_work,
-    };
+    let links = app.settings_store.settings_edit.web_links.clone();
+    let mut expanded = app.view_state.expansions.nav_web;
 
     crate::widgets::collapsible_section::collapsible_section(
         ui,
@@ -64,17 +44,11 @@ pub fn render_web_section(
             let add_resp =
                 crate::widgets::nav_row(ui, &theme, crate::theme::ICON_PLUS, app.t("Add"), false);
             if add_resp.on_hover_text(app.t("Manage bookmarks")).clicked() {
-                let modal = match context {
-                    WebSectionContext::Chat => clarity_core::ui::ModalType::ManageWebLinksChat,
-                    WebSectionContext::Work => clarity_core::ui::ModalType::ManageWebLinksWork,
-                };
-                app.view_state.open_modal(modal);
+                app.view_state
+                    .open_modal(clarity_core::ui::ModalType::ManageWebLinks);
             }
         },
     );
 
-    match context {
-        WebSectionContext::Chat => app.view_state.expansions.nav_web_chat = expanded,
-        WebSectionContext::Work => app.view_state.expansions.nav_web_work = expanded,
-    }
+    app.view_state.expansions.nav_web = expanded;
 }

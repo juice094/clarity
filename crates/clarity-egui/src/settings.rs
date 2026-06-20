@@ -22,22 +22,6 @@ struct ProfilesFile {
     profiles: HashMap<String, AgentProfile>,
 }
 
-/// Session initialization context set by the Work/Chat toggle.
-///
-/// **Not a sidebar filter.** Both modes display the same sidebar sections
-/// (web bookmarks, templates, projects, claw, history). The context only
-/// affects `new_session()` behaviour: default system prompt, tool presets,
-/// and project association.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum NavContext {
-    /// Chat mode — casual conversation defaults.
-    #[default]
-    Chat,
-    /// Work mode — project-oriented defaults (workspace plan, file tools).
-    Work,
-}
-
 /// A user-defined web bookmark shown in the left sidebar web section.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct WebLink {
@@ -146,18 +130,12 @@ pub struct GuiSettings {
     /// S6 Phase C3: show the layout debug overlay (green/blue/red/yellow diagnostic rects).
     #[serde(default)]
     pub debug_layout_overlay: bool,
-    /// S6 navigation tree: work/chat context toggle state.
-    #[serde(default)]
-    pub nav_context: NavContext,
     /// S6 navigation tree: custom work templates.
     #[serde(default)]
     pub work_templates: Vec<WorkTemplate>,
-    /// S6 navigation tree: web bookmarks for chat context.
+    /// S6 navigation tree: web bookmarks.
     #[serde(default)]
-    pub web_links_chat: Vec<WebLink>,
-    /// S6 navigation tree: web bookmarks for work context.
-    #[serde(default)]
-    pub web_links_work: Vec<WebLink>,
+    pub web_links: Vec<WebLink>,
     /// S6 navigation tree: set to true after default templates are seeded on first launch.
     #[serde(default)]
     pub work_templates_initialized: bool,
@@ -209,8 +187,24 @@ impl GuiSettings {
     pub fn load() -> Self {
         let path = Self::config_path();
         let mut settings: Self = if let Ok(content) = std::fs::read_to_string(&path) {
-            match serde_json::from_str(&content) {
-                Ok(settings) => settings,
+            // ponytail: migrate legacy split web-link lists into a single list.
+            // We parse as Value first so unknown fields survive and old keys can
+            // be merged before `GuiSettings` deserialization rejects them.
+            match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(mut value) => {
+                    migrate_legacy_web_links(&mut value);
+                    match serde_json::from_value(value) {
+                        Ok(settings) => settings,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to deserialize migrated settings at {}: {}. Falling back to defaults.",
+                                path.display(),
+                                e
+                            );
+                            Self::default_with_env()
+                        }
+                    }
+                }
                 Err(e) => {
                     tracing::warn!(
                         "Failed to parse settings at {}: {}. Falling back to defaults.",
@@ -350,10 +344,8 @@ impl Default for GuiSettings {
                 "ppt".to_string(),
             ],
             debug_layout_overlay: false,
-            nav_context: NavContext::default(),
             work_templates: Vec::new(),
-            web_links_chat: Vec::new(),
-            web_links_work: Vec::new(),
+            web_links: Vec::new(),
             work_templates_initialized: false,
             openclaw_connections: Vec::new(),
             profiles: HashMap::new(),
@@ -362,6 +354,43 @@ impl Default for GuiSettings {
 }
 
 // Model enumeration moved to clarity_core::view_models::settings.
+
+/// Merge legacy `web_links_chat` and `web_links_work` arrays into the unified
+/// `web_links` field, deduplicating by URL. This preserves existing user
+/// bookmarks when upgrading from versions that stored two separate lists.
+fn migrate_legacy_web_links(value: &mut serde_json::Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+
+    let has_new = obj
+        .get("web_links")
+        .and_then(|v| v.as_array())
+        .map(|a| !a.is_empty())
+        .unwrap_or(false);
+    if has_new {
+        return;
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut merged = Vec::new();
+
+    for key in ["web_links_chat", "web_links_work"] {
+        if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
+            for item in arr {
+                if let Some(url) = item.get("url").and_then(|v| v.as_str()) {
+                    if seen.insert(url.to_string()) {
+                        merged.push(item.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    if !merged.is_empty() {
+        obj.insert("web_links".to_string(), serde_json::Value::Array(merged));
+    }
+}
 
 /// Deep-merge two JSON values: `new` overwrites `base` recursively.
 /// Arrays are replaced (not merged). Null values in `new` delete keys in `base`.
@@ -613,5 +642,56 @@ approval_mode = "yolo"
     fn test_gui_settings_openclaw_connections_default_empty() {
         let settings = GuiSettings::default_with_env();
         assert!(settings.openclaw_connections.is_empty());
+    }
+
+    #[test]
+    fn test_migrate_legacy_web_links_merges_and_dedupes() {
+        let mut value = serde_json::json!({
+            "model": "gpt-4o",
+            "web_links_chat": [
+                {"name": "Chat A", "url": "https://a.example"},
+                {"name": "Shared", "url": "https://shared.example"}
+            ],
+            "web_links_work": [
+                {"name": "Work B", "url": "https://b.example"},
+                {"name": "Shared", "url": "https://shared.example"}
+            ]
+        });
+        migrate_legacy_web_links(&mut value);
+        let merged = value["web_links"].as_array().unwrap();
+        assert_eq!(merged.len(), 3);
+        let urls: Vec<String> = merged
+            .iter()
+            .map(|v| v["url"].as_str().unwrap().to_string())
+            .collect();
+        assert!(urls.contains(&"https://a.example".to_string()));
+        assert!(urls.contains(&"https://b.example".to_string()));
+        assert!(urls.contains(&"https://shared.example".to_string()));
+        // Duplicate shared URL must appear only once.
+        assert_eq!(
+            urls.iter()
+                .filter(|u| *u == "https://shared.example")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_migrate_legacy_web_links_preserves_existing_web_links() {
+        let mut value = serde_json::json!({
+            "web_links": [{"name": "Existing", "url": "https://existing.example"}],
+            "web_links_chat": [{"name": "Legacy", "url": "https://legacy.example"}]
+        });
+        migrate_legacy_web_links(&mut value);
+        let merged = value["web_links"].as_array().unwrap();
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0]["url"], "https://existing.example");
+    }
+
+    #[test]
+    fn test_migrate_legacy_web_links_no_old_keys_is_noop() {
+        let mut value = serde_json::json!({"model": "gpt-4o"});
+        migrate_legacy_web_links(&mut value);
+        assert!(value.get("web_links").is_none());
     }
 }

@@ -20,7 +20,6 @@ pub mod history_section;
 pub mod nav_items;
 pub mod project_section;
 pub mod web_section;
-pub mod work_chat_toggle;
 pub mod work_templates;
 
 /// Render the left navigation tree.
@@ -61,7 +60,7 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                             .id_salt("left_nav_scroll")
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                                render_top_actions(app, ui, &theme);
+                                render_top_actions(app, ui);
                                 ui.add_space(theme.space_12);
                                 render_sections(app, ui, &theme);
                             });
@@ -77,46 +76,30 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
         });
 }
 
-/// Top area: Work/Chat toggle + primary navigation actions.
-fn render_top_actions(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    work_chat_toggle::render_work_chat_toggle(app, ui);
-    ui.add_space(theme.space_12);
+/// Top area: primary navigation actions.
+fn render_top_actions(app: &mut App, ui: &mut egui::Ui) {
     nav_items::render_nav_items(app, ui);
 }
 
 /// Scrollable sections: collapsible web/templates/projects/claw/history.
 fn render_sections(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    // 1. Web bookmarks (chat context)
-    web_section::render_web_section(
-        app,
-        ui,
-        "nav_web_chat",
-        web_section::WebSectionContext::Chat,
-    );
+    // 1. Web bookmarks
+    web_section::render_web_section(app, ui, "nav_web");
     ui.add_space(theme.space_12);
 
     // 2. Work templates
     work_templates::render_work_templates(app, ui);
     ui.add_space(theme.space_12);
 
-    // 3. Web bookmarks (work context)
-    web_section::render_web_section(
-        app,
-        ui,
-        "nav_web_work",
-        web_section::WebSectionContext::Work,
-    );
-    ui.add_space(theme.space_12);
-
-    // 4. Projects
+    // 3. Projects
     project_section::render_project_section(app, ui);
     ui.add_space(theme.space_12);
 
-    // 5. Claw devices
+    // 4. Claw devices
     claw_section::render_claw_section(app, ui);
     ui.add_space(theme.space_12);
 
-    // 6. History / sessions
+    // 5. History / sessions
     history_section::render_history_section(app, ui);
 }
 

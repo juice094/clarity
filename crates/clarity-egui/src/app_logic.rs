@@ -247,7 +247,6 @@ impl App {
         let right_rail_card_order = settings_edit.right_rail_card_order.clone();
         let plugin_order = settings_edit.plugin_order.clone();
         let debug_layout_overlay = settings_edit.debug_layout_overlay;
-        let nav_context = settings_edit.nav_context;
         let theme = Theme::default().with_font_scale(font_scale);
         let settings_snapshot = clarity_core::view_models::settings::SettingsSnapshot {
             provider: settings_edit.provider.clone(),
@@ -475,7 +474,6 @@ impl App {
                 vs
             },
             pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
-            nav_context,
             claw_ws: None,
             claw_ws_device_id: String::new(),
             claw_device_identity: clarity_openclaw::DeviceIdentity::load_existing().unwrap_or_else(
@@ -737,8 +735,8 @@ impl App {
     /// S6 Phase C: mirror layout state into `settings_edit` and persist.
     ///
     /// Call this whenever the right rail visibility, active context, card order,
-    /// plugin order, or nav_context changes. Errors are logged but not surfaced
-    /// as toasts to avoid spamming the user every frame.
+    /// or plugin order changes. Errors are logged but not surfaced as toasts
+    /// to avoid spamming the user every frame.
     pub(crate) fn persist_layout_settings(&mut self) {
         self.settings_store.settings_edit.right_rail_visible = self.view_state.right_rail_visible;
         self.settings_store.settings_edit.right_rail_context = self.view_state.right_rail_context;
@@ -746,7 +744,6 @@ impl App {
             self.view_state.right_rail_card_order.clone();
         self.settings_store.settings_edit.debug_layout_overlay =
             self.view_state.debug_layout_overlay;
-        self.settings_store.settings_edit.nav_context = self.nav_context;
         if let Err(e) = self.commit_settings() {
             tracing::warn!("Failed to persist layout settings: {}", e);
         }

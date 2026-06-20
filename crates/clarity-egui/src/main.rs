@@ -102,8 +102,6 @@ pub(crate) struct App {
     pub(crate) view_state: clarity_core::ui::ViewState,
     /// Pretext text measurement backend backed by egui fonts.
     pub(crate) pretext_metrics: crate::pretext::EguiFontMetrics,
-    /// S6 navigation tree: work/chat context (GUI-local; not persisted to ViewState).
-    pub(crate) nav_context: crate::settings::NavContext,
     /// Live Claw device list polled from Gateway (replaces hardcoded mock data).
     pub(crate) device_state: crate::claw::DeviceState,
     /// Active WebSocket connection to the selected Claw Gateway.
@@ -254,8 +252,7 @@ impl App {
                 ModalType::SubAgentView => "subagent_view",
                 ModalType::TeamCreate => "team_create",
                 ModalType::KimiCodeLogin => "kimi_login",
-                ModalType::ManageWebLinksChat => "manage_web_links_chat",
-                ModalType::ManageWebLinksWork => "manage_web_links_work",
+                ModalType::ManageWebLinks => "manage_web_links",
                 ModalType::ManageWorkTemplates => "manage_work_templates",
                 ModalType::Skill | ModalType::Mcp | ModalType::Login | ModalType::AddProvider => {
                     // Skill/Mcp are overlay panels; Login/AddProvider not yet wired.
@@ -278,14 +275,9 @@ impl App {
                             &clarity_llm::auth::OAuthDeviceFlowConfig::default(),
                         );
                     }
-                    ModalType::ManageWebLinksChat => {
+                    ModalType::ManageWebLinks => {
                         crate::panels::modals::manage_web_links::render_manage_web_links_modal(
-                            app, ctx, true,
-                        );
-                    }
-                    ModalType::ManageWebLinksWork => {
-                        crate::panels::modals::manage_web_links::render_manage_web_links_modal(
-                            app, ctx, false,
+                            app, ctx,
                         );
                     }
                     ModalType::ManageWorkTemplates => {

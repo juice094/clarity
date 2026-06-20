@@ -133,10 +133,8 @@ pub enum ModalType {
     Skill,
     /// MCP server configuration modal (P1.5.4 relocation from SidePanel per ADR-014).
     Mcp,
-    /// Manage chat-context web link bookmarks (S6 navigation tree).
-    ManageWebLinksChat,
-    /// Manage work-context web link bookmarks (S6 navigation tree).
-    ManageWebLinksWork,
+    /// Manage web link bookmarks (S6 navigation tree).
+    ManageWebLinks,
     /// Manage custom work templates (S6 navigation tree).
     ManageWorkTemplates,
 }
@@ -277,12 +275,9 @@ pub struct PanelExpansion {
     #[serde(default)]
     pub workspace_plan_manually_collapsed: bool,
     // --- S6 navigation tree collapsible sections ---
-    /// Web bookmarks section expanded (Chat context).
+    /// Web bookmarks section expanded.
     #[serde(default)]
-    pub nav_web_chat: bool,
-    /// Web bookmarks section expanded (Work context).
-    #[serde(default)]
-    pub nav_web_work: bool,
+    pub nav_web: bool,
     /// Project section expanded.
     #[serde(default)]
     pub nav_projects: bool,
@@ -317,8 +312,7 @@ impl PanelExpansion {
             subagents,
             workspace_plan,
             workspace_plan_manually_collapsed,
-            nav_web_chat: false,
-            nav_web_work: false,
+            nav_web: false,
             nav_projects: false,
             nav_claw: false,
             nav_history: false,
@@ -1006,8 +1000,7 @@ mod tests {
             ModalType::KimiCodeLogin,
             ModalType::Skill,
             ModalType::Mcp,
-            ModalType::ManageWebLinksChat,
-            ModalType::ManageWebLinksWork,
+            ModalType::ManageWebLinks,
             ModalType::ManageWorkTemplates,
         ] {
             let s = serde_json::to_string(&modal).unwrap();

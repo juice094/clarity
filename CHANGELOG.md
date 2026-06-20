@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `navigation_tree/work_chat_toggle.rs`：Work/Chat 分段按钮使用 `LayoutJob` 分别设置图标字体与文本字体，修复图标乱码。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
 
+- **左侧边栏 Work/Chat 切换清理（2026-06-20）**
+  - 删除未实际影响 `new_session()` 的 `NavContext` 枚举与持久化字段。
+  - 删除 `panels/navigation_tree/work_chat_toggle.rs` 及 Work/Chat 分段按钮，解决按钮尺寸不一与悬浮多选问题。
+  - 合并 `web_links_chat` / `web_links_work` 为单一 `web_links`；在 `GuiSettings::load()` 中通过 JSON 迁移保留旧书签。
+  - 将 `ManageWebLinksChat` / `ManageWebLinksWork` 两个 modal 变体统一为 `ManageWebLinks`。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

@@ -1,15 +1,10 @@
-//! Modal for managing web link bookmarks (Chat or Work context).
+//! Modal for managing web link bookmarks.
 
 use crate::App;
 
 /// Render the web links management modal.
-pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context, is_chat: bool) {
-    let expected_modal = if is_chat {
-        clarity_core::ui::ModalType::ManageWebLinksChat
-    } else {
-        clarity_core::ui::ModalType::ManageWebLinksWork
-    };
-    if app.view_state.modal != Some(expected_modal) {
+pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context) {
+    if app.view_state.modal != Some(clarity_core::ui::ModalType::ManageWebLinks) {
         return;
     }
 
@@ -17,11 +12,7 @@ pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context, is_chat
     let theme = app.ui_store.theme.clone();
 
     // Clone links so the render closure doesn't conflict with mutable app borrows.
-    let mut links_edit = if is_chat {
-        app.settings_store.settings_edit.web_links_chat.clone()
-    } else {
-        app.settings_store.settings_edit.web_links_work.clone()
-    };
+    let mut links_edit = app.settings_store.settings_edit.web_links.clone();
     let mut needs_save = false;
 
     egui::Window::new(title)
@@ -112,11 +103,7 @@ pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context, is_chat
     // Always sync edits back to in-memory settings (TextEdit mutations are
     // in-place and don't fire change events). Only persist to disk on
     // explicit actions (add, delete, close) to avoid per-frame disk writes.
-    if is_chat {
-        app.settings_store.settings_edit.web_links_chat = links_edit;
-    } else {
-        app.settings_store.settings_edit.web_links_work = links_edit;
-    }
+    app.settings_store.settings_edit.web_links = links_edit;
     if needs_save {
         app.auto_save_settings();
     }
