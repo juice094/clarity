@@ -38,6 +38,8 @@ pub mod runtime_router;
 pub mod sse;
 pub mod tool_payload;
 
+pub(crate) mod rate_limit;
+
 /// Version of the clarity-llm crate
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -467,6 +469,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
         let status = response.status();
         if !status.is_success() {
+            rate_limit::wait_for_retry_after(&response).await;
             let error_text = response
                 .text()
                 .await
@@ -583,6 +586,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             match response {
                 Ok(resp) => {
                     if !resp.status().is_success() {
+                        rate_limit::wait_for_retry_after(&resp).await;
                         let err = resp.text().await.unwrap_or_default();
                         let _ = tx
                             .send(Err(AgentError::Llm(format!("API error: {}", err))))
@@ -961,6 +965,7 @@ impl LlmProvider for AnthropicLlm {
 
         let status = response.status();
         if !status.is_success() {
+            rate_limit::wait_for_retry_after(&response).await;
             let error_text = response
                 .text()
                 .await
@@ -1043,6 +1048,7 @@ impl LlmProvider for AnthropicLlm {
             match response {
                 Ok(resp) => {
                     if !resp.status().is_success() {
+                        rate_limit::wait_for_retry_after(&resp).await;
                         let err = resp.text().await.unwrap_or_default();
                         let _ = tx
                             .send(Err(AgentError::Llm(format!("API error: {}", err))))
@@ -1307,6 +1313,12 @@ impl LlmFactory {
                     model
                 },
             ))),
+            "deepseek-device" => {
+                let options = DeepSeekDeviceOptions::from_model_id(model);
+                Ok(Box::new(DeepSeekDeviceProvider::with_token_and_options(
+                    api_key, options,
+                )))
+            }
             "openai" => Ok(Box::new(OpenAiCompatibleLlm::new(
                 api_key,
                 "https://api.openai.com/v1",
@@ -1335,7 +1347,7 @@ impl LlmFactory {
                 if model.is_empty() { "llama3.2" } else { model },
             ))),
             _ => Err(AgentError::Llm(format!(
-                "Unknown provider '{}'. Supported: openai, anthropic, kimi, deepseek, ollama, local",
+                "Unknown provider '{}'. Supported: openai, anthropic, kimi, deepseek, deepseek-device, ollama, local",
                 name
             ))),
         }
