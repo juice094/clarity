@@ -385,6 +385,58 @@ impl ProviderDefinition {
 
         Ok(())
     }
+
+    /// Build a `DeepSeekDeviceProvider` from this definition.
+    ///
+    /// # Errors
+    /// - Provider is not configured for deepseek-device.
+    /// - Token mode without a resolvable token.
+    /// - Password mode without a saved password or mobile number.
+    pub fn to_deepseek_device_provider(
+        &self,
+        model_id: &str,
+    ) -> Result<clarity_llm::DeepSeekDeviceProvider, String> {
+        if self.id != "deepseek-device" {
+            return Err(format!(
+                "Provider '{}' is not a deepseek-device definition",
+                self.id
+            ));
+        }
+
+        let options = clarity_llm::DeepSeekDeviceOptions::from_model_id(model_id);
+
+        if self.auth_mode.is_password() {
+            let password = self.resolve_password().ok_or_else(|| {
+                "DeepSeek (Device) password mode requires a saved password.".to_string()
+            })?;
+            if self.mobile.is_empty() {
+                return Err("DeepSeek (Device) password login requires a mobile number.".into());
+            }
+            Ok(clarity_llm::DeepSeekDeviceProvider::new(
+                clarity_llm::DeepSeekDeviceConfig {
+                    base_url: self.base_url.clone(),
+                    client_version: "2.1.8".into(),
+                    device_id: "clarity-device".into(),
+                    credentials: clarity_llm::DeepSeekDeviceCredentials::Password {
+                        mobile: self.mobile.clone(),
+                        password,
+                    },
+                    options,
+                },
+            ))
+        } else {
+            let token = self.resolve_api_key().ok_or_else(|| {
+                "DeepSeek (Device) token mode requires a device token.".to_string()
+            })?;
+            Ok(clarity_llm::DeepSeekDeviceProvider::new(
+                clarity_llm::DeepSeekDeviceConfig {
+                    credentials: clarity_llm::DeepSeekDeviceCredentials::Token(token),
+                    options,
+                    ..Default::default()
+                },
+            ))
+        }
+    }
 }
 
 impl From<&ProviderDefinition> for clarity_llm::ProviderConfig {
@@ -660,6 +712,7 @@ impl ProviderRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clarity_contract::LlmProvider;
 
     #[test]
     fn test_builtin_providers_loaded() {
@@ -854,5 +907,126 @@ models = ["model-a", "model-b"]
             ..Default::default()
         };
         assert!(def.validate_api_key_prefix().is_ok());
+    }
+
+    // ============================================================================
+    // DeepSeek (Device) provider builder tests
+    // ============================================================================
+
+    fn deepseek_device_def() -> ProviderDefinition {
+        ProviderDefinition {
+            id: "deepseek-device".into(),
+            display_name: "DeepSeek (Device)".into(),
+            base_url: "https://chat.deepseek.com".into(),
+            api_format: ApiFormat::DeepSeekDevice,
+            auth_type: AuthType::ApiKey,
+            api_key_ref: String::new(),
+            auth_token_key: String::new(),
+            models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
+            builtin: true,
+            tags: vec!["chat-only".into()],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_auth_mode_default_is_token() {
+        let def = deepseek_device_def();
+        assert_eq!(def.auth_mode, AuthMode::Token);
+    }
+
+    #[test]
+    fn test_auth_mode_toml_roundtrip() {
+        // ApiFormat serializes as kebab-case: DeepSeekDevice -> "deep-seek-device".
+        let toml_str = r#"
+[provider.test]
+display_name = "Test"
+base_url = "https://chat.deepseek.com"
+api_format = "deep-seek-device"
+auth_mode = "password"
+mobile = "13800138000"
+"#;
+        let file: ProviderConfigFile = toml::from_str(toml_str).unwrap();
+        let def = file.provider.get("test").unwrap();
+        assert_eq!(def.auth_mode, AuthMode::Password);
+        assert_eq!(def.mobile, "13800138000");
+
+        // Missing auth_mode defaults to Token.
+        let toml_default = r#"
+[provider.test]
+display_name = "Test"
+base_url = "https://chat.deepseek.com"
+api_format = "deep-seek-device"
+"#;
+        let file: ProviderConfigFile = toml::from_str(toml_default).unwrap();
+        let def = file.provider.get("test").unwrap();
+        assert_eq!(def.auth_mode, AuthMode::Token);
+    }
+
+    #[test]
+    fn test_password_roundtrip() {
+        let mut def = deepseek_device_def();
+        def.set_password("my-secret-password")
+            .expect("secret store should be available in tests");
+        assert!(def.password_enc.is_some());
+        assert!(!def.password_enc.as_ref().unwrap().is_empty());
+        assert_eq!(
+            def.resolve_password().as_deref(),
+            Some("my-secret-password")
+        );
+
+        def.clear_password();
+        assert!(def.resolve_password().is_none());
+    }
+
+    #[test]
+    fn test_to_deepseek_device_provider_token() {
+        let mut def = deepseek_device_def();
+        def.api_key_ref = "ds-test-token".into();
+        let provider = def.to_deepseek_device_provider("deepseek-chat").unwrap();
+        assert!(!provider.capabilities().native_tool_calling);
+    }
+
+    #[test]
+    fn test_to_deepseek_device_provider_password() {
+        let mut def = deepseek_device_def();
+        def.auth_mode = AuthMode::Password;
+        def.mobile = "13800138000".into();
+        def.set_password("my-secret-password").unwrap();
+        let provider = def
+            .to_deepseek_device_provider("deepseek-reasoner")
+            .unwrap();
+        assert!(!provider.capabilities().native_tool_calling);
+    }
+
+    #[test]
+    fn test_to_deepseek_device_provider_missing_token() {
+        let def = deepseek_device_def();
+        let err = def
+            .to_deepseek_device_provider("deepseek-chat")
+            .unwrap_err();
+        assert!(err.contains("device token"));
+    }
+
+    #[test]
+    fn test_to_deepseek_device_provider_missing_password() {
+        let mut def = deepseek_device_def();
+        def.auth_mode = AuthMode::Password;
+        def.mobile = "13800138000".into();
+        let err = def
+            .to_deepseek_device_provider("deepseek-chat")
+            .unwrap_err();
+        assert!(err.contains("saved password"));
+    }
+
+    #[test]
+    fn test_to_deepseek_device_provider_missing_mobile() {
+        let mut def = deepseek_device_def();
+        def.auth_mode = AuthMode::Password;
+        def.set_password("my-secret-password").unwrap();
+        let err = def
+            .to_deepseek_device_provider("deepseek-chat")
+            .unwrap_err();
+        assert!(err.contains("mobile number"));
     }
 }

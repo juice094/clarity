@@ -297,43 +297,10 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         } else {
             settings.model.clone()
         };
-        let options = clarity_llm::DeepSeekDeviceOptions::from_model_id(&model_id);
 
-        let provider = if def.auth_mode.is_password() {
-            let password = def.resolve_password().ok_or_else(|| {
-                EguiError::InvalidProvider(
-                    "DeepSeek (Device) password mode requires a saved password.".into(),
-                )
-            })?;
-            if def.mobile.is_empty() {
-                return Err(EguiError::InvalidProvider(
-                    "DeepSeek (Device) password login requires a mobile number.".into(),
-                ));
-            }
-            clarity_llm::DeepSeekDeviceProvider::new(clarity_llm::DeepSeekDeviceConfig {
-                base_url: def.base_url.clone(),
-                client_version: "2.1.8".into(),
-                device_id: "clarity-device".into(),
-                credentials: clarity_llm::DeepSeekDeviceCredentials::Password {
-                    mobile: def.mobile.clone(),
-                    password,
-                },
-                options,
-            })
-        } else {
-            let token = def.resolve_api_key().ok_or_else(|| {
-                EguiError::InvalidProvider(
-                    "DeepSeek (Device) token mode requires a device token. \
-                     Open Settings and configure credentials."
-                        .into(),
-                )
-            })?;
-            clarity_llm::DeepSeekDeviceProvider::new(clarity_llm::DeepSeekDeviceConfig {
-                credentials: clarity_llm::DeepSeekDeviceCredentials::Token(token),
-                options,
-                ..Default::default()
-            })
-        };
+        let provider = def
+            .to_deepseek_device_provider(&model_id)
+            .map_err(EguiError::InvalidProvider)?;
 
         bind_llm(
             &state.agent,
