@@ -12,4 +12,47 @@ ignore = [
     # Until tray-icon/tao release GTK4-based versions, this advisory cannot be resolved transitively.
     # It is a build-time/unmaintained warning with no known exploitable vulnerability in Clarity's usage.
     "RUSTSEC-2024-0370",
+
+    # gtk-rs GTK3 bindings are no longer maintained.
+    # Pulled in via clarity-claw / clarity-egui → tao 0.35.3 / tray-icon 0.24.1 / muda 0.19.2.
+    # These are Linux system-tray / menu dependencies; the GTK3 unmaintained status does not
+    # introduce a known exploitable vulnerability in Clarity's usage. Resolution is blocked on
+    # upstream tao/tray-icon/muda GTK4 migration (tracked in tauri-apps/tao#1104).
+    "RUSTSEC-2024-0413", # atk
+    "RUSTSEC-2024-0416", # atk-sys
+    "RUSTSEC-2024-0412", # gdk
+    "RUSTSEC-2024-0418", # gdk-sys
+    "RUSTSEC-2024-0411", # gdkwayland-sys
+    "RUSTSEC-2024-0414", # gdkx11-sys
+    "RUSTSEC-2024-0415", # gtk
+    "RUSTSEC-2024-0420", # gtk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+
+    # bincode 2.0.1 is unmaintained.
+    # Pulled in only via the experimental clarity-slint / pretext-slint stack.
+    # clarity-slint is excluded from default workspace builds and CI; this warning is not
+    # actionable without replacing the slint compiler dependency.
+    "RUSTSEC-2025-0141",
+
+    # fxhash is unmaintained.
+    # Pulled in via selectors 0.25.0 → scraper 0.19.1 (HTML parsing in clarity-tools / clarity-core).
+    # No known exploitable vulnerability; resolution is blocked on selectors/scraper switching
+    # to a maintained hash implementation.
+    "RUSTSEC-2025-0057",
+
+    # instant is unmaintained.
+    # Pulled in via notify 7.0.0 → clarity-claw file watcher.
+    # No known exploitable vulnerability; resolution is blocked on notify updating.
+    "RUSTSEC-2024-0384",
+
+    # number_prefix is unmaintained.
+    # Pulled in via indicatif → tokenizers (HuggingFace tokenizer dependency for local-llm).
+    # No known exploitable vulnerability; resolution is blocked upstream.
+    "RUSTSEC-2025-0119",
+
+    # paste is unmaintained.
+    # Pulled in via tokenizers → candle-core (local-llm / GGUF inference).
+    # This is a compile-time proc-macro crate with no runtime impact.
+    # Resolution is blocked upstream on tokenizers/candle updating.
+    "RUSTSEC-2024-0436",
 ]
