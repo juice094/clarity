@@ -13,7 +13,7 @@
 //! changed on disk can use [`OkfBundleCache::invalidate`] to force a reload on
 //! the next access.
 
-use super::{BundleLoader, OkfBundle, OkfError, OkfResult};
+use super::{OkfBundle, OkfError, OkfResult, load_bundle};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, RwLock};
@@ -60,7 +60,7 @@ impl OkfBundleCache {
             }
         }
 
-        let bundle = BundleLoader::load(&canonical)?;
+        let bundle = load_bundle(&canonical)?;
         {
             let mut guard = self.inner.write().map_err(lock_error)?;
             guard.insert(canonical, bundle.clone());

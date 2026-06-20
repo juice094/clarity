@@ -9,7 +9,7 @@
 //!
 //! Verifies that the merged workspace OKF bundle loads without errors.
 
-use clarity_core::okf::BundleLoader;
+use clarity_core::okf::load_bundle;
 use std::path::PathBuf;
 
 #[test]
@@ -25,7 +25,7 @@ fn test_merged_workspace_okf_bundle_loads() {
         bundle_root.display()
     );
 
-    let bundle = BundleLoader::load(&bundle_root).expect("failed to load OKF bundle");
+    let bundle = load_bundle(&bundle_root).expect("failed to load OKF bundle");
 
     assert!(
         !bundle.concepts.is_empty(),

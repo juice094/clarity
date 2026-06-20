@@ -48,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 将 `ManageWebLinksChat` / `ManageWebLinksWork` 两个 modal 变体统一为 `ManageWebLinks`。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
 
+- **OKF 知识库按需链接查询（2026-06-20）**
+  - 删除 eager 构建完整图的 `OkfGraph` 与 `OkfBundle::into_graph()`。
+  - 删除零大小结构体 `BundleLoader` / `ConceptLoader`，改为自由函数 `load_bundle` / `load_concept` / `parse_concept`。
+  - 在 `OkfBundle` 上新增按需方法 `outgoing_links(id)` / `incoming_links(id)`，避免加载时扫描全部概念。
+  - 更新 `okf/tools.rs`、`cache.rs`、集成测试与文档测试。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --doc --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

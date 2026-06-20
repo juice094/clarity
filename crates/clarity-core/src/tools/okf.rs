@@ -308,20 +308,19 @@ impl Tool for OkfReadTool {
 
         let resolved = resolve_bundle_path(path, &ctx.working_dir);
         let bundle = load_bundle(resolved).await?;
-        let graph = bundle.into_graph();
 
-        let concept = graph.get(id).ok_or_else(|| {
+        let concept = bundle.get(id).ok_or_else(|| {
             clarity_contract::ToolError::execution_failed(format!("Concept not found: {id}"))
         })?;
 
-        let outgoing: Vec<Value> = graph
-            .outgoing(id)
-            .iter()
+        let outgoing: Vec<Value> = bundle
+            .outgoing_links(id)
+            .into_iter()
             .map(|l| json!({"target": l.target, "url": l.url}))
             .collect();
-        let incoming: Vec<Value> = graph
-            .incoming(id)
-            .iter()
+        let incoming: Vec<Value> = bundle
+            .incoming_links(id)
+            .into_iter()
             .map(|l| json!({"source": l.source, "url": l.url}))
             .collect();
 

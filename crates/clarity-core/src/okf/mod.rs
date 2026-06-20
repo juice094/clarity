@@ -15,8 +15,8 @@ mod loader;
 use std::collections::HashMap;
 
 pub use cache::OkfBundleCache;
-pub use graph::{OkfGraph, OkfLink};
-pub use loader::{BundleLoader, ConceptLoader};
+pub use graph::OkfLink;
+pub use loader::{load_bundle, load_concept, parse_concept};
 
 /// Result type for OKF operations.
 pub type OkfResult<T> = std::result::Result<T, OkfError>;

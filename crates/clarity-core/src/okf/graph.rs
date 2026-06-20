@@ -1,11 +1,10 @@
 //! OKF knowledge graph.
 //!
-//! A graph is built from an [`OkfBundle`] by extracting Markdown links from
-//! each concept's body and resolving them to concept ids.
+//! Links between concepts are computed on demand by scanning a concept's
+//! Markdown body and resolving internal `.md` references to concept ids.
 
 use super::loader::normalize_concept_id;
 use super::{OkfBundle, OkfConcept};
-use std::collections::HashMap;
 use std::path::Path;
 
 /// A directed link between two OKF concepts.
@@ -19,84 +18,45 @@ pub struct OkfLink {
     pub url: String,
 }
 
-/// Traversable view over a loaded OKF bundle.
-#[derive(Debug, Clone)]
-pub struct OkfGraph {
-    /// Concepts indexed by id.
-    pub concepts: HashMap<String, OkfConcept>,
-    /// Directed links between concepts.
-    pub links: Vec<OkfLink>,
-}
-
-impl OkfGraph {
-    /// Build a graph from a bundle.
-    pub fn from_bundle(bundle: OkfBundle) -> Self {
-        let mut links = Vec::new();
-        for concept in bundle.concepts.values() {
-            for url in extract_links(&concept.body) {
-                if let Some(target) = resolve_link(&concept.id, &url) {
-                    links.push(OkfLink {
-                        source: concept.id.clone(),
-                        target,
-                        url,
-                    });
-                }
-            }
-        }
-        Self {
-            concepts: bundle.concepts,
-            links,
-        }
-    }
-
-    /// Look up a concept by id.
-    pub fn get(&self, id: &str) -> Option<&OkfConcept> {
-        self.concepts.get(id)
-    }
-
+impl OkfBundle {
     /// Return all links originating from `id`.
-    pub fn outgoing(&self, id: &str) -> Vec<&OkfLink> {
-        self.links.iter().filter(|l| l.source == id).collect()
+    ///
+    /// Links are computed on demand by scanning the source concept's body.
+    pub fn outgoing_links(&self, id: &str) -> Vec<OkfLink> {
+        let Some(concept) = self.concepts.get(id) else {
+            return Vec::new();
+        };
+        collect_links(concept)
     }
 
     /// Return all links pointing to `id`.
-    pub fn incoming(&self, id: &str) -> Vec<&OkfLink> {
-        self.links.iter().filter(|l| l.target == id).collect()
-    }
-
-    /// Return the ids of concepts reachable directly from `id`.
-    pub fn neighbors(&self, id: &str) -> Vec<&OkfConcept> {
-        self.outgoing(id)
-            .iter()
-            .filter_map(|l| self.concepts.get(&l.target))
+    ///
+    /// Links are computed on demand by scanning every concept's body.
+    pub fn incoming_links(&self, id: &str) -> Vec<OkfLink> {
+        self.concepts
+            .values()
+            .flat_map(|concept| {
+                collect_links(concept)
+                    .into_iter()
+                    .filter(|link| link.target == id)
+            })
             .collect()
-    }
-
-    /// Return the number of concepts in the graph.
-    pub fn len(&self) -> usize {
-        self.concepts.len()
-    }
-
-    /// Check if the graph contains no concepts.
-    pub fn is_empty(&self) -> bool {
-        self.concepts.is_empty()
-    }
-
-    /// Convert the graph back into a bundle.
-    pub fn into_bundle(self) -> OkfBundle {
-        OkfBundle {
-            root: std::path::PathBuf::new(),
-            concepts: self.concepts,
-            warnings: Vec::new(),
-        }
     }
 }
 
-impl OkfBundle {
-    /// Build a traversable [`OkfGraph`] from this bundle.
-    pub fn into_graph(self) -> OkfGraph {
-        OkfGraph::from_bundle(self)
+/// Collect resolved internal links for a single concept.
+fn collect_links(concept: &OkfConcept) -> Vec<OkfLink> {
+    let mut links = Vec::new();
+    for url in extract_links(&concept.body) {
+        if let Some(target) = resolve_link(&concept.id, &url) {
+            links.push(OkfLink {
+                source: concept.id.clone(),
+                target,
+                url,
+            });
+        }
     }
+    links
 }
 
 /// Extract Markdown links whose destination ends with `.md`.
@@ -163,6 +123,18 @@ mod tests {
         }
     }
 
+    fn bundle_with(concepts: Vec<OkfConcept>) -> OkfBundle {
+        let mut map = std::collections::HashMap::new();
+        for concept in concepts {
+            map.insert(concept.id.clone(), concept);
+        }
+        OkfBundle {
+            root: std::path::PathBuf::new(),
+            concepts: map,
+            warnings: Vec::new(),
+        }
+    }
+
     #[test]
     fn test_extract_links() {
         let body = "See [WAU](metrics/wau.md) and [MAU](../metrics/mau.md). Also [external](https://example.com).";
@@ -199,21 +171,38 @@ mod tests {
     }
 
     #[test]
-    fn test_graph_neighbors() {
-        let mut concepts = HashMap::new();
-        concepts.insert("metrics/wau".to_string(), concept("metrics/wau", "# WAU"));
-        concepts.insert(
-            "metrics/mau".to_string(),
+    fn test_outgoing_links() {
+        let bundle = bundle_with(vec![
+            concept("metrics/wau", "# WAU"),
+            concept(
+                "metrics/mau",
+                "See [WAU](./wau.md) for weekly. Also [external](https://example.com).",
+            ),
+        ]);
+
+        let outgoing = bundle.outgoing_links("metrics/mau");
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].target, "metrics/wau");
+        assert_eq!(outgoing[0].source, "metrics/mau");
+    }
+
+    #[test]
+    fn test_incoming_links() {
+        let bundle = bundle_with(vec![
+            concept("metrics/wau", "# WAU"),
             concept("metrics/mau", "See [WAU](./wau.md) for weekly."),
-        );
-        let _bundle = OkfBundle::new(std::path::PathBuf::new());
-        let graph = OkfGraph {
-            concepts,
-            links: Vec::new(),
-        };
-        let graph = graph.into_bundle().into_graph();
-        let neighbors = graph.neighbors("metrics/mau");
-        assert_eq!(neighbors.len(), 1);
-        assert_eq!(neighbors[0].id, "metrics/wau");
+        ]);
+
+        let incoming = bundle.incoming_links("metrics/wau");
+        assert_eq!(incoming.len(), 1);
+        assert_eq!(incoming[0].source, "metrics/mau");
+        assert_eq!(incoming[0].target, "metrics/wau");
+    }
+
+    #[test]
+    fn test_unknown_concept_has_no_links() {
+        let bundle = bundle_with(vec![concept("a", "[B](b.md)")]);
+        assert!(bundle.outgoing_links("missing").is_empty());
+        assert!(bundle.incoming_links("missing").is_empty());
     }
 }
