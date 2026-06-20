@@ -122,8 +122,9 @@ async fn handle_socket(
 
     info!("WebSocket disconnected: session_id={}", session_id);
 
-    // Reclaim the session store entry for transient WebSocket sessions so
-    // failed connections do not accumulate indefinitely.
+    // ponytail: transient WebSocket sessions are deleted on disconnect to avoid
+    // accumulation. If persistent sessions are needed later, add an explicit
+    // lifecycle (e.g. keep-alive TTL) instead of keeping every session forever.
     if let Err(e) = state
         .session_store
         .delete_session(&session_id.to_string())

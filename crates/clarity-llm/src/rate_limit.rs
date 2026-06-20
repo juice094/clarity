@@ -11,6 +11,8 @@ const MAX_RETRY_AFTER_SECONDS: u64 = 60;
 /// currently treated as opaque / unparseable; providers in this codebase
 /// overwhelmingly emit seconds.
 pub(crate) fn parse_retry_after(value: &str) -> Option<Duration> {
+    // ponytail: only parses delay-seconds; add httpdate parsing if a provider
+    // starts sending HTTP-date Retry-After headers.
     let trimmed = value.trim();
     trimmed
         .parse::<u64>()

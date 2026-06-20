@@ -1101,12 +1101,11 @@ impl eframe::App for App {
                 })
                 .unwrap_or_else(|| active_id.clone());
 
-            let should_reconnect = self.claw_ws.is_none()
-                || picked_id != self.claw_ws_device_id
-                || matches!(
-                    self.claw_ws,
-                    Some(crate::claw::ClawClientHandle::Gateway(_))
-                );
+            // Only reconnect when there is no handle or the selected device changed.
+            // If a handle already exists for the same device we keep it (OpenClaw has
+            // its own internal reconnect; Gateway is recreated only after an error
+            // clears the handle).
+            let should_reconnect = self.claw_ws.is_none() || picked_id != self.claw_ws_device_id;
             if should_reconnect && !picked_id.is_empty() {
                 if let Some(remaining) = self.ui_store.is_in_backoff(&picked_id) {
                     if self.ui_store.frame_count % 300 == 0 {

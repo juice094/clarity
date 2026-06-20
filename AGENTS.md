@@ -342,6 +342,23 @@ Scope：`core`、`memory`、`gateway`、`egui`、`tui`、`claw`、`wire`、`head
 - **P6** — Theme Token 强制：egui 布局字面量必须 token 化。
 - **P7** — 协议层不前瞻：新增协议类型必须同时有 producer、consumer 和端到端测试。
 
+### 7.6 Ponytail lazy-senior-dev 原则（Rust 本地化）
+
+本仓库额外吸收 [Ponytail](https://github.com/DietrichGebert/ponytail) 的 lazy-senior-dev 风格，作为 P1–P7 的补充，目标是**在保持安全与正确的前提下写得更少**。
+
+| 原则 | Rust/Clarity 实践 |
+|------|-------------------|
+| **YAGNI** | 不为未来扩展预写 trait wrapper、泛型层、配置开关。新增抽象必须被当前至少两个调用方需要。 |
+| **优先 stdlib / 已有依赖** | 能用 `std::fs`、`std::path`、`std::collections`、`tokio::sync` 解决的问题，不引入新 crate。 |
+| **删除优于添加** | 每个 PR 尽量净删代码；移除 dead code、unused feature、obsolete 注释。 |
+| **显式标记 shortcut** | 任何故意简化且已知上限的实现必须加 `// ponytail: <上限>；<升级路径>`，例如 `// ponytail: O(n²) scan; replace with index if items > 1000`。 |
+| **信任边界必须校验** | 路径、用户输入、网络响应、MCP 命令在边界处校验，与现有 `sanitize_path`、`validate_mcp_command` 等规则一致。 |
+| **非平凡逻辑留一个可运行检查** | 新增纯函数、状态机、算法必须配单元测试；egui 逻辑优先写纯函数测试。Trivial one-liner 可免测。 |
+| **Boring over clever** | 同样的功能，选择未来维护者 3 点能看懂的写法；避免宏技巧、隐式 trait 魔术。 |
+| **输入验证 + 错误处理防数据丢失** | lazy 不等于省略错误处理；任何可能失败的 IO/序列化/网络操作必须处理，禁止 `unwrap()` 无 `// SAFE:` 注释。 |
+
+> **应用方式**：新增/修改代码时按上表自问；代码审查时检查 `// ponytail:` 标记与测试覆盖。不追求一次性全仓库重构，而是**每次改动让相关文件比修改前更薄**。
+
 ---
 
 ## 8. 测试策略
