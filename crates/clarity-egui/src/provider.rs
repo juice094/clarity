@@ -89,8 +89,42 @@ impl AuthType {
     }
 }
 
+/// Authentication mode for providers that support both token and password login.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthMode {
+    /// Authenticate with an explicit device / API token.
+    #[default]
+    Token,
+    /// Authenticate with mobile number + password.
+    Password,
+}
+
+impl AuthMode {
+    /// Returns the string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AuthMode::Token => "token",
+            AuthMode::Password => "password",
+        }
+    }
+
+    /// Parses from a string, defaulting to `Token`.
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "password" => Self::Password,
+            _ => Self::Token,
+        }
+    }
+
+    /// Returns true when this is password mode.
+    pub fn is_password(&self) -> bool {
+        matches!(self, Self::Password)
+    }
+}
+
 /// A single provider definition.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ProviderDefinition {
     /// Internal identifier (e.g. "openai", "my-custom").
     /// Used as the TOML section key and the `provider` field value.
@@ -145,6 +179,12 @@ pub struct ProviderDefinition {
     /// `clarity_secrets` store (`enc2:` prefix) so it is never persisted in plaintext.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password_enc: Option<String>,
+
+    /// Authentication mode for providers that support both token and password login
+    /// (currently only `deepseek-device`). Persisted so the UI does not flip back to
+    /// token mode while the user is typing a mobile number before the password is set.
+    #[serde(default)]
+    pub auth_mode: AuthMode,
 }
 
 /// Top-level TOML structure for a provider config file.
@@ -254,6 +294,8 @@ impl ProviderDefinition {
     /// Decrypt the stored password, if any.
     pub fn resolve_password(&self) -> Option<String> {
         let ciphertext = self.password_enc.as_ref()?;
+        // ponytail: failures to load the secret store or decrypt are silently
+        // treated as "no password"; callers validate presence before use.
         let store = clarity_llm::default_secret_store().ok()?;
         store.decrypt(ciphertext).ok()
     }
@@ -421,8 +463,7 @@ impl ProviderRegistry {
                 models: vec!["gpt-4o".into(), "gpt-4o-mini".into(), "gpt-4".into()],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "anthropic".into(),
@@ -435,8 +476,7 @@ impl ProviderRegistry {
                 models: vec!["claude-sonnet-4-20250514".into(), "claude-haiku-3-5".into()],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "deepseek".into(),
@@ -449,8 +489,7 @@ impl ProviderRegistry {
                 models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "deepseek-device".into(),
@@ -467,8 +506,7 @@ impl ProviderRegistry {
                 ],
                 builtin: true,
                 tags: vec!["chat-only".into()],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "kimi".into(),
@@ -481,8 +519,7 @@ impl ProviderRegistry {
                 models: vec!["kimi-k2-07132k".into()],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "kimi_code".into(),
@@ -495,8 +532,7 @@ impl ProviderRegistry {
                 models: vec!["kimi-k2.6".into()],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
             ProviderDefinition {
                 id: "local".into(),
@@ -509,8 +545,7 @@ impl ProviderRegistry {
                 models: vec![],
                 builtin: true,
                 tags: vec![],
-                mobile: String::new(),
-                password_enc: None,
+                ..Default::default()
             },
         ];
         for p in builtins {
@@ -651,6 +686,7 @@ mod tests {
             models: vec![],
             builtin: false,
             tags: vec![],
+            ..Default::default()
         };
         // No env var set → should return None
         assert!(def.resolve_api_key().is_none());
@@ -669,6 +705,7 @@ mod tests {
             models: vec![],
             builtin: false,
             tags: vec![],
+            ..Default::default()
         };
         assert_eq!(def.resolve_api_key(), Some("sk-mykey".into()));
     }
@@ -686,6 +723,7 @@ mod tests {
             models: vec![],
             builtin: false,
             tags: vec![],
+            ..Default::default()
         };
         assert_eq!(def.display(), "my-provider");
     }
@@ -719,6 +757,7 @@ models = ["model-a", "model-b"]
             models: vec!["kimi-k2.6".into()],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         let cfg: clarity_llm::ProviderConfig = (&def).into();
         assert_eq!(cfg.auth_type, clarity_llm::AuthType::OAuth);
@@ -738,6 +777,7 @@ models = ["model-a", "model-b"]
             models: vec![],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }
@@ -755,6 +795,7 @@ models = ["model-a", "model-b"]
             models: vec![],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         let err = def.validate_api_key_prefix().unwrap_err();
         assert!(err.contains("Anthropic"));
@@ -773,6 +814,7 @@ models = ["model-a", "model-b"]
             models: vec![],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }
@@ -790,6 +832,7 @@ models = ["model-a", "model-b"]
             models: vec![],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         let err = def.validate_api_key_prefix().unwrap_err();
         assert!(err.contains("sk-ant-"));
@@ -808,6 +851,7 @@ models = ["model-a", "model-b"]
             models: vec![],
             builtin: true,
             tags: vec![],
+            ..Default::default()
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }

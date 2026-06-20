@@ -1,5 +1,5 @@
 use crate::App;
-use crate::provider::{ApiFormat, ProviderDefinition, ProviderRegistry};
+use crate::provider::{ApiFormat, AuthMode, ProviderDefinition, ProviderRegistry};
 use crate::ui::types::{SessionContext, ToastLevel, UiEvent};
 
 use clarity_llm::runtime::{
@@ -242,54 +242,167 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.add_space(theme.space_8);
     }
 
-    // ── API Key (editable with show/hide) ──
-    let show_key_id = ui.id().with(&prov.id).with("show_key");
-    let mut show_key = ui.data(|d| d.get_temp::<bool>(show_key_id).unwrap_or(false));
-
-    ui.label(
-        egui::RichText::new("API Key")
-            .font(theme.font(theme.text_sm))
-            .color(theme.text_muted),
-    );
-    let key_edit_id = ui.id().with(&prov.id).with("api_key_edit");
-    let resolved_key = if prov.api_key_ref.starts_with("${env:") {
-        prov.resolve_api_key().unwrap_or_default()
-    } else {
-        prov.api_key_ref.clone()
-    };
-    let mut key_buffer = ui.data(|d| {
-        d.get_temp::<String>(key_edit_id)
-            .unwrap_or(resolved_key.clone())
-    });
-    ui.horizontal(|ui| {
-        let mut te = egui::TextEdit::singleline(&mut key_buffer)
-            .password(!show_key)
-            .desired_width(ui.available_width() - 50.0)
-            .font(theme.font(theme.text_base))
-            .frame(false);
-        if resolved_key.is_empty() {
-            te = te.hint_text("Enter API key...");
-        }
-        let resp = ui.add(te);
-        if resp.changed() {
-            ui.data_mut(|d| d.insert_temp(key_edit_id, key_buffer.clone()));
+    // ── Auth mode selector (deepseek-device only) ──
+    let is_deepseek_device = prov.id == "deepseek-device";
+    let mut is_password_mode = prov.auth_mode.is_password();
+    if is_deepseek_device {
+        ui.label(
+            egui::RichText::new("Auth Mode")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text_muted),
+        );
+        let modes = [(false, "Token"), (true, "Password")];
+        let cur = if is_password_mode { 1 } else { 0 };
+        let mut sel = cur;
+        egui::ComboBox::from_id_salt(format!("{}_auth_mode", prov.id))
+            .selected_text(modes[sel].1)
+            .show_ui(ui, |ui| {
+                for (i, (_, label)) in modes.iter().enumerate() {
+                    ui.selectable_value(&mut sel, i, *label);
+                }
+            });
+        if sel != cur {
             let mut updated = prov.clone();
-            updated.api_key_ref = key_buffer;
+            updated.auth_mode = if sel == 1 {
+                AuthMode::Password
+            } else {
+                AuthMode::Token
+            };
+            if sel == 1 {
+                // Switching to password: clear any saved token.
+                updated.api_key_ref.clear();
+            } else {
+                // Switching to token: clear encrypted password.
+                updated.clear_password();
+            }
+            let _ = app
+                .settings_store
+                .provider_registry
+                .update_provider(&updated);
+            is_password_mode = sel == 1;
+        }
+        ui.add_space(theme.space_8);
+    }
+
+    if !is_password_mode {
+        // ── API Key (editable with show/hide) ──
+        let show_key_id = ui.id().with(&prov.id).with("show_key");
+        let mut show_key = ui.data(|d| d.get_temp::<bool>(show_key_id).unwrap_or(false));
+
+        ui.label(
+            egui::RichText::new("API Key")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text_muted),
+        );
+        let key_edit_id = ui.id().with(&prov.id).with("api_key_edit");
+        let resolved_key = if prov.api_key_ref.starts_with("${env:") {
+            prov.resolve_api_key().unwrap_or_default()
+        } else {
+            prov.api_key_ref.clone()
+        };
+        let mut key_buffer = ui.data(|d| {
+            d.get_temp::<String>(key_edit_id)
+                .unwrap_or(resolved_key.clone())
+        });
+        ui.horizontal(|ui| {
+            let mut te = egui::TextEdit::singleline(&mut key_buffer)
+                .password(!show_key)
+                .desired_width(ui.available_width() - 50.0)
+                .font(theme.font(theme.text_base))
+                .frame(false);
+            if resolved_key.is_empty() {
+                te = te.hint_text("Enter API key...");
+            }
+            let resp = ui.add(te);
+            if resp.changed() {
+                ui.data_mut(|d| d.insert_temp(key_edit_id, key_buffer.clone()));
+                let mut updated = prov.clone();
+                updated.api_key_ref = key_buffer;
+                let _ = app
+                    .settings_store
+                    .provider_registry
+                    .update_provider(&updated);
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let eye_text = if show_key { "Hide" } else { "Show" };
+                if ui.add(theme.ghost_button(eye_text)).clicked() {
+                    show_key = !show_key;
+                    ui.data_mut(|d| d.insert_temp(show_key_id, show_key));
+                }
+            });
+        });
+
+        ui.add_space(theme.space_8);
+    } else {
+        // ── Mobile + Password login ──
+        ui.label(
+            egui::RichText::new("Mobile")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text_muted),
+        );
+        let mobile_edit_id = ui.id().with(&prov.id).with("mobile_edit");
+        let mut mobile_buffer = ui.data(|d| {
+            d.get_temp::<String>(mobile_edit_id)
+                .unwrap_or(prov.mobile.clone())
+        });
+        let mobile_resp = ui.add(
+            egui::TextEdit::singleline(&mut mobile_buffer)
+                .desired_width(ui.available_width())
+                .font(theme.font(theme.text_base))
+                .frame(false)
+                .hint_text("+86 13800138000"),
+        );
+        if mobile_resp.changed() {
+            ui.data_mut(|d| d.insert_temp(mobile_edit_id, mobile_buffer.clone()));
+            let mut updated = prov.clone();
+            updated.mobile = mobile_buffer;
             let _ = app
                 .settings_store
                 .provider_registry
                 .update_provider(&updated);
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let eye_text = if show_key { "Hide" } else { "Show" };
-            if ui.add(theme.ghost_button(eye_text)).clicked() {
-                show_key = !show_key;
-                ui.data_mut(|d| d.insert_temp(show_key_id, show_key));
-            }
-        });
-    });
+        ui.add_space(theme.space_8);
 
-    ui.add_space(theme.space_8);
+        ui.label(
+            egui::RichText::new("Password")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text_muted),
+        );
+        let password_edit_id = ui.id().with(&prov.id).with("password_edit");
+        let mut password_buffer =
+            ui.data(|d| d.get_temp::<String>(password_edit_id).unwrap_or_default());
+        let password_resp = ui.add(
+            egui::TextEdit::singleline(&mut password_buffer)
+                .password(true)
+                .desired_width(ui.available_width())
+                .font(theme.font(theme.text_base))
+                .frame(false)
+                .hint_text("Enter password..."),
+        );
+        if password_resp.changed() {
+            ui.data_mut(|d| d.insert_temp(password_edit_id, password_buffer.clone()));
+        }
+        if password_resp.lost_focus() && !password_buffer.is_empty() {
+            let mut updated = prov.clone();
+            if let Err(e) = updated.set_password(&password_buffer) {
+                app.push_toast(e, ToastLevel::Error);
+            } else {
+                let _ = app
+                    .settings_store
+                    .provider_registry
+                    .update_provider(&updated);
+            }
+        }
+        if prov.password_enc.is_some() {
+            ui.label(
+                egui::RichText::new("Password saved (encrypted)")
+                    .size(theme.text_xs)
+                    .color(theme.ok),
+            );
+        }
+
+        ui.add_space(theme.space_8);
+    }
 
     // ── Base URL (editable) ──
     ui.label(
@@ -593,6 +706,37 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             } else if is_chat_only {
                 // Chat-only providers (e.g. deepseek-device) are loaded through the
                 // ModelRegistry rather than the runtime active-config pipeline.
+                if current == "deepseek-device" && is_password_mode {
+                    // Flush any password that has been typed but not yet encrypted
+                    // (e.g. the user clicked Apply without unfocusing the field).
+                    let password_edit_id = ui.id().with(&current).with("password_edit");
+                    if let Some(password_buffer) =
+                        ui.data(|d| d.get_temp::<String>(password_edit_id))
+                    {
+                        if !password_buffer.is_empty() {
+                            if let Some(mut updated) = prov.clone() {
+                                if let Err(e) = updated.set_password(&password_buffer) {
+                                    app.push_toast(e, ToastLevel::Error);
+                                } else {
+                                    let _ = app
+                                        .settings_store
+                                        .provider_registry
+                                        .update_provider(&updated);
+                                }
+                            }
+                        }
+                    }
+                    let prov = app.settings_store.provider_registry.get(&current).cloned();
+                    let mobile = prov.as_ref().map(|p| p.mobile.clone()).unwrap_or_default();
+                    let has_password = prov.as_ref().and_then(|p| p.resolve_password()).is_some();
+                    if mobile.is_empty() || !has_password {
+                        app.push_toast(
+                            "DeepSeek (Device) password mode requires mobile and password",
+                            ToastLevel::Warn,
+                        );
+                        return;
+                    }
+                }
                 app.auto_save_settings();
                 app.push_toast(
                     format!("Applied: {} / {} (registry-backed)", display_name, model),
@@ -715,6 +859,7 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                             models: vec![],
                             builtin: false,
                             tags: vec![],
+                            ..Default::default()
                         };
                         match def.validate_api_key_prefix() {
                             Err(e) => app.push_toast(e, ToastLevel::Warn),
