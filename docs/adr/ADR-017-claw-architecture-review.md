@@ -125,6 +125,47 @@ Implications:
 
 **Adopt Model A: `SessionContext` is the mode.** It matches the data model that already exists after the cleanup, eliminates the orphaned `AppView::Work`, and avoids the global-mode UI bugs we just removed. The left sidebar should be a neutral navigation tree; mode is determined by which session you open.
 
+## Role-Based Claw: From Device-Centric to Role-Centric
+
+A further refinement for Claw: Clarity itself is intended to be a living node in a distributed system. The long-term model is therefore not "instance 1 → device 1" but "role 1 → device n".
+
+### Concepts
+
+- **Role**: a capability/permission set, e.g. `operator`, `executor`, `observer`.
+- **DeviceInstance**: a concrete Clarity/Gateway node that fulfills a role. Many devices can share one role.
+- **SessionContext::Claw**: a session is bound to a **role** and a **Gateway session key**, with an affinity hint for stateful routing.
+
+### Proposed `SessionContext::Claw` shape
+
+```rust
+pub enum DeviceAffinity {
+    /// Any online instance of the role may handle this message.
+    AnyOnline,
+    /// Pin this session to a specific device instance.
+    Specific(String),
+}
+
+pub struct ClawContext {
+    pub role: String,
+    pub session_key: String,
+    pub affinity: DeviceAffinity,
+}
+
+SessionContext::Claw(ClawContext)
+```
+
+### Why this matters
+
+- A role can have failover: if one device goes offline, another instance of the same role can take over the same `session_key`.
+- Stateful tool calls can request `Specific(device_id)` affinity.
+- It aligns with the existing `Coordinator`/`CapabilityRegistry` skeleton in `clarity-claw` and `FederationMessage` in `clarity-contract`.
+
+### Staged adoption
+
+1. **Stage 1 (now)**: add `role`, `session_key`, and `affinity` to `SessionContext::Claw`, but default `affinity` to `Specific(device_id)` and derive `role` from the active bot. Behavior remains identical to the old single-device model.
+2. **Stage 2**: group `BotInstance`s by role in `DeviceState`, implement `pick_instance(role, affinity)` with basic liveness.
+3. **Stage 3**: wire `clarity-claw::Coordinator` and Gateway device registry into a real distributed role/liveness layer.
+
 ## Options for the Claw Runtime
 
 Given Model A, we can evaluate the runtime refactor options.
@@ -185,9 +226,11 @@ Cons:
 2. **Do not refactor `ClawClient` runtime yet.**
    - First fix the protocol mismatch for ZeroClaw or explicitly decide that ZeroClaw in egui should not use WebSocket at all (e.g., use Gateway HTTP polling like the tray daemon does).
 
-3. **Introduce explicit session-to-device binding.**
-   - When a session is created with `SessionContext::Claw { device_id }`, store the device id and the Gateway session key.
-   - The send path should use that key, not `"agent:main:main"`.
+3. **Introduce explicit role + session-key binding (Stage 1).**
+   - Replace `SessionContext::Claw { device_id }` with `SessionContext::Claw { role, session_key, affinity }`.
+   - Default `affinity` to `Specific(device_id)` and derive `role` from the active bot, so current single-device behavior is preserved.
+   - Update the send/history/subscribe paths to use `session_key` instead of the hard-coded `"agent:main:main"`.
+   - Keep `DeviceState` as a flat list for now; role grouping and instance picking come in Stage 2.
 
 4. **Revisit after ADR-016 Pretext layout is further along.**
    - The left sidebar and right rail are being redesigned. Claw device selection and claw-specific tools should fit into the new three-column layout before we invest in a deep transport refactor.
