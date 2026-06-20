@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::App;
 use crate::app_state::AppState;
-use crate::session::{load_sessions, new_session, save_session_internal, session_path};
+use crate::session::{load_sessions, new_session, save_session_internal};
 use crate::settings::GuiSettings;
 use crate::theme::Theme;
 use crate::ui::types::*;
@@ -644,79 +644,6 @@ impl App {
             }
         }
     }
-    /// Switch category.
-    #[allow(dead_code)]
-    pub(crate) fn switch_category(&mut self, category: &str) {
-        if self.session_store.active_category == category {
-            return;
-        }
-        let old_id = self.session_store.active_session_id.clone();
-
-        // Discard empty sessions when switching categories so they don't
-        // clutter the tab bar with blank tabs.
-        let was_empty = self
-            .session_store
-            .active_session()
-            .map(|s| s.messages.is_empty())
-            .unwrap_or(false);
-        if was_empty {
-            let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadDeleted {
-                thread_id: old_id.clone(),
-            });
-            self.session_store.drafts.remove(&old_id);
-        } else {
-            self.save_current_session();
-            if !self.chat_store.input.trim().is_empty() {
-                self.session_store
-                    .drafts
-                    .insert(old_id, self.chat_store.input.clone());
-            } else {
-                self.session_store.drafts.remove(&old_id);
-            }
-        }
-
-        self.session_store.active_category = category.to_string();
-
-        // Emotion is singleton: refuse to create multiple emotion sessions.
-        let target = if category == "emotion" {
-            self.session_store
-                .sessions
-                .iter()
-                .find(|s| s.category == "emotion")
-                .cloned()
-        } else {
-            self.session_store
-                .sessions
-                .iter()
-                .find(|s| s.category == category)
-                .cloned()
-        };
-
-        if let Some(s) = target {
-            let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadActive {
-                thread_id: s.id.clone(),
-                title: Some(s.title.clone()),
-            });
-            self.process_events();
-            self.chat_store.input = self.session_store.drafts.remove(&s.id).unwrap_or_default();
-            self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
-        } else {
-            let count = self
-                .session_store
-                .sessions
-                .iter()
-                .filter(|s| s.category == category)
-                .count();
-            let s = new_session(category, count);
-            let _ = self
-                .ui_tx
-                .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
-            self.process_events();
-            self.chat_store.input = String::new();
-        }
-        self.chat_store.last_usage = None;
-    }
-
     /// Creates a new session.
     pub(crate) fn new_session(&mut self) {
         let category = self.session_store.active_category.clone();
@@ -901,15 +828,6 @@ impl App {
         }
     }
 
-    /// S6 Phase C: persist the current plugin order.
-    #[allow(dead_code)]
-    pub(crate) fn persist_plugin_order(&mut self, order: Vec<String>) {
-        self.settings_store.settings_edit.plugin_order = order;
-        if let Err(e) = self.commit_settings() {
-            tracing::warn!("Failed to persist plugin order: {}", e);
-        }
-    }
-
     /// Propagate the current `settings_edit.approval_mode` to the agent and
     /// the mode-aware approval runtime. Idempotent.
     pub(crate) fn apply_approval_mode_to_runtime(&self) {
@@ -950,14 +868,6 @@ impl App {
         self.apply_approval_mode_to_runtime();
     }
 
-    /// Save settings to disk without reloading LLM.
-    #[allow(dead_code)]
-    pub(crate) fn save_settings_internal(&self) {
-        if let Err(e) = self.commit_settings() {
-            tracing::error!("Failed to save settings: {}", e);
-        }
-    }
-
     /// Increase the global font scale by one step, persist, and re-apply the theme.
     pub(crate) fn increase_font_scale(&mut self) {
         let current = self
@@ -992,37 +902,6 @@ impl App {
             crate::theme::Theme::dark().with_font_scale(scale)
         };
         self.auto_save_settings();
-    }
-
-    /// Delete session.
-    #[allow(dead_code)]
-    pub(crate) fn delete_session(&mut self, id: String) {
-        // Event-driven deletion: the centralized handler updates SessionStore so
-        // future backend ThreadDeleted wire messages use the same path.
-        let _ = self.ui_tx.send(crate::ui::types::UiEvent::ThreadDeleted {
-            thread_id: id.clone(),
-        });
-        self.process_events();
-
-        self.session_store.drafts.remove(&id);
-        if let Err(e) = std::fs::remove_file(session_path(&id)) {
-            tracing::warn!("Failed to remove session file: {}", e);
-        }
-        if self.session_store.sessions.is_empty() {
-            self.new_session();
-            return;
-        }
-
-        // If the handler moved activation to a different session, restore its
-        // draft only when the user is not actively typing (prevents race).
-        let active_id = self.session_store.active_session_id.clone();
-        if active_id != id && self.chat_store.input.is_empty() {
-            self.chat_store.input = self
-                .session_store
-                .drafts
-                .remove(&active_id)
-                .unwrap_or_default();
-        }
     }
 
     /// Set a session's archived flag.
