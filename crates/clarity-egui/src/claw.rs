@@ -24,6 +24,7 @@
 
 use crate::settings::{GuiSettings, OpenClawAuthMode, OpenClawConnection};
 use crate::stores::ui::{BotInstance, BotStatus};
+use crate::ui::types::DeviceAffinity;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -34,9 +35,13 @@ pub use clarity_openclaw::types::{ClawConnection, ClawType};
 // ── DeviceState ────────────────────────────────────────────────────────
 
 /// Aggregated device list + per-device connection parameters.
+///
+/// Devices are stored grouped by their `role` so that role-based routing can
+/// pick an instance without scanning a flat list on every frame.
 #[derive(Clone)]
 pub struct DeviceState {
-    devices: Arc<RwLock<Vec<BotInstance>>>,
+    /// role → devices with that role
+    roles: Arc<RwLock<HashMap<String, Vec<BotInstance>>>>,
     /// device_id → connection info
     connections: Arc<RwLock<HashMap<String, ClawConnection>>>,
 }
@@ -44,7 +49,7 @@ pub struct DeviceState {
 impl Default for DeviceState {
     fn default() -> Self {
         Self {
-            devices: Arc::new(RwLock::new(Vec::new())),
+            roles: Arc::new(RwLock::new(HashMap::new())),
             connections: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -52,8 +57,45 @@ impl Default for DeviceState {
 
 impl DeviceState {
     /// Snapshot of the current device list for the UI thread.
+    ///
+    /// Returns a flat, deterministic ordering: sorted role name, then sorted
+    /// device id. This preserves compatibility with panels that expect a
+    /// one-dimensional list.
     pub fn snapshot(&self) -> Vec<BotInstance> {
-        self.devices.read().map(|g| g.clone()).unwrap_or_default()
+        let guard = match self.roles.read() {
+            Ok(g) => g,
+            Err(_) => return Vec::new(),
+        };
+        let mut role_names: Vec<String> = guard.keys().cloned().collect();
+        role_names.sort();
+        let mut out = Vec::new();
+        for role in role_names {
+            if let Some(devices) = guard.get(&role) {
+                let mut sorted = devices.clone();
+                sorted.sort_by(|a, b| a.id.cmp(&b.id));
+                out.extend(sorted);
+            }
+        }
+        out
+    }
+
+    /// Snapshot grouped by role, useful for UI sections that render devices
+    /// under role headings.
+    pub fn snapshot_grouped(&self) -> Vec<(String, Vec<BotInstance>)> {
+        let guard = match self.roles.read() {
+            Ok(g) => g,
+            Err(_) => return Vec::new(),
+        };
+        let mut role_names: Vec<String> = guard.keys().cloned().collect();
+        role_names.sort();
+        role_names
+            .into_iter()
+            .filter_map(|role| {
+                let mut devices = guard.get(&role)?.clone();
+                devices.sort_by(|a, b| a.id.cmp(&b.id));
+                Some((role, devices))
+            })
+            .collect()
     }
 
     /// Look up connection parameters for a device.
@@ -69,10 +111,71 @@ impl DeviceState {
         })
     }
 
+    /// Pick a bot instance for a Claw session according to the requested role
+    /// and affinity.
+    ///
+    /// - `Specific(device_id)`: returns the device with that id, preferring the
+    ///   requested role but falling back to a search across all roles. If the
+    ///   device is offline it is still returned in Stage 2.
+    /// - `AnyOnline`: returns the first device in the requested role whose
+    ///   status is `Online` or `Syncing`.
+    pub fn pick_instance(&self, role: &str, affinity: &DeviceAffinity) -> Option<BotInstance> {
+        let guard = self.roles.read().ok()?;
+        match affinity {
+            DeviceAffinity::Specific(device_id) => {
+                // Prefer the requested device if it is still alive.
+                let preferred = guard.get(role).into_iter();
+                let others = guard
+                    .iter()
+                    .filter(|(r, _)| r.as_str() != role)
+                    .map(|(_, v)| v);
+                if let Some(device) = preferred
+                    .chain(others)
+                    .flat_map(|v| v.iter())
+                    .find(|b| b.id == *device_id && !matches!(b.status, BotStatus::Offline))
+                {
+                    return Some(device.clone());
+                }
+                // Pinned device is offline or missing — failover to any online/syncing
+                // instance of the requested role.
+                guard.get(role).and_then(|devices| {
+                    devices
+                        .iter()
+                        .find(|b| matches!(b.status, BotStatus::Online | BotStatus::Syncing))
+                        .cloned()
+                })
+            }
+            DeviceAffinity::AnyOnline => guard.get(role).and_then(|devices| {
+                devices
+                    .iter()
+                    .find(|b| matches!(b.status, BotStatus::Online | BotStatus::Syncing))
+                    .cloned()
+            }),
+        }
+    }
+
+    /// Update the status of a device by id.
+    ///
+    /// Called by the connection loop when a device goes offline or comes back
+    /// online.
+    pub fn update_status(&self, device_id: &str, status: BotStatus) {
+        if let Ok(mut guard) = self.roles.write() {
+            for devices in guard.values_mut() {
+                if let Some(device) = devices.iter_mut().find(|d| d.id == device_id) {
+                    device.status = status;
+                    break;
+                }
+            }
+        }
+    }
+
     /// Add a device with its connection info.
     fn register(&self, device: BotInstance, conn: ClawConnection) {
-        if let Ok(mut devs) = self.devices.write() {
-            devs.push(device.clone());
+        if let Ok(mut guard) = self.roles.write() {
+            guard
+                .entry(device.role.clone())
+                .or_default()
+                .push(device.clone());
         }
         if let Ok(mut conns) = self.connections.write() {
             conns.insert(device.id, conn);
@@ -323,6 +426,149 @@ mod tests {
             enabled: true,
             device_token: None,
         }
+    }
+
+    fn bot(id: &str, role: &str, status: BotStatus) -> BotInstance {
+        BotInstance {
+            id: id.into(),
+            name: format!("Bot {}", id),
+            device_id: id.into(),
+            role: role.into(),
+            status,
+            version: "0.0.0".into(),
+            last_backup: String::new(),
+        }
+    }
+
+    fn conn(id: &str) -> ClawConnection {
+        ClawConnection {
+            claw_type: ClawType::ZeroClaw,
+            gateway_url: format!("http://{}", id),
+            gateway_token: String::new(),
+            workspace_root: std::env::current_dir().unwrap_or_default(),
+            host: id.into(),
+            auth_mode: None,
+            device_token: None,
+        }
+    }
+
+    #[test]
+    fn test_devices_grouped_by_role() {
+        let state = DeviceState::default();
+        state.register(bot("a-op-1", "operator", BotStatus::Online), conn("a-op-1"));
+        state.register(
+            bot("a-coder-1", "coder", BotStatus::Online),
+            conn("a-coder-1"),
+        );
+        state.register(
+            bot("a-op-2", "operator", BotStatus::Offline),
+            conn("a-op-2"),
+        );
+
+        let grouped = state.snapshot_grouped();
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].0, "coder");
+        assert_eq!(grouped[0].1.len(), 1);
+        assert_eq!(grouped[1].0, "operator");
+        assert_eq!(grouped[1].1.len(), 2);
+
+        // Flat snapshot is sorted by role then id.
+        let flat = state.snapshot();
+        let ids: Vec<_> = flat.iter().map(|b| b.id.as_str()).collect();
+        assert_eq!(ids, vec!["a-coder-1", "a-op-1", "a-op-2"]);
+    }
+
+    #[test]
+    fn test_pick_instance_specific() {
+        let state = DeviceState::default();
+        state.register(bot("op-1", "operator", BotStatus::Online), conn("op-1"));
+        state.register(bot("coder-1", "coder", BotStatus::Online), conn("coder-1"));
+
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::Specific("op-1".into()))
+            .expect("finds specific operator device");
+        assert_eq!(picked.id, "op-1");
+
+        // Searching within a role that does not contain the id falls back to
+        // other roles.
+        let cross = state
+            .pick_instance("operator", &DeviceAffinity::Specific("coder-1".into()))
+            .expect("falls back across roles");
+        assert_eq!(cross.id, "coder-1");
+
+        // A missing pinned id falls back to the first online/syncing device in
+        // the requested role.
+        let missing = state
+            .pick_instance("operator", &DeviceAffinity::Specific("missing".into()))
+            .expect("falls back to online device in role");
+        assert_eq!(missing.id, "op-1");
+    }
+
+    #[test]
+    fn test_pick_instance_any_online() {
+        let state = DeviceState::default();
+        state.register(
+            bot("op-off", "operator", BotStatus::Offline),
+            conn("op-off"),
+        );
+        state.register(
+            bot("op-sync", "operator", BotStatus::Syncing),
+            conn("op-sync"),
+        );
+        state.register(bot("op-on", "operator", BotStatus::Online), conn("op-on"));
+
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::AnyOnline)
+            .expect("finds online or syncing device");
+        // Devices are kept in registration order; the first online/syncing
+        // device is op-sync.
+        assert_eq!(picked.id, "op-sync");
+        assert!(matches!(
+            picked.status,
+            BotStatus::Online | BotStatus::Syncing
+        ));
+    }
+
+    #[test]
+    fn test_pick_instance_specific_failover_to_online() {
+        let state = DeviceState::default();
+        state.register(
+            bot("op-off", "operator", BotStatus::Offline),
+            conn("op-off"),
+        );
+        state.register(
+            bot("op-sync", "operator", BotStatus::Syncing),
+            conn("op-sync"),
+        );
+        state.register(bot("op-on", "operator", BotStatus::Online), conn("op-on"));
+
+        // Pinned offline device fails over to the first online/syncing device
+        // in the same role.
+        let picked = state
+            .pick_instance("operator", &DeviceAffinity::Specific("op-off".into()))
+            .expect("fails over to online/syncing device");
+        assert_eq!(picked.id, "op-sync");
+
+        // A missing pinned id also falls back to the first online/syncing role
+        // device.
+        let missing = state
+            .pick_instance("operator", &DeviceAffinity::Specific("missing".into()))
+            .expect("fails over to online/syncing device");
+        assert_eq!(missing.id, "op-sync");
+    }
+
+    #[test]
+    fn test_update_status() {
+        let state = DeviceState::default();
+        state.register(bot("op-1", "operator", BotStatus::Online), conn("op-1"));
+
+        state.update_status("op-1", BotStatus::Offline);
+        let flat = state.snapshot();
+        assert_eq!(flat[0].status, BotStatus::Offline);
+
+        state.update_status("missing", BotStatus::Syncing);
+        // No panic and existing device unchanged.
+        assert_eq!(state.snapshot()[0].status, BotStatus::Offline);
     }
 
     #[test]

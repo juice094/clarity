@@ -604,19 +604,21 @@ impl App {
             .active_session()
             .map(|s| match &s.context {
                 SessionContext::Claw {
-                    role: _,
+                    role,
                     session_key,
                     affinity,
                 } => {
-                    let target = match affinity {
-                        DeviceAffinity::Specific(device_id)
-                            if self.device_state.connection(device_id).is_some() =>
-                        {
-                            device_id.clone()
+                    let target = self.device_state.pick_instance(role, affinity);
+                    if let Some(ref bot) = target {
+                        // Make sure the active bot matches the picked instance
+                        // before the message goes out.
+                        if self.ui_store.active_bot_id != bot.id {
+                            self.ui_store.active_bot_id = bot.id.clone();
                         }
-                        _ => self.ui_store.active_bot_id.clone(),
-                    };
-                    (session_key.clone(), target)
+                        (session_key.clone(), bot.id.clone())
+                    } else {
+                        (session_key.clone(), self.ui_store.active_bot_id.clone())
+                    }
                 }
                 _ => (
                     "agent:main:main".to_string(),
@@ -630,15 +632,13 @@ impl App {
                 )
             });
 
-        // ponytail: target_bot_id is resolved but not used for routing in Stage 1
-        // because the active WebSocket connection is still single-device. Log any
-        // mismatch so future multi-device affinity work has a visible signal.
-        if !target_bot_id.is_empty() && target_bot_id != self.ui_store.active_bot_id {
-            tracing::debug!(
-                "Claw send affinity target {} differs from active bot {}",
-                target_bot_id,
-                self.ui_store.active_bot_id
-            );
+        // ponytail: in Stage 2 we route through the resolved target. The main
+        // loop's connection manager will reconnect if the active bot changed.
+        if target_bot_id.is_empty() {
+            let _ = self
+                .ui_tx
+                .send(UiEvent::Error("No Claw device available".into()));
+            return;
         }
 
         // Responses arrive asynchronously via claw_ws.drain(); the main loop

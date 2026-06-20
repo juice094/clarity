@@ -1084,9 +1084,25 @@ impl eframe::App for App {
 
             // Manage WebSocket connection: connect/reconnect when the active
             // Claw device changes or when the connection drops.
+            //
+            // For Claw sessions, use role-based routing to pick the best device
+            // and make it the active bot. Non-Claw sessions continue to use the
+            // flat active bot selection.
             let active_id = &self.ui_store.active_bot_id;
-            if active_id != &self.claw_ws_device_id || self.claw_ws.is_none() {
-                if let Some(conn) = self.device_state.connection(active_id) {
+            let picked_id = self
+                .session_store
+                .active_session()
+                .and_then(|s| match &s.context {
+                    crate::ui::types::SessionContext::Claw { role, affinity, .. } => self
+                        .device_state
+                        .pick_instance(role, affinity)
+                        .map(|b| b.id),
+                    _ => None,
+                })
+                .unwrap_or_else(|| active_id.clone());
+
+            if picked_id != self.claw_ws_device_id || self.claw_ws.is_none() {
+                if let Some(conn) = self.device_state.connection(&picked_id) {
                     if !conn.gateway_token.is_empty() {
                         let ws_url = if conn.gateway_url.starts_with("ws://")
                             || conn.gateway_url.starts_with("wss://")
@@ -1198,7 +1214,10 @@ impl eframe::App for App {
                                 &conn.gateway_token,
                             ))
                         };
-                        self.claw_ws_device_id = active_id.clone();
+                        self.claw_ws_device_id = picked_id.clone();
+                        if self.ui_store.active_bot_id != picked_id {
+                            self.ui_store.active_bot_id = picked_id.clone();
+                        }
                         self.claw_ws_uses_sessions_send = is_remote;
                     }
                 }
@@ -1237,6 +1256,17 @@ impl eframe::App for App {
                                 ws.subscribe_session(&session_key);
                                 ws.subscribe_messages(&session_key);
                                 ws.fetch_history(&session_key);
+                            }
+                            // Pin the active Claw session to this device so the
+                            // connection manager keeps routing to the new instance.
+                            if let Some(session) = self.session_store.active_session_mut() {
+                                if let crate::ui::types::SessionContext::Claw { affinity, .. } =
+                                    &mut session.context
+                                {
+                                    *affinity = crate::ui::types::DeviceAffinity::Specific(
+                                        self.claw_ws_device_id.clone(),
+                                    );
+                                }
                             }
                         }
                         clarity_openclaw::client::ClawResponse::HistoryLoaded {
@@ -1352,6 +1382,25 @@ impl eframe::App for App {
                             event_type,
                             payload,
                         } => {
+                            if event_type == "openclaw.reconnect_pending" {
+                                let failed_device = self.claw_ws_device_id.clone();
+                                if !failed_device.is_empty() {
+                                    self.device_state.update_status(
+                                        &failed_device,
+                                        crate::stores::ui::BotStatus::Offline,
+                                    );
+                                    self.push_toast(
+                                        format!(
+                                            "Claw device {} went offline; failing over",
+                                            failed_device
+                                        ),
+                                        crate::ui::types::ToastLevel::Warn,
+                                    );
+                                }
+                                self.claw_ws = None;
+                                self.claw_ws_device_id.clear();
+                                continue;
+                            }
                             if matches!(
                                 event_type.as_str(),
                                 "done" | "finished" | "turn_end" | "message_end"
@@ -1401,8 +1450,15 @@ impl eframe::App for App {
                                 "OpenClaw connection error: {}",
                                 e
                             )));
+                            let failed_device = self.claw_ws_device_id.clone();
                             self.claw_ws = None;
                             self.claw_ws_device_id.clear();
+                            if !failed_device.is_empty() {
+                                self.device_state.update_status(
+                                    &failed_device,
+                                    crate::stores::BotStatus::Offline,
+                                );
+                            }
                         }
                     }
                 }

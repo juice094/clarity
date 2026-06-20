@@ -691,11 +691,9 @@ impl App {
         if self.is_claw_active() {
             let active_bot_id = self.ui_store.active_bot_id.clone();
             let role = self
-                .ui_store
-                .bot_instances
-                .iter()
-                .find(|b| b.id == active_bot_id)
-                .map(|b| b.role.clone())
+                .device_state
+                .pick_instance("operator", &DeviceAffinity::Specific(active_bot_id.clone()))
+                .map(|b| b.role)
                 .unwrap_or_else(|| "operator".to_string());
             let session_key = format!("agent:main:{}", uuid::Uuid::new_v4());
             return SessionContext::Claw {
