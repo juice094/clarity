@@ -7,10 +7,11 @@ param(
     [string]$Target = "--all",
     
     [switch]$Report,
-    [switch]$Strict
+    [switch]$Strict,
+    [switch]$TechDebtScan
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $StartTime = Get-Date
 
 # 颜色设置
@@ -67,10 +68,10 @@ function Test-Crate($crateName) {
     # 检查 2: 编译
     Write-Host "`n  [2/5] 编译检查..." -ForegroundColor Yellow
     $compileTime = Measure-Command {
-        $compileOutput = cargo check -p $crateName 2>&1
+        $compileOutput = cargo check -p $crateName -q 2>&1
         $compileExit = $LASTEXITCODE
     }
-    
+
     $compilePass = $compileExit -eq 0
     $result.Checks.Compile = @{
         Status = if ($compilePass) { "PASS" } else { "FAIL" }
@@ -80,26 +81,28 @@ function Test-Crate($crateName) {
     if (-not $compilePass) {
         Write-Host "     错误: $compileOutput" -ForegroundColor Red
     }
-    
+
     # 检查 3: 单元测试
     Write-Host "`n  [3/5] 单元测试..." -ForegroundColor Yellow
     $testTime = Measure-Command {
-        $testOutput = cargo test -p $crateName 2>&1
+        $testOutput = cargo test -p $crateName --quiet 2>&1
         $testExit = $LASTEXITCODE
     }
-    
-    # 解析测试结果
+
+    # 解析测试结果（lib + bin 可能有多行 result，累加）
     $testSummary = $testOutput | Select-String "test result:"
     $passed = 0
     $failed = 0
     $ignored = 0
-    
-    if ($testSummary -match "(\d+) passed.*?(\d+) failed.*?(\d+) ignored") {
-        $passed = [int]$matches[1]
-        $failed = [int]$matches[2]
-        $ignored = [int]$matches[3]
+
+    foreach ($line in $testSummary) {
+        if ($line -match "(\d+) passed.*?(\d+) failed.*?(\d+) ignored") {
+            $passed += [int]$matches[1]
+            $failed += [int]$matches[2]
+            $ignored += [int]$matches[3]
+        }
     }
-    
+
     $testPass = $testExit -eq 0 -and $failed -eq 0
     $result.Checks.Test = @{
         Status = if ($testPass) { "PASS" } else { "FAIL" }
@@ -115,12 +118,12 @@ function Test-Crate($crateName) {
             Write-Host "     $ft" -ForegroundColor Red
         }
     }
-    
+
     # 检查 4: Clippy
     Write-Host "`n  [4/5] Clippy 检查..." -ForegroundColor Yellow
-    $clippyOutput = cargo clippy -p $crateName -- -D warnings 2>&1
+    $clippyOutput = cargo clippy -p $crateName --quiet -- -D warnings 2>&1
     $clippyExit = $LASTEXITCODE
-    
+
     $clippyPass = $clippyExit -eq 0
     $result.Checks.Clippy = @{
         Status = if ($clippyPass) { "PASS" } else { "FAIL" }
@@ -133,7 +136,7 @@ function Test-Crate($crateName) {
             Write-Host "     $w" -ForegroundColor Red
         }
     }
-    
+
     # 检查 5: 代码格式化
     Write-Host "`n  [5/5] 格式化检查..." -ForegroundColor Yellow
     $fmtOutput = cargo fmt -p $crateName -- --check 2>&1
@@ -177,9 +180,17 @@ Write-Host "  时间: $($StartTime.ToString("yyyy-MM-dd HH:mm:ss"))" -Foreground
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
+# 实验性 / 不参与默认 CI 的 crate 列表
+$SkippedCrates = @("clarity-slint")
+
 # 确定要验证的 crates
 if ($Target -eq "--all") {
-    $Crates = Get-ChildItem -Directory "crates/*" | ForEach-Object { $_.Name }
+    # 从 cargo metadata 读取 workspace members，自动尊重 Cargo.toml 的 exclude 列表
+    $metadata = cargo metadata --no-deps --format-version=1 -q 2>&1 | ConvertFrom-Json
+    $Crates = $metadata.packages |
+        Where-Object { $_.manifest_path -like "$ProjectRoot\crates\*" -and $SkippedCrates -notcontains $_.name } |
+        ForEach-Object { $_.name } |
+        Sort-Object
 } else {
     $Crates = @($Target)
 }
@@ -210,6 +221,24 @@ if ($cargoModulesAvailable) {
 } else {
     Write-Host "  ⚠️ cargo-modules 未安装，跳过模块结构检查" -ForegroundColor Yellow
     Write-Host "     安装: cargo install cargo-modules" -ForegroundColor Gray
+}
+
+# 可选：技术债务扫描
+if ($TechDebtScan) {
+    Write-Host "`n  [Optional] Tech Debt Scan" -ForegroundColor Yellow
+    $scanScript = Join-Path $PSScriptRoot 'tech-debt-scan.ps1'
+    if (Test-Path $scanScript) {
+        try {
+            $scanResult = & pwsh -NoProfile -ExecutionPolicy Bypass -File $scanScript -Model qwen2.5:7b 2>&1 | Out-String
+            $scanJson = $scanResult | ConvertFrom-Json -AsHashtable
+            Write-Result "Tech debt scan" $true "open=$($scanJson.state.total_debt_open) new=$($scanJson.new_findings)"
+        }
+        catch {
+            Write-Result "Tech debt scan" $false "$_"
+        }
+    } else {
+        Write-Host "  ⚠️ tech-debt-scan.ps1 不存在，跳过" -ForegroundColor Yellow
+    }
 }
 
 # 生成报告
