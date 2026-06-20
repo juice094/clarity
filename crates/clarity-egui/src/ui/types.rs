@@ -43,6 +43,11 @@ pub enum UiEvent {
     DraftContent {
         text: String,
     },
+    /// A reasoning/thinking chunk that should be persisted as a collapsible block
+    /// in the current assistant message.
+    ReasoningChunk {
+        text: String,
+    },
     /// A new agent turn has begun. Carries the user input for confirmation / telemetry.
     TurnStart {
         user_input: String,

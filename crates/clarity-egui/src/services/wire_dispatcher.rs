@@ -20,6 +20,9 @@ pub fn dispatch_wire_payload(payload: &serde_json::Value, tx: &mpsc::Sender<UiEv
 pub fn dispatch_wire_message(msg: clarity_wire::WireMessage, tx: &mpsc::Sender<UiEvent>) {
     let event = match msg {
         clarity_wire::WireMessage::ContentPart { text, .. } => Some(UiEvent::Chunk(text)),
+        clarity_wire::WireMessage::ReasoningPart { text, .. } => {
+            Some(UiEvent::ReasoningChunk { text })
+        }
         clarity_wire::WireMessage::DraftEvent { event, .. } => match event {
             clarity_wire::DraftEvent::Progress { text } => Some(UiEvent::DraftProgress { text }),
             clarity_wire::DraftEvent::Clear => Some(UiEvent::DraftClear),

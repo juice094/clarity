@@ -39,6 +39,8 @@ pub enum ApiFormat {
     AnthropicMessages,
     /// Native Kimi API.
     Kimi,
+    /// DeepSeek device-login native API (chat-only).
+    DeepSeekDevice,
 }
 
 impl ApiFormat {
@@ -48,6 +50,7 @@ impl ApiFormat {
             ApiFormat::OpenaiCompletions => "openai-completions",
             ApiFormat::AnthropicMessages => "anthropic-messages",
             ApiFormat::Kimi => "kimi",
+            ApiFormat::DeepSeekDevice => "deepseek-device",
         }
     }
 
@@ -56,6 +59,7 @@ impl ApiFormat {
         match s {
             "anthropic-messages" => Self::AnthropicMessages,
             "kimi" => Self::Kimi,
+            "deepseek-device" => Self::DeepSeekDevice,
             _ => Self::OpenaiCompletions,
         }
     }
@@ -128,6 +132,10 @@ pub struct ProviderDefinition {
     /// Whether this provider is built-in (cannot be deleted).
     #[serde(default)]
     pub builtin: bool,
+
+    /// Capability / routing tags (e.g. "chat-only").
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Top-level TOML structure for a provider config file.
@@ -217,6 +225,12 @@ impl ProviderDefinition {
         }
     }
 
+    /// Returns true when this provider is tagged as chat-only and should not be
+    /// used in Work or Claw sessions.
+    pub fn is_chat_only(&self) -> bool {
+        self.tags.contains(&"chat-only".to_string())
+    }
+
     /// Validate that the resolved API key matches the expected prefix for this provider.
     ///
     /// Returns `Ok(())` if the key is valid, missing, or the provider does not require one.
@@ -277,7 +291,7 @@ impl ProviderDefinition {
                             ));
                         }
                     }
-                    ApiFormat::OpenaiCompletions | ApiFormat::Kimi => {
+                    ApiFormat::OpenaiCompletions | ApiFormat::Kimi | ApiFormat::DeepSeekDevice => {
                         if key.starts_with("sk-ant-") {
                             return Err(format!(
                                 "Provider '{}' uses OpenAI-compatible format, but the key looks like an Anthropic key (starts with 'sk-ant-'). Did you configure the wrong key?",
@@ -305,6 +319,7 @@ impl From<&ProviderDefinition> for clarity_llm::ProviderConfig {
             ApiFormat::OpenaiCompletions => clarity_llm::ProtocolType::OpenAiChat,
             ApiFormat::AnthropicMessages => clarity_llm::ProtocolType::AnthropicMessages,
             ApiFormat::Kimi => clarity_llm::ProtocolType::OpenAiChat,
+            ApiFormat::DeepSeekDevice => clarity_llm::ProtocolType::DeepSeekDevice,
         };
 
         let auth_type = match def.auth_type {
@@ -373,6 +388,7 @@ impl ProviderRegistry {
                 auth_token_key: String::new(),
                 models: vec!["gpt-4o".into(), "gpt-4o-mini".into(), "gpt-4".into()],
                 builtin: true,
+                tags: vec![],
             },
             ProviderDefinition {
                 id: "anthropic".into(),
@@ -384,6 +400,7 @@ impl ProviderRegistry {
                 auth_token_key: String::new(),
                 models: vec!["claude-sonnet-4-20250514".into(), "claude-haiku-3-5".into()],
                 builtin: true,
+                tags: vec![],
             },
             ProviderDefinition {
                 id: "deepseek".into(),
@@ -395,6 +412,23 @@ impl ProviderRegistry {
                 auth_token_key: String::new(),
                 models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
                 builtin: true,
+                tags: vec![],
+            },
+            ProviderDefinition {
+                id: "deepseek-device".into(),
+                display_name: "DeepSeek (Device)".into(),
+                base_url: "https://chat.deepseek.com".into(),
+                api_format: ApiFormat::DeepSeekDevice,
+                auth_type: AuthType::ApiKey,
+                api_key_ref: "${env:DEEPSEEK_DEVICE_TOKEN}".into(),
+                auth_token_key: String::new(),
+                models: vec![
+                    "deepseek-chat".into(),
+                    "deepseek-reasoner".into(),
+                    "deepseek-vision".into(),
+                ],
+                builtin: true,
+                tags: vec!["chat-only".into()],
             },
             ProviderDefinition {
                 id: "kimi".into(),
@@ -406,6 +440,7 @@ impl ProviderRegistry {
                 auth_token_key: String::new(),
                 models: vec!["kimi-k2-07132k".into()],
                 builtin: true,
+                tags: vec![],
             },
             ProviderDefinition {
                 id: "kimi_code".into(),
@@ -417,6 +452,7 @@ impl ProviderRegistry {
                 auth_token_key: "kimi-code".into(),
                 models: vec!["kimi-k2.6".into()],
                 builtin: true,
+                tags: vec![],
             },
             ProviderDefinition {
                 id: "local".into(),
@@ -428,6 +464,7 @@ impl ProviderRegistry {
                 auth_token_key: String::new(),
                 models: vec![],
                 builtin: true,
+                tags: vec![],
             },
         ];
         for p in builtins {
@@ -567,6 +604,7 @@ mod tests {
             auth_token_key: String::new(),
             models: vec![],
             builtin: false,
+            tags: vec![],
         };
         // No env var set → should return None
         assert!(def.resolve_api_key().is_none());
@@ -584,6 +622,7 @@ mod tests {
             auth_token_key: String::new(),
             models: vec![],
             builtin: false,
+            tags: vec![],
         };
         assert_eq!(def.resolve_api_key(), Some("sk-mykey".into()));
     }
@@ -600,6 +639,7 @@ mod tests {
             auth_token_key: String::new(),
             models: vec![],
             builtin: false,
+            tags: vec![],
         };
         assert_eq!(def.display(), "my-provider");
     }
@@ -632,6 +672,7 @@ models = ["model-a", "model-b"]
             auth_token_key: "kimi-code".into(),
             models: vec!["kimi-k2.6".into()],
             builtin: true,
+            tags: vec![],
         };
         let cfg: clarity_llm::ProviderConfig = (&def).into();
         assert_eq!(cfg.auth_type, clarity_llm::AuthType::OAuth);
@@ -650,6 +691,7 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec![],
             builtin: true,
+            tags: vec![],
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }
@@ -666,6 +708,7 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec![],
             builtin: true,
+            tags: vec![],
         };
         let err = def.validate_api_key_prefix().unwrap_err();
         assert!(err.contains("Anthropic"));
@@ -683,6 +726,7 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec![],
             builtin: true,
+            tags: vec![],
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }
@@ -699,6 +743,7 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec![],
             builtin: true,
+            tags: vec![],
         };
         let err = def.validate_api_key_prefix().unwrap_err();
         assert!(err.contains("sk-ant-"));
@@ -716,6 +761,7 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec![],
             builtin: true,
+            tags: vec![],
         };
         assert!(def.validate_api_key_prefix().is_ok());
     }

@@ -80,6 +80,12 @@ impl AgentLoop for StreamingLoop {
                 while let Some(chunk_result) = stream_rx.recv().await {
                     match chunk_result {
                         Ok(delta) => {
+                            if let Some(reasoning) = delta.reasoning_content {
+                                agent.send_wire_message(WireMessage::ReasoningPart {
+                                    turn_id: String::new(),
+                                    text: reasoning,
+                                });
+                            }
                             if let Some(content) = delta.content {
                                 accumulated.push_str(&content);
                                 if !draft_cleared {

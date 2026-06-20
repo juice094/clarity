@@ -80,10 +80,36 @@ impl App {
             return;
         }
 
-        // When an OpenClaw remote bot is selected, route the main chat message
-        // through the WebSocket gateway instead of the local Agent.
-        if self.is_claw_active() {
+        let active_context = self
+            .session_store
+            .active_session()
+            .map(|s| s.context.clone());
+        let is_claw_session = matches!(active_context, Some(SessionContext::Claw { .. }));
+        let is_work_session = matches!(active_context, Some(SessionContext::Work { .. }));
+        let selected_provider = self.settings_store.settings_edit.provider.clone();
+        let provider_chat_only = self
+            .settings_store
+            .provider_registry
+            .get(&selected_provider)
+            .map(|p| p.is_chat_only())
+            .unwrap_or(false);
+
+        // When an OpenClaw remote bot is selected AND the active session is a Claw
+        // session, route the main chat message through the WebSocket gateway.
+        // Chat/Work sessions must keep using the local agent even if a Claw bot
+        // happens to be selected, avoiding mode confusion.
+        if self.is_claw_active() && is_claw_session {
             self.send_claw();
+            return;
+        }
+
+        // Chat-only providers (e.g. deepseek-device) are intentionally unavailable
+        // in Work sessions because they do not support workspace tools.
+        if is_work_session && provider_chat_only {
+            self.push_toast(
+                "The selected provider is only available in Chat sessions.",
+                ToastLevel::Warn,
+            );
             return;
         }
 

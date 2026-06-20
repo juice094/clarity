@@ -115,6 +115,15 @@ pub enum WireMessage {
         text: String,
     },
 
+    /// A reasoning/thinking part emitted by reasoning models (e.g. DeepSeek R1).
+    ReasoningPart {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Reasoning text content of this chunk.
+        text: String,
+    },
+
     /// Streaming draft lifecycle event (replaces simple ContentPart for streaming).
     DraftEvent {
         /// Identifier for the turn this message belongs to.
@@ -281,6 +290,7 @@ impl WireMessage {
             WireMessage::TurnBegin { turn_id: t, .. } => *t = turn_id,
             WireMessage::StepBegin { turn_id: t, .. } => *t = turn_id,
             WireMessage::ContentPart { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ReasoningPart { turn_id: t, .. } => *t = turn_id,
             WireMessage::DraftEvent { turn_id: t, .. } => *t = turn_id,
             WireMessage::ToolCall { turn_id: t, .. } => *t = turn_id,
             WireMessage::ToolResult { turn_id: t, .. } => *t = turn_id,

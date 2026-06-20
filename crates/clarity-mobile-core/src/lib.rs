@@ -416,6 +416,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
             user_input,
         },
         WireMessage::ContentPart { turn_id, text } => UiEvent::ContentPart { turn_id, text },
+        WireMessage::ReasoningPart { turn_id, text } => UiEvent::ContentPart { turn_id, text },
         WireMessage::ToolCall {
             turn_id,
             id,

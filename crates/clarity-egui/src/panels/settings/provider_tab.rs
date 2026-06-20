@@ -1,6 +1,6 @@
 use crate::App;
 use crate::provider::{ApiFormat, ProviderDefinition, ProviderRegistry};
-use crate::ui::types::{ToastLevel, UiEvent};
+use crate::ui::types::{SessionContext, ToastLevel, UiEvent};
 
 use clarity_llm::runtime::{
     RuntimeProviderConfig, list_models, set_provider_config, test_connection,
@@ -49,11 +49,18 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
     );
     ui.add_space(theme.space_12);
 
+    let active_context = app
+        .session_store
+        .active_session()
+        .map(|s| s.context.clone())
+        .unwrap_or(SessionContext::Chat);
+    let show_chat_only = matches!(active_context, SessionContext::Chat);
     let all: Vec<ProviderDefinition> = app
         .settings_store
         .provider_registry
         .list()
         .into_iter()
+        .filter(|p| show_chat_only || !p.is_chat_only())
         .cloned()
         .collect();
     let current = app.settings_store.settings_edit.provider.clone();
@@ -419,13 +426,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
 
     // ── Action buttons ──
     ui.horizontal(|ui| {
-        let is_local = current.is_empty()
-            || app
-                .settings_store
-                .provider_registry
-                .get(&current)
-                .map(|p| p.base_url.is_empty())
-                .unwrap_or(true);
+        let prov = app.settings_store.provider_registry.get(&current).cloned();
+        let is_local =
+            current.is_empty() || prov.as_ref().map(|p| p.base_url.is_empty()).unwrap_or(true);
+        let is_chat_only = prov.as_ref().map(|p| p.is_chat_only()).unwrap_or(false);
         let is_testing = app.settings_store.testing_provider.as_deref() == Some(&current);
         let is_refreshing = app.settings_store.refreshing_provider.as_deref() == Some(&current);
 
@@ -438,8 +442,15 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         let test_btn = egui::Button::new(egui::RichText::new(test_label).size(theme.text_sm))
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-        if ui.add_enabled(!is_local && !is_testing, test_btn).clicked() {
-            let prov = app.settings_store.provider_registry.get(&current);
+        let test_hover = if is_chat_only {
+            "Connection test is not supported for chat-only providers"
+        } else {
+            "Test provider connectivity"
+        };
+        let test_response = ui
+            .add_enabled(!is_local && !is_testing && !is_chat_only, test_btn)
+            .on_hover_text(test_hover);
+        if test_response.clicked() {
             let (display_name, base_url, api_fmt) = prov
                 .as_ref()
                 .map(|p| {
@@ -460,7 +471,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     format!("{}: No API key configured", display_name),
                     ToastLevel::Warn,
                 );
-            } else if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
+            } else if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
                 app.push_toast(e, ToastLevel::Warn);
             } else {
                 let cfg = RuntimeProviderConfig {
@@ -497,11 +508,15 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         let refresh_btn = egui::Button::new(egui::RichText::new(refresh_label).size(theme.text_sm))
             .fill(theme.surface)
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
-        if ui
-            .add_enabled(!is_local && !is_refreshing, refresh_btn)
-            .clicked()
-        {
-            let prov = app.settings_store.provider_registry.get(&current);
+        let refresh_hover = if is_chat_only {
+            "Model refresh is not supported for chat-only providers"
+        } else {
+            "Refresh model list"
+        };
+        let refresh_response = ui
+            .add_enabled(!is_local && !is_refreshing && !is_chat_only, refresh_btn)
+            .on_hover_text(refresh_hover);
+        if refresh_response.clicked() {
             let (_, base_url, api_fmt) = prov
                 .as_ref()
                 .map(|p| {
@@ -526,7 +541,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     format!("{}: No API key configured", display_name),
                     ToastLevel::Warn,
                 );
-            } else if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
+            } else if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
                 app.push_toast(e, ToastLevel::Warn);
             } else {
                 let cfg = RuntimeProviderConfig {
@@ -558,7 +573,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         .fill(theme.accent)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local, apply_btn).clicked() {
-            let prov = app.settings_store.provider_registry.get(&current);
             let (display_name, base_url, api_fmt) = prov
                 .as_ref()
                 .map(|p| {
@@ -574,8 +588,16 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                 .and_then(|p| p.resolve_api_key())
                 .unwrap_or_default();
             let model = app.settings_store.settings_edit.model.clone();
-            if let Some(Err(e)) = prov.map(|p| p.validate_api_key_prefix()) {
-                app.push_toast(e, ToastLevel::Warn);
+            if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
+                app.push_toast(e.clone(), ToastLevel::Warn);
+            } else if is_chat_only {
+                // Chat-only providers (e.g. deepseek-device) are loaded through the
+                // ModelRegistry rather than the runtime active-config pipeline.
+                app.auto_save_settings();
+                app.push_toast(
+                    format!("Applied: {} / {} (registry-backed)", display_name, model),
+                    ToastLevel::Info,
+                );
             } else {
                 let cfg = RuntimeProviderConfig {
                     provider_id: current.clone(),
@@ -692,6 +714,7 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                             auth_token_key: String::new(),
                             models: vec![],
                             builtin: false,
+                            tags: vec![],
                         };
                         match def.validate_api_key_prefix() {
                             Err(e) => app.push_toast(e, ToastLevel::Warn),
@@ -744,6 +767,7 @@ pub(crate) fn map_api_format(frontend: &str) -> &'static str {
         "anthropic-messages" => "anthropic_messages",
         "ollama" => "ollama",
         "llama_server" => "llama_server",
+        "deepseek-device" => "deepseek_device",
         _ => "openai_chat",
     }
 }

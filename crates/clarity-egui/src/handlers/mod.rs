@@ -65,6 +65,9 @@ pub fn process_events(app: &mut App) {
             UiEvent::DraftContent { text } => {
                 chat::on_draft_content(&mut app.chat_store, text);
             }
+            UiEvent::ReasoningChunk { text } => {
+                chat::on_reasoning_chunk(&mut app.session_store, &mut app.chat_store, text);
+            }
             UiEvent::TurnStart { user_input } => {
                 chat::on_turn_start(&mut app.chat_store, user_input);
             }

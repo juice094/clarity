@@ -24,6 +24,49 @@ pub fn on_draft_content(chat_store: &mut ChatStore, text: String) {
     }
 }
 
+/// Handles a reasoning chunk from the backend.
+///
+/// Reasoning content is appended to a `ContentBlock::Think` in the current
+/// assistant message so it survives the end of the turn as a collapsible panel.
+pub fn on_reasoning_chunk(
+    session_store: &mut SessionStore,
+    _chat_store: &mut ChatStore,
+    text: String,
+) {
+    if text.is_empty() {
+        return;
+    }
+
+    if let Some(session) = session_store.active_session_mut() {
+        if let Some(last) = session.messages.last_mut() {
+            if last.role == Role::Agent {
+                if let Some(ContentBlock::Think { steps }) = last.blocks.last_mut() {
+                    if let Some(step) = steps.last_mut() {
+                        step.push_str(&text);
+                    } else {
+                        steps.push(text);
+                    }
+                } else {
+                    last.blocks.push(ContentBlock::Think { steps: vec![text] });
+                }
+                last.cached_height = None;
+                return;
+            }
+        }
+        let msg = Message {
+            role: Role::Agent,
+            content: String::new(),
+            blocks: vec![ContentBlock::Think { steps: vec![text] }],
+            timestamp: Instant::now(),
+            parsed: vec![],
+            cached_height: None,
+            is_error: false,
+            lines: Vec::new(),
+        };
+        session.messages.push(msg);
+    }
+}
+
 /// Handles the turn start event.
 pub fn on_turn_start(_chat_store: &mut ChatStore, _user_input: String) {
     // Reserved for telemetry, turn attribution, or marking the start of a new
