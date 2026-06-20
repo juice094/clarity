@@ -73,6 +73,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 删除 `bot_bar.rs` 中依赖 category/title 的启发式 context 推断，改用显式 `SessionContext`。
   - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
 
+- **ADR-017 Stage 1：role-based Claw 会话绑定（2026-06-20）**
+  - `SessionContext` 新增 `DeviceAffinity`，`Project` 改名为 `Work`，`Claw` 扩展为 `{ role, session_key, affinity }`。
+  - `BotInstance` 增加 `role` 字段，默认 `"operator"`。
+  - 新建 Claw 会话时生成本地 `session_key`，并绑定当前 device 的 `role`/`device_id`。
+  - `agent_runner.rs` 发送路径与 `main.rs` 历史订阅路径改用会话级 `session_key`，替换硬编码 `"agent:main:main"`。
+  - 保持旧 JSON 反序列化兼容（legacy `device_id` → `role="operator"`, `session_key=device_id`, `affinity=Specific(device_id)`）。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --doc --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

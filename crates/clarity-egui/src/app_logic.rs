@@ -223,7 +223,7 @@ impl App {
             .map(|s| crate::stores::rebuild_tool_calls(&s.messages))
             .unwrap_or_default();
         let (sessions, active_id) = if loaded.is_empty() {
-            let s = new_session(0);
+            let s = new_session(0, SessionContext::Chat);
             let id = s.id.clone();
             (vec![s], id)
         } else {
@@ -667,7 +667,8 @@ impl App {
         }
 
         let count = self.session_store.sessions.len();
-        let s = new_session(count);
+        let context = self.infer_new_session_context();
+        let s = new_session(count, context);
         let id = s.id.clone();
 
         // Emit event-driven session creation so navigation and future backend
@@ -679,6 +680,44 @@ impl App {
 
         self.chat_store.input = self.session_store.drafts.remove(&id).unwrap_or_default();
         self.chat_store.last_usage = None;
+    }
+
+    /// Infer the right `SessionContext` for a newly created session.
+    ///
+    /// - Claw bot active → Claw context bound to the active bot.
+    /// - Project selected → Work context bound to the selected project.
+    /// - Otherwise → plain Chat.
+    fn infer_new_session_context(&self) -> SessionContext {
+        if self.is_claw_active() {
+            let active_bot_id = self.ui_store.active_bot_id.clone();
+            let role = self
+                .ui_store
+                .bot_instances
+                .iter()
+                .find(|b| b.id == active_bot_id)
+                .map(|b| b.role.clone())
+                .unwrap_or_else(|| "operator".to_string());
+            let session_key = format!("agent:main:{}", uuid::Uuid::new_v4());
+            return SessionContext::Claw {
+                role,
+                session_key,
+                affinity: DeviceAffinity::Specific(active_bot_id),
+            };
+        }
+        if let Some(ref project_id) = self.project_store.selected_project_id {
+            let has_workspace = self
+                .project_store
+                .projects
+                .iter()
+                .find(|p| &p.id == project_id)
+                .map(|p| p.has_workspace)
+                .unwrap_or(true);
+            return SessionContext::Work {
+                workspace_id: Some(project_id.clone()),
+                has_workspace,
+            };
+        }
+        SessionContext::Chat
     }
     /// Stop.
     pub(crate) fn stop(&mut self) {
@@ -752,12 +791,65 @@ impl App {
     }
 
     /// Create a new session and pre-fill the chat input with the given prompt.
+    ///
+    /// Work templates always create a Work-context session.
     pub(crate) fn new_session_with_prompt(&mut self, prompt: &str) {
         if self.view_state.turn == clarity_core::ui::TurnState::Loading {
             return;
         }
-        self.new_session();
+
+        let workspace_id = self.project_store.selected_project_id.clone();
+        let has_workspace = workspace_id
+            .as_ref()
+            .and_then(|pid| {
+                self.project_store
+                    .projects
+                    .iter()
+                    .find(|p| &p.id == pid)
+                    .map(|p| p.has_workspace)
+            })
+            .unwrap_or(true);
+        let context = SessionContext::Work {
+            workspace_id: workspace_id.clone(),
+            has_workspace,
+        };
+
+        // If the current session is empty, repurpose it for the template.
+        let is_empty = self
+            .session_store
+            .active_session()
+            .map(|s| s.messages.is_empty())
+            .unwrap_or(false);
+        if is_empty {
+            if let Some(session) = self.session_store.active_session_mut() {
+                session.context = context;
+                session.project_id = workspace_id;
+            }
+            self.chat_store.input = prompt.to_string();
+            self.chat_store.last_usage = None;
+            return;
+        }
+
+        // Current session has real messages — save it and create a fresh Work session.
+        let old_id = self.session_store.active_session_id.clone();
+        self.save_current_session();
+        if !self.chat_store.input.trim().is_empty() {
+            self.session_store
+                .drafts
+                .insert(old_id, self.chat_store.input.clone());
+        } else {
+            self.session_store.drafts.remove(&old_id);
+        }
+
+        let count = self.session_store.sessions.len();
+        let s = new_session(count, context);
+        let _ = self
+            .ui_tx
+            .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
+        self.process_events();
+
         self.chat_store.input = prompt.to_string();
+        self.chat_store.last_usage = None;
     }
 
     /// Switch the active session, preserving the current session's draft and

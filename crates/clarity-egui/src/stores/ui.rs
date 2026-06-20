@@ -68,6 +68,8 @@ pub struct BotInstance {
     pub id: String,
     pub name: String,
     pub device_id: String,
+    /// Claw role used when creating sessions bound to this device.
+    pub role: String,
     pub status: BotStatus,
     pub version: String,
     pub last_backup: String,

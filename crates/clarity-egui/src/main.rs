@@ -1221,10 +1221,22 @@ impl eframe::App for App {
                                 crate::ui::types::ToastLevel::Info,
                             );
                             // Auto-subscribe and fetch history after connect.
+                            // Use the active session's Claw session_key when available;
+                            // fall back to the legacy fixed key for non-Claw sessions.
+                            let session_key = self
+                                .session_store
+                                .active_session()
+                                .and_then(|s| match &s.context {
+                                    crate::ui::types::SessionContext::Claw {
+                                        session_key, ..
+                                    } => Some(session_key.clone()),
+                                    _ => None,
+                                })
+                                .unwrap_or_else(|| "agent:main:main".to_string());
                             if let Some(ref ws) = ws_handle {
-                                ws.subscribe_session("agent:main:main");
-                                ws.subscribe_messages("agent:main:main");
-                                ws.fetch_history("agent:main:main");
+                                ws.subscribe_session(&session_key);
+                                ws.subscribe_messages(&session_key);
+                                ws.fetch_history(&session_key);
                             }
                         }
                         clarity_openclaw::client::ClawResponse::HistoryLoaded {

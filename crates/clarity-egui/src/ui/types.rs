@@ -470,24 +470,123 @@ pub enum GatewayStatus {
 // Session / Project context (S6 Phase D)
 // ============================================================================
 
+/// Device affinity for a Claw session.
+///
+/// Determines which remote device a Claw session is bound to.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum DeviceAffinity {
+    /// Any online device may handle the session.
+    #[default]
+    AnyOnline,
+    /// The session is pinned to a specific device id.
+    Specific(String),
+}
+
 /// Conversation context that drives the Bot bar and right rail panels.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
 pub enum SessionContext {
     /// Plain conversation without project or device binding.
     #[default]
     Chat,
-    /// Project-bound conversation.
-    Project {
-        /// Project identifier.
-        project_id: String,
-        /// Whether the project has a local workspace (affects compute source).
+    /// Work-bound conversation.
+    Work {
+        /// Workspace / project identifier.
+        workspace_id: Option<String>,
+        /// Whether the workspace has a local compute environment.
         has_workspace: bool,
     },
     /// Claw remote-device conversation.
     Claw {
-        /// Remote device identifier.
-        device_id: String,
+        /// Claw role used for this session (e.g. "operator").
+        role: String,
+        /// Session key used for Gateway history / send routing.
+        session_key: String,
+        /// Device affinity: which device should handle the session.
+        affinity: DeviceAffinity,
     },
+}
+
+impl<'de> serde::Deserialize<'de> for SessionContext {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| D::Error::custom("expected object"))?;
+
+        // Plain chat context.
+        if obj.contains_key("Chat") {
+            return Ok(SessionContext::Chat);
+        }
+
+        // Work context.
+        if let Some(work) = obj.get("Work") {
+            let workspace_id = work
+                .get("workspace_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let has_workspace = work
+                .get("has_workspace")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            return Ok(SessionContext::Work {
+                workspace_id,
+                has_workspace,
+            });
+        }
+
+        // Legacy "Project" variant → Work.
+        if let Some(project) = obj.get("Project") {
+            let workspace_id = project
+                .get("project_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let has_workspace = project
+                .get("has_workspace")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            return Ok(SessionContext::Work {
+                workspace_id,
+                has_workspace,
+            });
+        }
+
+        // Claw with backward-compatible defaults for missing role / session_key / affinity.
+        if let Some(claw) = obj.get("Claw") {
+            let role = claw
+                .get("role")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or_else(|| "operator".to_string());
+            let device_id = claw
+                .get("device_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let session_key = claw
+                .get("session_key")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .or_else(|| device_id.clone())
+                .unwrap_or_default();
+            let affinity = if let Some(aff) = claw.get("affinity") {
+                serde_json::from_value(aff.clone()).map_err(D::Error::custom)?
+            } else {
+                device_id.map(DeviceAffinity::Specific).unwrap_or_default()
+            };
+            return Ok(SessionContext::Claw {
+                role,
+                session_key,
+                affinity,
+            });
+        }
+
+        Err(D::Error::custom(format!(
+            "unknown SessionContext variant: {value}"
+        )))
+    }
 }
 
 /// Session lifecycle category.
@@ -730,5 +829,55 @@ mod tests {
         assert_eq!(p.name, "ui refactor");
         assert!(p.has_workspace);
         assert!(!p.archived);
+    }
+
+    #[test]
+    fn session_context_work_roundtrips() {
+        let ctx = SessionContext::Work {
+            workspace_id: Some("ws-1".into()),
+            has_workspace: true,
+        };
+        let json = serde_json::to_string(&ctx).unwrap();
+        let restored: SessionContext = serde_json::from_str(&json).unwrap();
+        assert_eq!(ctx, restored);
+    }
+
+    #[test]
+    fn session_context_claw_roundtrips() {
+        let ctx = SessionContext::Claw {
+            role: "operator".into(),
+            session_key: "sess-key-1".into(),
+            affinity: DeviceAffinity::Specific("dev-1".into()),
+        };
+        let json = serde_json::to_string(&ctx).unwrap();
+        let restored: SessionContext = serde_json::from_str(&json).unwrap();
+        assert_eq!(ctx, restored);
+    }
+
+    #[test]
+    fn session_context_legacy_project_deserializes_to_work() {
+        let json = r#"{"Project":{"project_id":"p-legacy","has_workspace":false}}"#;
+        let restored: SessionContext = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            restored,
+            SessionContext::Work {
+                workspace_id: Some("p-legacy".into()),
+                has_workspace: false,
+            }
+        );
+    }
+
+    #[test]
+    fn session_context_legacy_claw_defaults_fields() {
+        let json = r#"{"Claw":{"device_id":"d-legacy"}}"#;
+        let restored: SessionContext = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            restored,
+            SessionContext::Claw {
+                role: "operator".into(),
+                session_key: "d-legacy".into(),
+                affinity: DeviceAffinity::Specific("d-legacy".into()),
+            }
+        );
     }
 }

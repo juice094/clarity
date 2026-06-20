@@ -166,7 +166,17 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             let cmd = app.chat_store.input.trim().to_string();
             if !cmd.is_empty() {
                 if let Some(ref ws) = app.claw_ws {
-                    ws.send_message("agent:main:main", &cmd);
+                    let session_key = app
+                        .session_store
+                        .active_session()
+                        .and_then(|s| match &s.context {
+                            crate::ui::types::SessionContext::Claw { session_key, .. } => {
+                                Some(session_key.clone())
+                            }
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| "agent:main:main".to_string());
+                    ws.send_message(&session_key, &cmd);
                 } else {
                     app.push_toast(
                         app.t("Not connected to Claw Gateway"),

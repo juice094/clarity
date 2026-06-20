@@ -46,7 +46,7 @@ fn bot_bar_buttons(ctx: &crate::ui::types::SessionContext) -> Vec<BotBarButton> 
                 context: RightRailContext::Session,
             },
         ],
-        crate::ui::types::SessionContext::Project { has_workspace, .. } => {
+        crate::ui::types::SessionContext::Work { has_workspace, .. } => {
             if *has_workspace {
                 vec![
                     BotBarButton {
@@ -228,7 +228,9 @@ mod tests {
     fn claw_session_is_claw() {
         let s = make_session(
             crate::ui::types::SessionContext::Claw {
-                device_id: String::new(),
+                role: "operator".into(),
+                session_key: "agent:main:main".into(),
+                affinity: crate::ui::types::DeviceAffinity::Specific(String::new()),
             },
             "remote",
         );
@@ -239,17 +241,17 @@ mod tests {
     }
 
     #[test]
-    fn project_session_is_project() {
+    fn project_session_is_work() {
         let s = make_session(
-            crate::ui::types::SessionContext::Project {
-                project_id: String::new(),
+            crate::ui::types::SessionContext::Work {
+                workspace_id: Some(String::new()),
                 has_workspace: true,
             },
             "ui refactor",
         );
         assert!(matches!(
             session_context(Some(&s)),
-            crate::ui::types::SessionContext::Project { .. }
+            crate::ui::types::SessionContext::Work { .. }
         ));
     }
 

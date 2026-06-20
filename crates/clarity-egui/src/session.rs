@@ -129,20 +129,27 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
-/// Creates a new plain chat session.
-pub fn new_session(index: usize) -> Session {
+/// Creates a new session with the given context.
+pub fn new_session(index: usize, context: SessionContext) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
     let title = if index == 0 {
         "New Chat".to_string()
     } else {
         format!("New Chat {}", index + 1)
     };
+    let project_id = match &context {
+        SessionContext::Work {
+            workspace_id: Some(id),
+            ..
+        } => Some(id.clone()),
+        _ => None,
+    };
     Session {
         id: id.clone(),
         title,
         category: "chat".to_string(),
-        project_id: None,
-        context: SessionContext::Chat,
+        project_id,
+        context,
         lifecycle: SessionLifecycle::Temporary,
         archived: false,
         messages: vec![],
@@ -192,7 +199,7 @@ mod tests {
 
     #[test]
     fn new_session_defaults_to_chat_context() {
-        let s = new_session(0);
+        let s = new_session(0, SessionContext::Chat);
         assert_eq!(s.context, SessionContext::Chat);
         assert_eq!(s.lifecycle, SessionLifecycle::Temporary);
         assert!(!s.archived);
@@ -202,8 +209,21 @@ mod tests {
 
     #[test]
     fn new_session_increments_title_index() {
-        let s = new_session(2);
+        let s = new_session(2, SessionContext::Chat);
         assert_eq!(s.title, "New Chat 3");
+    }
+
+    #[test]
+    fn new_session_work_carries_workspace_id() {
+        let s = new_session(
+            0,
+            SessionContext::Work {
+                workspace_id: Some("ws-1".into()),
+                has_workspace: true,
+            },
+        );
+        assert_eq!(s.project_id, Some("ws-1".into()));
+        assert!(matches!(s.context, SessionContext::Work { .. }));
     }
 
     #[test]
@@ -213,8 +233,8 @@ mod tests {
             title: "test".into(),
             category: Some("engineering".into()),
             project_id: Some("p-1".into()),
-            context: SessionContext::Project {
-                project_id: "p-1".into(),
+            context: SessionContext::Work {
+                workspace_id: Some("p-1".into()),
                 has_workspace: true,
             },
             lifecycle: SessionLifecycle::ProjectBound,

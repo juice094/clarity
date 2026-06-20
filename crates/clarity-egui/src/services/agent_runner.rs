@@ -596,13 +596,58 @@ impl App {
             }
         };
 
+        // Resolve the session key and target device from the active session's
+        // Claw context when available; fall back to the active bot for non-Claw
+        // sessions so existing flows keep working.
+        let (session_key, target_bot_id) = self
+            .session_store
+            .active_session()
+            .map(|s| match &s.context {
+                SessionContext::Claw {
+                    role: _,
+                    session_key,
+                    affinity,
+                } => {
+                    let target = match affinity {
+                        DeviceAffinity::Specific(device_id)
+                            if self.device_state.connection(device_id).is_some() =>
+                        {
+                            device_id.clone()
+                        }
+                        _ => self.ui_store.active_bot_id.clone(),
+                    };
+                    (session_key.clone(), target)
+                }
+                _ => (
+                    "agent:main:main".to_string(),
+                    self.ui_store.active_bot_id.clone(),
+                ),
+            })
+            .unwrap_or_else(|| {
+                (
+                    "agent:main:main".to_string(),
+                    self.ui_store.active_bot_id.clone(),
+                )
+            });
+
+        // ponytail: target_bot_id is resolved but not used for routing in Stage 1
+        // because the active WebSocket connection is still single-device. Log any
+        // mismatch so future multi-device affinity work has a visible signal.
+        if !target_bot_id.is_empty() && target_bot_id != self.ui_store.active_bot_id {
+            tracing::debug!(
+                "Claw send affinity target {} differs from active bot {}",
+                target_bot_id,
+                self.ui_store.active_bot_id
+            );
+        }
+
         // Responses arrive asynchronously via claw_ws.drain(); the main loop
         // translates them into UiEvent::Chunk / UiEvent::Done and the chat
         // handlers finalize the assistant message.
         if self.claw_ws_uses_sessions_send {
-            ws.send_session_message("agent:main:main", &full_message);
+            ws.send_session_message(&session_key, &full_message);
         } else {
-            ws.send_message("agent:main:main", &full_message);
+            ws.send_message(&session_key, &full_message);
         }
     }
 }
