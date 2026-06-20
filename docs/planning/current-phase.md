@@ -37,9 +37,9 @@ tags: [planning, status, current-phase]
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1258 | 0 | 8 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 210 | 0 | 2 |
-| `cargo test --workspace --doc --exclude clarity-slint` | 33 | 0 | 3 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1290 | 0 | 9 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 244 | 0 | 3 |
+| `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
 | `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
 | `cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
 | `cargo fmt --all -- --check` | pass | 0 | - |
