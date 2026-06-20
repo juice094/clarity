@@ -183,5 +183,4 @@ does not duplicate content. See `compute_stream_delta` in `src/client.rs`.
 
 - `src/client.rs` — connection loop, handshake, and delta computation.
 - `src/device.rs` — Ed25519 device identity and token persistence.
-- `examples/remote_raw3.rs` — minimal working handshake + `sessions.send`.
 - `examples/remote_chat.rs` — interactive bidirectional chat.
