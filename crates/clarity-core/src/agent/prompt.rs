@@ -6,6 +6,36 @@ use crate::approval::ApprovalMode;
 use crate::error::AgentError;
 use serde_json::Value;
 use std::collections::HashMap;
+
+/// Hard byte budget for each half of the system prompt.
+///
+/// DeepSeek/Kimi reject bodies around 2MB; we budget 400KB each for static and
+/// dynamic system prompts so that, combined with history/tools, we stay well
+/// below the provider limit.
+const MAX_STATIC_PROMPT_BYTES: usize = 400_000;
+const MAX_DYNAMIC_PROMPT_BYTES: usize = 400_000;
+
+/// Find the largest valid UTF-8 boundary at or before `byte_idx`.
+fn floor_char_boundary(text: &str, byte_idx: usize) -> usize {
+    let byte_idx = byte_idx.min(text.len());
+    let mut idx = byte_idx;
+    while idx > 0 && text.as_bytes()[idx] & 0b1100_0000 == 0b1000_0000 {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Truncate `text` to at most `max_bytes` UTF-8 bytes, appending a marker.
+fn truncate_to_bytes(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let marker = "\n\n...[truncated]";
+    let budget = max_bytes.saturating_sub(marker.len());
+    let split = floor_char_boundary(text, budget);
+    format!("{}{}", &text[..split], marker)
+}
+
 /// Component that can be conditionally injected into the system prompt.
 #[derive(Debug, Clone)]
 pub enum PromptComponent {
@@ -232,7 +262,10 @@ pub(crate) async fn build_system_prompt_split(
         }
     }
 
-    (static_prompt, dynamic_prompt)
+    (
+        static_prompt,
+        truncate_to_bytes(&dynamic_prompt, MAX_DYNAMIC_PROMPT_BYTES),
+    )
 }
 
 impl Agent {
@@ -339,7 +372,7 @@ impl Agent {
             }
         }
 
-        SystemPromptBuilder::new()
+        let (static_prompt, dynamic_prompt) = SystemPromptBuilder::new()
             .with_base(base)
             .with_tools(tool_descs)
             .with_entry_context(self.config.entry_context.clone())
@@ -349,7 +382,12 @@ impl Agent {
             .with_active_files(self.active_files().unwrap_or_default())
             .with_git_context(self.git_context().unwrap_or_default())
             .with_project_metadata(self.project_metadata().unwrap_or_default())
-            .build_split()
+            .build_split();
+
+        (
+            truncate_to_bytes(&static_prompt, MAX_STATIC_PROMPT_BYTES),
+            truncate_to_bytes(&dynamic_prompt, MAX_DYNAMIC_PROMPT_BYTES),
+        )
     }
 
     /// Get tool descriptions from the registry for the system prompt.
@@ -611,5 +649,31 @@ mod tests {
         assert!(dynamic_prompt.contains("f1.rs"));
         assert!(!dynamic_prompt.contains("Base."));
         assert!(!dynamic_prompt.contains("Security Notice"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_split_raw_caps_static_and_dynamic() {
+        use crate::agent::{Agent, AgentConfig};
+        // Create a minimal agent with an oversized base prompt.
+        let config = AgentConfig {
+            system_prompt: "x".repeat(600_000),
+            ..Default::default()
+        };
+        let agent = Agent::with_config(crate::ToolRegistry::default(), config);
+
+        let (static_prompt, dynamic_prompt) = agent.build_system_prompt_split_raw();
+        assert!(
+            static_prompt.len() <= MAX_STATIC_PROMPT_BYTES,
+            "static prompt {} bytes exceeds {}",
+            static_prompt.len(),
+            MAX_STATIC_PROMPT_BYTES
+        );
+        assert!(
+            dynamic_prompt.len() <= MAX_DYNAMIC_PROMPT_BYTES,
+            "dynamic prompt {} bytes exceeds {}",
+            dynamic_prompt.len(),
+            MAX_DYNAMIC_PROMPT_BYTES
+        );
+        assert!(static_prompt.contains("...[truncated]"));
     }
 }

@@ -19,6 +19,8 @@
 pub mod api;
 pub mod auth;
 pub mod deepseek;
+pub mod deepseek_device;
+pub mod deepseek_pow;
 pub mod kalosm;
 pub mod llama_server;
 #[cfg(feature = "local-llm")]
@@ -41,6 +43,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
+pub use deepseek_device::{
+    DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceProvider,
+};
 pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
@@ -155,6 +160,11 @@ fn shared_http_client() -> reqwest::Client {
 /// and provider metadata.
 const MAX_MESSAGE_BODY_BYTES: usize = 1_500_000;
 
+/// Maximum serialized JSON bytes for the `tools` field. MCP servers can return
+/// very large input schemas; if the tools payload exceeds this, we drop tools
+/// for this request rather than risk a 413 from the provider.
+const MAX_TOOLS_JSON_BYTES: usize = 500_000;
+
 /// Truncate message history to fit within a byte budget while preserving the
 /// system prompt and the most recent user/assistant exchanges.
 ///
@@ -167,26 +177,85 @@ pub fn truncate_messages_by_bytes(messages: &[Message], max_bytes: usize) -> Vec
         return messages.to_vec();
     }
 
-    let mut result = Vec::new();
-    let mut start = 0;
-    if !messages.is_empty() && messages[0].role == MessageRole::System {
-        result.push(messages[0].clone());
-        start = 1;
-    }
+    let mut result = messages.to_vec();
 
-    let mut kept = messages[start..].to_vec();
-    let budget = max_bytes.saturating_sub(result.iter().map(|m| m.content.len()).sum::<usize>());
+    // Preserve the final user message index if present; otherwise the last message.
+    let mut last_user = result
+        .iter()
+        .rposition(|m| m.role == MessageRole::User)
+        .unwrap_or_else(|| result.len().saturating_sub(1));
 
-    while kept.len() > 1 {
-        let current: usize = kept.iter().map(|m| m.content.len()).sum();
-        if current <= budget {
+    // First pass: drop oldest non-system messages until we fit or only system + last remain.
+    while result.len() > 1 {
+        let current: usize = result.iter().map(|m| m.content.len()).sum();
+        if current <= max_bytes {
             break;
         }
-        kept.remove(0);
+        let Some(remove_idx) = result
+            .iter()
+            .position(|m| m.role != MessageRole::System)
+            .filter(|&i| i != last_user)
+        else {
+            break;
+        };
+        result.remove(remove_idx);
+        if remove_idx < last_user {
+            last_user -= 1;
+        }
     }
 
-    result.extend(kept);
+    // Last pass: if the budget is still blown, truncate the first system message.
+    let current: usize = result.iter().map(|m| m.content.len()).sum();
+    if current > max_bytes {
+        if let Some(sys) = result.iter_mut().find(|m| m.role == MessageRole::System) {
+            let non_system: usize = current - sys.content.len();
+            let budget = max_bytes.saturating_sub(non_system);
+            sys.content = truncate_to_bytes_llm(&sys.content, budget);
+        }
+    }
+
     result
+}
+
+/// Find the largest valid UTF-8 boundary at or before `byte_idx`.
+fn floor_char_boundary_llm(text: &str, byte_idx: usize) -> usize {
+    let byte_idx = byte_idx.min(text.len());
+    let mut idx = byte_idx;
+    while idx > 0 && text.as_bytes()[idx] & 0b1100_0000 == 0b1000_0000 {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Truncate `text` to at most `max_bytes` UTF-8 bytes, appending a marker.
+fn truncate_to_bytes_llm(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let marker = "\n\n...[truncated]";
+    let budget = max_bytes.saturating_sub(marker.len());
+    let split = floor_char_boundary_llm(text, budget);
+    format!("{}{}", &text[..split], marker)
+}
+
+/// Drop the tools payload if its serialized JSON exceeds the byte budget.
+fn cap_tools_json(tools_opt: Option<Value>) -> Option<Value> {
+    match tools_opt {
+        Some(ref tools) => {
+            let size = serde_json::to_string(tools).unwrap_or_default().len();
+            if size > MAX_TOOLS_JSON_BYTES {
+                tracing::warn!(
+                    "Tools JSON exceeds {} bytes ({} bytes); dropping tools for this request",
+                    MAX_TOOLS_JSON_BYTES,
+                    size
+                );
+                None
+            } else {
+                tools_opt
+            }
+        }
+        None => None,
+    }
 }
 
 // ==================== OpenAI Compatible API Types ====================
@@ -344,10 +413,12 @@ impl LlmProvider for OpenAiCompatibleLlm {
         // Convert internal Message to API message format
         let api_messages = convert_api_messages(&messages);
 
-        let tools_opt = tools
-            .as_array()
-            .filter(|a| !a.is_empty())
-            .map(|_| tools.clone());
+        let tools_opt = cap_tools_json(
+            tools
+                .as_array()
+                .filter(|a| !a.is_empty())
+                .map(|_| tools.clone()),
+        );
         let thinking_opt = if self.base_url.contains("kimi.com") {
             Some(json!({"type": "disabled"}))
         } else if self.base_url.contains("deepseek.com") {
@@ -459,10 +530,12 @@ impl LlmProvider for OpenAiCompatibleLlm {
         let messages = truncate_messages_by_bytes(messages, MAX_MESSAGE_BODY_BYTES);
         let api_messages = convert_api_messages(&messages);
 
-        let tools_opt = tools
-            .as_array()
-            .filter(|a| !a.is_empty())
-            .map(|_| tools.clone());
+        let tools_opt = cap_tools_json(
+            tools
+                .as_array()
+                .filter(|a| !a.is_empty())
+                .map(|_| tools.clone()),
+        );
         let thinking_opt = if self.base_url.contains("kimi.com") {
             Some(json!({"type": "disabled"}))
         } else {
@@ -1411,5 +1484,54 @@ mod tests {
         };
         let json = serde_json::to_value(&request).unwrap();
         assert!(json.get("prompt_cache_key").is_none());
+    }
+
+    #[test]
+    fn test_truncate_messages_caps_system_message() {
+        let system = Message::system("x".repeat(2_000_000));
+        let messages = vec![system];
+        let result = truncate_messages_by_bytes(&messages, MAX_MESSAGE_BODY_BYTES);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].content.len() <= MAX_MESSAGE_BODY_BYTES);
+        assert!(result[0].content.contains("...[truncated]"));
+    }
+
+    #[test]
+    fn test_truncate_messages_keeps_final_user() {
+        let mut messages = vec![Message::system("system".to_string())];
+        for i in 0..4 {
+            messages.push(Message::user(format!("user message {}", i).repeat(400_000)));
+            messages.push(Message::assistant(
+                format!("assistant reply {}", i).repeat(400_000),
+            ));
+        }
+        messages.push(Message::user("user message 4".repeat(100_000)));
+        let result = truncate_messages_by_bytes(&messages, MAX_MESSAGE_BODY_BYTES);
+        assert!(result.iter().any(|m| m.role == MessageRole::User));
+        let last_user_content = result
+            .iter()
+            .rfind(|m| m.role == MessageRole::User)
+            .map(|m| m.content.as_str());
+        assert_eq!(
+            last_user_content,
+            Some("user message 4".repeat(100_000).as_str())
+        );
+        let total: usize = result.iter().map(|m| m.content.len()).sum();
+        assert!(total <= MAX_MESSAGE_BODY_BYTES);
+    }
+
+    #[test]
+    fn test_cap_tools_json_drops_oversized_tools() {
+        let huge_description = "x".repeat(600_000);
+        let tools = json!([{
+            "type": "function",
+            "function": {
+                "name": "big_tool",
+                "description": huge_description,
+                "parameters": { "type": "object", "properties": {} }
+            }
+        }]);
+        let tools_opt = cap_tools_json(Some(tools));
+        assert!(tools_opt.is_none());
     }
 }
