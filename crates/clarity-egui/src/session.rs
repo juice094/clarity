@@ -63,7 +63,7 @@ pub fn load_sessions() -> Vec<Session> {
                         sessions.push(Session {
                             id: data.id,
                             title: data.title,
-                            category: data.category.unwrap_or_else(|| "engineering".to_string()),
+                            category: data.category.unwrap_or_else(|| "chat".to_string()),
                             project_id: data.project_id,
                             context: data.context,
                             lifecycle: data.lifecycle,
@@ -129,36 +129,20 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
-/// Creates a new session.
-pub fn new_session(category: &str, index: usize) -> Session {
+/// Creates a new plain chat session.
+pub fn new_session(index: usize) -> Session {
     let id = format!("sess-{}", uuid::Uuid::new_v4());
-    let base = match category {
-        "emotion" => "Emotion",
-        "knowledge" => "Knowledge",
-        "engineering" => "Engineering",
-        _ => "Chat",
-    };
     let title = if index == 0 {
-        format!("New {}", base)
+        "New Chat".to_string()
     } else {
-        format!("New {} {}", base, index + 1)
-    };
-    let context = match category {
-        "claw" => SessionContext::Claw {
-            device_id: String::new(),
-        },
-        "project" => SessionContext::Project {
-            project_id: String::new(),
-            has_workspace: true,
-        },
-        _ => SessionContext::Chat,
+        format!("New Chat {}", index + 1)
     };
     Session {
         id: id.clone(),
         title,
-        category: category.into(),
+        category: "chat".to_string(),
         project_id: None,
-        context,
+        context: SessionContext::Chat,
         lifecycle: SessionLifecycle::Temporary,
         archived: false,
         messages: vec![],
@@ -208,35 +192,18 @@ mod tests {
 
     #[test]
     fn new_session_defaults_to_chat_context() {
-        let s = new_session("engineering", 0);
+        let s = new_session(0);
         assert_eq!(s.context, SessionContext::Chat);
         assert_eq!(s.lifecycle, SessionLifecycle::Temporary);
         assert!(!s.archived);
         assert!(s.project_id.is_none());
+        assert_eq!(s.title, "New Chat");
     }
 
     #[test]
-    fn new_session_infers_project_context_from_category() {
-        let s = new_session("project", 0);
-        assert!(
-            matches!(
-                s.context,
-                SessionContext::Project {
-                    has_workspace: true,
-                    ..
-                }
-            ),
-            "project category should create a Project context"
-        );
-    }
-
-    #[test]
-    fn new_session_infers_claw_context_from_category() {
-        let s = new_session("claw", 0);
-        assert!(
-            matches!(s.context, SessionContext::Claw { .. }),
-            "claw category should create a Claw context"
-        );
+    fn new_session_increments_title_index() {
+        let s = new_session(2);
+        assert_eq!(s.title, "New Chat 3");
     }
 
     #[test]

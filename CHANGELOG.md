@@ -67,6 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 梳理 ZeroClaw / OpenClaw 当前状态、协议错位、会话模型与多模式会话的三种候选模型。
   - 建议采用「SessionContext 即模式」模型，暂不进行 OpenClaw 运行时重构，优先移除遗留的 Work 视图与 `active_category` 僵尸字段。
 
+- **ADR-017 清理：移除 Work 视图与 active_category（2026-06-20）**
+  - 删除 `AppView::Work` 变体与 `panels/work/` 目录（已无任何入口可达）。
+  - 删除 `SessionStore::active_category` 僵尸字段；新建会话默认 `SessionContext::Chat`，标题改为 "New Chat" / "New Chat N"。
+  - 删除 `bot_bar.rs` 中依赖 category/title 的启发式 context 推断，改用显式 `SessionContext`。
+  - 验证：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --bins --exclude clarity-slint` ✅。
+
 ### Engineering / Code Health (Sprint S5 — egui 模块整理与健康维护, 2026-06-13)
 
 - **ViewState 单源化收尾** — 从 `settings_store` / `ui_store` / `team_store` / `task_store` / `mcp_store` 删除 7 个遗留 panel_open 布尔字段，所有面板可见性统一由 `app.view_state` 驱动。

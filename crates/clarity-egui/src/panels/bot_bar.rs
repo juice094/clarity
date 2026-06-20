@@ -16,31 +16,11 @@ struct BotBarButton {
     context: RightRailContext,
 }
 
-/// Compute the active session context from session metadata.
-///
-/// This is a temporary heuristic used until `Session` carries an explicit
-/// `SessionContext` field (Phase 7).
+/// Compute the active session context from explicit session metadata.
 fn session_context(session: Option<&Session>) -> crate::ui::types::SessionContext {
-    if let Some(s) = session {
-        // Prefer the explicit context once it has been set; fall back to the
-        // legacy category/title heuristic for sessions loaded before Phase 7.
-        if s.context != crate::ui::types::SessionContext::Chat {
-            return s.context.clone();
-        }
-        let marker = format!("{} {}", s.category, s.title).to_lowercase();
-        if marker.contains("claw") {
-            return crate::ui::types::SessionContext::Claw {
-                device_id: String::new(),
-            };
-        }
-        if marker.contains("project") || marker.contains("workspace") {
-            return crate::ui::types::SessionContext::Project {
-                project_id: String::new(),
-                has_workspace: true,
-            };
-        }
-    }
-    crate::ui::types::SessionContext::Chat
+    session
+        .map(|s| s.context.clone())
+        .unwrap_or(crate::ui::types::SessionContext::Chat)
 }
 
 /// Return the right-side buttons for the given session context.
@@ -220,13 +200,13 @@ mod tests {
     use super::*;
     use crate::ui::types::Session;
 
-    fn make_session(category: &str, title: &str) -> Session {
+    fn make_session(context: crate::ui::types::SessionContext, title: &str) -> Session {
         Session {
             id: "s-1".into(),
             title: title.into(),
-            category: category.into(),
+            category: "chat".into(),
             project_id: None,
-            context: crate::ui::types::SessionContext::Chat,
+            context,
             lifecycle: crate::ui::types::SessionLifecycle::Temporary,
             archived: false,
             messages: vec![],
@@ -237,7 +217,7 @@ mod tests {
 
     #[test]
     fn plain_session_is_chat() {
-        let s = make_session("engineering", "general");
+        let s = make_session(crate::ui::types::SessionContext::Chat, "general");
         assert_eq!(
             session_context(Some(&s)),
             crate::ui::types::SessionContext::Chat
@@ -246,7 +226,12 @@ mod tests {
 
     #[test]
     fn claw_session_is_claw() {
-        let s = make_session("claw", "remote");
+        let s = make_session(
+            crate::ui::types::SessionContext::Claw {
+                device_id: String::new(),
+            },
+            "remote",
+        );
         assert!(matches!(
             session_context(Some(&s)),
             crate::ui::types::SessionContext::Claw { .. }
@@ -255,7 +240,13 @@ mod tests {
 
     #[test]
     fn project_session_is_project() {
-        let s = make_session("project", "ui refactor");
+        let s = make_session(
+            crate::ui::types::SessionContext::Project {
+                project_id: String::new(),
+                has_workspace: true,
+            },
+            "ui refactor",
+        );
         assert!(matches!(
             session_context(Some(&s)),
             crate::ui::types::SessionContext::Project { .. }

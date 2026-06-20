@@ -185,7 +185,7 @@ fn render_session_row(
 ) {
     let is_active = session.id == app.session_store.active_session_id;
     let icon = match session.category.as_str() {
-        "emotion" => crate::theme::ICON_CHAT,
+        "emotion" | "chat" => crate::theme::ICON_CHAT,
         "knowledge" => crate::theme::ICON_BOOK,
         _ => crate::theme::ICON_WRENCH,
     };

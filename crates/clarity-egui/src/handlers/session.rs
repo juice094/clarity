@@ -110,7 +110,6 @@ mod tests {
             sessions,
             active_session_id: active.to_string(),
             drafts: HashMap::new(),
-            active_category: "engineering".to_string(),
         }
     }
 

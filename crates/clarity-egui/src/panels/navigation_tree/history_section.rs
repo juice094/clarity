@@ -65,7 +65,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                     for session in &sessions[range] {
                         let is_active = session.is_active && session.id == active_session_id;
                         let icon = match session.category.as_str() {
-                            "emotion" => crate::theme::ICON_CHAT,
+                            "emotion" | "chat" => crate::theme::ICON_CHAT,
                             "knowledge" => crate::theme::ICON_BOOK,
                             _ => crate::theme::ICON_WRENCH,
                         };

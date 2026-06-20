@@ -1,6 +1,6 @@
 //! Session Store
 //!
-//! session list, active session, drafts, categories
+//! session list, active session, drafts
 
 use crate::ui::types::*;
 use std::collections::HashMap;
@@ -11,8 +11,6 @@ pub struct SessionStore {
     pub active_session_id: String,
     /// Per-session draft buffer. Key = session_id.
     pub drafts: HashMap<String, String>,
-    /// Active session category: emotion / knowledge / engineering / tools.
-    pub active_category: String,
 }
 
 impl SessionStore {

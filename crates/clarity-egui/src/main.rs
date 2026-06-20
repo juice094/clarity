@@ -393,13 +393,11 @@ impl App {
     fn render_main_stage(&mut self, ctx: &egui::Context) {
         // Views that do not render their own CentralPanel would otherwise expose
         // the raw window background (black on decorated-less Windows windows).
-        // Fill the stage with `theme.bg` first; Chat/TaskBoard/Work already do
+        // Fill the stage with `theme.bg` first; Chat/TaskBoard already do
         // this themselves, so skip them to avoid double CentralPanel.
         let self_renders_central = matches!(
             self.view_state.main,
-            clarity_core::ui::AppView::Chat
-                | clarity_core::ui::AppView::TaskBoard
-                | clarity_core::ui::AppView::Work
+            clarity_core::ui::AppView::Chat | clarity_core::ui::AppView::TaskBoard
         );
         if !self_renders_central {
             // The unified background painter already fills the main stage; only
@@ -421,7 +419,6 @@ impl App {
             clarity_core::ui::AppView::Dashboard => self.render_dashboard_panel(ctx),
             clarity_core::ui::AppView::Gantt => self.render_gantt_panel(ctx),
             clarity_core::ui::AppView::TaskBoard => self.render_task_board(ctx),
-            clarity_core::ui::AppView::Work => self.render_work_panel(ctx),
         }
     }
 
@@ -901,10 +898,6 @@ impl App {
 
     fn render_snapshot_modal(&mut self, ctx: &egui::Context) {
         panels::snapshot::render_snapshot_modal(self, ctx);
-    }
-
-    fn render_work_panel(&mut self, ctx: &egui::Context) {
-        panels::work::render_work_panel(self, ctx);
     }
 
     /// Start an in-app OpenClaw pairing flow for the connection at `conn_idx`.

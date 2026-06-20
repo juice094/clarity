@@ -3,7 +3,6 @@
 //! Layout topology:
 //!   - `navigation_tree/` — left navigation rail (S6 Pretext)
 //!   - `chat/`            — center main view (chat stream + input)
-//!   - `work/`            — center main view (OpenClaw project orchestration)
 //!   - `bot_bar/`         — bottom context bar
 //!   - `right_ide_panel/` — right utility rail (IDE-style panels)
 //!   - `settings/`        — center modal (settings tabs)
@@ -22,7 +21,6 @@ pub mod navigation_tree;
 pub mod right_ide_panel;
 pub mod settings;
 pub mod system;
-pub mod work;
 
 // -----------------------------------------------------------------------------
 // Backward-compatibility re-exports (remove once all call sites are migrated)

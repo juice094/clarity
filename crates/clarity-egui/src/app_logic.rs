@@ -223,7 +223,7 @@ impl App {
             .map(|s| crate::stores::rebuild_tool_calls(&s.messages))
             .unwrap_or_default();
         let (sessions, active_id) = if loaded.is_empty() {
-            let s = new_session("engineering", 0);
+            let s = new_session(0);
             let id = s.id.clone();
             (vec![s], id)
         } else {
@@ -319,7 +319,6 @@ impl App {
                 sessions,
                 active_session_id: active_id,
                 drafts: std::collections::HashMap::new(),
-                active_category: "engineering".to_string(),
             },
             chat_store: crate::stores::ChatStore {
                 input: String::new(),
@@ -642,10 +641,8 @@ impl App {
             }
         }
     }
-    /// Creates a new session.
+    /// Creates a new plain chat session.
     pub(crate) fn new_session(&mut self) {
-        let category = self.session_store.active_category.clone();
-
         // If the current session is empty, reuse it rather than accumulating blank tabs.
         let is_empty = self
             .session_store
@@ -669,30 +666,8 @@ impl App {
             self.session_store.drafts.remove(&old_id);
         }
 
-        // Emotion is singleton: refuse to create multiple emotion sessions.
-        if category == "emotion" {
-            if let Some(existing) = self
-                .session_store
-                .sessions
-                .iter()
-                .find(|s| s.category == "emotion")
-            {
-                self.session_store.active_session_id = existing.id.clone();
-                self.chat_store.input = self
-                    .session_store
-                    .drafts
-                    .remove(&existing.id)
-                    .unwrap_or_default();
-                return;
-            }
-        }
-        let count = self
-            .session_store
-            .sessions
-            .iter()
-            .filter(|s| s.category == category)
-            .count();
-        let s = new_session(&category, count);
+        let count = self.session_store.sessions.len();
+        let s = new_session(count);
         let id = s.id.clone();
 
         // Emit event-driven session creation so navigation and future backend
