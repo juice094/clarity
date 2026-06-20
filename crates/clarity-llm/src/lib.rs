@@ -44,7 +44,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use deepseek_device::{
-    DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceProvider,
+    DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceOptions, DeepSeekDeviceProvider,
 };
 pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
@@ -1075,6 +1075,7 @@ impl LlmProvider for AnthropicLlm {
                                                     if tx
                                                         .send(Ok(StreamDelta {
                                                             content: Some(text.to_string()),
+                                                            reasoning_content: None,
                                                             tool_calls: vec![],
                                                         }))
                                                         .await

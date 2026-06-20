@@ -178,6 +178,7 @@ impl LlmProvider for MockLlm {
             let _ = tx
                 .send(Ok(StreamDelta {
                     content: Some("This is a mock response".to_string()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;

@@ -1707,6 +1707,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "candle-core",
  "candle-transformers",
  "chrono",
@@ -1718,6 +1719,7 @@ dependencies = [
  "hf-hub",
  "parking_lot",
  "rand 0.10.1",
+ "rayon",
  "regex",
  "reqwest",
  "serde",

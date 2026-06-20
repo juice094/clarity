@@ -306,6 +306,7 @@ impl LlmProvider for OllamaProvider {
                                                 && tx
                                                     .send(Ok(StreamDelta {
                                                         content: Some(event.message.content),
+                                                        reasoning_content: None,
                                                         tool_calls: vec![],
                                                     }))
                                                     .await
@@ -331,6 +332,7 @@ impl LlmProvider for OllamaProvider {
                                                     && tx
                                                         .send(Ok(StreamDelta {
                                                             content: None,
+                                                            reasoning_content: None,
                                                             tool_calls,
                                                         }))
                                                         .await

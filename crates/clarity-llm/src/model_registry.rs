@@ -42,7 +42,9 @@
 //! 4. Built-in fallback (auto-detect from env vars)
 
 use crate::api::LlmProvider;
-use crate::{LlamaServerProvider, OpenAiCompatibleLlm};
+use crate::{
+    DeepSeekDeviceOptions, DeepSeekDeviceProvider, LlamaServerProvider, OpenAiCompatibleLlm,
+};
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use clarity_contract::llm::{LlmProviderFactory, Pricing};
@@ -68,6 +70,8 @@ pub enum ProtocolType {
     Ollama,
     /// llama.cpp server (OpenAI-compatible HTTP endpoint)
     LlamaServer,
+    /// DeepSeek Android App device-login API (no official API key).
+    DeepSeekDevice,
 }
 
 /// Authentication type for a provider.
@@ -351,6 +355,7 @@ impl ModelRegistry {
                     auth_type: defaults.auth_type.clone(),
                     auth_token_key: defaults.auth_token_key.clone(),
                     oauth: defaults.oauth.clone(),
+                    tags: defaults.tags.clone(),
                     ..Default::default()
                 },
             );
@@ -418,6 +423,44 @@ impl ModelRegistry {
     /// List all provider names
     pub fn list_providers(&self) -> Vec<&String> {
         self.config.providers.keys().collect()
+    }
+
+    /// List aliases whose provider has every tag in `required`.
+    pub fn aliases_with_tags(&self, required: &[&str]) -> Vec<&ModelEntry> {
+        self.config
+            .models
+            .iter()
+            .filter(|m| {
+                self.config
+                    .providers
+                    .get(&m.provider)
+                    .map(|p| required.iter().all(|tag| p.tags.contains(&tag.to_string())))
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    /// List aliases that are usable for a given session context.
+    ///
+    /// - `"chat"` allows all aliases.
+    /// - `"work"` / `"claw"` exclude aliases whose provider is tagged `chat-only`.
+    pub fn aliases_for_context(&self, context: &str) -> Vec<&ModelEntry> {
+        match context {
+            "chat" => self.list_models(),
+            "work" | "claw" => self
+                .config
+                .models
+                .iter()
+                .filter(|m| {
+                    self.config
+                        .providers
+                        .get(&m.provider)
+                        .map(|p| !p.tags.contains(&"chat-only".to_string()))
+                        .unwrap_or(true)
+                })
+                .collect(),
+            _ => self.list_models(),
+        }
     }
 
     /// Add or replace a provider family configuration.
@@ -643,6 +686,76 @@ pub async fn build_provider_from_registry_with_key(
             let provider = LlamaServerProvider::new(base_url, model_id);
             Ok(Box::new(provider))
         }
+        ProtocolType::DeepSeekDevice => {
+            let token = resolve_api_key(
+                merged_api_key_env,
+                alias_api_key,
+                alias_api_key_env,
+                override_key,
+                secrets,
+            )
+            .unwrap_or_default();
+
+            let credentials = if !token.is_empty() {
+                crate::DeepSeekDeviceCredentials::Token(token)
+            } else {
+                let mobile = cfg
+                    .extra
+                    .get("mobile")
+                    .cloned()
+                    .or_else(|| std::env::var("DEEPSEEK_DEVICE_MOBILE").ok())
+                    .filter(|s| !s.is_empty());
+                let password = cfg
+                    .extra
+                    .get("password")
+                    .cloned()
+                    .or_else(|| std::env::var("DEEPSEEK_DEVICE_PASSWORD").ok())
+                    .filter(|s| !s.is_empty());
+                match (mobile, password) {
+                    (Some(m), Some(p)) => {
+                        crate::DeepSeekDeviceCredentials::Password { mobile: m, password: p }
+                    }
+                    _ => {
+                        return Err(AgentError::Llm(
+                            "DeepSeek device provider requires either api_key (token) or \
+                             extra.mobile + extra.password / env vars"
+                                .into(),
+                        ));
+                    }
+                }
+            };
+
+            let defaults = crate::DeepSeekDeviceConfig::default();
+            let mut options = defaults.options;
+            if let Some(v) = cfg.extra.get("thinking_enabled") {
+                options.thinking_enabled = v == "true";
+            }
+            if let Some(v) = cfg.extra.get("search_enabled") {
+                options.search_enabled = v == "true";
+            }
+            if let Some(v) = cfg.extra.get("model_type") {
+                options.model_type = v.clone();
+            } else {
+                options = DeepSeekDeviceOptions::from_model_id(model_id);
+            }
+
+            let config = crate::DeepSeekDeviceConfig {
+                base_url: cfg.base_url.clone().unwrap_or(defaults.base_url),
+                client_version: cfg
+                    .extra
+                    .get("client_version")
+                    .cloned()
+                    .unwrap_or(defaults.client_version),
+                device_id: cfg
+                    .extra
+                    .get("device_id")
+                    .cloned()
+                    .unwrap_or(defaults.device_id),
+                credentials,
+                options,
+            };
+            Ok(Box::new(DeepSeekDeviceProvider::new(config)))
+        }
     }
 }
 
@@ -688,4 +801,125 @@ pub fn default_secret_store() -> Result<clarity_secrets::SecretStore, AgentError
     };
     clarity_secrets::SecretStore::load_or_create(key_path)
         .map_err(|e| AgentError::Llm(format!("Failed to load secret store: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_build_deepseek_device_provider_from_registry() {
+        let provider_cfg = ProviderConfig {
+            protocol: ProtocolType::DeepSeekDevice,
+            base_url: Some("https://chat.deepseek.com".into()),
+            ..Default::default()
+        };
+        let entry = ModelEntry {
+            alias: "deepseek-device".into(),
+            provider: "deepseek-device".into(),
+            model_id: "deepseek-chat".into(),
+            api_key: Some("test-device-token".into()),
+            ..Default::default()
+        };
+
+        let provider = build_provider_from_registry_entry(&provider_cfg, &entry, None, None)
+            .await
+            .expect("should build DeepSeek device provider");
+
+        // 验证类型正确：能成功构建即说明 registry 路径打通。
+        // （无法直接 downcast，因为 LlmProvider 是 trait object）
+        assert!(!provider.capabilities().native_tool_calling);
+    }
+
+    #[tokio::test]
+    async fn test_build_deepseek_device_provider_requires_token() {
+        let provider_cfg = ProviderConfig {
+            protocol: ProtocolType::DeepSeekDevice,
+            ..Default::default()
+        };
+        let entry = ModelEntry {
+            alias: "deepseek-device".into(),
+            provider: "deepseek-device".into(),
+            model_id: "deepseek-chat".into(),
+            ..Default::default()
+        };
+
+        let result = build_provider_from_registry_entry(&provider_cfg, &entry, None, None).await;
+        assert!(result.is_err(), "should fail without token");
+    }
+
+    #[tokio::test]
+    async fn test_build_deepseek_device_provider_from_password() {
+        let mut provider_cfg = ProviderConfig {
+            protocol: ProtocolType::DeepSeekDevice,
+            ..Default::default()
+        };
+        provider_cfg
+            .extra
+            .insert("mobile".into(), "13800138000".into());
+        provider_cfg
+            .extra
+            .insert("password".into(), "password".into());
+        let entry = ModelEntry {
+            alias: "deepseek-device-pwd".into(),
+            provider: "deepseek-device".into(),
+            model_id: "deepseek-reasoner".into(),
+            ..Default::default()
+        };
+
+        let provider = build_provider_from_registry_entry(&provider_cfg, &entry, None, None)
+            .await
+            .expect("should build DeepSeek device provider with password");
+
+        let caps = provider.capabilities();
+        assert!(!caps.native_tool_calling);
+    }
+
+    #[test]
+    fn test_aliases_for_context_filters_chat_only() {
+        let mut config = ModelConfigFile::default();
+        config.providers.insert(
+            "chat-provider".into(),
+            ProviderConfig {
+                tags: vec!["chat-only".into()],
+                ..Default::default()
+            },
+        );
+        config.providers.insert(
+            "work-provider".into(),
+            ProviderConfig {
+                tags: vec![],
+                ..Default::default()
+            },
+        );
+        config.models.push(ModelEntry {
+            alias: "chat-model".into(),
+            provider: "chat-provider".into(),
+            model_id: "x".into(),
+            ..Default::default()
+        });
+        config.models.push(ModelEntry {
+            alias: "work-model".into(),
+            provider: "work-provider".into(),
+            model_id: "y".into(),
+            ..Default::default()
+        });
+
+        let registry = ModelRegistry::from_config(config).unwrap();
+        let chat_aliases: Vec<_> = registry
+            .aliases_for_context("chat")
+            .into_iter()
+            .map(|m| m.alias.clone())
+            .collect();
+        let work_aliases: Vec<_> = registry
+            .aliases_for_context("work")
+            .into_iter()
+            .map(|m| m.alias.clone())
+            .collect();
+
+        assert!(chat_aliases.contains(&"chat-model".into()));
+        assert!(chat_aliases.contains(&"work-model".into()));
+        assert!(!work_aliases.contains(&"chat-model".into()));
+        assert!(work_aliases.contains(&"work-model".into()));
+    }
 }

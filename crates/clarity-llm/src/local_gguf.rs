@@ -497,6 +497,7 @@ impl LocalGgufProvider {
                 let _ = sender
                     .send(Ok(StreamDelta {
                         content: Some(text.clone()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -540,6 +541,7 @@ impl LocalGgufProvider {
                     let _ = sender
                         .send(Ok(StreamDelta {
                             content: Some(text.clone()),
+                            reasoning_content: None,
                             tool_calls: vec![],
                         }))
                         .await;
@@ -557,6 +559,7 @@ impl LocalGgufProvider {
                 let _ = sender
                     .send(Ok(StreamDelta {
                         content: Some(rest.clone()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -798,6 +801,7 @@ async fn generate_with_state(
             let _ = sender
                 .send(Ok(StreamDelta {
                     content: Some(text.clone()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;
@@ -839,6 +843,7 @@ async fn generate_with_state(
                 let _ = sender
                     .send(Ok(StreamDelta {
                         content: Some(text.clone()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -856,6 +861,7 @@ async fn generate_with_state(
             let _ = sender
                 .send(Ok(StreamDelta {
                     content: Some(rest.clone()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;

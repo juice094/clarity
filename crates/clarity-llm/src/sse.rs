@@ -41,6 +41,7 @@ impl SseParser {
             if let Some(call) = self.flush_last() {
                 out.push(StreamDelta {
                     content: None,
+                    reasoning_content: None,
                     tool_calls: vec![call],
                 });
             }
@@ -65,6 +66,7 @@ impl SseParser {
                 if !content.is_empty() {
                     out.push(StreamDelta {
                         content: Some(content.to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     });
                 }
@@ -75,6 +77,7 @@ impl SseParser {
                 if !reasoning.is_empty() {
                     out.push(StreamDelta {
                         content: Some(reasoning.to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     });
                 }
@@ -97,6 +100,7 @@ impl SseParser {
                             if let Some(call) = self.flush_last() {
                                 out.push(StreamDelta {
                                     content: None,
+                                    reasoning_content: None,
                                     tool_calls: vec![call],
                                 });
                             }
@@ -135,6 +139,7 @@ impl SseParser {
     pub fn flush(&mut self) -> Option<StreamDelta> {
         self.flush_last().map(|call| StreamDelta {
             content: None,
+            reasoning_content: None,
             tool_calls: vec![call],
         })
     }

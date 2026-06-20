@@ -24,6 +24,8 @@ pub struct FamilyDefaults {
     pub oauth: Option<OAuthProviderConfig>,
     /// Default model identifier for this family.
     pub default_model: Option<String>,
+    /// Capability / visibility tags (e.g. "chat-only").
+    pub tags: Vec<String>,
 }
 
 impl Default for FamilyDefaults {
@@ -36,6 +38,7 @@ impl Default for FamilyDefaults {
             auth_token_key: None,
             oauth: None,
             default_model: None,
+            tags: Vec::new(),
         }
     }
 }
@@ -100,6 +103,14 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             default_model: Some("llama-server-default".into()),
             ..Default::default()
         }),
+        "deepseek-device" => Some(FamilyDefaults {
+            protocol: ProtocolType::DeepSeekDevice,
+            base_url: Some("https://chat.deepseek.com".into()),
+            api_key_env: Some("DEEPSEEK_DEVICE_TOKEN".into()),
+            default_model: Some("deepseek-chat".into()),
+            tags: vec!["chat-only".to_string()],
+            ..Default::default()
+        }),
         #[cfg(feature = "local-llm")]
         "local" => Some(FamilyDefaults {
             protocol: ProtocolType::KalosmLocal,
@@ -116,6 +127,7 @@ pub fn all_family_names() -> &'static [&'static str] {
     &[
         "openai",
         "deepseek",
+        "deepseek-device",
         "kimi",
         "moonshot",
         "kimi-code",

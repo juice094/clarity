@@ -405,6 +405,7 @@ mod tests {
                     let _ = tx
                         .send(Ok(StreamDelta {
                             content: Some(response),
+                            reasoning_content: None,
                             tool_calls: vec![],
                         }))
                         .await;

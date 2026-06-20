@@ -157,14 +157,33 @@ impl Message {
 pub struct StreamDelta {
     /// Text chunk emitted by the model, if any.
     pub content: Option<String>,
+    /// Reasoning / thinking chunk emitted by the model, if any.
+    /// Providers that do not expose reasoning (e.g. OpenAI gpt-4o) leave this as `None`.
+    pub reasoning_content: Option<String>,
     /// Tool calls parsed from the stream so far.
     pub tool_calls: Vec<ToolCall>,
 }
 
 impl StreamDelta {
+    /// Convenience constructor for a plain text delta.
+    pub fn content(text: impl Into<String>) -> Self {
+        Self {
+            content: Some(text.into()),
+            ..Default::default()
+        }
+    }
+
+    /// Convenience constructor for a reasoning/thinking delta.
+    pub fn reasoning(text: impl Into<String>) -> Self {
+        Self {
+            reasoning_content: Some(text.into()),
+            ..Default::default()
+        }
+    }
+
     /// Check if this delta contains any meaningful data.
     pub fn is_empty(&self) -> bool {
-        self.content.is_none() && self.tool_calls.is_empty()
+        self.content.is_none() && self.reasoning_content.is_none() && self.tool_calls.is_empty()
     }
 }
 

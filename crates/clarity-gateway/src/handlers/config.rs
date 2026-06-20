@@ -26,6 +26,10 @@ pub struct SetAliasConfigRequest {
     /// Optional base URL override.
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Optional protocol override, e.g. "openai_chat", "deepseek_device".
+    /// Defaults to the provider family's existing protocol or "openai_chat".
+    #[serde(default)]
+    pub protocol: Option<String>,
     /// Fallback aliases to try if this provider fails.
     #[serde(default)]
     pub fallback_aliases: Vec<String>,
@@ -75,6 +79,18 @@ fn active_alias_path() -> PathBuf {
 
 fn secret_key_path() -> PathBuf {
     project_clarity_dir().join("secrets.key")
+}
+
+/// Parse a protocol string into [`clarity_llm::ProtocolType`].
+fn parse_protocol(s: &str) -> Option<clarity_llm::ProtocolType> {
+    match s {
+        "openai_chat" => Some(clarity_llm::ProtocolType::OpenAiChat),
+        "anthropic_messages" => Some(clarity_llm::ProtocolType::AnthropicMessages),
+        "ollama" => Some(clarity_llm::ProtocolType::Ollama),
+        "llama_server" => Some(clarity_llm::ProtocolType::LlamaServer),
+        "deepseek_device" => Some(clarity_llm::ProtocolType::DeepSeekDevice),
+        _ => None,
+    }
 }
 
 fn mask_key(key: &str) -> String {
@@ -283,9 +299,15 @@ pub async fn apply_alias_config(
 
     // Ensure provider family exists.
     if registry.get_provider(&req.provider).is_none() {
-        // Create a minimal OpenAI-compatible provider family.
+        // Create a minimal provider family. Protocol defaults to OpenAI-compatible
+        // unless explicitly overridden (e.g. "deepseek_device").
+        let protocol = req
+            .protocol
+            .as_deref()
+            .and_then(parse_protocol)
+            .unwrap_or(clarity_llm::ProtocolType::OpenAiChat);
         let mut provider_cfg = clarity_llm::ProviderConfig {
-            protocol: clarity_llm::ProtocolType::OpenAiChat,
+            protocol,
             auth_type: clarity_llm::AuthType::ApiKey,
             ..Default::default()
         };

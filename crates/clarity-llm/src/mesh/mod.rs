@@ -272,6 +272,7 @@ mod tests {
                     let _ = tx
                         .send(Ok(StreamDelta {
                             content: Some(format!("stream from {}", name)),
+                            reasoning_content: None,
                             tool_calls: vec![],
                         }))
                         .await;

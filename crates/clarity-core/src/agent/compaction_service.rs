@@ -393,6 +393,7 @@ mod tests {
                 let _ = tx
                     .send(Ok(clarity_contract::StreamDelta {
                         content: Some("chunk".to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -810,6 +811,7 @@ mod tests {
                     let _ = tx
                         .send(Ok(clarity_contract::StreamDelta {
                             content: Some("chunk".to_string()),
+                            reasoning_content: None,
                             tool_calls: vec![],
                         }))
                         .await;

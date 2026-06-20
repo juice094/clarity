@@ -144,6 +144,7 @@ async fn test_compaction_triggered_in_agent() {
                 let _ = tx
                     .send(Ok(StreamDelta {
                         content: Some("This is a mock response".to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -258,6 +259,7 @@ async fn test_tool_call_approval_flow() {
                 let _ = tx
                     .send(Ok(StreamDelta {
                         content: Some("Mock response".to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -343,6 +345,7 @@ async fn test_tool_call_yolo_mode() {
                 let _ = tx
                     .send(Ok(StreamDelta {
                         content: Some("Mock response".to_string()),
+                        reasoning_content: None,
                         tool_calls: vec![],
                     }))
                     .await;
@@ -967,6 +970,7 @@ impl LlmProvider for MockLlmFailingTool {
             let _ = tx
                 .send(Ok(StreamDelta {
                     content: Some("Mock".to_string()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;
@@ -1066,6 +1070,7 @@ impl LlmProvider for MockLlmRecoverableLoop {
             let _ = tx
                 .send(Ok(StreamDelta {
                     content: Some("Mock".to_string()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;
@@ -1136,6 +1141,7 @@ impl LlmProvider for BudgetMockLlm {
             let _ = tx
                 .send(Ok(StreamDelta {
                     content: Some("This is a mock response".to_string()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;
@@ -1281,6 +1287,7 @@ impl LlmProvider for VisionTrackingMockLlm {
             let _ = tx
                 .send(Ok(StreamDelta {
                     content: Some("mock".to_string()),
+                    reasoning_content: None,
                     tool_calls: vec![],
                 }))
                 .await;
