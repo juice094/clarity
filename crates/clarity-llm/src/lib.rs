@@ -165,7 +165,13 @@ const MAX_MESSAGE_BODY_BYTES: usize = 1_500_000;
 /// Maximum serialized JSON bytes for the `tools` field. MCP servers can return
 /// very large input schemas; if the tools payload exceeds this, we drop tools
 /// for this request rather than risk a 413 from the provider.
-const MAX_TOOLS_JSON_BYTES: usize = 500_000;
+const MAX_TOOLS_JSON_BYTES: usize = 300_000;
+
+/// Maximum serialized JSON bytes for the entire request body.
+///
+/// Providers such as DeepSeek and Kimi reject bodies larger than ~2MB. We leave
+/// a small margin for JSON framing and provider metadata.
+const MAX_REQUEST_BODY_BYTES: usize = 2_000_000;
 
 /// Truncate message history to fit within a byte budget while preserving the
 /// system prompt and the most recent user/assistant exchanges.
@@ -257,6 +263,35 @@ fn cap_tools_json(tools_opt: Option<Value>) -> Option<Value> {
             }
         }
         None => None,
+    }
+}
+
+/// Final guard: if the serialized request body is still over the provider limit,
+/// drop tools and log. We do not silently truncate messages here to avoid
+/// surprising the caller; message truncation already happened earlier.
+fn guard_request_body_size(request_body: &mut ChatCompletionRequest) {
+    let body_size = serde_json::to_string(request_body).map_or(0, |s| s.len());
+    tracing::debug!(
+        body_bytes = body_size,
+        messages = request_body.messages.len(),
+        tools_present = request_body.tools.is_some(),
+        "LLM request prepared"
+    );
+    if body_size > MAX_REQUEST_BODY_BYTES {
+        tracing::warn!(
+            body_bytes = body_size,
+            max_bytes = MAX_REQUEST_BODY_BYTES,
+            "Request body exceeds budget; dropping tools"
+        );
+        request_body.tools = None;
+        let body_size = serde_json::to_string(request_body).map_or(0, |s| s.len());
+        if body_size > MAX_REQUEST_BODY_BYTES {
+            tracing::error!(
+                body_bytes = body_size,
+                max_bytes = MAX_REQUEST_BODY_BYTES,
+                "Request body still exceeds budget after dropping tools; provider will likely reject"
+            );
+        }
     }
 }
 
@@ -428,7 +463,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             None
         };
-        let request_body = ChatCompletionRequest {
+        let mut request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
             tools: tools_opt,
@@ -438,6 +473,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
         };
+        guard_request_body_size(&mut request_body);
 
         // Build URL: base_url should end with /v1, e.g. https://api.kimi.com/coding/v1
         let base = self.base_url.trim_end_matches('/');
@@ -446,12 +482,6 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             format!("{}/v1/chat/completions", base)
         };
-
-        tracing::debug!(
-            "LLM complete request: {} messages, tools={}",
-            request_body.messages.len(),
-            serde_json::to_string(&request_body.tools).unwrap_or_default()
-        );
 
         let response = self
             .client
@@ -544,7 +574,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
         } else {
             None
         };
-        let request_body = ChatCompletionRequest {
+        let mut request_body = ChatCompletionRequest {
             model: self.model.clone(),
             messages: api_messages,
             tools: tools_opt,
@@ -554,12 +584,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
         };
-
-        tracing::debug!(
-            "LLM stream request: {} messages, tools={}",
-            request_body.messages.len(),
-            serde_json::to_string(&request_body.tools).unwrap_or_default()
-        );
+        guard_request_body_size(&mut request_body);
 
         let base = self.base_url.trim_end_matches('/');
         let url = if base.ends_with("/v1") {
@@ -1546,5 +1571,35 @@ mod tests {
         }]);
         let tools_opt = cap_tools_json(Some(tools));
         assert!(tools_opt.is_none());
+    }
+
+    #[test]
+    fn test_guard_request_body_drops_tools_when_oversized() {
+        let huge_content = "x".repeat(2_500_000);
+        let mut request = ChatCompletionRequest {
+            model: "test-model".into(),
+            messages: vec![ApiMessage {
+                role: "user".into(),
+                content: huge_content,
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+            }],
+            tools: Some(json!([{
+                "type": "function",
+                "function": {
+                    "name": "small_tool",
+                    "description": "a tool",
+                    "parameters": { "type": "object", "properties": {} }
+                }
+            }])),
+            temperature: None,
+            max_tokens: None,
+            stream: false,
+            prompt_cache_key: None,
+            thinking: None,
+        };
+        guard_request_body_size(&mut request);
+        assert!(request.tools.is_none());
     }
 }

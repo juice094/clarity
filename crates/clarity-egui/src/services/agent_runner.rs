@@ -7,6 +7,37 @@ use crate::services::wire_dispatcher::dispatch_wire_message;
 use crate::session::now_millis;
 use crate::ui::types::*;
 
+/// Maximum text bytes to read from a user-attached file.
+///
+/// ponytail: hard cap prevents a huge attachment from blowing the LLM request
+/// body. The user can still reference the filename; upgrade path is streaming
+/// or chunked upload for genuinely large files.
+const MAX_ATTACHMENT_BYTES: usize = 100_000;
+
+/// Find the largest valid UTF-8 boundary at or before `byte_idx`.
+///
+/// ponytail: std `str::floor_char_boundary` is stable since 1.91; we are on
+/// MSRV 1.85, so keep this tiny helper until we bump Rust.
+fn floor_char_boundary(text: &str, byte_idx: usize) -> usize {
+    let byte_idx = byte_idx.min(text.len());
+    let mut idx = byte_idx;
+    while idx > 0 && text.as_bytes()[idx] & 0b1100_0000 == 0b1000_0000 {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Read a text attachment, truncating to [`MAX_ATTACHMENT_BYTES`] if needed.
+fn read_attachment_text(path: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(path).ok()?;
+    if content.len() <= MAX_ATTACHMENT_BYTES {
+        Some(content)
+    } else {
+        let split = floor_char_boundary(&content, MAX_ATTACHMENT_BYTES);
+        Some(format!("{}...[truncated]", &content[..split]))
+    }
+}
+
 impl App {
     /// Execute a shell command directly (!cmd), bypassing the LLM entirely.
     pub(crate) fn execute_shell_direct(&mut self, cmd: String) {
@@ -140,7 +171,7 @@ impl App {
 
         let mut full_message = text.clone();
         for att in &self.chat_store.attachments {
-            if let Ok(content) = std::fs::read_to_string(&att.path) {
+            if let Some(content) = read_attachment_text(&att.path) {
                 full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
             } else {
                 full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
@@ -466,7 +497,7 @@ impl App {
 
         let mut full_message = text.clone();
         for att in &self.chat_store.attachments {
-            if let Ok(content) = std::fs::read_to_string(&att.path) {
+            if let Some(content) = read_attachment_text(&att.path) {
                 full_message.push_str(&format!("\n\n[File: {}]\n```\n{}\n```", att.name, content));
             } else {
                 full_message.push_str(&format!("\n\n[File: {} (binary or unreadable)]", att.name));
@@ -588,5 +619,21 @@ mod tests {
         assert!(!is_turn_idle_for_send(&TurnState::Stopping));
         assert!(!is_turn_idle_for_send(&TurnState::Compacting));
         assert!(!is_turn_idle_for_send(&TurnState::Restoring));
+    }
+
+    #[test]
+    fn test_attachment_text_truncates_to_cap() {
+        let path = std::env::temp_dir().join(format!(
+            "clarity-attachment-test-{}.txt",
+            std::process::id()
+        ));
+        let huge = "x".repeat(MAX_ATTACHMENT_BYTES + 1_000);
+        std::fs::write(&path, &huge).unwrap();
+
+        let result = read_attachment_text(&path).unwrap();
+        assert!(result.len() <= MAX_ATTACHMENT_BYTES + "...[truncated]".len());
+        assert!(result.ends_with("...[truncated]"));
+
+        std::fs::remove_file(&path).unwrap();
     }
 }

@@ -12,8 +12,8 @@ use std::collections::HashMap;
 /// DeepSeek/Kimi reject bodies around 2MB; we budget 400KB each for static and
 /// dynamic system prompts so that, combined with history/tools, we stay well
 /// below the provider limit.
-const MAX_STATIC_PROMPT_BYTES: usize = 400_000;
-const MAX_DYNAMIC_PROMPT_BYTES: usize = 400_000;
+const MAX_STATIC_PROMPT_BYTES: usize = 200_000;
+const MAX_DYNAMIC_PROMPT_BYTES: usize = 200_000;
 
 /// Find the largest valid UTF-8 boundary at or before `byte_idx`.
 fn floor_char_boundary(text: &str, byte_idx: usize) -> usize {
@@ -656,7 +656,7 @@ mod tests {
         use crate::agent::{Agent, AgentConfig};
         // Create a minimal agent with an oversized base prompt.
         let config = AgentConfig {
-            system_prompt: "x".repeat(600_000),
+            system_prompt: "x".repeat(300_000),
             ..Default::default()
         };
         let agent = Agent::with_config(crate::ToolRegistry::default(), config);

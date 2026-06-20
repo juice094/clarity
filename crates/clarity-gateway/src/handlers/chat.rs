@@ -355,7 +355,7 @@ pub async fn chat_completions(
 
     // Guard against providers that reject oversized request bodies (e.g. DeepSeek's
     // 2MB limit). Drop oldest non-system messages while keeping the current query.
-    const MAX_BODY_BYTES: usize = 1_500_000;
+    const MAX_BODY_BYTES: usize = 1_000_000;
     let original_count = messages.len();
     messages = truncate_messages_by_bytes(messages, MAX_BODY_BYTES);
     if messages.len() < original_count {
