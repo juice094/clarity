@@ -27,6 +27,7 @@ use chrono::Utc;
 
 mod app_state;
 pub(crate) mod claw;
+use crate::claw::normalize_gateway_url;
 mod components;
 mod design_system;
 mod error;
@@ -153,15 +154,9 @@ pub(crate) enum PairingState {
     Error(String),
 }
 
-/// Normalize a Gateway URL so that 127.0.0.1 and localhost are treated as
-/// equivalent when matching a saved device token to a discovered connection.
-fn normalize_gateway_url(url: &str) -> String {
-    url.to_ascii_lowercase().replace("127.0.0.1", "localhost")
-}
-
 /// Return true if the URL's host is localhost/127.0.0.1.
 fn is_localhost_host(url: &str) -> bool {
-    normalize_gateway_url(url)
+    crate::claw::normalize_gateway_url(url)
         .trim_start_matches("ws://")
         .trim_start_matches("wss://")
         .trim_start_matches("http://")
@@ -949,14 +944,7 @@ impl App {
         };
         self.claw_device_identity = Some(identity.clone());
 
-        let ws_url =
-            if conn.gateway_url.starts_with("ws://") || conn.gateway_url.starts_with("wss://") {
-                conn.gateway_url.clone()
-            } else {
-                conn.gateway_url
-                    .replace("http://", "ws://")
-                    .replace("https://", "wss://")
-            };
+        let ws_url = crate::claw::to_ws_url(&conn.gateway_url);
 
         let token = crate::settings::GuiSettings::resolve_api_key(&Some(conn.token.clone()))
             .unwrap_or_default();

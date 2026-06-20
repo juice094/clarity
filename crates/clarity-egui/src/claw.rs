@@ -239,11 +239,23 @@ fn discover_saved_openclaw(state: &DeviceState) {
     );
 }
 
-fn normalize_gateway_url(url: &str) -> String {
+/// Normalize a Gateway URL so that `127.0.0.1` and `localhost` are treated as
+/// equivalent and trailing slashes are removed.
+pub(crate) fn normalize_gateway_url(url: &str) -> String {
     url.to_ascii_lowercase()
         .replace("127.0.0.1", "localhost")
         .trim_end_matches('/')
         .to_string()
+}
+
+/// Convert an HTTP(S) Gateway URL to a WebSocket URL.
+pub(crate) fn to_ws_url(url: &str) -> String {
+    if url.starts_with("ws://") || url.starts_with("wss://") {
+        url.to_string()
+    } else {
+        url.replace("http://", "ws://")
+            .replace("https://", "wss://")
+    }
 }
 
 fn gateway_host(url: &str) -> Option<String> {

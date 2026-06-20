@@ -1,23 +1,8 @@
 //! Settings UI for managing OpenClaw remote Gateway connections.
 
 use crate::App;
+use crate::claw::{normalize_gateway_url, to_ws_url};
 use crate::settings::OpenClawAuthMode;
-
-fn to_ws_url(url: &str) -> String {
-    if url.starts_with("ws://") || url.starts_with("wss://") {
-        url.to_string()
-    } else {
-        url.replace("http://", "ws://")
-            .replace("https://", "wss://")
-    }
-}
-
-fn normalize_url(url: &str) -> String {
-    url.to_ascii_lowercase()
-        .replace("127.0.0.1", "localhost")
-        .trim_end_matches('/')
-        .to_string()
-}
 
 /// Renders the OpenClaw connections tab.
 pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
@@ -71,7 +56,8 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
                     } else {
                         for (idx, conn) in conns.iter_mut().enumerate() {
                             let is_pairing = pairing_url.as_deref().map(|u| {
-                                normalize_url(u) == normalize_url(&to_ws_url(&conn.gateway_url))
+                                normalize_gateway_url(u)
+                                    == normalize_gateway_url(&to_ws_url(&conn.gateway_url))
                             }) == Some(true);
                             ui.horizontal(|ui| {
                                 ui.set_min_width(ui.available_width());
