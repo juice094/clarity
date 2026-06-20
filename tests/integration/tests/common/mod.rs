@@ -58,6 +58,7 @@ impl LlmProvider for SequentialMockLlm {
                 .send(Ok(StreamDelta {
                     content: Some("Done".to_string()),
                     tool_calls: vec![],
+                    reasoning_content: None,
                 }))
                 .await;
         });

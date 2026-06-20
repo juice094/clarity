@@ -176,7 +176,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                             _ => None,
                         })
                         .unwrap_or_else(|| "agent:main:main".to_string());
-                    ws.send_message(&session_key, &cmd);
+                    ws.send_chat(&session_key, &cmd, app.claw_ws_uses_sessions_send);
                 } else {
                     app.push_toast(
                         app.t("Not connected to Claw Gateway"),

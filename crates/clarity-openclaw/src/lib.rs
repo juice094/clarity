@@ -9,10 +9,12 @@
 pub mod client;
 pub mod device;
 pub mod discovery;
+pub mod gateway_client;
 pub mod types;
 
 pub use client::ClawClient;
 pub use client::ClawClient as OpenClawClient;
 pub use device::{DeviceIdentity, PairedToken, load_paired_token, save_paired_token};
 pub use discovery::discover_openclaw_devices;
-pub use types::{ClawConnection, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};
+pub use gateway_client::{GatewayClient, GatewayMessage, GatewayResponse, ToolCall};
+pub use types::{ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};

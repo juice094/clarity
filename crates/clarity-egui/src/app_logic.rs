@@ -392,6 +392,7 @@ impl App {
                 last_active_session_id: String::new(),
                 request_repaint: false,
                 claw_history: Vec::new(),
+                claw_gateway_session_id: String::new(),
             },
             subagent_store: crate::stores::SubAgentStore {
                 parallel_batches: vec![],

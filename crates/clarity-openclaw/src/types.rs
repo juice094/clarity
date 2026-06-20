@@ -11,6 +11,15 @@ pub enum ClawType {
     OpenClaw,
 }
 
+/// Wire protocol spoken to a Claw Gateway.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClawProtocol {
+    /// OpenClaw / KimiClaw JSON-RPC over WebSocket.
+    OpenClawJsonRpc,
+    /// Native Clarity Gateway WebSocket protocol (`WsRequest`/`WsResponse`).
+    GatewayWebSocket,
+}
+
 /// Runtime status of a discovered device.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeviceStatus {
@@ -42,6 +51,8 @@ pub struct DeviceInfo {
 pub struct ClawConnection {
     /// Protocol family of the device.
     pub claw_type: ClawType,
+    /// Wire protocol spoken to the Gateway.
+    pub protocol: ClawProtocol,
     /// WebSocket or HTTP URL of the Gateway.
     pub gateway_url: String,
     /// Auth token (empty = no auth).

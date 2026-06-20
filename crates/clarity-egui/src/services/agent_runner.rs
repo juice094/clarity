@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use crate::App;
 use crate::app_state::ensure_llm;
+use crate::services::wire_dispatcher::dispatch_wire_message;
 use crate::session::now_millis;
 use crate::ui::types::*;
 
@@ -368,125 +369,7 @@ impl App {
             tokio::spawn(async move {
                 let mut wire_ui = wire.ui_side(false);
                 while let Some(msg) = wire_ui.recv().await {
-                    let event = match msg {
-                        clarity_wire::WireMessage::ContentPart { text, .. } => {
-                            Some(UiEvent::Chunk(text))
-                        }
-                        clarity_wire::WireMessage::DraftEvent { event, .. } => match event {
-                            clarity_wire::DraftEvent::Progress { text } => {
-                                Some(UiEvent::DraftProgress { text })
-                            }
-                            clarity_wire::DraftEvent::Clear => Some(UiEvent::DraftClear),
-                            clarity_wire::DraftEvent::Content { text } => {
-                                Some(UiEvent::DraftContent { text })
-                            }
-                        },
-                        clarity_wire::WireMessage::ToolCall {
-                            id,
-                            name,
-                            arguments,
-                            ..
-                        } => Some(UiEvent::ToolStart {
-                            id,
-                            name,
-                            arguments,
-                        }),
-                        clarity_wire::WireMessage::ToolResult { id, result, .. } => {
-                            Some(UiEvent::ToolResult { id, result })
-                        }
-                        clarity_wire::WireMessage::StepBegin { tool_name, .. } => {
-                            Some(UiEvent::StepBegin { tool_name })
-                        }
-                        clarity_wire::WireMessage::CompactionBegin { .. } => {
-                            Some(UiEvent::CompactionBegin)
-                        }
-                        clarity_wire::WireMessage::CompactionEnd { .. } => {
-                            Some(UiEvent::CompactionEnd)
-                        }
-                        clarity_wire::WireMessage::PlanStepBegin {
-                            step_id, tool_name, ..
-                        } => Some(UiEvent::PlanStepBegin { step_id, tool_name }),
-                        clarity_wire::WireMessage::PlanStepEnd {
-                            step_id, success, ..
-                        } => Some(UiEvent::PlanStepEnd { step_id, success }),
-                        clarity_wire::WireMessage::PlanStepSkipped { step_id, .. } => {
-                            Some(UiEvent::PlanStepSkipped { step_id })
-                        }
-                        clarity_wire::WireMessage::TurnBegin { user_input, .. } => {
-                            Some(UiEvent::TurnStart { user_input })
-                        }
-                        clarity_wire::WireMessage::TurnEnd { .. } => Some(UiEvent::TurnEnd),
-                        clarity_wire::WireMessage::StatusUpdate { message, .. } => {
-                            Some(UiEvent::StatusUpdate { message })
-                        }
-                        clarity_wire::WireMessage::ViewStateUpdate { turn, .. } => {
-                            Some(UiEvent::ViewStateUpdate {
-                                turn: turn.map(Into::into),
-                            })
-                        }
-                        clarity_wire::WireMessage::ThreadActive {
-                            thread_id, title, ..
-                        } => Some(UiEvent::ThreadActive { thread_id, title }),
-                        clarity_wire::WireMessage::ThreadList { threads, .. } => {
-                            let sessions = threads
-                                .into_iter()
-                                .map(|t| crate::ui::types::Session {
-                                    id: t.thread_id,
-                                    title: t.title.unwrap_or_default(),
-                                    category: "engineering".to_string(),
-                                    project_id: None,
-                                    context: crate::ui::types::SessionContext::default(),
-                                    lifecycle: crate::ui::types::SessionLifecycle::default(),
-                                    archived: false,
-                                    messages: Vec::new(),
-                                    updated_at: crate::session::now_millis(),
-                                    turn_heights: Vec::new(),
-                                })
-                                .collect();
-                            Some(UiEvent::ThreadList { threads: sessions })
-                        }
-                        clarity_wire::WireMessage::ThreadCreated {
-                            thread_id, title, ..
-                        } => Some(UiEvent::ThreadCreated {
-                            session: crate::ui::types::Session {
-                                id: thread_id,
-                                title: title.unwrap_or_default(),
-                                category: "engineering".to_string(),
-                                project_id: None,
-                                context: crate::ui::types::SessionContext::default(),
-                                lifecycle: crate::ui::types::SessionLifecycle::default(),
-                                archived: false,
-                                messages: Vec::new(),
-                                updated_at: crate::session::now_millis(),
-                                turn_heights: Vec::new(),
-                            },
-                        }),
-                        clarity_wire::WireMessage::ThreadUpdated {
-                            thread_id,
-                            title,
-                            archived,
-                            ..
-                        } => Some(UiEvent::ThreadUpdated {
-                            thread_id,
-                            title,
-                            archived,
-                        }),
-                        clarity_wire::WireMessage::Usage {
-                            prompt_tokens,
-                            completion_tokens,
-                            total_tokens,
-                            ..
-                        } => Some(UiEvent::Usage {
-                            prompt_tokens,
-                            completion_tokens,
-                            total_tokens,
-                        }),
-                    };
-                    if let Some(ev) = event {
-                        if let Err(e) = tx_wire.send(ev) {
-                            tracing::warn!("Failed to send wire event: {}", e);
-                        }
-                    }
+                    dispatch_wire_message(msg, &tx_wire);
                 }
             });
 
@@ -645,10 +528,6 @@ impl App {
         // Responses arrive asynchronously via claw_ws.drain(); the main loop
         // translates them into UiEvent::Chunk / UiEvent::Done and the chat
         // handlers finalize the assistant message.
-        if self.claw_ws_uses_sessions_send {
-            ws.send_session_message(&session_key, &full_message);
-        } else {
-            ws.send_message(&session_key, &full_message);
-        }
+        ws.send_chat(&session_key, &full_message, self.claw_ws_uses_sessions_send);
     }
 }

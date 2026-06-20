@@ -105,7 +105,7 @@ pub(crate) struct App {
     /// Live Claw device list polled from Gateway (replaces hardcoded mock data).
     pub(crate) device_state: crate::claw::DeviceState,
     /// Active WebSocket connection to the selected Claw Gateway.
-    pub(crate) claw_ws: Option<clarity_openclaw::ClawClient>,
+    pub(crate) claw_ws: Option<crate::claw::ClawClientHandle>,
     /// Track which device the current WebSocket is connected to.
     pub(crate) claw_ws_device_id: String,
     /// Whether the active connection uses `sessions.send` (remote OpenClaw)
@@ -1103,7 +1103,11 @@ impl eframe::App for App {
 
             if picked_id != self.claw_ws_device_id || self.claw_ws.is_none() {
                 if let Some(conn) = self.device_state.connection(&picked_id) {
-                    if !conn.gateway_token.is_empty() {
+                    // GatewayWebSocket (ZeroClaw) connections do not require a
+                    // token; OpenClaw still needs one.
+                    let token_required =
+                        conn.protocol == crate::claw::ClawProtocol::OpenClawJsonRpc;
+                    if !token_required || !conn.gateway_token.is_empty() {
                         let ws_url = if conn.gateway_url.starts_with("ws://")
                             || conn.gateway_url.starts_with("wss://")
                         {
@@ -1132,93 +1136,100 @@ impl eframe::App for App {
                             }
                         });
 
-                        self.claw_ws = if matches!(conn.claw_type, crate::claw::ClawType::OpenClaw)
-                        {
-                            match conn.auth_mode.as_deref() {
-                                Some("device_paired") => {
-                                    let token = conn
-                                        .device_token
-                                        .as_deref()
-                                        .or(saved_pairing.map(|r| r.auth_token()))
-                                        .unwrap_or(&conn.gateway_token);
-                                    if let Some(identity) = identity {
-                                        if is_remote {
-                                            Some(
-                                                clarity_openclaw::ClawClient::connect_with_remote_device(
-                                                    &ws_url, token, identity,
-                                                ),
-                                            )
-                                        } else {
-                                            Some(clarity_openclaw::ClawClient::connect_with_device(
-                                                &ws_url, identity, token,
-                                            ))
-                                        }
-                                    } else {
-                                        Some(clarity_openclaw::ClawClient::connect(
-                                            &ws_url,
-                                            &conn.gateway_token,
-                                        ))
-                                    }
-                                }
-                                Some("token_with_device") => {
-                                    if let Some(identity) = identity {
-                                        if is_remote {
-                                            Some(
-                                                clarity_openclaw::ClawClient::connect_with_remote_device(
-                                                    &ws_url, &conn.gateway_token, identity,
-                                                ),
-                                            )
-                                        } else {
-                                            Some(clarity_openclaw::ClawClient::connect_with_device(
-                                                &ws_url,
-                                                identity,
-                                                &conn.gateway_token,
-                                            ))
-                                        }
-                                    } else {
-                                        Some(clarity_openclaw::ClawClient::connect(
-                                            &ws_url,
-                                            &conn.gateway_token,
-                                        ))
-                                    }
-                                }
-                                _ => {
-                                    // Default policy: use a saved pairing record
-                                    // when its Gateway URL matches.
-                                    if let (Some(identity), Some(record)) =
-                                        (identity, saved_pairing)
-                                    {
-                                        let token = record.auth_token();
-                                        if is_remote {
-                                            Some(
-                                                clarity_openclaw::ClawClient::connect_with_remote_device(
-                                                    &ws_url, token, identity,
-                                                ),
-                                            )
-                                        } else {
-                                            Some(clarity_openclaw::ClawClient::connect_with_device(
-                                                &ws_url, identity, token,
-                                            ))
-                                        }
-                                    } else {
-                                        Some(clarity_openclaw::ClawClient::connect(
-                                            &ws_url,
-                                            &conn.gateway_token,
-                                        ))
-                                    }
-                                }
+                        self.claw_ws = match conn.protocol {
+                            crate::claw::ClawProtocol::GatewayWebSocket => {
+                                let ws_url = if ws_url.ends_with("/ws") {
+                                    ws_url
+                                } else {
+                                    format!("{}/ws", ws_url.trim_end_matches('/'))
+                                };
+                                let ws_url = ws_url
+                                    .replace("http://", "ws://")
+                                    .replace("https://", "wss://");
+                                Some(crate::claw::ClawClientHandle::Gateway(
+                                    clarity_openclaw::GatewayClient::connect(&ws_url),
+                                ))
                             }
-                        } else {
-                            Some(clarity_openclaw::ClawClient::connect(
-                                &ws_url,
-                                &conn.gateway_token,
-                            ))
+                            crate::claw::ClawProtocol::OpenClawJsonRpc => {
+                                Some(crate::claw::ClawClientHandle::OpenClaw(
+                                    match conn.auth_mode.as_deref() {
+                                        Some("device_paired") => {
+                                            let token = conn
+                                                .device_token
+                                                .as_deref()
+                                                .or(saved_pairing.map(|r| r.auth_token()))
+                                                .unwrap_or(&conn.gateway_token);
+                                            if let Some(identity) = identity {
+                                                if is_remote {
+                                                    clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                        &ws_url, token, identity,
+                                                    )
+                                                } else {
+                                                    clarity_openclaw::ClawClient::connect_with_device(
+                                                        &ws_url, identity, token,
+                                                    )
+                                                }
+                                            } else {
+                                                clarity_openclaw::ClawClient::connect(
+                                                    &ws_url,
+                                                    &conn.gateway_token,
+                                                )
+                                            }
+                                        }
+                                        Some("token_with_device") => {
+                                            if let Some(identity) = identity {
+                                                if is_remote {
+                                                    clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                        &ws_url, &conn.gateway_token, identity,
+                                                    )
+                                                } else {
+                                                    clarity_openclaw::ClawClient::connect_with_device(
+                                                        &ws_url,
+                                                        identity,
+                                                        &conn.gateway_token,
+                                                    )
+                                                }
+                                            } else {
+                                                clarity_openclaw::ClawClient::connect(
+                                                    &ws_url,
+                                                    &conn.gateway_token,
+                                                )
+                                            }
+                                        }
+                                        _ => {
+                                            // Default policy: use a saved pairing record
+                                            // when its Gateway URL matches.
+                                            if let (Some(identity), Some(record)) =
+                                                (identity, saved_pairing)
+                                            {
+                                                let token = record.auth_token();
+                                                if is_remote {
+                                                    clarity_openclaw::ClawClient::connect_with_remote_device(
+                                                        &ws_url, token, identity,
+                                                    )
+                                                } else {
+                                                    clarity_openclaw::ClawClient::connect_with_device(
+                                                        &ws_url, identity, token,
+                                                    )
+                                                }
+                                            } else {
+                                                clarity_openclaw::ClawClient::connect(
+                                                    &ws_url,
+                                                    &conn.gateway_token,
+                                                )
+                                            }
+                                        }
+                                    },
+                                ))
+                            }
                         };
                         self.claw_ws_device_id = picked_id.clone();
                         if self.ui_store.active_bot_id != picked_id {
                             self.ui_store.active_bot_id = picked_id.clone();
                         }
-                        self.claw_ws_uses_sessions_send = is_remote;
+                        self.claw_ws_uses_sessions_send = conn.protocol
+                            == crate::claw::ClawProtocol::OpenClawJsonRpc
+                            && is_remote;
                     }
                 }
             }
@@ -1230,16 +1241,24 @@ impl eframe::App for App {
                     .as_ref()
                     .map(|ws| ws.drain())
                     .unwrap_or_default();
-                let ws_handle = self.claw_ws.clone();
 
-                for resp in responses {
-                    match resp {
-                        clarity_openclaw::client::ClawResponse::Connected { gateway_url } => {
+                for event in responses {
+                    match event {
+                        crate::claw::ClawEvent::Connected {
+                            gateway_url,
+                            session_id,
+                        } => {
                             self.push_toast(
                                 format!("Connected to Claw Gateway: {}", gateway_url),
                                 crate::ui::types::ToastLevel::Info,
                             );
                             self.device_state.record_success(&self.claw_ws_device_id, 0);
+                            if let Some(id) = session_id {
+                                self.ui_store.claw_gateway_session_id = id;
+                                if let Some(ref ws) = self.claw_ws {
+                                    ws.get_history();
+                                }
+                            }
                             // Auto-subscribe and fetch history after connect.
                             // Use the active session's Claw session_key when available;
                             // fall back to the legacy fixed key for non-Claw sessions.
@@ -1253,10 +1272,12 @@ impl eframe::App for App {
                                     _ => None,
                                 })
                                 .unwrap_or_else(|| "agent:main:main".to_string());
-                            if let Some(ref ws) = ws_handle {
-                                ws.subscribe_session(&session_key);
-                                ws.subscribe_messages(&session_key);
-                                ws.fetch_history(&session_key);
+                            if let Some(crate::claw::ClawClientHandle::OpenClaw(ref openclaw)) =
+                                self.claw_ws
+                            {
+                                openclaw.subscribe_session(&session_key);
+                                openclaw.subscribe_messages(&session_key);
+                                openclaw.fetch_history(&session_key);
                             }
                             // Pin the active Claw session to this device so the
                             // connection manager keeps routing to the new instance.
@@ -1280,10 +1301,21 @@ impl eframe::App for App {
                                 }
                             }
                         }
-                        clarity_openclaw::client::ClawResponse::HistoryLoaded {
-                            session_key: _,
-                            messages,
-                        } => {
+                        crate::claw::ClawEvent::StreamChunk(text) => {
+                            if !text.trim().is_empty() {
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
+                            }
+                        }
+                        crate::claw::ClawEvent::Done => {
+                            let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                        }
+                        crate::claw::ClawEvent::WirePayload(payload) => {
+                            crate::services::wire_dispatcher::dispatch_wire_payload(
+                                &payload,
+                                &self.ui_tx,
+                            );
+                        }
+                        crate::claw::ClawEvent::History(messages) => {
                             let count = messages.len();
                             self.push_toast(
                                 format!("Loaded {} messages from session", count),
@@ -1327,104 +1359,7 @@ impl eframe::App for App {
                                 }
                             }
                         }
-                        clarity_openclaw::client::ClawResponse::Reply {
-                            id: _,
-                            method,
-                            ok,
-                            payload,
-                        } => {
-                            if ok {
-                                if let Some(text) = extract_claw_text(&payload) {
-                                    if !text.trim().is_empty() {
-                                        let _ =
-                                            self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
-                                        let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
-                                    }
-                                }
-                            } else {
-                                let method_str = method.as_deref().unwrap_or("unknown");
-                                let err = payload
-                                    .get("error")
-                                    .and_then(|v| v.as_str())
-                                    .or_else(|| payload.get("message").and_then(|v| v.as_str()))
-                                    .map(|s| s.to_string());
-                                let detail = if payload.is_null()
-                                    || payload.as_object().map(|o| o.is_empty()).unwrap_or(false)
-                                {
-                                    "empty error payload".to_string()
-                                } else {
-                                    payload.to_string()
-                                };
-                                let msg = format!(
-                                    "OpenClaw {} failed: {}",
-                                    method_str,
-                                    err.as_deref().unwrap_or(&detail)
-                                );
-                                // Chat send failures are user-visible; subscription /
-                                // history fetch failures should be warnings so they do
-                                // not spam the UI during connection setup.
-                                let is_chat_failure = method.as_deref() == Some("chat.send")
-                                    || method.as_deref() == Some("sessions.send");
-                                if is_chat_failure {
-                                    tracing::warn!(?payload, method = %method_str, "OpenClaw chat request returned ok=false");
-                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(msg));
-                                } else {
-                                    tracing::warn!(?payload, method = %method_str, "OpenClaw request returned ok=false");
-                                }
-                            }
-                        }
-                        clarity_openclaw::client::ClawResponse::SessionMessage {
-                            role,
-                            content,
-                            finished,
-                        } => {
-                            let text = content.trim();
-                            if role == "user" {
-                                // User messages are already rendered optimistically
-                                // when send() was called; ignore echo events.
-                            } else if !text.is_empty() {
-                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(content));
-                            }
-                            if finished {
-                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
-                            }
-                        }
-                        clarity_openclaw::client::ClawResponse::Event {
-                            event_type,
-                            payload,
-                        } => {
-                            if event_type == "openclaw.reconnect_pending" {
-                                let failed_device = self.claw_ws_device_id.clone();
-                                if !failed_device.is_empty() {
-                                    self.device_state.record_failure(&failed_device);
-                                    self.device_state.update_status(
-                                        &failed_device,
-                                        crate::stores::ui::BotStatus::Offline,
-                                    );
-                                    self.push_toast(
-                                        format!(
-                                            "Claw device {} went offline; failing over",
-                                            failed_device
-                                        ),
-                                        crate::ui::types::ToastLevel::Warn,
-                                    );
-                                }
-                                self.claw_ws = None;
-                                self.claw_ws_device_id.clear();
-                                continue;
-                            }
-                            if matches!(
-                                event_type.as_str(),
-                                "done" | "finished" | "turn_end" | "message_end"
-                            ) {
-                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
-                            } else if let Some(text) = extract_claw_text(&payload) {
-                                if !text.trim().is_empty() {
-                                    let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
-                                }
-                            }
-                        }
-                        clarity_openclaw::client::ClawResponse::PairingResult {
+                        crate::claw::ClawEvent::PairingResult {
                             device_id,
                             approved,
                             token,
@@ -1456,7 +1391,27 @@ impl eframe::App for App {
                                 tracing::info!(device_id = %device_id, "OpenClaw pairing pending");
                             }
                         }
-                        clarity_openclaw::client::ClawResponse::Error(e) => {
+                        crate::claw::ClawEvent::ReconnectPending { .. } => {
+                            let failed_device = self.claw_ws_device_id.clone();
+                            if !failed_device.is_empty() {
+                                self.device_state.record_failure(&failed_device);
+                                self.device_state.update_status(
+                                    &failed_device,
+                                    crate::stores::ui::BotStatus::Offline,
+                                );
+                                self.push_toast(
+                                    format!(
+                                        "Claw device {} went offline; failing over",
+                                        failed_device
+                                    ),
+                                    crate::ui::types::ToastLevel::Warn,
+                                );
+                            }
+                            self.claw_ws = None;
+                            self.claw_ws_device_id.clear();
+                            continue;
+                        }
+                        crate::claw::ClawEvent::Error(e) => {
                             tracing::warn!("Claw WebSocket error: {}", e);
                             let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error(format!(
                                 "OpenClaw connection error: {}",
@@ -1837,40 +1792,6 @@ fn render_line_text(line: &clarity_core::ui::RenderLine) -> String {
             format!("⤢ Block {block_id} ({line_count} lines)")
         }
     }
-}
-
-/// Try to extract human-readable text from an OpenClaw Gateway payload.
-///
-/// Different Gateway implementations emit responses under different keys, so
-/// this helper checks the common shapes without being tied to one schema.
-fn extract_claw_text(payload: &serde_json::Value) -> Option<String> {
-    // Direct string fields.
-    for key in ["text", "content", "message", "delta", "answer", "output"] {
-        if let Some(text) = payload.get(key).and_then(|v| v.as_str()) {
-            return Some(text.into());
-        }
-    }
-    // Nested message object.
-    if let Some(content) = payload
-        .get("message")
-        .or_else(|| payload.get("choices"))
-        .and_then(|v| v.get("content"))
-        .and_then(|v| v.as_str())
-    {
-        return Some(content.into());
-    }
-    // Array of content parts (OpenAI-style).
-    if let Some(parts) = payload.get("content_parts").and_then(|v| v.as_array()) {
-        let text: String = parts
-            .iter()
-            .filter_map(|p| p.get("text").and_then(|v| v.as_str()))
-            .collect::<Vec<_>>()
-            .join("");
-        if !text.is_empty() {
-            return Some(text);
-        }
-    }
-    None
 }
 
 #[cfg(test)]

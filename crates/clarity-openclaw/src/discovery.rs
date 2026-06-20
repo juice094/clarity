@@ -1,6 +1,8 @@
 //! Discover OpenClaw Gateways and paired devices.
 
-use crate::types::{ClawConnection, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};
+use crate::types::{
+    ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus,
+};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -92,6 +94,7 @@ fn discover_local_openclaw(
         },
         connection: ClawConnection {
             claw_type: ClawType::OpenClaw,
+            protocol: ClawProtocol::OpenClawJsonRpc,
             gateway_url: "ws://127.0.0.1:18679".into(),
             gateway_token: token.clone(),
             workspace_root: workspace.clone(),
@@ -123,6 +126,7 @@ fn discover_local_openclaw(
                         },
                         connection: ClawConnection {
                             claw_type: ClawType::OpenClaw,
+                            protocol: ClawProtocol::OpenClawJsonRpc,
                             gateway_url: "ws://127.0.0.1:18679".into(),
                             gateway_token: token.clone(),
                             workspace_root: workspace.clone(),
@@ -166,6 +170,7 @@ fn discover_remote_openclaw(out: &mut Vec<DeviceRecord>) {
         },
         connection: ClawConnection {
             claw_type: ClawType::OpenClaw,
+            protocol: ClawProtocol::OpenClawJsonRpc,
             gateway_url: remote_url,
             gateway_token: remote_token,
             workspace_root: PathBuf::from("."),
