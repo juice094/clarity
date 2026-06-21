@@ -124,7 +124,7 @@ tags: [index, moc]
 | [`comparisons/KIMI_CLI_COMPARISON.md`](./comparisons/KIMI_CLI_COMPARISON.md) | Kimi CLI 对比 | 决策者 |
 | [`research/`](./research/) | 研究参考 | 开发者 |
 | [`references/`](./references/) | 深度参考 | 开发者 |
-| [`adr/`](./adr/) | 架构决策记录（ADR-001 ~ ADR-015） | 开发者、架构师 |
+| [`adr/`](./adr/) | 架构决策记录（ADR-001 ~ ADR-018） | 开发者、架构师 |
 | [`notes/`](./notes/) | 会议纪要、审计、临时笔记 | 维护者 |
 
 ---
