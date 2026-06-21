@@ -141,6 +141,16 @@ impl ClawClientHandle {
             .send(clarity_openclaw::ProtocolCommand::SubscribeMessages { key: key.into() });
     }
 
+    /// Request missing role-context events for the given role.
+    pub fn sync_role_context(&self, role_id: &str, since_event_id: Option<&str>, device_id: &str) {
+        self.manager
+            .send(clarity_openclaw::ProtocolCommand::SyncRoleContext {
+                role_id: role_id.into(),
+                since_event_id: since_event_id.map(Into::into),
+                device_id: device_id.into(),
+            });
+    }
+
     /// Drain all pending events from the underlying manager and normalize them to
     /// [`ClawEvent`].
     pub fn drain(&self) -> Vec<ClawEvent> {

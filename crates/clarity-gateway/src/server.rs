@@ -18,6 +18,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use crate::handlers;
+use crate::role_context_store::RoleContextStore;
 use crate::session_store::{PersistentSessionStore, SessionStoreError};
 use chrono::{DateTime, Utc};
 use clarity_contract::subagent::BatchProgress;
@@ -65,12 +66,8 @@ pub struct AppState {
     pub oauth_service: Arc<clarity_llm::auth::OAuthService>,
     /// Registry of connected Claw daemon instances (heartbeat-based liveness).
     pub device_registry: crate::handlers::claw::DeviceRegistry,
-    /// In-memory store for Claw Mesh role-context events.
-    ///
-    /// ponytail: this is a placeholder until persistent storage (SQLite or
-    /// syncthing-backed files) is wired in. It is enough to validate the sync
-    /// protocol end-to-end.
-    pub role_context_store: Arc<RwLock<HashMap<String, Vec<clarity_contract::ClawContextEvent>>>>,
+    /// Persistent SQLite store for Claw Mesh role-context events.
+    pub role_context_store: Arc<RoleContextStore>,
 }
 
 impl AppState {
@@ -159,6 +156,24 @@ impl AppState {
         let oauth_service = Arc::new(clarity_llm::auth::OAuthService::new());
         oauth_service.register_kimi_code();
 
+        let role_context_db = clarity_home.join("role_context.db");
+        let role_context_store = match RoleContextStore::new(&role_context_db).await {
+            Ok(store) => {
+                info!("Role context store initialized at {:?}", role_context_db);
+                Arc::new(store)
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to create persistent role context store at {:?}: {}. Falling back to in-memory store.",
+                    role_context_db, e
+                );
+                Arc::new(RoleContextStore::new_in_memory().map_err(|inner| {
+                    warn!("Failed to create in-memory role context store: {}", inner);
+                    SessionStoreError::Io(std::io::Error::other(inner.to_string()))
+                })?)
+            }
+        };
+
         Ok(Self {
             agent: agent.clone(),
             session_store,
@@ -172,7 +187,7 @@ impl AppState {
             ws_sem: Arc::new(Semaphore::new(64)),
             oauth_service,
             device_registry: crate::handlers::claw::DeviceRegistry::new(),
-            role_context_store: Arc::new(RwLock::new(HashMap::new())),
+            role_context_store,
         })
     }
 }

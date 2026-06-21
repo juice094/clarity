@@ -79,6 +79,8 @@ pub mod channels;
 /// HTTP/Axum request handlers.
 pub mod handlers;
 pub mod health;
+/// Persistent SQLite-backed store for Claw Mesh role-context events.
+pub mod role_context_store;
 /// Shared application state and dual-port server runner.
 pub mod server;
 /// Session identifier types.

@@ -701,12 +701,14 @@ impl App {
                 }
             }
             self.switch_to_session(id);
+            self.maybe_sync_claw_role_context(&role);
             return;
         }
 
         // No existing role session: create one.
         let count = self.session_store.sessions.len();
         let session_key = crate::session::claw_session_key(&role);
+        let role_for_sync = role.clone();
         let session = new_session(
             count,
             SessionContext::Claw {
@@ -719,6 +721,23 @@ impl App {
             .ui_tx
             .send(crate::ui::types::UiEvent::ThreadCreated { session });
         self.process_events();
+        self.maybe_sync_claw_role_context(&role_for_sync);
+    }
+
+    /// Trigger a role-context sync for `role` if a Claw WebSocket is connected.
+    fn maybe_sync_claw_role_context(&self, role: &str) {
+        let Some(ref ws) = self.claw_ws else {
+            return;
+        };
+        let device_id = self
+            .claw_device_identity
+            .as_ref()
+            .map(|id| id.device_id())
+            .unwrap_or_else(|| self.claw_ws_device_id.clone());
+        // ponytail: since_event_id should be derived from the session's already
+        // known events once local role-context state is tracked. Passing None
+        // fetches all events and relies on the merger to deduplicate.
+        ws.sync_role_context(role, None, &device_id);
     }
 
     /// Infer the right `SessionContext` for a newly created session.

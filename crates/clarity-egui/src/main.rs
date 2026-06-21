@@ -1256,6 +1256,20 @@ impl eframe::App for App {
                                 ws.subscribe_session(&session_key);
                                 ws.subscribe_messages(&session_key);
                                 ws.get_history(&session_key);
+                                // Trigger role-context sync when the active session is a
+                                // Claw session, so the UI converges with Gateway state.
+                                if let Some(session) = self.session_store.active_session() {
+                                    if let crate::ui::types::SessionContext::Claw { role, .. } =
+                                        &session.context
+                                    {
+                                        let device_id = self
+                                            .claw_device_identity
+                                            .as_ref()
+                                            .map(|id| id.device_id())
+                                            .unwrap_or_else(|| self.claw_ws_device_id.clone());
+                                        ws.sync_role_context(role, None, &device_id);
+                                    }
+                                }
                             }
                             // Pin the active Claw session to this device so the
                             // connection manager keeps routing to the new instance.

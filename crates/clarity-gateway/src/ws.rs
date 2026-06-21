@@ -419,24 +419,34 @@ async fn handle_request(
         }
         WsRequest::SyncRoleContext {
             role_id,
-            since_event_id: _,
-            device_id: _,
+            since_event_id,
+            device_id,
         } => {
-            // ponytail: in-memory placeholder store. Replace with persistent
-            // SQLite-backed RoleContextStore once the protocol is validated.
+            if !device_id.is_empty()
+                && let Err(e) = state
+                    .role_context_store
+                    .record_device_presence(&role_id, &device_id)
+                    .await
+            {
+                tracing::warn!(error = %e, "failed to record device presence");
+            }
+
             let events = state
                 .role_context_store
-                .read()
+                .list_events(&role_id, since_event_id.as_deref())
                 .await
-                .get(&role_id)
-                .cloned()
+                .unwrap_or_default();
+            let online_devices = state
+                .role_context_store
+                .online_devices(&role_id)
+                .await
                 .unwrap_or_default();
 
             WsResponse::RoleContextSynced {
                 role_id,
                 events,
                 next_cursor: None,
-                online_devices: Vec::new(),
+                online_devices,
             }
         }
     }
@@ -696,6 +706,55 @@ mod tests {
                 assert_eq!(messages[0].content, "hello history");
             }
             _ => panic!("expected History variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_sync_role_context() {
+        use clarity_contract::{ClawContextEvent, ContextEventKind};
+
+        let state = test_state().await;
+        let session_id = SessionId::new();
+
+        let event = ClawContextEvent {
+            event_id: "ev-1".into(),
+            origin_device: "dev-a".into(),
+            origin_clock: 1,
+            kind: ContextEventKind::AppendMessage {
+                role: "user".into(),
+                content: "hello".into(),
+            },
+        };
+        state
+            .role_context_store
+            .append_event("operator", &event)
+            .await
+            .unwrap();
+
+        let response = handle_request(
+            &state,
+            &session_id,
+            WsRequest::SyncRoleContext {
+                role_id: "operator".into(),
+                since_event_id: None,
+                device_id: "dev-b".into(),
+            },
+        )
+        .await;
+
+        match response {
+            WsResponse::RoleContextSynced {
+                role_id,
+                events,
+                online_devices,
+                ..
+            } => {
+                assert_eq!(role_id, "operator");
+                assert_eq!(events.len(), 1);
+                assert_eq!(events[0].event_id, "ev-1");
+                assert!(online_devices.contains(&"dev-b".into()));
+            }
+            _ => panic!("expected RoleContextSynced variant"),
         }
     }
 
