@@ -32,6 +32,53 @@ use std::sync::{Arc, RwLock};
 // using `crate::claw::ClawType` / `crate::claw::ClawConnection`.
 pub use clarity_openclaw::types::{ClawConnection, ClawProtocol, ClawType, OpenClawSendMethod};
 
+/// Source of a discovered Claw endpoint, ordered by user-intent priority.
+/// Lower discriminants win when two sources describe the same endpoint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum DeviceSource {
+    /// User-configured in `GuiSettings::openclaw_connections`.
+    Settings,
+    /// `OPENCLAW_REMOTE_*` environment variables.
+    Env,
+    /// Persisted pairing record (`claw-device-token.json`).
+    SavedPairing,
+    /// Local OpenClaw discovery (`~/.kimi_openclaw`).
+    LocalDiscovery,
+    /// ZeroClaw fallback.
+    ZeroClaw,
+    /// Ultimate localhost fallback when nothing else is found.
+    Fallback,
+}
+
+impl DeviceSource {
+    fn label(self) -> &'static str {
+        match self {
+            DeviceSource::Settings => "settings",
+            DeviceSource::Env => "env",
+            DeviceSource::SavedPairing => "paired",
+            DeviceSource::LocalDiscovery => "local",
+            DeviceSource::ZeroClaw => "zeroclaw",
+            DeviceSource::Fallback => "fallback",
+        }
+    }
+}
+
+/// Stable key for deduplicating discovered endpoints that point to the same
+/// target session. Endpoints are considered identical when they share the same
+/// role, protocol family, normalized Gateway URL, and *effective* session key.
+/// Auth token differences are ignored because multiple config sources (admin
+/// token, device token, env, pairing) may all route to the same session.
+fn endpoint_key(role: &str, conn: &ClawConnection, session_key: &str) -> String {
+    format!(
+        "{}|{:?}|{:?}|{}|{}",
+        role,
+        conn.claw_type,
+        conn.protocol,
+        normalize_gateway_url(&conn.gateway_url),
+        session_key,
+    )
+}
+
 /// A single message entry returned as part of a Claw history response.
 #[derive(Clone, Debug)]
 pub struct ClawHistoryMessage {
@@ -322,6 +369,7 @@ impl DeviceState {
 
     /// Snapshot grouped by role, useful for UI sections that render devices
     /// under role headings.
+    #[allow(dead_code)]
     pub fn snapshot_grouped(&self) -> Vec<(String, Vec<BotInstance>)> {
         let guard = match self.roles.read() {
             Ok(g) => g,
@@ -337,6 +385,46 @@ impl DeviceState {
                 Some((role, devices))
             })
             .collect()
+    }
+
+    /// A session-centric view of the discovered device list.
+    ///
+    /// Devices that share the same `(role, effective_session_key)` are grouped
+    /// together because they all route to the same target Claw session. The UI
+    /// renders one row per group and lets the user expand the device sub-list
+    /// for pinning / failover.
+    pub fn snapshot_by_session(&self) -> Vec<ClawSessionGroup> {
+        let guard = match self.roles.read() {
+            Ok(g) => g,
+            Err(_) => return Vec::new(),
+        };
+        let mut groups: HashMap<(String, String), Vec<BotInstance>> = HashMap::new();
+        for (role, devices) in guard.iter() {
+            for device in devices {
+                let session_key = device
+                    .session_key
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| crate::session::claw_session_key(role));
+                groups
+                    .entry((role.clone(), session_key))
+                    .or_default()
+                    .push(device.clone());
+            }
+        }
+        let mut out: Vec<ClawSessionGroup> = groups
+            .into_iter()
+            .map(|((role, session_key), mut devices)| {
+                devices.sort_by(|a, b| a.id.cmp(&b.id));
+                ClawSessionGroup {
+                    role,
+                    session_key,
+                    devices,
+                }
+            })
+            .collect();
+        out.sort_by(|a, b| (&a.role, &a.session_key).cmp(&(&b.role, &b.session_key)));
+        out
     }
 
     /// Look up connection parameters for a device.
@@ -474,6 +562,7 @@ impl DeviceState {
     }
 
     /// Set the session-key override for a device by id.
+    #[allow(dead_code)]
     pub fn set_session_key(&self, device_id: &str, session_key: String) {
         if let Ok(mut guard) = self.roles.write() {
             for devices in guard.values_mut() {
@@ -500,6 +589,19 @@ impl DeviceState {
             health.entry(device.id).or_default();
         }
     }
+}
+
+/// Discovered devices grouped by the Claw session they target.
+///
+/// All devices in a group share the same `(role, session_key)` and therefore
+/// the same Gateway-side session context. The UI uses this as the primary
+/// navigation unit, with the individual devices shown as a collapsible
+/// failover list.
+#[derive(Clone, Debug)]
+pub struct ClawSessionGroup {
+    pub role: String,
+    pub session_key: String,
+    pub devices: Vec<BotInstance>,
 }
 
 /// Select the healthiest online/syncing device in a role.
@@ -575,86 +677,86 @@ fn best_in_role(
 pub fn discover(settings_connections: &[OpenClawConnection]) -> DeviceState {
     let state = DeviceState::default();
     let hostname = local_hostname();
+    let mut endpoints: HashMap<String, (DeviceSource, BotInstance, ClawConnection)> =
+        HashMap::new();
 
     // Source 1: ZeroClaw (local clarity-claw).
-    discover_zeroclaw(&state, &hostname);
+    discover_zeroclaw(&mut endpoints, &hostname);
 
     // Source 2 & 3: Local and remote OpenClaw via the shared crate
     // (local config + OPENCLAW_REMOTE_* env vars).
-    for record in clarity_openclaw::discovery::discover_openclaw_devices(&hostname) {
-        state.register(
-            BotInstance {
-                id: record.info.id,
-                name: record.info.name,
-                device_id: record.info.device_id,
-                role: "operator".into(),
-                status: map_status(record.info.status),
-                version: record.info.version,
-                last_backup: String::new(),
-                session_key: None,
-            },
-            record.connection,
-        );
-    }
-    // Allow the env-var remote connection to specify a custom session key.
-    if let Ok(remote_session_key) = std::env::var("OPENCLAW_REMOTE_SESSION_KEY") {
-        if !remote_session_key.is_empty() {
-            state.set_session_key("openclaw-remote-env", remote_session_key);
-        }
-    }
+    discover_openclaw_crate(&mut endpoints, &hostname);
 
     // Source 4: User-configured remote OpenClaw connections from settings.
-    discover_settings_openclaw(&state, settings_connections);
+    discover_settings_openclaw(&mut endpoints, settings_connections);
 
     // Source 5: Persisted paired token (e.g. a remote private Claw Gateway).
-    discover_saved_openclaw(&state);
+    discover_saved_openclaw(&mut endpoints);
 
-    // Ultimate fallback.
-    if state.snapshot().is_empty() {
-        state.register(
-            BotInstance {
-                id: hostname.clone(),
-                name: hostname,
-                device_id: "127.0.0.1".into(),
-                role: "operator".into(),
-                status: BotStatus::Online,
-                version: env!("CARGO_PKG_VERSION").into(),
-                last_backup: String::new(),
-                session_key: None,
-            },
-            ClawConnection {
-                claw_type: ClawType::ZeroClaw,
-                protocol: ClawProtocol::GatewayWebSocket,
-                gateway_url: "http://127.0.0.1:18790".into(),
-                gateway_token: String::new(),
-                workspace_root: std::env::current_dir().unwrap_or_default(),
-                host: "127.0.0.1".into(),
-                auth_mode: None,
-                device_token: None,
-                send_method: OpenClawSendMethod::SessionsSend,
-            },
-        );
+    // Ultimate fallback: only register if no endpoint at all was discovered.
+    if endpoints.is_empty() {
+        discover_fallback(&mut endpoints, &hostname);
+    }
+
+    for (_, (source, mut device, conn)) in endpoints {
+        device.source = Some(source.label().to_string());
+        state.register(device, conn);
     }
 
     state
 }
 
-fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnection]) {
-    let existing = state.snapshot();
+/// Insert or merge a discovered endpoint into the canonical map.
+///
+/// Higher-priority sources (lower `DeviceSource` discriminant) win the display
+/// name and connection parameters. `session_key` overrides are preserved from
+/// any source.
+fn merge_endpoint(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+    source: DeviceSource,
+    device: BotInstance,
+    conn: ClawConnection,
+) {
+    let default_session_key = crate::session::claw_session_key(&device.role);
+    let effective_session_key = device
+        .session_key
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&default_session_key);
+    let key = endpoint_key(&device.role, &conn, effective_session_key);
+    match endpoints.entry(key) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => {
+            let (existing_source, existing_device, existing_conn) = entry.get_mut();
+            // Merge session_key override: keep any non-None value.
+            let merged_session_key = existing_device
+                .session_key
+                .clone()
+                .or_else(|| device.session_key.clone());
+            if source < *existing_source {
+                // Higher-priority source replaces the previous config.
+                *existing_source = source;
+                *existing_device = device;
+                *existing_conn = conn;
+            }
+            existing_device.session_key = merged_session_key;
+            // If the kept config has no session_key but the new one had a token
+            // override we might care about, we intentionally do not merge tokens:
+            // the higher-priority source's auth parameters are authoritative.
+        }
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert((source, device, conn));
+        }
+    }
+}
+
+fn discover_settings_openclaw(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+    connections: &[OpenClawConnection],
+) {
     for conn in connections
         .iter()
         .filter(|c| c.enabled && !c.gateway_url.is_empty())
     {
-        let normalized = normalize_gateway_url(&conn.gateway_url);
-        if existing.iter().any(|d| {
-            state
-                .connection(&d.id)
-                .map(|c| normalize_gateway_url(&c.gateway_url) == normalized)
-                .unwrap_or(false)
-        }) {
-            continue;
-        }
-
         let name = if conn.name.is_empty() {
             format!("OpenClaw ({})", conn.gateway_url)
         } else {
@@ -675,7 +777,9 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
                 clarity_openclaw::types::OpenClawSendMethod::ChatSend
             }
         };
-        state.register(
+        merge_endpoint(
+            endpoints,
+            DeviceSource::Settings,
             BotInstance {
                 id: id.clone(),
                 name,
@@ -685,6 +789,7 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
                 version: env!("CARGO_PKG_VERSION").into(),
                 last_backup: String::new(),
                 session_key: conn.session_key.clone(),
+                source: None,
             },
             ClawConnection {
                 claw_type: ClawType::OpenClaw,
@@ -702,7 +807,9 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
     }
 }
 
-fn discover_saved_openclaw(state: &DeviceState) {
+fn discover_saved_openclaw(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+) {
     let paired = match clarity_openclaw::load_paired_token() {
         Ok(Some(p)) => p,
         Ok(None) => return,
@@ -712,22 +819,12 @@ fn discover_saved_openclaw(state: &DeviceState) {
         }
     };
 
-    // Avoid duplicating an already-discovered Gateway.
-    let existing = state.snapshot();
-    let normalized = normalize_gateway_url(&paired.gateway_url);
-    if existing.iter().any(|d| {
-        state
-            .connection(&d.id)
-            .map(|c| normalize_gateway_url(&c.gateway_url) == normalized)
-            .unwrap_or(false)
-    }) {
-        return;
-    }
-
     let gateway_url = paired.gateway_url.clone();
     let host = gateway_host(&gateway_url).unwrap_or_else(|| "openclaw".into());
     let id = format!("openclaw-saved-{}", host);
-    state.register(
+    merge_endpoint(
+        endpoints,
+        DeviceSource::SavedPairing,
         BotInstance {
             id: id.clone(),
             name: format!("OpenClaw Saved ({host})"),
@@ -737,6 +834,7 @@ fn discover_saved_openclaw(state: &DeviceState) {
             version: env!("CARGO_PKG_VERSION").into(),
             last_backup: String::new(),
             session_key: None,
+            source: None,
         },
         ClawConnection {
             claw_type: ClawType::OpenClaw,
@@ -781,8 +879,13 @@ fn gateway_host(url: &str) -> Option<String> {
         .map(String::from)
 }
 
-fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
-    state.register(
+fn discover_zeroclaw(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+    hostname: &str,
+) {
+    merge_endpoint(
+        endpoints,
+        DeviceSource::ZeroClaw,
         BotInstance {
             id: "zeroclaw-local".into(),
             name: format!("{} (ZeroClaw)", hostname),
@@ -792,6 +895,7 @@ fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
             session_key: None,
             version: env!("CARGO_PKG_VERSION").into(),
             last_backup: String::new(),
+            source: None,
         },
         ClawConnection {
             claw_type: ClawType::ZeroClaw,
@@ -805,6 +909,72 @@ fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
             send_method: OpenClawSendMethod::SessionsSend,
         },
     );
+}
+
+/// Ultimate fallback when no Claw endpoint was discovered at all.
+fn discover_fallback(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+    hostname: &str,
+) {
+    merge_endpoint(
+        endpoints,
+        DeviceSource::Fallback,
+        BotInstance {
+            id: "claw-fallback-local".into(),
+            name: format!("{} (Fallback)", hostname),
+            device_id: hostname.into(),
+            role: "operator".into(),
+            status: BotStatus::Offline,
+            session_key: None,
+            version: env!("CARGO_PKG_VERSION").into(),
+            last_backup: String::new(),
+            source: None,
+        },
+        ClawConnection {
+            claw_type: ClawType::ZeroClaw,
+            protocol: ClawProtocol::GatewayWebSocket,
+            gateway_url: "http://127.0.0.1:18790".to_string(),
+            gateway_token: String::new(),
+            workspace_root: std::env::current_dir().unwrap_or_default(),
+            host: hostname.into(),
+            auth_mode: None,
+            device_token: None,
+            send_method: OpenClawSendMethod::SessionsSend,
+        },
+    );
+}
+
+fn discover_openclaw_crate(
+    endpoints: &mut HashMap<String, (DeviceSource, BotInstance, ClawConnection)>,
+    hostname: &str,
+) {
+    for record in clarity_openclaw::discovery::discover_openclaw_devices(hostname) {
+        let mut device = BotInstance {
+            id: record.info.id,
+            name: record.info.name,
+            device_id: record.info.device_id,
+            role: "operator".into(),
+            status: map_status(record.info.status),
+            version: record.info.version,
+            last_backup: String::new(),
+            session_key: None,
+            source: None,
+        };
+        // Env-var remote connections may override the target session key.
+        if device.id == "openclaw-remote-env" {
+            if let Ok(remote_session_key) = std::env::var("OPENCLAW_REMOTE_SESSION_KEY") {
+                if !remote_session_key.is_empty() {
+                    device.session_key = Some(remote_session_key);
+                }
+            }
+        }
+        let source = if device.id == "openclaw-remote-env" {
+            DeviceSource::Env
+        } else {
+            DeviceSource::LocalDiscovery
+        };
+        merge_endpoint(endpoints, source, device, record.connection);
+    }
 }
 
 fn map_status(status: clarity_openclaw::types::DeviceStatus) -> BotStatus {
@@ -849,6 +1019,7 @@ mod tests {
             version: "0.0.0".into(),
             last_backup: String::new(),
             session_key: None,
+            source: None,
         }
     }
 
@@ -1215,5 +1386,99 @@ mod tests {
             }
             _ => panic!("expected ReconnectPending event"),
         }
+    }
+
+    #[test]
+    fn test_snapshot_by_session_groups_by_effective_key() {
+        let state = DeviceState::default();
+        state.register(bot("op-1", "operator", BotStatus::Online), conn("op-1"));
+        state.register(bot("op-2", "operator", BotStatus::Online), conn("op-2"));
+        state.register(bot("op-3", "operator", BotStatus::Online), conn("op-3"));
+        state.set_session_key("op-3", "custom:main:operator".into());
+        state.register(bot("coder-1", "coder", BotStatus::Online), conn("coder-1"));
+
+        let groups = state.snapshot_by_session();
+        assert_eq!(groups.len(), 3);
+
+        let operator_default = groups
+            .iter()
+            .find(|g| g.role == "operator" && g.session_key == "agent:main:operator")
+            .expect("operator default group");
+        assert_eq!(operator_default.devices.len(), 2);
+
+        let operator_custom = groups
+            .iter()
+            .find(|g| g.role == "operator" && g.session_key == "custom:main:operator")
+            .expect("operator custom group");
+        assert_eq!(operator_custom.devices.len(), 1);
+        assert_eq!(operator_custom.devices[0].id, "op-3");
+
+        let coder_group = groups
+            .iter()
+            .find(|g| g.role == "coder")
+            .expect("coder group");
+        assert_eq!(coder_group.devices.len(), 1);
+    }
+
+    #[test]
+    fn test_merge_endpoint_deduplicates_same_session() {
+        let mut endpoints = HashMap::new();
+        merge_endpoint(
+            &mut endpoints,
+            DeviceSource::Settings,
+            BotInstance {
+                id: "settings-op".into(),
+                name: "Settings".into(),
+                device_id: "settings-op".into(),
+                role: "operator".into(),
+                status: BotStatus::Online,
+                version: "0.0.0".into(),
+                last_backup: String::new(),
+                session_key: None,
+                source: None,
+            },
+            ClawConnection {
+                claw_type: ClawType::OpenClaw,
+                protocol: ClawProtocol::OpenClawJsonRpc,
+                gateway_url: "ws://gray-cloud.example:18789".into(),
+                gateway_token: "admin-token".into(),
+                workspace_root: std::env::current_dir().unwrap_or_default(),
+                host: "gray-cloud".into(),
+                auth_mode: Some("token_with_device".into()),
+                device_token: None,
+                send_method: crate::claw::OpenClawSendMethod::SessionsSend,
+            },
+        );
+        merge_endpoint(
+            &mut endpoints,
+            DeviceSource::SavedPairing,
+            BotInstance {
+                id: "paired-op".into(),
+                name: "Paired".into(),
+                device_id: "paired-op".into(),
+                role: "operator".into(),
+                status: BotStatus::Online,
+                version: "0.0.0".into(),
+                last_backup: String::new(),
+                session_key: None,
+                source: None,
+            },
+            ClawConnection {
+                claw_type: ClawType::OpenClaw,
+                protocol: ClawProtocol::OpenClawJsonRpc,
+                gateway_url: "ws://gray-cloud.example:18789".into(),
+                gateway_token: "device-token".into(),
+                workspace_root: std::env::current_dir().unwrap_or_default(),
+                host: "gray-cloud".into(),
+                auth_mode: Some("device_paired".into()),
+                device_token: None,
+                send_method: crate::claw::OpenClawSendMethod::SessionsSend,
+            },
+        );
+
+        assert_eq!(endpoints.len(), 1);
+        let (_, (source, device, _)) = endpoints.into_iter().next().expect("one endpoint");
+        assert_eq!(source, DeviceSource::Settings);
+        assert_eq!(device.id, "settings-op");
     }
 }

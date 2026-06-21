@@ -172,6 +172,10 @@ pub struct BotInstance {
     /// When set, new Claw sessions for this role use this key instead of the
     /// default `agent:main:<role>` key.
     pub session_key: Option<String>,
+    /// Human-readable source label for this discovered device (e.g.
+    /// "settings", "env", "paired", "local", "fallback"). Used by the UI
+    /// to disambiguate merged endpoint configurations.
+    pub source: Option<String>,
 }
 
 /// Lifecycle status variants for bot.

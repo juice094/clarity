@@ -35,12 +35,12 @@ pub fn nav_row_with_trailing(
     trailing: impl FnOnce(&mut egui::Ui),
 ) -> egui::Response {
     let icon_color = if is_selected {
-        theme.text_strong
+        theme.accent
     } else {
         theme.text_dim
     };
     let label_color = if is_selected {
-        theme.text_strong
+        theme.accent
     } else {
         theme.text
     };

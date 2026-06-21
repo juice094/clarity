@@ -1205,7 +1205,24 @@ impl eframe::App for App {
                         // record matches this Gateway URL and we have a device
                         // identity. Remote OpenClaw uses gateway-client/cli;
                         // local KimiClaw uses the control-ui/webchat identity.
-                        let identity = self.claw_device_identity.clone();
+                        // If no identity exists yet (e.g. first launch without a
+                        // prior pairing flow), generate one now so that the
+                        // connect handshake can present an Ed25519 signature.
+                        let identity = self.claw_device_identity.clone().or_else(|| {
+                            match clarity_openclaw::DeviceIdentity::load_or_generate() {
+                                Ok(id) => {
+                                    self.claw_device_identity = Some(id.clone());
+                                    Some(id)
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Failed to generate Claw device identity: {}",
+                                        e
+                                    );
+                                    None
+                                }
+                            }
+                        });
                         let saved_pairing = self.claw_device_token.as_ref().and_then(|record| {
                             if normalize_gateway_url(&record.gateway_url)
                                 == normalize_gateway_url(&ws_url)
@@ -1308,11 +1325,29 @@ impl eframe::App for App {
                                 crate::ui::types::ToastLevel::Info,
                             );
                             self.device_state.record_success(&self.claw_ws_device_id, 0);
-                            if let Some(id) = session_id {
-                                self.ui_store.claw_gateway_session_id = id;
+                            if let Some(ref id) = session_id {
+                                self.ui_store.claw_gateway_session_id = id.clone();
                                 if let Some(ref ws) = self.claw_ws {
                                     ws.get_history(&self.ui_store.claw_gateway_session_id);
                                 }
+                                // The Gateway assigns a concrete session id during
+                                // handshake. For OpenClaw/DevicePaired connections the
+                                // session_key in the Claw session context must match
+                                // this id, otherwise `sessions.send` targets a
+                                // non-existent key and returns an empty error payload.
+                                if let Some(session) = self.session_store.active_session_mut() {
+                                    if let crate::ui::types::SessionContext::Claw {
+                                        session_key,
+                                        ..
+                                    } = &mut session.context
+                                    {
+                                        *session_key = id.clone();
+                                    }
+                                }
+                                // Re-subscribe using the Gateway-assigned key so the
+                                // backend routes streamed responses to the correct
+                                // session.
+                                self.subscribe_claw_session(id);
                             }
                             // Auto-subscribe and fetch history after connect.
                             // Use the active session's Claw session_key when available;

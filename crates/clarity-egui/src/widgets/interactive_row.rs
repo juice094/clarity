@@ -3,28 +3,26 @@ use crate::theme::Theme;
 /// Interactive row — full-width clickable container with hover / selected states.
 ///
 /// Renders a rounded rectangle background across the entire available width.
-/// Selected rows receive a neutral highlight; hovered rows get a subtle hover
-/// fill. This matches the flat, compact sidebar style used by modern reference
-/// UIs where the row itself is the only visual chrome.
+/// Selected rows use a stronger surface fill plus an accent stroke; hovered rows
+/// get the same stronger fill. This matches the visual treatment of the settings
+/// provider list so the sidebar and settings panels feel consistent.
 ///
 /// # Architecture note
-/// Uses `UiBuilder::sense(Sense::click())` to create a child Ui whose natural
-/// response carries click/hover semantics. No manual `ui.interact` or raw Rect
-/// construction is required. This complies with EGUI_LAYOUT.md RULE 3.
+/// Uses `ui.allocate_exact_size(..., Sense::click())` to reserve a precise row
+/// rectangle, then paints the frame and lets the caller lay out content inside.
+/// Hover is read from the returned `Response`, which respects egui's widget
+/// layering and does not bleed into the remaining sidebar area.
 ///
 /// # Keyboard navigation
-/// The returned response participates in egui's focus system (Tab navigation)
-/// because the sense is declared at Ui creation time, not via late-bound interact.
+/// The returned response participates in egui's focus system because the sense
+/// is declared at allocation time.
 ///
 /// # Usage
 /// ```ignore
 /// let resp = interactive_row(ui, true, &theme, |ui| {
 ///     ui.label("Title");
-///     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-///         ui.label("▸");
-///     });
 /// });
-/// if resp.response.clicked() { /* toggle */ }
+/// if resp.response.clicked() { /* handle click */ }
 /// ```
 pub fn interactive_row<R>(
     ui: &mut egui::Ui,
@@ -32,57 +30,46 @@ pub fn interactive_row<R>(
     theme: &Theme,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let available_rect = ui.available_rect_before_wrap();
-    let row_h = theme.size_nav_row_h;
+    let desired_size = egui::vec2(ui.available_width(), theme.size_nav_row_h);
+    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-    // Allocate a unique id for this row so repeated interactive rows in the same
-    // parent do not share widget ids and trigger egui's "ID clashes" debug warnings.
-    let row_id = ui.next_auto_id();
-
-    // Create a child Ui sized to the full available width. We do not set a sense
-    // on the builder; instead we use an explicit `interact` on the final rect so
-    // the response rect is guaranteed to match the painted row.
-    let mut child_ui = ui.new_child(
-        egui::UiBuilder::new()
-            .id_salt(row_id)
-            .max_rect(available_rect)
-            .layout(*ui.layout()),
-    );
-
-    let is_hovered = child_ui.rect_contains_pointer(available_rect);
-    let fill = if is_selected {
-        theme.nav_row_selected
-    } else if is_hovered {
-        theme.nav_row_hover
+    let fill = if is_selected || response.hovered() {
+        theme.surface_strong
     } else {
-        egui::Color32::TRANSPARENT
+        theme.surface
+    };
+    let stroke = if is_selected {
+        egui::Stroke::new(1.5, theme.accent)
+    } else {
+        egui::Stroke::NONE
     };
 
-    // Render the row background across the full available width, then let the
-    // caller lay out icon + text inside. The symmetric horizontal inner margin
-    // gives the row a consistent left/right padding while keeping the highlight
-    // flush to the edges.
-    let inner = egui::Frame::new()
-        .fill(fill)
-        .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
-        .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 0))
-        .show(&mut child_ui, |ui| {
-            ui.set_min_height(row_h);
-            add_contents(ui)
-        });
+    let inner = ui
+        .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+            let frame_resp = egui::Frame::new()
+                .fill(fill)
+                .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+                .stroke(stroke)
+                .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 0))
+                .show(ui, |ui| {
+                    ui.set_min_size(ui.available_size());
+                    add_contents(ui)
+                });
+            frame_resp.inner
+        })
+        .inner;
 
-    let row_rect = child_ui.min_rect();
-
-    // Click/hover response for the full row.
-    let response = child_ui.interact(row_rect, row_id, egui::Sense::click());
-
-    // Advance parent cursor so subsequent widgets are laid out correctly.
-    ui.advance_cursor_after_rect(row_rect);
-
-    egui::InnerResponse {
-        inner: inner.inner,
-        response,
+    // Focus ring (P0.5.E.1).
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(theme.radius_sm as u8),
+            egui::Stroke::new(2.0, theme.focus_ring),
+            egui::StrokeKind::Inside,
+        );
     }
+
+    egui::InnerResponse { inner, response }
 }
 
 #[cfg(test)]

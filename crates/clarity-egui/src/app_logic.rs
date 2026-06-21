@@ -473,12 +473,15 @@ impl App {
             pretext_metrics: crate::pretext::EguiFontMetrics::new(cc.egui_ctx.clone()),
             claw_ws: None,
             claw_ws_device_id: String::new(),
-            claw_device_identity: clarity_openclaw::DeviceIdentity::load_existing().unwrap_or_else(
-                |e| {
-                    tracing::warn!("Failed to load Clarity device identity: {}", e);
+            // Always ensure a device identity is available. OpenClaw remote
+            // Gateways reject token-only connections and clear scopes, which
+            // causes sessions.send to fail with an empty error payload.
+            claw_device_identity: clarity_openclaw::DeviceIdentity::load_or_generate()
+                .map(Some)
+                .unwrap_or_else(|e| {
+                    tracing::warn!("Failed to load or generate Clarity device identity: {}", e);
                     None
-                },
-            ),
+                }),
             claw_device_token: clarity_openclaw::load_paired_token().unwrap_or_else(|e| {
                 tracing::warn!("Failed to load Clarity device token: {}", e);
                 None
@@ -679,35 +682,41 @@ impl App {
         self.chat_store.last_usage = None;
     }
 
-    /// Enter a Claw session for the given role.
+    /// Enter a Claw session for the given role and session key.
     ///
-    /// If a Claw session for `role` already exists, switch to it and pin it to
-    /// the requested device when `device_id` is provided. Otherwise create a
-    /// new Claw session bound to the device (or to any online device when
-    /// `device_id` is `None`). This is the only way to create a Claw session
-    /// after Phase 1.
-    pub(crate) fn enter_claw_session(&mut self, role: String, device_id: Option<String>) {
-        let session_key = self.resolve_claw_session_key(&role, device_id.as_deref());
+    /// If a Claw session for `(role, session_key)` already exists, switch to it
+    /// and pin it to the requested device when `device_id` is provided.
+    /// Otherwise create a new Claw session bound to the device (or to any online
+    /// device when `device_id` is `None`). `session_key` may be `None` to fall
+    /// back to the default `agent:main:<role>` key resolved from the device.
+    pub(crate) fn enter_claw_session(
+        &mut self,
+        role: String,
+        session_key: Option<String>,
+        device_id: Option<String>,
+    ) {
+        let session_key = session_key
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| self.resolve_claw_session_key(&role, device_id.as_deref()));
 
-        // Look for an existing Claw session with the same role.
+        // Look for an existing Claw session with the same role and session key.
         let existing_id = self
             .session_store
             .sessions
             .iter()
-            .find(|s| matches!(&s.context, SessionContext::Claw { role: r, .. } if r == &role))
+            .find(|s| {
+                matches!(
+                    &s.context,
+                    SessionContext::Claw { role: r, session_key: k, .. }
+                    if r == &role && k == &session_key
+                )
+            })
             .map(|s| s.id.clone());
 
         if let Some(id) = existing_id {
-            // Apply the configured session key override and pin to the selected
-            // device when one is given.
+            // Pin to the selected device when one is given.
             if let Some(session) = self.session_store.sessions.iter_mut().find(|s| s.id == id) {
-                if let SessionContext::Claw {
-                    affinity,
-                    session_key: existing_key,
-                    ..
-                } = &mut session.context
-                {
-                    *existing_key = session_key.clone();
+                if let SessionContext::Claw { affinity, .. } = &mut session.context {
                     if let Some(dev) = device_id.as_ref() {
                         *affinity = DeviceAffinity::Specific(dev.clone());
                     }
@@ -725,7 +734,7 @@ impl App {
             return;
         }
 
-        // No existing role session: create one.
+        // No existing session for this key: create one.
         let count = self.session_store.sessions.len();
         let role_for_sync = role.clone();
         let affinity = device_id
