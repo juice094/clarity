@@ -517,6 +517,13 @@ impl DeepSeekDeviceProvider {
             return (None, None);
         }
 
+        // ponytail: DeepSeek device stream terminates with a bare `FINISHED`
+        // sentinel (sometimes JSON-encoded as `{"v":"FINISHED"}`). It is not
+        // user content and must never be appended to the response.
+        if event == "FINISHED" || event == "\"FINISHED\"" {
+            return (None, None);
+        }
+
         let value: Value = match serde_json::from_str(event) {
             Ok(v) => v,
             Err(_) => return (None, None),
@@ -569,6 +576,9 @@ impl DeepSeekDeviceProvider {
             }
             // 裸值事件 {"v": "xxx"}，追加到最后一个 fragment
             if let Some(text) = v.as_str() {
+                if text == "FINISHED" {
+                    return (None, None);
+                }
                 buffer.last_fragment_content.push_str(text);
                 if buffer.last_fragment_type.as_deref() == Some("REASONING") {
                     return (None, Some(text.to_string()));
@@ -581,6 +591,9 @@ impl DeepSeekDeviceProvider {
         if let Some(_path) = value.get("p").and_then(|p| p.as_str()) {
             if value.get("o").and_then(|o| o.as_str()) == Some("APPEND") {
                 if let Some(text) = value.get("v").and_then(|v| v.as_str()) {
+                    if text == "FINISHED" {
+                        return (None, None);
+                    }
                     buffer.last_fragment_content.push_str(text);
                     // 根据路径判断类型：/response/fragments/{n}/content
                     // REASONING fragment 的 content 也走同一路径，需依赖缓冲区的类型标记
@@ -675,7 +688,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
             for line in text.lines() {
                 if let Some(data) = line.strip_prefix("data:") {
                     let data = data.trim_start();
-                    if data == "[DONE]" {
+                    if data == "[DONE]" || data == "FINISHED" {
                         break;
                     }
                     let (c, r) = self.parse_patch_event(data, &mut buffer);
@@ -742,7 +755,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
 
                                     if let Some(data) = line.strip_prefix("data:") {
                                         let data = data.trim_start();
-                                        if data == "[DONE]" {
+                                        if data == "[DONE]" || data == "FINISHED" {
                                             return Ok(());
                                         }
                                         let (c, r) =
@@ -938,5 +951,29 @@ mod tests {
         let opts = DeepSeekDeviceOptions::from_model_id("deepseek-vision");
         assert_eq!(opts.model_type, "vision");
         assert!(!opts.thinking_enabled);
+    }
+
+    #[test]
+    fn test_parse_patch_event_ignores_finished_sentinel() {
+        let provider = DeepSeekDeviceProvider::with_token("test");
+        let mut buffer = PatchBuffer::default();
+
+        // Bare JSON-encoded sentinel.
+        let (content, reasoning) = provider.parse_patch_event(r#"{"v":"FINISHED"}"#, &mut buffer);
+        assert_eq!(content, None);
+        assert_eq!(reasoning, None);
+
+        // Plain SSE data line value.
+        let (content, reasoning) = provider.parse_patch_event("FINISHED", &mut buffer);
+        assert_eq!(content, None);
+        assert_eq!(reasoning, None);
+
+        // Patch form sentinel (should not be treated as content).
+        let (content, reasoning) = provider.parse_patch_event(
+            r#"{"p":"response/state","o":"APPEND","v":"FINISHED"}"#,
+            &mut buffer,
+        );
+        assert_eq!(content, None);
+        assert_eq!(reasoning, None);
     }
 }

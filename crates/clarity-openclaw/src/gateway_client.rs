@@ -10,8 +10,13 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
+
+/// Maximum consecutive connection failures before giving up and surfacing a
+/// terminal error to the UI.
+const MAX_RETRIES: usize = 5;
 
 /// A handle to a native Gateway WebSocket client.
 #[derive(Clone)]
@@ -22,13 +27,22 @@ pub struct GatewayClient {
 
 /// Commands that can be sent from the UI thread to the Gateway thread.
 #[derive(Clone, Debug)]
-enum GatewayCommand {
+pub(crate) enum GatewayCommand {
     /// Send a chat message.
     Chat { message: String, use_wire: bool },
     /// Send a ping.
     Ping,
     /// Request conversation history.
     GetHistory,
+    /// Request missing role-context events.
+    SyncRoleContext {
+        /// Role context to synchronize.
+        role_id: String,
+        /// Last event id known locally.
+        since_event_id: Option<String>,
+        /// Local device id.
+        device_id: String,
+    },
 }
 
 /// Responses/events emitted by the Gateway WebSocket connection.
@@ -57,6 +71,17 @@ pub enum GatewayResponse {
     History {
         /// Conversation messages.
         messages: Vec<GatewayMessage>,
+    },
+    /// Role-context sync reply.
+    RoleContextSynced {
+        /// Role that was synchronized.
+        role_id: String,
+        /// Events missing on the client.
+        events: Vec<clarity_contract::ClawContextEvent>,
+        /// Cursor for the next sync request.
+        next_cursor: Option<String>,
+        /// Devices currently online for this role.
+        online_devices: Vec<String>,
     },
     /// Connection or execution error.
     Error(String),
@@ -101,6 +126,16 @@ enum WsRequest {
     Ping,
     /// Fetch conversation history.
     GetHistory,
+    /// Request missing role-context events.
+    SyncRoleContext {
+        /// Role context to synchronize.
+        role_id: String,
+        /// Last event id known locally.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        since_event_id: Option<String>,
+        /// Local device id.
+        device_id: String,
+    },
 }
 
 /// Incoming response types for the native Gateway WebSocket protocol.
@@ -124,6 +159,14 @@ enum WsResponse {
     Error { error: String },
     /// Wire message payload.
     WireMessage { payload: serde_json::Value },
+    /// Role-context sync payload.
+    RoleContextSynced {
+        role_id: String,
+        events: Vec<clarity_contract::ClawContextEvent>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        next_cursor: Option<String>,
+        online_devices: Vec<String>,
+    },
 }
 
 impl GatewayClient {
@@ -171,6 +214,15 @@ impl GatewayClient {
         let _ = self.tx.send(GatewayCommand::GetHistory);
     }
 
+    /// Request missing role-context events from the Gateway.
+    pub fn sync_role_context(&self, role_id: &str, since_event_id: Option<&str>, device_id: &str) {
+        let _ = self.tx.send(GatewayCommand::SyncRoleContext {
+            role_id: role_id.into(),
+            since_event_id: since_event_id.map(Into::into),
+            device_id: device_id.into(),
+        });
+    }
+
     /// Non-blocking poll for a response from the Gateway.
     pub fn try_recv(&self) -> Option<GatewayResponse> {
         self.rx.lock().try_recv().ok()
@@ -194,7 +246,7 @@ async fn run_connection(
 ) {
     let (async_tx, mut async_rx) = tokio::sync::mpsc::unbounded_channel::<GatewayCommand>();
 
-    tokio::task::spawn_blocking(move || {
+    let mut bridge = tokio::task::spawn_blocking(move || {
         while let Ok(cmd) = cmd_rx.recv() {
             if async_tx.send(cmd).is_err() {
                 break;
@@ -202,9 +254,43 @@ async fn run_connection(
         }
     });
 
-    if let Err(e) = run_single_connection(url, &mut async_rx, &resp_tx).await {
-        let _ = resp_tx.send(GatewayResponse::Error(e));
+    let mut failures = 0usize;
+    loop {
+        tokio::select! {
+            // When the UI drops the client the command channel closes. Prefer
+            // detecting this so we stop reconnecting and let the thread exit.
+            biased;
+            _ = &mut bridge => return,
+            result = run_single_connection(url, &mut async_rx, &resp_tx) => {
+                match result {
+                    Ok(()) => {
+                        // Clean close: reset the failure counter so the next
+                        // transient outage starts from a short backoff again.
+                        failures = 0;
+                    }
+                    Err(e) => {
+                        failures += 1;
+                        if failures >= MAX_RETRIES {
+                            let _ = resp_tx.send(GatewayResponse::Error(format!(
+                                "OpenClaw connection error: {} ({} retries exhausted)",
+                                e, failures
+                            )));
+                            return;
+                        }
+                        tokio::time::sleep(next_backoff(failures)).await;
+                    }
+                }
+            }
+        }
     }
+}
+
+fn next_backoff(failures: usize) -> Duration {
+    // 1 -> 1s, 2 -> 2s, 3 -> 4s, 4 -> 8s, capped at 30s.
+    let secs = 2usize
+        .saturating_pow(failures.saturating_sub(1) as u32)
+        .min(30);
+    Duration::from_secs(secs as u64)
 }
 
 async fn run_single_connection(
@@ -218,13 +304,35 @@ async fn run_single_connection(
     let (mut write, mut read) = ws_stream.split();
 
     // The Gateway sends a welcome frame immediately after the handshake.
-    let welcome = match read.next().await {
-        Some(Ok(Message::Text(text))) => serde_json::from_str::<WsResponse>(&text)
-            .map_err(|e| format!("welcome parse: {}", e))?,
+    let welcome_text = match read.next().await {
+        Some(Ok(Message::Text(text))) => text,
         Some(Ok(other)) => return Err(format!("unexpected welcome message: {:?}", other)),
         Some(Err(e)) => return Err(format!("WebSocket error: {}", e)),
         None => return Err("Connection closed before welcome".into()),
     };
+
+    run_gateway_protocol(url, welcome_text, &mut write, &mut read, async_rx, resp_tx).await
+}
+
+/// Run the native Gateway WebSocket protocol over an already-established
+/// stream. This is the protocol handler used by [`ClawConnectionManager`] so
+/// a single connection can be auto-detected and then handed off without a
+/// second handshake.
+pub(crate) async fn run_gateway_protocol<
+    W: futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin + Send,
+    R: futures_util::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+        + Unpin
+        + Send,
+>(
+    url: &str,
+    welcome_text: String,
+    write: &mut W,
+    read: &mut R,
+    async_rx: &mut tokio::sync::mpsc::UnboundedReceiver<GatewayCommand>,
+    resp_tx: &Sender<GatewayResponse>,
+) -> Result<(), String> {
+    let welcome = serde_json::from_str::<WsResponse>(&welcome_text)
+        .map_err(|e| format!("welcome parse: {}", e))?;
 
     let session_id = match welcome {
         WsResponse::Welcome { session_id, .. } => session_id,
@@ -245,6 +353,9 @@ async fn run_single_connection(
                     }
                     Some(GatewayCommand::Ping) => WsRequest::Ping,
                     Some(GatewayCommand::GetHistory) => WsRequest::GetHistory,
+                    Some(GatewayCommand::SyncRoleContext { role_id, since_event_id, device_id }) => {
+                        WsRequest::SyncRoleContext { role_id, since_event_id, device_id }
+                    }
                     None => return Ok(()),
                 };
                 let text = serde_json::to_string(&request)
@@ -257,15 +368,15 @@ async fn run_single_connection(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        let response = match serde_json::from_str::<WsResponse>(&text) {
-                            Ok(r) => r,
+                        match parse_incoming_frame(&text) {
+                            Ok(Some(out)) => {
+                                let _ = resp_tx.send(out);
+                            }
+                            Ok(None) => {}
                             Err(e) => {
-                                let _ = resp_tx.send(GatewayResponse::Error(format!("parse response: {}", e)));
+                                let _ = resp_tx.send(GatewayResponse::Error(e));
                                 continue;
                             }
-                        };
-                        if let Some(out) = translate_response(response) {
-                            let _ = resp_tx.send(out);
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(()),
@@ -273,6 +384,29 @@ async fn run_single_connection(
                     Some(Err(e)) => return Err(format!("WebSocket error: {}", e)),
                 }
             }
+        }
+    }
+}
+
+/// Parse a single text frame from the Gateway.
+///
+/// First tries the native `WsResponse` envelope. If that fails, falls back to
+/// treating the frame as an unwrapped `clarity_wire::WireMessage` payload as
+/// long as it contains a `type` field. This keeps us compatible with older or
+/// alternative Gateway implementations that stream raw wire messages.
+fn parse_incoming_frame(text: &str) -> Result<Option<GatewayResponse>, String> {
+    match serde_json::from_str::<WsResponse>(text) {
+        Ok(r) => Ok(translate_response(r)),
+        Err(e) => {
+            // ponytail: fallback parse for unwrapped WireMessage frames such as
+            // `turn_begin`. If the JSON has no `type` we cannot safely interpret
+            // it, so report the original serde error to aid debugging.
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+                if value.get("type").is_some() {
+                    return Ok(Some(GatewayResponse::WireMessage { payload: value }));
+                }
+            }
+            Err(format!("parse response: {}", e))
         }
     }
 }
@@ -291,6 +425,17 @@ fn translate_response(response: WsResponse) -> Option<GatewayResponse> {
         WsResponse::History { messages } => Some(GatewayResponse::History { messages }),
         WsResponse::Error { error } => Some(GatewayResponse::Error(error)),
         WsResponse::WireMessage { payload } => Some(GatewayResponse::WireMessage { payload }),
+        WsResponse::RoleContextSynced {
+            role_id,
+            events,
+            next_cursor,
+            online_devices,
+        } => Some(GatewayResponse::RoleContextSynced {
+            role_id,
+            events,
+            next_cursor,
+            online_devices,
+        }),
     }
 }
 
@@ -338,5 +483,37 @@ mod tests {
             }
             _ => panic!("expected wire_message"),
         }
+    }
+
+    #[test]
+    fn test_parse_incoming_frame_unwrapped_turn_begin() {
+        let json = r#"{"type":"turn_begin","turn_id":"t1","user_input":"hi"}"#;
+        let out = parse_incoming_frame(json).unwrap().unwrap();
+        match out {
+            GatewayResponse::WireMessage { payload } => {
+                assert_eq!(payload.get("type").unwrap().as_str().unwrap(), "turn_begin");
+                assert_eq!(payload.get("turn_id").unwrap().as_str().unwrap(), "t1");
+            }
+            _ => panic!("expected wire message fallback"),
+        }
+    }
+
+    #[test]
+    fn test_parse_incoming_frame_malformed_returns_error() {
+        // A JSON object without a `type` field cannot be interpreted as either a
+        // native WsResponse or an unwrapped WireMessage, so it must produce an error.
+        let json = r#"{"value":42}"#;
+        let err = parse_incoming_frame(json).unwrap_err();
+        assert!(err.starts_with("parse response:"));
+    }
+
+    #[test]
+    fn test_next_backoff_progression_and_cap() {
+        assert_eq!(next_backoff(1), Duration::from_secs(1));
+        assert_eq!(next_backoff(2), Duration::from_secs(2));
+        assert_eq!(next_backoff(3), Duration::from_secs(4));
+        assert_eq!(next_backoff(4), Duration::from_secs(8));
+        assert_eq!(next_backoff(5), Duration::from_secs(16));
+        assert_eq!(next_backoff(10), Duration::from_secs(30));
     }
 }

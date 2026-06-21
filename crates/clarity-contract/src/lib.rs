@@ -43,6 +43,7 @@ use serde::{Deserialize, Serialize};
 // ============================================================================
 
 pub mod capability;
+pub mod claw_context;
 pub mod error;
 pub mod federation;
 pub mod llm;
@@ -51,6 +52,11 @@ pub mod rollout;
 pub mod subagent;
 pub mod thread;
 pub mod tool;
+
+pub use claw_context::{
+    ClawContextEvent, ContextEventKind, RoleContext, RoleContextId, RoleContextMessage,
+    SyncRequest, SyncResponse,
+};
 
 // ============================================================================
 // Phase 1: Core interchange types

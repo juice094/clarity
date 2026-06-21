@@ -1,12 +1,9 @@
 //! Runtime Provider Configuration
 //!
 //! Provides pure functions for constructing LLM providers from an explicit
-//! [`RuntimeProviderConfig`]. The legacy global mutable cache (`ACTIVE_CONFIG`)
-//! is retained for backward compatibility during the S3.3 → S3.4 migration,
-//! but new code should derive `RuntimeProviderConfig` from settings and pass
-//! it directly to [`build_provider`].
-//!
-//! ## Architecture (target state — S3.4)
+//! [`RuntimeProviderConfig`]. The config is a value type: callers derive it
+//! from frontend settings on every `ensure_llm` call and pass it directly to
+//! [`build_provider`]. There is no global mutable cache.
 //!
 //! ```text
 //! egui (settings UI)                    core (runtime)
@@ -35,8 +32,8 @@ use clarity_contract::AgentError;
 /// Runtime provider configuration.
 ///
 /// A value type representing the resolved parameters for a single LLM provider.
-/// In the target architecture (S3.4) this is derived from frontend settings on
-/// every `ensure_llm` call rather than cached globally.
+/// Callers derive it from frontend settings on every `ensure_llm` call rather
+/// than caching it globally.
 #[derive(Debug, Clone)]
 pub struct RuntimeProviderConfig {
     /// Human-readable identifier (e.g. "my-custom-openai").
@@ -55,45 +52,7 @@ pub struct RuntimeProviderConfig {
     pub model: String,
 }
 
-use parking_lot::Mutex;
-
-// ── Mutex cache ─────────────────────────────────────────────────────────────
-
-static ACTIVE_CONFIG: Mutex<Option<RuntimeProviderConfig>> = Mutex::new(None);
-
-/// DEPRECATED — S3.3 migration: derive `RuntimeProviderConfig` from settings
-/// and pass it directly to [`build_provider`] instead of caching globally.
-pub fn set_provider_config(cfg: RuntimeProviderConfig) {
-    let mut guard = ACTIVE_CONFIG.lock();
-    let provider_id = cfg.provider_id.clone();
-    *guard = Some(cfg);
-    tracing::info!("RuntimeProviderConfig set: provider_id={}", provider_id);
-}
-
-/// DEPRECATED — S3.3 migration: use explicit `RuntimeProviderConfig` values.
-pub fn get_active_config() -> Option<RuntimeProviderConfig> {
-    ACTIVE_CONFIG.lock().clone()
-}
-
-/// DEPRECATED — S3.3 migration: clear the cached config. Will be removed in S3.4.
-pub fn clear_provider_config() {
-    *ACTIVE_CONFIG.lock() = None;
-    tracing::info!("RuntimeProviderConfig cleared");
-}
-
 // ── Provider construction ──────────────────────────────────────────────────
-
-/// Build an `LlmProvider` from the currently active runtime config.
-///
-/// DEPRECATED — S3.3 migration: derive `RuntimeProviderConfig` from settings
-/// and call [`build_provider`] directly. Will be removed in S3.4.
-pub async fn build_from_active_config() -> Result<Box<dyn LlmProvider>, AgentError> {
-    let cfg = ACTIVE_CONFIG
-        .lock()
-        .clone()
-        .ok_or_else(|| AgentError::Llm("No active runtime provider config".into()))?;
-    build_provider(&cfg).await
-}
 
 /// Build an `LlmProvider` from an explicit [`RuntimeProviderConfig`].
 ///
@@ -320,44 +279,30 @@ mod tests {
     }
 
     #[test]
-    fn test_provider_config_set_get_clear_and_replace() {
-        // Step 1: initial state is None
-        clear_provider_config();
-        assert!(get_active_config().is_none());
-
-        // Step 2: set and read back
+    fn test_build_provider_unknown_format() {
         let cfg = RuntimeProviderConfig {
             provider_id: "test".into(),
             base_url: "https://test.com/v1".into(),
-            api_format: "openai_chat".into(),
+            api_format: "unknown_format".into(),
             api_key: "sk-test".into(),
             model: "test-model".into(),
         };
-        set_provider_config(cfg.clone());
-
-        let cached = get_active_config().expect("config should be set");
-        assert_eq!(cached.provider_id, "test");
-        assert_eq!(cached.base_url, "https://test.com/v1");
-        assert_eq!(cached.api_format, "openai_chat");
-        assert_eq!(cached.api_key, "sk-test");
-        assert_eq!(cached.model, "test-model");
-
-        // Step 3: replace config
-        let cfg2 = RuntimeProviderConfig {
-            provider_id: "second".into(),
-            base_url: "https://second.com/v1".into(),
-            api_format: "anthropic_messages".into(),
-            api_key: "sk-2".into(),
-            model: "model-2".into(),
+        // build_provider is async; use a minimal runtime for the test.
+        let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+        let result = rt.block_on(build_provider(&cfg));
+        let err = match result {
+            Ok(_) => panic!("expected error for unknown api_format"),
+            Err(e) => e,
         };
-        set_provider_config(cfg2);
-
-        let cached = get_active_config().expect("config should be replaced");
-        assert_eq!(cached.provider_id, "second");
-        assert_eq!(cached.api_format, "anthropic_messages");
-
-        // Step 4: clear
-        clear_provider_config();
-        assert!(get_active_config().is_none());
+        match err {
+            AgentError::Llm(msg) => {
+                assert!(
+                    msg.contains("Unknown api_format"),
+                    "unexpected error: {}",
+                    msg
+                );
+            }
+            other => panic!("expected Llm error, got {:?}", other),
+        }
     }
 }

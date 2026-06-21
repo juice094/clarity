@@ -9,6 +9,7 @@ struct SessionSummary {
     id: String,
     title: String,
     category: String,
+    context: crate::ui::types::SessionContext,
     project_id: Option<String>,
     archived: bool,
 }
@@ -19,6 +20,7 @@ impl SessionSummary {
             id: session.id.clone(),
             title: session.title.clone(),
             category: session.category.clone(),
+            context: session.context.clone(),
             project_id: session.project_id.clone(),
             archived: session.archived,
         }
@@ -184,10 +186,14 @@ fn render_session_row(
     theme: &crate::theme::Theme,
 ) {
     let is_active = session.id == app.session_store.active_session_id;
-    let icon = match session.category.as_str() {
-        "emotion" | "chat" => crate::theme::ICON_CHAT,
-        "knowledge" => crate::theme::ICON_BOOK,
-        _ => crate::theme::ICON_WRENCH,
+    use crate::ui::types::SessionContext;
+    let icon = match &session.context {
+        SessionContext::Claw { .. } => crate::theme::ICON_CPU,
+        SessionContext::Work { .. } => crate::theme::ICON_WRENCH,
+        SessionContext::Chat => match session.category.as_str() {
+            "knowledge" => crate::theme::ICON_BOOK,
+            _ => crate::theme::ICON_CHAT,
+        },
     };
     let title = truncate_session_title(&session.title);
     let resp = crate::widgets::nav_row(ui, theme, icon, &title, is_active);

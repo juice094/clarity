@@ -125,11 +125,11 @@ impl App {
             .map(|p| p.is_chat_only())
             .unwrap_or(false);
 
-        // When an OpenClaw remote bot is selected AND the active session is a Claw
-        // session, route the main chat message through the WebSocket gateway.
-        // Chat/Work sessions must keep using the local agent even if a Claw bot
-        // happens to be selected, avoiding mode confusion.
-        if self.is_claw_active() && is_claw_session {
+        // When the active session is a Claw session, route the main chat message
+        // through the WebSocket gateway. Chat/Work sessions must keep using the
+        // local agent even if a Claw bot happens to be selected, avoiding mode
+        // confusion.
+        if is_claw_session {
             // Guard against rapid Enter presses while a Claw turn is already in
             // flight. Unlike the local agent we cannot cancel a remote turn, so
             // we simply drop the duplicate send.
@@ -429,8 +429,17 @@ impl App {
             let agent = state.agent.clone().with_wire(wire.clone());
 
             let tx_wire = tx.clone();
+            // Subscribe the UI receiver *before* starting generation. The agent
+            // sends wire messages synchronously into a tokio broadcast channel;
+            // if no receiver exists yet, the first events (TurnBegin, ContentPart)
+            // are dropped with "no receivers" and the chat UI never leaves the
+            // typing indicator.
+            // ponytail: the receiver handle is created here and moved into the
+            // drain task so subscription happens in the spawning task, not inside
+            // the spawned future where scheduling delay would race with streaming.
+            let wire_ui = wire.ui_side(false);
             tokio::spawn(async move {
-                let mut wire_ui = wire.ui_side(false);
+                let mut wire_ui = wire_ui;
                 while let Some(msg) = wire_ui.recv().await {
                     dispatch_wire_message(msg, &tx_wire);
                 }
@@ -546,51 +555,39 @@ impl App {
             }
         };
 
-        // Resolve the session key and target device from the active session's
-        // Claw context when available; fall back to the active bot for non-Claw
-        // sessions so existing flows keep working.
-        let (session_key, target_bot_id) = self
-            .session_store
-            .active_session()
-            .map(|s| match &s.context {
-                SessionContext::Claw {
-                    role,
-                    session_key,
-                    affinity,
-                } => {
-                    let target = self.device_state.pick_instance(role, affinity);
-                    if let Some(ref bot) = target {
-                        // Make sure the active bot matches the picked instance
-                        // before the message goes out.
-                        if self.ui_store.active_bot_id != bot.id {
-                            self.ui_store.active_bot_id = bot.id.clone();
-                        }
+        // Resolve the session key from the active session's Claw context. The
+        // target device is managed by the connection loop in main.rs; sending
+        // only needs the session key. Non-Claw sessions must not reach this
+        // path.
+        let session_key = match self.session_store.active_session() {
+            Some(Session {
+                context:
+                    SessionContext::Claw {
+                        role,
+                        session_key,
+                        affinity,
+                    },
+                ..
+            }) => {
+                let target = self.device_state.pick_instance(role, affinity);
+                match target {
+                    Some(bot) => {
                         self.device_state.set_last_picked(role, &bot.id);
-                        (session_key.clone(), bot.id.clone())
-                    } else {
-                        (session_key.clone(), self.ui_store.active_bot_id.clone())
+                        session_key.clone()
+                    }
+                    None => {
+                        let _ = self
+                            .ui_tx
+                            .send(UiEvent::Error("No Claw device available".into()));
+                        return;
                     }
                 }
-                _ => (
-                    "agent:main:main".to_string(),
-                    self.ui_store.active_bot_id.clone(),
-                ),
-            })
-            .unwrap_or_else(|| {
-                (
-                    "agent:main:main".to_string(),
-                    self.ui_store.active_bot_id.clone(),
-                )
-            });
-
-        // ponytail: in Stage 2 we route through the resolved target. The main
-        // loop's connection manager will reconnect if the active bot changed.
-        if target_bot_id.is_empty() {
-            let _ = self
-                .ui_tx
-                .send(UiEvent::Error("No Claw device available".into()));
-            return;
-        }
+            }
+            _ => {
+                let _ = self.ui_tx.send(UiEvent::Error("Not a Claw session".into()));
+                return;
+            }
+        };
 
         // Responses arrive asynchronously via claw_ws.drain(); the main loop
         // translates them into UiEvent::Chunk / UiEvent::Done and the chat

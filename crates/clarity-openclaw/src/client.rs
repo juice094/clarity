@@ -200,7 +200,7 @@ impl ClawClient {
         )
     }
 
-    fn connect_with_auth(gateway_url: &str, auth: ClawAuth) -> Self {
+    pub(crate) fn connect_with_auth(gateway_url: &str, auth: ClawAuth) -> Self {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<ClawCommand>();
         let (resp_tx, resp_rx) = std::sync::mpsc::channel::<ClawResponse>();
 

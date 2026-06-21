@@ -166,6 +166,14 @@ pub fn now_millis() -> u64 {
         .as_millis() as u64
 }
 
+/// Returns the canonical session key for a Claw role.
+///
+/// All devices sharing the same role consume the same session context, so the
+/// key must be deterministic per role rather than a random uuid.
+pub fn claw_session_key(role: &str) -> String {
+    format!("agent:main:{}", role)
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SessionData {
     id: String,
@@ -258,5 +266,13 @@ mod tests {
         assert_eq!(restored.context, SessionContext::Chat);
         assert_eq!(restored.lifecycle, SessionLifecycle::Temporary);
         assert!(!restored.archived);
+    }
+
+    #[test]
+    fn claw_session_key_is_deterministic_per_role() {
+        assert_eq!(claw_session_key("operator"), "agent:main:operator");
+        assert_eq!(claw_session_key("coder"), "agent:main:coder");
+        // Same role always yields the same key so multiple devices share context.
+        assert_eq!(claw_session_key("operator"), claw_session_key("operator"));
     }
 }

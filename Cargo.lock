@@ -1814,7 +1814,9 @@ dependencies = [
 name = "clarity-openclaw"
 version = "0.3.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
+ "clarity-contract",
  "dirs 5.0.1",
  "ed25519-dalek",
  "futures-util",
@@ -1824,6 +1826,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite 0.24.0",
  "tracing",

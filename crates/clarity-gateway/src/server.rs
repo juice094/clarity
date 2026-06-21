@@ -65,6 +65,12 @@ pub struct AppState {
     pub oauth_service: Arc<clarity_llm::auth::OAuthService>,
     /// Registry of connected Claw daemon instances (heartbeat-based liveness).
     pub device_registry: crate::handlers::claw::DeviceRegistry,
+    /// In-memory store for Claw Mesh role-context events.
+    ///
+    /// ponytail: this is a placeholder until persistent storage (SQLite or
+    /// syncthing-backed files) is wired in. It is enough to validate the sync
+    /// protocol end-to-end.
+    pub role_context_store: Arc<RwLock<HashMap<String, Vec<clarity_contract::ClawContextEvent>>>>,
 }
 
 impl AppState {
@@ -166,6 +172,7 @@ impl AppState {
             ws_sem: Arc::new(Semaphore::new(64)),
             oauth_service,
             device_registry: crate::handlers::claw::DeviceRegistry::new(),
+            role_context_store: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 }

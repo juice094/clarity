@@ -7,14 +7,19 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 pub mod client;
+pub mod connection_manager;
 pub mod device;
 pub mod discovery;
 pub mod gateway_client;
+pub mod mesh;
+pub mod protocol;
 pub mod types;
 
-pub use client::ClawClient;
 pub use client::ClawClient as OpenClawClient;
+pub use client::{ClawAuth, ClawClient};
+pub use connection_manager::ClawConnectionManager;
 pub use device::{DeviceIdentity, PairedToken, load_paired_token, save_paired_token};
 pub use discovery::discover_openclaw_devices;
 pub use gateway_client::{GatewayClient, GatewayMessage, GatewayResponse, ToolCall};
+pub use protocol::{DetectedProtocol, ProtocolCommand, ProtocolEvent, ProtocolHistoryMessage};
 pub use types::{ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus};

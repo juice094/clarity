@@ -68,6 +68,7 @@ mod tests {
     fn test_already_bound() {
         let binding = Some(LlmBinding {
             provider: "openai".to_string(),
+            model: "gpt-4o".to_string(),
             local_model_path: String::new(),
         });
         let sel = resolve_provider("openai", true, &binding);
@@ -113,6 +114,7 @@ mod tests {
     fn test_binding_mismatch_still_resolves() {
         let binding = Some(LlmBinding {
             provider: "anthropic".to_string(),
+            model: "claude-sonnet".to_string(),
             local_model_path: String::new(),
         });
         let sel = resolve_provider("openai", true, &binding);

@@ -65,6 +65,9 @@ pub struct UiStore {
     pub pretext_estimate_enabled: bool,
     /// Per-device connection failure backoff: device_id -> (failure_count, next_retry_at).
     pub claw_connect_backoff: HashMap<String, (usize, Instant)>,
+    /// Last surfaced Claw error message and timestamp, used to suppress
+    /// duplicate toast/chat spam while a device is flapping.
+    pub last_claw_error: Option<(String, Instant)>,
 }
 
 impl Default for UiStore {
@@ -101,6 +104,7 @@ impl Default for UiStore {
             pretext_probe_wrap_width: 400.0,
             pretext_estimate_enabled: true,
             claw_connect_backoff: HashMap::new(),
+            last_claw_error: None,
         }
     }
 }
@@ -130,6 +134,22 @@ impl UiStore {
     /// Clear backoff for a device after a successful connection.
     pub fn clear_connect_backoff(&mut self, device_id: &str) {
         self.claw_connect_backoff.remove(device_id);
+    }
+
+    /// Decide whether a Claw error should be surfaced to the user right now.
+    ///
+    /// Repeated identical errors within a short window are suppressed to avoid
+    /// toast/chat spam while a device is flapping or the Gateway is unreachable.
+    pub fn should_surface_claw_error(&mut self, msg: &str) -> bool {
+        let now = Instant::now();
+        let suppress_window = Duration::from_secs(5);
+        if let Some((last_msg, last_time)) = self.last_claw_error.as_ref() {
+            if last_msg == msg && last_time.elapsed() < suppress_window {
+                return false;
+            }
+        }
+        self.last_claw_error = Some((msg.to_string(), now));
+        true
     }
 }
 
@@ -203,5 +223,14 @@ mod tests {
         assert_eq!(count, 5);
         let delay = last.duration_since(Instant::now());
         assert!((29..=30).contains(&delay.as_secs()), "cap delay at 30s");
+    }
+
+    #[test]
+    fn test_should_surface_claw_error_suppresses_duplicates() {
+        let mut store = UiStore::default();
+        let msg = "OpenClaw connection error: refused";
+        assert!(store.should_surface_claw_error(msg));
+        assert!(!store.should_surface_claw_error(msg));
+        assert!(store.should_surface_claw_error("different error"));
     }
 }

@@ -9,10 +9,15 @@ repository.workspace = true
 description = "OpenClaw / KimiClaw Gateway client, device identity and discovery"
 
 [dependencies]
+# Clarity contracts
+clarity-contract = { path = "../clarity-contract" }
+
 # Async / WebSocket
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.24", features = ["__rustls-tls"] }
 futures-util = "0.3"
+async-trait = { workspace = true }
+thiserror = { workspace = true }
 
 # Serialization
 serde = { workspace = true }

@@ -63,7 +63,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                         });
 
                         if resp.response.clicked() {
-                            app.ui_store.active_bot_id = bot_id;
+                            app.enter_claw_session(bot.role.clone(), bot_id);
                         }
                     }
 

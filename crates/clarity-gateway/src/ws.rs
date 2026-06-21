@@ -264,6 +264,16 @@ pub enum WsRequest {
     Ping,
     /// Request the conversation history.
     GetHistory,
+    /// Request missing role-context events for a Claw role.
+    SyncRoleContext {
+        /// Role context id.
+        role_id: String,
+        /// Last event id known to the client.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        since_event_id: Option<String>,
+        /// Device id of the requesting client.
+        device_id: String,
+    },
 }
 
 /// WebSocket 响应类型.
@@ -302,6 +312,18 @@ pub enum WsResponse {
     WireMessage {
         /// The original WireMessage payload.
         payload: serde_json::Value,
+    },
+    /// Role-context sync response.
+    RoleContextSynced {
+        /// Role that was synchronized.
+        role_id: String,
+        /// Events missing on the client.
+        events: Vec<clarity_contract::ClawContextEvent>,
+        /// Cursor for the next sync request.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        next_cursor: Option<String>,
+        /// Devices currently online for this role.
+        online_devices: Vec<String>,
     },
 }
 
@@ -394,6 +416,28 @@ async fn handle_request(
                 .collect();
 
             WsResponse::History { messages }
+        }
+        WsRequest::SyncRoleContext {
+            role_id,
+            since_event_id: _,
+            device_id: _,
+        } => {
+            // ponytail: in-memory placeholder store. Replace with persistent
+            // SQLite-backed RoleContextStore once the protocol is validated.
+            let events = state
+                .role_context_store
+                .read()
+                .await
+                .get(&role_id)
+                .cloned()
+                .unwrap_or_default();
+
+            WsResponse::RoleContextSynced {
+                role_id,
+                events,
+                next_cursor: None,
+                online_devices: Vec::new(),
+            }
         }
     }
 }

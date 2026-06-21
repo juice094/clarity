@@ -4,6 +4,7 @@
 //! via `egui::ScrollArea::show_rows` for performance with large session counts.
 
 use crate::App;
+use crate::ui::types::SessionContext;
 
 /// Estimated row height for virtualized rendering.
 ///
@@ -28,6 +29,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
             id: s.id.clone(),
             title: truncate_title(&s.title),
             category: s.category.clone(),
+            context: s.context.clone(),
             is_active: s.id == app.session_store.active_session_id,
         })
         .collect();
@@ -64,11 +66,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                 .show_rows(ui, EST_ROW_HEIGHT, count, |ui, range| {
                     for session in &sessions[range] {
                         let is_active = session.is_active && session.id == active_session_id;
-                        let icon = match session.category.as_str() {
-                            "emotion" | "chat" => crate::theme::ICON_CHAT,
-                            "knowledge" => crate::theme::ICON_BOOK,
-                            _ => crate::theme::ICON_WRENCH,
-                        };
+                        let icon = session_icon(session);
 
                         let resp =
                             crate::widgets::nav_row(ui, &theme, icon, &session.title, is_active);
@@ -93,7 +91,22 @@ struct SessionRow {
     id: String,
     title: String,
     category: String,
+    context: SessionContext,
     is_active: bool,
+}
+
+/// Choose an icon that reflects the session *context* (Chat / Claw / Work)
+/// rather than the legacy category string, so users can tell at a glance
+/// which sessions route through OpenClaw and which use the local agent.
+fn session_icon(session: &SessionRow) -> &'static str {
+    match &session.context {
+        SessionContext::Claw { .. } => crate::theme::ICON_CPU,
+        SessionContext::Work { .. } => crate::theme::ICON_WRENCH,
+        SessionContext::Chat => match session.category.as_str() {
+            "knowledge" => crate::theme::ICON_BOOK,
+            _ => crate::theme::ICON_CHAT,
+        },
+    }
 }
 
 fn truncate_title(title: &str) -> String {

@@ -2,9 +2,7 @@ use crate::App;
 use crate::provider::{ApiFormat, AuthMode, ProviderDefinition, ProviderRegistry};
 use crate::ui::types::{ToastLevel, UiEvent};
 
-use clarity_llm::runtime::{
-    RuntimeProviderConfig, list_models, set_provider_config, test_connection,
-};
+use clarity_llm::runtime::{RuntimeProviderConfig, list_models, test_connection};
 
 /// Renders the provider UI.
 pub fn render_provider(app: &mut App, ui: &mut egui::Ui) {
@@ -239,8 +237,8 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.add_space(theme.space_8);
     }
 
-    // ── Auth mode selector (deepseek-device only) ──
-    let is_deepseek_device = prov.id == "deepseek-device";
+    // ── Auth mode selector (deepseek-device format only) ──
+    let is_deepseek_device = prov.api_format == ApiFormat::DeepSeekDevice;
     let mut is_password_mode = prov.auth_mode.is_password();
     if is_deepseek_device {
         ui.label(
@@ -567,7 +565,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     (
                         p.display().to_string(),
                         p.base_url.clone(),
-                        map_api_format(p.api_format.as_str()).to_string(),
+                        p.api_format.runtime_api_format().to_string(),
                     )
                 })
                 .unwrap_or_default();
@@ -633,7 +631,7 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     (
                         p.display().to_string(),
                         p.base_url.clone(),
-                        map_api_format(p.api_format.as_str()).to_string(),
+                        p.api_format.runtime_api_format().to_string(),
                     )
                 })
                 .unwrap_or_default();
@@ -683,27 +681,17 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         .fill(theme.accent)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         if ui.add_enabled(!is_local, apply_btn).clicked() {
-            let (display_name, base_url, api_fmt) = prov
+            let display_name = prov
                 .as_ref()
-                .map(|p| {
-                    (
-                        p.display().to_string(),
-                        p.base_url.clone(),
-                        map_api_format(p.api_format.as_str()).to_string(),
-                    )
-                })
-                .unwrap_or_default();
-            let key = prov
-                .as_ref()
-                .and_then(|p| p.resolve_api_key())
+                .map(|p| p.display().to_string())
                 .unwrap_or_default();
             let model = app.settings_store.settings_edit.model.clone();
             if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
                 app.push_toast(e.clone(), ToastLevel::Warn);
             } else if is_chat_only {
                 // Chat-only providers (e.g. deepseek-device) are loaded through the
-                // ModelRegistry rather than the runtime active-config pipeline.
-                if current == "deepseek-device" && is_password_mode {
+                // registry-backed loader rather than the runtime active-config pipeline.
+                if is_deepseek_device && is_password_mode {
                     // Flush any password that has been typed but not yet encrypted
                     // (e.g. the user clicked Apply without unfocusing the field).
                     let password_edit_id = ui.id().with(&current).with("password_edit");
@@ -740,14 +728,6 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
                     ToastLevel::Info,
                 );
             } else {
-                let cfg = RuntimeProviderConfig {
-                    provider_id: current.clone(),
-                    base_url,
-                    api_format: api_fmt,
-                    api_key: key,
-                    model: model.clone(),
-                };
-                set_provider_config(cfg);
                 app.auto_save_settings();
                 app.push_toast(
                     format!("Applied: {} / {}", display_name, model),
@@ -894,22 +874,4 @@ fn render_add_form(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         });
-}
-
-/// Map frontend API format string (kebab-case) to core runtime format string (snake_case).
-///
-/// Frontend `ApiFormat` serializes as:
-///   "openai-completions" | "anthropic-messages" | "kimi"
-///
-/// Core `RuntimeProviderConfig.api_format` expects:
-///   "openai_chat" | "anthropic_messages" | "ollama" | "llama_server"
-pub(crate) fn map_api_format(frontend: &str) -> &'static str {
-    match frontend {
-        "openai-completions" | "kimi" => "openai_chat",
-        "anthropic-messages" => "anthropic_messages",
-        "ollama" => "ollama",
-        "llama_server" => "llama_server",
-        "deepseek-device" => "deepseek_device",
-        _ => "openai_chat",
-    }
 }

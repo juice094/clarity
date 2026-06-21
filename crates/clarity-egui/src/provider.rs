@@ -54,6 +54,15 @@ impl ApiFormat {
         }
     }
 
+    /// Returns the runtime API format expected by [`clarity_llm::runtime::build_provider`].
+    pub fn runtime_api_format(&self) -> &'static str {
+        match self {
+            ApiFormat::OpenaiCompletions | ApiFormat::Kimi => "openai_chat",
+            ApiFormat::AnthropicMessages => "anthropic_messages",
+            ApiFormat::DeepSeekDevice => "deepseek_device",
+        }
+    }
+
     /// Parses from a string.
     pub fn from_str(s: &str) -> Self {
         match s {
@@ -1028,5 +1037,22 @@ api_format = "deep-seek-device"
             .to_deepseek_device_provider("deepseek-chat")
             .unwrap_err();
         assert!(err.contains("mobile number"));
+    }
+
+    #[test]
+    fn test_runtime_api_format_mappings() {
+        assert_eq!(
+            ApiFormat::OpenaiCompletions.runtime_api_format(),
+            "openai_chat"
+        );
+        assert_eq!(ApiFormat::Kimi.runtime_api_format(), "openai_chat");
+        assert_eq!(
+            ApiFormat::AnthropicMessages.runtime_api_format(),
+            "anthropic_messages"
+        );
+        assert_eq!(
+            ApiFormat::DeepSeekDevice.runtime_api_format(),
+            "deepseek_device"
+        );
     }
 }

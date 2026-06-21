@@ -78,75 +78,102 @@ pub enum ClawEvent {
         /// Seconds until the next retry attempt.
         seconds: u64,
     },
+    /// Role-context sync response from the Gateway.
+    RoleContextSynced {
+        /// Role that was synchronized.
+        role_id: String,
+        /// Missing events.
+        events: Vec<clarity_contract::ClawContextEvent>,
+        /// Cursor for the next sync request.
+        #[allow(dead_code)]
+        next_cursor: Option<String>,
+        /// Devices currently online for this role.
+        online_devices: Vec<String>,
+    },
     /// Terminal error or provider error.
     Error(String),
 }
 
 /// A protocol-agnostic handle for an active Claw connection.
+///
+/// Internally this wraps a `clarity_openclaw::ClawConnectionManager` that
+/// auto-detects the remote dialect (OpenClaw JSON-RPC vs native Gateway
+/// WebSocket) from the server's first message.
 #[derive(Clone)]
-pub enum ClawClientHandle {
-    /// OpenClaw / KimiClaw JSON-RPC client.
-    OpenClaw(clarity_openclaw::ClawClient),
-    /// Native Clarity Gateway WebSocket client.
-    Gateway(clarity_openclaw::GatewayClient),
+pub struct ClawClientHandle {
+    manager: clarity_openclaw::ClawConnectionManager,
 }
 
 impl ClawClientHandle {
-    /// Send a chat message. For OpenClaw the `session_key` and `use_sessions_send`
-    /// select between `chat.send` and `sessions.send`; for Gateway the message is
-    /// sent directly and `session_key` is ignored.
+    /// Wrap a pre-configured connection manager.
+    pub fn new(manager: clarity_openclaw::ClawConnectionManager) -> Self {
+        Self { manager }
+    }
+
+    /// Send a chat message. The `session_key` is used by OpenClaw; the Gateway
+    /// dialect ignores it. `use_sessions_send` selects the OpenClaw `sessions.send`
+    /// method instead of `chat.send`.
     pub fn send_chat(&self, session_key: &str, message: &str, use_sessions_send: bool) {
-        match self {
-            Self::OpenClaw(ws) => {
-                if use_sessions_send {
-                    ws.send_session_message(session_key, message);
-                } else {
-                    ws.send_message(session_key, message);
-                }
-            }
-            Self::Gateway(ws) => {
-                ws.chat(message, true);
-            }
-        }
+        self.manager.send(clarity_openclaw::ProtocolCommand::Chat {
+            session_key: session_key.into(),
+            message: message.into(),
+            use_sessions_send,
+        });
     }
 
-    /// Request conversation history. No-op for OpenClaw (subscriptions are set up
-    /// on connect); queues a history request for Gateway.
-    pub fn get_history(&self) {
-        if let Self::Gateway(ws) = self {
-            ws.get_history();
-        }
+    /// Request conversation history for the given session key.
+    pub fn get_history(&self, session_key: &str) {
+        self.manager
+            .send(clarity_openclaw::ProtocolCommand::GetHistory {
+                session_key: session_key.into(),
+            });
     }
 
-    /// Drain all pending events from the underlying client and normalize them to
+    /// Subscribe to session-level events (OpenClaw only; no-op for Gateway).
+    pub fn subscribe_session(&self, key: &str) {
+        self.manager
+            .send(clarity_openclaw::ProtocolCommand::SubscribeSession { key: key.into() });
+    }
+
+    /// Subscribe to message-level events (OpenClaw only; no-op for Gateway).
+    pub fn subscribe_messages(&self, key: &str) {
+        self.manager
+            .send(clarity_openclaw::ProtocolCommand::SubscribeMessages { key: key.into() });
+    }
+
+    /// Drain all pending events from the underlying manager and normalize them to
     /// [`ClawEvent`].
     pub fn drain(&self) -> Vec<ClawEvent> {
-        match self {
-            Self::OpenClaw(ws) => ws
-                .drain()
-                .into_iter()
-                .flat_map(map_openclaw_response)
-                .collect(),
-            Self::Gateway(ws) => ws
-                .drain()
-                .into_iter()
-                .flat_map(map_gateway_response)
-                .collect(),
-        }
+        self.manager
+            .drain()
+            .into_iter()
+            .flat_map(map_protocol_event)
+            .collect()
     }
 }
 
-fn map_openclaw_response(resp: clarity_openclaw::client::ClawResponse) -> Vec<ClawEvent> {
-    use clarity_openclaw::client::ClawResponse;
+fn map_protocol_event(event: clarity_openclaw::ProtocolEvent) -> Vec<ClawEvent> {
+    use clarity_openclaw::ProtocolEvent;
     let mut events = Vec::new();
-    match resp {
-        ClawResponse::Connected { gateway_url } => {
+    match event {
+        ProtocolEvent::Connected {
+            gateway_url,
+            session_id,
+        } => {
             events.push(ClawEvent::Connected {
                 gateway_url,
-                session_id: None,
+                session_id,
             });
         }
-        ClawResponse::HistoryLoaded { messages, .. } => {
+        ProtocolEvent::ChatChunk(text) => {
+            if !text.trim().is_empty() {
+                events.push(ClawEvent::StreamChunk(text));
+            }
+        }
+        ProtocolEvent::Done => {
+            events.push(ClawEvent::Done);
+        }
+        ProtocolEvent::History(messages) => {
             events.push(ClawEvent::History(
                 messages
                     .into_iter()
@@ -157,76 +184,7 @@ fn map_openclaw_response(resp: clarity_openclaw::client::ClawResponse) -> Vec<Cl
                     .collect(),
             ));
         }
-        ClawResponse::Reply {
-            id: _,
-            ok,
-            method,
-            payload,
-        } => {
-            if ok {
-                if let Some(text) = extract_claw_text(&payload) {
-                    if !text.trim().is_empty() {
-                        events.push(ClawEvent::StreamChunk(text));
-                        events.push(ClawEvent::Done);
-                    }
-                }
-            } else {
-                let method_str = method.as_deref().unwrap_or("unknown");
-                let err = payload
-                    .get("error")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| payload.get("message").and_then(|v| v.as_str()))
-                    .map(|s| s.to_string());
-                let detail = if payload.is_null()
-                    || payload.as_object().map(|o| o.is_empty()).unwrap_or(false)
-                {
-                    "empty error payload".to_string()
-                } else {
-                    payload.to_string()
-                };
-                events.push(ClawEvent::Error(format!(
-                    "OpenClaw {} failed: {}",
-                    method_str,
-                    err.as_deref().unwrap_or(&detail)
-                )));
-            }
-        }
-        ClawResponse::SessionMessage {
-            role,
-            content,
-            finished,
-        } => {
-            if role != "user" && !content.trim().is_empty() {
-                events.push(ClawEvent::StreamChunk(content));
-            }
-            if finished {
-                events.push(ClawEvent::Done);
-            }
-        }
-        ClawResponse::Event {
-            event_type,
-            payload,
-        } => {
-            if event_type == "openclaw.reconnect_pending" {
-                let reason = payload
-                    .get("reason")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let seconds = payload.get("seconds").and_then(|v| v.as_u64()).unwrap_or(0);
-                events.push(ClawEvent::ReconnectPending { reason, seconds });
-            } else if matches!(
-                event_type.as_str(),
-                "done" | "finished" | "turn_end" | "message_end"
-            ) {
-                events.push(ClawEvent::Done);
-            } else if let Some(text) = extract_claw_text(&payload) {
-                if !text.trim().is_empty() {
-                    events.push(ClawEvent::StreamChunk(text));
-                }
-            }
-        }
-        ClawResponse::PairingResult {
+        ProtocolEvent::PairingResult {
             device_id,
             approved,
             token,
@@ -239,85 +197,33 @@ fn map_openclaw_response(resp: clarity_openclaw::client::ClawResponse) -> Vec<Cl
                 scopes,
             });
         }
-        ClawResponse::Error(e) => {
+        ProtocolEvent::ReconnectPending { reason, seconds } => {
+            events.push(ClawEvent::ReconnectPending { reason, seconds });
+        }
+        ProtocolEvent::Error(e) => {
             events.push(ClawEvent::Error(e));
         }
-    }
-    events
-}
-
-fn map_gateway_response(resp: clarity_openclaw::gateway_client::GatewayResponse) -> Vec<ClawEvent> {
-    use clarity_openclaw::gateway_client::GatewayResponse;
-    let mut events = Vec::new();
-    match resp {
-        GatewayResponse::Connected {
-            gateway_url,
-            session_id,
-        } => {
-            events.push(ClawEvent::Connected {
-                gateway_url,
-                session_id: Some(session_id),
-            });
-        }
-        GatewayResponse::Chat { message, .. } => {
-            if !message.trim().is_empty() {
-                events.push(ClawEvent::StreamChunk(message));
-            }
-            events.push(ClawEvent::Done);
-        }
-        GatewayResponse::WireMessage { payload } => {
+        ProtocolEvent::WireMessage(payload) => {
             events.push(ClawEvent::WirePayload(payload));
         }
-        GatewayResponse::History { messages } => {
-            events.push(ClawEvent::History(
-                messages
-                    .into_iter()
-                    .map(|m| ClawHistoryMessage {
-                        role: m.role,
-                        content: m.content,
-                    })
-                    .collect(),
-            ));
+        ProtocolEvent::RoleContextSynced {
+            role_id,
+            events: sync_events,
+            next_cursor,
+            online_devices,
+        } => {
+            events.push(ClawEvent::RoleContextSynced {
+                role_id,
+                events: sync_events,
+                next_cursor,
+                online_devices,
+            });
         }
-        GatewayResponse::Error(e) => {
-            events.push(ClawEvent::Error(e));
+        ProtocolEvent::Unsupported { reason } => {
+            events.push(ClawEvent::Error(reason));
         }
     }
     events
-}
-
-/// Try to extract human-readable text from an OpenClaw Gateway payload.
-///
-/// Different Gateway implementations emit responses under different keys, so
-/// this helper checks the common shapes without being tied to one schema.
-pub(crate) fn extract_claw_text(payload: &serde_json::Value) -> Option<String> {
-    // Direct string fields.
-    for key in ["text", "content", "message", "delta", "answer", "output"] {
-        if let Some(text) = payload.get(key).and_then(|v| v.as_str()) {
-            return Some(text.into());
-        }
-    }
-    // Nested message object.
-    if let Some(content) = payload
-        .get("message")
-        .or_else(|| payload.get("choices"))
-        .and_then(|v| v.get("content"))
-        .and_then(|v| v.as_str())
-    {
-        return Some(content.into());
-    }
-    // Array of content parts (OpenAI-style).
-    if let Some(parts) = payload.get("content_parts").and_then(|v| v.as_array()) {
-        let text: String = parts
-            .iter()
-            .filter_map(|p| p.get("text").and_then(|v| v.as_str()))
-            .collect::<Vec<_>>()
-            .join("");
-        if !text.is_empty() {
-            return Some(text);
-        }
-    }
-    None
 }
 
 // ── DeviceState ────────────────────────────────────────────────────────
@@ -1094,9 +1000,10 @@ mod tests {
     }
 
     #[test]
-    fn test_claw_event_mapping_openclaw_connected() {
-        let events = map_openclaw_response(clarity_openclaw::client::ClawResponse::Connected {
+    fn test_claw_event_mapping_connected() {
+        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::Connected {
             gateway_url: "wss://gray-cloud.example:18789".into(),
+            session_id: None,
         });
         assert_eq!(events.len(), 1);
         match &events[0] {
@@ -1112,13 +1019,11 @@ mod tests {
     }
 
     #[test]
-    fn test_claw_event_mapping_gateway_wire_payload() {
+    fn test_claw_event_mapping_wire_payload() {
         let payload = serde_json::json!({"foo": "bar"});
-        let events = map_gateway_response(
-            clarity_openclaw::gateway_client::GatewayResponse::WireMessage {
-                payload: payload.clone(),
-            },
-        );
+        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::WireMessage(
+            payload.clone(),
+        ));
         assert_eq!(events.len(), 1);
         match &events[0] {
             ClawEvent::WirePayload(p) => assert_eq!(p, &payload),
@@ -1127,22 +1032,17 @@ mod tests {
     }
 
     #[test]
-    fn test_claw_event_mapping_gateway_history() {
-        let events =
-            map_gateway_response(clarity_openclaw::gateway_client::GatewayResponse::History {
-                messages: vec![
-                    clarity_openclaw::gateway_client::GatewayMessage {
-                        role: "user".into(),
-                        content: "hello".into(),
-                        timestamp: "2026-01-01T00:00:00Z".into(),
-                    },
-                    clarity_openclaw::gateway_client::GatewayMessage {
-                        role: "assistant".into(),
-                        content: "hi there".into(),
-                        timestamp: "2026-01-01T00:00:01Z".into(),
-                    },
-                ],
-            });
+    fn test_claw_event_mapping_history() {
+        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::History(vec![
+            clarity_openclaw::ProtocolHistoryMessage {
+                role: "user".into(),
+                content: "hello".into(),
+            },
+            clarity_openclaw::ProtocolHistoryMessage {
+                role: "assistant".into(),
+                content: "hi there".into(),
+            },
+        ]));
         assert_eq!(events.len(), 1);
         match &events[0] {
             ClawEvent::History(messages) => {
@@ -1157,10 +1057,43 @@ mod tests {
     }
 
     #[test]
-    fn test_claw_client_handle_sends_gateway_chat() {
-        let client = clarity_openclaw::GatewayClient::connect("ws://127.0.0.1:18790/ws");
-        let handle = ClawClientHandle::Gateway(client);
-        // Should not panic; the message is queued on the background thread.
-        handle.send_chat("ignored", "hello", false);
+    fn test_claw_event_mapping_pairing_result() {
+        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::PairingResult {
+            device_id: "dev-1".into(),
+            approved: true,
+            token: Some("tok".into()),
+            scopes: vec!["operator.read".into()],
+        });
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            ClawEvent::PairingResult {
+                device_id,
+                approved,
+                token,
+                scopes,
+            } => {
+                assert_eq!(device_id, "dev-1");
+                assert!(approved);
+                assert_eq!(token.as_deref(), Some("tok"));
+                assert_eq!(scopes, &["operator.read"]);
+            }
+            _ => panic!("expected PairingResult event"),
+        }
+    }
+
+    #[test]
+    fn test_claw_event_mapping_reconnect_pending() {
+        let events = map_protocol_event(clarity_openclaw::ProtocolEvent::ReconnectPending {
+            reason: "network flap".into(),
+            seconds: 4,
+        });
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            ClawEvent::ReconnectPending { reason, seconds } => {
+                assert_eq!(reason, "network flap");
+                assert_eq!(*seconds, 4);
+            }
+            _ => panic!("expected ReconnectPending event"),
+        }
     }
 }

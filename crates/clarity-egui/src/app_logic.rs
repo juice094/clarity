@@ -9,24 +9,6 @@ use crate::settings::GuiSettings;
 use crate::theme::Theme;
 use crate::ui::types::*;
 impl App {
-    /// Returns true when the active bot is an OpenClaw remote device with a
-    /// live WebSocket connection. In this mode the main chat composer should
-    /// route messages through `claw_ws` instead of the local Agent.
-    pub(crate) fn is_claw_active(&self) -> bool {
-        if self.claw_ws.is_none() {
-            return false;
-        }
-        if self.ui_store.active_bot_id.is_empty() {
-            return false;
-        }
-        if self.ui_store.active_bot_id != self.claw_ws_device_id {
-            return false;
-        }
-        self.device_state
-            .connection(&self.ui_store.active_bot_id)
-            .is_some()
-    }
-
     /// Creates a new instance.
     pub(crate) fn new(
         cc: &eframe::CreationContext<'_>,
@@ -470,6 +452,10 @@ impl App {
                 let mut vs = clarity_core::ui::ViewState::new();
                 vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
                 vs.left_rail_expanded = true;
+                // Sessions are the primary navigation entry point; keep the
+                // history section expanded on startup so users can see and
+                // switch between Chat / Claw / Work contexts immediately.
+                vs.expansions.nav_history = true;
                 vs.right_rail_visible = right_rail_visible;
                 vs.right_rail_context = right_rail_context;
                 vs.debug_layout_overlay = debug_layout_overlay;
@@ -693,41 +679,84 @@ impl App {
         self.chat_store.last_usage = None;
     }
 
-    /// Infer the right `SessionContext` for a newly created session.
+    /// Enter a Claw session for the given role.
     ///
-    /// - Claw bot active → Claw context bound to the active bot.
-    /// - Project selected → Work context bound to the selected project.
-    /// - Otherwise → plain Chat.
-    fn infer_new_session_context(&self) -> SessionContext {
-        if self.is_claw_active() {
-            let active_bot_id = self.ui_store.active_bot_id.clone();
-            let role = self
-                .device_state
-                .pick_instance("operator", &DeviceAffinity::Specific(active_bot_id.clone()))
-                .map(|b| b.role)
-                .unwrap_or_else(|| "operator".to_string());
-            let session_key = format!("agent:main:{}", uuid::Uuid::new_v4());
-            return SessionContext::Claw {
+    /// If a Claw session for `role` already exists, switch to it and pin it to
+    /// the requested device. Otherwise create a new Claw session bound to the
+    /// device. This is the only way to create a Claw session after Phase 1.
+    pub(crate) fn enter_claw_session(&mut self, role: String, device_id: String) {
+        // Look for an existing Claw session with the same role.
+        let existing_id = self
+            .session_store
+            .sessions
+            .iter()
+            .find(|s| matches!(&s.context, SessionContext::Claw { role: r, .. } if r == &role))
+            .map(|s| s.id.clone());
+
+        if let Some(id) = existing_id {
+            // Pin the existing session to the selected device.
+            if let Some(session) = self.session_store.sessions.iter_mut().find(|s| s.id == id) {
+                if let SessionContext::Claw { affinity, .. } = &mut session.context {
+                    *affinity = DeviceAffinity::Specific(device_id);
+                }
+            }
+            self.switch_to_session(id);
+            return;
+        }
+
+        // No existing role session: create one.
+        let count = self.session_store.sessions.len();
+        let session_key = crate::session::claw_session_key(&role);
+        let session = new_session(
+            count,
+            SessionContext::Claw {
                 role,
                 session_key,
-                affinity: DeviceAffinity::Specific(active_bot_id),
-            };
-        }
-        if let Some(ref project_id) = self.project_store.selected_project_id {
-            let has_workspace = self
-                .project_store
-                .projects
-                .iter()
-                .find(|p| &p.id == project_id)
-                .map(|p| p.has_workspace)
-                .unwrap_or(true);
-            return SessionContext::Work {
-                workspace_id: Some(project_id.clone()),
-                has_workspace,
-            };
-        }
-        SessionContext::Chat
+                affinity: DeviceAffinity::Specific(device_id),
+            },
+        );
+        let _ = self
+            .ui_tx
+            .send(crate::ui::types::UiEvent::ThreadCreated { session });
+        self.process_events();
     }
+
+    /// Infer the right `SessionContext` for a newly created session.
+    ///
+    /// - Project selected → Work context bound to the selected project.
+    /// - Otherwise → plain Chat.
+    ///
+    /// Note: Claw sessions are no longer created via "New Session". They are
+    /// entered by clicking a Claw device/role in the left navigation tree.
+    fn infer_new_session_context(&self) -> SessionContext {
+        infer_new_session_context_impl(
+            self.project_store.selected_project_id.as_deref(),
+            &self.project_store.projects,
+        )
+    }
+}
+
+/// Pure helper for [`App::infer_new_session_context`], separated so it can be
+/// unit-tested without constructing a full `App`.
+fn infer_new_session_context_impl(
+    selected_project_id: Option<&str>,
+    projects: &[Project],
+) -> SessionContext {
+    if let Some(project_id) = selected_project_id {
+        let has_workspace = projects
+            .iter()
+            .find(|p| p.id == project_id)
+            .map(|p| p.has_workspace)
+            .unwrap_or(true);
+        return SessionContext::Work {
+            workspace_id: Some(project_id.into()),
+            has_workspace,
+        };
+    }
+    SessionContext::Chat
+}
+
+impl App {
     /// Stop.
     pub(crate) fn stop(&mut self) {
         self.state.agent.cancel();
@@ -999,4 +1028,76 @@ fn is_safe_url(url: &str) -> bool {
     // Reject shell metacharacters to prevent command injection when the URL
     // is passed to platform-specific openers.
     !url.contains(['&', '|', '<', '>', '^', '%', '!', '$', '`', '\n', '\r'])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infer_new_session_context_defaults_to_chat() {
+        let projects = vec![];
+        let ctx = infer_new_session_context_impl(None, &projects);
+        assert_eq!(ctx, SessionContext::Chat);
+    }
+
+    #[test]
+    fn infer_new_session_context_selects_work_with_project() {
+        let projects = vec![Project {
+            id: "p-1".into(),
+            name: "Project One".into(),
+            archived: false,
+            has_workspace: true,
+        }];
+        let ctx = infer_new_session_context_impl(Some("p-1"), &projects);
+        assert_eq!(
+            ctx,
+            SessionContext::Work {
+                workspace_id: Some("p-1".into()),
+                has_workspace: true,
+            }
+        );
+    }
+
+    #[test]
+    fn infer_new_session_context_uses_project_workspace_flag() {
+        let projects = vec![Project {
+            id: "p-2".into(),
+            name: "Project Two".into(),
+            archived: false,
+            has_workspace: false,
+        }];
+        let ctx = infer_new_session_context_impl(Some("p-2"), &projects);
+        assert_eq!(
+            ctx,
+            SessionContext::Work {
+                workspace_id: Some("p-2".into()),
+                has_workspace: false,
+            }
+        );
+    }
+
+    #[test]
+    fn infer_new_session_context_missing_project_defaults_workspace_true() {
+        // If the selected project is somehow not in the list, treat it as a
+        // workspace to avoid data-loss from a misclassified context.
+        let projects = vec![];
+        let ctx = infer_new_session_context_impl(Some("missing"), &projects);
+        assert_eq!(
+            ctx,
+            SessionContext::Work {
+                workspace_id: Some("missing".into()),
+                has_workspace: true,
+            }
+        );
+    }
+
+    #[test]
+    fn infer_new_session_context_never_returns_claw() {
+        // Claw sessions must be entered via the navigation tree, not created
+        // through "New Session".
+        let projects = vec![];
+        let ctx = infer_new_session_context_impl(None, &projects);
+        assert!(!matches!(ctx, SessionContext::Claw { .. }));
+    }
 }

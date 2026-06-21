@@ -44,6 +44,10 @@ async fn test_e2e_complete_hello() {
 
     println!("response: {:?}", response);
     assert!(!response.content.is_empty(), "response should not be empty");
+    assert!(
+        !response.content.contains("FINISHED"),
+        "response must not contain stream terminator sentinel"
+    );
 }
 
 #[tokio::test]
@@ -69,4 +73,8 @@ async fn test_e2e_stream_hello() {
     }
     println!();
     assert!(!received.is_empty(), "streamed content should not be empty");
+    assert!(
+        !received.contains("FINISHED"),
+        "streamed content must not contain stream terminator sentinel"
+    );
 }

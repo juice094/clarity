@@ -2,7 +2,6 @@ use crate::error::EguiError;
 use crate::llm_binder::{bind_llm, unbind_llm};
 use crate::llm_loader::load_llm;
 use crate::llm_policy::resolve_provider;
-use crate::provider::ProviderRegistry;
 use crate::settings::GuiSettings;
 use parking_lot::Mutex;
 use std::path::PathBuf;
@@ -24,6 +23,7 @@ pub fn parse_approval_mode(mode: &str) -> clarity_core::approval::ApprovalMode {
 #[derive(Clone, Debug)]
 pub struct LlmBinding {
     pub provider: String,
+    pub model: String,
     pub local_model_path: String,
 }
 
@@ -196,8 +196,8 @@ fn load_skill_registry() -> Option<clarity_core::skills::SkillRegistry> {
     }
 }
 
-fn binding_matches(binding: &Option<LlmBinding>, provider: &str, path: &str) -> bool {
-    matches!(binding, Some(b) if b.provider == provider && b.local_model_path == path)
+fn binding_matches(binding: &Option<LlmBinding>, provider: &str, model: &str, path: &str) -> bool {
+    matches!(binding, Some(b) if b.provider == provider && b.model == model && b.local_model_path == path)
 }
 
 /// Apply the active profile's fields onto `settings` when an active profile is set.
@@ -227,6 +227,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     apply_profile_overlay(&mut settings);
 
     let desired_provider = settings.provider.clone();
+    let desired_model = settings.model.clone();
     // C2: `network_available` is a cached flag updated by the background probe
     // (every ~30 s).  The probe drives UI banners only; it never auto-switches
     // the active provider.  Provider selection is always explicit via Policy.
@@ -234,34 +235,11 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
         .network_available
         .load(std::sync::atomic::Ordering::Relaxed);
 
-    // Layer 0 — Runtime provider config: check BEFORE binding shortcut.
-    // When the user clicks Apply in the settings panel, set_provider_config()
-    // writes to ACTIVE_CONFIG. Without this ordering, binding_matches would
-    // short-circuit on the same provider name and the new config would never
-    // be consumed, even if the user changed model / key / base_url.
-    if let Some(cfg) = clarity_llm::runtime::get_active_config() {
-        let _load_guard = state.llm_load_lock.lock().await;
-        let desc = format!("runtime:{}:{}", cfg.provider_id, cfg.model);
-        let llm = clarity_llm::runtime::build_from_active_config()
-            .await
-            .map_err(|e| {
-                crate::error::EguiError::LlmLoad(format!(
-                    "Failed to build provider from runtime config: {}",
-                    e
-                ))
-            })?;
-        bind_llm(&state.agent, llm.into(), &desc);
-        let mut guard = state.llm_binding.lock();
-        *guard = Some(LlmBinding {
-            provider: desired_provider,
-            local_model_path: String::new(),
-        });
-        return Ok(());
-    }
-
     let current_binding = {
         let guard = state.llm_binding.lock();
-        if binding_matches(&guard, &desired_provider, "") && state.agent.llm().is_some() {
+        if binding_matches(&guard, &desired_provider, &desired_model, "")
+            && state.agent.llm().is_some()
+        {
             return Ok(());
         }
         guard.clone()
@@ -271,47 +249,11 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
 
     {
         let guard = state.llm_binding.lock();
-        if binding_matches(&guard, &desired_provider, "") && state.agent.llm().is_some() {
+        if binding_matches(&guard, &desired_provider, &desired_model, "")
+            && state.agent.llm().is_some()
+        {
             return Ok(());
         }
-    }
-
-    // ponytail: deepseek-device shortcut bypasses the generic runtime loader because
-    // credentials live in ProviderRegistry, not GuiSettings.api_key. Hardcoded
-    // client_version/device_id match the unofficial device API; unify this path
-    // when the registry-backed loader can read credentials itself.
-    if desired_provider == "deepseek-device" {
-        let registry = tokio::task::spawn_blocking(ProviderRegistry::load)
-            .await
-            .map_err(|e| {
-                EguiError::InvalidProvider(format!("Failed to load provider registry: {e}"))
-            })?;
-        let def = registry.get("deepseek-device").ok_or_else(|| {
-            EguiError::InvalidProvider(
-                "Built-in provider 'deepseek-device' is missing from registry.".into(),
-            )
-        })?;
-
-        let model_id = if settings.model.is_empty() {
-            "deepseek-chat".to_string()
-        } else {
-            settings.model.clone()
-        };
-
-        let provider = def
-            .to_deepseek_device_provider(&model_id)
-            .map_err(EguiError::InvalidProvider)?;
-
-        bind_llm(
-            &state.agent,
-            Arc::new(provider),
-            &format!("deepseek-device:{}", model_id),
-        );
-        *state.llm_binding.lock() = Some(LlmBinding {
-            provider: desired_provider,
-            local_model_path: String::new(),
-        });
-        return Ok(());
     }
 
     // Layer 1 — Policy: pure function decides which provider to load.
@@ -344,7 +286,7 @@ pub async fn ensure_llm(state: &AppState) -> Result<(), EguiError> {
     bind_llm(
         &state.agent,
         llm,
-        &format!("{}:{}", desired_provider, settings.model),
+        &format!("{}:{}", desired_provider, desired_model),
     );
 
     if let Some(b) = binding {
@@ -427,23 +369,35 @@ mod tests {
     fn test_binding_matches_same() {
         let binding = Some(LlmBinding {
             provider: "openai".to_string(),
+            model: "gpt-4o".to_string(),
             local_model_path: "".to_string(),
         });
-        assert!(binding_matches(&binding, "openai", ""));
+        assert!(binding_matches(&binding, "openai", "gpt-4o", ""));
     }
 
     #[test]
     fn test_binding_matches_different_provider() {
         let binding = Some(LlmBinding {
             provider: "openai".to_string(),
+            model: "gpt-4o".to_string(),
             local_model_path: "".to_string(),
         });
-        assert!(!binding_matches(&binding, "anthropic", ""));
+        assert!(!binding_matches(&binding, "anthropic", "gpt-4o", ""));
+    }
+
+    #[test]
+    fn test_binding_matches_different_model() {
+        let binding = Some(LlmBinding {
+            provider: "openai".to_string(),
+            model: "gpt-4o".to_string(),
+            local_model_path: "".to_string(),
+        });
+        assert!(!binding_matches(&binding, "openai", "gpt-4o-mini", ""));
     }
 
     #[test]
     fn test_binding_matches_none() {
-        assert!(!binding_matches(&None, "openai", ""));
+        assert!(!binding_matches(&None, "openai", "gpt-4o", ""));
     }
 
     // ============================================================================
@@ -539,59 +493,21 @@ mod tests {
     fn test_binding_matches_with_local_path() {
         let binding = Some(LlmBinding {
             provider: "local".to_string(),
+            model: String::new(),
             local_model_path: "/models/qwen.gguf".to_string(),
         });
-        assert!(binding_matches(&binding, "local", "/models/qwen.gguf"));
-        assert!(!binding_matches(&binding, "local", "/models/deepseek.gguf"));
-        assert!(!binding_matches(&binding, "ollama", "/models/qwen.gguf"));
-    }
-
-    /// Temporary smoke test: verify deepseek-device can be bound to the Agent and
-    /// produce a streaming response through the same path used by the egui chat.
-    /// Ignored by default because it requires DEEPSEEK_DEVICE_TOKEN.
-    #[tokio::test]
-    #[ignore]
-    async fn test_deepseek_device_stream_via_agent() {
-        eprintln!("TEST: start");
-        let state = AppState::default();
-        eprintln!("TEST: ensure_llm begin");
-        ensure_llm(&state)
-            .await
-            .expect("ensure_llm should bind deepseek-device");
-        eprintln!("TEST: ensure_llm done");
-
-        // Mirror the egui path: attach a wire and drain UI-side messages in the
-        // background while the agent streams.
-        let wire = Arc::new(clarity_wire::Wire::new());
-        let agent = state.agent.clone().with_wire(wire.clone());
-        let mut ui = wire.ui_side(false);
-        eprintln!("TEST: wire receiver spawned");
-        let wire_handle = tokio::spawn(async move {
-            let mut chunks = 0;
-            while let Some(msg) = ui.recv().await {
-                if matches!(msg, clarity_wire::WireMessage::ContentPart { .. }) {
-                    chunks += 1;
-                }
-                eprintln!("TEST wire: {:?}", msg);
-            }
-            chunks
-        });
-
-        eprintln!("TEST: run_streaming begin");
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            agent.run_streaming("测试"),
-        )
-        .await
-        .expect("agent streaming should complete within 5s")
-        .expect("agent streaming returned error");
-        eprintln!("TEST: run_streaming done");
-        assert!(!response.is_empty(), "response should not be empty");
-        eprintln!("deepseek-device response: {}", response);
-
-        // Give the wire receiver a moment to drain, then check it saw something.
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let chunks = wire_handle.await.unwrap_or(0);
-        eprintln!("TEST: wire content chunks: {}", chunks);
+        assert!(binding_matches(&binding, "local", "", "/models/qwen.gguf"));
+        assert!(!binding_matches(
+            &binding,
+            "local",
+            "",
+            "/models/deepseek.gguf"
+        ));
+        assert!(!binding_matches(
+            &binding,
+            "ollama",
+            "",
+            "/models/qwen.gguf"
+        ));
     }
 }
