@@ -8,14 +8,19 @@ pub mod task;
 pub mod team;
 
 use crate::App;
-use crate::ui::types::{ContentBlock, Message, Role, UiEvent};
+use crate::ui::types::UiEvent;
 
 /// Dispatches queued UI events to handlers.
 pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
         match event {
-            UiEvent::Chunk(text) => {
-                chat::on_chunk(&mut app.session_store, &mut app.chat_store, text);
+            UiEvent::Chunk { session_id, text } => {
+                chat::on_chunk(
+                    &mut app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    text,
+                );
                 // Incrementally persist the session during long streams so a
                 // crash before UiEvent::Done does not lose the entire response.
                 const CHUNKS_PER_SAVE: usize = 10;
@@ -25,6 +30,7 @@ pub fn process_events(app: &mut App) {
                 }
             }
             UiEvent::ToolStart {
+                session_id,
                 id,
                 name,
                 arguments,
@@ -32,12 +38,17 @@ pub fn process_events(app: &mut App) {
                 chat::on_tool_start(
                     &mut app.session_store,
                     &mut app.chat_store,
+                    &session_id,
                     id,
                     name,
                     arguments,
                 );
             }
-            UiEvent::ToolResult { id, result } => {
+            UiEvent::ToolResult {
+                session_id,
+                id,
+                result,
+            } => {
                 let name = app
                     .chat_store
                     .tool_calls
@@ -48,36 +59,74 @@ pub fn process_events(app: &mut App) {
                 chat::on_tool_result(
                     &mut app.session_store,
                     &mut app.chat_store,
+                    &session_id,
                     id,
                     name,
                     result,
                 );
             }
-            UiEvent::StepBegin { tool_name } => {
-                system::on_step_begin(&mut app.chat_store, tool_name);
+            UiEvent::StepBegin {
+                session_id,
+                tool_name,
+            } => {
+                chat::on_status_update(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    format!("🔧 正在执行: {}…", tool_name),
+                );
             }
-            UiEvent::CompactionBegin => chat::on_compaction_begin(&mut app.view_state),
-            UiEvent::CompactionEnd => chat::on_compaction_end(&mut app.view_state),
-            UiEvent::DraftProgress { text } => {
-                chat::on_draft_progress(&mut app.chat_store, text);
+            UiEvent::CompactionBegin { session_id } => {
+                chat::on_compaction_begin(&app.session_store, &mut app.view_state, &session_id);
             }
-            UiEvent::DraftClear => chat::on_draft_clear(&mut app.chat_store),
-            UiEvent::DraftContent { text } => {
-                chat::on_draft_content(&mut app.chat_store, text);
+            UiEvent::CompactionEnd { session_id } => {
+                chat::on_compaction_end(&app.session_store, &mut app.view_state, &session_id);
             }
-            UiEvent::ReasoningChunk { text } => {
-                chat::on_reasoning_chunk(&mut app.session_store, &mut app.chat_store, text);
+            UiEvent::DraftProgress { session_id, text } => {
+                chat::on_draft_progress(&app.session_store, &mut app.chat_store, &session_id, text);
             }
-            UiEvent::TurnStart { user_input } => {
-                chat::on_turn_start(&mut app.chat_store, user_input);
+            UiEvent::DraftClear { session_id } => {
+                chat::on_draft_clear(&app.session_store, &mut app.chat_store, &session_id);
             }
-            UiEvent::TurnEnd => chat::on_turn_end(app),
-            UiEvent::StatusUpdate { message } => {
-                chat::on_status_update(&mut app.chat_store, message);
+            UiEvent::DraftContent { session_id, text } => {
+                chat::on_draft_content(&app.session_store, &mut app.chat_store, &session_id, text);
             }
-            UiEvent::ViewStateUpdate { turn } => {
-                if let Some(turn) = turn {
-                    app.view_state.turn = turn;
+            UiEvent::ReasoningChunk { session_id, text } => {
+                chat::on_reasoning_chunk(
+                    &mut app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    text,
+                );
+            }
+            UiEvent::TurnStart {
+                session_id,
+                user_input,
+            } => {
+                chat::on_turn_start(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    user_input,
+                );
+            }
+            UiEvent::TurnEnd { session_id } => chat::on_turn_end(app, &session_id),
+            UiEvent::StatusUpdate {
+                session_id,
+                message,
+            } => {
+                chat::on_status_update(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    message,
+                );
+            }
+            UiEvent::ViewStateUpdate { session_id, turn } => {
+                if app.session_store.active_session_id == session_id {
+                    if let Some(turn) = turn {
+                        app.view_state.turn = turn;
+                    }
                 }
             }
             UiEvent::ThreadActive { thread_id, .. } => {
@@ -99,8 +148,17 @@ pub fn process_events(app: &mut App) {
             UiEvent::ThreadDeleted { thread_id } => {
                 session::on_thread_deleted(&mut app.session_store, thread_id);
             }
-            UiEvent::Done => chat::on_done(app),
-            UiEvent::Error(msg) => chat::on_error(app, msg),
+            UiEvent::SessionMeta {
+                session_id,
+                provider_state,
+            } => {
+                chat::on_session_meta(app, &session_id, provider_state);
+            }
+            UiEvent::Done { session_id } => chat::on_done(app, &session_id),
+            UiEvent::Error {
+                session_id,
+                message,
+            } => chat::on_error(app, &session_id, message),
             UiEvent::Fallback { fallback, reason } => {
                 system::on_fallback(&mut app.ui_store, fallback, reason);
             }
@@ -109,11 +167,14 @@ pub fn process_events(app: &mut App) {
                 subagent::on_subagent_batch(&mut app.subagent_store, batch_id, status);
             }
             UiEvent::Usage {
+                session_id,
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
             } => chat::on_usage(
+                &app.session_store,
                 &mut app.chat_store,
+                &session_id,
                 prompt_tokens,
                 completion_tokens,
                 total_tokens,
@@ -121,11 +182,31 @@ pub fn process_events(app: &mut App) {
             UiEvent::PlanReady(plan) => {
                 chat::on_plan_ready(&mut app.chat_store, &mut app.view_state, plan)
             }
-            UiEvent::PlanStepBegin { step_id, tool_name } => {
-                chat::on_plan_step_begin(&mut app.chat_store, step_id, tool_name);
+            UiEvent::PlanStepBegin {
+                session_id,
+                step_id,
+                tool_name,
+            } => {
+                chat::on_plan_step_begin(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    step_id,
+                    tool_name,
+                );
             }
-            UiEvent::PlanStepEnd { step_id, success } => {
-                chat::on_plan_step_end(&mut app.chat_store, step_id, success);
+            UiEvent::PlanStepEnd {
+                session_id,
+                step_id,
+                success,
+            } => {
+                chat::on_plan_step_end(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    step_id,
+                    success,
+                );
             }
             UiEvent::PlanSkip { step_id } => {
                 let agent = app.state.agent.clone();
@@ -143,8 +224,16 @@ pub fn process_events(app: &mut App) {
                     }
                 });
             }
-            UiEvent::PlanStepSkipped { step_id } => {
-                chat::on_plan_step_skipped(&mut app.chat_store, step_id);
+            UiEvent::PlanStepSkipped {
+                session_id,
+                step_id,
+            } => {
+                chat::on_plan_step_skipped(
+                    &app.session_store,
+                    &mut app.chat_store,
+                    &session_id,
+                    step_id,
+                );
             }
             UiEvent::CronList(tasks) => {
                 cron::on_cron_list(&mut app.cron_store, tasks);
@@ -295,38 +384,12 @@ pub fn process_events(app: &mut App) {
                 }
             }
             UiEvent::ShellResult {
+                session_id,
                 command,
                 output,
                 exit_code,
             } => {
-                let exit_marker = if exit_code == 0 {
-                    format!("Exit: {}", exit_code)
-                } else {
-                    format!("Exit: {} ❌", exit_code)
-                };
-                let content = format!(
-                    "▶ {}\n```\n{}\n```\n_{}_",
-                    command,
-                    output.trim_end(),
-                    exit_marker
-                );
-                if let Some(session) = app.session_store.active_session_mut() {
-                    let mut msg = Message {
-                        role: Role::Agent,
-                        content: content.clone(),
-                        blocks: vec![ContentBlock::Text { text: content }],
-                        timestamp: std::time::Instant::now(),
-                        parsed: vec![],
-                        cached_height: None,
-                        is_error: exit_code != 0,
-                        lines: Vec::new(),
-                    };
-                    msg.prepare();
-                    session.messages.push(msg);
-                    session.updated_at = crate::session::now_millis();
-                }
-                app.save_current_session();
-                app.chat_store.stick_to_bottom = true;
+                chat::on_shell_result(app, &session_id, command, output, exit_code);
             }
             UiEvent::KnowledgeLoaded { path, result } => {
                 app.knowledge_store.loading = false;

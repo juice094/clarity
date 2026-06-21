@@ -101,7 +101,7 @@ pub struct GetThreadQuery {
 }
 
 /// Thread summary returned in list responses.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadListItem {
     /// Thread identifier.
     pub thread_id: String,
@@ -134,7 +134,7 @@ pub struct ThreadListResponse {
 }
 
 /// Single thread response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadResponse {
     /// Thread identifier.
     pub thread_id: String,
@@ -189,7 +189,7 @@ fn store_error(e: impl std::fmt::Display) -> axum::response::Response {
         .into_response()
 }
 
-fn summary_to_item(summary: &clarity_thread_store::ThreadSummary) -> ThreadListItem {
+pub(crate) fn summary_to_item(summary: &clarity_thread_store::ThreadSummary) -> ThreadListItem {
     ThreadListItem {
         thread_id: summary.thread_id.to_string(),
         session_id: summary.session_id.to_string(),
@@ -202,7 +202,7 @@ fn summary_to_item(summary: &clarity_thread_store::ThreadSummary) -> ThreadListI
     }
 }
 
-fn stored_to_response(stored: &clarity_thread_store::StoredThread) -> ThreadResponse {
+pub(crate) fn stored_to_response(stored: &clarity_thread_store::StoredThread) -> ThreadResponse {
     ThreadResponse {
         thread_id: stored.thread_id.to_string(),
         session_id: stored.session_id.to_string(),

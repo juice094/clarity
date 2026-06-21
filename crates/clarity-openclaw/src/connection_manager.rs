@@ -5,6 +5,15 @@
 //! JSON-RPC by reading the server's first message. The detected dialect is then
 //! used for the lifetime of the connection.
 //!
+//! # Protocol strategy
+//!
+//! - **Gateway WebSocket** is the single canonical protocol for Clarity
+//!   internal mesh (`clarity-claw` ↔ `clarity-gateway` ↔ frontends).
+//! - **OpenClaw JSON-RPC** is an external-interop fallback for talking to
+//!   out-of-process KimiClaw / OpenClaw Gateways. It participates in basic
+//!   chat/history/pairing but not in Clarity-internal semantics such as
+//!   role-context sync, `WireMessage`, or MCP tool events.
+//!
 //! # Current implementation
 //!
 //! The manager performs a short-lived probe handshake to read the server's
@@ -70,6 +79,16 @@ impl ClawConnectionManager {
     /// Send a command to the active protocol handler.
     pub fn send(&self, cmd: ProtocolCommand) {
         let _ = self.tx.send(ManagerCommand::Protocol(cmd));
+    }
+
+    /// Set or clear the passphrase used to encrypt role-context events at rest.
+    pub fn set_role_passphrase(&self, role_id: &str, passphrase: &str) {
+        let _ = self.tx.send(ManagerCommand::Protocol(
+            ProtocolCommand::SetRolePassphrase {
+                role_id: role_id.into(),
+                passphrase: passphrase.into(),
+            },
+        ));
     }
 
     /// Non-blocking poll for a normalized protocol event.
@@ -170,6 +189,8 @@ async fn run_gateway_manager(
     for cmd in cmd_rx {
         match cmd {
             ManagerCommand::Protocol(ProtocolCommand::Chat { message, .. }) => {
+                // Gateway WebSocket is the single native Clarity protocol;
+                // chat.send is the canonical method.
                 client.chat(&message, true);
             }
             ManagerCommand::Protocol(ProtocolCommand::GetHistory { .. }) => {
@@ -187,6 +208,9 @@ async fn run_gateway_manager(
                 device_id,
             }) => {
                 client.sync_role_context(&role_id, since_event_id.as_deref(), &device_id);
+            }
+            ManagerCommand::Protocol(ProtocolCommand::SetRolePassphrase { .. }) => {
+                // Gateway dialect does not persist role-context at rest.
             }
         }
     }
@@ -266,13 +290,11 @@ async fn run_openclaw_manager(
             ManagerCommand::Protocol(ProtocolCommand::Chat {
                 session_key,
                 message,
-                use_sessions_send,
             }) => {
-                if use_sessions_send {
-                    client.send_session_message(&session_key, &message);
-                } else {
-                    client.send_message(&session_key, &message);
-                }
+                // OpenClaw JSON-RPC is the external-fallback dialect; it always
+                // uses sessions.send. Gateway WebSocket (the native Clarity
+                // protocol) uses chat.send in its own manager branch.
+                client.send_session_message(&session_key, &message);
             }
             ManagerCommand::Protocol(ProtocolCommand::GetHistory { session_key }) => {
                 client.fetch_history(&session_key);
@@ -287,6 +309,12 @@ async fn run_openclaw_manager(
                 let _ = resp_tx.send(ProtocolEvent::Unsupported {
                     reason: "OpenClaw dialect uses syncthing-rust for role-context sync".into(),
                 });
+            }
+            ManagerCommand::Protocol(ProtocolCommand::SetRolePassphrase {
+                role_id,
+                passphrase,
+            }) => {
+                client.set_role_passphrase(&role_id, &passphrase);
             }
         }
     }
@@ -321,12 +349,12 @@ fn translate_openclaw_response(resp: ClawResponse) -> Vec<ProtocolEvent> {
             ..
         } => {
             if ok {
-                if let Some(text) = extract_claw_text(&payload) {
-                    if !text.trim().is_empty() {
-                        out.push(ProtocolEvent::ChatChunk(text));
-                        out.push(ProtocolEvent::Done);
-                    }
-                }
+                // OpenClaw command replies are acknowledgments, not chat
+                // streams. Chat content arrives via SessionMessage / Event.
+                // We intentionally do not map ok replies to ChatChunk to keep
+                // the external fallback dialect from leaking into Gateway
+                // semantics.
+                tracing::debug!(method = ?method, payload = ?payload, "OpenClaw ok reply ignored");
             } else {
                 let method_str = method.as_deref().unwrap_or("unknown");
                 let err = payload

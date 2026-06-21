@@ -9,6 +9,7 @@
 
 use clarity_core::agent::Plan;
 use clarity_core::background::TaskInfo;
+use std::collections::HashMap;
 use std::time::Instant;
 
 // ============================================================================
@@ -18,44 +19,63 @@ use std::time::Instant;
 /// ui event variants.
 #[derive(Debug, Clone)]
 pub enum UiEvent {
-    Chunk(String),
+    Chunk {
+        session_id: String,
+        text: String,
+    },
     ToolStart {
+        session_id: String,
         id: String,
         name: String,
         arguments: serde_json::Value,
     },
     ToolResult {
+        session_id: String,
         id: String,
         result: String,
     },
     StepBegin {
+        session_id: String,
         tool_name: String,
     },
-    CompactionBegin,
-    CompactionEnd,
+    CompactionBegin {
+        session_id: String,
+    },
+    CompactionEnd {
+        session_id: String,
+    },
     /// Transient draft/thinking indicator shown while the model is preparing a response.
     DraftProgress {
+        session_id: String,
         text: String,
     },
     /// Clear the transient draft indicator (the model is about to emit real content).
-    DraftClear,
+    DraftClear {
+        session_id: String,
+    },
     /// Optional reasoning/thinking content (e.g. <think> blocks from reasoning models).
     DraftContent {
+        session_id: String,
         text: String,
     },
     /// A reasoning/thinking chunk that should be persisted as a collapsible block
     /// in the current assistant message.
     ReasoningChunk {
+        session_id: String,
         text: String,
     },
     /// A new agent turn has begun. Carries the user input for confirmation / telemetry.
     TurnStart {
+        session_id: String,
         user_input: String,
     },
     /// The current agent turn has ended. Replaces the legacy `Done` event over time.
-    TurnEnd,
+    TurnEnd {
+        session_id: String,
+    },
     /// Backend status text update (e.g. "Executing tools...", "Compacting context...").
     StatusUpdate {
+        session_id: String,
         message: String,
     },
     /// Delta update for the frontend view state.
@@ -63,6 +83,7 @@ pub enum UiEvent {
     /// Only fields that changed are present; absent fields must be ignored.
     /// Initially only `turn` is authoritative from the backend.
     ViewStateUpdate {
+        session_id: String,
         turn: Option<clarity_core::ui::TurnState>,
     },
     /// A thread/session became active (e.g. user switched or backend promoted one).
@@ -90,14 +111,25 @@ pub enum UiEvent {
     ThreadDeleted {
         thread_id: String,
     },
-    Done,
-    Error(String),
+    /// Session-level metadata update from the backend (e.g. provider state blobs).
+    SessionMeta {
+        session_id: String,
+        provider_state: HashMap<String, String>,
+    },
+    Done {
+        session_id: String,
+    },
+    Error {
+        session_id: String,
+        message: String,
+    },
     Fallback {
         fallback: bool,
         reason: String,
     },
     TaskList(Vec<TaskInfo>),
     Usage {
+        session_id: String,
         prompt_tokens: u32,
         completion_tokens: u32,
         total_tokens: u32,
@@ -106,11 +138,13 @@ pub enum UiEvent {
     SubAgentBatch(String, serde_json::Value),
     PlanReady(Plan),
     PlanStepBegin {
+        session_id: String,
         step_id: String,
         #[allow(dead_code)]
         tool_name: String,
     },
     PlanStepEnd {
+        session_id: String,
         step_id: String,
         success: bool,
     },
@@ -126,6 +160,7 @@ pub enum UiEvent {
     },
     /// Notification that a plan step has been skipped (from wire).
     PlanStepSkipped {
+        session_id: String,
         step_id: String,
     },
     /// Cron task list refreshed from backend store.
@@ -216,6 +251,7 @@ pub enum UiEvent {
     },
     /// Direct shell execution (!cmd) completed.
     ShellResult {
+        session_id: String,
         command: String,
         output: String,
         exit_code: i32,
@@ -317,6 +353,13 @@ pub struct Session {
     pub updated_at: u64,
     /// Cached heights for aggregated agent turns.
     pub turn_heights: Vec<Option<f32>>,
+    /// Opaque provider-side state blobs, keyed by provider id.
+    /// Clarity does not interpret the contents; stateful providers use this to
+    /// resume server-side sessions across app restarts.
+    pub provider_state: HashMap<String, String>,
+    /// Runtime-only flag: true while this session is waiting for a streamed
+    /// response. Never persisted; used to keep per-session turn state.
+    pub in_flight: bool,
 }
 
 impl std::fmt::Debug for Session {
@@ -488,7 +531,7 @@ pub enum DeviceAffinity {
 }
 
 /// Conversation context that drives the Bot bar and right rail panels.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum SessionContext {
     /// Plain conversation without project or device binding.
     #[default]
@@ -509,6 +552,41 @@ pub enum SessionContext {
         /// Device affinity: which device should handle the session.
         affinity: DeviceAffinity,
     },
+}
+
+impl serde::Serialize for SessionContext {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            SessionContext::Chat => {
+                serde_json::json!({"Chat": serde_json::Value::Null}).serialize(serializer)
+            }
+            SessionContext::Work {
+                workspace_id,
+                has_workspace,
+            } => serde_json::json!({
+                "Work": {
+                    "workspace_id": workspace_id,
+                    "has_workspace": has_workspace,
+                }
+            })
+            .serialize(serializer),
+            SessionContext::Claw {
+                role,
+                session_key,
+                affinity,
+            } => serde_json::json!({
+                "Claw": {
+                    "role": role,
+                    "session_key": session_key,
+                    "affinity": affinity,
+                }
+            })
+            .serialize(serializer),
+        }
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for SessionContext {
@@ -884,5 +962,13 @@ mod tests {
                 affinity: DeviceAffinity::Specific("d-legacy".into()),
             }
         );
+    }
+
+    #[test]
+    fn session_context_chat_roundtrips() {
+        let ctx = SessionContext::Chat;
+        let json = serde_json::to_string(&ctx).unwrap();
+        let restored: SessionContext = serde_json::from_str(&json).unwrap();
+        assert_eq!(ctx, restored);
     }
 }

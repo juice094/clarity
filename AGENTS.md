@@ -109,7 +109,7 @@ contract
 | `clarity-gateway` | bin/lib | Axum HTTP/WebSocket 服务端、Web IDE、session store。 |
 | `clarity-egui` | bin | 桌面 GUI（主前端栈），egui 0.31 / eframe 0.31 纯 Rust。 |
 | `clarity-tui` | bin | ratatui 0.30 终端界面。 |
-| `clarity-claw` | bin | 系统托盘后台监控。 |
+| `clarity-claw` | bin | 系统托盘常驻节点，仅通过 Gateway WebSocket 与 clarity-gateway 通信，不兼任外部 OpenClaw 适配器。 |
 | `clarity-headless` | bin | 无头 CLI（脚本 / CI 场景）。 |
 | `clarity-slint` | bin | 桌面 GUI 实验栈，Slint（不参与默认 CI）。 |
 | `clarity-tauri` | bin | Tauri 前端（**已归档**，被 workspace 排除）。 |
@@ -466,6 +466,7 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 - **输入框位置修复**：空状态时隐藏底部 `TopBottomPanel` 输入栏，将 Composer 居中置于大 Logo 与快捷提示下方；非空状态时恢复底部固定输入栏。同时把右栏渲染提前到底部输入栏与中栏之前，避免展开右栏时输入框/中栏与其重叠。
 - **文档补齐**：为 `clarity-rollout` 与 `clarity-thread-store` 补全了 `README.md` 与 `AGENTS.md`，满足 CI `doc-guard` 对每 crate 文档存在性的检查。
 - **移动端 FFI 核心落地**：新增 `crates/clarity-mobile-core`，通过 UniFFI 暴露 Runtime/事件/配置/记忆接口；默认禁用 `local-llm` 以避免移动 ABI fullfp16 问题。完整 Android/iOS UI 仍在 `mobile/` 与 `docs/mobile-architecture.md` 路线图中。
+- **Claw 协议统一**：已决策 Gateway WebSocket 为 Clarity 内部唯一协议，OpenClaw JSON-RPC 仅作为外部 KimiClaw/OpenClaw Gateway 互通的 fallback；已删除 egui 层的 `claw_ws_uses_sessions_send` 协议泄漏字段，发送方法由 `ClawConnectionManager` 根据检测到的 dialect 自行决定；已明确 `clarity-claw` 只做 Gateway WebSocket 客户端/系统托盘节点，不兼任外部 OpenClaw 适配器，并移除了其中未使用的 federation coordinator/nodes/runtime 骨架代码。详见 [`docs/architecture/claw-protocol.md`](docs/architecture/claw-protocol.md)。
 - **已知限制**：
   - Discord/Telegram 默认禁用，等待上游 `rustls-webpki` 修复。
   - Gateway HTTP Chat Completions 默认无状态；完整 session 请用 WebSocket 或传 `session_id`。
@@ -474,6 +475,8 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 ---
 
 ## 12. 更多参考
+
+
 
 | 主题 | 文档 |
 |------|------|
@@ -491,6 +494,7 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 | 贡献指南 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | 变更日志 | [`CHANGELOG.md`](CHANGELOG.md) |
 | **协议层设计与映射** | [`docs/architecture/protocol-layer.md`](docs/architecture/protocol-layer.md) |
+| **Claw 协议策略**（Gateway WebSocket / OpenClaw fallback） | [`docs/architecture/claw-protocol.md`](docs/architecture/claw-protocol.md) |
 | **生命周期与管线图例** | [`docs/architecture/lifecycle-diagrams.md`](docs/architecture/lifecycle-diagrams.md) |
 
 ---

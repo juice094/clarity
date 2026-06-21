@@ -330,6 +330,7 @@ impl App {
                 input_history_idx: None,
                 draft_status: crate::ui::types::DraftStatus::None,
                 status_message: None,
+                claw_in_flight_session_id: None,
                 chunks_since_save: 0,
             },
             settings_store,
@@ -482,7 +483,6 @@ impl App {
                 tracing::warn!("Failed to load Clarity device token: {}", e);
                 None
             }),
-            claw_ws_uses_sessions_send: false,
             claw_pairing_client: None,
             claw_pairing_state: crate::PairingState::default(),
             knowledge_store: crate::stores::KnowledgeStore::new(),

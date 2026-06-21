@@ -29,14 +29,22 @@ pub(crate) struct TaskCreateResponse {
     pub status: TaskStatus,
 }
 
-#[derive(Serialize)]
-pub(crate) struct TaskDetailResponse {
+/// Detailed background task response returned by the HTTP and WebSocket APIs.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaskDetailResponse {
+    /// Task identifier.
     pub task_id: TaskId,
+    /// Human-readable task name.
     pub name: String,
+    /// Current task status.
     pub status: TaskStatus,
+    /// Prompt that the task is executing against.
     pub prompt: String,
+    /// Creation timestamp as seconds since the Unix epoch.
     pub created_at: u64,
+    /// Last update timestamp as seconds since the Unix epoch.
     pub updated_at: u64,
+    /// Final task result, if the task has reached a terminal state.
     pub result: Option<TaskResult>,
 }
 

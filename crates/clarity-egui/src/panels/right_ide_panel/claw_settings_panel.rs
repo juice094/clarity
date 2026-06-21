@@ -16,15 +16,11 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         .bot_instances
         .iter()
         .find(|b| b.id == app.ui_store.active_bot_id)
-        .or_else(|| app.ui_store.bot_instances.first());
+        .or_else(|| app.ui_store.bot_instances.first())
+        .cloned();
 
-    let (bot_name, bot_id, bot_version, bot_last_backup) = match bot {
-        Some(b) => (
-            b.name.clone(),
-            b.id.clone(),
-            b.version.clone(),
-            b.last_backup.clone(),
-        ),
+    let (bot_name, bot_id, bot_version, bot_last_backup, role_for_passphrase) = match bot {
+        Some(b) => (b.name, b.id, b.version, b.last_backup, b.role),
         None => {
             ui.label(
                 egui::RichText::new(app.t("No devices"))
@@ -34,6 +30,9 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             return;
         }
     };
+
+    // Pre-translate strings that are used while `app.ui_store` is mutably borrowed.
+    let hint_enter_passphrase = app.t("Enter passphrase…").to_string();
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
@@ -61,6 +60,65 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space(theme.space_8);
             if action_button(ui, &theme, app.t("Connect chat channel")).clicked() {
                 app.push_toast(app.t("Connecting to chat channel…"), ToastLevel::Info);
+            }
+
+            ui.add_space(theme.space_16);
+
+            // ── Role Passphrase (E2EE) ─────────────────────────────────
+            section_header(
+                ui,
+                &theme,
+                app.t("Role passphrase"),
+                crate::theme::ICON_LOCK,
+            );
+            ui.add_space(theme.space_8);
+            ui.label(
+                egui::RichText::new(app.t("Encrypts role-context events stored by Syncthing"))
+                    .size(theme.text_xs)
+                    .color(theme.text_muted),
+            );
+            ui.add_space(theme.space_4);
+
+            if role_for_passphrase.is_empty() {
+                ui.label(
+                    egui::RichText::new(app.t("Select a Claw device to set a passphrase"))
+                        .size(theme.text_sm)
+                        .color(theme.text_muted),
+                );
+            } else {
+                ui.label(
+                    egui::RichText::new(format!("{}: {}", app.t("Role"), role_for_passphrase))
+                        .size(theme.text_sm)
+                        .color(theme.text_dim),
+                );
+                ui.add_space(theme.space_4);
+                ui.add_sized(
+                    egui::vec2(ui.available_width(), 28.0),
+                    egui::TextEdit::singleline(&mut app.ui_store.claw_role_passphrase_input)
+                        .password(true)
+                        .hint_text(hint_enter_passphrase),
+                );
+                ui.add_space(theme.space_4);
+                ui.horizontal(|ui| {
+                    let has_connection = app.claw_ws.is_some();
+                    ui.add_enabled_ui(has_connection, |ui| {
+                        if action_button(ui, &theme, app.t("Apply passphrase")).clicked() {
+                            let pw = app.ui_store.claw_role_passphrase_input.clone();
+                            if let Some(ref claw) = app.claw_ws {
+                                claw.set_role_passphrase(&role_for_passphrase, &pw);
+                                app.push_toast(app.t("Passphrase applied"), ToastLevel::Info);
+                            }
+                        }
+                    });
+                    ui.add_space(theme.space_8);
+                    if small_button(ui, &theme, app.t("Clear")).clicked() {
+                        app.ui_store.claw_role_passphrase_input.clear();
+                        if let Some(ref claw) = app.claw_ws {
+                            claw.set_role_passphrase(&role_for_passphrase, "");
+                            app.push_toast(app.t("Passphrase cleared"), ToastLevel::Info);
+                        }
+                    }
+                });
             }
 
             ui.add_space(theme.space_16);

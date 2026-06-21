@@ -98,6 +98,20 @@ pub trait LlmProvider: Send + Sync {
     /// Default is a no-op; providers with local state should override.
     fn clear_cache(&self) {}
 
+    /// Reset any provider-side conversation context.
+    /// Default is a no-op; stateful providers (e.g. deepseek-device) should override.
+    fn reset_conversation_context(&self) {}
+
+    /// Restore provider-side conversation state from an opaque blob.
+    /// Default is a no-op; stateful providers (e.g. deepseek-device) should override.
+    fn restore_provider_state(&self, _state: &str) {}
+
+    /// Capture the current provider-side conversation state as an opaque blob.
+    /// Default returns None; stateful providers should override.
+    fn capture_provider_state(&self) -> Option<String> {
+        None
+    }
+
     /// Provider self-reported capabilities.
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {

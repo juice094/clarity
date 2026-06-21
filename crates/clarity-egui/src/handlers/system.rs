@@ -36,6 +36,7 @@ pub fn on_fallback(ui_store: &mut UiStore, fallback: bool, reason: String) {
 /// Displays a transient status message in the chat area so the user can see
 /// which tool is currently being executed. The message is cleared automatically
 /// when real content arrives, the turn ends, or an error occurs.
+#[allow(dead_code)]
 pub fn on_step_begin(chat_store: &mut ChatStore, tool_name: String) {
     tracing::info!("Step begin: {}", tool_name);
     chat_store.status_message = Some(format!("🔧 正在执行: {}…", tool_name));

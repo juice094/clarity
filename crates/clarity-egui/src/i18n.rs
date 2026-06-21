@@ -269,6 +269,22 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Clear Batch Grants", "清除批量授权");
     m.insert("No custom providers configured.", "未配置自定义服务商。");
 
+    // ── Claw role-context E2EE ──
+    m.insert("Role passphrase", "角色口令");
+    m.insert(
+        "Encrypts role-context events stored by Syncthing",
+        "加密 Syncthing 存储的角色上下文事件",
+    );
+    m.insert(
+        "Select a Claw device to set a passphrase",
+        "选择一台 Claw 设备以设置口令",
+    );
+    m.insert("Role", "角色");
+    m.insert("Enter passphrase…", "输入口令…");
+    m.insert("Apply passphrase", "应用口令");
+    m.insert("Passphrase applied", "口令已应用");
+    m.insert("Passphrase cleared", "口令已清除");
+
     m
 });
 

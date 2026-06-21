@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -43,6 +44,7 @@ impl App {
     pub(crate) fn execute_shell_direct(&mut self, cmd: String) {
         let tx = self.ui_tx.clone();
         let working_dir = self.state.agent.config().working_dir.clone();
+        let session_id = self.session_store.active_session_id.clone();
 
         // Add the command as a user message immediately.
         if let Some(session) = self.session_store.active_session_mut() {
@@ -88,6 +90,7 @@ impl App {
                         format!("{}\n[stderr]\n{}", stdout, stderr)
                     };
                     let _ = tx.send(UiEvent::ShellResult {
+                        session_id: session_id.clone(),
                         command: cmd,
                         output: combined,
                         exit_code,
@@ -95,6 +98,7 @@ impl App {
                 }
                 Err(e) => {
                     let _ = tx.send(UiEvent::ShellResult {
+                        session_id: session_id.clone(),
                         command: cmd,
                         output: format!("Failed to execute: {}", e),
                         exit_code: -1,
@@ -207,6 +211,10 @@ impl App {
         self.session_store
             .drafts
             .remove(&self.session_store.active_session_id);
+        let session_id = self.session_store.active_session_id.clone();
+        if let Some(session) = self.session_store.session_mut(&session_id) {
+            session.in_flight = true;
+        }
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
         self.chat_store.agent_status = AgentStatus::Busy;
         self.chat_store.tool_calls.clear();
@@ -214,13 +222,22 @@ impl App {
         let state = self.state.clone();
         let tx = self.ui_tx.clone();
         let query = full_message;
+        let provider_id = selected_provider.clone();
+        let restored_state = self
+            .session_store
+            .active_session()
+            .and_then(|s| s.provider_state.get(&provider_id).cloned());
 
         // Plan mode command: /plan <query>
         if let Some(plan_query) = text.strip_prefix("/plan ") {
             let plan_query = plan_query.to_string();
+            let plan_session_id = session_id.clone();
             self.runtime.spawn(async move {
                 if let Err(e) = ensure_llm(&state).await {
-                    if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {
+                    if let Err(err) = tx.send(UiEvent::Error {
+                        session_id: plan_session_id,
+                        message: e.to_string(),
+                    }) {
                         tracing::warn!("Failed to send Error: {}", err);
                     }
                     return;
@@ -232,14 +249,17 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        if let Err(err) =
-                            tx.send(UiEvent::Error(format!("Plan generation failed: {}", e)))
-                        {
+                        if let Err(err) = tx.send(UiEvent::Error {
+                            session_id: plan_session_id.clone(),
+                            message: format!("Plan generation failed: {}", e),
+                        }) {
                             tracing::warn!("Failed to send Error: {}", err);
                         }
                     }
                 }
-                if let Err(e) = tx.send(UiEvent::Done) {
+                if let Err(e) = tx.send(UiEvent::Done {
+                    session_id: plan_session_id,
+                }) {
                     tracing::warn!("Failed to send Done: {}", e);
                 }
             });
@@ -258,9 +278,13 @@ impl App {
         if let Some((agent_type, prefix)) = subagent_prefix {
             let subagent_prompt = query.strip_prefix(prefix).unwrap_or(&query).to_string();
             let agent_type_string = agent_type.to_string();
+            let subagent_session_id = session_id.clone();
             self.runtime.spawn(async move {
                 if let Err(e) = ensure_llm(&state).await {
-                    if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {
+                    if let Err(err) = tx.send(UiEvent::Error {
+                        session_id: subagent_session_id,
+                        message: e.to_string(),
+                    }) {
                         tracing::warn!("Failed to send Error: {}", err);
                     }
                     return;
@@ -270,7 +294,10 @@ impl App {
                 let llm = match state.agent.llm() {
                     Some(llm) => llm,
                     None => {
-                        if let Err(err) = tx.send(UiEvent::Error("No LLM configured".to_string())) {
+                        if let Err(err) = tx.send(UiEvent::Error {
+                            session_id: subagent_session_id,
+                            message: "No LLM configured".to_string(),
+                        }) {
                             tracing::warn!("Failed to send Error: {}", err);
                         }
                         return;
@@ -354,18 +381,23 @@ impl App {
                             "🤖 **{}** subagent result\n\n{}",
                             agent_type_string, result.summary
                         );
-                        if let Err(e) = tx.send(UiEvent::Chunk(content)) {
+                        if let Err(e) = tx.send(UiEvent::Chunk {
+                            session_id: subagent_session_id.clone(),
+                            text: content,
+                        }) {
                             tracing::warn!("Failed to send Chunk: {}", e);
                         }
-                        if let Err(e) = tx.send(UiEvent::Done) {
+                        if let Err(e) = tx.send(UiEvent::Done {
+                            session_id: subagent_session_id,
+                        }) {
                             tracing::warn!("Failed to send Done: {}", e);
                         }
                     }
                     Err(e) => {
-                        if let Err(err) = tx.send(UiEvent::Error(format!(
-                            "Subagent /{} failed: {}",
-                            agent_type_string, e
-                        ))) {
+                        if let Err(err) = tx.send(UiEvent::Error {
+                            session_id: subagent_session_id,
+                            message: format!("Subagent /{} failed: {}", agent_type_string, e),
+                        }) {
                             tracing::warn!("Failed to send Error: {}", err);
                         }
                     }
@@ -376,59 +408,34 @@ impl App {
 
         self.runtime.spawn(async move {
             if let Err(e) = ensure_llm(&state).await {
-                if let Err(err) = tx.send(UiEvent::Error(e.to_string())) {
+                if let Err(err) = tx.send(UiEvent::Error {
+                    session_id: session_id.clone(),
+                    message: e.to_string(),
+                }) {
                     tracing::warn!("Failed to send Error: {}", err);
                 }
                 return;
             }
 
-            // Retrieve relevant long-term memories and enrich the query.
-            let enriched_query = if let Some(store) = state.memory_store.get() {
-                match store.search_fulltext(&query, 5).await {
-                    Ok(facts) if !facts.is_empty() => {
-                        let memory_context = facts
-                            .iter()
-                            .map(|f| format!("- {}", f.fact))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        tracing::debug!(
-                            "Injecting {} relevant memory facts into query",
-                            facts.len()
-                        );
-                        format!(
-                            "{}\n\n[Relevant memories from past conversations]\n{}",
-                            query, memory_context
-                        )
-                    }
-                    _ => query,
-                }
-            } else {
-                query
-            };
+            // The LLM already receives the full conversation history from the agent,
+            // and stateful providers (e.g. deepseek-device) keep server-side context.
+            // Injecting full-text memory facts here duplicates that history and causes
+            // noisy, token-heavy prompts, so we pass the query through unchanged.
+            let enriched_query = query;
 
-            // Fire-and-forget: save the user query as a memory fact.
-            if let Some(store) = state.memory_store.get() {
-                let store = store.clone();
-                let q = enriched_query.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = store
-                        .save_fact(
-                            &q,
-                            &["session".to_string(), "user_query".to_string()],
-                            None,
-                            None,
-                        )
-                        .await
-                    {
-                        tracing::debug!("Failed to save memory fact: {}", e);
-                    }
-                });
+            // Restore provider-side session state for stateful providers (e.g.
+            // deepseek-device) so a restart can continue the same server-side session.
+            if let Some(llm) = state.agent.llm() {
+                if let Some(ref blob) = restored_state {
+                    llm.restore_provider_state(blob);
+                }
             }
 
             let wire = Arc::new(clarity_wire::Wire::new());
             let agent = state.agent.clone().with_wire(wire.clone());
 
             let tx_wire = tx.clone();
+            let wire_session_id = session_id.clone();
             // Subscribe the UI receiver *before* starting generation. The agent
             // sends wire messages synchronously into a tokio broadcast channel;
             // if no receiver exists yet, the first events (TurnBegin, ContentPart)
@@ -441,46 +448,48 @@ impl App {
             tokio::spawn(async move {
                 let mut wire_ui = wire_ui;
                 while let Some(msg) = wire_ui.recv().await {
-                    dispatch_wire_message(msg, &tx_wire);
+                    dispatch_wire_message(msg, &wire_session_id, &tx_wire);
                 }
             });
 
             let result = agent.run_streaming(&enriched_query).await;
 
             match result {
-                Ok(final_response) => {
-                    // Fire-and-forget: save a turn summary to long-term memory.
-                    if let Some(store) = state.memory_store.get() {
-                        let store = store.clone();
-                        let summary = format!(
-                            "Turn summary —\nUser: {}\nAgent: {}",
-                            enriched_query, final_response
-                        );
-                        tokio::spawn(async move {
-                            if let Err(e) = store
-                                .save_fact(
-                                    &summary,
-                                    &["session".to_string(), "turn".to_string()],
-                                    None,
-                                    None,
-                                )
-                                .await
-                            {
-                                tracing::debug!("Failed to save turn memory: {}", e);
+                Ok(_final_response) => {
+                    // Capture any provider-side session state (e.g. deepseek-device's
+                    // chat_session_id) so the next restart can resume the same
+                    // server-side session. Send the updated blob back to the UI thread
+                    // to be persisted in session.json.
+                    if let Some(llm) = state.agent.llm() {
+                        if let Some(blob) = llm.capture_provider_state() {
+                            let mut provider_state = HashMap::new();
+                            provider_state.insert(provider_id.clone(), blob);
+                            if let Err(e) = tx.send(UiEvent::SessionMeta {
+                                session_id: session_id.clone(),
+                                provider_state,
+                            }) {
+                                tracing::warn!("Failed to send SessionMeta: {}", e);
                             }
-                        });
+                        }
                     }
-                    if let Err(e) = tx.send(UiEvent::Done) {
+                    if let Err(e) = tx.send(UiEvent::Done {
+                        session_id: session_id.clone(),
+                    }) {
                         tracing::warn!("Failed to send Done: {}", e);
                     }
                 }
                 Err(clarity_core::AgentError::Cancelled) => {
-                    if let Err(e) = tx.send(UiEvent::Done) {
+                    if let Err(e) = tx.send(UiEvent::Done {
+                        session_id: session_id.clone(),
+                    }) {
                         tracing::warn!("Failed to send Done: {}", e);
                     }
                 }
                 Err(e) => {
-                    if let Err(err) = tx.send(UiEvent::Error(format!("Agent error: {}", e))) {
+                    if let Err(err) = tx.send(UiEvent::Error {
+                        session_id: session_id.clone(),
+                        message: format!("Agent error: {}", e),
+                    }) {
                         tracing::warn!("Failed to send Error: {}", err);
                     }
                 }
@@ -503,6 +512,8 @@ impl App {
         if text.is_empty() && self.chat_store.attachments.is_empty() {
             return;
         }
+
+        let session_id = self.session_store.active_session_id.clone();
 
         let mut full_message = text.clone();
         for att in &self.chat_store.attachments {
@@ -537,6 +548,9 @@ impl App {
                 };
             }
         }
+        if let Some(session) = self.session_store.session_mut(&session_id) {
+            session.in_flight = true;
+        }
         self.chat_store.input.clear();
         self.session_store
             .drafts
@@ -544,13 +558,20 @@ impl App {
         self.view_state.turn = clarity_core::ui::TurnState::Loading;
         self.chat_store.agent_status = AgentStatus::Busy;
         self.chat_store.tool_calls.clear();
+        self.chat_store.claw_in_flight_session_id = Some(session_id.clone());
 
         let ws = match self.claw_ws {
             Some(ref ws) => ws.clone(),
             None => {
-                let _ = self.ui_tx.send(UiEvent::Error(
-                    "OpenClaw connection is not available".into(),
-                ));
+                if let Some(session) = self.session_store.session_mut(&session_id) {
+                    session.in_flight = false;
+                }
+                self.chat_store.claw_in_flight_session_id = None;
+                self.view_state.turn = clarity_core::ui::TurnState::Idle;
+                let _ = self.ui_tx.send(UiEvent::Error {
+                    session_id,
+                    message: "OpenClaw connection is not available".into(),
+                });
                 return;
             }
         };
@@ -576,15 +597,29 @@ impl App {
                         session_key.clone()
                     }
                     None => {
-                        let _ = self
-                            .ui_tx
-                            .send(UiEvent::Error("No Claw device available".into()));
+                        if let Some(session) = self.session_store.session_mut(&session_id) {
+                            session.in_flight = false;
+                        }
+                        self.chat_store.claw_in_flight_session_id = None;
+                        self.view_state.turn = clarity_core::ui::TurnState::Idle;
+                        let _ = self.ui_tx.send(UiEvent::Error {
+                            session_id,
+                            message: "No Claw device available".into(),
+                        });
                         return;
                     }
                 }
             }
             _ => {
-                let _ = self.ui_tx.send(UiEvent::Error("Not a Claw session".into()));
+                if let Some(session) = self.session_store.session_mut(&session_id) {
+                    session.in_flight = false;
+                }
+                self.chat_store.claw_in_flight_session_id = None;
+                self.view_state.turn = clarity_core::ui::TurnState::Idle;
+                let _ = self.ui_tx.send(UiEvent::Error {
+                    session_id,
+                    message: "Not a Claw session".into(),
+                });
                 return;
             }
         };
@@ -592,7 +627,7 @@ impl App {
         // Responses arrive asynchronously via claw_ws.drain(); the main loop
         // translates them into UiEvent::Chunk / UiEvent::Done and the chat
         // handlers finalize the assistant message.
-        ws.send_chat(&session_key, &full_message, self.claw_ws_uses_sessions_send);
+        ws.send_chat(&session_key, &full_message);
     }
 }
 

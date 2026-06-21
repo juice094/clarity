@@ -199,6 +199,7 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
 mod tests {
     use super::*;
     use crate::ui::types::Session;
+    use std::collections::HashMap;
 
     fn make_session(context: crate::ui::types::SessionContext, title: &str) -> Session {
         Session {
@@ -212,6 +213,8 @@ mod tests {
             messages: vec![],
             updated_at: 0,
             turn_heights: vec![],
+            provider_state: HashMap::new(),
+            in_flight: false,
         }
     }
 

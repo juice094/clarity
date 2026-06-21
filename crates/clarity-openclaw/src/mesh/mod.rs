@@ -11,6 +11,7 @@
 //! Both transports feed events into the same CRDT [`merger`] to converge on a
 //! single `RoleContext` per role.
 
+pub mod crypto;
 pub mod gateway_transport;
 pub mod merger;
 pub mod syncthing_transport;

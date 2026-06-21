@@ -33,6 +33,10 @@ pub struct ChatStore {
     /// Transient backend status message for the current agent turn.
     /// Examples: "Executing 3 tool(s)...", "Compacting context...".
     pub status_message: Option<String>,
+    /// Session id that owns the current Claw streaming turn. Used because
+    /// WebSocket responses are drained centrally in main.rs and must be
+    /// routed back to the originating session.
+    pub claw_in_flight_session_id: Option<String>,
     /// Counter for incremental session persistence during streaming.
     pub chunks_since_save: usize,
     /// Input history for ↑↓ recall (TUI-style input box Phase 1).
@@ -59,6 +63,7 @@ impl Default for ChatStore {
             last_snapshot: None,
             draft_status: DraftStatus::None,
             status_message: None,
+            claw_in_flight_session_id: None,
             chunks_since_save: 0,
             input_history: Vec::new(),
             input_history_idx: None,

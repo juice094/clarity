@@ -34,6 +34,7 @@ bytes = { workspace = true }
 # Crypto / device identity
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 sha2 = "0.10"
+ring = { workspace = true }
 rand = "0.8"
 hex = "0.4"
 base64 = { workspace = true }

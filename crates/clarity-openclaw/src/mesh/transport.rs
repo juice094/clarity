@@ -23,6 +23,9 @@ pub enum MeshTransportError {
     /// A generic transport error.
     #[error("mesh transport error: {0}")]
     Other(String),
+    /// A cryptographic operation failed (e.g. wrong passphrase or tampered data).
+    #[error("mesh transport crypto error: {0}")]
+    Crypto(String),
     /// The operation is not supported by this transport.
     #[error("mesh transport unsupported: {0}")]
     Unsupported(String),

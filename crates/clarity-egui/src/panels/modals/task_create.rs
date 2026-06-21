@@ -124,6 +124,7 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
         let gateway_client = GatewayTaskClient::new();
         let local_store = app.state.task_store.clone();
         let tx = app.ui_tx.clone();
+        let session_id = app.session_store.active_session_id.clone();
 
         app.runtime.spawn(async move {
             // Try Gateway first
@@ -149,7 +150,10 @@ pub fn render_task_create_modal(app: &mut App, ctx: &egui::Context) {
                     let task_id = format!("task-{}", uuid::Uuid::new_v4());
                     if let Err(e) = local_store.create(&task_id, spec).await {
                         tracing::warn!("Failed to create task {} locally: {}", task_id, e);
-                        let _ = tx.send(UiEvent::Error(format!("Task create failed: {}", e)));
+                        let _ = tx.send(UiEvent::Error {
+                            session_id: session_id.clone(),
+                            message: format!("Task create failed: {}", e),
+                        });
                         return;
                     }
                     tracing::info!("Created task locally: {}", task_id);

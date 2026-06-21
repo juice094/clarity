@@ -121,14 +121,30 @@ pub enum DeepSeekDeviceCredentials {
     },
 }
 
+/// 维护一个 DeepSeek 多轮会话的状态。
+///
+/// 设备端 API 通过 `chat_session_id` + `parent_message_id` 维护上下文，
+/// 因此同一个 clarity session 内需要复用这两个字段，而不是每轮新建 session。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ChatSessionState {
+    /// DeepSeek 侧会话 ID。
+    chat_session_id: String,
+    /// 上一轮 assistant 消息的 message_id，作为下一轮 user 消息的 parent。
+    last_response_message_id: Option<i64>,
+}
+
 /// DeepSeek 设备登录 Provider
 #[derive(Debug, Clone)]
 pub struct DeepSeekDeviceProvider {
     config: DeepSeekDeviceConfig,
     client: reqwest::Client,
     /// 当前 access token，登录/刷新后写入。
-    /// Provider 本身保持无状态：每个 `complete`/`stream` 调用会创建新的 DeepSeek session。
     token: Arc<RwLock<Option<String>>>,
+    /// 当前 DeepSeek 多轮会话状态。
+    ///
+    /// Provider 实例本身按 clarity 的 active session 生命周期复用；当用户切换
+    /// session 时，上游应调用 `reset_session_state()` 清空状态，避免上下文串扰。
+    session_state: Arc<RwLock<Option<ChatSessionState>>>,
 }
 
 impl DeepSeekDeviceProvider {
@@ -142,6 +158,7 @@ impl DeepSeekDeviceProvider {
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
             token: Arc::new(RwLock::new(None)),
+            session_state: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -173,6 +190,58 @@ impl DeepSeekDeviceProvider {
             ..Default::default()
         };
         Self::new(config)
+    }
+
+    /// 获取或创建 DeepSeek chat_session。
+    ///
+    /// 若已存在当前会话则复用 `chat_session_id`，并把上一轮 assistant 消息的 id
+    /// 作为 `parent_message_id` 返回；否则新建 session。
+    async fn ensure_session_state(&self, token: &str) -> Result<(String, Option<i64>), AgentError> {
+        {
+            let state = self.session_state.read();
+            if let Some(ref s) = *state {
+                debug!(
+                    "deepseek-device reuse session session_id={} parent_id={:?}",
+                    s.chat_session_id, s.last_response_message_id
+                );
+                return Ok((s.chat_session_id.clone(), s.last_response_message_id));
+            }
+        }
+
+        let session_id = self.create_chat_session(token).await?;
+        {
+            let mut state = self.session_state.write();
+            *state = Some(ChatSessionState {
+                chat_session_id: session_id.clone(),
+                last_response_message_id: None,
+            });
+        }
+        debug!(
+            "deepseek-device created new session session_id={}",
+            session_id
+        );
+        Ok((session_id, None))
+    }
+
+    /// 在收到 `ready` 事件后记录 assistant 消息的 message_id，供下一轮使用。
+    fn update_last_response_message_id(&self, response_message_id: i64) {
+        let mut state = self.session_state.write();
+        if let Some(ref mut s) = *state {
+            s.last_response_message_id = Some(response_message_id);
+            debug!(
+                "deepseek-device updated last_response_message_id id={}",
+                response_message_id
+            );
+        }
+    }
+
+    /// 清空当前 DeepSeek 会话状态。
+    ///
+    /// 当 clarity 切换 active session 时调用，避免不同会话之间共享 DeepSeek 上下文。
+    pub fn reset_session_state(&self) {
+        let mut state = self.session_state.write();
+        *state = None;
+        debug!("deepseek-device session state reset");
     }
 
     /// 构建通用请求头
@@ -453,6 +522,7 @@ impl DeepSeekDeviceProvider {
         &self,
         token: &str,
         session_id: &str,
+        parent_message_id: Option<i64>,
         prompt: &str,
     ) -> Result<reqwest::Response, AgentError> {
         let challenge = self.create_pow_challenge(token).await?;
@@ -471,7 +541,7 @@ impl DeepSeekDeviceProvider {
         let opts = &self.config.options;
         let body = json!({
             "chat_session_id": session_id,
-            "parent_message_id": null,
+            "parent_message_id": parent_message_id,
             "prompt": prompt,
             "ref_file_ids": [],
             "thinking_enabled": opts.thinking_enabled,
@@ -492,6 +562,7 @@ impl DeepSeekDeviceProvider {
             .map_err(|e| AgentError::Llm(format!("chat completion request failed: {}", e)))?;
 
         let status = response.status();
+        debug!("deepseek-device chat_completion response status={}", status);
         if !status.is_success() {
             let err = response.text().await.unwrap_or_default();
             return Err(AgentError::Llm(format!(
@@ -627,12 +698,16 @@ impl DeepSeekDeviceProvider {
         F: Fn(reqwest::Response) -> Fut,
         Fut: std::future::Future<Output = Result<T, AgentError>>,
     {
+        if prompt.is_empty() {
+            return Err(AgentError::Llm("empty user prompt".to_string()));
+        }
+
         let mut attempts = 0;
         loop {
             let token = self.ensure_token().await?;
-            let session_id = self.create_chat_session(&token).await?;
+            let (session_id, parent_message_id) = self.ensure_session_state(&token).await?;
             match self
-                .chat_completion_stream(&token, &session_id, prompt)
+                .chat_completion_stream(&token, &session_id, parent_message_id, prompt)
                 .await
             {
                 Ok(response) => return f(response).await,
@@ -656,6 +731,12 @@ impl DeepSeekDeviceProvider {
             }
         }
     }
+
+    /// 尝试从 SSE 事件数据中提取 `ready` 事件的 `response_message_id`。
+    fn try_extract_ready_message_id(&self, data: &str) -> Option<i64> {
+        let value: Value = serde_json::from_str(data).ok()?;
+        value.get("response_message_id").and_then(|v| v.as_i64())
+    }
 }
 
 #[async_trait]
@@ -670,12 +751,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
             .filter(|m| m.role == MessageRole::User)
             .map(|m| m.content.clone())
             .unwrap_or_default();
-
-        if prompt.is_empty() {
-            return Err(AgentError::Llm("empty user prompt".to_string()));
-        }
-
-        self.run_completion_with_retry(&prompt, |response| async move {
+        self.run_completion_with_retry(&prompt, move |response| async move {
             let bytes = response
                 .bytes()
                 .await
@@ -690,6 +766,9 @@ impl LlmProvider for DeepSeekDeviceProvider {
                     let data = data.trim_start();
                     if data == "[DONE]" || data == "FINISHED" {
                         break;
+                    }
+                    if let Some(id) = self.try_extract_ready_message_id(data) {
+                        self.update_last_response_message_id(id);
                     }
                     let (c, r) = self.parse_patch_event(data, &mut buffer);
                     if let Some(chunk) = c {
@@ -720,7 +799,6 @@ impl LlmProvider for DeepSeekDeviceProvider {
             .filter(|m| m.role == MessageRole::User)
             .map(|m| m.content.clone())
             .unwrap_or_default();
-
         if prompt.is_empty() {
             return Err(AgentError::Llm("empty user prompt".to_string()));
         }
@@ -742,11 +820,13 @@ impl LlmProvider for DeepSeekDeviceProvider {
                             let mut line_buffer = String::new();
                             use futures::StreamExt;
 
+                            debug!("deepseek-device stream started");
                             while let Some(chunk) = stream.next().await {
                                 let bytes = chunk.map_err(|e| {
                                     AgentError::Llm(format!("stream chunk error: {}", e))
                                 })?;
                                 let text = String::from_utf8_lossy(&bytes);
+                                debug!("deepseek-device raw sse bytes len={}", bytes.len());
                                 line_buffer.push_str(&text);
 
                                 while let Some(pos) = line_buffer.find('\n') {
@@ -756,10 +836,21 @@ impl LlmProvider for DeepSeekDeviceProvider {
                                     if let Some(data) = line.strip_prefix("data:") {
                                         let data = data.trim_start();
                                         if data == "[DONE]" || data == "FINISHED" {
+                                            debug!("deepseek-device stream terminator: {}", data);
                                             return Ok(());
+                                        }
+                                        if let Some(id) =
+                                            self_clone3.try_extract_ready_message_id(data)
+                                        {
+                                            self_clone3.update_last_response_message_id(id);
                                         }
                                         let (c, r) =
                                             self_clone3.parse_patch_event(data, &mut buffer);
+                                        debug!(
+                                            "deepseek-device parsed content_len={} reasoning_len={}",
+                                            c.as_ref().map(|s| s.len()).unwrap_or(0),
+                                            r.as_ref().map(|s| s.len()).unwrap_or(0)
+                                        );
                                         if (c.is_some() || r.is_some())
                                             && tx
                                                 .send(Ok(StreamDelta {
@@ -775,6 +866,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
                                     }
                                 }
                             }
+                            debug!("deepseek-device stream ended");
 
                             Ok(())
                         }
@@ -792,6 +884,34 @@ impl LlmProvider for DeepSeekDeviceProvider {
 
     fn set_prompt_cache_key(&self, _key: &str) {
         // 设备端 API 不支持 prompt caching
+    }
+
+    fn reset_conversation_context(&self) {
+        self.reset_session_state();
+    }
+
+    fn restore_provider_state(&self, state: &str) {
+        match serde_json::from_str::<ChatSessionState>(state) {
+            Ok(s) => {
+                debug!(
+                    "deepseek-device restoring session_id={} parent_id={:?}",
+                    s.chat_session_id, s.last_response_message_id
+                );
+                *self.session_state.write() = Some(s);
+            }
+            Err(e) => {
+                tracing::warn!("failed to restore deepseek-device provider state: {}", e);
+            }
+        }
+    }
+
+    fn capture_provider_state(&self) -> Option<String> {
+        let state = self.session_state.read();
+        state.as_ref().and_then(|s| {
+            let json = serde_json::to_string(s).ok()?;
+            debug!("deepseek-device captured provider state: {}", json);
+            Some(json)
+        })
     }
 
     fn capabilities(&self) -> ProviderCapabilities {
@@ -975,5 +1095,30 @@ mod tests {
         );
         assert_eq!(content, None);
         assert_eq!(reasoning, None);
+    }
+
+    #[test]
+    fn test_provider_state_restore_and_capture() {
+        use clarity_contract::LlmProvider;
+
+        let provider = DeepSeekDeviceProvider::with_token("test-token");
+        assert!(provider.capture_provider_state().is_none());
+
+        provider.restore_provider_state(
+            r#"{"chat_session_id":"sess-abc","last_response_message_id":42}"#,
+        );
+        let captured = provider.capture_provider_state().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&captured).unwrap();
+        assert_eq!(parsed["chat_session_id"], "sess-abc");
+        assert_eq!(parsed["last_response_message_id"], 42);
+    }
+
+    #[test]
+    fn test_provider_state_restore_invalid_is_no_op() {
+        use clarity_contract::LlmProvider;
+
+        let provider = DeepSeekDeviceProvider::with_token("test-token");
+        provider.restore_provider_state("not-json");
+        assert!(provider.capture_provider_state().is_none());
     }
 }

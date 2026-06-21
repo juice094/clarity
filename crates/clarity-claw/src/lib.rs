@@ -8,39 +8,34 @@
         unsafe_code
     )
 )]
-//! clarity-claw —— 联邦运行时协调器
+//! clarity-claw —— Clarity 内部 mesh 的系统托盘常驻节点
 //!
-//! Claw is the federation runtime for Project Clarity.
-//! It coordinates multiple federal nodes (core, memory, egui, gateway)
-//! via a central Coordinator and capability registry.
+//! Claw is the system-tray resident node of Project Clarity's internal mesh.
+//! It speaks **Gateway WebSocket only** to `clarity-gateway` and does not act
+//! as an external OpenClaw/KimiClaw adapter. External protocol interop is the
+//! responsibility of `clarity-openclaw`.
 //!
-//! ## Architecture
+//! ## Role boundary
 //!
-//! ```text
-//! ┌─────────────┐
-//! │  Coordinator │  ← 联邦消息路由 + 能力注册表
-//! └──────┬──────┘
-//!        │
-//!   ┌────┴────┬────────┬────────┐
-//!   ▼         ▼        ▼        ▼
-//! Core    Memory   egui    Gateway
-//! Node    Node     Node     Node
-//! ```
+//! - One protocol: Gateway WebSocket (`clarity-gateway`)
+//! - No OpenClaw JSON-RPC fallback
+//! - No external KimiClaw/OpenClaw dialect handling
+//!
+//! All tray operations — chat, role-context sync, task/thread polling,
+//! device registration and heartbeats — go through Gateway WebSocket.
 
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
-use std::time::Duration;
+use tokio_tungstenite::tungstenite::Message;
 
 // ------------------------------------------------------------------
-// Federation modules
+// Tray integration
 // ------------------------------------------------------------------
 
-pub mod coordinator;
-pub mod nodes;
-pub mod runtime;
 pub mod tray;
 
 // ------------------------------------------------------------------
-// Legacy tray helpers (retained for backward compatibility)
+// Shared types
 // ------------------------------------------------------------------
 
 /// Default Gateway address.
@@ -49,7 +44,7 @@ pub const GATEWAY_URL: &str = "http://127.0.0.1:18790";
 /// Gateway polling interval in seconds.
 pub const POLL_INTERVAL_SECS: u64 = 5;
 
-/// Minimal task info deserialized from Gateway `/v1/tasks`.
+/// Minimal task info returned by Gateway `list_tasks`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TaskSummary {
     #[serde(rename = "task_id")]
@@ -61,14 +56,7 @@ pub struct TaskSummary {
     pub status: String,
 }
 
-/// Gateway task list payload.
-#[derive(Clone, Debug, Deserialize)]
-pub struct TaskListPayload {
-    /// Tasks returned by the Gateway.
-    pub tasks: Vec<TaskSummary>,
-}
-
-/// Minimal thread info deserialized from Gateway `/api/v2/threads`.
+/// Minimal thread info returned by Gateway `list_threads`.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ThreadSummary {
     /// Thread identifier.
@@ -78,13 +66,6 @@ pub struct ThreadSummary {
     /// Last update timestamp.
     #[serde(default)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Gateway thread list payload.
-#[derive(Clone, Debug, Deserialize)]
-pub struct ThreadListPayload {
-    /// Threads returned by the Gateway.
-    pub data: Vec<ThreadSummary>,
 }
 
 // ------------------------------------------------------------------
@@ -130,145 +111,187 @@ pub fn classify_task_status(status: &str) -> (&'static str, Option<notify_rust::
 }
 
 // ------------------------------------------------------------------
-// HTTP helpers for Gateway interaction
+// Gateway interaction helpers
 // ------------------------------------------------------------------
 
-/// Send a quick chat message to the Gateway (non-streaming).
+/// Send a single WebSocket request to the Gateway and return the first
+/// non-welcome response.
+///
+/// ponytail: opens a fresh connection per request. If polling volume becomes
+/// high, reuse a long-lived WebSocket instead.
+async fn gateway_ws_request(
+    gateway_url: &str,
+    request: serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    let ws_url = gateway_ws_url(gateway_url);
+    let (ws_stream, _) = tokio_tungstenite::connect_async(&ws_url).await?;
+    let (mut write, mut read) = ws_stream.split();
+
+    // The Gateway sends a welcome frame immediately after the handshake.
+    let welcome = read
+        .next()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("connection closed before welcome"))??;
+    let welcome_text = welcome.to_text()?;
+    let welcome: serde_json::Value = serde_json::from_str(welcome_text)?;
+    if welcome.get("type").and_then(|v| v.as_str()) != Some("welcome") {
+        return Err(anyhow::anyhow!("expected welcome, got {}", welcome_text));
+    }
+
+    write
+        .send(Message::Text(request.to_string()))
+        .await
+        .map_err(|e| anyhow::anyhow!("send request: {}", e))?;
+
+    while let Some(msg) = read.next().await {
+        let msg = msg?;
+        if let Message::Text(text) = msg {
+            let value: serde_json::Value = serde_json::from_str(&text)?;
+            if value.get("type").and_then(|v| v.as_str()) == Some("welcome") {
+                continue;
+            }
+            return Ok(value);
+        }
+    }
+
+    Err(anyhow::anyhow!("connection closed before response"))
+}
+
+/// Convert a Gateway error response into an `anyhow::Error`.
+fn check_gateway_error(value: &serde_json::Value) -> anyhow::Result<()> {
+    if value.get("type").and_then(|v| v.as_str()) == Some("error") {
+        let msg = value
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown error");
+        return Err(anyhow::anyhow!("Gateway error: {}", msg));
+    }
+    Ok(())
+}
+
+/// Convert an HTTP(S) Gateway URL into the canonical WebSocket endpoint.
+fn gateway_ws_url(url: &str) -> String {
+    let mut url = url.to_string();
+    if url.starts_with("http://") {
+        url = url.replacen("http://", "ws://", 1);
+    } else if url.starts_with("https://") {
+        url = url.replacen("https://", "wss://", 1);
+    }
+    format!("{}/ws", url.trim_end_matches('/'))
+}
+
+/// Send a quick chat message to the Gateway over WebSocket (non-streaming).
+///
+/// Claw speaks Gateway WebSocket only; this function intentionally does not
+/// fall back to the HTTP `/v1/chat/completions` endpoint.
 pub async fn quick_chat(gateway_url: &str, input: &str) -> anyhow::Result<String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()?;
-
-    let payload = serde_json::json!({
-        "model": "default",
-        "messages": [{"role": "user", "content": input}],
-        "stream": false
+    let request = serde_json::json!({
+        "type": "chat",
+        "message": input,
+        "use_wire": false,
     });
-
-    let url = format!("{}/v1/chat/completions", gateway_url);
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?;
-
-    let body: serde_json::Value = resp.json().await?;
-    let reply = body["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("(no response)");
-
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
+    let reply = value["message"].as_str().unwrap_or("(no response)");
     Ok(reply.to_string())
 }
 
-/// Create a background task via Gateway.
+/// Poll the Gateway task list over WebSocket.
+pub async fn poll_tasks(gateway_url: &str) -> anyhow::Result<Vec<TaskSummary>> {
+    let request = serde_json::json!({ "type": "list_tasks" });
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
+    let tasks = value
+        .get("tasks")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| serde_json::from_value::<TaskSummary>(v.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(tasks)
+}
+
+/// Create a background task via Gateway WebSocket.
 pub async fn create_remote_task(
     gateway_url: &str,
     name: &str,
     prompt: &str,
 ) -> anyhow::Result<String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-
-    let payload = serde_json::json!({
+    let request = serde_json::json!({
+        "type": "create_task",
         "name": name,
         "prompt": prompt,
-        "max_iterations": 10
+        "max_iterations": 10,
     });
-
-    let url = format!("{}/v1/tasks", gateway_url);
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?;
-
-    let body: serde_json::Value = resp.json().await?;
-    let task_id = body["task_id"].as_str().unwrap_or("unknown").to_string();
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
+    let task_id = value["task_id"].as_str().unwrap_or("unknown").to_string();
     Ok(task_id)
 }
 
-/// Cancel a background task via Gateway.
+/// Cancel a background task via Gateway WebSocket.
 pub async fn cancel_remote_task(gateway_url: &str, task_id: &str) -> anyhow::Result<()> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-
-    let url = format!("{}/v1/tasks/{}", gateway_url, task_id);
-    client.delete(&url).send().await?.error_for_status()?;
+    let request = serde_json::json!({
+        "type": "cancel_task",
+        "task_id": task_id,
+    });
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
     Ok(())
 }
 
-/// Poll the Gateway thread list.
+/// Poll the Gateway thread list over WebSocket.
 pub async fn poll_threads(gateway_url: &str) -> anyhow::Result<Vec<ThreadSummary>> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-
-    let url = format!("{}/api/v2/threads?limit=10", gateway_url);
-    let payload: ThreadListPayload = client
-        .get(&url)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    Ok(payload.data)
+    let request = serde_json::json!({
+        "type": "list_threads",
+        "limit": 10,
+    });
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
+    let threads = value
+        .get("data")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| serde_json::from_value::<ThreadSummary>(v.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(threads)
 }
 
-/// Create a new thread via the Gateway v2 API.
+/// Create a new thread via Gateway WebSocket.
 pub async fn create_remote_thread(
     gateway_url: &str,
     title: Option<&str>,
 ) -> anyhow::Result<String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-
-    let payload = serde_json::json!({
+    let request = serde_json::json!({
+        "type": "create_thread",
         "title": title,
-        "source": "Claw",
     });
-
-    let url = format!("{}/api/v2/threads", gateway_url);
-    let resp = client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?;
-
-    let body: serde_json::Value = resp.json().await?;
-    let thread_id = body["thread_id"].as_str().unwrap_or("unknown").to_string();
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
+    let thread_id = value["thread_id"].as_str().unwrap_or("unknown").to_string();
     Ok(thread_id)
 }
 
-/// Register this Claw instance as a device with the Gateway and maintain
-/// a heartbeat. Returns the device id on first registration.
+/// Register this Claw instance as a device with the Gateway.
+/// Returns the device id on first registration.
 pub async fn register_device(gateway_url: &str) -> anyhow::Result<String> {
     let hostname = get_hostname();
     let device_id = format!("claw-{}", hostname);
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()?;
-
-    let payload = serde_json::json!({
+    let request = serde_json::json!({
+        "type": "register_device",
         "id": device_id,
         "name": hostname,
         "host": hostname,
         "version": env!("CARGO_PKG_VERSION"),
     });
-
-    let url = format!("{}/api/v1/claw/devices", gateway_url);
-    client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?;
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
 
     tracing::info!(
         device_id = %device_id,
@@ -280,24 +303,15 @@ pub async fn register_device(gateway_url: &str) -> anyhow::Result<String> {
 
 /// Send a heartbeat to keep the device alive in the Gateway registry.
 pub async fn send_heartbeat(gateway_url: &str, device_id: &str) -> anyhow::Result<()> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()?;
-
-    let payload = serde_json::json!({
+    let request = serde_json::json!({
+        "type": "heartbeat",
         "id": device_id,
         "name": get_hostname(),
         "host": get_hostname(),
         "version": env!("CARGO_PKG_VERSION"),
     });
-
-    let url = format!("{}/api/v1/claw/devices", gateway_url);
-    client
-        .post(&url)
-        .json(&payload)
-        .send()
-        .await?
-        .error_for_status()?;
+    let value = gateway_ws_request(gateway_url, request).await?;
+    check_gateway_error(&value)?;
 
     tracing::debug!(device_id = %device_id, "Claw heartbeat sent");
     Ok(())
@@ -402,5 +416,21 @@ mod tests {
         assert_eq!(summary.thread_id, "th-abc");
         assert_eq!(summary.title, Some("My thread".to_string()));
         assert!(summary.updated_at.is_some());
+    }
+
+    #[test]
+    fn test_gateway_ws_url_converts_http_and_appends_ws() {
+        assert_eq!(
+            gateway_ws_url("http://127.0.0.1:18790"),
+            "ws://127.0.0.1:18790/ws"
+        );
+        assert_eq!(
+            gateway_ws_url("https://example.com:18790/"),
+            "wss://example.com:18790/ws"
+        );
+        assert_eq!(
+            gateway_ws_url("ws://127.0.0.1:18790"),
+            "ws://127.0.0.1:18790/ws"
+        );
     }
 }

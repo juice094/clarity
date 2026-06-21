@@ -110,14 +110,12 @@ impl ClawClientHandle {
         Self { manager }
     }
 
-    /// Send a chat message. The `session_key` is used by OpenClaw; the Gateway
-    /// dialect ignores it. `use_sessions_send` selects the OpenClaw `sessions.send`
-    /// method instead of `chat.send`.
-    pub fn send_chat(&self, session_key: &str, message: &str, use_sessions_send: bool) {
+    /// Send a chat message. The wire method is chosen by the detected dialect:
+    /// Gateway WebSocket uses `chat.send`; OpenClaw JSON-RPC uses `sessions.send`.
+    pub fn send_chat(&self, session_key: &str, message: &str) {
         self.manager.send(clarity_openclaw::ProtocolCommand::Chat {
             session_key: session_key.into(),
             message: message.into(),
-            use_sessions_send,
         });
     }
 
@@ -149,6 +147,11 @@ impl ClawClientHandle {
                 since_event_id: since_event_id.map(Into::into),
                 device_id: device_id.into(),
             });
+    }
+
+    /// Set or clear the passphrase used to encrypt role-context events at rest.
+    pub fn set_role_passphrase(&self, role_id: &str, passphrase: &str) {
+        self.manager.set_role_passphrase(role_id, passphrase);
     }
 
     /// Drain all pending events from the underlying manager and normalize them to

@@ -108,9 +108,6 @@ pub(crate) struct App {
     pub(crate) claw_ws: Option<crate::claw::ClawClientHandle>,
     /// Track which device the current WebSocket is connected to.
     pub(crate) claw_ws_device_id: String,
-    /// Whether the active connection uses `sessions.send` (remote OpenClaw)
-    /// instead of `chat.send` (local KimiClaw).
-    pub(crate) claw_ws_uses_sessions_send: bool,
     /// Cached Clarity device identity for OpenClaw device-paired auth.
     pub(crate) claw_device_identity: Option<clarity_openclaw::DeviceIdentity>,
     /// Cached paired-device token for the OpenClaw Gateway.
@@ -1205,9 +1202,6 @@ impl eframe::App for App {
                         if self.ui_store.active_bot_id != picked_id {
                             self.ui_store.active_bot_id = picked_id.clone();
                         }
-                        self.claw_ws_uses_sessions_send = conn.protocol
-                            == crate::claw::ClawProtocol::OpenClawJsonRpc
-                            && is_remote;
                     }
                 } else {
                     self.ui_store.record_connect_failure(&picked_id);
@@ -1295,15 +1289,37 @@ impl eframe::App for App {
                         }
                         crate::claw::ClawEvent::StreamChunk(text) => {
                             if !text.trim().is_empty() {
-                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Chunk(text));
+                                let session_id = self
+                                    .chat_store
+                                    .claw_in_flight_session_id
+                                    .clone()
+                                    .unwrap_or_else(|| {
+                                        self.session_store.active_session_id.clone()
+                                    });
+                                let _ = self
+                                    .ui_tx
+                                    .send(crate::ui::types::UiEvent::Chunk { session_id, text });
                             }
                         }
                         crate::claw::ClawEvent::Done => {
-                            let _ = self.ui_tx.send(crate::ui::types::UiEvent::Done);
+                            let session_id = self
+                                .chat_store
+                                .claw_in_flight_session_id
+                                .take()
+                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
+                            let _ = self
+                                .ui_tx
+                                .send(crate::ui::types::UiEvent::Done { session_id });
                         }
                         crate::claw::ClawEvent::WirePayload(payload) => {
+                            let session_id = self
+                                .chat_store
+                                .claw_in_flight_session_id
+                                .clone()
+                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
                             crate::services::wire_dispatcher::dispatch_wire_payload(
                                 &payload,
+                                &session_id,
                                 &self.ui_tx,
                             );
                         }
@@ -1477,9 +1493,17 @@ impl eframe::App for App {
                             tracing::warn!("Claw WebSocket error: {}", e);
                             let surfaced_msg = format!("OpenClaw connection error: {}", e);
                             if self.ui_store.should_surface_claw_error(&surfaced_msg) {
-                                let _ = self
-                                    .ui_tx
-                                    .send(crate::ui::types::UiEvent::Error(surfaced_msg));
+                                let session_id = self
+                                    .chat_store
+                                    .claw_in_flight_session_id
+                                    .take()
+                                    .unwrap_or_else(|| {
+                                        self.session_store.active_session_id.clone()
+                                    });
+                                let _ = self.ui_tx.send(crate::ui::types::UiEvent::Error {
+                                    session_id,
+                                    message: surfaced_msg,
+                                });
                             }
                             let failed_device = self.claw_ws_device_id.clone();
                             if !failed_device.is_empty() {
@@ -1581,6 +1605,11 @@ impl eframe::App for App {
             self.chat_store.editing_message_idx = None;
             self.chat_store.edit_buffer.clear();
             self.ui_store.focus_input_requested = true;
+            // Stateful providers (e.g. deepseek-device) must not carry
+            // conversation context across clarity sessions.
+            if let Some(ref llm) = self.state.agent.llm() {
+                llm.reset_conversation_context();
+            }
             ctx.request_repaint();
         }
         if self.ui_store.request_repaint {

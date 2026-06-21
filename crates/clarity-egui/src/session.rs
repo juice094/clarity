@@ -1,6 +1,7 @@
 //! Session persistence — load/save chat history to JSON files.
 
 use crate::ui::types::{ContentBlock, Message, Role, Session, SessionContext, SessionLifecycle};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -71,6 +72,8 @@ pub fn load_sessions() -> Vec<Session> {
                             messages,
                             updated_at: data.updated_at,
                             turn_heights: vec![],
+                            provider_state: data.provider_state,
+                            in_flight: false,
                         });
                     }
                 }
@@ -102,6 +105,7 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
         context: session.context.clone(),
         lifecycle: session.lifecycle,
         archived: session.archived,
+        provider_state: session.provider_state.clone(),
         created_at: session.updated_at,
         updated_at: now_millis(),
         messages: session
@@ -155,6 +159,8 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         messages: vec![],
         updated_at: now_millis(),
         turn_heights: vec![],
+        provider_state: HashMap::new(),
+        in_flight: false,
     }
 }
 
@@ -187,6 +193,8 @@ struct SessionData {
     lifecycle: SessionLifecycle,
     #[serde(default)]
     archived: bool,
+    #[serde(default)]
+    provider_state: HashMap<String, String>,
     created_at: u64,
     updated_at: u64,
     messages: Vec<MessageData>,
@@ -247,6 +255,7 @@ mod tests {
             },
             lifecycle: SessionLifecycle::ProjectBound,
             archived: true,
+            provider_state: HashMap::new(),
             created_at: 0,
             updated_at: 1,
             messages: vec![],
@@ -266,6 +275,35 @@ mod tests {
         assert_eq!(restored.context, SessionContext::Chat);
         assert_eq!(restored.lifecycle, SessionLifecycle::Temporary);
         assert!(!restored.archived);
+        assert!(restored.provider_state.is_empty());
+    }
+
+    #[test]
+    fn session_data_roundtrips_provider_state() {
+        let mut provider_state = HashMap::new();
+        provider_state.insert(
+            "deepseek-device".into(),
+            r#"{"chat_session_id":"abc-123","last_response_message_id":7}"#.into(),
+        );
+        let data = SessionData {
+            id: "s-1".into(),
+            title: "test".into(),
+            category: Some("chat".into()),
+            project_id: None,
+            context: SessionContext::Chat,
+            lifecycle: SessionLifecycle::Temporary,
+            archived: false,
+            provider_state,
+            created_at: 0,
+            updated_at: 1,
+            messages: vec![],
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        let restored: SessionData = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            restored.provider_state.get("deepseek-device"),
+            Some(&r#"{"chat_session_id":"abc-123","last_response_message_id":7}"#.to_string())
+        );
     }
 
     #[test]

@@ -89,6 +89,9 @@ pub enum ClawCommand {
         method: String,
         params: serde_json::Value,
     },
+    /// Set or clear the passphrase used to encrypt role-context events at rest.
+    #[allow(dead_code)]
+    SetRolePassphrase { role_id: String, passphrase: String },
 }
 
 /// Which JSON-RPC method a [`ClawCommand::SendMessage`] should use.
@@ -309,6 +312,14 @@ impl ClawClient {
             id: id.into(),
             method: method.into(),
             params,
+        });
+    }
+
+    /// Set or clear the passphrase used to encrypt role-context events at rest.
+    pub fn set_role_passphrase(&self, role_id: &str, passphrase: &str) {
+        let _ = self.tx.send(ClawCommand::SetRolePassphrase {
+            role_id: role_id.into(),
+            passphrase: passphrase.into(),
         });
     }
 
@@ -755,6 +766,10 @@ async fn run_single_connection(
     });
 
     // ── Step 2: Main loop ─────────────────────────────────────────
+    // Passphrases for role-context E2EE. Currently stored locally until the
+    // OpenClaw path wires a SyncthingTransport that consumes them.
+    let mut role_passphrases: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     let mut req_id: u64 = 0;
     // Track pending request IDs so replies can be attributed to their original
     // method. This lets the UI decide whether an ok=false response should be
@@ -910,6 +925,15 @@ async fn run_single_connection(
                         });
                         if let Err(e) = write.send(Message::Text(req.to_string())).await {
                             return Err(ConnectionExit::Transient(format!("send: {}", e)));
+                        }
+                    }
+                    Some(ClawCommand::SetRolePassphrase { role_id, passphrase }) => {
+                        // ponytail: stored locally until SyncthingTransport is wired
+                        // into the OpenClaw connection path.
+                        if passphrase.is_empty() {
+                            role_passphrases.remove(&role_id);
+                        } else {
+                            role_passphrases.insert(role_id, passphrase);
                         }
                     }
                     None => {

@@ -2,14 +2,12 @@
     test,
     allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, missing_docs)
 )]
-//! clarity-claw —— 联邦运行时协调器 + 系统托盘常驻应用
+//! clarity-claw —— Clarity 内部 mesh 的系统托盘常驻应用
 //!
-//! Entry point: initializes the Claw Coordinator, registers federal nodes,
-//! then starts the system tray event loop.
+//! Entry point: registers this Claw instance with the local Gateway and
+//! starts the system tray event loop. Claw speaks Gateway WebSocket only
+//! and does not act as an external OpenClaw/KimiClaw adapter.
 
-use clarity_claw::coordinator::Coordinator;
-use clarity_claw::nodes::core::CoreNode;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::main]
@@ -27,22 +25,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ------------------------------------------------------------------
-    // 1. Initialize the Coordinator
-    // ------------------------------------------------------------------
-    let mut coordinator = Coordinator::new();
-
-    // ------------------------------------------------------------------
-    // 2. Create and register the Core node
-    // ------------------------------------------------------------------
-    let core_node = Arc::new(CoreNode::new());
-    coordinator.register_node(core_node);
-    tracing::info!(
-        "CoreNode registered — {} node(s) active",
-        coordinator.node_count()
-    );
-
-    // ------------------------------------------------------------------
-    // 3. Register this instance as a Claw device with the Gateway
+    // 1. Register this instance as a Claw device with the Gateway
     // ------------------------------------------------------------------
     let gateway_url = clarity_claw::resolve_gateway_url();
     let device_id = match clarity_claw::register_device(&gateway_url).await {
@@ -80,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ------------------------------------------------------------------
-    // 4. Start the system tray (blocks until user selects Quit)
+    // 2. Start the system tray (blocks until user selects Quit)
     // ------------------------------------------------------------------
     clarity_claw::tray::run()?;
 

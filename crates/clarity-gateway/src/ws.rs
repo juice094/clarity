@@ -14,6 +14,8 @@ use crate::handlers::AgentHandle;
 use crate::server::AppState;
 use crate::session::SessionId;
 use crate::session_store::SessionMessage;
+use clarity_contract::{SessionSource, ThreadId};
+use clarity_core::background::{TaskSpec, TaskStatus};
 
 /// WebSocket 升级处理器
 pub async fn ws_handler(
@@ -274,6 +276,79 @@ pub enum WsRequest {
         /// Device id of the requesting client.
         device_id: String,
     },
+    /// Register a Claw device.
+    RegisterDevice {
+        /// Stable machine identifier.
+        id: String,
+        /// Human-readable display name.
+        name: String,
+        /// IP address or hostname.
+        host: String,
+        /// Claw daemon version string.
+        version: String,
+        /// Optional status override.
+        #[serde(default)]
+        status: Option<String>,
+    },
+    /// Send a heartbeat for a registered Claw device.
+    Heartbeat {
+        /// Stable machine identifier.
+        id: String,
+        /// Human-readable display name.
+        name: String,
+        /// IP address or hostname.
+        host: String,
+        /// Claw daemon version string.
+        version: String,
+        /// Optional status override.
+        #[serde(default)]
+        status: Option<String>,
+    },
+    /// Create a background task.
+    CreateTask {
+        /// Task name.
+        name: String,
+        /// Task prompt.
+        prompt: String,
+        /// Maximum agent iterations.
+        #[serde(default)]
+        max_iterations: Option<usize>,
+    },
+    /// Cancel a background task.
+    CancelTask {
+        /// Task identifier.
+        task_id: String,
+    },
+    /// List background tasks.
+    ListTasks,
+    /// Get a single background task.
+    GetTask {
+        /// Task identifier.
+        task_id: String,
+    },
+    /// Create a new thread.
+    CreateThread {
+        /// Optional human-readable title.
+        #[serde(default)]
+        title: Option<String>,
+    },
+    /// List threads.
+    ListThreads {
+        /// Maximum number of threads to return.
+        #[serde(default)]
+        limit: Option<usize>,
+        /// Whether to include archived threads.
+        #[serde(default)]
+        include_archived: Option<bool>,
+    },
+    /// Get a single thread.
+    GetThread {
+        /// Thread identifier.
+        thread_id: String,
+        /// Include full rollout history.
+        #[serde(default)]
+        include_history: Option<bool>,
+    },
 }
 
 /// WebSocket 响应类型.
@@ -324,6 +399,51 @@ pub enum WsResponse {
         next_cursor: Option<String>,
         /// Devices currently online for this role.
         online_devices: Vec<String>,
+    },
+    /// Device registration / heartbeat acknowledgement.
+    DeviceAck {
+        /// Registered device record.
+        device: crate::handlers::claw::ClawDevice,
+    },
+    /// Background task creation response.
+    TaskCreated {
+        /// New task identifier.
+        task_id: String,
+        /// Initial task status.
+        status: String,
+    },
+    /// Background task cancellation response.
+    TaskCancelled {
+        /// Whether the cancellation succeeded.
+        cancelled: bool,
+    },
+    /// Background task list response.
+    TaskList {
+        /// Tasks returned by the Gateway.
+        tasks: Vec<crate::handlers::tasks::TaskDetailResponse>,
+    },
+    /// Single background task response.
+    TaskDetail {
+        /// Task detail payload.
+        task: crate::handlers::tasks::TaskDetailResponse,
+    },
+    /// Thread creation response.
+    ThreadCreated {
+        /// New thread identifier.
+        thread_id: String,
+    },
+    /// Thread list response.
+    ThreadList {
+        /// Thread summaries for this page.
+        data: Vec<crate::handlers::threads::ThreadListItem>,
+        /// Cursor for the next page, if any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        next_cursor: Option<String>,
+    },
+    /// Single thread response.
+    ThreadDetail {
+        /// Thread detail payload.
+        thread: crate::handlers::threads::ThreadResponse,
     },
 }
 
@@ -449,6 +569,184 @@ async fn handle_request(
                 online_devices,
             }
         }
+        WsRequest::RegisterDevice {
+            id,
+            name,
+            host,
+            version,
+            status,
+        }
+        | WsRequest::Heartbeat {
+            id,
+            name,
+            host,
+            version,
+            status,
+        } => {
+            if id.is_empty() || name.is_empty() {
+                return WsResponse::Error {
+                    error: "device id and name are required".into(),
+                };
+            }
+            let device =
+                state
+                    .device_registry
+                    .register(crate::handlers::claw::DeviceRegistration {
+                        id,
+                        name,
+                        host,
+                        version,
+                        status,
+                    });
+            WsResponse::DeviceAck { device }
+        }
+        WsRequest::CreateTask {
+            name,
+            prompt,
+            max_iterations,
+        } => {
+            let spec = TaskSpec::new(name.clone(), prompt)
+                .with_agent_type("default")
+                .with_max_iterations(max_iterations.unwrap_or(10));
+            match state.task_manager.spawn_agent(spec).await {
+                Ok(task_id) => WsResponse::TaskCreated {
+                    task_id,
+                    status: format!("{:?}", TaskStatus::Pending),
+                },
+                Err(e) => WsResponse::Error {
+                    error: format!("failed to create task: {}", e),
+                },
+            }
+        }
+        WsRequest::CancelTask { task_id } => match state.task_manager.cancel(&task_id).await {
+            Ok(()) => WsResponse::TaskCancelled { cancelled: true },
+            Err(e) => WsResponse::Error {
+                error: format!("failed to cancel task: {}", e),
+            },
+        },
+        WsRequest::ListTasks => match state.task_manager.list().await {
+            Ok(tasks) => {
+                let tasks = tasks
+                    .into_iter()
+                    .map(|info| crate::handlers::tasks::TaskDetailResponse {
+                        task_id: info.id,
+                        name: info.spec.name,
+                        status: info.status,
+                        prompt: info.spec.prompt,
+                        created_at: info.created_at,
+                        updated_at: info.updated_at,
+                        result: None,
+                    })
+                    .collect();
+                WsResponse::TaskList { tasks }
+            }
+            Err(e) => WsResponse::Error {
+                error: format!("failed to list tasks: {}", e),
+            },
+        },
+        WsRequest::GetTask { task_id } => {
+            let store = state.task_manager.store();
+            match store.get(&task_id).await {
+                Ok(info) => {
+                    let result = if info.status.is_terminal() {
+                        store.get_result(&task_id).await.ok()
+                    } else {
+                        None
+                    };
+                    WsResponse::TaskDetail {
+                        task: crate::handlers::tasks::TaskDetailResponse {
+                            task_id: info.id,
+                            name: info.spec.name,
+                            status: info.status,
+                            prompt: info.spec.prompt,
+                            created_at: info.created_at,
+                            updated_at: info.updated_at,
+                            result,
+                        },
+                    }
+                }
+                Err(e) => WsResponse::Error {
+                    error: format!("failed to get task: {}", e),
+                },
+            }
+        }
+        WsRequest::CreateThread { title } => {
+            let cwd = state.agent.config().working_dir.clone();
+            match state
+                .thread_manager
+                .create_thread(&cwd, "clarity-gateway", SessionSource::AppServer)
+                .await
+            {
+                Ok(thread_id) => {
+                    if let Some(title) = title {
+                        let _ = state
+                            .thread_manager
+                            .update_metadata(
+                                thread_id,
+                                clarity_thread_store::ThreadMetadataPatch {
+                                    title: Some(title),
+                                    archived: None,
+                                    extra: std::collections::HashMap::new(),
+                                },
+                            )
+                            .await;
+                    }
+                    WsResponse::ThreadCreated {
+                        thread_id: thread_id.to_string(),
+                    }
+                }
+                Err(e) => WsResponse::Error {
+                    error: format!("failed to create thread: {}", e),
+                },
+            }
+        }
+        WsRequest::ListThreads {
+            limit,
+            include_archived,
+        } => match state
+            .thread_manager
+            .list_threads(limit.unwrap_or(10), include_archived.unwrap_or(false), None)
+            .await
+        {
+            Ok(summaries) => {
+                let data: Vec<_> = summaries
+                    .iter()
+                    .map(crate::handlers::threads::summary_to_item)
+                    .collect();
+                WsResponse::ThreadList {
+                    data,
+                    next_cursor: None,
+                }
+            }
+            Err(e) => WsResponse::Error {
+                error: format!("failed to list threads: {}", e),
+            },
+        },
+        WsRequest::GetThread {
+            thread_id,
+            include_history,
+        } => match ThreadId::from_string(&thread_id) {
+            Ok(id) => match state
+                .thread_manager
+                .read_thread(id, include_history.unwrap_or(false))
+                .await
+            {
+                Ok(stored) => WsResponse::ThreadDetail {
+                    thread: crate::handlers::threads::stored_to_response(&stored),
+                },
+                Err(clarity_core::thread::ThreadManagerError::ThreadStore(
+                    clarity_thread_store::ThreadStoreError::NotFound { .. },
+                )) => WsResponse::Error {
+                    error: format!("thread not found: {}", thread_id),
+                },
+                Err(e) => WsResponse::Error {
+                    error: format!("failed to get thread: {}", e),
+                },
+            },
+            Err(e) => WsResponse::Error {
+                error: format!("invalid thread id: {}", e),
+            },
+        },
     }
 }
 
@@ -459,6 +757,7 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use clarity_core::agent::{Agent, AgentConfig, MockLlm};
     use clarity_core::background::BackgroundTaskManager;
+    use clarity_core::background::agent_executor::DefaultAgentTaskExecutor;
     use clarity_core::registry::ToolRegistry;
     use futures::stream::StreamExt;
     use std::sync::Arc;
@@ -479,11 +778,16 @@ mod tests {
         ));
         let _ = std::fs::create_dir_all(&temp);
 
-        let task_manager = Arc::new(BackgroundTaskManager::new(
-            temp.join("store"),
-            temp.join("work"),
-            temp.join("context"),
+        let llm = agent.llm().unwrap_or_else(|| Arc::new(MockLlm));
+        let executor = Arc::new(DefaultAgentTaskExecutor::new(
+            llm,
+            agent.registry().clone(),
+            temp.clone(),
         ));
+        let task_manager = Arc::new(
+            BackgroundTaskManager::new(temp.join("store"), temp.join("work"), temp.join("context"))
+                .with_agent_executor(executor),
+        );
 
         Arc::new(
             crate::server::AppState::new_with_home(agent, task_manager, temp.join(".clarity"))
@@ -755,6 +1059,177 @@ mod tests {
                 assert!(online_devices.contains(&"dev-b".into()));
             }
             _ => panic!("expected RoleContextSynced variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_register_device() {
+        let json = r#"{"type":"register_device","id":"claw-1","name":"Claw One","host":"host","version":"0.3.0"}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        assert!(matches!(
+            req,
+            WsRequest::RegisterDevice {
+                id,
+                name,
+                version,
+                ..
+            } if id == "claw-1" && name == "Claw One" && version == "0.3.0"
+        ));
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_create_task() {
+        let json = r#"{"type":"create_task","name":"demo","prompt":"hello","max_iterations":5}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        match req {
+            WsRequest::CreateTask {
+                name,
+                prompt,
+                max_iterations,
+            } => {
+                assert_eq!(name, "demo");
+                assert_eq!(prompt, "hello");
+                assert_eq!(max_iterations, Some(5));
+            }
+            _ => panic!("expected CreateTask variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_request_deserialization_list_threads() {
+        let json = r#"{"type":"list_threads","limit":20,"include_archived":true}"#;
+        let req: WsRequest = serde_json::from_str(json).unwrap();
+        match req {
+            WsRequest::ListThreads {
+                limit,
+                include_archived,
+            } => {
+                assert_eq!(limit, Some(20));
+                assert_eq!(include_archived, Some(true));
+            }
+            _ => panic!("expected ListThreads variant"),
+        }
+    }
+
+    #[test]
+    fn test_ws_response_serialization_device_ack() {
+        let resp = WsResponse::DeviceAck {
+            device: crate::handlers::claw::ClawDevice {
+                id: "d1".into(),
+                name: "Dev".into(),
+                host: "h".into(),
+                version: "1".into(),
+                status: crate::handlers::claw::DeviceStatus::Online,
+                last_heartbeat: "2026-01-01T00:00:00Z".into(),
+            },
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "device_ack");
+        assert_eq!(json["device"]["id"], "d1");
+        assert_eq!(json["device"]["status"], "online");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_task_created() {
+        let resp = WsResponse::TaskCreated {
+            task_id: "t1".into(),
+            status: "Pending".into(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "task_created");
+        assert_eq!(json["task_id"], "t1");
+        assert_eq!(json["status"], "Pending");
+    }
+
+    #[test]
+    fn test_ws_response_serialization_thread_created() {
+        let resp = WsResponse::ThreadCreated {
+            thread_id: "th-1".into(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["type"], "thread_created");
+        assert_eq!(json["thread_id"], "th-1");
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_register_device() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+        let response = handle_request(
+            &state,
+            &session_id,
+            WsRequest::RegisterDevice {
+                id: "claw-1".into(),
+                name: "Claw One".into(),
+                host: "localhost".into(),
+                version: "0.3.0".into(),
+                status: None,
+            },
+        )
+        .await;
+        match response {
+            WsResponse::DeviceAck { device } => {
+                assert_eq!(device.id, "claw-1");
+                assert_eq!(device.name, "Claw One");
+            }
+            _ => panic!("expected DeviceAck variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_create_and_list_threads() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+
+        let create = handle_request(
+            &state,
+            &session_id,
+            WsRequest::CreateThread {
+                title: Some("My Thread".into()),
+            },
+        )
+        .await;
+        let thread_id = match create {
+            WsResponse::ThreadCreated { thread_id } => thread_id,
+            _ => panic!("expected ThreadCreated variant"),
+        };
+
+        let list = handle_request(
+            &state,
+            &session_id,
+            WsRequest::ListThreads {
+                limit: Some(10),
+                include_archived: Some(false),
+            },
+        )
+        .await;
+        match list {
+            WsResponse::ThreadList { data, .. } => {
+                assert!(data.iter().any(|t| t.thread_id == thread_id));
+            }
+            _ => panic!("expected ThreadList variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_create_task() {
+        let state = test_state().await;
+        let session_id = SessionId::new();
+        let response = handle_request(
+            &state,
+            &session_id,
+            WsRequest::CreateTask {
+                name: "demo".into(),
+                prompt: "say hi".into(),
+                max_iterations: Some(1),
+            },
+        )
+        .await;
+        match response {
+            WsResponse::TaskCreated { task_id, .. } => {
+                assert!(!task_id.is_empty());
+            }
+            _ => panic!("expected TaskCreated variant"),
         }
     }
 

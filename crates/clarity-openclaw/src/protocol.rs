@@ -10,13 +10,15 @@ use serde_json::Value;
 #[derive(Clone, Debug)]
 pub enum ProtocolCommand {
     /// Send a chat message.
+    ///
+    /// The wire method is chosen by the detected dialect:
+    /// - Gateway WebSocket uses `chat.send`.
+    /// - OpenClaw JSON-RPC uses `sessions.send`.
     Chat {
         /// Session key (OpenClaw) or unused (Gateway).
         session_key: String,
         /// Message text.
         message: String,
-        /// For OpenClaw: use `sessions.send` instead of `chat.send`.
-        use_sessions_send: bool,
     },
     /// Fetch message history.
     GetHistory {
@@ -43,6 +45,16 @@ pub enum ProtocolCommand {
         since_event_id: Option<String>,
         /// Local device id, used for presence tracking.
         device_id: String,
+    },
+    /// Provide or remove the passphrase used to encrypt role-context events at
+    /// rest for the OpenClaw/syncthing-rust transport.
+    ///
+    /// An empty `passphrase` clears any existing key for the role.
+    SetRolePassphrase {
+        /// Role context to set the passphrase for.
+        role_id: String,
+        /// Passphrase; empty means "clear".
+        passphrase: String,
     },
 }
 

@@ -3,7 +3,7 @@
 //! Provides the tao event loop, tray icon, menu, OS notifications,
 //! Gateway task polling, and wire message listening.
 
-use crate::{POLL_INTERVAL_SECS, TaskListPayload, TaskSummary, ThreadListPayload, ThreadSummary};
+use crate::{POLL_INTERVAL_SECS, TaskSummary, ThreadSummary};
 use clarity_wire::{Wire, WireMessage};
 use notify::Watcher;
 use parking_lot::Mutex;
@@ -245,8 +245,7 @@ pub fn run() -> anyhow::Result<()> {
     // Background: Gateway task polling
     // ------------------------------------------------------------------
     let poll_proxy = proxy.clone();
-    let poll_url = format!("{}/v1/tasks", gateway_url);
-    let threads_poll_url = format!("{}/api/v2/threads?limit=10", gateway_url);
+    let poll_gateway_url = gateway_url.clone();
     let tasks_dir = std::env::current_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."))
         .join(".clarity")
@@ -256,10 +255,6 @@ pub fn run() -> anyhow::Result<()> {
     let thread_cache_bg = thread_cache.clone();
 
     tokio::spawn(async move {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
         let mut last_running: Vec<String> = Vec::new();
 
         let (fs_tx, mut fs_rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(10);
@@ -290,72 +285,51 @@ pub fn run() -> anyhow::Result<()> {
                 }
             }
 
-            match client.get(&poll_url).send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    if let Ok(payload) = resp.json::<TaskListPayload>().await {
-                        let tasks: Vec<TaskSummary> = payload
-                            .tasks
-                            .iter()
-                            .map(|t| TaskSummary {
-                                task_id: t.task_id.clone(),
-                                name: t.name.clone(),
-                                status: t.status.clone(),
-                            })
-                            .collect();
-                        *task_cache_bg.lock() = tasks.clone();
+            match crate::poll_tasks(&poll_gateway_url).await {
+                Ok(tasks) => {
+                    *task_cache_bg.lock() = tasks.clone();
 
-                        let running_now: Vec<String> = tasks
-                            .iter()
-                            .filter(|t| t.status == "Running")
-                            .map(|t| t.task_id.clone())
-                            .collect();
+                    let running_now: Vec<String> = tasks
+                        .iter()
+                        .filter(|t| t.status == "Running")
+                        .map(|t| t.task_id.clone())
+                        .collect();
 
-                        for old_id in &last_running {
-                            if !running_now.iter().any(|id| id == old_id) {
-                                if let Some(task) = tasks.iter().find(|t| &t.task_id == old_id) {
-                                    let (summary, urgency) =
-                                        crate::classify_task_status(&task.status);
-                                    let mut notif = notify_rust::Notification::new();
-                                    notif
-                                        .summary(&format!("Clarity — {}", task.name))
-                                        .body(summary);
-                                    #[cfg(target_os = "linux")]
-                                    if let Some(u) = urgency {
-                                        notif.urgency(u);
-                                    }
-                                    #[cfg(not(target_os = "linux"))]
-                                    let _ = urgency;
-                                    let _ = notif.show();
+                    for old_id in &last_running {
+                        if !running_now.iter().any(|id| id == old_id) {
+                            if let Some(task) = tasks.iter().find(|t| &t.task_id == old_id) {
+                                let (summary, urgency) = crate::classify_task_status(&task.status);
+                                let mut notif = notify_rust::Notification::new();
+                                notif
+                                    .summary(&format!("Clarity — {}", task.name))
+                                    .body(summary);
+                                #[cfg(target_os = "linux")]
+                                if let Some(u) = urgency {
+                                    notif.urgency(u);
                                 }
+                                #[cfg(not(target_os = "linux"))]
+                                let _ = urgency;
+                                let _ = notif.show();
                             }
                         }
-
-                        last_running = running_now;
-                        let _ = poll_proxy.send_event(UserEvent::TaskUpdate(tasks.clone()));
                     }
+
+                    last_running = running_now;
+                    let _ = poll_proxy.send_event(UserEvent::TaskUpdate(tasks));
                 }
-                _ => {
+                Err(e) => {
+                    tracing::warn!("Failed to poll tasks: {}", e);
                     let _ = poll_proxy.send_event(UserEvent::TaskUpdate(Vec::new()));
                 }
             }
 
-            match client.get(&threads_poll_url).send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    if let Ok(payload) = resp.json::<ThreadListPayload>().await {
-                        let threads: Vec<ThreadSummary> = payload
-                            .data
-                            .iter()
-                            .map(|t| ThreadSummary {
-                                thread_id: t.thread_id.clone(),
-                                title: t.title.clone(),
-                                updated_at: t.updated_at,
-                            })
-                            .collect();
-                        *thread_cache_bg.lock() = threads.clone();
-                        let _ = poll_proxy.send_event(UserEvent::ThreadUpdate(threads));
-                    }
+            match crate::poll_threads(&poll_gateway_url).await {
+                Ok(threads) => {
+                    *thread_cache_bg.lock() = threads.clone();
+                    let _ = poll_proxy.send_event(UserEvent::ThreadUpdate(threads));
                 }
-                _ => {
+                Err(e) => {
+                    tracing::warn!("Failed to poll threads: {}", e);
                     let _ = poll_proxy.send_event(UserEvent::ThreadUpdate(Vec::new()));
                 }
             }

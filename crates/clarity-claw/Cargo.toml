@@ -28,14 +28,16 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 
-# HTTP client for Gateway API
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Gateway WebSocket client for all Gateway communication.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
 
 # Filesystem watch for real-time task notifications
 notify = { version = "7", default-features = false, features = ["macos_fsevent", "crossbeam-channel"] }
 
-# Async trait support (clarity-contract uses #[async_trait])
-async-trait = { workspace = true }
+# Intentionally not depending on clarity-openclaw: Claw is an internal mesh node
+# that speaks Gateway WebSocket only; external OpenClaw/KimiClaw interop is handled
+# by clarity-openclaw on the Gateway side.
 parking_lot = "0.12"
 
 [lints]

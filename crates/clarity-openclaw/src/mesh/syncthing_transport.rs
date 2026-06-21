@@ -10,9 +10,13 @@
 //! added with [`SyncthingTransport::add_peer`] after the transport is created,
 //! or via the underlying `SyncService` config.
 
-use super::transport::{MeshTransportError, Result, RoleContextTransport};
+use super::{
+    crypto,
+    transport::{MeshTransportError, Result, RoleContextTransport},
+};
 use bytes::Bytes;
 use clarity_contract::{ClawContextEvent, RoleContextId};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use syncthing_core::types::{Config, Folder, FolderType};
@@ -31,6 +35,7 @@ pub struct SyncthingTransport {
     service: Arc<SyncService>,
     base_dir: PathBuf,
     notify_tx: tokio::sync::mpsc::UnboundedSender<RoleContextId>,
+    passphrases: Arc<tokio::sync::RwLock<HashMap<RoleContextId, String>>>,
 }
 
 impl SyncthingTransport {
@@ -83,6 +88,7 @@ impl SyncthingTransport {
             service,
             base_dir,
             notify_tx,
+            passphrases: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         };
         transport.spawn_event_loop();
 
@@ -121,10 +127,30 @@ impl SyncthingTransport {
         self.base_dir.join(role_id.as_ref())
     }
 
-    fn event_path(&self, role_id: &RoleContextId, event_id: &str) -> PathBuf {
+    fn event_path(&self, role_id: &RoleContextId, event_id: &str, encrypted: bool) -> PathBuf {
+        let ext = if encrypted { "enc" } else { "json" };
         self.role_folder_path(role_id)
             .join("events")
-            .join(format!("{event_id}.json"))
+            .join(format!("{event_id}.{ext}"))
+    }
+
+    async fn passphrase_for(&self, role_id: &RoleContextId) -> Option<String> {
+        self.passphrases.read().await.get(role_id).cloned()
+    }
+
+    /// Set or clear the passphrase used to encrypt events for `role_id`.
+    ///
+    /// An empty passphrase removes any existing encryption key for the role;
+    /// subsequent `publish` calls will write plaintext `.json` files. Existing
+    /// encrypted `.enc` files remain on disk and can still be collected if the
+    /// passphrase is re-supplied later.
+    pub async fn set_role_passphrase(&self, role_id: RoleContextId, passphrase: String) {
+        let mut passphrases = self.passphrases.write().await;
+        if passphrase.is_empty() {
+            passphrases.remove(&role_id);
+        } else {
+            passphrases.insert(role_id, passphrase);
+        }
     }
 
     /// Ensure the Syncthing folder for `role_id` exists in the service.
@@ -179,15 +205,21 @@ impl RoleContextTransport for SyncthingTransport {
     async fn publish(&self, role_id: &RoleContextId, event: &ClawContextEvent) -> Result<()> {
         self.ensure_folder(role_id).await?;
 
-        let path = self.event_path(role_id, &event.event_id);
+        let passphrase = self.passphrase_for(role_id).await;
+        let path = self.event_path(role_id, &event.event_id, passphrase.is_some());
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
                 MeshTransportError::Other(format!("create events dir {}: {e}", parent.display()))
             })?;
         }
 
-        let content = serde_json::to_vec_pretty(event)
+        let json = serde_json::to_string_pretty(event)
             .map_err(|e| MeshTransportError::Serialization(e.to_string()))?;
+        let content = if let Some(passphrase) = passphrase {
+            crypto::encrypt(role_id, &passphrase, &json)?
+        } else {
+            json
+        };
         tokio::fs::write(&path, content).await.map_err(|e| {
             MeshTransportError::Other(format!("write event file {}: {e}", path.display()))
         })?;
@@ -211,6 +243,7 @@ impl RoleContextTransport for SyncthingTransport {
             MeshTransportError::Other(format!("read events dir {}: {e}", events_dir.display()))
         })?;
 
+        let passphrase = self.passphrase_for(role_id).await;
         let mut events = Vec::new();
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
             MeshTransportError::Other(format!(
@@ -219,7 +252,9 @@ impl RoleContextTransport for SyncthingTransport {
             ))
         })? {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            let ext = path.extension().and_then(|e| e.to_str());
+            let is_encrypted = ext == Some("enc");
+            if ext != Some("json") && !is_encrypted {
                 continue;
             }
             let content = match tokio::fs::read_to_string(&path).await {
@@ -229,7 +264,26 @@ impl RoleContextTransport for SyncthingTransport {
                     continue;
                 }
             };
-            match serde_json::from_str::<ClawContextEvent>(&content) {
+
+            let json = if is_encrypted {
+                match passphrase {
+                    Some(ref pw) => match crypto::decrypt(role_id, pw, &content) {
+                        Ok(j) => j,
+                        Err(e) => {
+                            tracing::warn!(path = %path.display(), error = %e, "skipping encrypted mesh event file (wrong passphrase?)");
+                            continue;
+                        }
+                    },
+                    None => {
+                        tracing::warn!(path = %path.display(), "skipping encrypted mesh event file (no passphrase set)");
+                        continue;
+                    }
+                }
+            } else {
+                content
+            };
+
+            match serde_json::from_str::<ClawContextEvent>(&json) {
                 Ok(event) => events.push(event),
                 Err(e) => {
                     tracing::warn!(path = %path.display(), error = %e, "skipping malformed mesh event file");
@@ -331,6 +385,101 @@ mod tests {
         let collected = transport.collect(&role).await.expect("collect");
         assert_eq!(collected.len(), 1);
         assert_eq!(collected[0].event_id, "evt-1");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_publish_and_collect_roundtrip() {
+        let base = temp_dir("encrypted-roundtrip");
+        let _ = std::fs::remove_dir_all(&base);
+        let (transport, _rx) = SyncthingTransport::new(&base, "test-device")
+            .await
+            .expect("transport starts");
+
+        let role = RoleContextId::new("encrypted-role");
+        transport
+            .set_role_passphrase(role.clone(), "mesh-secret".to_string())
+            .await;
+
+        let event = sample_event("evt-enc-1");
+        transport
+            .publish(&role, &event)
+            .await
+            .expect("publish encrypted");
+
+        let collected = transport.collect(&role).await.expect("collect encrypted");
+        assert_eq!(collected.len(), 1);
+        assert_eq!(collected[0].event_id, "evt-enc-1");
+
+        // The file on disk should be encrypted (enc3: prefix).
+        let file_path = base
+            .join("encrypted-role")
+            .join("events")
+            .join("evt-enc-1.enc");
+        let on_disk = std::fs::read_to_string(&file_path).expect("read encrypted file");
+        assert!(crypto::is_encrypted(&on_disk));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_file_skipped_without_passphrase() {
+        let base = temp_dir("encrypted-no-pass");
+        let _ = std::fs::remove_dir_all(&base);
+        let (transport, _rx) = SyncthingTransport::new(&base, "test-device")
+            .await
+            .expect("transport starts");
+
+        let role = RoleContextId::new("skip-role");
+        transport
+            .set_role_passphrase(role.clone(), "mesh-secret".to_string())
+            .await;
+        let event = sample_event("evt-skip");
+        transport
+            .publish(&role, &event)
+            .await
+            .expect("publish encrypted");
+
+        // Remove the passphrase and try to collect.
+        transport
+            .set_role_passphrase(role.clone(), String::new())
+            .await;
+        let collected = transport.collect(&role).await.expect("collect");
+        assert!(collected.is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[tokio::test]
+    async fn test_mixed_plaintext_and_encrypted_events() {
+        let base = temp_dir("mixed-events");
+        let _ = std::fs::remove_dir_all(&base);
+        let (transport, _rx) = SyncthingTransport::new(&base, "test-device")
+            .await
+            .expect("transport starts");
+
+        let role = RoleContextId::new("mixed-role");
+        let plain_event = sample_event("evt-plain");
+        transport
+            .publish(&role, &plain_event)
+            .await
+            .expect("publish plain");
+
+        transport
+            .set_role_passphrase(role.clone(), "mixed-secret".to_string())
+            .await;
+        let enc_event = sample_event("evt-enc");
+        transport
+            .publish(&role, &enc_event)
+            .await
+            .expect("publish encrypted");
+
+        let collected = transport.collect(&role).await.expect("collect mixed");
+        assert_eq!(collected.len(), 2);
+        let ids: Vec<_> = collected.iter().map(|e| e.event_id.clone()).collect();
+        assert!(ids.contains(&"evt-plain".to_string()));
+        assert!(ids.contains(&"evt-enc".to_string()));
 
         let _ = std::fs::remove_dir_all(&base);
     }

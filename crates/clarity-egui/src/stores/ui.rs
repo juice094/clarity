@@ -68,6 +68,8 @@ pub struct UiStore {
     /// Last surfaced Claw error message and timestamp, used to suppress
     /// duplicate toast/chat spam while a device is flapping.
     pub last_claw_error: Option<(String, Instant)>,
+    /// Input buffer for the role-context E2EE passphrase in the Claw settings panel.
+    pub claw_role_passphrase_input: String,
 }
 
 impl Default for UiStore {
@@ -105,6 +107,7 @@ impl Default for UiStore {
             pretext_estimate_enabled: true,
             claw_connect_backoff: HashMap::new(),
             last_claw_error: None,
+            claw_role_passphrase_input: String::new(),
         }
     }
 }

@@ -39,6 +39,7 @@ pub const ICON_LAYERS: &str = "\u{e529}"; // Lucide: Layers
 pub const ICON_BOOK_OPEN: &str = "\u{e05f}"; // Lucide: BookOpen
 pub const ICON_INFO: &str = "\u{e0f4}"; // Lucide: Info
 pub const ICON_ARCHIVE: &str = "\u{e052}"; // Lucide: Archive
+pub const ICON_LOCK: &str = "\u{e1f3}"; // Lucide: Lock
 
 // ============================================================================
 // Design Token System — Phase A Foundation
