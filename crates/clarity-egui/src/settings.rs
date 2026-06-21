@@ -49,6 +49,17 @@ pub enum OpenClawAuthMode {
     DevicePaired,
 }
 
+/// Which JSON-RPC send method an OpenClaw connection should use.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenClawSendMethod {
+    /// `sessions.send` with `key` — typical remote OpenClaw path.
+    #[default]
+    SessionsSend,
+    /// `chat.send` with `sessionKey` — KimiClaw-local/ACP-style path.
+    ChatSend,
+}
+
 /// A user-configured OpenClaw Gateway connection.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OpenClawConnection {
@@ -67,6 +78,19 @@ pub struct OpenClawConnection {
     /// Optional device-specific token for `DevicePaired` mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_token: Option<String>,
+    /// Optional session key override for this remote OpenClaw connection.
+    ///
+    /// When set, Claw sessions bound to this connection use this key instead of
+    /// the default `agent:main:<role>` key, allowing egui to join an existing
+    /// remote main session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_key: Option<String>,
+    /// Which JSON-RPC send method to use for chat messages.
+    ///
+    /// Most remote OpenClaw Gateways expect `sessions.send`; some
+    /// KimiClaw/ACP-style Gateways expect `chat.send`.
+    #[serde(default)]
+    pub send_method: OpenClawSendMethod,
 }
 
 fn default_openclaw_enabled() -> bool {
@@ -82,6 +106,8 @@ impl Default for OpenClawConnection {
             auth_mode: OpenClawAuthMode::default(),
             enabled: true,
             device_token: None,
+            session_key: None,
+            send_method: OpenClawSendMethod::default(),
         }
     }
 }
@@ -627,6 +653,8 @@ approval_mode = "yolo"
             auth_mode: OpenClawAuthMode::TokenWithDevice,
             enabled: true,
             device_token: Some("device-token".into()),
+            session_key: Some("remote-main-session".into()),
+            send_method: OpenClawSendMethod::ChatSend,
         };
         let json = serde_json::to_string(&conn).expect("serialize");
         let deserialized: OpenClawConnection = serde_json::from_str(&json).expect("deserialize");
@@ -636,6 +664,8 @@ approval_mode = "yolo"
         assert_eq!(deserialized.auth_mode, conn.auth_mode);
         assert_eq!(deserialized.enabled, conn.enabled);
         assert_eq!(deserialized.device_token, conn.device_token);
+        assert_eq!(deserialized.session_key, conn.session_key);
+        assert_eq!(deserialized.send_method, conn.send_method);
     }
 
     #[test]

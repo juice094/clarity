@@ -73,6 +73,7 @@ static ZH_CN: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     m.insert("Settings", "设置");
     m.insert("New Session", "新建会话");
     m.insert("New session (Ctrl+N)", "新建会话（Ctrl+N）");
+    m.insert("New task (Ctrl+N)", "新建任务（Ctrl+N）");
     m.insert("New Session Shortcut", "Ctrl+K");
     m.insert("New Task", "新建任务");
     m.insert("New cron schedule", "新建定时任务");

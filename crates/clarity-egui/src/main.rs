@@ -201,6 +201,59 @@ impl App {
         }
     }
 
+    /// Find a Claw session by its session_key.
+    fn claw_session_id_by_key(&self, session_key: &str) -> Option<String> {
+        self.session_store
+            .sessions
+            .iter()
+            .find(|s| {
+                matches!(
+                    &s.context,
+                    crate::ui::types::SessionContext::Claw {
+                        session_key: key,
+                        ..
+                    } if key == session_key
+                )
+            })
+            .map(|s| s.id.clone())
+    }
+
+    /// Find all Claw sessions belonging to a role.
+    fn claw_session_ids_by_role(&self, role: &str) -> Vec<String> {
+        self.session_store
+            .sessions
+            .iter()
+            .filter(|s| {
+                matches!(
+                    &s.context,
+                    crate::ui::types::SessionContext::Claw {
+                        role: r,
+                        ..
+                    } if r == role
+                )
+            })
+            .map(|s| s.id.clone())
+            .collect()
+    }
+
+    /// Subscribe to and fetch history for the given Claw session_key over an
+    /// already-connected Gateway WebSocket.
+    fn subscribe_claw_session(&self, session_key: &str) {
+        let Some(ref ws) = self.claw_ws else {
+            return;
+        };
+        // OpenClaw/KimiClaw Gateways do not support the Gateway-native
+        // subscribe/history WebSocket commands.
+        let is_openclaw =
+            self.active_claw_protocol() == Some(crate::claw::ClawProtocol::OpenClawJsonRpc);
+        if is_openclaw {
+            return;
+        }
+        ws.subscribe_session(session_key);
+        ws.subscribe_messages(session_key);
+        ws.get_history(session_key);
+    }
+
     /// Orchestrates the full layout shell.
     ///
     /// S6 (Pretext Phase A): the shell is now organised as a single-page
@@ -1087,11 +1140,24 @@ impl eframe::App for App {
                 self.ui_store.active_bot_id.clear();
             }
 
-            let picked_id = if active_session_is_claw {
+            // Capture the active Claw role (if any) so we can decide whether the
+            // user-selected bot is still valid for this session's role.
+            let active_role = if active_session_is_claw {
                 self.session_store
                     .active_session()
                     .and_then(|s| match &s.context {
-                        crate::ui::types::SessionContext::Claw { role, affinity, .. } => self
+                        crate::ui::types::SessionContext::Claw { role, .. } => Some(role.clone()),
+                        _ => None,
+                    })
+            } else {
+                None
+            };
+
+            let picked_id = if let Some(ref role) = active_role {
+                self.session_store
+                    .active_session()
+                    .and_then(|s| match &s.context {
+                        crate::ui::types::SessionContext::Claw { affinity, .. } => self
                             .device_state
                             .pick_instance(role, affinity)
                             .map(|b| b.id),
@@ -1193,13 +1259,28 @@ impl eframe::App for App {
                             None
                         };
 
-                        let manager = clarity_openclaw::ClawConnectionManager::connect_with_auth(
-                            &ws_url, auth,
+                        let manager = clarity_openclaw::ClawConnectionManager::connect_with_options(
+                            &ws_url,
+                            auth,
+                            conn.send_method,
                         );
                         self.claw_ws = Some(crate::claw::ClawClientHandle::new(manager));
                         self.claw_ws_device_id = picked_id.clone();
                         self.ui_store.clear_connect_backoff(&picked_id);
-                        if self.ui_store.active_bot_id != picked_id {
+
+                        // Preserve a user-selected bot as long as it still belongs
+                        // to the active Claw role. Otherwise default to the device
+                        // we actually connected to.
+                        let selection_still_valid = active_role
+                            .as_ref()
+                            .map(|role| {
+                                self.device_state
+                                    .has_device_in_role(role, &self.ui_store.active_bot_id)
+                            })
+                            .unwrap_or(false);
+                        if self.ui_store.active_bot_id.is_empty()
+                            || (!selection_still_valid && self.ui_store.active_bot_id != picked_id)
+                        {
                             self.ui_store.active_bot_id = picked_id.clone();
                         }
                     }
@@ -1246,12 +1327,15 @@ impl eframe::App for App {
                                     _ => None,
                                 })
                                 .unwrap_or_else(|| "agent:main:main".to_string());
-                            if let Some(ref ws) = self.claw_ws {
-                                ws.subscribe_session(&session_key);
-                                ws.subscribe_messages(&session_key);
-                                ws.get_history(&session_key);
-                                // Trigger role-context sync when the active session is a
-                                // Claw session, so the UI converges with Gateway state.
+                            self.subscribe_claw_session(&session_key);
+
+                            // Trigger role-context sync when the active session is a
+                            // Claw session, so the UI converges with Gateway state.
+                            // OpenClaw uses syncthing-rust for role-context sync, so we
+                            // skip the WebSocket sync for that dialect.
+                            let is_openclaw = self.active_claw_protocol()
+                                == Some(crate::claw::ClawProtocol::OpenClawJsonRpc);
+                            if !is_openclaw {
                                 if let Some(session) = self.session_store.active_session() {
                                     if let crate::ui::types::SessionContext::Claw { role, .. } =
                                         &session.context
@@ -1261,7 +1345,9 @@ impl eframe::App for App {
                                             .as_ref()
                                             .map(|id| id.device_id())
                                             .unwrap_or_else(|| self.claw_ws_device_id.clone());
-                                        ws.sync_role_context(role, None, &device_id);
+                                        if let Some(ref ws) = self.claw_ws {
+                                            ws.sync_role_context(role, None, &device_id);
+                                        }
                                     }
                                 }
                             }
@@ -1323,7 +1409,10 @@ impl eframe::App for App {
                                 &self.ui_tx,
                             );
                         }
-                        crate::claw::ClawEvent::History(messages) => {
+                        crate::claw::ClawEvent::History {
+                            session_key,
+                            messages,
+                        } => {
                             let count = messages.len();
                             self.push_toast(
                                 format!("Loaded {} messages from session", count),
@@ -1333,9 +1422,14 @@ impl eframe::App for App {
                                 .iter()
                                 .map(|m| format!("[{}] {}", m.role, m.content))
                                 .collect();
-                            // Merge Gateway history into the local active session so
-                            // it survives restarts and can be searched/continued.
-                            if let Some(session) = self.session_store.active_session_mut() {
+                            // Merge Gateway history into the target Claw session,
+                            // falling back to the active session for legacy responses
+                            // that do not carry a session_key.
+                            let target_id = session_key
+                                .as_deref()
+                                .and_then(|key| self.claw_session_id_by_key(key))
+                                .unwrap_or_else(|| self.session_store.active_session_id.clone());
+                            if let Some(session) = self.session_store.session_mut(&target_id) {
                                 let existing: std::collections::HashSet<String> =
                                     session.messages.iter().map(|m| m.content.clone()).collect();
                                 for gm in messages {
@@ -1401,6 +1495,7 @@ impl eframe::App for App {
                         }
                         crate::claw::ClawEvent::RoleContextSynced {
                             role_id,
+                            session_key,
                             events,
                             online_devices,
                             ..
@@ -1412,51 +1507,75 @@ impl eframe::App for App {
                                     count,
                                     "Role context synced from Gateway"
                                 );
-                                // Merge missing events into the active Claw session.
-                                if let Some(session) = self.session_store.active_session_mut() {
-                                    if let crate::ui::types::SessionContext::Claw {
-                                        session_key,
-                                        ..
-                                    } = &session.context
-                                    {
-                                        let role_ctx = clarity_openclaw::mesh::merge_events(
-                                            clarity_contract::RoleContextId::new(
-                                                session_key.clone(),
-                                            ),
-                                            &events,
-                                        );
-                                        let existing: std::collections::HashSet<String> = session
-                                            .messages
-                                            .iter()
-                                            .map(|m| m.content.clone())
-                                            .collect();
-                                        for m in role_ctx.messages {
-                                            if m.content.is_empty() || existing.contains(&m.content)
-                                            {
-                                                continue;
+                                // Merge missing events into every Claw session that
+                                // matches the role (or the single session identified by
+                                // session_key when the backend provides it). This avoids
+                                // dumping a role's history into whatever session happens
+                                // to be active at arrival time.
+                                let active_id = self.session_store.active_session_id.clone();
+                                let target_ids: Vec<String> = session_key
+                                    .as_deref()
+                                    .and_then(|key| self.claw_session_id_by_key(key))
+                                    .map(|id| vec![id])
+                                    .unwrap_or_else(|| self.claw_session_ids_by_role(&role_id));
+                                for id in target_ids {
+                                    if let Some(session) = self.session_store.session_mut(&id) {
+                                        if let crate::ui::types::SessionContext::Claw {
+                                            session_key,
+                                            ..
+                                        } = &session.context
+                                        {
+                                            let role_ctx = clarity_openclaw::mesh::merge_events(
+                                                clarity_contract::RoleContextId::new(
+                                                    session_key.clone(),
+                                                ),
+                                                &events,
+                                            );
+                                            let existing: std::collections::HashSet<String> =
+                                                session
+                                                    .messages
+                                                    .iter()
+                                                    .map(|m| m.content.clone())
+                                                    .collect();
+                                            let mut appended = false;
+                                            for m in role_ctx.messages {
+                                                if m.content.is_empty()
+                                                    || existing.contains(&m.content)
+                                                {
+                                                    continue;
+                                                }
+                                                let role = if m.role == "user" {
+                                                    Role::User
+                                                } else {
+                                                    Role::Agent
+                                                };
+                                                let content = m.content.clone();
+                                                let mut msg = Message {
+                                                    role,
+                                                    content: content.clone(),
+                                                    blocks: vec![ContentBlock::Text {
+                                                        text: content,
+                                                    }],
+                                                    timestamp: Instant::now(),
+                                                    parsed: vec![],
+                                                    cached_height: None,
+                                                    is_error: false,
+                                                    lines: Vec::new(),
+                                                };
+                                                msg.prepare();
+                                                session.messages.push(msg);
+                                                appended = true;
                                             }
-                                            let role = if m.role == "user" {
-                                                Role::User
-                                            } else {
-                                                Role::Agent
-                                            };
-                                            let content = m.content.clone();
-                                            let mut msg = Message {
-                                                role,
-                                                content: content.clone(),
-                                                blocks: vec![ContentBlock::Text { text: content }],
-                                                timestamp: Instant::now(),
-                                                parsed: vec![],
-                                                cached_height: None,
-                                                is_error: false,
-                                                lines: Vec::new(),
-                                            };
-                                            msg.prepare();
-                                            session.messages.push(msg);
-                                        }
-                                        if !session.messages.is_empty() {
-                                            session.updated_at = crate::session::now_millis();
-                                            self.save_current_session();
+                                            if appended {
+                                                session.updated_at = crate::session::now_millis();
+                                                if id == active_id {
+                                                    self.save_current_session();
+                                                } else {
+                                                    let _ = crate::session::save_session_internal(
+                                                        session,
+                                                    );
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1485,6 +1604,7 @@ impl eframe::App for App {
                                     crate::ui::types::ToastLevel::Warn,
                                 );
                             }
+                            self.chat_store.claw_in_flight_session_id = None;
                             self.claw_ws = None;
                             self.claw_ws_device_id.clear();
                             continue;

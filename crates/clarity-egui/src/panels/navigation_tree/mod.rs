@@ -1,8 +1,9 @@
 //! Fixed-width left navigation tree.
 //!
-//! S6 Phase D→E: single fixed-width tree containing work/chat toggle,
-//! navigation items, collapsible web bookmarks, work templates, Claw devices,
-//! project tree, history/sessions, and a bottom-aligned user avatar.
+//! S6 Phase D→E: single fixed-width tree containing a Work/Chat mode toggle,
+//! New Session/Task, Skills, Plugins, a fixed Web entry, work templates,
+//! collapsible web bookmarks, project tree, Claw devices, history/sessions,
+//! and a bottom-aligned user avatar.
 //!
 //! The visual style is intentionally flat: no card frames, no section dividers,
 //! and selected rows are highlighted by a full-width neutral background.
@@ -81,14 +82,15 @@ fn render_top_actions(app: &mut App, ui: &mut egui::Ui) {
     nav_items::render_nav_items(app, ui);
 }
 
-/// Scrollable sections: collapsible web/templates/projects/claw/history.
+/// Scrollable sections: work templates, collapsible web bookmarks, projects,
+/// claw devices, and session history.
 fn render_sections(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
-    // 1. Web bookmarks
-    web_section::render_web_section(app, ui, "nav_web");
+    // 1. Work templates (quick-launch rows)
+    work_templates::render_work_templates(app, ui);
     ui.add_space(theme.space_12);
 
-    // 2. Work templates
-    work_templates::render_work_templates(app, ui);
+    // 2. Collapsible web bookmarks
+    web_section::render_web_section(app, ui, "nav_web");
     ui.add_space(theme.space_12);
 
     // 3. Projects

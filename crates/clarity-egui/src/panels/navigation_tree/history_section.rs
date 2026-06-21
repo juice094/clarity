@@ -24,7 +24,11 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
         .session_store
         .sessions
         .iter()
-        .filter(|s| !s.archived && s.project_id.is_none())
+        .filter(|s| {
+            !s.archived
+                && s.project_id.is_none()
+                && !matches!(s.context, SessionContext::Claw { .. })
+        })
         .map(|s| SessionRow {
             id: s.id.clone(),
             title: truncate_title(&s.title),

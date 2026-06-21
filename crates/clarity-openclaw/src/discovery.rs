@@ -2,6 +2,7 @@
 
 use crate::types::{
     ClawConnection, ClawProtocol, ClawType, DeviceInfo, DeviceRecord, DeviceStatus,
+    OpenClawSendMethod,
 };
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -101,6 +102,7 @@ fn discover_local_openclaw(
             host: "127.0.0.1".into(),
             auth_mode: None,
             device_token: None,
+            send_method: OpenClawSendMethod::SessionsSend,
         },
     });
 
@@ -133,6 +135,7 @@ fn discover_local_openclaw(
                             host: pd.device_id,
                             auth_mode: None,
                             device_token: None,
+                            send_method: OpenClawSendMethod::SessionsSend,
                         },
                     });
                 }
@@ -177,6 +180,7 @@ fn discover_remote_openclaw(out: &mut Vec<DeviceRecord>) {
             host,
             auth_mode: None,
             device_token: None,
+            send_method: OpenClawSendMethod::SessionsSend,
         },
     });
 }

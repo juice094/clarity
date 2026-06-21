@@ -682,9 +682,13 @@ impl App {
     /// Enter a Claw session for the given role.
     ///
     /// If a Claw session for `role` already exists, switch to it and pin it to
-    /// the requested device. Otherwise create a new Claw session bound to the
-    /// device. This is the only way to create a Claw session after Phase 1.
-    pub(crate) fn enter_claw_session(&mut self, role: String, device_id: String) {
+    /// the requested device when `device_id` is provided. Otherwise create a
+    /// new Claw session bound to the device (or to any online device when
+    /// `device_id` is `None`). This is the only way to create a Claw session
+    /// after Phase 1.
+    pub(crate) fn enter_claw_session(&mut self, role: String, device_id: Option<String>) {
+        let session_key = self.resolve_claw_session_key(&role, device_id.as_deref());
+
         // Look for an existing Claw session with the same role.
         let existing_id = self
             .session_store
@@ -694,34 +698,93 @@ impl App {
             .map(|s| s.id.clone());
 
         if let Some(id) = existing_id {
-            // Pin the existing session to the selected device.
+            // Apply the configured session key override and pin to the selected
+            // device when one is given.
             if let Some(session) = self.session_store.sessions.iter_mut().find(|s| s.id == id) {
-                if let SessionContext::Claw { affinity, .. } = &mut session.context {
-                    *affinity = DeviceAffinity::Specific(device_id);
+                if let SessionContext::Claw {
+                    affinity,
+                    session_key: existing_key,
+                    ..
+                } = &mut session.context
+                {
+                    *existing_key = session_key.clone();
+                    if let Some(dev) = device_id.as_ref() {
+                        *affinity = DeviceAffinity::Specific(dev.clone());
+                    }
                 }
             }
             self.switch_to_session(id);
+            self.ui_store.active_bot_id = device_id
+                .or_else(|| {
+                    self.device_state
+                        .pick_instance(&role, &DeviceAffinity::AnyOnline)
+                        .map(|b| b.id)
+                })
+                .unwrap_or_default();
             self.maybe_sync_claw_role_context(&role);
             return;
         }
 
         // No existing role session: create one.
         let count = self.session_store.sessions.len();
-        let session_key = crate::session::claw_session_key(&role);
         let role_for_sync = role.clone();
+        let affinity = device_id
+            .clone()
+            .map(DeviceAffinity::Specific)
+            .unwrap_or(DeviceAffinity::AnyOnline);
         let session = new_session(
             count,
             SessionContext::Claw {
                 role,
                 session_key,
-                affinity: DeviceAffinity::Specific(device_id),
+                affinity,
             },
         );
         let _ = self
             .ui_tx
             .send(crate::ui::types::UiEvent::ThreadCreated { session });
         self.process_events();
+        self.ui_store.active_bot_id = device_id
+            .or_else(|| {
+                self.device_state
+                    .pick_instance(&role_for_sync, &DeviceAffinity::AnyOnline)
+                    .map(|b| b.id)
+            })
+            .unwrap_or_default();
         self.maybe_sync_claw_role_context(&role_for_sync);
+    }
+
+    /// Resolve the session key for a Claw role.
+    ///
+    /// Priority:
+    /// 1. Session key override on the selected device.
+    /// 2. Session key override on any device in the role.
+    /// 3. Default `agent:main:<role>`.
+    fn resolve_claw_session_key(&self, role: &str, device_id: Option<&str>) -> String {
+        device_id
+            .and_then(|id| {
+                self.device_state
+                    .snapshot()
+                    .into_iter()
+                    .find(|b| b.id == id)
+                    .and_then(|b| b.session_key)
+            })
+            .or_else(|| self.device_state.session_key_for_role(role))
+            .unwrap_or_else(|| crate::session::claw_session_key(role))
+    }
+
+    /// Returns the protocol of the currently connected Claw device, if any.
+    ///
+    /// Used to decide which Gateway features (e.g. role-context sync) are
+    /// available for the active connection.
+    pub(crate) fn active_claw_protocol(&self) -> Option<crate::claw::ClawProtocol> {
+        self.claw_ws.as_ref()?;
+        let device_id = if self.claw_ws_device_id.is_empty() {
+            &self.ui_store.active_bot_id
+        } else {
+            &self.claw_ws_device_id
+        };
+        self.device_state.connection(device_id).map(|c| c.protocol)
     }
 
     /// Trigger a role-context sync for `role` if a Claw WebSocket is connected.
@@ -729,6 +792,12 @@ impl App {
         let Some(ref ws) = self.claw_ws else {
             return;
         };
+        // OpenClaw/KimiClaw uses syncthing-rust for role-context sync, not the
+        // WebSocket channel. Sending SyncRoleContext over OpenClaw produces an
+        // unsupported error; skip it silently.
+        if self.active_claw_protocol() == Some(crate::claw::ClawProtocol::OpenClawJsonRpc) {
+            return;
+        }
         let device_id = self
             .claw_device_identity
             .as_ref()
@@ -742,8 +811,8 @@ impl App {
 
     /// Infer the right `SessionContext` for a newly created session.
     ///
-    /// - Project selected → Work context bound to the selected project.
-    /// - Otherwise → plain Chat.
+    /// - Work mode → Work context bound to the selected project (if any).
+    /// - Chat mode → plain Chat.
     ///
     /// Note: Claw sessions are no longer created via "New Session". They are
     /// entered by clicking a Claw device/role in the left navigation tree.
@@ -751,6 +820,7 @@ impl App {
         infer_new_session_context_impl(
             self.project_store.selected_project_id.as_deref(),
             &self.project_store.projects,
+            self.view_state.new_session_mode,
         )
     }
 }
@@ -760,19 +830,20 @@ impl App {
 fn infer_new_session_context_impl(
     selected_project_id: Option<&str>,
     projects: &[Project],
+    mode: clarity_core::ui::NewSessionMode,
 ) -> SessionContext {
-    if let Some(project_id) = selected_project_id {
-        let has_workspace = projects
-            .iter()
-            .find(|p| p.id == project_id)
-            .map(|p| p.has_workspace)
-            .unwrap_or(true);
-        return SessionContext::Work {
-            workspace_id: Some(project_id.into()),
-            has_workspace,
-        };
+    if mode == clarity_core::ui::NewSessionMode::Chat {
+        return SessionContext::Chat;
     }
-    SessionContext::Chat
+
+    let has_workspace = selected_project_id
+        .and_then(|pid| projects.iter().find(|p| p.id == pid))
+        .map(|p| p.has_workspace)
+        .unwrap_or(true);
+    SessionContext::Work {
+        workspace_id: selected_project_id.map(|s| s.into()),
+        has_workspace,
+    }
 }
 
 impl App {
@@ -947,6 +1018,30 @@ impl App {
         {
             self.chat_store.tool_calls = crate::stores::rebuild_tool_calls(&s.messages);
         }
+
+        // If we switched to a Claw session and a Gateway WebSocket is already
+        // connected, make sure the Gateway is subscribed to this session's key
+        // and sync its role context. Without this, switching sessions while
+        // connected would leave us subscribed to the previous session's stream.
+        if let Some(session) = self.session_store.active_session() {
+            if let crate::ui::types::SessionContext::Claw {
+                role, session_key, ..
+            } = &session.context
+            {
+                let session_key = session_key.clone();
+                let role = role.clone();
+                if let Some(ref ws) = self.claw_ws {
+                    let is_openclaw = self.active_claw_protocol()
+                        == Some(crate::claw::ClawProtocol::OpenClawJsonRpc);
+                    if !is_openclaw {
+                        ws.subscribe_session(&session_key);
+                        ws.subscribe_messages(&session_key);
+                        ws.get_history(&session_key);
+                    }
+                }
+                self.maybe_sync_claw_role_context(&role);
+            }
+        }
     }
 
     /// Propagate the current `settings_edit.approval_mode` to the agent and
@@ -1056,7 +1151,24 @@ mod tests {
     #[test]
     fn infer_new_session_context_defaults_to_chat() {
         let projects = vec![];
-        let ctx = infer_new_session_context_impl(None, &projects);
+        let ctx =
+            infer_new_session_context_impl(None, &projects, clarity_core::ui::NewSessionMode::Chat);
+        assert_eq!(ctx, SessionContext::Chat);
+    }
+
+    #[test]
+    fn infer_new_session_context_chat_ignores_project() {
+        let projects = vec![Project {
+            id: "p-1".into(),
+            name: "Project One".into(),
+            archived: false,
+            has_workspace: true,
+        }];
+        let ctx = infer_new_session_context_impl(
+            Some("p-1"),
+            &projects,
+            clarity_core::ui::NewSessionMode::Chat,
+        );
         assert_eq!(ctx, SessionContext::Chat);
     }
 
@@ -1068,7 +1180,11 @@ mod tests {
             archived: false,
             has_workspace: true,
         }];
-        let ctx = infer_new_session_context_impl(Some("p-1"), &projects);
+        let ctx = infer_new_session_context_impl(
+            Some("p-1"),
+            &projects,
+            clarity_core::ui::NewSessionMode::Work,
+        );
         assert_eq!(
             ctx,
             SessionContext::Work {
@@ -1086,7 +1202,11 @@ mod tests {
             archived: false,
             has_workspace: false,
         }];
-        let ctx = infer_new_session_context_impl(Some("p-2"), &projects);
+        let ctx = infer_new_session_context_impl(
+            Some("p-2"),
+            &projects,
+            clarity_core::ui::NewSessionMode::Work,
+        );
         assert_eq!(
             ctx,
             SessionContext::Work {
@@ -1101,7 +1221,11 @@ mod tests {
         // If the selected project is somehow not in the list, treat it as a
         // workspace to avoid data-loss from a misclassified context.
         let projects = vec![];
-        let ctx = infer_new_session_context_impl(Some("missing"), &projects);
+        let ctx = infer_new_session_context_impl(
+            Some("missing"),
+            &projects,
+            clarity_core::ui::NewSessionMode::Work,
+        );
         assert_eq!(
             ctx,
             SessionContext::Work {
@@ -1112,11 +1236,26 @@ mod tests {
     }
 
     #[test]
+    fn infer_new_session_context_work_without_project_defaults_workspace_true() {
+        let projects = vec![];
+        let ctx =
+            infer_new_session_context_impl(None, &projects, clarity_core::ui::NewSessionMode::Work);
+        assert_eq!(
+            ctx,
+            SessionContext::Work {
+                workspace_id: None,
+                has_workspace: true,
+            }
+        );
+    }
+
+    #[test]
     fn infer_new_session_context_never_returns_claw() {
         // Claw sessions must be entered via the navigation tree, not created
         // through "New Session".
         let projects = vec![];
-        let ctx = infer_new_session_context_impl(None, &projects);
+        let ctx =
+            infer_new_session_context_impl(None, &projects, clarity_core::ui::NewSessionMode::Chat);
         assert!(!matches!(ctx, SessionContext::Claw { .. }));
     }
 }

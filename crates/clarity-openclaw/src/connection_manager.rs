@@ -28,6 +28,7 @@
 use crate::client::{ClawAuth, ClawClient, ClawResponse};
 use crate::gateway_client::{GatewayClient, GatewayResponse};
 use crate::protocol::{DetectedProtocol, ProtocolCommand, ProtocolEvent, ProtocolHistoryMessage};
+use crate::types::OpenClawSendMethod;
 use futures_util::StreamExt;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -54,7 +55,19 @@ impl ClawConnectionManager {
     /// Open a connection with an optional OpenClaw authentication config.
     ///
     /// `auth` is only used when the remote speaks OpenClaw JSON-RPC.
+    /// Defaults to `OpenClawSendMethod::SessionsSend` for OpenClaw dialect.
     pub fn connect_with_auth(url: &str, auth: Option<ClawAuth>) -> Self {
+        Self::connect_with_options(url, auth, OpenClawSendMethod::SessionsSend)
+    }
+
+    /// Open a connection with auth and an explicit OpenClaw send-method choice.
+    ///
+    /// `send_method` is only used when the remote speaks OpenClaw JSON-RPC.
+    pub fn connect_with_options(
+        url: &str,
+        auth: Option<ClawAuth>,
+        send_method: OpenClawSendMethod,
+    ) -> Self {
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<ManagerCommand>();
         let (resp_tx, resp_rx) = std::sync::mpsc::channel::<ProtocolEvent>();
 
@@ -67,7 +80,7 @@ impl ClawConnectionManager {
                     return;
                 }
             };
-            rt.block_on(run_manager(&url, auth, cmd_rx, resp_tx));
+            rt.block_on(run_manager(&url, auth, send_method, cmd_rx, resp_tx));
         });
 
         Self {
@@ -116,6 +129,7 @@ enum ManagerCommand {
 async fn run_manager(
     url: &str,
     auth: Option<ClawAuth>,
+    send_method: OpenClawSendMethod,
     cmd_rx: Receiver<ManagerCommand>,
     resp_tx: Sender<ProtocolEvent>,
 ) {
@@ -132,7 +146,7 @@ async fn run_manager(
             run_gateway_manager(url, cmd_rx, resp_tx).await;
         }
         DetectedProtocol::OpenClawJsonRpc => {
-            run_openclaw_manager(url, auth, cmd_rx, resp_tx).await;
+            run_openclaw_manager(url, auth, send_method, cmd_rx, resp_tx).await;
         }
     }
 }
@@ -259,6 +273,7 @@ fn translate_gateway_response(
 async fn run_openclaw_manager(
     url: &str,
     auth: Option<ClawAuth>,
+    send_method: OpenClawSendMethod,
     cmd_rx: Receiver<ManagerCommand>,
     resp_tx: Sender<ProtocolEvent>,
 ) {
@@ -291,10 +306,18 @@ async fn run_openclaw_manager(
                 session_key,
                 message,
             }) => {
-                // OpenClaw JSON-RPC is the external-fallback dialect; it always
-                // uses sessions.send. Gateway WebSocket (the native Clarity
-                // protocol) uses chat.send in its own manager branch.
-                client.send_session_message(&session_key, &message);
+                // OpenClaw JSON-RPC is the external-fallback dialect. Some
+                // Gateways expect `sessions.send`, others (KimiClaw/ACP-style)
+                // expect `chat.send`. The send_method is configured per
+                // connection; Gateway WebSocket uses chat.send in its own branch.
+                match send_method {
+                    OpenClawSendMethod::ChatSend => {
+                        client.send_message(&session_key, &message);
+                    }
+                    OpenClawSendMethod::SessionsSend => {
+                        client.send_session_message(&session_key, &message);
+                    }
+                }
             }
             ManagerCommand::Protocol(ProtocolCommand::GetHistory { session_key }) => {
                 client.fetch_history(&session_key);
@@ -357,11 +380,7 @@ fn translate_openclaw_response(resp: ClawResponse) -> Vec<ProtocolEvent> {
                 tracing::debug!(method = ?method, payload = ?payload, "OpenClaw ok reply ignored");
             } else {
                 let method_str = method.as_deref().unwrap_or("unknown");
-                let err = payload
-                    .get("error")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| payload.get("message").and_then(|v| v.as_str()))
-                    .map(|s| s.to_string());
+                let err = extract_openclaw_error_message(&payload);
                 let detail = if payload.is_null()
                     || payload.as_object().map(|o| o.is_empty()).unwrap_or(false)
                 {
@@ -369,6 +388,11 @@ fn translate_openclaw_response(resp: ClawResponse) -> Vec<ProtocolEvent> {
                 } else {
                     payload.to_string()
                 };
+                tracing::debug!(
+                    method = method_str,
+                    payload = %detail,
+                    "OpenClaw error reply"
+                );
                 out.push(ProtocolEvent::Error(format!(
                     "OpenClaw {} failed: {}",
                     method_str,
@@ -429,6 +453,31 @@ fn translate_openclaw_response(resp: ClawResponse) -> Vec<ProtocolEvent> {
         }
     }
     out
+}
+
+/// Try to extract a human-readable error message from an OpenClaw error payload.
+///
+/// Handles several common shapes:
+/// - `{ "error": "string" }`
+/// - `{ "error": { "message": "string" } }`
+/// - `{ "message": "string" }`
+fn extract_openclaw_error_message(payload: &serde_json::Value) -> Option<String> {
+    payload
+        .get("error")
+        .and_then(|v| v.as_str().map(String::from))
+        .or_else(|| {
+            payload
+                .get("error")
+                .and_then(|v| v.get("message"))
+                .and_then(|m| m.as_str())
+                .map(String::from)
+        })
+        .or_else(|| {
+            payload
+                .get("message")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
 }
 
 /// Try to extract human-readable text from an OpenClaw Gateway payload.
@@ -521,5 +570,47 @@ mod tests {
         let events = translate_openclaw_response(ClawResponse::Error("boom".into()));
         assert_eq!(events.len(), 1);
         assert!(matches!(&events[0], ProtocolEvent::Error(e) if e == "boom"));
+    }
+
+    #[test]
+    fn translate_openclaw_reply_error_extracts_string_error() {
+        let events = translate_openclaw_response(ClawResponse::Reply {
+            id: "1".into(),
+            ok: false,
+            method: Some("sessions.send".into()),
+            payload: serde_json::json!({ "error": "session not found" }),
+        });
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(&events[0], ProtocolEvent::Error(e) if e == "OpenClaw sessions.send failed: session not found")
+        );
+    }
+
+    #[test]
+    fn translate_openclaw_reply_error_extracts_nested_message() {
+        let events = translate_openclaw_response(ClawResponse::Reply {
+            id: "2".into(),
+            ok: false,
+            method: Some("sessions.send".into()),
+            payload: serde_json::json!({
+                "error": { "code": -32000, "message": "invalid session key" }
+            }),
+        });
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(&events[0], ProtocolEvent::Error(e) if e == "OpenClaw sessions.send failed: invalid session key")
+        );
+    }
+
+    #[test]
+    fn translate_openclaw_reply_error_falls_back_to_payload() {
+        let events = translate_openclaw_response(ClawResponse::Reply {
+            id: "3".into(),
+            ok: false,
+            method: Some("sessions.send".into()),
+            payload: serde_json::Value::Null,
+        });
+        assert_eq!(events.len(), 1);
+        assert!(matches!(&events[0], ProtocolEvent::Error(e) if e.contains("empty error payload")));
     }
 }

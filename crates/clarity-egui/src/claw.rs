@@ -30,7 +30,7 @@ use std::sync::{Arc, RwLock};
 
 // Re-export UI-agnostic types from the shared crate so existing panels can keep
 // using `crate::claw::ClawType` / `crate::claw::ClawConnection`.
-pub use clarity_openclaw::types::{ClawConnection, ClawProtocol, ClawType};
+pub use clarity_openclaw::types::{ClawConnection, ClawProtocol, ClawType, OpenClawSendMethod};
 
 /// A single message entry returned as part of a Claw history response.
 #[derive(Clone, Debug)]
@@ -58,7 +58,11 @@ pub enum ClawEvent {
     /// A streamed `clarity_wire::WireMessage` payload (Gateway native protocol).
     WirePayload(serde_json::Value),
     /// History response.
-    History(Vec<ClawHistoryMessage>),
+    History {
+        /// Session key the history belongs to, when known.
+        session_key: Option<String>,
+        messages: Vec<ClawHistoryMessage>,
+    },
     /// Pairing result (OpenClaw only).
     PairingResult {
         /// Paired device id.
@@ -82,6 +86,8 @@ pub enum ClawEvent {
     RoleContextSynced {
         /// Role that was synchronized.
         role_id: String,
+        /// Session key the events belong to, when known.
+        session_key: Option<String>,
         /// Missing events.
         events: Vec<clarity_contract::ClawContextEvent>,
         /// Cursor for the next sync request.
@@ -187,15 +193,19 @@ fn map_protocol_event(event: clarity_openclaw::ProtocolEvent) -> Vec<ClawEvent> 
             events.push(ClawEvent::Done);
         }
         ProtocolEvent::History(messages) => {
-            events.push(ClawEvent::History(
-                messages
+            events.push(ClawEvent::History {
+                // ProtocolEvent currently does not carry the originating
+                // session_key; the egui layer falls back to the active Claw
+                // session when this is None.
+                session_key: None,
+                messages: messages
                     .into_iter()
                     .map(|m| ClawHistoryMessage {
                         role: m.role,
                         content: m.content,
                     })
                     .collect(),
-            ));
+            });
         }
         ProtocolEvent::PairingResult {
             device_id,
@@ -227,6 +237,9 @@ fn map_protocol_event(event: clarity_openclaw::ProtocolEvent) -> Vec<ClawEvent> 
         } => {
             events.push(ClawEvent::RoleContextSynced {
                 role_id,
+                // ProtocolEvent currently does not include a session_key; the
+                // egui layer routes by role_id when this is None.
+                session_key: None,
                 events: sync_events,
                 next_cursor,
                 online_devices,
@@ -429,6 +442,49 @@ impl DeviceState {
         }
     }
 
+    /// Returns true if `device_id` belongs to `role` in the current snapshot.
+    ///
+    /// Used by the UI to decide whether a user-selected device is still valid
+    /// for the active Claw session's role, or whether to reset the selection to
+    /// the best available instance.
+    pub fn has_device_in_role(&self, role: &str, device_id: &str) -> bool {
+        let guard = match self.roles.read() {
+            Ok(g) => g,
+            Err(_) => return false,
+        };
+        guard
+            .get(role)
+            .map(|devices| devices.iter().any(|d| d.id == device_id))
+            .unwrap_or(false)
+    }
+
+    /// Return the first session-key override found for `role`, if any.
+    ///
+    /// Remote OpenClaw connections may specify a custom session key (e.g. the
+    /// remote's existing main session UUID) that should be used instead of the
+    /// default `agent:main:<role>` key.
+    pub fn session_key_for_role(&self, role: &str) -> Option<String> {
+        let guard = match self.roles.read() {
+            Ok(g) => g,
+            Err(_) => return None,
+        };
+        guard
+            .get(role)
+            .and_then(|devices| devices.iter().find_map(|d| d.session_key.clone()))
+    }
+
+    /// Set the session-key override for a device by id.
+    pub fn set_session_key(&self, device_id: &str, session_key: String) {
+        if let Ok(mut guard) = self.roles.write() {
+            for devices in guard.values_mut() {
+                if let Some(device) = devices.iter_mut().find(|d| d.id == device_id) {
+                    device.session_key = Some(session_key);
+                    break;
+                }
+            }
+        }
+    }
+
     /// Add a device with its connection info.
     fn register(&self, device: BotInstance, conn: ClawConnection) {
         if let Ok(mut guard) = self.roles.write() {
@@ -535,9 +591,16 @@ pub fn discover(settings_connections: &[OpenClawConnection]) -> DeviceState {
                 status: map_status(record.info.status),
                 version: record.info.version,
                 last_backup: String::new(),
+                session_key: None,
             },
             record.connection,
         );
+    }
+    // Allow the env-var remote connection to specify a custom session key.
+    if let Ok(remote_session_key) = std::env::var("OPENCLAW_REMOTE_SESSION_KEY") {
+        if !remote_session_key.is_empty() {
+            state.set_session_key("openclaw-remote-env", remote_session_key);
+        }
     }
 
     // Source 4: User-configured remote OpenClaw connections from settings.
@@ -557,6 +620,7 @@ pub fn discover(settings_connections: &[OpenClawConnection]) -> DeviceState {
                 status: BotStatus::Online,
                 version: env!("CARGO_PKG_VERSION").into(),
                 last_backup: String::new(),
+                session_key: None,
             },
             ClawConnection {
                 claw_type: ClawType::ZeroClaw,
@@ -567,6 +631,7 @@ pub fn discover(settings_connections: &[OpenClawConnection]) -> DeviceState {
                 host: "127.0.0.1".into(),
                 auth_mode: None,
                 device_token: None,
+                send_method: OpenClawSendMethod::SessionsSend,
             },
         );
     }
@@ -602,6 +667,14 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
             OpenClawAuthMode::TokenWithDevice => "token_with_device".into(),
             OpenClawAuthMode::DevicePaired => "device_paired".into(),
         });
+        let send_method = match conn.send_method {
+            crate::settings::OpenClawSendMethod::SessionsSend => {
+                clarity_openclaw::types::OpenClawSendMethod::SessionsSend
+            }
+            crate::settings::OpenClawSendMethod::ChatSend => {
+                clarity_openclaw::types::OpenClawSendMethod::ChatSend
+            }
+        };
         state.register(
             BotInstance {
                 id: id.clone(),
@@ -611,6 +684,7 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
                 status: BotStatus::Online,
                 version: env!("CARGO_PKG_VERSION").into(),
                 last_backup: String::new(),
+                session_key: conn.session_key.clone(),
             },
             ClawConnection {
                 claw_type: ClawType::OpenClaw,
@@ -622,6 +696,7 @@ fn discover_settings_openclaw(state: &DeviceState, connections: &[OpenClawConnec
                 host,
                 auth_mode,
                 device_token: GuiSettings::resolve_api_key(&conn.device_token),
+                send_method,
             },
         );
     }
@@ -661,6 +736,7 @@ fn discover_saved_openclaw(state: &DeviceState) {
             status: BotStatus::Online,
             version: env!("CARGO_PKG_VERSION").into(),
             last_backup: String::new(),
+            session_key: None,
         },
         ClawConnection {
             claw_type: ClawType::OpenClaw,
@@ -671,6 +747,7 @@ fn discover_saved_openclaw(state: &DeviceState) {
             host,
             auth_mode: Some("device_paired".into()),
             device_token: None,
+            send_method: OpenClawSendMethod::SessionsSend,
         },
     );
 }
@@ -712,6 +789,7 @@ fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
             device_id: hostname.into(),
             role: "operator".into(),
             status: BotStatus::Online,
+            session_key: None,
             version: env!("CARGO_PKG_VERSION").into(),
             last_backup: String::new(),
         },
@@ -724,6 +802,7 @@ fn discover_zeroclaw(state: &DeviceState, hostname: &str) {
             host: hostname.into(),
             auth_mode: None,
             device_token: None,
+            send_method: OpenClawSendMethod::SessionsSend,
         },
     );
 }
@@ -745,7 +824,7 @@ fn local_hostname() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::OpenClawAuthMode;
+    use crate::settings::{OpenClawAuthMode, OpenClawSendMethod};
 
     fn sample_settings_connection() -> OpenClawConnection {
         OpenClawConnection {
@@ -755,6 +834,8 @@ mod tests {
             auth_mode: OpenClawAuthMode::TokenWithDevice,
             enabled: true,
             device_token: None,
+            session_key: Some("custom:main:operator".into()),
+            send_method: OpenClawSendMethod::SessionsSend,
         }
     }
 
@@ -767,6 +848,7 @@ mod tests {
             status,
             version: "0.0.0".into(),
             last_backup: String::new(),
+            session_key: None,
         }
     }
 
@@ -780,6 +862,7 @@ mod tests {
             host: id.into(),
             auth_mode: None,
             device_token: None,
+            send_method: crate::claw::OpenClawSendMethod::SessionsSend,
         }
     }
 
@@ -933,6 +1016,26 @@ mod tests {
     }
 
     #[test]
+    fn test_discover_settings_propagates_session_key() {
+        let mut conn = sample_settings_connection();
+        conn.session_key = Some("467adc23-03cb-42b5-923e-4824c22ead4f".into());
+        let state = discover(&[conn]);
+        let snapshot = state.snapshot();
+        let bot = snapshot
+            .iter()
+            .find(|b| b.name == "Gray-Cloud")
+            .expect("Gray-Cloud bot registered");
+        assert_eq!(
+            bot.session_key.as_deref(),
+            Some("467adc23-03cb-42b5-923e-4824c22ead4f")
+        );
+        assert_eq!(
+            state.session_key_for_role("operator").as_deref(),
+            Some("467adc23-03cb-42b5-923e-4824c22ead4f")
+        );
+    }
+
+    #[test]
     fn test_health_score_prefers_lower_failures() {
         let state = DeviceState::default();
         state.register(bot("a", "operator", BotStatus::Online), conn("a"));
@@ -1058,7 +1161,11 @@ mod tests {
         ]));
         assert_eq!(events.len(), 1);
         match &events[0] {
-            ClawEvent::History(messages) => {
+            ClawEvent::History {
+                session_key,
+                messages,
+            } => {
+                assert!(session_key.is_none());
                 assert_eq!(messages.len(), 2);
                 assert_eq!(messages[0].role, "user");
                 assert_eq!(messages[0].content, "hello");

@@ -20,6 +20,16 @@ pub enum ClawProtocol {
     GatewayWebSocket,
 }
 
+/// Which JSON-RPC send method an OpenClaw connection should use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum OpenClawSendMethod {
+    /// `sessions.send` with `key` — typical remote OpenClaw path.
+    #[default]
+    SessionsSend,
+    /// `chat.send` with `sessionKey` — KimiClaw-local/ACP-style path.
+    ChatSend,
+}
+
 /// Runtime status of a discovered device.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeviceStatus {
@@ -66,6 +76,8 @@ pub struct ClawConnection {
     pub auth_mode: Option<String>,
     /// Optional device-specific token for paired-device auth.
     pub device_token: Option<String>,
+    /// Which OpenClaw JSON-RPC send method to use for chat messages.
+    pub send_method: OpenClawSendMethod,
 }
 
 /// A discovered device together with its connection parameters.

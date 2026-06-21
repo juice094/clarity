@@ -167,6 +167,11 @@ pub struct BotInstance {
     pub status: BotStatus,
     pub version: String,
     pub last_backup: String,
+    /// Optional session key override for this bot's role.
+    ///
+    /// When set, new Claw sessions for this role use this key instead of the
+    /// default `agent:main:<role>` key.
+    pub session_key: Option<String>,
 }
 
 /// Lifecycle status variants for bot.

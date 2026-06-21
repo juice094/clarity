@@ -384,6 +384,20 @@ pub enum RightRailCard {
     Context,
 }
 
+/// New-session mode selected by the Work/Chat toggle in the left navigation tree.
+///
+/// This only affects the context assigned to sessions created via the
+/// "New Session / New Task" row; work-template and Claw sessions are unaffected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NewSessionMode {
+    /// Create a plain chat session.
+    #[default]
+    Chat,
+    /// Create a work/task session.
+    Work,
+}
+
 /// IDE-style right rail panel for the Pretext layout.
 ///
 /// S6 Phase D: the right rail is now an IDE-style compressed panel that shows
@@ -545,6 +559,9 @@ pub struct ViewState {
     /// Whether the left expanded list is open (S6).
     #[serde(default)]
     pub left_rail_expanded: bool,
+    /// New-session mode selected by the Work/Chat toggle in the left nav tree.
+    #[serde(default)]
+    pub new_session_mode: NewSessionMode,
     /// Pretext right rail section (S6).
     #[serde(default)]
     pub right_rail: RightRailSection,
