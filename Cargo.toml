@@ -45,6 +45,34 @@ uuid = { version = "1", features = ["v4", "v7"] }
 futures = "0.3"
 tokio-util = "0.7"
 
+# Syncthing-rust transitive dependencies (used by third_party/syncthing-rust).
+# These are defined here so path-dependent syncthing crates can use workspace
+# inheritance while being built inside the Clarity workspace.
+hex = "0.4"
+rand = "0.8"
+sha2 = "0.10"
+bytes = "1.5"
+dashmap = "5.5"
+notify = "8"
+filetime = "0.2"
+similar = "2.6"
+async-recursion = "1.0"
+prost = "0.12"
+prost-build = "0.12"
+parking_lot = "0.12"
+tempfile = "3"
+rayon = "1.10"
+num_cpus = "1.16"
+ring = "0.17"
+rustls = "0.23"
+rustls-pemfile = "2.0"
+socket2 = "0.5"
+walkdir = "2"
+tracing-appender = "0.2"
+tokio-rustls = "0.26"
+tokio-tungstenite = "0.24"
+criterion = { version = "0.8", features = ["html_reports", "async_tokio"] }
+
 # TUI dependencies
 ratatui = "0.30"
 crossterm = "0.29"

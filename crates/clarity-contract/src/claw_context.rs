@@ -21,8 +21,11 @@ impl RoleContextId {
     }
 
     /// Syncthing folder id used when this role is synchronized as a folder.
+    ///
+    /// Uses an underscore separator so the id is safe to use in filenames on
+    /// Windows (colons are reserved).
     pub fn syncthing_folder_id(&self) -> String {
-        format!("claw:role:{}", self.0)
+        format!("claw_role_{}", self.0)
     }
 
     /// Local directory name component for this role's mesh data.
@@ -165,7 +168,7 @@ mod tests {
     #[test]
     fn role_context_id_syncthing_folder() {
         let id = RoleContextId::new("operator");
-        assert_eq!(id.syncthing_folder_id(), "claw:role:operator");
+        assert_eq!(id.syncthing_folder_id(), "claw_role_operator");
         assert_eq!(id.local_dir_name(), "role-operator");
     }
 

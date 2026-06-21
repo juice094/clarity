@@ -13,10 +13,12 @@
 
 pub mod gateway_transport;
 pub mod merger;
+pub mod syncthing_transport;
 pub mod transport;
 
 pub use gateway_transport::GatewaySyncTransport;
 pub use merger::{merge_events, merge_into};
+pub use syncthing_transport::SyncthingTransport;
 pub use transport::{
     MeshTransportError, NullTransport, Result, RoleContextTransport, TransportHandle,
 };

@@ -12,6 +12,11 @@ description = "OpenClaw / KimiClaw Gateway client, device identity and discovery
 # Clarity contracts
 clarity-contract = { path = "../clarity-contract" }
 
+# Syncthing BEP transport for offline-capable role-context sync.
+# ponytail: path dependency on git submodule; switch to crates.io once published.
+syncthing-core = { path = "../../third_party/syncthing-rust/crates/syncthing-core" }
+syncthing-sync = { path = "../../third_party/syncthing-rust/crates/syncthing-sync" }
+
 # Async / WebSocket
 tokio = { workspace = true }
 tokio-tungstenite = { version = "0.24", features = ["__rustls-tls"] }
@@ -22,6 +27,9 @@ thiserror = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+# Block transfer for syncthing-rust integration
+bytes = { workspace = true }
 
 # Crypto / device identity
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
