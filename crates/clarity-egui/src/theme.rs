@@ -1104,7 +1104,7 @@ fn build_font_definitions(include_system_cjk: bool) -> egui::FontDefinitions {
         .families
         .entry(egui::FontFamily::Proportional)
         .or_default()
-        .extend(["inter".into(), "noto-sc".into()]);
+        .extend(["inter".into(), "noto-sc".into(), "lucide".into()]);
 
     fonts
         .families

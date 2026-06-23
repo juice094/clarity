@@ -30,6 +30,7 @@ pub fn window_control_button(
 
     // 1. Reserve 36×36 in the parent's flow. RTL-safe.
     let (_id, rect) = ui.allocate_space(desired_size);
+
     // Clip to parent bounds to prevent hitbox overflow when parent is narrower than 36 px.
     let rect = rect.intersect(ui.max_rect());
 
@@ -61,10 +62,13 @@ pub fn window_control_button(
         .corner_radius(egui::CornerRadius::same(theme.radius_sm.round() as u8))
         .inner_margin(egui::Margin::symmetric(margin as i8, margin as i8))
         .show(&mut child_ui, |ui| {
-            ui.label(
-                egui::RichText::new(icon)
-                    .font(theme.font_icon(icon_size))
-                    .color(color),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(icon)
+                        .font(theme.font_icon(icon_size))
+                        .color(color),
+                )
+                .selectable(false),
             );
         });
 

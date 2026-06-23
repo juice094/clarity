@@ -33,19 +33,27 @@ pub fn interactive_row<R>(
     let desired_size = egui::vec2(ui.available_width(), theme.size_nav_row_h);
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-    let fill = if is_selected || response.hovered() {
-        theme.surface_strong
+    // Prevent text/icons inside the row from being selectable or stealing hover.
+    // This keeps the row behaving like a single button rather than a floating
+    // text layer above the background.
+    let mut style: egui::Style = (**ui.style()).clone();
+    style.interaction.selectable_labels = false;
+    let style = std::sync::Arc::new(style);
+
+    // Screenshot-style selection/hover: accent-tinted rounded background.
+    // Normal state is transparent so the sidebar surface shows through.
+    let fill = if is_selected {
+        theme.accent.gamma_multiply(0.18)
+    } else if response.hovered() {
+        theme.accent.gamma_multiply(0.10)
     } else {
-        theme.surface
+        egui::Color32::TRANSPARENT
     };
-    let stroke = if is_selected {
-        egui::Stroke::new(1.5, theme.accent)
-    } else {
-        egui::Stroke::NONE
-    };
+    let stroke = egui::Stroke::NONE;
 
     let inner = ui
-        .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), move |ui| {
+            ui.set_style(style);
             let frame_resp = egui::Frame::new()
                 .fill(fill)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))

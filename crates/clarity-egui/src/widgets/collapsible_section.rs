@@ -44,12 +44,12 @@ pub fn collapsible_section<R>(
                             ui.spacing_mut().item_spacing.x = theme.space_4;
                             ui.label(
                                 egui::RichText::new(chevron)
-                                    .size(theme.text_sm)
+                                    .font(theme.font_icon(theme.text_sm))
                                     .color(theme.text_muted),
                             );
                             ui.label(
                                 egui::RichText::new(icon)
-                                    .size(theme.text_sm)
+                                    .font(theme.font_icon(theme.text_sm))
                                     .color(theme.text_dim),
                             );
                         });
