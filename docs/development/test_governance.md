@@ -1,7 +1,7 @@
 ---
 title: Clarity 项目测试治理框架
 category: Document
-date: 2026-05-16
+date: 2026-06-25
 tags: [document]
 ---
 
@@ -93,15 +93,15 @@ async fn test_deepseek_live_api() {}
 
 ### 3.1 使用方式
 
-```bash
+```powershell
 # 验收单个 crate
-./scripts/verify.sh clarity-core
+.\scripts\verify.ps1 clarity-core
 
 # 验收全部
-./scripts/verify.sh --all
+.\scripts\verify.ps1 --all
 
 # 生成报告
-./scripts/verify.sh --report
+.\scripts\verify.ps1 --all -Report
 ```
 
 ### 3.2 验收脚本标准（必须实现）
@@ -140,10 +140,10 @@ async fn test_deepseek_live_api() {}
 - [ ] 新增代码覆盖率 >= 70%
 
 ### 验证命令
-```bash
-cd Desktop/clarity
+```powershell
+cd C:\Users\22414\dev\clarity
 cargo test -p clarity-xxx
-cargo tarpaulin -p clarity-xxx --out Stdout
+cargo clippy -p clarity-xxx -- -D warnings
 ```
 
 ### 报告格式
@@ -167,10 +167,10 @@ cargo tarpaulin -p clarity-xxx --out Stdout
 
 | Crate | 行覆盖率 | 测试数 | 状态 |
 |-------|---------|--------|------|
-| clarity-core | ??% | ?? | 待测量 |
-| clarity-memory | ??% | 33 | 待测量 |
-| clarity-gateway | ??% | 5 | 待测量 |
-| clarity-tui | 0% | 0 | 需补充 |
+| clarity-core | ??% | 603+ | 待测量 |
+| clarity-memory | ??% | 97 | 待测量 |
+| clarity-gateway | ??% | 116 | 待测量 |
+| clarity-tui | ??% | 46 | 待测量 |
 
 ### 5.2 目标
 
@@ -216,9 +216,9 @@ set -e
 
 echo "=== Running pre-push checks ==="
 
-cargo fmt -- --check
-cargo clippy --workspace -- -D warnings
-cargo test --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+cargo test --workspace --lib --exclude clarity-slint
 
 echo "=== All checks passed ==="
 ```
@@ -237,8 +237,8 @@ echo "=== All checks passed ==="
 | `pub fn` doc 覆盖率 | ~92% | **≥90%** | `cargo doc --no-deps 2>&1 \| grep "missing"` |
 | clippy warning | 0 | **0** | `cargo clippy --workspace --lib --bins --tests -D warnings` |
 | `unsafe` 数量 | 1 处 | **禁止新增** | `grep -rn "unsafe" crates/ --include="*.rs" \| grep -v "test"` |
-| 测试通过率 | 515/0 | **100%** | `cargo test --workspace --lib` |
-| 前端测试 | 30/0 | **100%** | `cd crates/clarity-tauri/frontend && npm test` |
+| 测试通过率 | 1554/0 | **100%** | `cargo test --workspace --lib --exclude clarity-slint` |
+| 二进制测试 | 275/0 | **100%** | `cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` |
 
 ### 8.2 `unwrap()` / `expect()` 分类策略
 
@@ -255,13 +255,12 @@ echo "=== All checks passed ==="
 
 ```bash
 # Rust 侧
-cargo test --workspace --lib
-cargo clippy --workspace --lib --bins --tests -D warnings
+cargo test --workspace --lib --exclude clarity-slint
+cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2
+cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
 cargo fmt --all -- --check
-cargo doc --no-deps
-
-# 前端侧
-cd crates/clarity-tauri/frontend && npm test
+cargo doc --workspace --no-deps --exclude clarity-slint
 
 # 安全检查（本地预检）
 cargo audit --deny unsound --deny yanked
@@ -286,5 +285,5 @@ cargo audit --deny unsound --deny yanked
 ---
 
 **生效日期**：立即生效  
-**最后更新**：2026-04-26  
+**最后更新**：2026-06-25  
 **负责人**：主控会话（人类监督）

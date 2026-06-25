@@ -313,32 +313,46 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Backend["Backend Crates"]
+    subgraph Backend["Backend / Infrastructure Crates"]
         direction TB
-        CORE[clarity-core<br/>Agent loop / ReAct / Plan]
+        CORE[clarity-core<br/>Agent loop / ReAct / Plan<br/>+ src/background/]
         MEM[clarity-memory<br/>SQLite / BM25 / Vector]
         LLM[clarity-llm<br/>Provider / GGUF]
         MCP[clarity-mcp<br/>stdio / SSE / WS]
         TOOL[clarity-tools<br/>File / Shell / Web]
-        SUB[clarity-subagents<br/>并行调度]
-        BG[clarity-background<br/>Cron / Task queue]
+        CHAN[clarity-channels<br/>WeChat iLink / Webhook]
+        SEC[clarity-secrets<br/>enc2: secret store]
+        OPEN[clarity-openclaw<br/>Gateway WS client]
+        TEL[clarity-telemetry<br/>WideEvent / traces]
     end
 
-    subgraph Contract["Contract Crates"]
+    subgraph Contract["Contract / Persistence Crates"]
         direction TB
         CONTRACT[clarity-contract<br/>LlmProvider / Tool / AgentError]
         WIRE[clarity-wire<br/>WireMessage / SPMC]
-        THREAD[clarity-thread-store<br/>ThreadStore trait]
         ROLLOUT[clarity-rollout<br/>JSONL event log]
+        THREAD[clarity-thread-store<br/>ThreadStore trait]
     end
 
-    subgraph Frontend["Frontend Crates"]
+    subgraph CrossCutting["Cross-Cutting Consumers"]
+        direction TB
+        SUB[clarity-subagents<br/>consumes core]
+    end
+
+    subgraph Frontend["Frontend / Entry Crates"]
         direction LR
-        EGUI[clarity-egui<br/>Desktop GUI<br/>eframe 0.31]
-        TUI[clarity-tui<br/>Terminal UI<br/>ratatui 0.30]
-        GW[clarity-gateway<br/>Web IDE<br/>Axum 0.7 + WS]
+        EGUI[clarity-egui<br/>Desktop GUI]
+        TUI[clarity-tui<br/>Terminal UI]
+        GW[clarity-gateway<br/>Web IDE]
         CLAW[clarity-claw<br/>System Tray]
         HEAD[clarity-headless<br/>CLI / CI]
+        MOB[clarity-mobile-core<br/>Mobile FFI]
+    end
+
+    subgraph Experimental["Experimental / Utility"]
+        direction LR
+        SLINT[clarity-slint<br/>Slint GUI]
+        PROXY[clarity-anthropic-proxy<br/>Anthropic proxy]
     end
 
     CORE -->|produces| WIRE
@@ -349,20 +363,29 @@ flowchart TB
     CORE -->|uses| LLM
     CORE -->|uses| MCP
     CORE -->|uses| TOOL
-    CORE -->|uses| SUB
-    CORE -->|uses| BG
+    CORE -->|uses| CHAN
+    CORE -->|uses| SEC
+    CORE -->|uses| OPEN
+    CORE -->|uses| TEL
+
+    SUB -->|consumes| CORE
 
     WIRE -->|consumed by| EGUI
     WIRE -->|consumed by| TUI
     WIRE -->|consumed by| GW
     WIRE -->|consumed by| CLAW
     WIRE -->|consumed by| HEAD
+    WIRE -->|consumed by| MOB
 
     EGUI -->|also uses| CONTRACT
     TUI -->|also uses| CONTRACT
     GW -->|also uses| CONTRACT
     CLAW -->|also uses| CONTRACT
     HEAD -->|also uses| CONTRACT
+    MOB -->|also uses| CONTRACT
+
+    SLINT -->|uses| CONTRACT
+    SLINT -->|uses| WIRE
 
     CONTRACT -.->|zero internal deps| Backend
     CONTRACT -.->|zero internal deps| Frontend

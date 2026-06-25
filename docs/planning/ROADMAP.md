@@ -1,7 +1,7 @@
 ---
 title: Clarity Roadmap
 category: Roadmap
-date: 2026-05-18
+date: 2026-06-25
 tags: [roadmap, planning]
 ---
 
@@ -158,8 +158,8 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 | cargo audit warnings | ⚠️ 待确认 | 需重新运行 `cargo audit` 确认当前警告来源；`.cargo/audit.toml` 已配置忽略规则 |
 | S3.3 Settings 单源化 | 🔄 进行中 | llm 层已改造（`build_provider` 公开，`ACTIVE_CONFIG` 标 DEPRECATED）；egui 层 `provider_tab.rs` 仍写全局缓存，阻塞于并行 session 暂停协议 |
 | Discord/Telegram CVE | ❌ 已禁用 | 等上游修复 |
-| Mobile app | ❌ 已否决 | Hard Veto 禁止（项目广度 > 5 核心工具） |
-| `clarity-tauri` 冻结 | ⏸️ 冻结 | 停止新功能开发，仅维护现有代码至 egui 主控成熟 |
+| Mobile FFI 核心 | 🔄 进行中 | `clarity-mobile-core` 已落地；完整 Android/iOS UI 仍在路线图 |
+| `clarity-tauri` | 🗃️ 已归档 | 被 workspace 排除，禁止修改 |
 | Pretext 排版引擎（重型 TeX 移植） | ❌ 已否决 | 重型移植工程，不入主 repo 路线图；可作为个人探索项目 |
 | Pretext UI 设计哲学（轻型采纳） | ✅ 已采纳 | 见 [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)：S1+S2 已完成 Phase 0.5+1（图标即字符、Chrome StripBuilder），不重做布局引擎 |
 
@@ -168,10 +168,10 @@ Bridge 远程控制、Vector Search (`sqlite-vec`)、Sandbox (`landlock`)、Plug
 ## 质量标准
 
 ```bash
-cargo test --workspace --lib      # 全绿
-cargo clippy --workspace --lib --bins --tests -- -D warnings  # 零 warning
+cargo test --workspace --lib --exclude clarity-slint      # 全绿
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings  # 零 warning
 cargo fmt --all -- --check        # 格式检查通过
-cargo audit                       # 无高危漏洞
+cargo audit --deny unsound --deny yanked  # 无高危漏洞
 ```
 
 ---

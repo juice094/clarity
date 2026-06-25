@@ -1,7 +1,7 @@
 ---
 title: 开发环境搭建与验证
 category: Development
-date: 2026-06-13
+date: 2026-06-25
 tags: [development, setup, build, test]
 ---
 
@@ -61,10 +61,10 @@ cargo audit --deny unsound --deny yanked
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1087 | 0 | 8 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 139 | 0 | 0 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1554 | 0 | 0 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 275 | 0 | 2 |
 | `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
-| `cargo test -p clarity-integration-tests --lib` | 16 | 0 | 0 |
+| `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
 | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
 | `cargo fmt --all -- --check` | pass | 0 | - |
 
@@ -138,4 +138,4 @@ cargo run -p clarity-egui --features cuda
 
 ---
 
-*最后更新：2026-06-13*
+*最后更新：2026-06-25*

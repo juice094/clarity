@@ -26,12 +26,12 @@
 //! ```
 
 use axum::{
+    Json, Router,
     extract::State,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use clarity_contract::{LlmProvider, Message};
 use clarity_core::agent::tool_parser::{self, ToolFormat};
@@ -82,11 +82,7 @@ fn extract_system_text(sys: &Option<SystemContent>) -> Option<String> {
                 .map(|b| b.text.as_str())
                 .collect::<Vec<_>>()
                 .join("\n");
-            if text.is_empty() {
-                None
-            } else {
-                Some(text)
-            }
+            if text.is_empty() { None } else { Some(text) }
         }
         None => None,
     }
@@ -125,8 +121,10 @@ enum AnthropicBlock {
         is_error: Option<bool>,
     },
     #[serde(rename = "thinking")]
+    #[allow(dead_code)]
     Thinking { thinking: String },
     #[serde(rename = "redacted_thinking")]
+    #[allow(dead_code)]
     RedactedThinking { data: String },
     /// Catch-all for unknown content block types (server_tool_use, search_result, etc.)
     #[serde(other)]
@@ -289,7 +287,7 @@ async fn log_requests(req: Request<axum::body::Body>, next: Next) -> impl IntoRe
         "<< {} {} | {:?}",
         method,
         uri,
-        headers.get("x-api-key").map(|v| "***")
+        headers.get("x-api-key").map(|_| "***")
     );
     let response = next.run(req).await;
     info!(">> {} {} -> {}", method, uri, response.status());
@@ -324,7 +322,10 @@ async fn messages_handler(State(state): State<Arc<AppState>>, body: String) -> i
     let prompt = build_prompt(&req.messages, &system);
     debug!("Prompt: {} chars, {} tools", prompt.len(), req.tools.len());
 
-    // Stateless — each request is self-contained
+    // Stateless — each request creates a fresh DeepSeek session to
+    // prevent context leakage between Claude Code conversations.
+    // Both reset_conversation_context AND capture/restore ensure
+    // no stale session state survives.
     state.provider.reset_conversation_context();
 
     let clarity_messages = vec![

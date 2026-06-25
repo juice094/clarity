@@ -7,6 +7,8 @@ tags: [plan, ui, planning]
 
 # Pretext UI Evolution Plan — Grid, Lines, State, and Filesystem-Substrate Composition
 
+> **历史归档**：本计划书为 2026-05-12 的 Pretext UI 演进计划，其中 S1/S2 已完成并落地；后续阶段已在 `clarity-egui` 中实现。当前 Pretext 状态见 [`../../AGENTS.md`](../../AGENTS.md) §11.1 与 [`../../crates/clarity-egui/EGUI_LAYOUT_DEBUG.md`](../../crates/clarity-egui/EGUI_LAYOUT_DEBUG.md)。
+>
 > **Date**: 2026-05-12 (revised 2026-05-13 after information-architecture dialogue)
 > **Status**: Phase 0 ✅ · Phase 0.5 ✅ (S1) · Phase 1 ✅ (S2) · Phase 1.5-3 planned
 > **Owner**: juice094 + Clarity Agent

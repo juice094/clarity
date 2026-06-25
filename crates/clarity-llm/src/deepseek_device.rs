@@ -995,9 +995,9 @@ impl DeepSeekResponse {
                 context, self.code, self.msg
             )));
         }
-        let data = self
-            .data
-            .ok_or_else(|| AgentError::Llm(format!("{} response data missing: {}", context, raw)))?;
+        let data = self.data.ok_or_else(|| {
+            AgentError::Llm(format!("{} response data missing: {}", context, raw))
+        })?;
         data.biz_data
             .ok_or_else(|| AgentError::Llm(format!("{} biz_data missing: {}", context, raw)))
     }

@@ -1,7 +1,7 @@
 ---
 title: 当前阶段与已知问题
 category: Planning
-date: 2026-06-15
+date: 2026-06-25
 tags: [planning, status, current-phase]
 ---
 
@@ -37,8 +37,8 @@ tags: [planning, status, current-phase]
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1290 | 0 | 9 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 244 | 0 | 3 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1554 | 0 | 0 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 275 | 0 | 2 |
 | `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
 | `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
 | `cargo clippy --workspace --lib --bins --tests --examples --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
@@ -59,4 +59,4 @@ tags: [planning, status, current-phase]
 
 ---
 
-*最后更新：2026-06-16*
+*最后更新：2026-06-25*

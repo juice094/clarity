@@ -645,7 +645,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             "Test provider connectivity"
         };
         let test_response = ui
-            .add_enabled(!is_local && !is_testing && supports_connection_test, test_btn)
+            .add_enabled(
+                !is_local && !is_testing && supports_connection_test,
+                test_btn,
+            )
             .on_hover_text(test_hover);
         if test_response.clicked() {
             let (display_name, base_url, api_fmt) = prov
@@ -713,7 +716,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             "Refresh model list"
         };
         let refresh_response = ui
-            .add_enabled(!is_local && !is_refreshing && supports_model_refresh, refresh_btn)
+            .add_enabled(
+                !is_local && !is_refreshing && supports_model_refresh,
+                refresh_btn,
+            )
             .on_hover_text(refresh_hover);
         if refresh_response.clicked() {
             let (_, base_url, api_fmt) = prov

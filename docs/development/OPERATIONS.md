@@ -1,19 +1,19 @@
 ---
 title: Clarity 运维与部署指南
 category: Status
-date: 2026-05-16
+date: 2026-06-25
 tags: [status]
 ---
 
 # Clarity 运维与部署指南
 
-> 版本：v0.3.1+ | 关联文档：[`ARCHITECTURE.md`](../architecture/ARCHITECTURE.md) · [`ROADMAP.md`](../planning/ROADMAP.md)
+> 版本：v0.3.4-rc | 关联文档：[`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`ROADMAP.md`](../planning/ROADMAP.md) · [`AGENTS.md`](../../AGENTS.md)
 
 ---
 
 ## 1. 二进制布局
 
-Clarity Workspace 包含 9 个 crate，其中 5 个产出可执行文件：
+Clarity Workspace 包含 **22 个活跃 workspace crate + 1 个归档 crate（`clarity-tauri`）+ 1 个集成测试 crate（`tests/integration`）**，其中 6 个产出可执行文件：
 
 | 可执行文件 | Crate | 适用场景 | 说明 |
 |-----------|-------|---------|------|
@@ -21,14 +21,25 @@ Clarity Workspace 包含 9 个 crate，其中 5 个产出可执行文件：
 | `clarity-tui` | `clarity-tui` | 终端交互 | ratatui 终端 UI，`/` 前缀命令 |
 | `clarity-headless` | `clarity-headless` | 自动化 / CI | CLI：`run` / `jumpy` 子命令，支持 stdin pipe |
 | `clarity-gateway` | `clarity-gateway` | HTTP 服务 | Axum 双端口（18790 公开 / 18800 Admin） |
-| `clarity-claw` | `clarity-claw` | 系统托盘守护 | 开机自启，Gateway 健康监测，OS 通知推送 |
+| `clarity-claw` | `clarity-claw` | 系统托盘守护 | Gateway WebSocket 客户端，OS 通知推送 |
+| `clarity-slint` | `clarity-slint` | 实验性桌面 GUI | Slint 栈，不参与默认 CI |
 
 **纯库 crate**（不可直接运行）：
-- `clarity-core` — 核心引擎（Agent 循环、工具注册表、LLM Provider、MCP 客户端）
+- `clarity-core` — 核心引擎（Agent 循环、工具注册表、LLM Provider、MCP 集成）
 - `clarity-wire` — 事件总线（SPMC broadcast）
-- `clarity-memory` — 四级记忆系统（SQLite + FTS5）
-- `clarity-contract` — 最小 trait 契约（`Tool`、`LlmProvider`）
-- `clarity-mcp` — MCP 客户端库（stdio / HTTP / SSE）
+- `clarity-memory` — 混合记忆系统（SQLite + BM25 + 向量）
+- `clarity-contract` — 共享 trait 契约（`Tool`、`LlmProvider`）
+- `clarity-mcp` — MCP 客户端库（stdio / SSE / HTTP / WebSocket）
+- `clarity-llm` — LLM provider 抽象 + Candle GGUF 本地推理
+- `clarity-tools` — 内置工具库（file / shell / web / devkit）
+- `clarity-channels` — 外部通道抽象（WeChat iLink / Webhook）
+- `clarity-subagents` — 子代理执行器（消费 `clarity-core`）
+- `clarity-thread-store` — Thread 持久化抽象
+- `clarity-rollout` — JSONL rollout 持久化
+- `clarity-openclaw` — OpenClaw/KimiClaw Gateway WebSocket 客户端
+- `clarity-secrets` — 加密 Secret 存储（`enc2:`）
+- `clarity-telemetry` — 统一遥测（当前由 gateway 使用）
+- `clarity-mobile-core` — 移动端 UniFFI FFI 核心（lib，供 Android/iOS 使用）
 
 ---
 
@@ -189,8 +200,8 @@ OS Startup ──→ clarity-claw
 
 | 现象 | 排查步骤 |
 |------|---------|
-| 编译失败 | `cargo check --workspace`；检查 `local-llm` feature 是否启用 |
-| 测试失败 | `cargo test --workspace --lib`；7 个 ignored 测试需外部条件 |
+| 编译失败 | `cargo check --workspace --lib --bins --exclude clarity-slint`；检查 `local-llm` feature 是否启用 |
+| 测试失败 | `cargo test --workspace --lib --exclude clarity-slint`；ignored 测试需外部条件（本地 GGUF 等） |
 | Gateway 无法启动 | 检查 18790/18800 端口是否被占用；`lsof -i :18790` |
 | MCP 工具加载失败 | 验证 `~/.config/clarity/mcp.json` JSON 语法；检查命令是否在 allowlist |
 | 本地 LLM 加载失败 | 确认 `~/.cache/huggingface/hub/` 有模型；检查 `local-llm` feature |

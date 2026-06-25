@@ -7,6 +7,8 @@ tags: [plan]
 
 # Clarity 后续开发主计划书
 
+> **历史归档**：本计划书为 2026-05-15 的 Sprint S7/S8 主计划，已不反映当前开发状态。当前状态见 [`../current-phase.md`](../current-phase.md) 与 [`../../AGENTS.md`](../../AGENTS.md) §11。
+>
 > **Date**: 2026-05-15 (revised) | **Status**: S7 Phase 3A 已闭环；准备 S8 | **Owner**: juice094 + Clarity Agent
 > **Single source of truth**: 本文件整合 `pretext-ui-evolution.md` + `ROADMAP.md` + `FUTURE_DIRECTION.md` + `ENGINEERING_PLAN.md`
 > **基线 commit**: `edbb615f` on `main` | 所有前置 ADR: 011/012/013/014

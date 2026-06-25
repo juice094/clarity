@@ -1,7 +1,7 @@
 ---
 title: 架构地图 · 拓扑层
 category: Architecture
-date: 2026-05-16
+date: 2026-06-25
 tags: [architecture]
 ---
 
@@ -62,11 +62,13 @@ clarity-contract
     ├── clarity-channels
     └── clarity-secrets
 
-旁路 crate：
-  clarity-claw     → 系统托盘监控（激活中）
-  clarity-headless → 无头 CLI（激活中）
-  clarity-slint    → 实验性 Slint GUI（不参与默认 CI）
-  clarity-tauri    → 已归档，被 workspace 排除
+旁路 / 独立入口 crate：
+  clarity-claw            → 系统托盘监控（激活中）
+  clarity-headless        → 无头 CLI（激活中）
+  clarity-mobile-core     → 移动端 UniFFI FFI 核心
+  clarity-anthropic-proxy → Anthropic Messages API → DeepSeek 代理
+  clarity-slint           → 实验性 Slint GUI（不参与默认 CI）
+  clarity-tauri           → 已归档，被 workspace 排除
 ```
 
 ### 1.1 依赖明细
@@ -77,7 +79,7 @@ clarity-contract
 | `clarity-wire` | contract | serde, tokio | 纯协议，无业务逻辑，可被任意前端引用 |
 | `clarity-memory` | contract | rusqlite, ndarray, tantivy(opt) | 独立存储层；gateway 直接引用；core 通过 factory 注入 |
 | `clarity-mcp` | contract, wire | serde_json, tokio | MCP client；被 `clarity-llm` 使用 |
-| `clarity-openclaw` | — | tokio-tungstenite, ed25519-dalek | OpenClaw Gateway 客户端与设备身份 |
+| `clarity-openclaw` | contract | tokio-tungstenite, ed25519-dalek | OpenClaw Gateway 客户端与设备身份 |
 | `clarity-llm` | contract, mcp, memory, secrets | reqwest, candle-core(opt) | Provider 绑定层 |
 | `clarity-tools` | contract, memory | regex, glob | 内置工具库；从 `clarity-core` 拆出 |
 | `clarity-channels` | contract | reqwest | 外部消息通道适配器 |
@@ -92,6 +94,8 @@ clarity-contract
 | `clarity-tui` | core, wire | ratatui, crossterm | TUI 前端 |
 | `clarity-claw` | core | notify, tray-icon | 系统托盘监控 |
 | `clarity-headless` | core | clap | 无头 CLI |
+| `clarity-mobile-core` | core, wire, memory, contract, llm | uniffi | 移动端 UniFFI FFI 核心 |
+| `clarity-anthropic-proxy` | contract, core, llm | axum | Anthropic Messages API → DeepSeek 代理 |
 
 ---
 

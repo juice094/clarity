@@ -9,13 +9,13 @@
 > **Local-first AI Agent runtime in Rust.**  
 > Multi-model, MCP tool ecosystem, and data sovereignty.
 
-Clarity orchestrates LLMs, tools, and sub-agents across TUI, desktop GUI, web IDE, headless CLI, and system-tray monitor — with persistent memory, structured planning, and parallel execution.
+Clarity orchestrates LLMs, tools, and sub-agents across TUI, desktop GUI, web IDE, headless CLI, system-tray monitor, and mobile FFI — with persistent memory, structured planning, and parallel execution.
 
 ## Why Clarity?
 
 | Dimension | Clarity | Typical Node.js / TS Agents |
 |-----------|---------|----------------------------|
-| **Runtime** | Single binary, `cargo install` | Node.js / Bun runtime required |
+| **Runtime** | Per-frontend single binary, `cargo install` | Node.js / Bun runtime required |
 | **Memory Safety** | Compile-time guarantees (Rust) | Runtime GC |
 | **Process Model** | Single-process (eframe ↔ Rust core) | Frontend ↔ server dual-process |
 | **Memory System** | SQLite + BM25 + vector hybrid | File-based or external DB |
@@ -25,21 +25,29 @@ Clarity orchestrates LLMs, tools, and sub-agents across TUI, desktop GUI, web ID
 
 ```
 crates/
-├── clarity-contract   # Shared trait/types contract (zero internal deps)
-├── clarity-wire       # UI ↔ Agent event bus (SPMC) + ViewCommand channel
-├── clarity-memory     # BM25 + vector hybrid search, chunking, compaction
-├── clarity-mcp        # MCP client (stdio / SSE / HTTP / WebSocket)
-├── clarity-llm        # LLM provider abstraction + built-ins + Candle GGUF
-├── clarity-tools      # Built-in tool library (file/shell/web/devkit)
-├── clarity-channels   # External message channels
-├── clarity-subagents  # Sub-agent executor + parallel scheduler
-├── clarity-core       # Agent loop, Approval, Skill, MCP integration
-├── clarity-telemetry  # Unified telemetry
-├── clarity-gateway    # Axum HTTP/WebSocket server, Web UI, session store
-├── clarity-egui       # Desktop GUI (eframe/egui) — primary UI stack
-├── clarity-tui        # ratatui terminal interface
-├── clarity-claw       # System-tray background monitor
-└── clarity-headless   # Headless CLI for scripts/CI
+├── clarity-contract        # Shared trait/types contract (zero internal deps)
+├── clarity-wire           # UI ↔ Agent event bus (SPMC) + ViewCommand channel
+├── clarity-memory         # BM25 + vector hybrid search, chunking, compaction
+├── clarity-mcp            # MCP client (stdio / SSE / HTTP / WebSocket)
+├── clarity-llm            # LLM provider abstraction + built-ins + Candle GGUF
+├── clarity-tools          # Built-in tool library (file/shell/web/devkit)
+├── clarity-channels       # External channel abstraction; WeChat iLink implemented; Webhook enabled
+├── clarity-subagents      # Sub-agent executor + parallel scheduler
+├── clarity-thread-store   # Thread persistence abstraction; depends on clarity-rollout
+├── clarity-rollout        # JSONL rollout persistence (API design inspired by Codex)
+├── clarity-openclaw       # OpenClaw/KimiClaw Gateway WebSocket client, device identity
+├── clarity-secrets        # Encrypted secret storage (`enc2:`)
+├── clarity-telemetry      # Unified telemetry
+├── clarity-core           # Agent loop, Approval, Skill, MCP integration
+├── clarity-gateway        # Axum HTTP/WebSocket server, Web UI, session store
+├── clarity-egui           # Desktop GUI (eframe/egui) — primary UI stack
+├── clarity-tui            # ratatui terminal interface
+├── clarity-claw           # System-tray background monitor — Gateway WebSocket client only
+├── clarity-headless       # Headless CLI for scripts/CI
+├── clarity-mobile-core    # Mobile FFI core — UniFFI bridge for Android/iOS
+├── clarity-slint          # Experimental Slint desktop GUI — excluded from default CI
+├── clarity-anthropic-proxy # Anthropic Messages API → DeepSeek proxy (utility binary)
+└── clarity-tauri          # Archived — excluded from workspace build
 ```
 
 **Invariant**: `clarity-core` has zero dependencies on any frontend or network crate. `clarity-contract` has zero internal deps. Frontends never import each other — they cross-talk through `clarity-wire`.
@@ -68,6 +76,7 @@ No API key? Put a `.gguf` model in `~/models/` and select **Local (GGUF)** in se
 ## Development
 
 ```bash
+# 1550+ lib tests, 0 failures
 cargo test --workspace --lib --exclude clarity-slint
 cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
 cargo fmt --all -- --check

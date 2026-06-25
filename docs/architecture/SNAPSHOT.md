@@ -7,6 +7,8 @@ tags: [architecture]
 
 # Clarity 硬事实快照 · 2026-04-30
 
+> **历史归档**：本文档为 2026-04-30 `phase2/protocol-pilot` 分支的代码库快照，已不反映当前 `main` 分支状态。保留原样供考古参考；当前状态见 [`AGENTS.md`](../../AGENTS.md) §6.2 与 [`docs/planning/current-phase.md`](../planning/current-phase.md)。
+>
 > 性质：可验证的代码库状态记录。
 > 生成方式：Shell 命令扫描 + 文本提取。
 > 验证方式：复现下方每条 `[VERIFY]` 命令，对比输出。

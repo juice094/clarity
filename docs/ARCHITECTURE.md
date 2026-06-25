@@ -1,14 +1,14 @@
 ---
 title: Clarity Architecture
 category: Architecture
-date: 2026-05-16
+date: 2026-06-25
 tags: [architecture]
 ---
 
 # Clarity Architecture
 
-> Code-accurate architecture reference | Last updated: 2026-06-19
-> Reflects v0.3.x delivery: 20 active crates + 1 archived (`clarity-tauri`) ≈ 21 crate directories
+> Code-accurate architecture reference | Last updated: 2026-06-25
+> Reflects v0.3.x delivery: 22 active workspace crates + 1 archived (`clarity-tauri`) across 23 crate directories
 
 ---
 
@@ -16,7 +16,7 @@ tags: [architecture]
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Single Responsibility** | 20 active independent crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
+| **Single Responsibility** | 22 active independent workspace crates; `clarity-core` remains the largest crate and is subject to ongoing decomposition |
 | **Dependency Inversion** | `gateway → core`, `tui → core`; `core` knows nothing about frontends |
 | **Local-First** | Native GGUF inference via Candle; no external runtime required |
 | **Stream-First** | `Agent::run_streaming()` calls `llm.stream()` first, falls back to `complete()` |
@@ -91,17 +91,20 @@ tags: [architecture]
           └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1a Code Health Metrics (v0.3.0 baseline)
+### 2.1a Code Health Metrics (2026-06-25)
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| `unwrap()` / `expect()` (non-test) | ~1,069 | Freeze new; reduce risk-class gradually |
+| `unwrap()` / `expect()` (non-test) | ~1,069 (last measured) | Freeze new; reduce risk-class gradually |
 | `pub fn` doc coverage | ~92% | ≥90% |
 | clippy warnings | 0 | 0 |
 | `unsafe` count | 1 | 0 new |
-| Rust tests passed | 849 / 0 failed | 100% |
-| `clarity-egui` tests | 66 / 0 failed | Phase 2 baseline injected |
+| Workspace lib tests passed | 1,554 / 0 failed | 100% |
+| Workspace bin tests passed | 275 / 0 failed | 100% |
+| `clarity-egui` bin tests | 216 / 0 failed | — |
 | `cargo doc` warnings | 0 | 0 |
+
+> 最新测试基线见 [`AGENTS.md`](../../AGENTS.md) §6.2。
 
 ### 2.1 Crate Dependency Graph
 
@@ -114,7 +117,7 @@ clarity-contract
     ├── clarity-openclaw  (OpenClaw Gateway client + device identity)
     ├── clarity-llm       (provider bindings)
     ├── clarity-tools     (built-in tools)
-    ├── clarity-channels  (Discord / Slack / Telegram / Webhook)
+    ├── clarity-channels  (external channel abstraction; WeChat iLink implemented; Webhook enabled)
     ├── clarity-secrets   (ChaCha20-Poly1305 secret store)
     ├── clarity-rollout   (JSONL rollout persistence)
     └── clarity-thread-store (ThreadStore trait + implementations)
@@ -123,13 +126,16 @@ clarity-contract
       clarity-core
             │
             ├── clarity-subagents  (spawn / team / parallel)
+            ├── clarity-telemetry  (currently used by gateway)
             │
             ▼
     ┌───────────────────────────────────────┐
     │  clarity-egui / clarity-tui           │
     │  clarity-gateway / clarity-claw       │
-    │  clarity-headless                     │
+    │  clarity-headless / clarity-mobile-core │
     └───────────────────────────────────────┘
+
+clarity-anthropic-proxy: Anthropic Messages API → DeepSeek proxy (utility binary)
 ```
 
 **Reusability rating**:
@@ -163,8 +169,10 @@ clarity-contract
 | `clarity-tui` | ~1,800 | 46+ | `App`, `ui()`, command registry |
 | `clarity-claw` | ~600 | 18+ | Tray monitor, `notify` watcher |
 | `clarity-headless` | ~380 | 16+ | CLI args, `build_provider()` |
+| `clarity-mobile-core` | ~400 | 3+ | UniFFI bridge: Runtime/events/config/memory for Android/iOS |
 | `clarity-slint` | — | — | Experimental Slint GUI stack (excluded from default CI) |
 | `clarity-tauri` | — | — | **Archived** React+Vite frontend (excluded from workspace) |
+| `clarity-anthropic-proxy` | ~500 | 4+ | Anthropic Messages API → DeepSeek proxy (utility binary) |
 
 ---
 

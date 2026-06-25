@@ -1,7 +1,7 @@
 ---
 title: Clarity Future Direction — Technical Roadmap v0.3.0 → v0.5.0
 category: Strategy
-date: 2026-05-16
+date: 2026-06-25
 tags: [strategy, planning]
 ---
 
@@ -37,11 +37,11 @@ tags: [strategy, planning]
 
 ## 核心约束
 
-- **项目广度 ≤ 5 核心工具**：当前 6 crates 已达上限，Phase A-D 不新增 crate，只重构现有 crate
+- **项目广度控制**：当前 22 个活跃 workspace crate 已形成清晰分层；新增 crate 必须有明确边界且同步更新所有拓扑文档（参见 `AGENTS.md` §13）
 - **Rust 核心模块不可外包**：Hub-Worker、Wire 扩展、SessionManager 必须由直接代码实现
-- **Hard Veto 生效**：禁止 Docker / RAG(Qdrant) / Electron / 分布式消息通道 / Mobile 适配
-- **UI 技术栈方向**：egui 为**唯一主力栈**（`crates/clarity-egui` 已启动，复刻 Tauri 风格）；Tauri 废弃归档（不删除代码，停止维护）；Pretext 思想可借鉴（两阶段分离），库本身不入主路线图
-- **每阶段验收**：`cargo test --workspace --lib` + `npm run build` 全绿
+- **Hard Veto 生效**：禁止 Docker / RAG(Qdrant) / Electron / 分布式消息通道 / 完整移动端 UI；`clarity-mobile-core` FFI 核心已落地，完整 Android/iOS UI 仍在路线图
+- **UI 技术栈方向**：egui 为**唯一主力栈**；Tauri 已归档排除（不删除代码，禁止修改）；Pretext 思想已采纳并落地
+- **每阶段验收**：`cargo test --workspace --lib --exclude clarity-slint` 零回归
 
 ---
 
@@ -262,7 +262,7 @@ AgentStateSnapshot { instance_id, state_json }
 |---|---|---|
 | Phase C 重构破坏现有 Tauri/Gateway/TUI | 高 | 保持 `AgentController` 向后兼容 API；`AgentPool` 作为包装层 |
 | Session 迁移丢失数据 | 高 | 迁移工具支持 dry-run + 备份；删除 JSON 前跑完整验证套件 |
-| 项目广度超限 | 高 | Phase A-D 不新增 crate，只重构现有 6 crate |
+| 项目广度超限 | 高 | 新增 crate 必须配合同步更新 AGENTS.md / docs/ARCHITECTURE.md / map-topology.md / tech-stack.md |
 | BackgroundTaskManager 集成 destabilize | 中 | Feature-flag 集成；出错时 fallback 到旧 task 系统 |
 | CRDT 同步性能差 | 中 | 早期 benchmark；若开销 > 50ms 则 fallback 到 simple last-writer-wins |
 
@@ -272,7 +272,7 @@ AgentStateSnapshot { instance_id, state_json }
 
 | Phase | 标准 |
 |---|---|
-| A | 4 项 quick-win 全部合并，`cargo test --workspace --lib` 零回归 |
+| A | 4 项 quick-win 全部合并，`cargo test --workspace --lib --exclude clarity-slint` 零回归 |
 | B | 单一 `SessionManager` API；所有 session 进 SQLite；Handoff 可用 |
 | C | 2+ AgentInstance 并发运行；多窗口聊天正常；IPC 回环验证通过 |
 | D | 两台 Clarity 设备 session 同步；Agent 状态跨设备迁移 |

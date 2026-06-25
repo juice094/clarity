@@ -7,6 +7,8 @@ tags: [plan]
 
 # Clarity 未完成计划总览
 
+> **历史归档**：本文件为 2026-05-06 生成的未完成计划总览，已严重过期（Sprint、测试数、Mobile 状态等均不反映当前 `main`）。保留原样供考古参考；当前待办与状态见 [`../current-phase.md`](../current-phase.md)、[`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) 与 [`../../AGENTS.md`](../../AGENTS.md) §11。
+>
 > 生成时间：2026-05-06  
 > 基线分支：`main` @ Sprint 38-C 完成  
 > 整合来源：ROADMAP / PROJECT_STATUS / FUTURE_DIRECTION / Sprint Plans / 解耦计划

@@ -86,11 +86,7 @@ fn format_tools_for_prompt(tools: &Value) -> String {
                     let required: Vec<&str> = params
                         .get("required")
                         .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str())
-                                .collect()
-                        })
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                         .unwrap_or_default();
 
                     if let Some(props) = params.get("properties").and_then(|v| v.as_object()) {
@@ -184,7 +180,11 @@ mod tests {
         let (adapted, adapted_tools) = adapt_prompt_guided(&messages, &sample_tools());
 
         assert_eq!(adapted.len(), 2);
-        assert!(adapted[0].content.contains("<tool_description name=\"powershell\""));
+        assert!(
+            adapted[0]
+                .content
+                .contains("<tool_description name=\"powershell\"")
+        );
         assert!(adapted[0].content.contains("<arg key=\"arg_name\">"));
         assert!(!adapted[1].content.contains("tool_description"));
         assert!(adapted_tools.as_array().unwrap().is_empty());

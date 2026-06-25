@@ -7,6 +7,8 @@ tags: [plan]
 
 # Clarity Session Handoff — 2026-05-15 (EOD)
 
+> **历史归档**：本文件为 2026-05-15 的会话交接记录，已不反映当前 `main` 状态。保留原样供考古参考；当前状态见 [`../current-phase.md`](../current-phase.md) 与 [`../../AGENTS.md`](../../AGENTS.md)。
+>
 > **Purpose**: Quick context recovery after compaction. Read this first.
 > **HEAD**: `7f78de59` on `main` (pushed to `origin/main`)
 > **Last working session**: 2026-05-15, "S7 闭环 + EndpointDescriptor + S8 P3B.1 + Identity 审计"

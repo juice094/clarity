@@ -7,6 +7,8 @@ tags: [protocol]
 
 # AI 关键决策记录 · Clarity
 
+> **部分过时提示**：本文件记录 2026-05-10 前后的关键架构决策，其中分支/commit、Sprint 状态、版本号、crate 数量等信息已过时。当前权威状态见 [`AGENTS.md`](../../AGENTS.md) 与 [`docs/planning/current-phase.md`](../planning/current-phase.md)。下文保留原样供历史参考，但阅读时应以后续文档为准。
+>
 > 本文件记录跨 AI 会话的关键架构决策、状态锚点和 Hard Veto 边界。
 > 用途：在上下文压缩后，新会话可快速恢复项目认知。
 > 协议版本：V3.1-EP-O
@@ -15,31 +17,15 @@ tags: [protocol]
 
 ## 一、当前会话锚点
 
-**最后更新**：2026-05-10
-**当前分支**：`main` @ `5dc1fe23`（未推送 origin，领先 20 commits）
-**架构模式**：CLI
-**定位声明**：Clarity 是集群协作原语的单机验证运行时（非本地聊天工具）。
-**会话状态**：
-- v0.3.1 已发布（tag `v0.3.1`）
-- clarity-tauri 完全归档移出仓库；Dependabot 报警清零
-- Settings 模型选择缺陷修复；Mutex 硬化完成
-- **Sprint 9 — 服务商支持硬化**：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔓 已解锁
-- **Sprint 10 — 协议先行解锁**：D1 ✅ | D2 ✅ | D3 ✅ | D4 ✅
-- **Sprint 11 — 超越 Kimi CLI**：Phase A ✅ | Phase B ✅ | Phase C ✅
-- **Sprint 12 — egui 功能补齐**：✅ 已完成
-- **Sprint 13 — 稳定性硬化 + 架构解耦**：✅ 已完成（2026-04-27 ~ 2026-05-03）
-- **Sprint 13.5 — 前端架构重构**：✅ 已完成（Zustand-style Store + Services 拆分 + 错误边界）
-- **Sprint 14 — Glassmorphism 视觉精调**：✅ 已完成（2026-05-01 ~ 2026-05-03）
-- **Sprint 14.5 — 架构解耦与代码健康**：✅ 已完成（2026-05-02）
-- **Sprint 15 — 多方面强化**：✅ 已完成（2026-05-02 ~ 2026-05-03）
-- **Sprint 16 — 内核升级 + 基础设施**：✅ 已完成（2026-05-03）
-- **Sprint 17 — ZeroClaw 吸收与工程深化**：✅ 已完成（2026-05-03 ~ 2026-05-06）
-- **Sprint 38-C — CI Pipeline Hardening**：✅ 已完成（2026-05-06）
-- **Sprint 36/36.5/36.6 — Cron/Team UI + 死代码清理 + Markdown 表格**：✅ 已完成（2026-05-05）
-- **Sprint 39 — Runtime Stability + Engineering Hygiene**：✅ 已完成（2026-05-07）
-- **Sprint 40 — Runtime Robustness + Integration Tests**：✅ 已完成（2026-05-08）
-- **Sprint 41 — UI 审计修复与视觉精调**：✅ 已完成（2026-05-10）
-- **进行中**：LLM Mesh（circuit-breaker + McpLlmProvider + MCP Server 基础设施）、Gateway handler 模块化拆分、Phosphor 图标系统
+**最后更新**：2026-05-10（历史快照）
+**当前分支**：`main`（请以 `git branch --show-current` 与 `git log --oneline -1` 为准）
+**架构模式**：Rust workspace，多入口（TUI / 桌面 GUI / Web IDE / 无头 CLI / 系统托盘 / 移动端 FFI）
+**定位声明**：Rust 原生、本地优先的个人 AI 运行时（聚焦编码/工程工作流）。
+**会话状态**（历史快照，截至 2026-05-10）：
+- v0.3.1 已发布（tag `v0.3.1`）；当前开发版本 v0.3.4-rc
+- `clarity-tauri` 已归档，被 workspace 排除（目录仍保留于 `crates/clarity-tauri`，未移出仓库）
+- 2026-05-10 之前的 Sprint 均已完成
+- **进行中**（历史）：LLM Mesh、Gateway handler 模块化拆分、Phosphor 图标系统
 
 ---
 
@@ -51,8 +37,8 @@ tags: [protocol]
 | 禁止数据外泄 | ✅ 生效 | API key 仅存储本地；云端 Provider 由用户显式选择 |
 | 禁止 Docker | ✅ 生效 | 无容器化依赖 |
 | 禁止 RAG(Qdrant) | ✅ 生效 | `clarity-memory` 使用 SQLite + BM25 + CosineIndex |
-| 禁止 Electron | ✅ 生效 | Tauri 2 已替代 |
-| 项目广度 ≤ 5 核心工具 | ✅ 已收敛 | clarity-tauri 已归档，活跃 crate 6 个 + Gateway + TUI，已达上限，新增功能需裁减 |
+| 禁止 Electron | ✅ 生效 | Tauri 已归档，egui 为主力栈 |
+| 项目广度控制 | ✅ 已收敛 | 当前 22 个活跃 workspace crate；新增 crate 必须同步更新拓扑文档（`AGENTS.md` §13） |
 | **主权防御：不入赘** | ✅ 生效 | 学习 Kimi 生态（娘家/导师），但保持独立实现。模型/数据/协议/人格四层主权不可让渡 |
 
 ---

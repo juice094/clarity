@@ -5,6 +5,8 @@ date: 2026-05-16
 tags: [architecture]
 ---
 
+> **历史归档**：本文档记录 2026-05-16 `phase2/protocol-pilot` 分支的验证快照，已不反映当前 `main` 分支状态。当前权威验证基线与命令见 [`AGENTS.md`](../../AGENTS.md) §6 和 [`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml)。下文保留原样供考古参考。
+
 # 架构地图 · 验证层
 
 > 用途：改完代码后知道跑什么命令验证，崩了知道回滚到哪

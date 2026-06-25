@@ -1,33 +1,49 @@
 ---
 title: AI 实例交接手册 · Clarity
 category: Handover
-date: 2026-05-16
+date: 2026-06-25
 tags: [handover]
 ---
 
 # AI 实例交接手册 · Clarity
 
 > 用途：新 AI 会话启动时快速恢复项目上下文。
-> 协议版本：V3.1-EP-O
-> 最后更新：2026-05-03
+> 协议版本：V3.2-EP-O
+> 最后更新：2026-06-25
+> **权威来源**：本文件为快速交接速查；详细运行上下文、架构约束与测试基线以 [`AGENTS.md`](../../AGENTS.md) 为准。
 
 ---
 
 ## 一、项目速览
 
-**定位**：集群协作原语的单机验证运行时（非本地聊天工具）。
-**技术栈**：Rust workspace, egui 0.31, tokio, eframe, axum 0.7, ratatui 0.24
-**当前分支**：`phase2/protocol-pilot` @ `01990446`
+**定位**：Rust 原生、本地优先的个人 AI 运行时（聚焦编码/工程工作流）。
+**技术栈**：Rust 2024 workspace, egui 0.31, eframe 0.31, tokio, axum 0.7, ratatui 0.30
+**当前分支**：`main`
 
 ```text
-Workspace 结构
-├── crates/clarity-core      # Agent 引擎 + LLM 运行时 + 审批系统
-├── crates/clarity-egui      # 主力 GUI（egui + eframe）★ 当前主战场
-├── crates/clarity-tui       # 终端 UI（ratatui）
-├── crates/clarity-gateway   # HTTP API + WebSocket + MCP 网关
-├── crates/clarity-memory    # SQLite + BM25 + Cosine 向量存储
-├── crates/clarity-wire      # 事件总线（跨 crate 消息通道）
-└── crates/clarity-claw      # Headless CLI（归档维护）
+Workspace 结构（23 crate 目录 = 22 活跃 workspace 成员 + 1 归档）
+├── crates/clarity-contract     # 共享契约层（零内部依赖）
+├── crates/clarity-wire         # UI ↔ Agent SPMC 事件总线
+├── crates/clarity-memory       # SQLite + BM25 + 向量混合记忆
+├── crates/clarity-mcp          # MCP 客户端（stdio/SSE/HTTP/WS）
+├── crates/clarity-llm          # LLM provider 抽象 + Candle GGUF
+├── crates/clarity-tools        # 内置工具库
+├── crates/clarity-channels     # 外部通道抽象（WeChat iLink / Webhook）
+├── crates/clarity-subagents    # 子代理执行器（消费 core）
+├── crates/clarity-thread-store # Thread 持久化抽象
+├── crates/clarity-rollout      # JSONL rollout 持久化
+├── crates/clarity-openclaw     # OpenClaw/KimiClaw Gateway WS 客户端
+├── crates/clarity-secrets      # 加密 Secret 存储（enc2:）
+├── crates/clarity-telemetry    # 统一遥测
+├── crates/clarity-core         # Agent 内核（ReAct/Plan + Approval + Skill）
+├── crates/clarity-gateway      # Web IDE / Axum HTTP + WebSocket
+├── crates/clarity-egui         # 桌面 GUI（主入口）
+├── crates/clarity-tui          # 终端 UI
+├── crates/clarity-claw         # 系统托盘节点（Gateway WS 客户端）
+├── crates/clarity-headless     # 无头 CLI / CI
+├── crates/clarity-mobile-core  # 移动端 UniFFI FFI 核心
+├── crates/clarity-slint        # 实验性 Slint GUI（不参与默认 CI）
+└── crates/clarity-tauri        # 已归档，被 workspace 排除
 ```
 
 ---
@@ -36,18 +52,23 @@ Workspace 结构
 
 ```powershell
 # 工作目录
-cd C:\Users\22414\dev\third_party\clarity
+cd C:\Users\22414\dev\clarity
 
 # 验证基线（任何修改前必须执行）
-cargo test --workspace --lib        # 期望：438 passed, 0 failed, 6 ignored
-cargo check --workspace             # 期望：零错误
-cargo clippy --workspace --lib --tests -- -D warnings  # 期望：零 warning
+cargo test --workspace --lib --exclude clarity-slint        # 期望：1554 passed, 0 failed, 0 ignored
+cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2  # 期望：275 passed, 0 failed, 2 ignored
+cargo check --workspace --lib --bins --exclude clarity-slint # 期望：零错误
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings  # 期望：零 warning
+cargo fmt --all -- --check                                   # 期望：零 diff
 
 # 运行 egui 桌面端
 cargo run -p clarity-egui
 
 # 运行 TUI
 cargo run -p clarity-tui
+
+# 运行 Gateway
+ cargo run -p clarity-gateway
 ```
 
 ### 环境变量（按需设置）

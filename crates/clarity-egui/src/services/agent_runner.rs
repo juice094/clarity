@@ -118,7 +118,7 @@ impl App {
                 self.project_store
                     .projects
                     .iter()
-                .find(|p| &p.id == pid)
+                    .find(|p| &p.id == pid)
                     .map(|p| p.has_workspace)
             })
             .unwrap_or(true);

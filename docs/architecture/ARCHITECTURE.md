@@ -7,39 +7,50 @@ tags: [architecture]
 
 # Clarity Architecture — Master Index
 
-> **Status**: Living document | **Last revised**: 2026-05-15 (post-S7 Phase 3A)
+> **Status**: Living document | **Last revised**: 2026-06-25
 > **Audience**: New contributors, AI agents, technical reviewers
 > **Scope**: Cross-crate architecture, design contracts, decision rationales
 
-This document is the **single entry point** to Clarity's architecture. Specific
-subsystems each have their own deep-dive note linked below.
+This document is the **index entry point** to Clarity's architecture. For the
+code-accurate crate topology and worktree, see [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+and [`../../AGENTS.md`](../../AGENTS.md) §3 / §A. Specific subsystems each have
+their own deep-dive note linked below.
 
 ---
 
 ## 1. Project Layout
 
-Clarity is a Rust workspace with the following crates (top-down dependency):
+Clarity is a Rust workspace with **23 crate directories** (22 active workspace
+members + 1 archived `clarity-tauri`). See [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+§2 for the authoritative crate topology. The dependency direction is:
 
 ```
-clarity-egui  (binary)  ──┐
-clarity-tui   (binary)  ──┤
-clarity-gateway         ──┼─► clarity-core (the "kernel")
-clarity-headless (bin)  ──┤        │
-clarity-claw  (binary)  ──┘        ├─► clarity-memory
-                                   ├─► clarity-llm
-                                   ├─► clarity-tools
-                                   ├─► clarity-mcp
-                                   ├─► clarity-subagents
-                                   ├─► clarity-wire   (protocol layer)
-                                   └─► clarity-contract (37 LOC type bridge)
+clarity-contract (zero internal deps)
+    ▲
+    ├── {wire, memory, mcp, llm, tools, channels, secrets, openclaw, rollout}
+    ├── thread-store (→ rollout)
+    │
+    ▼
+  core ← {gateway, egui, tui, claw, headless, mobile-core}
+    ▲
+    ├── subagents (consumes core)
+    └── telemetry (currently used by gateway)
+
+# Experimental / utility:
+clarity-slint ← {contract, wire}
+clarity-anthropic-proxy (utility binary)
 ```
 
 - **`clarity-core`** is the agent kernel: state, planning, tool dispatch, LLM
-  abstraction, approval, snapshot/restore, BTM, cron, subagents.
-- **`clarity-egui` / `clarity-tui` / `clarity-gateway`** are alternative
-  frontends that all consume `core::ui::ViewState` and `core::ui::RenderLine`.
-- **`clarity-contract`** is a minimal type bridge to avoid circular deps.
-- **`clarity-memory`** owns BM25 + cosine index + session persistence.
+  abstraction, approval, snapshot/restore, background tasks, subagents.
+- **`clarity-egui` / `clarity-tui` / `clarity-gateway` / `clarity-claw` /
+  `clarity-headless` / `clarity-mobile-core`** are alternative frontends that
+  communicate through `clarity-wire`.
+- **`clarity-slint`** is an experimental Slint frontend that depends only on
+  `clarity-contract` + `clarity-wire`; it does **not** consume `clarity-core`.
+- **`clarity-contract`** is the shared type/trait contract with zero internal
+  dependencies.
+- **`clarity-memory`** owns BM25 + vector + session persistence.
 
 ---
 
@@ -143,6 +154,7 @@ All major decisions are recorded under `../adr/`. Active ADRs:
 | 004 | `rustls` TLS replacement | Accepted |
 | 005 | Subagent / core decoupling | Accepted |
 | 006 | Protocol layer convergence | Accepted |
+| 007 | Turn ID in `WireMessage` | Accepted |
 | 008 | Brain / hands / session decoupling | Accepted |
 | 009 | Icon font strategy | Accepted |
 | 010 | Lucide icons adoption | Accepted |
@@ -151,6 +163,9 @@ All major decisions are recorded under `../adr/`. Active ADRs:
 | 013 | Keyboard shortcuts (ClaudeCode-inspired) | Accepted |
 | 014 | Side panel tab consolidation (Tab D) | Accepted |
 | 015 | `EndpointDescriptor` abstraction (Persona/Site/Frontend unified) | Accepted |
+| 016 | Pretext three-column layout | Accepted |
+| 017 | Claw architecture review | Accepted |
+| 018 | Session-scoped event routing | Accepted |
 
 ---
 
@@ -167,10 +182,13 @@ cargo build --release -p clarity-headless # Headless binary
 ### 4.2 Pre-merge checks
 
 ```bash
-cargo test --workspace --lib              # All unit tests
-cargo clippy --workspace -- -D warnings   # Zero warnings policy
-cargo fmt --all -- --check                # Style check
-cargo audit                               # Security scan
+cargo test --workspace --lib --exclude clarity-slint              # Unit tests
+cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2
+cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2
+cargo test -p clarity-integration-tests --lib
+cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings
+cargo fmt --all -- --check
+cargo audit --deny unsound --deny yanked
 ```
 
 ### 4.3 Release workflow

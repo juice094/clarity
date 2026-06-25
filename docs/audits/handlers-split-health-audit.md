@@ -7,6 +7,8 @@ tags: [audit]
 
 # Health Audit Report — clarity-gateway/src/handlers/ Split
 
+> **历史归档**：本审计报告为 2026-05-10 的 Gateway handlers 拆分健康检查快照，已不反映当前 `main` 状态。保留原样供考古参考；当前健康基线见 [`AGENTS.md`](../../AGENTS.md) §6.2 与 §9。
+>
 > Generated: 2026-05-10
 > Commit: 7acbc3ce
 > Standard: AGENTS.md §9 Architecture Health Discipline

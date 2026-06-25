@@ -42,7 +42,7 @@ tags: [architecture, tech-stack, crates]
 | `clarity-llm` | lib | LLM provider 抽象 + 内置 provider + Candle GGUF | feature `local-llm` / `local-llm-cuda` |
 | `clarity-tools` | lib | 内置工具库：file / shell / web / devkit / team / task / … | 从 `clarity-core` 拆出 |
 | `clarity-secrets` | lib | ChaCha20-Poly1305 加密 Secret 存储（`enc2:`） | 用于 `models.toml` 加密 key |
-| `clarity-channels` | lib | 外部消息通道：Discord / Slack / Telegram / Webhook / 微信 iLink | Discord/Telegram 默认禁用 |
+| `clarity-channels` | lib | 外部通道抽象；当前实现 WeChat iLink（`chkit`）；Webhook 默认启用 | Discord/Slack/Telegram 默认禁用 |
 | `clarity-subagents` | lib | 子代理执行器、并行调度、团队协调 | 消费 `clarity-core` |
 | `clarity-thread-store` | lib | Thread 持久化抽象：`ThreadStore` trait（API 设计受 Codex 启发） | 依赖 `clarity-rollout` |
 | `clarity-rollout` | lib | JSONL rollout 持久化：事件日志、压缩、回放（设计受 Codex 启发） | 仅依赖 `clarity-contract` |
@@ -53,8 +53,10 @@ tags: [architecture, tech-stack, crates]
 | `clarity-tui` | bin | ratatui 终端界面 | 远程/SSH 优选 |
 | `clarity-claw` | bin | 系统托盘后台监控 | `tao`/`tray-icon` + OS 通知 |
 | `clarity-headless` | bin | 无头 CLI（脚本 / CI 场景） | `--prompt` / `--file` / `--output json` |
+| `clarity-mobile-core` | lib | 移动端 UniFFI FFI 核心 | 暴露 Runtime/事件/配置/记忆接口给 Kotlin/Swift |
 | `clarity-slint` | bin | 桌面 GUI 实验栈，Slint | 不参与默认 CI |
 | `clarity-tauri` | bin | Tauri 前端 | **已归档**，被 workspace 排除 |
+| `clarity-anthropic-proxy` | bin | Anthropic Messages API → DeepSeek 代理 | 工具二进制 |
 
 ---
 
@@ -78,14 +80,16 @@ clarity-thread-store
 clarity-core
     │
     ├── clarity-subagents（消费 core）
+    ├── clarity-telemetry（当前由 gateway 使用）
     │
     ▼
-{clarity-egui, clarity-tui, clarity-gateway, clarity-claw, clarity-headless}
+{clarity-egui, clarity-tui, clarity-gateway, clarity-claw, clarity-headless, clarity-mobile-core}
 
 clarity-openclaw：OpenClaw 协议客户端；被 clarity-egui 等前端使用
 clarity-telemetry：当前由 clarity-gateway 使用
 clarity-slint：实验栈，不参与默认 CI
 clarity-tauri：已归档，被 workspace 排除
+clarity-anthropic-proxy：Anthropic Messages API → DeepSeek 代理（工具二进制）
 ```
 
 **不可违反的不变量**：
