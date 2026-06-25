@@ -641,6 +641,25 @@ impl App {
             }
         }
     }
+    /// Resets transient input/composer state when entering a fresh session.
+    ///
+    /// Keeps `chat_store.input` intact so callers can pre-fill it with a draft
+    /// or prompt; clears everything else that belongs to the previous turn.
+    fn reset_chat_input_state(&mut self) {
+        self.chat_store.attachments.clear();
+        self.chat_store.last_snapshot = None;
+        self.chat_store.editing_message_idx = None;
+        self.chat_store.edit_buffer.clear();
+        self.chat_store.input_history_idx = None;
+        self.chat_store.pending_send = None;
+        self.chat_store.draft_status = DraftStatus::None;
+        self.chat_store.status_message = None;
+        self.chat_store.tool_calls.clear();
+        self.chat_store.stick_to_bottom = true;
+        self.chat_store.last_usage = None;
+        self.ui_store.focus_input_requested = true;
+    }
+
     /// Creates a new plain chat session.
     pub(crate) fn new_session(&mut self) {
         // If the current session is empty, reuse it rather than accumulating blank tabs.
@@ -651,7 +670,7 @@ impl App {
             .unwrap_or(false);
         if is_empty {
             self.chat_store.input = String::new();
-            self.chat_store.last_usage = None;
+            self.reset_chat_input_state();
             return;
         }
 
@@ -678,8 +697,8 @@ impl App {
             .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
         self.process_events();
 
+        self.reset_chat_input_state();
         self.chat_store.input = self.session_store.drafts.remove(&id).unwrap_or_default();
-        self.chat_store.last_usage = None;
     }
 
     /// Enter a Claw session for the given role and session key.
@@ -962,8 +981,8 @@ impl App {
                 session.context = context;
                 session.project_id = workspace_id;
             }
+            self.reset_chat_input_state();
             self.chat_store.input = prompt.to_string();
-            self.chat_store.last_usage = None;
             return;
         }
 
@@ -985,8 +1004,8 @@ impl App {
             .send(crate::ui::types::UiEvent::ThreadCreated { session: s });
         self.process_events();
 
+        self.reset_chat_input_state();
         self.chat_store.input = prompt.to_string();
-        self.chat_store.last_usage = None;
     }
 
     /// Switch the active session, preserving the current session's draft and

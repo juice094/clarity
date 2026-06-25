@@ -37,6 +37,9 @@ impl Pricing {
 pub struct ProviderCapabilities {
     /// Whether the provider supports native `tools` parameter in the API.
     pub native_tool_calling: bool,
+    /// Whether the provider can do tool calling via prompt-guided text output
+    /// (e.g. XML/JSON tool tags) when native `tools` is not available.
+    pub prompt_guided_tool_calling: bool,
     /// Whether the provider supports vision / image inputs.
     pub vision: bool,
     /// Whether the provider supports prompt caching.
@@ -49,6 +52,7 @@ impl Default for ProviderCapabilities {
     fn default() -> Self {
         Self {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             vision: false,
             prompt_caching: false,
             pricing: None,
@@ -116,6 +120,7 @@ pub trait LlmProvider: Send + Sync {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             vision: false,
             prompt_caching: false,
             pricing: None,
@@ -141,6 +146,7 @@ mod tests {
     fn test_provider_capabilities_default() {
         let caps = ProviderCapabilities::default();
         assert!(caps.native_tool_calling);
+        assert!(!caps.prompt_guided_tool_calling);
         assert!(!caps.vision);
         assert!(!caps.prompt_caching);
         assert!(caps.pricing.is_none());
@@ -150,6 +156,7 @@ mod tests {
     fn test_provider_capabilities_custom() {
         let caps = ProviderCapabilities {
             native_tool_calling: false,
+            prompt_guided_tool_calling: true,
             vision: true,
             prompt_caching: true,
             pricing: Some(Pricing {

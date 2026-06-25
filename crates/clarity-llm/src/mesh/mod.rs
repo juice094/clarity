@@ -215,6 +215,9 @@ impl LlmProvider for MeshLlmProvider {
             if p.native_tool_calling {
                 caps.native_tool_calling = true;
             }
+            if p.prompt_guided_tool_calling {
+                caps.prompt_guided_tool_calling = true;
+            }
             if p.vision {
                 caps.vision = true;
             }

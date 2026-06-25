@@ -48,10 +48,13 @@ pub fn render_project_section(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+    use crate::ui::types::SessionContext;
+
     let summaries: Vec<SessionSummary> = app
         .session_store
         .sessions
         .iter()
+        .filter(|s| !matches!(s.context, SessionContext::Claw { .. }))
         .map(SessionSummary::from_session)
         .collect();
 

@@ -67,6 +67,38 @@ impl Default for DeepSeekDeviceConfig {
     }
 }
 
+/// DeepSeek App 的对话模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeepSeekDeviceMode {
+    /// 快速模式（默认对话）
+    Fast,
+    /// 专家/深度思考模式
+    Expert,
+    /// 识图/视觉模式
+    Vision,
+}
+
+impl DeepSeekDeviceMode {
+    /// 内部 wire 值，对应请求体 `model_type`
+    pub fn model_type(&self) -> &'static str {
+        match self {
+            Self::Fast => "default",
+            Self::Expert => "expert",
+            Self::Vision => "vision",
+        }
+    }
+
+    /// 从内部 model_type 值反解析
+    pub fn from_model_type(s: &str) -> Option<Self> {
+        match s {
+            "default" | "fast" | "deepseek-chat" => Some(Self::Fast),
+            "expert" | "deepseek-reasoner" => Some(Self::Expert),
+            "vision" | "deepseek-vision" => Some(Self::Vision),
+            _ => None,
+        }
+    }
+}
+
 /// 单次对话选项
 #[derive(Debug, Clone)]
 pub struct DeepSeekDeviceOptions {
@@ -83,27 +115,30 @@ pub struct DeepSeekDeviceOptions {
 
 impl Default for DeepSeekDeviceOptions {
     fn default() -> Self {
-        Self {
-            thinking_enabled: false,
-            search_enabled: false,
-            model_type: "default".to_string(),
-        }
+        Self::from_mode(DeepSeekDeviceMode::Fast)
     }
 }
 
 impl DeepSeekDeviceOptions {
+    /// 从对话模式构造选项
+    pub fn from_mode(mode: DeepSeekDeviceMode) -> Self {
+        Self {
+            thinking_enabled: mode == DeepSeekDeviceMode::Expert,
+            search_enabled: false,
+            model_type: mode.model_type().to_string(),
+        }
+    }
+
     /// 从用户可见的 model_id 推导内部 model_type
     pub fn from_model_id(model_id: &str) -> Self {
-        let model_type = match model_id {
-            "deepseek-reasoner" | "expert" => "expert",
-            "deepseek-vision" | "vision" => "vision",
-            _ => "default",
-        };
-        Self {
-            thinking_enabled: model_type == "expert",
-            search_enabled: false,
-            model_type: model_type.to_string(),
-        }
+        Self::from_mode(
+            DeepSeekDeviceMode::from_model_type(model_id).unwrap_or(DeepSeekDeviceMode::Fast),
+        )
+    }
+
+    /// 当前对应的对话模式
+    pub fn mode(&self) -> DeepSeekDeviceMode {
+        DeepSeekDeviceMode::from_model_type(&self.model_type).unwrap_or(DeepSeekDeviceMode::Fast)
     }
 }
 
@@ -340,12 +375,10 @@ impl DeepSeekDeviceProvider {
             AgentError::Llm(format!("login response parse failed: {} | {}", e, text))
         })?;
 
-        let biz_data = resp
-            .data
-            .biz_data
-            .ok_or_else(|| AgentError::Llm(format!("login biz_data missing: {}", text)))?;
+        let biz_data = resp.into_biz_data("login", &text)?;
         biz_data
             .get("token")
+            .or_else(|| biz_data.get("user").and_then(|u| u.get("token")))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| AgentError::Llm("login response missing token".to_string()))
@@ -382,10 +415,7 @@ impl DeepSeekDeviceProvider {
             AgentError::Llm(format!("token refresh parse failed: {} | {}", e, text))
         })?;
 
-        let biz_data = resp
-            .data
-            .biz_data
-            .ok_or_else(|| AgentError::Llm(format!("token refresh biz_data missing: {}", text)))?;
+        let biz_data = resp.into_biz_data("token refresh", &text)?;
         biz_data
             .get("token")
             .and_then(|v| v.as_str())
@@ -421,9 +451,7 @@ impl DeepSeekDeviceProvider {
             AgentError::Llm(format!("session create parse failed: {} | {}", e, text))
         })?;
 
-        resp.data
-            .biz_data
-            .ok_or_else(|| AgentError::Llm(format!("session create biz_data missing: {}", text)))?
+        resp.into_biz_data("session create", &text)?
             .get("chat_session")
             .and_then(|s| s.get("id"))
             .and_then(|v| v.as_str())
@@ -457,9 +485,7 @@ impl DeepSeekDeviceProvider {
         })?;
 
         let challenge_value = resp
-            .data
-            .biz_data
-            .ok_or_else(|| AgentError::Llm(format!("pow challenge biz_data missing: {}", text)))?
+            .into_biz_data("pow challenge", &text)?
             .get("challenge")
             .cloned()
             .ok_or_else(|| AgentError::Llm("pow challenge missing challenge object".to_string()))?;
@@ -688,6 +714,37 @@ struct PatchBuffer {
 }
 
 impl DeepSeekDeviceProvider {
+    /// Build the single `prompt` string sent to the DeepSeek device API.
+    ///
+    /// The device `/api/v0/chat/completion` endpoint only accepts a single
+    /// `prompt` field and does not support a separate `tools` parameter or
+    /// multi-turn message array. For providers without native tool calling,
+    /// we inject tool descriptions into the prompt itself so the model can
+    /// emit XML/JSON tool tags that `clarity_core::agent::tool_parser` will
+    /// parse on the way back.
+    fn build_prompt_with_tools(messages: &[Message], tools: &Value) -> String {
+        let (adapted_messages, _) = crate::tool_payload::adapt_prompt_guided(messages, tools);
+
+        let system_content = adapted_messages
+            .iter()
+            .find(|m| m.role == MessageRole::System)
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+        let user_content = adapted_messages
+            .last()
+            .filter(|m| m.role == MessageRole::User)
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+
+        if system_content.is_empty() {
+            user_content
+        } else if user_content.is_empty() {
+            system_content
+        } else {
+            format!("{}\n\n{}", system_content, user_content)
+        }
+    }
+
     /// 执行一次 completion 调用，支持 password 模式下 token 过期后重试一次。
     async fn run_completion_with_retry<F, Fut, T>(
         &self,
@@ -744,13 +801,9 @@ impl LlmProvider for DeepSeekDeviceProvider {
     async fn complete(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
-        let prompt = messages
-            .last()
-            .filter(|m| m.role == MessageRole::User)
-            .map(|m| m.content.clone())
-            .unwrap_or_default();
+        let prompt = Self::build_prompt_with_tools(messages, tools);
         self.run_completion_with_retry(&prompt, move |response| async move {
             let bytes = response
                 .bytes()
@@ -792,13 +845,9 @@ impl LlmProvider for DeepSeekDeviceProvider {
     fn stream(
         &self,
         messages: &[Message],
-        _tools: &Value,
+        tools: &Value,
     ) -> Result<mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        let prompt = messages
-            .last()
-            .filter(|m| m.role == MessageRole::User)
-            .map(|m| m.content.clone())
-            .unwrap_or_default();
+        let prompt = Self::build_prompt_with_tools(messages, tools);
         if prompt.is_empty() {
             return Err(AgentError::Llm("empty user prompt".to_string()));
         }
@@ -917,6 +966,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: false,
+            prompt_guided_tool_calling: true,
             prompt_caching: false,
             vision: false,
             pricing: None,
@@ -932,7 +982,25 @@ struct DeepSeekResponse {
     code: i32,
     #[serde(default)]
     msg: String,
-    data: DeepSeekBizResponse,
+    #[serde(default)]
+    data: Option<DeepSeekBizResponse>,
+}
+
+impl DeepSeekResponse {
+    /// 提取业务数据对象，并把 DeepSeek 侧业务错误码/信息转成可读错误。
+    fn into_biz_data(self, context: &str, raw: &str) -> Result<Value, AgentError> {
+        if self.code != 0 {
+            return Err(AgentError::Llm(format!(
+                "{} failed (code {}): {}",
+                context, self.code, self.msg
+            )));
+        }
+        let data = self
+            .data
+            .ok_or_else(|| AgentError::Llm(format!("{} response data missing: {}", context, raw)))?;
+        data.biz_data
+            .ok_or_else(|| AgentError::Llm(format!("{} biz_data missing: {}", context, raw)))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -986,8 +1054,40 @@ mod tests {
         let provider = DeepSeekDeviceProvider::with_token("test");
         let caps = provider.capabilities();
         assert!(!caps.native_tool_calling);
+        assert!(caps.prompt_guided_tool_calling);
         assert!(!caps.prompt_caching);
         assert!(!caps.vision);
+    }
+
+    #[test]
+    fn test_build_prompt_with_tools_includes_tool_descriptions() {
+        let tools = json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "powershell",
+                    "description": "Execute a PowerShell command.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "The command to execute"
+                            }
+                        },
+                        "required": ["command"]
+                    }
+                }
+            }
+        ]);
+        let messages = vec![
+            Message::system("You are a helpful assistant."),
+            Message::user("List files."),
+        ];
+        let prompt = DeepSeekDeviceProvider::build_prompt_with_tools(&messages, &tools);
+        assert!(prompt.contains("<tool_description name=\"powershell\""));
+        assert!(prompt.contains("<arg key=\"arg_name\">"));
+        assert!(prompt.contains("List files."));
     }
 
     #[test]
@@ -1059,18 +1159,40 @@ mod tests {
     }
 
     #[test]
-    fn test_options_from_model_id() {
+    fn test_options_from_model_id_and_mode() {
         let opts = DeepSeekDeviceOptions::from_model_id("deepseek-chat");
         assert_eq!(opts.model_type, "default");
         assert!(!opts.thinking_enabled);
+        assert_eq!(opts.mode(), DeepSeekDeviceMode::Fast);
 
         let opts = DeepSeekDeviceOptions::from_model_id("deepseek-reasoner");
         assert_eq!(opts.model_type, "expert");
         assert!(opts.thinking_enabled);
+        assert_eq!(opts.mode(), DeepSeekDeviceMode::Expert);
 
         let opts = DeepSeekDeviceOptions::from_model_id("deepseek-vision");
         assert_eq!(opts.model_type, "vision");
         assert!(!opts.thinking_enabled);
+        assert_eq!(opts.mode(), DeepSeekDeviceMode::Vision);
+
+        let opts = DeepSeekDeviceOptions::from_mode(DeepSeekDeviceMode::Expert);
+        assert_eq!(opts.model_type, "expert");
+        assert!(opts.thinking_enabled);
+        assert!(!opts.search_enabled);
+    }
+
+    #[test]
+    fn test_mode_roundtrip() {
+        for mode in [
+            DeepSeekDeviceMode::Fast,
+            DeepSeekDeviceMode::Expert,
+            DeepSeekDeviceMode::Vision,
+        ] {
+            assert_eq!(
+                DeepSeekDeviceMode::from_model_type(mode.model_type()),
+                Some(mode)
+            );
+        }
     }
 
     #[test]

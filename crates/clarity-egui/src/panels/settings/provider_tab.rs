@@ -4,6 +4,25 @@ use crate::ui::types::{ToastLevel, UiEvent};
 
 use clarity_llm::runtime::{RuntimeProviderConfig, list_models, test_connection};
 
+/// Map legacy DeepSeek model id to internal `model_type` wire value.
+fn deepseek_model_to_mode(model_id: &str) -> Option<&'static str> {
+    match model_id {
+        "deepseek-chat" | "fast" | "default" => Some("default"),
+        "deepseek-reasoner" | "expert" => Some("expert"),
+        "deepseek-vision" | "vision" => Some("vision"),
+        _ => None,
+    }
+}
+
+/// Map internal `model_type` wire value back to a legacy model id.
+fn deepseek_mode_to_model(mode: &str) -> &'static str {
+    match mode {
+        "expert" => "deepseek-reasoner",
+        "vision" => "deepseek-vision",
+        _ => "deepseek-chat",
+    }
+}
+
 /// Renders the provider UI.
 pub fn render_provider(app: &mut App, ui: &mut egui::Ui) {
     let left_w = (ui.available_width() * 0.35).clamp(180.0, 260.0);
@@ -459,6 +478,68 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         ui.add_space(theme.space_8);
     }
 
+    // ── DeepSeek device mode / search toggles ──
+    if is_deepseek_device {
+        ui.label(
+            egui::RichText::new("Mode")
+                .font(theme.font(theme.text_sm))
+                .color(theme.text)
+                .strong(),
+        );
+        let modes = [("default", "快速"), ("expert", "专家"), ("vision", "识图")];
+        let current_mode = prov
+            .extra
+            .get("model_type")
+            .cloned()
+            .or_else(|| {
+                deepseek_model_to_mode(&app.settings_store.settings_edit.model)
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "default".to_string());
+        let cur = modes
+            .iter()
+            .position(|(v, _)| *v == current_mode)
+            .unwrap_or(0);
+        let mut sel = cur;
+        egui::ComboBox::from_id_salt(format!("{}_ds_mode", prov.id))
+            .selected_text(modes[sel].1)
+            .show_ui(ui, |ui| {
+                for (i, (_, label)) in modes.iter().enumerate() {
+                    ui.selectable_value(&mut sel, i, *label);
+                }
+            });
+        if sel != cur && sel < modes.len() {
+            let chosen = modes[sel].0.to_string();
+            app.settings_store.settings_edit.model = deepseek_mode_to_model(&chosen).to_string();
+            let mut updated = prov.clone();
+            updated.extra.insert("model_type".to_string(), chosen);
+            let _ = app
+                .settings_store
+                .provider_registry
+                .update_provider(&updated);
+            app.auto_save_settings();
+        }
+        ui.add_space(theme.space_8);
+
+        let mut search_enabled = prov
+            .extra
+            .get("search_enabled")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        if ui.checkbox(&mut search_enabled, "联网搜索").changed() {
+            let mut updated = prov.clone();
+            updated
+                .extra
+                .insert("search_enabled".to_string(), search_enabled.to_string());
+            let _ = app
+                .settings_store
+                .provider_registry
+                .update_provider(&updated);
+            app.auto_save_settings();
+        }
+        ui.add_space(theme.space_8);
+    }
+
     // ── Local model path (only for local provider) ──
     if current == "local" {
         ui.label(
@@ -538,6 +619,12 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
         let is_local =
             current.is_empty() || prov.as_ref().map(|p| p.base_url.is_empty()).unwrap_or(true);
         let is_chat_only = prov.as_ref().map(|p| p.is_chat_only()).unwrap_or(false);
+        let is_deepseek_device = prov
+            .as_ref()
+            .map(|p| p.api_format == ApiFormat::DeepSeekDevice)
+            .unwrap_or(false);
+        let supports_connection_test = !is_local && !is_chat_only && !is_deepseek_device;
+        let supports_model_refresh = !is_local && !is_chat_only && !is_deepseek_device;
         let is_testing = app.settings_store.testing_provider.as_deref() == Some(&current);
         let is_refreshing = app.settings_store.refreshing_provider.as_deref() == Some(&current);
 
@@ -552,11 +639,13 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         let test_hover = if is_chat_only {
             "Connection test is not supported for chat-only providers"
+        } else if is_deepseek_device {
+            "Connection test is not supported for DeepSeek (Device)"
         } else {
             "Test provider connectivity"
         };
         let test_response = ui
-            .add_enabled(!is_local && !is_testing && !is_chat_only, test_btn)
+            .add_enabled(!is_local && !is_testing && supports_connection_test, test_btn)
             .on_hover_text(test_hover);
         if test_response.clicked() {
             let (display_name, base_url, api_fmt) = prov
@@ -618,11 +707,13 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8));
         let refresh_hover = if is_chat_only {
             "Model refresh is not supported for chat-only providers"
+        } else if is_deepseek_device {
+            "Model refresh is not supported for DeepSeek (Device)"
         } else {
             "Refresh model list"
         };
         let refresh_response = ui
-            .add_enabled(!is_local && !is_refreshing && !is_chat_only, refresh_btn)
+            .add_enabled(!is_local && !is_refreshing && supports_model_refresh, refresh_btn)
             .on_hover_text(refresh_hover);
         if refresh_response.clicked() {
             let (_, base_url, api_fmt) = prov
@@ -688,10 +779,10 @@ fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: ProviderDefini
             let model = app.settings_store.settings_edit.model.clone();
             if let Some(Err(e)) = prov.as_ref().map(|p| p.validate_api_key_prefix()) {
                 app.push_toast(e.clone(), ToastLevel::Warn);
-            } else if is_chat_only {
-                // Chat-only providers (e.g. deepseek-device) are loaded through the
-                // registry-backed loader rather than the runtime active-config pipeline.
-                if is_deepseek_device && is_password_mode {
+            } else if is_deepseek_device {
+                // DeepSeek (Device) uses a private API and must be loaded through the
+                // registry-backed loader rather than the generic runtime config pipeline.
+                if is_password_mode {
                     // Flush any password that has been typed but not yet encrypted
                     // (e.g. the user clicked Apply without unfocusing the field).
                     let password_edit_id = ui.id().with(&current).with("password_edit");

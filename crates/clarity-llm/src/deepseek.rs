@@ -96,6 +96,7 @@ impl LlmProvider for DeepSeekProvider {
     fn capabilities(&self) -> crate::api::ProviderCapabilities {
         crate::api::ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             prompt_caching: true,
             vision: false,
             pricing: None,

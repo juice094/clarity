@@ -39,7 +39,7 @@ pub enum ApiFormat {
     AnthropicMessages,
     /// Native Kimi API.
     Kimi,
-    /// DeepSeek device-login native API (chat-only).
+    /// DeepSeek device-login native API (prompt-guided tool calling enabled).
     DeepSeekDevice,
 }
 
@@ -180,6 +180,12 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub tags: Vec<String>,
 
+    /// True when this provider supports tool calling via prompt-guided
+    /// generation (no native function-calling API). When enabled, the provider
+    /// is allowed in Work sessions even if it is tagged as chat-only.
+    #[serde(default)]
+    pub prompt_guided_tool_calling: bool,
+
     /// Mobile number for providers that support phone/password login (e.g. deepseek-device).
     #[serde(default)]
     pub mobile: String,
@@ -194,6 +200,13 @@ pub struct ProviderDefinition {
     /// token mode while the user is typing a mobile number before the password is set.
     #[serde(default)]
     pub auth_mode: AuthMode,
+
+    /// Provider-specific key/value options.
+    ///
+    /// Used by `deepseek-device` to store `model_type` (fast/expert/vision) and
+    /// `search_enabled` without polluting the generic schema.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extra: HashMap<String, String>,
 }
 
 /// Top-level TOML structure for a provider config file.
@@ -287,6 +300,14 @@ impl ProviderDefinition {
     /// used in Work or Claw sessions.
     pub fn is_chat_only(&self) -> bool {
         self.tags.contains(&"chat-only".to_string())
+    }
+
+    /// Returns true when this provider can drive workspace tools.
+    ///
+    /// A provider supports tools when it is either not chat-only or explicitly
+    /// enables prompt-guided tool calling.
+    pub fn supports_tools(&self) -> bool {
+        !self.is_chat_only() || self.prompt_guided_tool_calling
     }
 
     /// Encrypt and store a login password using the project-wide SecretStore.
@@ -412,7 +433,14 @@ impl ProviderDefinition {
             ));
         }
 
-        let options = clarity_llm::DeepSeekDeviceOptions::from_model_id(model_id);
+        let mut options = self
+            .extra
+            .get("model_type")
+            .map(|v| clarity_llm::DeepSeekDeviceOptions::from_model_id(v))
+            .unwrap_or_else(|| clarity_llm::DeepSeekDeviceOptions::from_model_id(model_id));
+        if let Some(v) = self.extra.get("search_enabled") {
+            options.search_enabled = v == "true";
+        }
 
         if self.auth_mode.is_password() {
             let password = self.resolve_password().ok_or_else(|| {
@@ -481,7 +509,7 @@ impl From<&ProviderDefinition> for clarity_llm::ProviderConfig {
             auth_type,
             auth_token_key: Some(def.auth_token_key.clone()).filter(|s| !s.is_empty()),
             oauth,
-            extra: HashMap::new(),
+            extra: def.extra.clone(),
             pricing: None,
             tags: Vec::new(),
         }
@@ -566,7 +594,8 @@ impl ProviderRegistry {
                     "deepseek-vision".into(),
                 ],
                 builtin: true,
-                tags: vec!["chat-only".into()],
+                tags: vec![],
+                prompt_guided_tool_calling: true,
                 ..Default::default()
             },
             ProviderDefinition {
@@ -733,6 +762,35 @@ mod tests {
         );
         assert!(registry.get("openai").is_some());
         assert!(registry.get("local").is_some());
+    }
+
+    #[test]
+    fn test_deepseek_device_supports_tools() {
+        let ds = deepseek_device_def();
+        assert!(ds.prompt_guided_tool_calling);
+        assert!(ds.supports_tools());
+        assert!(!ds.is_chat_only());
+    }
+
+    #[test]
+    fn test_chat_only_provider_does_not_support_tools() {
+        let mut def = ProviderDefinition {
+            id: "chat-only".into(),
+            display_name: String::new(),
+            base_url: "https://test.com".into(),
+            api_format: ApiFormat::OpenaiCompletions,
+            auth_type: AuthType::None,
+            api_key_ref: String::new(),
+            auth_token_key: String::new(),
+            models: vec![],
+            builtin: false,
+            tags: vec!["chat-only".into()],
+            ..Default::default()
+        };
+        assert!(!def.supports_tools());
+        // Prompt-guided tool calling overrides the chat-only tag.
+        def.prompt_guided_tool_calling = true;
+        assert!(def.supports_tools());
     }
 
     #[test]
@@ -933,7 +991,8 @@ models = ["model-a", "model-b"]
             auth_token_key: String::new(),
             models: vec!["deepseek-chat".into(), "deepseek-reasoner".into()],
             builtin: true,
-            tags: vec!["chat-only".into()],
+            tags: vec![],
+            prompt_guided_tool_calling: true,
             ..Default::default()
         }
     }

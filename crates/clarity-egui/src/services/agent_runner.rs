@@ -108,6 +108,36 @@ impl App {
         });
     }
 
+    /// Upgrade the active Chat session to a Work session bound to the currently
+    /// selected project (if any).
+    pub(crate) fn upgrade_active_session_to_work(&mut self) {
+        let workspace_id = self.project_store.selected_project_id.clone();
+        let has_workspace = workspace_id
+            .as_ref()
+            .and_then(|pid| {
+                self.project_store
+                    .projects
+                    .iter()
+                .find(|p| &p.id == pid)
+                    .map(|p| p.has_workspace)
+            })
+            .unwrap_or(true);
+
+        let context = SessionContext::Work {
+            workspace_id: workspace_id.clone(),
+            has_workspace,
+        };
+
+        if let Some(session) = self.session_store.active_session_mut() {
+            session.context = context;
+            session.project_id = workspace_id;
+            session.updated_at = crate::session::now_millis();
+        }
+
+        self.save_current_session();
+        self.push_toast("Session upgraded to Work mode.", ToastLevel::Info);
+    }
+
     /// Send.
     pub(crate) fn send(&mut self) {
         let text = self.chat_store.input.trim().to_string();
@@ -122,12 +152,12 @@ impl App {
         let is_claw_session = matches!(active_context, Some(SessionContext::Claw { .. }));
         let is_work_session = matches!(active_context, Some(SessionContext::Work { .. }));
         let selected_provider = self.settings_store.settings_edit.provider.clone();
-        let provider_chat_only = self
+        let provider_tools_available = self
             .settings_store
             .provider_registry
             .get(&selected_provider)
-            .map(|p| p.is_chat_only())
-            .unwrap_or(false);
+            .map(|p| p.supports_tools())
+            .unwrap_or(true);
 
         // When the active session is a Claw session, route the main chat message
         // through the WebSocket gateway. Chat/Work sessions must keep using the
@@ -144,13 +174,28 @@ impl App {
             return;
         }
 
-        // Chat-only providers (e.g. deepseek-device) are intentionally unavailable
-        // in Work sessions because they do not support workspace tools.
-        if is_work_session && provider_chat_only {
+        // Work sessions require a provider that can drive workspace tools.
+        if is_work_session && !provider_tools_available {
             self.push_toast(
                 "The selected provider is only available in Chat sessions.",
                 ToastLevel::Warn,
             );
+            return;
+        }
+
+        // Command: /work — upgrade the current Chat session to a Work session.
+        if text.trim() == "/work" {
+            if !provider_tools_available {
+                self.push_toast(
+                    "The selected provider does not support workspace tools.",
+                    ToastLevel::Warn,
+                );
+                self.chat_store.input.clear();
+                return;
+            }
+            self.upgrade_active_session_to_work();
+            self.chat_store.input.clear();
+            self.chat_store.attachments.clear();
             return;
         }
 

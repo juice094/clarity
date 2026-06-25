@@ -379,6 +379,7 @@ impl LlmProvider for OllamaProvider {
     fn capabilities(&self) -> crate::api::ProviderCapabilities {
         crate::api::ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             ..Default::default()
         }
     }

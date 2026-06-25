@@ -46,7 +46,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Re-export provider types
 pub use deepseek::DeepSeekProvider;
 pub use deepseek_device::{
-    DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceOptions, DeepSeekDeviceProvider,
+    DeepSeekDeviceConfig, DeepSeekDeviceCredentials, DeepSeekDeviceMode, DeepSeekDeviceOptions,
+    DeepSeekDeviceProvider,
 };
 pub use kalosm::{KalosmConfig, KalosmProvider};
 pub use llama_server::LlamaServerProvider;
@@ -674,6 +675,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             prompt_caching: true,
             vision: false,
             pricing: Some(crate::api::Pricing {
@@ -741,6 +743,7 @@ impl LlmProvider for KimiLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             prompt_caching: true,
             vision: false,
             pricing: None,
@@ -854,6 +857,7 @@ impl LlmProvider for OAuthLlm {
     fn capabilities(&self) -> ProviderCapabilities {
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             prompt_caching: true,
             vision: false,
             pricing: None,

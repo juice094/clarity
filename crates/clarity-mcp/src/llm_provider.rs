@@ -99,6 +99,7 @@ impl LlmProvider for McpLlmProvider {
         // Conservative defaults — actual capabilities depend on the remote server.
         ProviderCapabilities {
             native_tool_calling: true,
+            prompt_guided_tool_calling: false,
             vision: false,
             prompt_caching: false,
             pricing: None,

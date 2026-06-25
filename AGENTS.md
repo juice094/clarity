@@ -180,30 +180,33 @@ clarity/
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| Agent 循环 | `src/agent/` | `Agent`、ReAct/Plan、controller、streaming、execution、compaction |
-| 工具 | `src/tools/`（由 `clarity-tools` 提供） | 文件、Shell、Web、任务、团队、MCP 等 |
-| LLM | `src/llm/`（由 `clarity-llm` 提供） | provider trait、factory、registry、本地 GGUF |
-| MCP | `src/mcp/` | 客户端、transport、config、devkit、enhanced |
+| Agent 循环 | `src/agent/` | `Agent`、ReAct/Plan、controller、run/flow/jumpy 子模块、streaming、execution、compaction、snapshot、LSP |
+| 工具集成 | `src/tools/` | ToolRegistry、内置工具封装、MCP 工具映射；**具体工具实现位于 `clarity-tools` crate** |
+| MCP | `src/mcp/` | 客户端集成、transport、config、devkit、enhanced |
+| LLM 消费 | `src/llm` 不存在 | LLM provider 抽象位于 `clarity-llm` crate；`clarity-core` 通过 `LlmProvider` trait 消费 |
 | 后台任务 | `src/background/` | `BackgroundTaskManager`、executor、scheduler、store |
-| 记忆 | `src/memory/` | `PersistentMemoryStore`、`MemoryCompiler`、`SharedMemoryTicker` |
+| 记忆 | `src/memory/` | `PersistentMemoryStore`、`MemoryCompiler`、`SharedMemoryTicker`（`clarity-memory` 的 core 侧封装） |
 | 审批 | `src/approval/` | Approval 模式、规则引擎 |
 | Skill | `src/skills/` | Markdown+YAML 技能加载、注册、发现 |
 | 压缩 | `src/compaction.rs` | 上下文压缩、Token 爆炸防护 |
 | 自适应 | `src/adaptive/` | `AdaptiveModelRouter`、profile、predictor、compression |
-| 快照 | `src/agent/snapshot/` | Side-Git 快照隔离 |
-| LSP | `src/agent/lsp/` | 语言服务器代理 |
-| Server | `src/server/` | JSON-RPC over stdio |
 | UI 状态 | `src/ui/` | `ViewState` 状态机（跨前端共享） |
-| Thread/Session | `src/thread/`、`src/session/` | Thread 生命周期、Session 上下文与持久化 |
+| 设置视图模型 | `src/view_models/` | `SettingsViewModel`、`SettingsSnapshot`、`ProviderModelEntry` |
+| Session/Thread | `src/session/`、`src/thread/` | Session 上下文与持久化、Thread 生命周期 |
+| OKF | `src/okf/` | Open Knowledge Format bundle/概念/知识图消费者 |
+| 人格 | `src/personality/` | Personality 模板变量解析（当前 inactive） |
+| 基础设施 | `src/config/`、`src/daemon/`、`src/hooks/`、`src/logging/`、`src/notifications/` | 配置、守护、钩子、日志、通知 |
 | 实验性 Agent OS | `src/soul/`、`src/tier_bus/`、`src/hub/` | **EXPERIMENTAL / 未接入主循环** |
 
 ### 5.3 `clarity-egui` 结构要点
 
 - `main.rs::update()` 每帧调用 `design_system::install_theme()`。
 - `App::render_layout_shell()` 是 chrome / 主视图 / 浮层 / 模态框唯一编排入口。
-- `panels/` 按职责分组：`chat/`、`work/`、`settings/`、`modals/`、`system/` 等；历史 obsolete 模块（`sidebar/`、`workspace/`、`left_rail/`、`right_rail/` 及 `panels/chat/header.rs`）已删除。
-- `widgets/` 存放可复用组件；`theme.rs` 是 design token 单源。
-- `stores/` 已拆分为按域子模块，保持原导入路径。
+- 根目录关键文件：`app_logic.rs`、`app_state.rs`、`design_system.rs`、`theme.rs`、`layout.rs`、`i18n.rs`、`pretext.rs`、`pretext_alignment.rs`、`window_manager.rs`。
+- `panels/` 按职责分组：`chat/`、`navigation_tree/`、`right_ide_panel/`、`settings/`、`modals/`、`system/`、`sidebar/`、`legacy/` 等。
+- `components/` 存放按域分组的可复用组件（`chat/`、`settings/`）。
+- `widgets/` 存放可复用小部件；`theme.rs` 是 design token 单源。
+- `handlers/` 处理 Agent/Wire 事件；`shortcuts/` 处理键盘路由；`services/` 封装后端交互；`stores/` 按域子模块组织。
 - 已接入 Pretext 文字测量后端（`pretext-core` / `pretext-fontdb`），`MessageBubble` 与 `widgets/rich_paragraph.rs` 已转为 pretext-aware。
 - `layout.rs` 提供 `LayoutMetrics` 与 `update_and_measure`，支撑 Pretext 三栏布局几何。
 - `ui/debug_overlay.rs` 提供布局诊断覆盖层，快捷键 `Ctrl+Shift+L`。
@@ -253,16 +256,16 @@ cargo audit --deny unsound --deny yanked
 cargo doc --workspace --no-deps --exclude clarity-slint
 ```
 
-### 6.2 当前测试基线（2026-06-20，实机验证）
+### 6.2 当前测试基线（2026-06-24，实机验证）
 
 | 测试类型 | 通过 | 失败 | 忽略 |
 |----------|------|------|------|
-| `cargo test --workspace --lib --exclude clarity-slint` | 1291 | 0 | 9 |
-| `cargo test --workspace --bins --exclude clarity-slint` | 251 | 0 | 2 |
-| `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 3 |
+| `cargo test --workspace --lib --exclude clarity-slint` | 1547 | 0 | 0 |
+| `cargo test --workspace --bins --exclude clarity-slint` | 269 | 0 | 0 |
+| `cargo test --workspace --doc --exclude clarity-slint` | 34 | 0 | 0 |
 | `cargo test -p clarity-integration-tests --lib` | 26 | 0 | 0 |
 | `cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` | 0 warning | 0 | - |
-| `cargo fmt --all -- --check` | pass | 0 | - |
+| `cargo fmt --all -- --check` | 当前存在 1 处 diff，提交前需执行 `cargo fmt --all` | - | - |
 
 > `clarity-slint` 为实验栈，不参与默认 CI。提交前必须保证上述命令全部通过。
 
@@ -285,7 +288,7 @@ cargo doc --workspace --no-deps --exclude clarity-slint
 | `line-mode` | egui 行级渲染管线 | `clarity-egui` 可选 |
 | `slack` / `discord` / `telegram` / `webhook` | Gateway 通道 feature | 默认仅 `webhook` |
 | `telemetry-api` | Gateway 遥测 REST API | `clarity-gateway` 可选 |
-| `hermes` | 各前端 / `clarity-core` / `clarity-memory` / `clarity-gateway` 可选的 hermes-memory SQLite 后端 | 实验性，默认关闭；通过 `CLARITY_MEMORY_BACKEND=hermes` 启用。**注意**：需要本地 `hermes-memory` 仓库位于 `../../../hermes-memory/` 相对路径。 |
+| `hermes` | `clarity-memory` / `clarity-core` / `clarity-egui` / `clarity-tui` / `clarity-gateway` / `clarity-headless` 可选的 hermes-memory SQLite 后端 | 实验性，默认关闭；通过 `CLARITY_MEMORY_BACKEND=hermes` 启用。**注意**：需要本地 `hermes-memory` 仓库位于 `../../../hermes-memory/` 相对路径。 |
 
 CUDA 构建示例（Windows）：
 
@@ -455,15 +458,19 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 ## 11. 当前工作与已知限制
 
-- **S6 Pretext 三栏布局迁移**：固定宽左导航树（`size_sidebar = text_base * 17`，≈238 px）+ 极简标题栏 + Bot 栏 + 统一会话中栏 + IDE 式压缩右栏已落地；旧 `panels/sidebar/`、`panels/workspace/`、`panels/left_rail/`、`panels/right_rail/` 及 `panels/chat/header.rs` 等 obsolete 模块已删除；布局几何随字体缩放同步。
-- **Pretext 文字测量接入**：`clarity-egui` 已接入 `pretext-core` / `pretext-fontdb`；`MessageBubble` 已迁移为 pretext-aware；默认启用 pretext 高度估算；回归测试与 release 性能基准通过。
+- **Gray Migration 通道层**：WeChat iLink 实现位于 `clarity-channels::chkit`；Gateway 已切换至 DeepSeek `deepseek-v4-pro`。
+- **Provider/Secret 体系**：Stage A/B/C 已完成，支持 `enc2:` 加密 key、`models.toml` per-alias 配置、`ReliableProvider` 链式 failover、`runtime_router` 与 OAuth device flow。
+- **egui 模块整理**：`ViewState` 单源化、`panels/` 目录重组、widget 提取、`design_system` 语义原语落地、`layout shell` 接入点稳定。
+- **S6 Pretext 三栏布局 Phase A/B/C3**：新增 `LeftRailSection` / `RightRailSection` 与 `ViewState` rail 字段；移除 `UiStore.sidebar_collapsed`；形成左 icon rail + 中主舞台 + 右工具 rail 的单页面外壳；右 rail 卡片（Status / Tools / Subagents / Memory）已接入真实内容；`legacy/task.rs` 与 `legacy/team.rs` 已迁移删除；布局几何精化（默认窗口 1280×800、sidebar 200px、header 全宽、内容居中）与 header far-right 定位修复完成。
+- **Pretext 文字测量接入**：`clarity-egui` 已接入 `pretext-core` / `pretext-fontdb`；`pretext::EguiFontMetrics` 用 egui 字体栈作为 measurement backend；`MessageBubble` 已迁移为 pretext-aware；默认启用 pretext 高度估算；23 样本对齐回归测试与 1000 条消息 release 性能基准通过（聚合高度偏差 ≈ 1.45%，estimate ≈ 74.4 µs/msg，render ≈ 135.7 µs/msg）。
 - **Phase 1.5 状态机迁移已完成**：所有遗留 boolean modal / turn / expansion 标志已迁移到 `view_state.modal` / `view_state.turn` / `view_state.expansions`；`clarity-egui` 全局 `#![allow(dead_code)]` 已移除。
-- **Phase E 设计系统替换已完成**：`design_system` 语义原语已落地到关键 widgets（provider_row / user_avatar）；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
-- **布局诊断覆盖层**：`clarity-egui/src/ui/debug_overlay.rs` 提供红/绿/蓝/黄布局诊断，快捷键 `Ctrl+Shift+L`。详见 `crates/clarity-egui/EGUI_LAYOUT_DEBUG.md`。
-- **人机协作图片标注器**：新增 `assets/ui_annotator.html` + schema + `render_annotations.py`，建立“用户框选 → JSON → AI 生成/修正 egui 代码”的协作闭环。
-- **S6 清理与国际化**：`cargo clippy -p clarity-egui --bins --tests -- -D warnings` 与 `cargo fmt --all -- --check` 通过；新增导航树、Bot 栏、右栏占位面板等所有用户可见字符串已接入 `t!()` / `app.t()` 国际化。
+- **Phase E 设计系统替换已完成**：右 rail 全部卡片（status / tools / subagent / memory / context / progress）与关键 widgets（provider_row / sidebar_card / user_avatar）已使用 `design_system` 语义原语；未使用原语已清理，`design_system.rs` 无模块级 `#[allow(dead_code)]`。
+- **方向 B（OpenClaw 连接管理）**：修复 `openclaw_pair` 示例 token 保存 URL；token 支持 `${env:VAR}` 解析；`OpenClawAuthMode` 在发现与连接逻辑中生效；Settings 新增 **Claw** 标签页，支持增删改查远程连接；egui 内实现完整设备配对流程（请求 → 等待审批 → 保存 token）。
+- **方向 C（OKF 前端接入）**：新增 `KnowledgeStore`；右 rail `Knowledge` 面板支持输入 OKF bundle 路径、Load/Reload、搜索概念、浏览概念列表并查看详情（frontmatter + Markdown 正文）。
 - **Phase 7 项目模型与上下文驱动**：`Session` 已新增 `project_id` / `context` / `lifecycle` / `archived`；`SessionContext` / `SessionLifecycle` 支持序列化并随会话 JSON 持久化；Bot 栏优先使用 `session.context` 驱动右栏按钮；导航树按 `project_id` 真实分组，项目下展示所属会话，归档会话可点击还原；无项目会话单独显示在 `Chats` 分组。
 - **输入框位置修复**：空状态时隐藏底部 `TopBottomPanel` 输入栏，将 Composer 居中置于大 Logo 与快捷提示下方；非空状态时恢复底部固定输入栏。同时把右栏渲染提前到底部输入栏与中栏之前，避免展开右栏时输入框/中栏与其重叠。
+- **布局诊断覆盖层**：`clarity-egui/src/ui/debug_overlay.rs` 提供红/绿/蓝/黄布局诊断，快捷键 `Ctrl+Shift+L`。详见 `crates/clarity-egui/EGUI_LAYOUT_DEBUG.md`。
+- **人机协作图片标注器**：新增 `assets/ui_annotator.html` + schema + `render_annotations.py`，建立“用户框选 → JSON → AI 生成/修正 egui 代码”的协作闭环。
 - **文档补齐**：为 `clarity-rollout` 与 `clarity-thread-store` 补全了 `README.md` 与 `AGENTS.md`，满足 CI `doc-guard` 对每 crate 文档存在性的检查。
 - **移动端 FFI 核心落地**：新增 `crates/clarity-mobile-core`，通过 UniFFI 暴露 Runtime/事件/配置/记忆接口；默认禁用 `local-llm` 以避免移动 ABI fullfp16 问题。完整 Android/iOS UI 仍在 `mobile/` 与 `docs/mobile-architecture.md` 路线图中。
 - **Claw 协议统一**：已决策 Gateway WebSocket 为 Clarity 内部唯一协议，OpenClaw JSON-RPC 仅作为外部 KimiClaw/OpenClaw Gateway 互通的 fallback；已删除 egui 层的 `claw_ws_uses_sessions_send` 协议泄漏字段，发送方法由 `ClawConnectionManager` 根据检测到的 dialect 自行决定；已明确 `clarity-claw` 只做 Gateway WebSocket 客户端/系统托盘节点，不兼任外部 OpenClaw 适配器，并移除了其中未使用的 federation coordinator/nodes/runtime 骨架代码。详见 [`docs/architecture/claw-protocol.md`](docs/architecture/claw-protocol.md)。
@@ -471,12 +478,11 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
   - Discord/Telegram 默认禁用，等待上游 `rustls-webpki` 修复。
   - Gateway HTTP Chat Completions 默认无状态；完整 session 请用 WebSocket 或传 `session_id`。
   - `hermes` feature 依赖位于 `../../../hermes-memory/` 的本地仓库，CI 与未检出该仓库的环境需跳过 hermes 相关检查。
+  - 当前 `cargo fmt --all -- --check` 存在 1 处待格式化差异，提交前需执行 `cargo fmt --all`。
 
 ---
 
 ## 12. 更多参考
-
-
 
 | 主题 | 文档 |
 |------|------|
@@ -515,4 +521,4 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 ---
 
-*最后更新：2026-06-20*
+*最后更新：2026-06-24*

@@ -79,6 +79,15 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
             });
             ui.add_space(theme.space_12);
 
+            // Surface the empty-session quick-start hints only inside the Console
+            // panel; the central empty stage keeps just the Clarity title/subtitle.
+            if panel == clarity_core::ui::RightRailPanel::Console
+                && crate::panels::chat::is_empty_state(app)
+            {
+                render_quick_start_hints(app, ui);
+                ui.add_space(theme.space_16);
+            }
+
             // Panel content.
             match panel {
                 RightRailPanel::Share => share_panel::render(app, ui),
@@ -135,6 +144,68 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
         ],
         egui::Stroke::new(1.0, theme.border),
     );
+}
+
+fn render_quick_start_hints(app: &mut App, ui: &mut egui::Ui) {
+    let theme = app.ui_store.theme.clone();
+    ui.label(
+        egui::RichText::new(app.t("Quick start"))
+            .size(theme.text_sm)
+            .strong()
+            .color(theme.text),
+    );
+    ui.add_space(theme.space_8);
+
+    let hints = [
+        ("/coder", app.t("Code assistant")),
+        ("/plan", app.t("Task planning")),
+        ("/review", app.t("Code review")),
+    ];
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = theme.space_8;
+        for (cmd, desc) in hints {
+            let chip = egui::Frame::new()
+                .fill(theme.bg_hover)
+                .stroke(egui::Stroke::new(1.0, theme.border))
+                .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+                .inner_margin(egui::Margin::symmetric(
+                    theme.space_12 as i8,
+                    theme.space_8 as i8,
+                ))
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(cmd)
+                                .size(theme.text_xs)
+                                .monospace()
+                                .color(theme.accent),
+                        );
+                        ui.add_space(theme.space_8);
+                        ui.label(
+                            egui::RichText::new(desc)
+                                .size(theme.text_xs)
+                                .color(theme.text_muted),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new("→")
+                                    .font(theme.font_icon(theme.text_xs))
+                                    .color(theme.text_dim),
+                            );
+                        });
+                    });
+                });
+            let chip_response = chip
+                .response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(format!("{} {}", cmd, desc));
+            if chip_response.clicked() {
+                app.chat_store.input = format!("{} ", cmd);
+                app.ui_store.focus_input_requested = true;
+            }
+        }
+    });
 }
 
 fn panel_title(panel: RightRailPanel, app: &crate::App) -> &'static str {

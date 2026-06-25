@@ -7,7 +7,9 @@ use std::sync::LazyLock;
 // The patterns are compile-time literals; expect is safe because they are valid regexes.
 #[allow(clippy::expect_used)]
 static RE_TOOL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["'][^>]*>(.*?)</tool>"#)
+    // Matches both self-closing <tool name="..." arg="..."/> and
+    // container-style <tool name="...">...</tool>.
+    Regex::new(r#"(?s)<tool\s+name=["']([^"']+)["']\s*([^>]*?)(?:>(.*?)</tool>|/>)"#)
         .expect("RE_TOOL regex is valid")
 });
 #[allow(clippy::expect_used)]
@@ -30,6 +32,15 @@ static RE_PARAM: LazyLock<Regex> = LazyLock::new(|| {
 #[allow(clippy::expect_used)]
 static RE_MINIMAX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?s)```(\w+)\s*\n(.*?)\n```").expect("RE_MINIMAX regex is valid")
+});
+#[allow(clippy::expect_used)]
+static RE_GENERIC_ARG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<([a-zA-Z_][a-zA-Z0-9_\-]*)>(.*?)</([a-zA-Z_][a-zA-Z0-9_\-]*)>"#)
+        .expect("RE_GENERIC_ARG regex is valid")
+});
+#[allow(clippy::expect_used)]
+static RE_ATTR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"([a-zA-Z_][a-zA-Z0-9_\-]*)\s*=\s*["']([^"']*)["']"#).expect("RE_ATTR regex is valid")
 });
 
 /// Supported tool call formats.
@@ -106,13 +117,29 @@ fn parse_json_tool_calls(content: &str) -> Vec<ToolCall> {
 fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
     let mut calls = Vec::new();
 
-    // Pattern 1: <tool name="...">...</tool>
+    // Pattern 1: <tool name="..." attr="..."/> or <tool name="...">...</tool>
     for caps in RE_TOOL.captures_iter(content) {
         let name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-        let inner = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+        let attrs = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+        let inner = caps.get(3).map(|m| m.as_str()).unwrap_or("");
 
         let mut args = serde_json::Map::new();
 
+        // Self-closing style: arguments are XML attributes on the <tool> tag.
+        for attr_caps in RE_ATTR.captures_iter(attrs) {
+            let key = attr_caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            let value = attr_caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
+            if key == "name" {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(value) {
+                args.insert(key.to_string(), v);
+            } else {
+                args.insert(key.to_string(), Value::String(value.to_string()));
+            }
+        }
+
+        // Container style: arguments are inside the <tool> tag.
         for arg_caps in RE_ARG.captures_iter(inner) {
             let key = arg_caps.get(1).map(|m| m.as_str()).unwrap_or("");
             let value = arg_caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
@@ -120,6 +147,24 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
                 args.insert(key.to_string(), v);
             } else {
                 args.insert(key.to_string(), Value::String(value.to_string()));
+            }
+        }
+
+        // Fallback: some models emit parameter values as direct child tags
+        // (e.g. `<command>Get-ChildItem</command>`) instead of `<arg key="...">`.
+        if args.is_empty() {
+            for gen_caps in RE_GENERIC_ARG.captures_iter(inner) {
+                let open_key = gen_caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                let value = gen_caps.get(2).map(|m| m.as_str().trim()).unwrap_or("");
+                let close_key = gen_caps.get(3).map(|m| m.as_str()).unwrap_or("");
+                if open_key != close_key || open_key == "arg" || open_key == "parameter" {
+                    continue;
+                }
+                if let Ok(v) = serde_json::from_str::<Value>(value) {
+                    args.insert(open_key.to_string(), v);
+                } else {
+                    args.insert(open_key.to_string(), Value::String(value.to_string()));
+                }
             }
         }
 
@@ -301,6 +346,28 @@ mod tests {
         assert_eq!(calls[0].function.name, "file_read");
         let args: Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
         assert_eq!(args["path"], "src/main.rs");
+    }
+
+    #[test]
+    fn test_parse_xml_tool_calls_generic_parameter_tags() {
+        let content = r#"<tool name="powershell"><command>Get-ChildItem</command></tool>"#;
+        let calls = parse_xml_tool_calls(content);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].function.name, "powershell");
+        let args: Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
+        assert_eq!(args["command"], "Get-ChildItem");
+    }
+
+    #[test]
+    fn test_parse_xml_tool_calls_self_closing_attributes() {
+        let content = r#"<tool name="powershell" command="Get-ChildItem -File" timeout="30"/>"#;
+        let calls = parse_xml_tool_calls(content);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].function.name, "powershell");
+        let args: Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
+        assert_eq!(args["command"], "Get-ChildItem -File");
+        // Numeric attribute values are parsed as JSON numbers when possible.
+        assert_eq!(args["timeout"], 30);
     }
 
     #[test]

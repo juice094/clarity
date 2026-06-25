@@ -8,7 +8,7 @@ pub use self::message_list::render_message_list;
 
 /// Returns true when the central stage should show the centered empty-state
 /// composer instead of the bottom input bar + message list.
-fn is_empty_state(app: &crate::App) -> bool {
+pub(crate) fn is_empty_state(app: &crate::App) -> bool {
     let active = app
         .session_store
         .sessions
@@ -49,13 +49,10 @@ fn render_message_list_centered(app: &mut App, ui: &mut egui::Ui, max_w: f32) {
 ///
 /// The composer is declared as a `TopBottomPanel::bottom` so it takes its
 /// natural height and leaves the remaining area to the scrollable conversation
-/// in `render_chat_area`. When the empty state is active the composer is
-/// rendered inline by `render_empty_stage` and this function does nothing.
+/// in `render_chat_area`. The composer is always rendered so that its top edge
+/// lines up with the bottom boundary of the chat area, both in empty and active
+/// sessions.
 pub fn render_input_panel(app: &mut App, ctx: &egui::Context) {
-    if is_empty_state(app) {
-        return;
-    }
-
     let theme = app.ui_store.theme.clone();
     let kimi_style = app.ui_store.kimi_conversation_style;
     let ui_tx = app.ui_tx.clone();
@@ -156,65 +153,78 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             // content_max_width.
             crate::panels::bot_bar::render_bot_bar(app, ui);
 
-            if is_empty_state(app) {
-                render_empty_stage(app, ui);
-                return;
-            }
+            if !is_empty_state(app) {
+                // The input bar is rendered by `render_input_panel` in a separate
+                // bottom panel. The remaining central area is used for the message
+                // list.
+                //
+                // Layout rules from the design discussion:
+                //   - Short conversation: top-aligned, horizontally centered, no
+                //     scrollable empty space below.
+                //   - Long conversation: full-height ScrollArea with the scrollbar on
+                //     the right divider, anchored to the bottom (latest messages next
+                //     to the input box).
+                let theme = app.ui_store.theme.clone();
+                let full_w = ui.available_width();
+                let max_w = app
+                    .ui_store
+                    .content_max_width
+                    .min(full_w - 2.0 * theme.space_24)
+                    .max(120.0);
+                let remaining_rect = ui.available_rect_before_wrap();
+                let content_h = message_list::estimate_total_height(app, max_w);
+                let long_conversation = content_h > 0.0 && content_h > remaining_rect.height();
 
-            // The input bar is rendered by `render_input_panel` in a separate
-            // bottom panel. The remaining central area is used for the message
-            // list.
-            //
-            // Layout rules from the design discussion:
-            //   - Short conversation: top-aligned, horizontally centered, no
-            //     scrollable empty space below.
-            //   - Long conversation: full-height ScrollArea with the scrollbar on
-            //     the right divider, anchored to the bottom (latest messages next
-            //     to the input box).
-            let theme = app.ui_store.theme.clone();
-            let full_w = ui.available_width();
-            let max_w = app
-                .ui_store
-                .content_max_width
-                .min(full_w - 2.0 * theme.space_24)
-                .max(120.0);
-            let remaining_rect = ui.available_rect_before_wrap();
-            let content_h = message_list::estimate_total_height(app, max_w);
-            let long_conversation = content_h > 0.0 && content_h > remaining_rect.height();
-
-            if long_conversation {
-                let max_scroll = (content_h - remaining_rect.height()).max(0.0);
-                if app.chat_store.stick_to_bottom {
-                    app.ui_store.last_scroll_offset = max_scroll;
+                if long_conversation {
+                    let max_scroll = (content_h - remaining_rect.height()).max(0.0);
+                    if app.chat_store.stick_to_bottom {
+                        app.ui_store.last_scroll_offset = max_scroll;
+                    }
+                    let active_id = app.session_store.active_session_id.clone();
+                    let output = egui::ScrollArea::vertical()
+                        .id_salt(format!("chat_scroll_{}", active_id))
+                        .auto_shrink([false; 2])
+                        .scroll_bar_visibility(
+                            egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                        )
+                        .scroll_offset(egui::vec2(0.0, app.ui_store.last_scroll_offset))
+                        .show(ui, |ui| {
+                            render_message_list_centered(app, ui, max_w);
+                        });
+                    app.ui_store.last_scroll_offset = output.state.offset.y;
+                } else {
+                    // Short conversation: top-aligned inside a horizontally centered
+                    // content column, no scrollable empty space below.
+                    app.ui_store.last_scroll_offset = 0.0;
+                    render_message_list_centered(app, ui, max_w);
                 }
-                let active_id = app.session_store.active_session_id.clone();
-                let output = egui::ScrollArea::vertical()
-                    .id_salt(format!("chat_scroll_{}", active_id))
-                    .auto_shrink([false; 2])
-                    .scroll_bar_visibility(
-                        egui::containers::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
-                    )
-                    .scroll_offset(egui::vec2(0.0, app.ui_store.last_scroll_offset))
-                    .show(ui, |ui| {
-                        render_message_list_centered(app, ui, max_w);
-                    });
-                app.ui_store.last_scroll_offset = output.state.offset.y;
             } else {
-                // Short conversation: top-aligned inside a horizontally centered
-                // content column, no scrollable empty space below.
-                app.ui_store.last_scroll_offset = 0.0;
-                render_message_list_centered(app, ui, max_w);
+                render_empty_stage(app, ui);
             }
         });
 }
 
-/// Centered empty state: large logo, quick-start hints, and composer.
+/// Centered empty state: large logo and short subtitle.
+///
+/// The composer is now rendered by `render_input_panel` at the bottom of the
+/// window so its top edge always aligns with the bottom of the chat area.
 fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
+    let full_w = ui.available_width();
+    let content_w = app
+        .ui_store
+        .content_max_width
+        .min(full_w - 2.0 * theme.space_24)
+        .clamp(320.0, 560.0);
 
     ui.vertical_centered(|ui| {
-        let empty_state_offset = (ui.available_height() / 3.0).max(120.0);
-        ui.add_space(empty_state_offset);
+        ui.set_max_width(content_w);
+
+        let full_h = ui.available_height();
+        // Center the Clarity title + subtitle block vertically, then shift it
+        // slightly upward because the screen is typically viewed at a tilt.
+        let block_h = 48.0 + theme.space_12 + 16.0;
+        ui.add_space((((full_h - block_h) / 2.0) - 32.0).max(40.0));
 
         ui.label(
             egui::RichText::new("Clarity")
@@ -222,63 +232,12 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
                 .strong()
                 .color(theme.text_strong),
         );
-        ui.add_space(theme.space_16);
+        ui.add_space(theme.space_12);
 
         ui.label(
             egui::RichText::new(app.t("Start conversation below"))
                 .size(theme.text_sm)
                 .color(theme.text_dim),
         );
-        ui.add_space(theme.space_24);
-
-        let hints = [
-            ("/coder", app.t("Code assistant")),
-            ("/plan", app.t("Task planning")),
-            ("/review", app.t("Code review")),
-        ];
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = theme.space_8;
-            ui.set_max_width(280.0);
-            for (cmd, desc) in hints {
-                let chip = egui::Frame::new()
-                    .fill(theme.bg_hover)
-                    .corner_radius(egui::CornerRadius::same(8))
-                    .inner_margin(egui::Margin::symmetric(16, 10))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(cmd)
-                                    .size(theme.text_sm)
-                                    .monospace()
-                                    .color(theme.accent),
-                            );
-                            ui.add_space(8.0);
-                            ui.label(
-                                egui::RichText::new(desc)
-                                    .size(theme.text_sm)
-                                    .color(theme.text_muted),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new("→")
-                                            .font(theme.font_icon(theme.text_sm))
-                                            .color(theme.text_dim),
-                                    );
-                                },
-                            );
-                        });
-                    });
-                if chip.response.clicked() {
-                    app.chat_store.input = format!("{} ", cmd);
-                    app.ui_store.focus_input_requested = true;
-                }
-            }
-        });
-
-        ui.add_space(theme.space_24);
-        render_input(app, ui);
     });
 }

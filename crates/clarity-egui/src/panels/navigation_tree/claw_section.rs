@@ -5,7 +5,7 @@
 //! sidebar is session-centric: one row per `(role, session_key)` and a
 //! collapsible sub-list of the devices that can serve it.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::App;
 use crate::stores::BotStatus;
@@ -41,6 +41,13 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
         all_keys.insert((g.role.clone(), g.session_key.clone()));
     }
 
+    // Group by role so Claw sessions are visually separated from the loose chat
+    // history and easy to locate/preserve.
+    let mut by_role: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (role, session_key) in &all_keys {
+        by_role.entry(role.clone()).or_default().push(session_key.clone());
+    }
+
     crate::widgets::collapsible_section::collapsible_section(
         ui,
         "nav_claw",
@@ -58,10 +65,28 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                 return;
             }
 
-            for (role, session_key) in all_keys {
-                let group = groups
-                    .iter()
-                    .find(|g| g.role == role && g.session_key == session_key);
+            for (role, session_keys) in by_role {
+                // Role header: a subtle but distinct grouping label.
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = theme.space_8;
+                    ui.label(
+                        egui::RichText::new(crate::theme::ICON_CPU)
+                            .font(theme.font_icon(theme.text_xs))
+                            .color(theme.text_dim),
+                    );
+                    ui.label(
+                        egui::RichText::new(&role)
+                            .size(theme.text_xs)
+                            .strong()
+                            .color(theme.text_dim),
+                    );
+                });
+                ui.add_space(theme.space_4);
+
+                for session_key in session_keys {
+                    let group = groups
+                        .iter()
+                        .find(|g| g.role == role && g.session_key == session_key);
 
                 // Session row status = best status of any device in the group.
                 let status = group
@@ -200,9 +225,12 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 }
+                }
 
                 ui.add_space(theme.space_4);
             }
+
+            ui.add_space(theme.space_8);
         },
     );
 
