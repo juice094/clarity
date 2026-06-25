@@ -134,9 +134,10 @@ async fn test_e2e_tool_call_powershell_list_dir() {
 
     // The model may emit parameters in several XML forms. Accept the same
     // variants that the production XML tool parser supports.
-    let command = if let Some(caps) = regex::Regex::new(r#"<arg\s+key=["']command["']\s*>(.*?)</arg>"#)
-        .unwrap()
-        .captures(tool_body)
+    let command = if let Some(caps) =
+        regex::Regex::new(r#"<arg\s+key=["']command["']\s*>(.*?)</arg>"#)
+            .unwrap()
+            .captures(tool_body)
     {
         caps.get(1).unwrap().as_str().trim()
     } else if let Some(caps) = regex::Regex::new(r#"<command>(.*?)</command>"#)
@@ -150,7 +151,11 @@ async fn test_e2e_tool_call_powershell_list_dir() {
     {
         caps.get(1).unwrap().as_str().trim()
     } else {
-        panic!("expected <arg key=\"command\">, <command>, or command= attribute in tool call");
+        // Raw text directly inside <tool> (no arg wrapper tags).
+        // The model emitted the command as the sole content of the <tool> block.
+        let raw = tool_body.trim();
+        assert!(!raw.is_empty(), "raw tool body should not be empty");
+        raw
     };
     println!("parsed command: {}", command);
 

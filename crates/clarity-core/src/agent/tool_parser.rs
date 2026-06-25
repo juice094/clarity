@@ -40,7 +40,8 @@ static RE_GENERIC_ARG: LazyLock<Regex> = LazyLock::new(|| {
 });
 #[allow(clippy::expect_used)]
 static RE_ATTR: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"([a-zA-Z_][a-zA-Z0-9_\-]*)\s*=\s*["']([^"']*)["']"#).expect("RE_ATTR regex is valid")
+    Regex::new(r#"([a-zA-Z_][a-zA-Z0-9_\-]*)\s*=\s*["']([^"']*)["']"#)
+        .expect("RE_ATTR regex is valid")
 });
 
 /// Supported tool call formats.
@@ -150,7 +151,7 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
             }
         }
 
-        // Fallback: some models emit parameter values as direct child tags
+        // Fallback 1: some models emit parameter values as direct child tags
         // (e.g. `<command>Get-ChildItem</command>`) instead of `<arg key="...">`.
         if args.is_empty() {
             for gen_caps in RE_GENERIC_ARG.captures_iter(inner) {
@@ -165,6 +166,15 @@ fn parse_xml_tool_calls(content: &str) -> Vec<ToolCall> {
                 } else {
                     args.insert(open_key.to_string(), Value::String(value.to_string()));
                 }
+            }
+        }
+
+        // Fallback 2: raw text directly inside <tool> with no wrapper tags
+        // (e.g. `<tool name="powershell">\nGet-ChildItem\n</tool>`).
+        if args.is_empty() {
+            let raw = inner.trim();
+            if !raw.is_empty() {
+                args.insert("command".to_string(), Value::String(raw.to_string()));
             }
         }
 
@@ -356,6 +366,17 @@ mod tests {
         assert_eq!(calls[0].function.name, "powershell");
         let args: Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
         assert_eq!(args["command"], "Get-ChildItem");
+    }
+
+    #[test]
+    fn test_parse_xml_tool_calls_raw_text_fallback() {
+        // Model emits direct text without any arg wrapper tags.
+        let content = "<tool name=\"powershell\">\nGet-ChildItem -File\n</tool>";
+        let calls = parse_xml_tool_calls(content);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].function.name, "powershell");
+        let args: Value = serde_json::from_str(&calls[0].function.arguments).unwrap();
+        assert_eq!(args["command"], "Get-ChildItem -File");
     }
 
     #[test]
