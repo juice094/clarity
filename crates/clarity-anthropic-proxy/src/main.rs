@@ -25,7 +25,14 @@
 //! export ANTHROPIC_BASE_URL="http://127.0.0.1:18791/v1/messages"
 //! ```
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
+use axum::{
+    extract::State,
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
 use clarity_contract::{LlmProvider, Message};
 use clarity_core::agent::tool_parser::{self, ToolFormat};
 use clarity_llm::deepseek_device::{
@@ -51,7 +58,38 @@ struct AnthropicRequest {
     #[serde(default)]
     stream: bool,
     #[serde(default)]
-    system: Option<String>,
+    system: Option<SystemContent>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum SystemContent {
+    Text(String),
+    Blocks(Vec<SystemTextBlock>),
+}
+
+#[derive(Debug, Deserialize)]
+struct SystemTextBlock {
+    text: String,
+}
+
+fn extract_system_text(sys: &Option<SystemContent>) -> Option<String> {
+    match sys {
+        Some(SystemContent::Text(s)) => Some(s.clone()),
+        Some(SystemContent::Blocks(blocks)) => {
+            let text: String = blocks
+                .iter()
+                .map(|b| b.text.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            if text.is_empty() {
+                None
+            } else {
+                Some(text)
+            }
+        }
+        None => None,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +124,13 @@ enum AnthropicBlock {
         #[serde(default)]
         is_error: Option<bool>,
     },
+    #[serde(rename = "thinking")]
+    Thinking { thinking: String },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking { data: String },
+    /// Catch-all for unknown content block types (server_tool_use, search_result, etc.)
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,7 +178,7 @@ struct Usage {
 // ── Translation Layer ────────────────────────────────────────────────
 
 /// Serialize the full Anthropic conversation into a single prompt string.
-fn build_prompt(messages: &[AnthropicMessage], system: Option<&str>) -> String {
+fn build_prompt(messages: &[AnthropicMessage], system: &Option<String>) -> String {
     let mut parts: Vec<String> = Vec::new();
 
     if let Some(sys) = system {
@@ -183,6 +228,11 @@ fn content_to_text(content: &AnthropicContent) -> String {
                             .unwrap_or_default();
                         lines.push(format!("{prefix} id={tool_use_id}]: {text}"));
                     }
+                    AnthropicBlock::Thinking { .. }
+                    | AnthropicBlock::RedactedThinking { .. }
+                    | AnthropicBlock::Unknown => {
+                        // Internal reasoning, not conversation content
+                    }
                 }
             }
             lines.join("\n")
@@ -231,26 +281,47 @@ struct AppState {
     provider: Arc<DeepSeekDeviceProvider>,
 }
 
+async fn log_requests(req: Request<axum::body::Body>, next: Next) -> impl IntoResponse {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    let headers = req.headers().clone();
+    info!(
+        "<< {} {} | {:?}",
+        method,
+        uri,
+        headers.get("x-api-key").map(|v| "***")
+    );
+    let response = next.run(req).await;
+    info!(">> {} {} -> {}", method, uri, response.status());
+    response
+}
+
 // ── Handler ──────────────────────────────────────────────────────────
 
-async fn messages_handler(
-    State(state): State<Arc<AppState>>,
-    Json(req): Json<AnthropicRequest>,
-) -> impl IntoResponse {
-    if req.stream {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": { "type": "invalid_request_error", "message": "Streaming not yet supported" }
-            })),
-        )
-            .into_response();
-    }
+async fn messages_handler(State(state): State<Arc<AppState>>, body: String) -> impl IntoResponse {
+    let req: AnthropicRequest = match serde_json::from_str(&body) {
+        Ok(r) => r,
+        Err(e) => {
+            warn!("Deserialize error: {e}");
+            warn!("Body preview: {}", &body[..body.len().min(1000)]);
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({
+                    "error": { "type": "invalid_request_error", "message": format!("deserialization: {e}") }
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    // Accept streaming requests but return non-streaming response.
+    // Claude Code falls back gracefully on non-streaming responses.
+    let _stream = req.stream;
 
     let model = req.model.as_deref().unwrap_or("deepseek-chat");
-    let system = req.system.as_deref();
+    let system = extract_system_text(&req.system);
     let tools_clarity = convert_tools(&req.tools);
-    let prompt = build_prompt(&req.messages, system);
+    let prompt = build_prompt(&req.messages, &system);
     debug!("Prompt: {} chars, {} tools", prompt.len(), req.tools.len());
 
     // Stateless — each request is self-contained
@@ -277,7 +348,7 @@ async fn messages_handler(
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
-                    "error": { "type": "api_error", "message": format!("{e}") }
+                    "error": { "type": "api_error", "message": "Internal server error" }
                 })),
             )
                 .into_response();
@@ -329,6 +400,26 @@ async fn messages_handler(
     (StatusCode::OK, Json(response)).into_response()
 }
 
+async fn models_handler() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "object": "list",
+        "data": [
+            {"id": "claude-sonnet-4-6", "object": "model", "created": 1, "owned_by": "cc-proxy"},
+            {"id": "claude-opus-4-8", "object": "model", "created": 1, "owned_by": "cc-proxy"},
+            {"id": "claude-haiku-4-5-20251001", "object": "model", "created": 1, "owned_by": "cc-proxy"},
+            {"id": "claude-fable-5", "object": "model", "created": 1, "owned_by": "cc-proxy"}
+        ]
+    }))
+}
+
+async fn count_tokens_handler(body: String) -> impl IntoResponse {
+    // Rough estimate: 1 token per 4 chars of the JSON body
+    let chars = body.len();
+    Json(serde_json::json!({
+        "input_tokens": (chars / 4) as u32
+    }))
+}
+
 // ── Server Entry Point ───────────────────────────────────────────────
 
 #[tokio::main]
@@ -341,18 +432,18 @@ async fn main() -> anyhow::Result<()> {
         base_url: "https://chat.deepseek.com".into(),
         client_version: "2.1.8".into(),
         device_id: "cc-proxy".into(),
-        credentials: if let Ok(token) = std::env::var("DEEPSEEK_DEVICE_TOKEN") {
-            info!("Using DEEPSEEK_DEVICE_TOKEN");
-            DeepSeekDeviceCredentials::Token(token)
-        } else if let (Ok(mobile), Ok(password)) = (
+        credentials: if let (Ok(mobile), Ok(password)) = (
             std::env::var("DEEPSEEK_DEVICE_MOBILE"),
             std::env::var("DEEPSEEK_DEVICE_PASSWORD"),
         ) {
             info!("Using DEEPSEEK_DEVICE_MOBILE + DEEPSEEK_DEVICE_PASSWORD");
             DeepSeekDeviceCredentials::Password { mobile, password }
+        } else if let Ok(token) = std::env::var("DEEPSEEK_DEVICE_TOKEN") {
+            info!("Using DEEPSEEK_DEVICE_TOKEN (fallback)");
+            DeepSeekDeviceCredentials::Token(token)
         } else {
             anyhow::bail!(
-                "Set DEEPSEEK_DEVICE_TOKEN or DEEPSEEK_DEVICE_MOBILE+DEEPSEEK_DEVICE_PASSWORD"
+                "Set DEEPSEEK_DEVICE_MOBILE+DEEPSEEK_DEVICE_PASSWORD or DEEPSEEK_DEVICE_TOKEN"
             );
         },
         options: DeepSeekDeviceOptions::from_model_id("deepseek-chat"),
@@ -378,6 +469,9 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(AppState { provider });
     let app = Router::new()
         .route("/v1/messages", post(messages_handler))
+        .route("/v1/messages/count_tokens", post(count_tokens_handler))
+        .route("/v1/models", get(models_handler))
+        .layer(middleware::from_fn(log_requests))
         .with_state(state);
 
     let addr = format!("127.0.0.1:{port}");
@@ -422,7 +516,7 @@ mod tests {
             role: "user".into(),
             content: AnthropicContent::Text("Hello".into()),
         }];
-        let prompt = build_prompt(&msgs, Some("You are helpful."));
+        let prompt = build_prompt(&msgs, &Some("You are helpful.".to_string()));
         assert!(prompt.contains("System: You are helpful."));
         assert!(prompt.contains("User: Hello"));
     }
