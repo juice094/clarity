@@ -528,9 +528,13 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 
 ---
 
-## A. 项目 Worktree 速查（OKF 知识图）
+## A. 项目 Worktree 速查（OKF Bundle）
 
-> 本附录按 Open Knowledge Format（OKF）概念图方式组织：每个 crate 是一个**概念节点**，标注类型、依赖、被依赖关系与核心职责。它供 Agent 快速定位模块边界；代码级精确架构仍归 `docs/ARCHITECTURE.md` 与 `docs/architecture/map-topology.md` 管理。
+> 本附录遵循 Google 开源的 **Open Knowledge Format（OKF）**：每个 crate 是一个独立的 Markdown 概念文件，使用 YAML frontmatter 描述类型、分层、依赖与被依赖关系，便于 AI Agent 跨会话/跨组织消费。
+>
+> **OKF Bundle 入口**：[`docs/okf/clarity-worktree/index.md`](docs/okf/clarity-worktree/index.md)  
+> **概念文件目录**：[`docs/okf/clarity-worktree/concepts/`](docs/okf/clarity-worktree/concepts/)  
+> 代码级精确架构仍归 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) 与 [`docs/architecture/map-topology.md`](docs/architecture/map-topology.md) 管理。
 
 ### A.1 分层概念图
 
@@ -569,170 +573,36 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
   └─ clarity-tauri         (bin)  已归档，被 workspace 排除
 ```
 
-### A.2 概念节点卡片
+### A.2 OKF 概念节点
 
-#### `clarity-contract`
-- **类型**: lib
-- **OKF 概念**: 共享契约
-- **依赖**: 无内部依赖
-- **被依赖**: 所有内部 crate
-- **核心职责**: `LlmProvider`, `Tool`, `AgentError`, `FederationMessage`, `ThreadId`, `RolloutItem`
+每个 crate 的完整元数据（frontmatter）与职责说明见对应概念文件：
 
-#### `clarity-wire`
-- **类型**: lib
-- **OKF 概念**: 事件总线
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-core`、所有前端（egui/tui/gateway/claw/headless/mobile-core）、`clarity-slint`
-- **核心职责**: SPMC 通道、`WireMessage`、`ViewCommand`
+- [clarity-contract](docs/okf/clarity-worktree/concepts/clarity-contract.md)
+- [clarity-wire](docs/okf/clarity-worktree/concepts/clarity-wire.md)
+- [clarity-core](docs/okf/clarity-worktree/concepts/clarity-core.md)
+- [clarity-memory](docs/okf/clarity-worktree/concepts/clarity-memory.md)
+- [clarity-llm](docs/okf/clarity-worktree/concepts/clarity-llm.md)
+- [clarity-mcp](docs/okf/clarity-worktree/concepts/clarity-mcp.md)
+- [clarity-tools](docs/okf/clarity-worktree/concepts/clarity-tools.md)
+- [clarity-channels](docs/okf/clarity-worktree/concepts/clarity-channels.md)
+- [clarity-secrets](docs/okf/clarity-worktree/concepts/clarity-secrets.md)
+- [clarity-openclaw](docs/okf/clarity-worktree/concepts/clarity-openclaw.md)
+- [clarity-subagents](docs/okf/clarity-worktree/concepts/clarity-subagents.md)
+- [clarity-rollout](docs/okf/clarity-worktree/concepts/clarity-rollout.md)
+- [clarity-thread-store](docs/okf/clarity-worktree/concepts/clarity-thread-store.md)
+- [clarity-telemetry](docs/okf/clarity-worktree/concepts/clarity-telemetry.md)
+- [clarity-gateway](docs/okf/clarity-worktree/concepts/clarity-gateway.md)
+- [clarity-egui](docs/okf/clarity-worktree/concepts/clarity-egui.md)
+- [clarity-tui](docs/okf/clarity-worktree/concepts/clarity-tui.md)
+- [clarity-claw](docs/okf/clarity-worktree/concepts/clarity-claw.md)
+- [clarity-headless](docs/okf/clarity-worktree/concepts/clarity-headless.md)
+- [clarity-mobile-core](docs/okf/clarity-worktree/concepts/clarity-mobile-core.md)
+- [clarity-slint](docs/okf/clarity-worktree/concepts/clarity-slint.md)
+- [clarity-anthropic-proxy](docs/okf/clarity-worktree/concepts/clarity-anthropic-proxy.md)
+- [clarity-tauri](docs/okf/clarity-worktree/concepts/clarity-tauri.md)
 
-#### `clarity-core`
-- **类型**: lib
-- **OKF 概念**: Agent 内核
-- **依赖**: `contract`, `wire`, `memory`, `mcp`, `llm`, `tools`, `channels`, `secrets`, `thread-store`
-- **被依赖**: `gateway`, `egui`, `tui`, `claw`, `headless`, `mobile-core`, `subagents`（消费 core）, `telemetry`（当前由 gateway 使用）
-- **核心职责**: ReAct/Plan 循环、`AgentController`/`Op`、Approval、Skill、MCP 集成、后台任务、Thread 生命周期
-- **关键路径**: `src/agent/`, `src/approval/`, `src/background/`, `src/memory/`, `src/mcp/`, `src/skills/`, `src/ui/`, `src/session/`, `src/thread/`
+### A.3 生成脚本
 
-#### `clarity-egui`
-- **类型**: bin
-- **OKF 概念**: 主桌面前端
-- **依赖**: `clarity-core`, `clarity-wire`
-- **被依赖**: 无（终端应用）
-- **核心职责**: eframe/egui 桌面 GUI、Pretext 三栏布局、`ViewState` 消费
-- **关键路径**: `src/main.rs`, `src/app_logic.rs`, `src/app_state.rs`, `src/design_system.rs`, `src/layout.rs`, `src/panels/`, `src/widgets/`
-
-#### `clarity-tui`
-- **类型**: bin
-- **OKF 概念**: 终端前端
-- **依赖**: `clarity-core`, `clarity-wire`
-- **被依赖**: 无
-- **核心职责**: ratatui 终端界面、键盘路由、`protocol_renderer.rs`
-
-#### `clarity-gateway`
-- **类型**: bin/lib
-- **OKF 概念**: Web IDE / 服务端
-- **依赖**: `clarity-core`, `clarity-wire`, `clarity-memory`, `clarity-telemetry`
-- **被依赖**: `clarity-claw`（通过 WebSocket 连接）
-- **核心职责**: Axum HTTP/WebSocket API、session store、Web IDE 静态文件
-
-#### `clarity-claw`
-- **类型**: bin
-- **OKF 概念**: 系统托盘节点
-- **依赖**: `clarity-core`（通过 Gateway WebSocket，不直接依赖 `clarity-openclaw` 协议泄漏字段）
-- **被依赖**: 无
-- **核心职责**: 系统托盘常驻、任务监控、Gateway WebSocket 客户端
-
-#### `clarity-headless`
-- **类型**: bin
-- **OKF 概念**: 无头 CLI
-- **依赖**: `clarity-core`
-- **被依赖**: 无
-- **核心职责**: 脚本/CI 场景、`--prompt` / `--file` / `--output json`
-
-#### `clarity-mobile-core`
-- **类型**: lib
-- **OKF 概念**: 移动端 FFI 核心
-- **依赖**: `clarity-core`, `clarity-wire`, `clarity-memory`, `clarity-contract`, `clarity-llm`
-- **被依赖**: Android/iOS 原生应用（`mobile/`）
-- **核心职责**: UniFFI 桥接、暴露 Runtime/事件/配置/记忆接口
-
-#### `clarity-memory`
-- **类型**: lib
-- **OKF 概念**: 混合记忆存储
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-core`, `clarity-gateway`, `clarity-mobile-core`
-- **核心职责**: SQLite + BM25 + 向量搜索、chunking、四级压缩归档
-
-#### `clarity-llm`
-- **类型**: lib
-- **OKF 概念**: LLM 抽象层
-- **依赖**: `clarity-contract`, `clarity-mcp`, `clarity-memory`, `clarity-secrets`
-- **被依赖**: `clarity-core`, `clarity-mobile-core`, `clarity-anthropic-proxy`
-- **核心职责**: Provider 抽象、`ReliableProvider` failover、`runtime_router`、Candle GGUF 本地推理
-
-#### `clarity-mcp`
-- **类型**: lib
-- **OKF 概念**: MCP 客户端
-- **依赖**: `clarity-contract`, `clarity-wire`
-- **被依赖**: `clarity-llm`, `clarity-core`
-- **核心职责**: MCP stdio/SSE/HTTP/WebSocket 传输、命令校验
-
-#### `clarity-tools`
-- **类型**: lib
-- **OKF 概念**: 内置工具库
-- **依赖**: `clarity-contract`, `clarity-memory`
-- **被依赖**: `clarity-core`
-- **核心职责**: file / shell / web / devkit / team / task 等内置工具
-
-#### `clarity-channels`
-- **类型**: lib
-- **OKF 概念**: 外部通道抽象
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-core`
-- **核心职责**: WeChat iLink（`chkit`）、Webhook；Discord/Slack/Telegram 默认禁用
-
-#### `clarity-secrets`
-- **类型**: lib
-- **OKF 概念**: 凭证加密
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-llm`, `clarity-core`
-- **核心职责**: ChaCha20-Poly1305 加密 Secret 存储（`enc2:`）
-
-#### `clarity-openclaw`
-- **类型**: lib
-- **OKF 概念**: OpenClaw/KimiClaw 协议客户端
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-core`, `clarity-egui`
-- **核心职责**: Gateway WebSocket 客户端、设备身份、发现、协议 dialect 检测
-
-#### `clarity-subagents`
-- **类型**: lib
-- **OKF 概念**: 子代理执行器
-- **依赖**: `clarity-core`
-- **被依赖**: 无（消费 core 的横切能力）
-- **核心职责**: 子代理并行调度、团队协调
-
-#### `clarity-thread-store`
-- **类型**: lib
-- **OKF 概念**: Thread 持久化抽象
-- **依赖**: `clarity-contract`, `clarity-rollout`
-- **被依赖**: `clarity-core`
-- **核心职责**: `ThreadStore` trait、Thread 生命周期持久化
-
-#### `clarity-rollout`
-- **类型**: lib
-- **OKF 概念**: JSONL rollout 持久化
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-thread-store`
-- **核心职责**: 事件日志、压缩、回放（API 设计受 Codex 启发）
-
-#### `clarity-telemetry`
-- **类型**: lib
-- **OKF 概念**: 统一遥测
-- **依赖**: `clarity-contract`
-- **被依赖**: `clarity-gateway`
-- **核心职责**: WideEvent、metrics、traces、config audit
-
-#### `clarity-slint`
-- **类型**: bin
-- **OKF 概念**: 实验性桌面前端
-- **依赖**: `clarity-contract`, `clarity-wire`（**不依赖 `clarity-core`**）
-- **被依赖**: 无
-- **核心职责**: 实验性 Slint GUI，不参与默认 CI
-
-#### `clarity-anthropic-proxy`
-- **类型**: bin
-- **OKF 概念**: 协议代理工具
-- **依赖**: `clarity-contract`, `clarity-core`, `clarity-llm`
-- **被依赖**: 无
-- **核心职责**: Anthropic Messages API → DeepSeek 转发代理
-
-#### `clarity-tauri`
-- **类型**: bin
-- **OKF 概念**: 已归档前端
-- **状态**: **ARCHIVED**，被 workspace 排除
-- **说明**: 不再维护，禁止修改
-
----
+OKF bundle 由 [`scripts/generate_okf_worktree.py`](scripts/generate_okf_worktree.py) 生成。当新增/删除 crate 或变更依赖关系时，应更新该脚本并重新运行，以保持 bundle 与代码一致。
 
 *最后更新：2026-06-25*
