@@ -51,6 +51,19 @@ Identified three low-to-medium-risk simplifications for `clarity-llm` /
 
 Detailed plans live in `docs/notes/plans/`.
 
+### Model catalog architecture decision
+
+- Confirmed that hard-coded model lists are only acceptable as an offline
+  bootstrap, not as the primary discovery mechanism.
+- Researched mature implementations: Ollama `/api/tags`, OpenAI `/v1/models`,
+  LM Studio `/api/v1/models`, OpenClaw's fetch-then-fallback pattern.
+- Decided on a three-layer catalog architecture:
+  1. User override (`models.toml`)
+  2. Cached remote catalog (`~/.clarity/catalogs/`)
+  3. Minimal hard-coded bootstrap seed (`registry_table::known_models`)
+- Documented the redesign in
+  `docs/notes/plans/model-catalog-redesign.md`.
+
 ### Notes organization
 
 - Created `docs/notes/research/` for research notes.
