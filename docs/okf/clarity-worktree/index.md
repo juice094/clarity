@@ -95,6 +95,10 @@ This OKF bundle describes the 23 crate directories in the Clarity workspace:
 - [TC-LLM-006: RouterLlmProvider routes by hint](test-cases/TC-LLM-006.md)
 - [TC-LLM-007: model_listing fallback derives from canonical registry defaults](test-cases/TC-LLM-007.md)
 - [TC-LLM-008: Anthropic provider uses prompt-guided tool calling](test-cases/TC-LLM-008.md)
+- [TC-CORE-001: Approval request can be created and resolved](test-cases/TC-CORE-001.md)
+- [TC-CORE-002: Tool registry registers and invokes a tool](test-cases/TC-CORE-002.md)
+- [TC-MEM-001: In-memory store adds and queries memories](test-cases/TC-MEM-001.md)
+- [TC-MEM-002: BM25 index ranks relevant documents first](test-cases/TC-MEM-002.md)
 
 ## Templates
 
