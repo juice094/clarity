@@ -164,8 +164,6 @@ pub enum UserEvent {
     QuickInput,
     /// Show task creation dialog.
     CreateTask,
-    /// Cancel a specific task.
-    CancelTask(String),
     /// Request graceful shutdown (e.g. Ctrl+C).
     Quit,
 }
@@ -180,7 +178,6 @@ pub fn run() -> anyhow::Result<()> {
     // Backend communication channel (wire)
     // ------------------------------------------------------------------
     let wire = Wire::new();
-    let _soul = wire.soul_side().clone();
     let mut ui_side = wire.ui_side(true);
 
     // ------------------------------------------------------------------
@@ -463,31 +460,6 @@ pub fn run() -> anyhow::Result<()> {
                         }
                     });
                 }
-                UserEvent::CancelTask(task_id) => {
-                    tracing::info!("Cancel task: {}", task_id);
-                    let task_id = task_id.clone();
-                    let gw = gw_url.clone();
-                    std::thread::spawn(move || {
-                        let rt = match tray_runtime() {
-                            Ok(rt) => rt,
-                            Err(e) => {
-                                tracing::error!("{}", e);
-                                return;
-                            }
-                        };
-                        match rt.block_on(crate::cancel_remote_task(&gw, &task_id)) {
-                            Ok(()) => {
-                                let _ = notify_rust::Notification::new()
-                                    .summary("Clarity")
-                                    .body(&format!("Task {} cancelled", task_id))
-                                    .show();
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to cancel task {}: {}", task_id, e);
-                            }
-                        }
-                    });
-                }
                 UserEvent::WireMsg(msg) => {
                     if let Some(text) = match msg {
                         WireMessage::ContentPart { text, .. } => Some(text.clone()),
@@ -588,8 +560,6 @@ pub fn run() -> anyhow::Result<()> {
                     if let Some(thread_id) = id_str.strip_prefix(MENU_THREAD_PREFIX) {
                         let url = format!("{}/chat.html?thread_id={}", gateway_url, thread_id);
                         let _ = open_url(&url);
-                    } else if let Some(task_id) = id_str.strip_prefix("cancel-") {
-                        let _ = proxy.send_event(UserEvent::CancelTask(task_id.to_string()));
                     }
                 }
             }

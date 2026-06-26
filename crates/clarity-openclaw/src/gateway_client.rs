@@ -10,7 +10,6 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::Duration;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -277,20 +276,12 @@ async fn run_connection(
                             )));
                             return;
                         }
-                        tokio::time::sleep(next_backoff(failures)).await;
+                        tokio::time::sleep(crate::util::next_backoff(failures)).await;
                     }
                 }
             }
         }
     }
-}
-
-fn next_backoff(failures: usize) -> Duration {
-    // 1 -> 1s, 2 -> 2s, 3 -> 4s, 4 -> 8s, capped at 30s.
-    let secs = 2usize
-        .saturating_pow(failures.saturating_sub(1) as u32)
-        .min(30);
-    Duration::from_secs(secs as u64)
 }
 
 async fn run_single_connection(
@@ -442,6 +433,7 @@ fn translate_response(response: WsResponse) -> Option<GatewayResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_ws_request_serialization() {
@@ -509,11 +501,11 @@ mod tests {
 
     #[test]
     fn test_next_backoff_progression_and_cap() {
-        assert_eq!(next_backoff(1), Duration::from_secs(1));
-        assert_eq!(next_backoff(2), Duration::from_secs(2));
-        assert_eq!(next_backoff(3), Duration::from_secs(4));
-        assert_eq!(next_backoff(4), Duration::from_secs(8));
-        assert_eq!(next_backoff(5), Duration::from_secs(16));
-        assert_eq!(next_backoff(10), Duration::from_secs(30));
+        assert_eq!(crate::util::next_backoff(1), Duration::from_secs(1));
+        assert_eq!(crate::util::next_backoff(2), Duration::from_secs(2));
+        assert_eq!(crate::util::next_backoff(3), Duration::from_secs(4));
+        assert_eq!(crate::util::next_backoff(4), Duration::from_secs(8));
+        assert_eq!(crate::util::next_backoff(5), Duration::from_secs(16));
+        assert_eq!(crate::util::next_backoff(10), Duration::from_secs(30));
     }
 }

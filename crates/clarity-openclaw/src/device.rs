@@ -13,7 +13,6 @@ use std::path::PathBuf;
 
 /// On-disk representation of a persisted device identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 struct DeviceIdentityFile {
     /// Hex-encoded Ed25519 private key (32 bytes).
     private_key: String,
@@ -66,7 +65,6 @@ impl DeviceIdentity {
     }
 
     /// Persist the identity to disk.
-    #[allow(dead_code)] // Called by load_or_generate.
     fn save(&self) -> Result<(), String> {
         let path = device_identity_path()?;
         if let Some(parent) = path.parent() {
@@ -124,7 +122,6 @@ fn encode_public_key(key: VerifyingKey) -> String {
     URL_SAFE_NO_PAD.encode(key.as_bytes())
 }
 
-#[allow(dead_code)] // Called by load_or_generate / save.
 fn device_identity_path() -> Result<PathBuf, String> {
     let data_dir = dirs::data_dir().ok_or("cannot determine data directory")?;
     Ok(data_dir.join("clarity").join("claw-device.json"))

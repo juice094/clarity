@@ -231,17 +231,6 @@ pub async fn create_remote_task(
     Ok(task_id)
 }
 
-/// Cancel a background task via Gateway WebSocket.
-pub async fn cancel_remote_task(gateway_url: &str, task_id: &str) -> anyhow::Result<()> {
-    let request = serde_json::json!({
-        "type": "cancel_task",
-        "task_id": task_id,
-    });
-    let value = gateway_ws_request(gateway_url, request).await?;
-    check_gateway_error(&value)?;
-    Ok(())
-}
-
 /// Poll the Gateway thread list over WebSocket.
 pub async fn poll_threads(gateway_url: &str) -> anyhow::Result<Vec<ThreadSummary>> {
     let request = serde_json::json!({

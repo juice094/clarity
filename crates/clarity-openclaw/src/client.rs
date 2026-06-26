@@ -350,15 +350,6 @@ enum ConnectionExit {
     Transient(String),
 }
 
-/// Compute the next exponential-backoff delay, capping at 30 seconds.
-///
-/// Sequence: 1s, 2s, 4s, 8s, 16s, 30s, 30s, ...
-fn next_backoff(current: Duration) -> Duration {
-    let next = current.saturating_mul(2);
-    let cap = Duration::from_secs(30);
-    if next > cap { cap } else { next }
-}
-
 async fn run_connection(
     gateway_url: &str,
     auth: ClawAuth,
@@ -374,7 +365,7 @@ async fn run_connection(
         }
     });
 
-    let mut delay = Duration::from_secs(1);
+    let mut failures = 0usize;
     loop {
         match run_single_connection(gateway_url, &auth, &mut async_rx, &resp_tx).await {
             Ok(()) => break,
@@ -383,6 +374,8 @@ async fn run_connection(
                 break;
             }
             Err(ConnectionExit::Transient(reason)) => {
+                failures += 1;
+                let delay = crate::util::next_backoff(failures);
                 tracing::warn!(
                     reason = %reason,
                     delay = %delay.as_secs(),
@@ -396,7 +389,6 @@ async fn run_connection(
                     }),
                 });
                 tokio::time::sleep(delay).await;
-                delay = next_backoff(delay);
             }
         }
     }
@@ -1226,9 +1218,7 @@ fn parse_message_list(items: &[serde_json::Value]) -> Vec<GatewayMessage> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use super::{extract_agent_event, next_backoff};
+    use super::extract_agent_event;
 
     #[test]
     fn extract_agent_event_assistant_chunk() {
@@ -1262,11 +1252,10 @@ mod tests {
 
     #[test]
     fn backoff_progression_capped_at_thirty_seconds() {
-        let mut delay = Duration::from_secs(1);
         let expected = [1, 2, 4, 8, 16, 30, 30];
-        for &secs in &expected {
-            assert_eq!(delay.as_secs(), secs);
-            delay = next_backoff(delay);
+        for (i, &secs) in expected.iter().enumerate() {
+            let failures = i + 1;
+            assert_eq!(crate::util::next_backoff(failures).as_secs(), secs);
         }
     }
 }

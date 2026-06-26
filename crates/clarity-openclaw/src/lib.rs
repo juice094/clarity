@@ -15,6 +15,8 @@ pub mod mesh;
 pub mod protocol;
 pub mod types;
 
+mod util;
+
 pub use client::ClawClient as OpenClawClient;
 pub use client::{ClawAuth, ClawClient};
 pub use connection_manager::ClawConnectionManager;
