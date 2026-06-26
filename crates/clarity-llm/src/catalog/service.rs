@@ -137,6 +137,72 @@ impl ModelCatalogService {
         Ok(Vec::new())
     }
 
+    /// Refresh a single provider from explicit runtime config and persist to cache.
+    ///
+    /// This supports both built-in families and custom providers added in the UI.
+    /// The `api_format` values mirror [`crate::runtime::RuntimeProviderConfig`]:
+    /// - `"ollama"` → [`OllamaFetcher`]
+    /// - `"openai_chat"` / `"llama_server"` → [`OpenAiCompatibleFetcher`]
+    /// - other formats return an empty list.
+    pub async fn refresh_provider(
+        &self,
+        provider_id: &str,
+        base_url: &str,
+        api_key: Option<&str>,
+        api_format: &str,
+    ) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
+        let entries = match api_format {
+            "ollama" => OllamaFetcher::new(base_url).fetch().await?,
+            "openai_chat" | "llama_server" => {
+                OpenAiCompatibleFetcher::new(provider_id, base_url, api_key.map(String::from))
+                    .fetch()
+                    .await?
+            }
+            _ => Vec::new(),
+        };
+
+        if !entries.is_empty() {
+            self.cache.save(provider_id, &entries)?;
+        }
+
+        Ok(entries)
+    }
+
+    /// Refresh a single provider family and persist the result to the cache.
+    ///
+    /// If a fetcher is already registered for the family, it is reused.
+    /// Otherwise the service tries to construct one from canonical registry defaults.
+    pub async fn refresh_family(
+        &self,
+        family: &str,
+    ) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
+        if let Some(fetcher) = self.fetchers.iter().find(|f| f.family() == family) {
+            let entries = fetcher.fetch().await?;
+            self.cache.save(family, &entries)?;
+            return Ok(entries);
+        }
+
+        if let Some(defaults) = registry_table::family_defaults(family) {
+            match defaults.protocol {
+                ProtocolType::Ollama => {
+                    let entries = OllamaFetcher::from_defaults()?.fetch().await?;
+                    self.cache.save(family, &entries)?;
+                    return Ok(entries);
+                }
+                ProtocolType::OpenAiChat => {
+                    let entries = OpenAiCompatibleFetcher::from_defaults(family)?
+                        .fetch()
+                        .await?;
+                    self.cache.save(family, &entries)?;
+                    return Ok(entries);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
     /// Refresh all registered fetchers and persist their results to the cache.
     ///
     /// Fetchers that fail are logged but do not abort the overall refresh.

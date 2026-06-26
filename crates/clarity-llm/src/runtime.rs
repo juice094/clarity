@@ -26,6 +26,7 @@
 //! zero benefit.
 
 use crate::api::LlmProvider;
+use crate::catalog::service::ModelCatalogService;
 use crate::{AnthropicLlm, LlamaServerProvider, OllamaProvider, OpenAiCompatibleLlm};
 use clarity_contract::AgentError;
 
@@ -167,62 +168,24 @@ async fn test_anthropic_connection(cfg: &RuntimeProviderConfig) -> Result<(), St
 
 /// Fetch the list of available models from a provider.
 ///
-/// For OpenAI-compatible APIs, issues `GET /v1/models` and extracts
-/// `data[].id` from the response.
+/// Delegates to [`ModelCatalogService`] so the result is persisted in the shared
+/// on-disk cache (`~/.clarity/catalogs/{provider_id}.json`) and can be reused
+/// by [`crate::model_listing::get_available_models`].
 ///
 /// Returns an empty list for Anthropic (no public model listing endpoint).
 pub async fn list_models(cfg: &RuntimeProviderConfig) -> Result<Vec<String>, String> {
-    match cfg.api_format.as_str() {
-        "openai_chat" | "ollama" | "llama_server" => fetch_openai_models(cfg).await,
-        "anthropic_messages" => {
-            tracing::warn!("list_models: Anthropic does not expose a public model listing API");
-            Ok(Vec::new())
-        }
-        other => Err(format!(
-            "Unsupported api_format for model listing: {}",
-            other
-        )),
-    }
-}
-
-async fn fetch_openai_models(cfg: &RuntimeProviderConfig) -> Result<Vec<String>, String> {
-    let base = normalise_base_url(&cfg.base_url);
-    let url = format!("{}/models", base);
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", cfg.api_key))
-        .header("Content-Type", "application/json")
-        .send()
+    let service = ModelCatalogService::with_defaults()
+        .map_err(|e| format!("Failed to open catalog cache: {}", e))?;
+    let api_key = if cfg.api_key.is_empty() {
+        None
+    } else {
+        Some(cfg.api_key.as_str())
+    };
+    let entries = service
+        .refresh_provider(&cfg.provider_id, &cfg.base_url, api_key, &cfg.api_format)
         .await
-        .map_err(|e| format!("Request failed: {}", e))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("API error ({}): {}", status, body));
-    }
-
-    let body: serde_json::Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    let models = body["data"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    Ok(models)
+        .map_err(|e| format!("Failed to refresh model list: {}", e))?;
+    Ok(entries.into_iter().map(|e| e.model_id).collect())
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
