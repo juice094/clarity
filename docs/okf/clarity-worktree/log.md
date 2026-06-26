@@ -12,3 +12,5 @@ timestamp: 2026-06-26T11:28:50Z
 - Enhanced all concept files with OKF v0.1 recommended fields (title, description, tags, timestamp).
 - Cleaned empty dependency arrays.
 - Declared bundle conformance to OKF v0.1.
+- Added `test-cases/` directory with 8 clarity-llm test cases stored as OKF concepts.
+- Added `templates/test-case.md` for future test case authoring.

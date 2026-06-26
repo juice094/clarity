@@ -85,6 +85,21 @@ This OKF bundle describes the 23 crate directories in the Clarity workspace:
 4. `clarity-slint` depends only on `clarity-contract` + `clarity-wire`; it does
    not consume `clarity-core`.
 
+## Test Cases
+
+- [TC-LLM-001: OpenAI-compatible provider completes a chat request](test-cases/TC-LLM-001.md)
+- [TC-LLM-002: Model registry loads models.toml and resolves an alias](test-cases/TC-LLM-002.md)
+- [TC-LLM-003: resolve_key_ref handles env, file, and literal references](test-cases/TC-LLM-003.md)
+- [TC-LLM-004: ReliableProvider retries primary and falls back on failure](test-cases/TC-LLM-004.md)
+- [TC-LLM-005: Local GGUF model discovery respects CLARITY_LOCAL_MODEL_PATH](test-cases/TC-LLM-005.md)
+- [TC-LLM-006: RouterLlmProvider routes by hint](test-cases/TC-LLM-006.md)
+- [TC-LLM-007: model_listing fallback derives from canonical registry defaults](test-cases/TC-LLM-007.md)
+- [TC-LLM-008: Anthropic provider uses prompt-guided tool calling](test-cases/TC-LLM-008.md)
+
+## Templates
+
+- [Test Case Template](templates/test-case.md)
+
 ## Living Sources of Truth
 
 - Operational context & test baselines: [`AGENTS.md`](../../AGENTS.md)
