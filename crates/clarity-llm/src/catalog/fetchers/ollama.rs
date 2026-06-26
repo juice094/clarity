@@ -53,11 +53,26 @@ impl OllamaFetcher {
 
 fn normalize_ollama_host(host: &str) -> String {
     let host = host.trim();
-    if host.starts_with("http://") || host.starts_with("https://") {
-        host.to_string()
-    } else {
-        format!("http://{}", host)
+    if let Some(rest) = host.strip_prefix("http://") {
+        return format!("http://{}", replace_zero_addr(rest));
     }
+    if let Some(rest) = host.strip_prefix("https://") {
+        return format!("https://{}", replace_zero_addr(rest));
+    }
+    format!("http://{}", replace_zero_addr(host))
+}
+
+/// `0.0.0.0` is a valid bind address but not a valid connect address.
+/// Treat it as localhost so users don't have to manually reconfigure.
+fn replace_zero_addr(addr: &str) -> String {
+    let addr = addr.trim();
+    if addr == "0.0.0.0" {
+        return "127.0.0.1".to_string();
+    }
+    if let Some(rest) = addr.strip_prefix("0.0.0.0:") {
+        return format!("127.0.0.1:{}", rest);
+    }
+    addr.to_string()
 }
 
 #[async_trait]
@@ -113,6 +128,19 @@ mod tests {
         assert_eq!(
             normalize_ollama_host("http://192.168.1.5:11434"),
             "http://192.168.1.5:11434"
+        );
+    }
+
+    #[test]
+    fn normalize_ollama_host_maps_zero_addr_to_localhost() {
+        assert_eq!(
+            normalize_ollama_host("0.0.0.0:11434"),
+            "http://127.0.0.1:11434"
+        );
+        assert_eq!(normalize_ollama_host("0.0.0.0"), "http://127.0.0.1");
+        assert_eq!(
+            normalize_ollama_host("http://0.0.0.0:11434"),
+            "http://127.0.0.1:11434"
         );
     }
 }
