@@ -312,7 +312,7 @@ impl MobileRuntime {
 
     /// Send a user message in the active thread.
     ///
-    /// The response is delivered asynchronously via [poll_event].
+    /// The response is delivered asynchronously via [`Self::poll_event`].
     pub fn send_message(&self, content: String) {
         let thread_id = self.current_thread_id.lock().clone();
         if thread_id.is_empty() {

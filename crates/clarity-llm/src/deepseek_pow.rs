@@ -1,6 +1,6 @@
 //! DeepSeekHashV1 PoW 求解器（纯 Rust 实现）
 //!
-//! 算法：SHA3-256 但 Keccak-f[1600] 仅执行 rounds 1..23（跳过 round 0）。
+//! 算法：SHA3-256 但 `Keccak-f[1600]` 仅执行 rounds 1..23（跳过 round 0）。
 //! 服务端预先选定 answer ∈ [0, difficulty)，计算 challenge = hash(prefix + str(answer))，
 //! 客户端遍历 [0, difficulty) 找到匹配的 nonce。
 
