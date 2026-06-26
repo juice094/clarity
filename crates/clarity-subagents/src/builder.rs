@@ -66,7 +66,7 @@ impl SubagentBuilder {
         store.create(agent_id.to_string(), type_def.name.clone());
 
         // Filter tools based on allowed_tools
-        let filtered_registry = self.filter_tools(&type_def.allowed_tools)?;
+        let filtered_registry = self.filter_tools(&type_def.allowed_tools);
 
         // Build system prompt, optionally prepending Git context
         let system_prompt = if let Some(git_ctx) = &self.git_context {
@@ -141,9 +141,9 @@ impl SubagentBuilder {
     }
 
     /// Filter tools based on allowed list
-    fn filter_tools(&self, allowed: &Option<Vec<String>>) -> anyhow::Result<ToolRegistry> {
+    fn filter_tools(&self, allowed: &Option<Vec<String>>) -> ToolRegistry {
         match allowed {
-            None => Ok(self.tool_registry.clone()),
+            None => self.tool_registry.clone(),
             Some(allowed_tools) => {
                 let filtered = ToolRegistry::new();
                 for name in allowed_tools {
@@ -151,7 +151,7 @@ impl SubagentBuilder {
                         let _ = filtered.register_shared(tool);
                     }
                 }
-                Ok(filtered)
+                filtered
             }
         }
     }

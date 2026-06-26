@@ -226,6 +226,7 @@ pub fn truncate_messages_by_bytes(messages: &[Message], max_bytes: usize) -> Vec
     result
 }
 
+// ponytail: manual UTF-8 boundary scan. Replace with str::floor_char_boundary once MSRV >= 1.91.
 /// Find the largest valid UTF-8 boundary at or before `byte_idx`.
 fn floor_char_boundary_llm(text: &str, byte_idx: usize) -> usize {
     let byte_idx = byte_idx.min(text.len());

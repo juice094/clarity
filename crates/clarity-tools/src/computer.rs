@@ -32,7 +32,7 @@ impl ComputerUseTool {
         None
     }
 
-    fn call_python_bridge(&self, action: &str, args: Value) -> ToolResult<String> {
+    fn call_python_bridge(&self, action: &str, args: &Value) -> ToolResult<String> {
         let payload = json!({"action": action, "args": args});
         let script_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("scripts")
@@ -109,7 +109,7 @@ impl Tool for ComputerUseTool {
         let action = helpers::required_str(&args, "action")?;
 
         let result = match action {
-            "screenshot" => self.call_python_bridge("screenshot", json!({})),
+            "screenshot" => self.call_python_bridge("screenshot", &json!({})),
             "click" => {
                 let x = args
                     .get("x")
@@ -119,14 +119,14 @@ impl Tool for ComputerUseTool {
                     .get("y")
                     .and_then(|v| v.as_i64())
                     .ok_or_else(|| ToolError::invalid_params("Missing 'y'"))?;
-                self.call_python_bridge("click", json!({"x": x, "y": y}))
+                self.call_python_bridge("click", &json!({"x": x, "y": y}))
             }
             "type" => {
                 let text = args
                     .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| ToolError::invalid_params("Missing 'text'"))?;
-                self.call_python_bridge("type", json!({"text": text}))
+                self.call_python_bridge("type", &json!({"text": text}))
             }
             "scroll" => {
                 let x = args.get("x").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -135,7 +135,7 @@ impl Tool for ComputerUseTool {
                     .get("amount")
                     .and_then(|v| v.as_i64())
                     .ok_or_else(|| ToolError::invalid_params("Missing 'amount'"))?;
-                self.call_python_bridge("scroll", json!({"x": x, "y": y, "amount": amount}))
+                self.call_python_bridge("scroll", &json!({"x": x, "y": y, "amount": amount}))
             }
             _ => Err(ToolError::invalid_params(format!(
                 "Unknown action: {}",

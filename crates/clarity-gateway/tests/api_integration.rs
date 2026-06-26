@@ -155,7 +155,7 @@ async fn test_webhook_empty_message() {
     let agent = test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let req_body = serde_json::to_string(&WebhookRequest {
         message: Some("".to_string()),

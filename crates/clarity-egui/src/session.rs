@@ -149,7 +149,7 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         _ => None,
     };
     Session {
-        id: id.clone(),
+        id,
         title,
         category: "chat".to_string(),
         project_id,

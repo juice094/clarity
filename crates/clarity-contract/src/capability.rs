@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-/// Normalize a path by resolving `.` and `..` components.
+// ponytail: minimal path normalizer that does not require the path to exist and
+// avoids UNC prefixes on Windows. Replace with std::path::absolute only after
+// proving equivalent sandbox-escape behavior across platforms.
 fn normalize_path(path: &Path) -> PathBuf {
     let mut result = PathBuf::new();
     for component in path.components() {
@@ -164,5 +166,41 @@ impl CapabilityToken {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sandbox_escape_via_parent_dir_is_blocked() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()])
+            .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
+        let escaped = PathBuf::from("/tmp/sandbox/../etc/passwd");
+        assert!(
+            matches!(
+                token.verify("file_read", &escaped),
+                Err(TokenError::SandboxEscape { .. })
+            ),
+            "parent-dir escape should be blocked"
+        );
+    }
+
+    #[test]
+    fn sandbox_subdir_is_allowed() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()])
+            .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
+        let subdir = PathBuf::from("/tmp/sandbox/src/main.rs");
+        assert!(token.verify("file_read", &subdir).is_ok());
+    }
+
+    #[test]
+    fn normalize_path_resolves_parent_dir() {
+        let base = PathBuf::from("/tmp/sandbox");
+        let escaped = base.join("../etc/passwd");
+        let normalized = normalize_path(&escaped);
+        assert_eq!(normalized, PathBuf::from("/tmp/etc/passwd"));
     }
 }

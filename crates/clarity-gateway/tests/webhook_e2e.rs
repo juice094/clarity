@@ -47,7 +47,7 @@ async fn test_webhook_generic_success() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let req_body = serde_json::to_string(&WebhookRequest {
         message: Some("Hello from generic webhook".to_string()),
@@ -95,7 +95,7 @@ async fn test_webhook_generic_auth_failure() {
     config.extra = Some(extra);
 
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let req_body = serde_json::to_string(&WebhookRequest {
         message: Some("Hello".to_string()),
@@ -146,7 +146,7 @@ async fn test_webhook_generic_empty_message() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let req_body = serde_json::to_string(&WebhookRequest {
         message: Some("".to_string()),
@@ -189,7 +189,7 @@ async fn test_webhook_generic_bearer_auth_success() {
     config.extra = Some(extra);
 
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let req_body = serde_json::to_string(&WebhookRequest {
         message: Some("Hello with Bearer".to_string()),
@@ -231,7 +231,7 @@ async fn test_webhook_feishu_success() {
     let secret = "feishu_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let timestamp = "1234567890";
     let nonce = "abc123";
@@ -266,7 +266,7 @@ async fn test_webhook_feishu_auth_failure() {
     let secret = "feishu_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let body_json = r#"{"event":{"message":{"content":"{\"text\":\"Hello Feishu\"}"}}}"#;
 
@@ -311,7 +311,7 @@ async fn test_webhook_feishu_plain_content() {
     let secret = "feishu_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let timestamp = "1234567890";
     let nonce = "abc123";
@@ -350,7 +350,7 @@ async fn test_webhook_dingtalk_success() {
     let secret = "dingtalk_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let timestamp = "1234567890";
     let sign_string = format!("{}\n{}", timestamp, secret);
@@ -385,7 +385,7 @@ async fn test_webhook_dingtalk_auth_failure() {
     let secret = "dingtalk_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     // 缺少 sign
     let body_json = r#"{"timestamp":"1234567890","text":{"content":"Hello"}}"#;
@@ -427,7 +427,7 @@ async fn test_webhook_dingtalk_content_field() {
     let secret = "dingtalk_test_secret";
     let config = ChannelConfig::new().enabled().with_webhook_secret(secret);
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let timestamp = "1234567890";
     let sign_string = format!("{}\n{}", timestamp, secret);
@@ -465,7 +465,7 @@ async fn test_webhook_wecom_success() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     // 企业微信暂时不验证签名
     let body_json = r#"{"Content":"Hello WeCom"}"#;
@@ -493,7 +493,7 @@ async fn test_webhook_wecom_text_object() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let body_json = r#"{"Text":{"Content":"Hello WeCom Object"}}"#;
 
@@ -519,7 +519,7 @@ async fn test_webhook_wecom_empty_message() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let body_json = r#"{"Content":""}"#;
 
@@ -547,7 +547,7 @@ async fn test_webhook_unknown_platform_generic_parse() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let body_json = r#"{"message":"Hello unknown platform"}"#;
 
@@ -574,7 +574,7 @@ async fn test_webhook_unknown_platform_bad_request() {
     let agent = create_test_agent();
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     // 无法解析的消息
     let body_json = r#"{"unknown_field":"value"}"#;
@@ -604,7 +604,7 @@ async fn test_webhook_no_secret_skips_auth() {
     // 不配置 webhook_secret
     let config = ChannelConfig::new().enabled();
     let channel = WebhookChannel::new(config);
-    let router = channel.create_router(agent).unwrap();
+    let router = channel.create_router(&agent).unwrap();
 
     let body_json = r#"{"event":{"message":{"content":"{\"text\":\"No secret\"}"}}}"#;
 

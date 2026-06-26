@@ -79,7 +79,7 @@ impl WebhookChannel {
     }
 
     /// 构建 webhook router（可复用于测试）
-    pub fn create_router(&self, agent: Arc<Agent>) -> Result<Router, ChannelError> {
+    pub fn create_router(&self, agent: &Arc<Agent>) -> Result<Router, ChannelError> {
         let app_state = WebhookAppState {
             agent: agent.clone(),
             auth_header: self.auth_header.clone(),
@@ -97,7 +97,7 @@ impl WebhookChannel {
     async fn start_server(&self, agent: Arc<Agent>) -> Result<(), ChannelError> {
         let addr = format!("0.0.0.0:{}", self.port);
 
-        let app = self.create_router(agent)?;
+        let app = self.create_router(&agent)?;
 
         let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| {
             ChannelError::ConnectionFailed(format!("Failed to bind to {}: {}", addr, e))

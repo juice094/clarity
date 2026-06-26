@@ -70,7 +70,7 @@ impl LspHook {
 
     /// Resolve a possibly-relative path against `working_dir` and convert
     /// to a `file://` URI.
-    fn path_to_uri(&self, path_str: &str) -> Option<String> {
+    fn path_to_uri(&self, path_str: &str) -> String {
         path_to_uri_impl(&self.working_dir, path_str)
     }
 
@@ -102,7 +102,7 @@ impl LspHook {
     }
 }
 
-pub(crate) fn path_to_uri_impl(working_dir: &std::path::Path, path_str: &str) -> Option<String> {
+pub(crate) fn path_to_uri_impl(working_dir: &std::path::Path, path_str: &str) -> String {
     let path = std::path::Path::new(path_str);
     let abs = if path.is_absolute() {
         path.to_path_buf()
@@ -111,10 +111,10 @@ pub(crate) fn path_to_uri_impl(working_dir: &std::path::Path, path_str: &str) ->
     };
     let normalized = abs.to_string_lossy().replace('\\', "/");
     if normalized.starts_with('/') {
-        Some(format!("file://{}", normalized))
+        format!("file://{}", normalized)
     } else {
         // Windows drive letter
-        Some(format!("file:/// {}", normalized).replace(' ', ""))
+        format!("file:///{}", normalized)
     }
 }
 
@@ -174,10 +174,7 @@ impl AgentHook for LspHook {
             return;
         }
 
-        let uri = match self.path_to_uri(path_str) {
-            Some(u) => u,
-            None => return,
-        };
+        let uri = self.path_to_uri(path_str);
 
         debug!("LSP hook queued URI for sync: {}", uri);
         let mut pending = self.pending_uris.write();
@@ -285,7 +282,7 @@ mod tests {
         let wd = std::path::PathBuf::from("/home/user/project");
         assert_eq!(
             path_to_uri_impl(&wd, "/home/user/project/src/main.rs"),
-            Some("file:///home/user/project/src/main.rs".to_string())
+            "file:///home/user/project/src/main.rs".to_string()
         );
     }
 
@@ -294,7 +291,7 @@ mod tests {
         let wd = std::path::PathBuf::from("/home/user/project");
         assert_eq!(
             path_to_uri_impl(&wd, "src/main.rs"),
-            Some("file:///home/user/project/src/main.rs".to_string())
+            "file:///home/user/project/src/main.rs".to_string()
         );
     }
 
@@ -303,7 +300,7 @@ mod tests {
         let wd = std::path::PathBuf::from("C:\\project");
         assert_eq!(
             path_to_uri_impl(&wd, "src\\main.rs"),
-            Some("file:///C:/project/src/main.rs".to_string())
+            "file:///C:/project/src/main.rs".to_string()
         );
     }
 

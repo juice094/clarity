@@ -15,6 +15,7 @@ use std::collections::HashMap;
 const MAX_STATIC_PROMPT_BYTES: usize = 200_000;
 const MAX_DYNAMIC_PROMPT_BYTES: usize = 200_000;
 
+// ponytail: manual UTF-8 boundary scan. Replace with str::floor_char_boundary once MSRV >= 1.91.
 /// Find the largest valid UTF-8 boundary at or before `byte_idx`.
 fn floor_char_boundary(text: &str, byte_idx: usize) -> usize {
     let byte_idx = byte_idx.min(text.len());
@@ -426,7 +427,7 @@ impl Agent {
         if skill.meta.tools.is_empty() {
             None
         } else {
-            Some(skill.meta.tools.clone())
+            Some(skill.meta.tools)
         }
     }
 

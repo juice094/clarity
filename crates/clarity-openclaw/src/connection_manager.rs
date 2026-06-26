@@ -187,9 +187,7 @@ async fn run_gateway_manager(
     std::thread::spawn(move || {
         loop {
             for r in client_clone.drain() {
-                if let Some(e) = translate_gateway_response(r, &bridge_resp_tx) {
-                    let _ = bridge_resp_tx.send(e);
-                }
+                let _ = bridge_resp_tx.send(translate_gateway_response(r, &bridge_resp_tx));
             }
             std::thread::sleep(Duration::from_millis(10));
             if internal_rx.try_recv().is_err() {
@@ -235,18 +233,18 @@ async fn run_gateway_manager(
 fn translate_gateway_response(
     resp: GatewayResponse,
     _resp_tx: &Sender<ProtocolEvent>,
-) -> Option<ProtocolEvent> {
+) -> ProtocolEvent {
     match resp {
         GatewayResponse::Connected {
             gateway_url,
             session_id,
-        } => Some(ProtocolEvent::Connected {
+        } => ProtocolEvent::Connected {
             gateway_url,
             session_id: Some(session_id),
-        }),
-        GatewayResponse::Chat { message, .. } => Some(ProtocolEvent::ChatChunk(message)),
-        GatewayResponse::WireMessage { payload } => Some(ProtocolEvent::WireMessage(payload)),
-        GatewayResponse::History { messages } => Some(ProtocolEvent::History(
+        },
+        GatewayResponse::Chat { message, .. } => ProtocolEvent::ChatChunk(message),
+        GatewayResponse::WireMessage { payload } => ProtocolEvent::WireMessage(payload),
+        GatewayResponse::History { messages } => ProtocolEvent::History(
             messages
                 .into_iter()
                 .map(|m| ProtocolHistoryMessage {
@@ -254,19 +252,19 @@ fn translate_gateway_response(
                     content: m.content,
                 })
                 .collect(),
-        )),
+        ),
         GatewayResponse::RoleContextSynced {
             role_id,
             events,
             next_cursor,
             online_devices,
-        } => Some(ProtocolEvent::RoleContextSynced {
+        } => ProtocolEvent::RoleContextSynced {
             role_id,
             events,
             next_cursor,
             online_devices,
-        }),
-        GatewayResponse::Error(e) => Some(ProtocolEvent::Error(e)),
+        },
+        GatewayResponse::Error(e) => ProtocolEvent::Error(e),
     }
 }
 
@@ -539,7 +537,7 @@ mod tests {
             gateway_url: "ws://localhost".into(),
             session_id: "s1".into(),
         };
-        let ev = translate_gateway_response(resp, &tx).unwrap();
+        let ev = translate_gateway_response(resp, &tx);
         match ev {
             ProtocolEvent::Connected {
                 gateway_url,

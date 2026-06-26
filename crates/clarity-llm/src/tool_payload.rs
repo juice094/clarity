@@ -36,6 +36,8 @@ pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>
     (adapted_messages, Value::Array(vec![]))
 }
 
+// ponytail: minimal XML escaping for the tool-prompt dialect. Switch to a dedicated XML
+/// library only if the project starts handling untrusted or complex XML documents.
 /// Escape a string so it can be safely embedded inside XML attribute values or text nodes.
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
