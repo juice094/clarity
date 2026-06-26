@@ -271,13 +271,23 @@ cargo doc --workspace --no-deps --exclude clarity-slint
 
 > `clarity-slint` 为实验栈，不参与默认 CI。提交前必须保证上述命令全部通过。
 
-### 6.3 一键验收
+### 6.3 一键验收与测试编排
 
 ```powershell
+# PowerShell 一键验收（README/AGENTS/编译/测试/Clippy/格式化）
 .\scripts\verify.ps1 --all -Strict
+
+# Python 测试编排：统一跑 lib/bin/doc/integration 四层并生成 Markdown/JSON 报告
+python scripts/test_runner.py
+python scripts/test_runner.py --markdown target/test-report.md --json target/test-report.json
+
+# 环境健康检查（测试人员/新成员首选）
+python scripts/doctor.py
 ```
 
-该脚本从 `cargo metadata` 读取 workspace 成员（自动尊重 `Cargo.toml` 的 `exclude`），逐 crate 检查 README、AGENTS、编译、测试、Clippy、格式化，并可生成 JSON 报告（`-Report`）。
+`verify.ps1` 从 `cargo metadata` 读取 workspace 成员（自动尊重 `Cargo.toml` 的 `exclude`），逐 crate 检查 README、AGENTS、编译、测试、Clippy、格式化，并可生成 JSON 报告（`-Report`）。
+
+`scripts/test_runner.py` 与 `scripts/doctor.py` 是开发与测试编排工具，**Python 不是 Clarity 运行时依赖**；它们用于解耦测试执行与发布二进制，并为 CI/QA 提供结构化报告。
 
 ### 6.4 Feature 与构建变体
 
@@ -493,6 +503,10 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 | 主题 | 文档 |
 |------|------|
 | 构建/测试/验证 | [`docs/development/setup.md`](docs/development/setup.md) |
+| 测试策略 | [`docs/testing/TEST_STRATEGY.md`](docs/testing/TEST_STRATEGY.md) |
+| 测试人员上手指南 | [`docs/testing/TESTER_GUIDE.md`](docs/testing/TESTER_GUIDE.md) |
+| 模块解构与工程路线对照 | [`docs/planning/CLARITY_MODULE_RESEARCH.md`](docs/planning/CLARITY_MODULE_RESEARCH.md) |
+| 架构健康迭代 | [`docs/development/ARCHITECTURE_HEALTH.md`](docs/development/ARCHITECTURE_HEALTH.md) |
 | Provider 配置 | [`docs/development/provider-config.md`](docs/development/provider-config.md) |
 | 代码改动原则 | [`docs/development/CODE-CHANGE-PRINCIPLES.md`](docs/development/CODE-CHANGE-PRINCIPLES.md) |
 | 移动端架构 | [`docs/mobile-architecture.md`](docs/mobile-architecture.md) |
