@@ -46,12 +46,15 @@ pub mod capability;
 pub mod claw_context;
 pub mod error;
 pub mod federation;
+pub mod key_ref;
 pub mod llm;
 pub mod reliable_provider;
 pub mod rollout;
 pub mod subagent;
 pub mod thread;
 pub mod tool;
+
+pub use key_ref::resolve_key_ref;
 
 pub use claw_context::{
     ClawContextEvent, ContextEventKind, RoleContext, RoleContextId, RoleContextMessage,

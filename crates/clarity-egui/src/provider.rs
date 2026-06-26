@@ -234,7 +234,7 @@ impl ProviderDefinition {
         // OAuth path: static key takes precedence, then token store
         if self.auth_type == AuthType::OAuth {
             if !ref_str.is_empty() {
-                return Self::resolve_key_ref(ref_str);
+                return clarity_contract::resolve_key_ref(ref_str);
             }
             let token_key = if self.auth_token_key.is_empty() {
                 &self.id
@@ -249,42 +249,7 @@ impl ProviderDefinition {
         if ref_str.is_empty() {
             return None;
         }
-        Self::resolve_key_ref(ref_str)
-    }
-
-    /// Resolve a key reference string (env var, file field, or literal).
-    fn resolve_key_ref(ref_str: &str) -> Option<String> {
-        // ${env:VAR}
-        if let Some(env_var) = ref_str
-            .strip_prefix("${env:")
-            .and_then(|s| s.strip_suffix('}'))
-        {
-            return std::env::var(env_var).ok();
-        }
-
-        // ${file:path:field}
-        if let Some(inner) = ref_str
-            .strip_prefix("${file:")
-            .and_then(|s| s.strip_suffix('}'))
-        {
-            let (path_part, field) = inner.split_once(':')?;
-
-            let path = if path_part.starts_with("~/") {
-                dirs::home_dir()
-                    .map(|h| h.join(&path_part[2..]))
-                    .unwrap_or_else(|| std::path::PathBuf::from(path_part))
-            } else {
-                std::path::PathBuf::from(path_part)
-            };
-            let content = std::fs::read_to_string(&path).ok()?;
-            let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-            return json
-                .get(field)
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-        }
-
-        Some(ref_str.to_string())
+        clarity_contract::resolve_key_ref(ref_str)
     }
 
     /// Full display name: falls back to `id` if `display_name` is empty.

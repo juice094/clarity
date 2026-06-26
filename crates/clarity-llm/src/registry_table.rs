@@ -24,6 +24,9 @@ pub struct FamilyDefaults {
     pub oauth: Option<OAuthProviderConfig>,
     /// Default model identifier for this family.
     pub default_model: Option<String>,
+    /// Known public model identifiers for this family, shown in settings UIs
+    /// when no registry config exists.
+    pub known_models: Vec<String>,
     /// Capability / visibility tags (e.g. "chat-only").
     pub tags: Vec<String>,
 }
@@ -38,6 +41,7 @@ impl Default for FamilyDefaults {
             auth_token_key: None,
             oauth: None,
             default_model: None,
+            known_models: Vec::new(),
             tags: Vec::new(),
         }
     }
@@ -50,24 +54,53 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("https://api.openai.com/v1".into()),
             api_key_env: Some("OPENAI_API_KEY".into()),
             default_model: Some("gpt-4o".into()),
+            known_models: vec![
+                "gpt-4o".into(),
+                "gpt-4o-mini".into(),
+                "gpt-4.1".into(),
+                "gpt-4.1-mini".into(),
+                "gpt-4.1-nano".into(),
+                "o1".into(),
+                "o1-mini".into(),
+                "o3-mini".into(),
+            ],
             ..Default::default()
         }),
         "deepseek" => Some(FamilyDefaults {
             base_url: Some("https://api.deepseek.com/v1".into()),
             api_key_env: Some("DEEPSEEK_API_KEY".into()),
             default_model: Some("deepseek-chat".into()),
+            known_models: vec![
+                "deepseek-v4-flash".into(),
+                "deepseek-v4-pro".into(),
+                "deepseek-chat".into(),
+                "deepseek-reasoner".into(),
+                "deepseek-coder".into(),
+            ],
             ..Default::default()
         }),
         "kimi" => Some(FamilyDefaults {
             base_url: Some("https://api.moonshot.cn/v1".into()),
             api_key_env: Some("KIMI_API_KEY".into()),
             default_model: Some("kimi-k2.6".into()),
+            known_models: vec![
+                "kimi-k2.6".into(),
+                "kimi-k2-07132k".into(),
+                "kimi-k1.5".into(),
+                "kimi-latest".into(),
+            ],
             ..Default::default()
         }),
         "moonshot" => Some(FamilyDefaults {
             base_url: Some("https://api.moonshot.cn/v1".into()),
             api_key_env: Some("KIMI_API_KEY".into()),
             default_model: Some("kimi-k2.6".into()),
+            known_models: vec![
+                "kimi-k2.6".into(),
+                "kimi-k2-07132k".into(),
+                "kimi-k1.5".into(),
+                "kimi-latest".into(),
+            ],
             ..Default::default()
         }),
         "kimi-code" => Some(FamilyDefaults {
@@ -80,6 +113,7 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
                 ..Default::default()
             }),
             default_model: Some("kimi-k2.6".into()),
+            known_models: vec!["kimi-k2.6".into()],
             ..Default::default()
         }),
         "anthropic" => Some(FamilyDefaults {
@@ -87,6 +121,12 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("https://api.anthropic.com".into()),
             api_key_env: Some("ANTHROPIC_AUTH_TOKEN".into()),
             default_model: Some("claude-sonnet".into()),
+            known_models: vec![
+                "claude-3-7-sonnet-20250219".into(),
+                "claude-3-5-sonnet-20241022".into(),
+                "claude-3-5-haiku-20241022".into(),
+                "claude-3-opus-20240229".into(),
+            ],
             ..Default::default()
         }),
         "ollama" => Some(FamilyDefaults {
@@ -94,6 +134,14 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("http://localhost:11434".into()),
             auth_type: AuthType::None,
             default_model: Some("ollama-llama3".into()),
+            known_models: vec![
+                "llama3.2".into(),
+                "llama3.1".into(),
+                "qwen2.5".into(),
+                "qwen2.5-coder".into(),
+                "deepseek-r1".into(),
+                "phi4".into(),
+            ],
             ..Default::default()
         }),
         "llama-server" => Some(FamilyDefaults {
@@ -120,6 +168,13 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
         }),
         _ => None,
     }
+}
+
+/// Return the canonical model list for a provider family.
+pub fn family_models(name: &str) -> Vec<String> {
+    family_defaults(name)
+        .map(|d| d.known_models)
+        .unwrap_or_default()
 }
 
 /// List all registered provider family names.
@@ -153,5 +208,24 @@ mod tests {
     #[test]
     fn test_all_family_names_non_empty() {
         assert!(!all_family_names().is_empty());
+    }
+
+    #[test]
+    fn test_family_models_matches_defaults() {
+        let openai = super::family_defaults("openai").unwrap();
+        assert!(openai.known_models.contains(&"gpt-4o".to_string()));
+        assert!(openai.known_models.contains(&"o3-mini".to_string()));
+    }
+
+    #[test]
+    fn test_family_models_helper() {
+        let models = super::family_models("anthropic");
+        assert!(!models.is_empty());
+        assert!(models.contains(&"claude-3-7-sonnet-20250219".to_string()));
+    }
+
+    #[test]
+    fn test_unknown_family_models_empty() {
+        assert!(super::family_models("unknown-provider").is_empty());
     }
 }

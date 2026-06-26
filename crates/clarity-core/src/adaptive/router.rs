@@ -11,8 +11,7 @@
 //!      │
 //!      ▼
 //! ┌─────────────────┐
-//! │ Filter: capability│  — exclude providers that don't support required features
-//! │ (reasoning, etc.) │
+//! │ Filter: health  │  — exclude providers below quality / error-rate thresholds
 //! └─────────────────┘
 //!      │
 //!      ▼
@@ -26,6 +25,12 @@
 //! │ Rank + select   │  — pick top provider, emit ModelRoute event for feedback
 //! └─────────────────┘
 //! ```
+//!
+//! // ponytail: capability routing deferred. The production router in
+//! `clarity-llm/src/runtime_router.rs` already handles vision/tool/reasoning
+//! hints via model tags. If `AdaptiveModelRouter` is later wired to real
+//! provider selection, re-introduce a `capabilities: ProviderCapabilities`
+//! field on `ProviderProfile` and a task-requirements filter here.
 
 use std::collections::HashMap;
 
@@ -72,15 +77,6 @@ pub struct TaskDescriptor {
     /// Estimated token count for the prompt.
     pub estimated_input_tokens: usize,
 
-    /// Whether the task requires reasoning capabilities.
-    pub requires_reasoning: bool,
-
-    /// Whether the task requires vision capabilities.
-    pub requires_vision: bool,
-
-    /// Whether the task requires tool use.
-    pub requires_tools: bool,
-
     /// Maximum acceptable latency in milliseconds.
     pub max_latency_ms: Option<u64>,
 
@@ -103,24 +99,6 @@ impl TaskDescriptor {
     /// Set estimated input tokens.
     pub fn with_estimated_tokens(mut self, tokens: usize) -> Self {
         self.estimated_input_tokens = tokens;
-        self
-    }
-
-    /// Require reasoning capability.
-    pub fn reasoning(mut self) -> Self {
-        self.requires_reasoning = true;
-        self
-    }
-
-    /// Require vision capability.
-    pub fn vision(mut self) -> Self {
-        self.requires_vision = true;
-        self
-    }
-
-    /// Require tool use.
-    pub fn tools(mut self) -> Self {
-        self.requires_tools = true;
         self
     }
 }
@@ -411,9 +389,8 @@ impl AdaptiveModelRouter {
     /// # Algorithm
     ///
     /// 1. Filter out providers that don't meet health thresholds.
-    /// 2. Filter out providers that don't support required capabilities.
-    /// 3. Score remaining providers using weighted composite fitness.
-    /// 4. Return the highest-scoring provider.
+    /// 2. Score remaining providers using weighted composite fitness.
+    /// 3. Return the highest-scoring provider.
     pub fn route(&self, task: &TaskDescriptor) -> Result<String, RouterError> {
         let profiles = self.profiles.read();
 
@@ -428,7 +405,6 @@ impl AdaptiveModelRouter {
         let mut candidates: Vec<(&String, f64)> = profiles
             .iter()
             .filter(|(_, profile)| self.is_healthy(profile))
-            .filter(|(_, profile)| self.capable(profile, task))
             .map(|(id, profile)| (id, profile.fitness_score(task, &weights)))
             .collect();
 
@@ -457,12 +433,11 @@ impl AdaptiveModelRouter {
             && profile.error_rate <= self.max_error_rate
     }
 
-    fn capable(&self, _profile: &ProviderProfile, _task: &TaskDescriptor) -> bool {
-        // NOTE: In a full implementation, this would check provider capability
-        // flags (reasoning, vision, tool-use) against task requirements.
-        // For now, we assume all registered providers are capable.
-        true
-    }
+    // ponytail: capability routing deferred. The production router in
+    // clarity-llm/src/runtime_router.rs already handles vision/tool/reasoning
+    // hints via model tags. If this adaptive router is later wired to real
+    // provider selection, add a `capabilities: ProviderCapabilities` field to
+    // `ProviderProfile` and restore a capability filter here.
 }
 
 impl Default for AdaptiveModelRouter {

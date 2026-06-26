@@ -5,6 +5,7 @@
 //! crate decoupled from concrete LLM provider construction.
 
 use crate::model_registry::ModelRegistry;
+use crate::registry_table;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -100,8 +101,8 @@ fn format_provider_name(id: &str) -> String {
 
 /// Return the list of available providers and their models for settings UIs.
 ///
-/// Merges the dynamic `ModelRegistry` with a hardcoded fallback list for
-/// backward compatibility when no registry is configured.
+/// Merges the dynamic `ModelRegistry` with a fallback derived from
+/// `registry_table` canonical defaults when no registry is configured.
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
     let mut result: Vec<(String, String, Vec<String>)> = Vec::new();
     let mut seen_providers = HashSet::new();
@@ -136,7 +137,8 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         }
     }
 
-    // Hardcoded fallback for providers not present in registry
+    // Fallback catalog derived from the canonical registry defaults.
+    // Only local GGUF scanning stays dynamic here.
     let local_models = scan_local_models();
     let local_model_names: Vec<String> = if local_models.is_empty() {
         vec!["No models found — place .gguf in ~/models/".into()]
@@ -144,74 +146,28 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         local_models.into_iter().map(|(_, name)| name).collect()
     };
 
-    let fallback = vec![
-        (
-            "openai".to_string(),
-            "OpenAI".to_string(),
-            vec![
-                "gpt-4o".into(),
-                "gpt-4o-mini".into(),
-                "gpt-4.1".into(),
-                "gpt-4.1-mini".into(),
-                "gpt-4.1-nano".into(),
-                "o1".into(),
-                "o1-mini".into(),
-                "o3-mini".into(),
-            ],
-        ),
-        (
-            "anthropic".to_string(),
-            "Anthropic".to_string(),
-            vec![
-                "claude-3-7-sonnet-20250219".into(),
-                "claude-3-5-sonnet-20241022".into(),
-                "claude-3-5-haiku-20241022".into(),
-                "claude-3-opus-20240229".into(),
-            ],
-        ),
-        (
-            "kimi".to_string(),
-            "Kimi".to_string(),
-            vec![
-                "kimi-k2.6".into(),
-                "kimi-k2-07132k".into(),
-                "kimi-k1.5".into(),
-                "kimi-latest".into(),
-            ],
-        ),
-        (
-            "deepseek".to_string(),
-            "DeepSeek".to_string(),
-            vec![
-                "deepseek-v4-flash".into(),
-                "deepseek-v4-pro".into(),
-                "deepseek-chat".into(),
-                "deepseek-reasoner".into(),
-                "deepseek-coder".into(),
-            ],
-        ),
-        (
-            "ollama".to_string(),
-            "Ollama".to_string(),
-            vec![
-                "llama3.2".into(),
-                "llama3.1".into(),
-                "qwen2.5".into(),
-                "qwen2.5-coder".into(),
-                "deepseek-r1".into(),
-                "phi4".into(),
-            ],
-        ),
-        (
-            "local".to_string(),
-            "Local (GGUF)".to_string(),
-            local_model_names,
-        ),
-    ];
+    for family in registry_table::all_family_names() {
+        if !seen_providers.insert(family.to_string()) {
+            continue;
+        }
 
-    for (id, label, models) in fallback {
-        if seen_providers.insert(id.clone()) {
-            result.push((id, label, models));
+        let defaults = match registry_table::family_defaults(family) {
+            Some(d) => d,
+            None => continue,
+        };
+
+        let models = if *family == "local" {
+            local_model_names.clone()
+        } else if defaults.known_models.is_empty() {
+            // Defensive fallback: if no curated list exists, at least surface
+            // the family's default model so the provider remains selectable.
+            defaults.default_model.into_iter().collect()
+        } else {
+            defaults.known_models
+        };
+
+        if !models.is_empty() {
+            result.push((family.to_string(), format_provider_name(family), models));
         }
     }
 
@@ -238,5 +194,29 @@ mod tests {
         assert!(local.is_some());
         let (_, label, _) = local.unwrap();
         assert_eq!(label, "Local (GGUF)");
+    }
+
+    #[test]
+    fn test_fallback_derives_from_registry_table() {
+        let models = get_available_models();
+        let openai = models.iter().find(|(id, _, _)| id == "openai");
+        assert!(openai.is_some(), "openai should appear in fallback");
+        let (_, _, openai_models) = openai.unwrap();
+        assert!(
+            openai_models.contains(&"gpt-4o".to_string()),
+            "openai fallback should include gpt-4o"
+        );
+    }
+
+    #[test]
+    fn test_no_duplicate_moonshot_when_kimi_present() {
+        // The registry-derived fallback keeps alias families distinct.
+        let models = get_available_models();
+        let ids: Vec<&str> = models.iter().map(|(id, _, _)| id.as_str()).collect();
+        assert!(ids.contains(&"kimi"));
+        assert!(
+            ids.iter().filter(|&&id| id == "moonshot").count() <= 1,
+            "moonshot alias should appear at most once"
+        );
     }
 }

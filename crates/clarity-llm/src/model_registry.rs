@@ -518,49 +518,6 @@ impl LlmProviderFactory for ModelRegistry {
     }
 }
 
-/// Expand a key reference string.
-///
-/// Supported syntax:
-/// - `${file:path:field}` — read `field` from JSON file at `path` (`~` is expanded).
-/// - `${env:VAR}` — read environment variable `VAR`.
-/// - plain string — treated as an env-var name for backward compat, or returned as-is.
-pub fn resolve_key_ref(raw: &str) -> Option<String> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return None;
-    }
-
-    // ${file:path:field}
-    if let Some(inner) = raw
-        .strip_prefix("${file:")
-        .and_then(|s| s.strip_suffix('}'))
-    {
-        let (path_part, field) = inner.split_once(':')?;
-
-        let path = if path_part.starts_with("~/") {
-            dirs::home_dir()
-                .map(|h| h.join(&path_part[2..]))
-                .unwrap_or_else(|| PathBuf::from(path_part))
-        } else {
-            PathBuf::from(path_part)
-        };
-        let content = std::fs::read_to_string(&path).ok()?;
-        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-        return json
-            .get(field)
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-    }
-
-    // ${env:VAR}
-    if let Some(var) = raw.strip_prefix("${env:").and_then(|s| s.strip_suffix('}')) {
-        return std::env::var(var).ok();
-    }
-
-    // Try env var, fall back to literal
-    std::env::var(raw).ok().or_else(|| Some(raw.to_string()))
-}
-
 /// Resolve an API key from a hierarchy of sources.
 ///
 /// Priority (highest first):
@@ -585,7 +542,7 @@ fn resolve_api_key(
         return Some(key.to_string());
     }
     let env_name = alias_api_key_env.or(provider_api_key_env)?;
-    resolve_key_ref(env_name)
+    clarity_contract::resolve_key_ref(env_name)
 }
 
 /// Build a concrete provider from registry config + model_id.
