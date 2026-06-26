@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::time::Duration;
 
 use crate::catalog::CatalogError;
 use crate::catalog::entry::ModelCatalogEntry;
@@ -51,7 +52,9 @@ impl CatalogFetcher for OllamaFetcher {
 
     async fn fetch(&self) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
         let url = format!("{}/api/tags", self.base_url.trim_end_matches('/'));
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()?;
         let response = client.get(&url).send().await?.error_for_status()?;
 
         let payload: OllamaTagsResponse = response.json().await?;

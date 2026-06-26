@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use std::time::Duration;
 
 use crate::catalog::CatalogError;
 use crate::catalog::entry::ModelCatalogEntry;
@@ -66,7 +67,9 @@ impl CatalogFetcher for OpenAiCompatibleFetcher {
 
     async fn fetch(&self) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
         let url = format!("{}/v1/models", self.base_url.trim_end_matches('/'));
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()?;
         let mut request = client.get(&url);
         if let Some(key) = &self.api_key {
             request = request.bearer_auth(key);
