@@ -34,13 +34,29 @@ impl OllamaFetcher {
     }
 
     /// Build a fetcher from canonical registry defaults.
+    ///
+    /// Honors the `OLLAMA_HOST` environment variable if set, matching the
+    /// Ollama CLI convention.
     pub fn from_defaults() -> Result<Self, CatalogError> {
-        let defaults = crate::registry_table::family_defaults("ollama")
-            .ok_or_else(|| CatalogError::MissingBaseUrl("ollama".into()))?;
-        let base_url = defaults
-            .base_url
-            .ok_or_else(|| CatalogError::MissingBaseUrl("ollama".into()))?;
+        let base_url = if let Ok(host) = std::env::var("OLLAMA_HOST") {
+            normalize_ollama_host(&host)
+        } else {
+            let defaults = crate::registry_table::family_defaults("ollama")
+                .ok_or_else(|| CatalogError::MissingBaseUrl("ollama".into()))?;
+            defaults
+                .base_url
+                .ok_or_else(|| CatalogError::MissingBaseUrl("ollama".into()))?
+        };
         Ok(Self::new(base_url))
+    }
+}
+
+fn normalize_ollama_host(host: &str) -> String {
+    let host = host.trim();
+    if host.starts_with("http://") || host.starts_with("https://") {
+        host.to_string()
+    } else {
+        format!("http://{}", host)
     }
 }
 
@@ -86,5 +102,17 @@ mod tests {
         let fetcher = OllamaFetcher::from_defaults().unwrap();
         assert_eq!(fetcher.family(), "ollama");
         assert!(fetcher.base_url.contains("11434"));
+    }
+
+    #[test]
+    fn normalize_ollama_host_adds_scheme() {
+        assert_eq!(
+            normalize_ollama_host("localhost:11434"),
+            "http://localhost:11434"
+        );
+        assert_eq!(
+            normalize_ollama_host("http://192.168.1.5:11434"),
+            "http://192.168.1.5:11434"
+        );
     }
 }

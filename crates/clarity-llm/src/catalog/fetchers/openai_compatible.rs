@@ -66,7 +66,7 @@ impl CatalogFetcher for OpenAiCompatibleFetcher {
     }
 
     async fn fetch(&self) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
-        let url = format!("{}/v1/models", self.base_url.trim_end_matches('/'));
+        let url = models_url(&self.base_url);
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
             .build()?;
@@ -82,6 +82,17 @@ impl CatalogFetcher for OpenAiCompatibleFetcher {
             .into_iter()
             .map(|m| ModelCatalogEntry::new(&self.family, m.id))
             .collect())
+    }
+}
+
+/// Build the `/v1/models` endpoint URL without duplicating the `/v1` segment
+/// when the configured base URL already ends in `/v1`.
+fn models_url(base_url: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    if base.ends_with("/v1") {
+        format!("{}/models", base)
+    } else {
+        format!("{}/v1/models", base)
     }
 }
 
@@ -107,5 +118,21 @@ mod tests {
         assert!(fetcher.base_url.contains("openai.com"));
         let expected = std::env::var("OPENAI_API_KEY").ok();
         assert_eq!(fetcher.api_key, expected);
+    }
+
+    #[test]
+    fn models_url_avoids_duplicate_v1_segment() {
+        assert_eq!(
+            models_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1/models"
+        );
+        assert_eq!(
+            models_url("https://api.openai.com/v1/"),
+            "https://api.openai.com/v1/models"
+        );
+        assert_eq!(
+            models_url("https://api.example.com"),
+            "https://api.example.com/v1/models"
+        );
     }
 }
