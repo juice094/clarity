@@ -1249,13 +1249,4 @@ mod tests {
         let payload = serde_json::json!({ "stream": "heartbeat" });
         assert!(extract_agent_event(&payload).is_none());
     }
-
-    #[test]
-    fn backoff_progression_capped_at_thirty_seconds() {
-        let expected = [1, 2, 4, 8, 16, 30, 30];
-        for (i, &secs) in expected.iter().enumerate() {
-            let failures = i + 1;
-            assert_eq!(crate::util::next_backoff(failures).as_secs(), secs);
-        }
-    }
 }

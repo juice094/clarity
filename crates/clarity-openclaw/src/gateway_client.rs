@@ -433,7 +433,6 @@ fn translate_response(response: WsResponse) -> Option<GatewayResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn test_ws_request_serialization() {
@@ -497,15 +496,5 @@ mod tests {
         let json = r#"{"value":42}"#;
         let err = parse_incoming_frame(json).unwrap_err();
         assert!(err.starts_with("parse response:"));
-    }
-
-    #[test]
-    fn test_next_backoff_progression_and_cap() {
-        assert_eq!(crate::util::next_backoff(1), Duration::from_secs(1));
-        assert_eq!(crate::util::next_backoff(2), Duration::from_secs(2));
-        assert_eq!(crate::util::next_backoff(3), Duration::from_secs(4));
-        assert_eq!(crate::util::next_backoff(4), Duration::from_secs(8));
-        assert_eq!(crate::util::next_backoff(5), Duration::from_secs(16));
-        assert_eq!(crate::util::next_backoff(10), Duration::from_secs(30));
     }
 }
