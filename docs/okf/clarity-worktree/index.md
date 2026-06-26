@@ -5,6 +5,10 @@ description: OKF knowledge bundle describing the Clarity crate topology, respons
 version: 0.3.4-rc
 date: 2026-06-25
 source_repo: https://github.com/juice094/clarity
+title: Clarity Project Worktree
+type: index
+okf_version: '0.1'
+timestamp: '2026-06-26T11:28:50Z'
 ---
 
 # Clarity Project Worktree

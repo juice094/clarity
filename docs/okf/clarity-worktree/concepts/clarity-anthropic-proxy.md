@@ -3,8 +3,18 @@ id: clarity-anthropic-proxy
 name: clarity-anthropic-proxy
 type: anthropic-proxy
 layer: utility
-depends_on: ["clarity-contract", "clarity-core", "clarity-llm"]
-consumed_by: [""]
+depends_on:
+- clarity-contract
+- clarity-core
+- clarity-llm
+consumed_by: []
+title: clarity-anthropic-proxy
+description: Anthropic Messages API → DeepSeek proxy utility.
+tags:
+- anthropic-proxy
+- clarity
+- utility
+timestamp: '2026-06-26T11:28:50Z'
 ---
 
 # clarity-anthropic-proxy

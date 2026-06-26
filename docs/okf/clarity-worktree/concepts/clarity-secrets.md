@@ -3,8 +3,18 @@ id: clarity-secrets
 name: clarity-secrets
 type: secrets
 layer: infrastructure
-depends_on: ["clarity-contract"]
-consumed_by: ["clarity-llm", "clarity-core"]
+depends_on:
+- clarity-contract
+consumed_by:
+- clarity-llm
+- clarity-core
+title: clarity-secrets
+description: Encrypted secret storage using ChaCha20-Poly1305.
+tags:
+- clarity
+- infrastructure
+- secrets
+timestamp: '2026-06-26T11:28:50Z'
 ---
 
 # clarity-secrets
