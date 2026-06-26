@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Create minimal stub crates for hermes-memory when the real repository is not
-# checked out. This allows Cargo to load manifests for the optional `hermes`
-# dependencies without actually compiling them (the feature is off by default).
-#
-# The real hermes-memory repository is expected at:
-#   <clarity-repo>/../hermes-memory
+# ponytail: minimal shim so Cargo can load optional hermes path deps without the
+# private hermes-memory repository. When the `hermes` feature is off these stubs
+# are not compiled; when it is on, the real repository is required.
 
 set -euo pipefail
 
@@ -12,55 +9,19 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HERMES_ROOT="${REPO_ROOT}/../hermes-memory"
 
 if [ -f "${HERMES_ROOT}/crates/hermes-memory-core/Cargo.toml" ]; then
-  echo "hermes-memory already present at ${HERMES_ROOT}; skipping stub creation."
   exit 0
 fi
 
-echo "Creating hermes-memory stubs at ${HERMES_ROOT}..."
-
-mkdir -p "${HERMES_ROOT}/crates/hermes-memory-core/src"
-mkdir -p "${HERMES_ROOT}/crates/hermes-memory-store/src"
-mkdir -p "${HERMES_ROOT}/crates/hermes-memory-search/src"
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-core/Cargo.toml" <<'EOF'
+mkdir -p "${HERMES_ROOT}/crates"
+for NAME in hermes-memory-core hermes-memory-store hermes-memory-search; do
+  CRATE_DIR="${HERMES_ROOT}/crates/${NAME}"
+  mkdir -p "${CRATE_DIR}/src"
+  cat > "${CRATE_DIR}/Cargo.toml" <<EOF
 [package]
-name = "hermes-memory-core"
+name = "${NAME}"
 version = "0.1.0-dev"
 edition = "2021"
-license = "AGPL-3.0-or-later"
-description = "Stub crate for optional hermes-memory integration."
 EOF
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-core/src/lib.rs" <<'EOF'
-//! Stub implementation. The real hermes-memory-core lives in the private
-//! hermes-memory repository; this stub exists only so Cargo can load the
-//! optional dependency manifest when hermes is disabled.
-EOF
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-store/Cargo.toml" <<'EOF'
-[package]
-name = "hermes-memory-store"
-version = "0.1.0-dev"
-edition = "2021"
-license = "AGPL-3.0-or-later"
-description = "Stub crate for optional hermes-memory integration."
-EOF
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-store/src/lib.rs" <<'EOF'
-//! Stub implementation. See hermes-memory-core for context.
-EOF
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-search/Cargo.toml" <<'EOF'
-[package]
-name = "hermes-memory-search"
-version = "0.1.0-dev"
-edition = "2021"
-license = "AGPL-3.0-or-later"
-description = "Stub crate for optional hermes-memory integration."
-EOF
-
-cat > "${HERMES_ROOT}/crates/hermes-memory-search/src/lib.rs" <<'EOF'
-//! Stub implementation. See hermes-memory-core for context.
-EOF
-
-echo "hermes-memory stubs created."
+  printf '// ponytail: stub only; real implementation lives in the private hermes-memory repo.\n' \
+    > "${CRATE_DIR}/src/lib.rs"
+done
