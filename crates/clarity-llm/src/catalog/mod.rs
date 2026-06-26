@@ -49,7 +49,10 @@ mod tests {
     use service::ModelCatalogService;
     use std::collections::HashMap;
 
+    use crate::catalog::fetcher::CatalogFetcher;
     use crate::model_registry::{AuthType, ModelConfigFile, ModelEntry, ProviderConfig};
+    use async_trait::async_trait;
+    use std::sync::Arc;
 
     #[test]
     fn catalog_entry_round_trip() {
@@ -143,5 +146,40 @@ mod tests {
         let models = service.family_catalog("openai").unwrap();
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].model_id, "cached-model");
+    }
+
+    /// In-memory fetcher used to verify `refresh_all` end-to-end without network.
+    struct MockFetcher {
+        family: String,
+        models: Vec<ModelCatalogEntry>,
+    }
+
+    #[async_trait]
+    impl CatalogFetcher for MockFetcher {
+        fn family(&self) -> &str {
+            &self.family
+        }
+
+        async fn fetch(&self) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
+            Ok(self.models.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn service_refresh_all_persists_to_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = CatalogCache::new(dir.path());
+        let mut service = ModelCatalogService::new(cache);
+        service.register_fetcher(Arc::new(MockFetcher {
+            family: "mock".into(),
+            models: vec![ModelCatalogEntry::new("mock", "m1")],
+        }));
+
+        let refreshed = service.refresh_all().await.unwrap();
+        assert_eq!(refreshed.get("mock").unwrap().len(), 1);
+
+        let cached = service.family_catalog("mock").unwrap();
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached[0].model_id, "m1");
     }
 }
