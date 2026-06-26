@@ -54,53 +54,33 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("https://api.openai.com/v1".into()),
             api_key_env: Some("OPENAI_API_KEY".into()),
             default_model: Some("gpt-4o".into()),
-            known_models: vec![
-                "gpt-4o".into(),
-                "gpt-4o-mini".into(),
-                "gpt-4.1".into(),
-                "gpt-4.1-mini".into(),
-                "gpt-4.1-nano".into(),
-                "o1".into(),
-                "o1-mini".into(),
-                "o3-mini".into(),
-            ],
+            // ponytail: minimal offline bootstrap. The canonical catalog is fetched
+            // dynamically by ModelCatalogService and cached in ~/.clarity/catalogs/.
+            known_models: vec!["gpt-4o".into()],
             ..Default::default()
         }),
         "deepseek" => Some(FamilyDefaults {
             base_url: Some("https://api.deepseek.com/v1".into()),
             api_key_env: Some("DEEPSEEK_API_KEY".into()),
             default_model: Some("deepseek-chat".into()),
-            known_models: vec![
-                "deepseek-v4-flash".into(),
-                "deepseek-v4-pro".into(),
-                "deepseek-chat".into(),
-                "deepseek-reasoner".into(),
-                "deepseek-coder".into(),
-            ],
+            // ponytail: minimal offline bootstrap; dynamic catalog lives in cache.
+            known_models: vec!["deepseek-chat".into()],
             ..Default::default()
         }),
         "kimi" => Some(FamilyDefaults {
             base_url: Some("https://api.moonshot.cn/v1".into()),
             api_key_env: Some("KIMI_API_KEY".into()),
             default_model: Some("kimi-k2.6".into()),
-            known_models: vec![
-                "kimi-k2.6".into(),
-                "kimi-k2-07132k".into(),
-                "kimi-k1.5".into(),
-                "kimi-latest".into(),
-            ],
+            // ponytail: minimal offline bootstrap; dynamic catalog lives in cache.
+            known_models: vec!["kimi-k2.6".into()],
             ..Default::default()
         }),
         "moonshot" => Some(FamilyDefaults {
             base_url: Some("https://api.moonshot.cn/v1".into()),
             api_key_env: Some("KIMI_API_KEY".into()),
             default_model: Some("kimi-k2.6".into()),
-            known_models: vec![
-                "kimi-k2.6".into(),
-                "kimi-k2-07132k".into(),
-                "kimi-k1.5".into(),
-                "kimi-latest".into(),
-            ],
+            // ponytail: minimal offline bootstrap; dynamic catalog lives in cache.
+            known_models: vec!["kimi-k2.6".into()],
             ..Default::default()
         }),
         "kimi-code" => Some(FamilyDefaults {
@@ -121,12 +101,8 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("https://api.anthropic.com".into()),
             api_key_env: Some("ANTHROPIC_AUTH_TOKEN".into()),
             default_model: Some("claude-sonnet".into()),
-            known_models: vec![
-                "claude-3-7-sonnet-20250219".into(),
-                "claude-3-5-sonnet-20241022".into(),
-                "claude-3-5-haiku-20241022".into(),
-                "claude-3-opus-20240229".into(),
-            ],
+            // ponytail: minimal offline bootstrap; dynamic catalog lives in cache.
+            known_models: vec!["claude-sonnet".into()],
             ..Default::default()
         }),
         "ollama" => Some(FamilyDefaults {
@@ -134,14 +110,9 @@ pub fn family_defaults(name: &str) -> Option<FamilyDefaults> {
             base_url: Some("http://localhost:11434".into()),
             auth_type: AuthType::None,
             default_model: Some("ollama-llama3".into()),
-            known_models: vec![
-                "llama3.2".into(),
-                "llama3.1".into(),
-                "qwen2.5".into(),
-                "qwen2.5-coder".into(),
-                "deepseek-r1".into(),
-                "phi4".into(),
-            ],
+            // ponytail: minimal offline bootstrap; Ollama's real model list is fetched
+            // dynamically from /api/tags when the instance is reachable.
+            known_models: vec!["llama3.2".into()],
             ..Default::default()
         }),
         "llama-server" => Some(FamilyDefaults {
@@ -214,14 +185,13 @@ mod tests {
     fn test_family_models_matches_defaults() {
         let openai = super::family_defaults("openai").unwrap();
         assert!(openai.known_models.contains(&"gpt-4o".to_string()));
-        assert!(openai.known_models.contains(&"o3-mini".to_string()));
     }
 
     #[test]
     fn test_family_models_helper() {
         let models = super::family_models("anthropic");
         assert!(!models.is_empty());
-        assert!(models.contains(&"claude-3-7-sonnet-20250219".to_string()));
+        assert!(models.contains(&"claude-sonnet".to_string()));
     }
 
     #[test]

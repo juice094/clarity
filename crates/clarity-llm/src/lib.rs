@@ -18,6 +18,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod catalog;
 pub mod deepseek;
 pub mod deepseek_device;
 pub mod deepseek_pow;
