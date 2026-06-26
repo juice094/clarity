@@ -9,15 +9,19 @@ use crate::catalog::CatalogError;
 use crate::catalog::cache::CatalogCache;
 use crate::catalog::entry::ModelCatalogEntry;
 use crate::catalog::fetcher::CatalogFetcher;
+use crate::catalog::fetchers::{OllamaFetcher, OpenAiCompatibleFetcher};
+use crate::model_registry::{ModelRegistry, ProtocolType};
 use crate::registry_table;
 
-/// Merges bootstrap defaults, on-disk cache, and remote fetches into a unified catalog.
+/// Merges user overrides, on-disk cache, and bootstrap defaults into a unified catalog.
 ///
-/// This is the Phase 1 skeleton. It currently supports cache + bootstrap fallback.
-/// User overrides from `models.toml` and live remote refresh will be wired in
-/// subsequent phases.
+/// Resolution order for [`family_catalog`](Self::family_catalog):
+/// 1. User override from a loaded [`ModelRegistry`] (`models.toml`).
+/// 2. Cached remote catalog.
+/// 3. Minimal offline bootstrap defaults from [`registry_table`].
 pub struct ModelCatalogService {
     cache: CatalogCache,
+    registry: Option<ModelRegistry>,
     fetchers: Vec<Arc<dyn CatalogFetcher>>,
 }
 
@@ -25,6 +29,7 @@ impl std::fmt::Debug for ModelCatalogService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ModelCatalogService")
             .field("cache", &self.cache)
+            .field("has_registry", &self.registry.is_some())
             .field("fetcher_count", &self.fetchers.len())
             .finish()
     }
@@ -36,12 +41,29 @@ impl ModelCatalogService {
         Ok(Self::new(CatalogCache::new(CatalogCache::default_dir()?)))
     }
 
+    /// Create a service with the default cache and all canonical remote fetchers registered.
+    ///
+    /// ponytail: fetchers are registered optimistically; missing API keys or offline
+    /// instances are handled gracefully during `refresh_all`.
+    pub fn with_defaults() -> Result<Self, CatalogError> {
+        let mut service = Self::default_cache()?;
+        service.register_default_fetchers();
+        Ok(service)
+    }
+
     /// Create a service with a custom cache.
     pub fn new(cache: CatalogCache) -> Self {
         Self {
             cache,
+            registry: None,
             fetchers: Vec::new(),
         }
+    }
+
+    /// Attach a user registry so its models take priority over cache/bootstrap.
+    pub fn with_registry(mut self, registry: ModelRegistry) -> Self {
+        self.registry = Some(registry);
+        self
     }
 
     /// Register a remote fetcher.
@@ -49,20 +71,60 @@ impl ModelCatalogService {
         self.fetchers.push(fetcher);
     }
 
+    /// Register canonical fetchers for all families that advertise a fetchable protocol.
+    ///
+    /// Currently supported:
+    /// - `ProtocolType::Ollama` → [`OllamaFetcher`]
+    /// - `ProtocolType::OpenAiChat` → [`OpenAiCompatibleFetcher`]
+    pub fn register_default_fetchers(&mut self) {
+        for family in registry_table::all_family_names() {
+            let Some(defaults) = registry_table::family_defaults(family) else {
+                continue;
+            };
+
+            match defaults.protocol {
+                ProtocolType::Ollama => match OllamaFetcher::from_defaults() {
+                    Ok(fetcher) => self.register_fetcher(Arc::new(fetcher)),
+                    Err(e) => tracing::warn!(family, error = %e, "skipping ollama fetcher"),
+                },
+                ProtocolType::OpenAiChat => match OpenAiCompatibleFetcher::from_defaults(family) {
+                    Ok(fetcher) => self.register_fetcher(Arc::new(fetcher)),
+                    Err(e) => {
+                        tracing::warn!(family, error = %e, "skipping openai-compatible fetcher")
+                    }
+                },
+                _ => {}
+            }
+        }
+    }
+
     /// Return the merged catalog for a provider family.
     ///
     /// Resolution order:
-    /// 1. On-disk cache.
-    /// 2. Minimal bootstrap defaults from [`registry_table`].
-    pub async fn family_catalog(
-        &self,
-        family: &str,
-    ) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
+    /// 1. User override from the attached registry.
+    /// 2. On-disk cache.
+    /// 3. Minimal bootstrap defaults from [`registry_table`].
+    pub fn family_catalog(&self, family: &str) -> Result<Vec<ModelCatalogEntry>, CatalogError> {
+        // 1. User override.
+        if let Some(registry) = &self.registry {
+            let override_models: Vec<ModelCatalogEntry> = registry
+                .list_models()
+                .into_iter()
+                .filter(|entry| entry.provider == family)
+                .map(|entry| ModelCatalogEntry::new(family, entry.model_id.clone()))
+                .collect();
+            if !override_models.is_empty() {
+                return Ok(override_models);
+            }
+        }
+
+        // 2. Cached remote catalog.
         let cached = self.cache.load(family)?;
         if !cached.is_empty() {
             return Ok(cached);
         }
 
+        // 3. Bootstrap defaults.
         if let Some(defaults) = registry_table::family_defaults(family) {
             let entries = defaults
                 .known_models

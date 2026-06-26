@@ -4,6 +4,8 @@
 //! depend on `clarity_llm::ModelRegistry`, so they live here to keep the core
 //! crate decoupled from concrete LLM provider construction.
 
+use crate::catalog::cache::CatalogCache;
+use crate::catalog::service::ModelCatalogService;
 use crate::model_registry::ModelRegistry;
 use crate::registry_table;
 use std::collections::HashSet;
@@ -101,44 +103,44 @@ fn format_provider_name(id: &str) -> String {
 
 /// Return the list of available providers and their models for settings UIs.
 ///
-/// Merges the dynamic `ModelRegistry` with a fallback derived from
-/// `registry_table` canonical defaults when no registry is configured.
+/// Merges the dynamic `ModelRegistry` (user override), cached remote catalogs,
+/// and minimal bootstrap defaults from [`registry_table`]. Local GGUF scanning
+/// remains dynamic.
 pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
     let mut result: Vec<(String, String, Vec<String>)> = Vec::new();
     let mut seen_providers = HashSet::new();
 
-    // Phase 2: Merge dynamic registry with hardcoded fallback
-    // Registry takes precedence; hardcoded fills gaps for backward compat.
-    if let Ok(registry) = ModelRegistry::load() {
-        for provider_id in registry.list_providers() {
-            seen_providers.insert(provider_id.clone());
-            let models: Vec<String> = if provider_id == "local" {
-                let local_models = scan_local_models();
-                if local_models.is_empty() {
-                    vec!["No models found — place .gguf in ~/models/".into()]
-                } else {
-                    local_models.into_iter().map(|(_, name)| name).collect()
-                }
-            } else {
-                registry
-                    .list_models()
-                    .into_iter()
-                    .filter(|m| &m.provider == provider_id)
-                    .map(|m| m.model_id.clone())
-                    .collect()
-            };
-            if !models.is_empty() {
-                result.push((
-                    provider_id.clone(),
-                    format_provider_name(provider_id),
-                    models,
-                ));
-            }
+    let registry = ModelRegistry::load().ok();
+    let registry_provider_ids: Vec<String> = registry
+        .as_ref()
+        .map(|r| r.list_providers().into_iter().cloned().collect())
+        .unwrap_or_default();
+
+    // Build the catalog service: user override -> cache -> bootstrap.
+    let cache = CatalogCache::default_dir()
+        .map(CatalogCache::new)
+        .unwrap_or_else(|_| CatalogCache::new(PathBuf::from("/dev/null")));
+    let service = {
+        let svc = ModelCatalogService::new(cache);
+        match registry {
+            Some(r) => svc.with_registry(r),
+            None => svc,
+        }
+    };
+
+    // Collect provider IDs from user registry and canonical families.
+    let mut provider_ids = Vec::new();
+    for id in registry_provider_ids {
+        if seen_providers.insert(id.clone()) {
+            provider_ids.push(id);
+        }
+    }
+    for family in registry_table::all_family_names() {
+        if seen_providers.insert(family.to_string()) {
+            provider_ids.push(family.to_string());
         }
     }
 
-    // Fallback catalog derived from the canonical registry defaults.
-    // Only local GGUF scanning stays dynamic here.
     let local_models = scan_local_models();
     let local_model_names: Vec<String> = if local_models.is_empty() {
         vec!["No models found — place .gguf in ~/models/".into()]
@@ -146,28 +148,24 @@ pub fn get_available_models() -> Vec<(String, String, Vec<String>)> {
         local_models.into_iter().map(|(_, name)| name).collect()
     };
 
-    for family in registry_table::all_family_names() {
-        if !seen_providers.insert(family.to_string()) {
-            continue;
-        }
-
-        let defaults = match registry_table::family_defaults(family) {
-            Some(d) => d,
-            None => continue,
-        };
-
-        let models = if *family == "local" {
+    for provider_id in provider_ids {
+        let models = if provider_id == "local" {
             local_model_names.clone()
-        } else if defaults.known_models.is_empty() {
-            // Defensive fallback: if no curated list exists, at least surface
-            // the family's default model so the provider remains selectable.
-            defaults.default_model.into_iter().collect()
         } else {
-            defaults.known_models
+            service
+                .family_catalog(&provider_id)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|entry| entry.model_id)
+                .collect()
         };
 
         if !models.is_empty() {
-            result.push((family.to_string(), format_provider_name(family), models));
+            result.push((
+                provider_id.clone(),
+                format_provider_name(&provider_id),
+                models,
+            ));
         }
     }
 
