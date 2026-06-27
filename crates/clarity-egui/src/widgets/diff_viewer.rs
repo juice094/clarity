@@ -107,12 +107,12 @@ pub fn render_diff_view(
     let ln_width = if config.show_line_numbers {
         let max_old = hunks
             .iter()
-            .map(|h| h.old_start + h.lines.len())
+            .map(|h| h.old_start + h.lines.len().saturating_sub(1))
             .max()
             .unwrap_or(1);
         let max_new = hunks
             .iter()
-            .map(|h| h.new_start + h.lines.len())
+            .map(|h| h.new_start + h.lines.len().saturating_sub(1))
             .max()
             .unwrap_or(1);
         let digits = max_old.max(max_new).to_string().len().max(3);

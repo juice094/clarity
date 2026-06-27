@@ -54,14 +54,27 @@ impl<'a> Widget for ChatPane<'a> {
             return;
         }
 
-        let mut lines: Vec<Line> = vec![];
-        // Track the previous message role to suppress duplicate headers for
-        // consecutive messages of the same role (visual "island" fix).
+        // ── Viewport culling ──
+        // Skip messages entirely below the visible area to avoid building
+        // ratatui Lines that will be clipped by the terminal anyway.
+        // Messages above are still rendered — ratatui's Paragraph::scroll()
+        // handles skipping them correctly.
+        let visible_budget = inner_area.height as usize + self.scroll_offset;
+
+        let mut lines: Vec<Line> = Vec::new();
         let mut prev_role: Option<MessageType> = None;
+        let mut line_estimate = 0usize;
 
         for msg in self.messages.iter_mut() {
+            // Early exit: past visible area.
+            if line_estimate >= visible_budget + 64 {
+                break;
+            }
+
             let show_header = prev_role.as_ref() != Some(&msg.msg_type);
             prev_role = Some(msg.msg_type.clone());
+
+            line_estimate += msg.line_count();
 
             match msg.msg_type {
                 MessageType::User => {

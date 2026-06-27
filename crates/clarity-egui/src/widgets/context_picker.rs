@@ -76,12 +76,22 @@ pub fn render_context_picker(
                 });
                 ui.add_space(theme.space_4);
 
+                // Filter input for narrowing by filename.
+                let filter_hint = "Filter files…";
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.filter)
+                        .hint_text(filter_hint)
+                        .font(theme.font_mono(theme.text_xs)),
+                );
+                ui.add_space(theme.space_4);
+
                 let root = state.cwd.clone();
                 if root.exists() && root.is_dir() {
                     egui::ScrollArea::vertical()
-                        .max_height(240.0)
+                        .max_height(200.0)
                         .id_salt("ctx_picker_file_tree")
                         .show(ui, |ui| {
+                            let filter_lower = state.filter.to_lowercase();
                             crate::ui::file_browser::render_file_tree(
                                 ui,
                                 &root,
@@ -89,6 +99,16 @@ pub fn render_context_picker(
                                 0,
                                 None,
                                 &mut |path: &std::path::Path| {
+                                    // Filter by filename if filter text is present.
+                                    let matches_filter = filter_lower.is_empty()
+                                        || path
+                                            .file_name()
+                                            .and_then(|n| n.to_str())
+                                            .map(|n| n.to_lowercase().contains(&filter_lower))
+                                            .unwrap_or(true);
+                                    if !matches_filter {
+                                        return;
+                                    }
                                     if path.is_file() || mode == "folder" {
                                         let resolved = if mode == "file" {
                                             ContextSource::File {

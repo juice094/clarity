@@ -91,6 +91,25 @@ impl Message {
         &self.cached_lines.as_ref().unwrap().1
     }
 
+    /// Estimate the number of rendered lines this message produces.
+    ///
+    /// Used by ChatPane for viewport culling — avoids building ratatui Lines
+    /// for messages far outside the visible scroll region.
+    pub fn line_count(&mut self) -> usize {
+        let content_lines = match self.msg_type {
+            MessageType::Assistant => self.render_lines().len(),
+            _ => self.content.lines().count(),
+        };
+        // Header line (blank + role bar) + content + optional streaming cursor
+        let header = if matches!(self.msg_type, MessageType::User | MessageType::Assistant) {
+            2 // blank separator + role header
+        } else {
+            1
+        };
+        let cursor = if self.is_streaming { 1 } else { 0 };
+        header + content_lines.max(1) + cursor
+    }
+
     /// Mark this message as streaming.
     pub fn streaming(mut self) -> Self {
         self.is_streaming = true;
