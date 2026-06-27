@@ -344,6 +344,7 @@ mod tests {
 }
 
 /// Helper: render a ChatPane and collect the output Lines.
+#[cfg(test)]
 fn render_to_lines(pane: ChatPane<'_>) -> Vec<Line<'static>> {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
