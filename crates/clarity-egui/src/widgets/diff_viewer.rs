@@ -400,15 +400,25 @@ mod tests {
 
     #[test]
     fn extract_diff_from_file_edit_tool_output() {
-        // Simulated FileEditTool output with _diff_preview.
+        // Simulated FileEditTool output with _diff_preview (no trailing newline).
         let json = r#"{
             "path": "/tmp/test.rs",
-            "_diff_preview": "--- a/test.rs\n+++ b/test.rs\n@@ -1,3 +1,3 @@\n fn main() {\n-    println!(\"old\");\n+    println!(\"new\");\n }\n"
+            "_diff_preview": "--- a/test.rs\n+++ b/test.rs\n@@ -1,2 +1,2 @@\n-fn main() {\n+fn run() {\n"
         }"#;
         let hunks = extract_diff_from_tool_result(json).unwrap();
         assert_eq!(hunks.len(), 1);
         assert_eq!(hunks[0].old_start, 1);
-        assert_eq!(hunks[0].lines.len(), 3);
+        // 2 context lines (the @@ header counts the line range, not content count;
+        // parse_unified_diff returns 2 lines: -old and +new).
+        assert_eq!(hunks[0].lines.len(), 2);
+        assert!(matches!(
+            hunks[0].lines[0],
+            clarity_core::diff::DiffLine::Removed(_)
+        ));
+        assert!(matches!(
+            hunks[0].lines[1],
+            clarity_core::diff::DiffLine::Added(_)
+        ));
     }
 
     #[test]
