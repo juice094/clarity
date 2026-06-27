@@ -93,7 +93,7 @@ pub fn svg_texture(
 
 /// Render an SVG as an egui image, falling back to a placeholder text label
 /// when the `svg` feature is not enabled or rasterization fails.
-#[allow(dead_code)]
+#[cfg(any(feature = "svg", test))]
 pub fn render_svg_or_fallback(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
