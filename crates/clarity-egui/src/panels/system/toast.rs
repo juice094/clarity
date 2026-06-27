@@ -46,7 +46,11 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
         // Per-level styling.
         let (icon, accent_color, border_color) = match toast.level {
             ToastLevel::Info => (crate::theme::ICON_INFO, theme.accent, theme.accent_subtle),
-            ToastLevel::Warn => (crate::theme::ICON_WARNING, theme.warn, rgba(212, 160, 80, 0.20)),
+            ToastLevel::Warn => (
+                crate::theme::ICON_WARNING,
+                theme.warn,
+                rgba(212, 160, 80, 0.20),
+            ),
             ToastLevel::Error => (
                 crate::theme::ICON_X,
                 theme.danger,
@@ -67,7 +71,10 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                     .stroke(egui::Stroke::new(1.0, border_color.linear_multiply(alpha)))
                     .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
                     .shadow(theme.shadow_toast)
-                    .inner_margin(egui::Margin::symmetric(theme.space_12 as i8, theme.space_8 as i8))
+                    .inner_margin(egui::Margin::symmetric(
+                        theme.space_12 as i8,
+                        theme.space_8 as i8,
+                    ))
                     .show(ui, |ui| {
                         ui.set_width(TOAST_W - theme.space_24);
                         ui.horizontal(|ui| {
@@ -108,8 +115,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                                         // SAFE: the retain above will drop it next frame.
                                     }
                                     if close_btn.hovered() {
-                                        ui.ctx()
-                                            .set_cursor_icon(egui::CursorIcon::PointingHand);
+                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                                     }
                                 },
                             );

@@ -7,9 +7,9 @@ pub mod system;
 pub mod task;
 pub mod team;
 
+use crate::App;
 use crate::stores::console::{ConsoleEntry, ConsoleLevel};
 use crate::ui::types::UiEvent;
-use crate::App;
 
 /// Dispatches queued UI events to handlers.
 pub fn process_events(app: &mut App) {

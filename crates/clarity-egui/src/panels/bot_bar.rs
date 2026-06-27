@@ -4,8 +4,8 @@
 //! context-dependent Lucide buttons on the right that open the IDE-style right
 //! rail.
 
-use crate::ui::types::Session;
 use crate::App;
+use crate::ui::types::Session;
 use clarity_core::ui::{RightRailContext, RightRailPanel};
 
 /// A button descriptor for the Bot bar right side.

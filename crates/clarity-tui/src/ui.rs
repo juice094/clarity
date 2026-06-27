@@ -13,7 +13,7 @@ use crate::protocol_renderer;
 use crate::widgets::{chat_pane::ChatPane, generating_indicator::GeneratingIndicator};
 
 /// 渲染主界面
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.area();
 
     let chunks = Layout::default()
@@ -89,7 +89,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(right, header_chunks[2]);
 
     // 聊天区域
-    let chat_pane = ChatPane::new(&app.messages, app.scroll_offset);
+    let chat_pane = ChatPane::new(&mut app.messages, app.scroll_offset);
     f.render_widget(chat_pane, chunks[1]);
 
     // 输入框

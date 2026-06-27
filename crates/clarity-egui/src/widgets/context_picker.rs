@@ -11,7 +11,6 @@ use std::path::PathBuf;
 
 /// State for the `#` context picker popup.
 #[derive(Clone, Default)]
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub struct ContextPickerState {
     /// Whether the picker is currently visible.
     pub open: bool,
@@ -26,7 +25,6 @@ pub struct ContextPickerState {
 ///
 /// Callers should invoke this immediately after the chat input widget when
 /// `state.open` is true, positioning it as an anchored popup.
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub fn render_context_picker(
     ui: &mut egui::Ui,
     state: &mut ContextPickerState,
@@ -92,7 +90,8 @@ pub fn render_context_picker(
                     });
 
                 if row.response.clicked() {
-                    let item = build_item(src, &state.cwd);
+                    let resolved_src = resolve_source(src, &state.filter);
+                    let item = build_item(&resolved_src, &state.cwd);
                     result = Some(item);
                     state.open = false;
                     state.filter.clear();
@@ -108,7 +107,6 @@ pub fn render_context_picker(
     result
 }
 
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 fn source_info(src: &ContextSource) -> (&'static str, &'static str, &'static str) {
     match src {
         ContextSource::File { .. } => ("File", crate::theme::ICON_FILE, "Select a file"),
@@ -132,7 +130,42 @@ fn source_info(src: &ContextSource) -> (&'static str, &'static str, &'static str
     }
 }
 
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
+/// Resolve a source by using the filter text to refine paths.
+fn resolve_source(src: &ContextSource, filter: &str) -> ContextSource {
+    match src {
+        ContextSource::File {
+            path,
+            start_line,
+            end_line,
+        } => {
+            let p = PathBuf::from(path);
+            if p.is_dir() && !filter.is_empty() {
+                let file_path = p.join(filter);
+                ContextSource::File {
+                    path: file_path.to_string_lossy().into_owned(),
+                    start_line: *start_line,
+                    end_line: *end_line,
+                }
+            } else {
+                src.clone()
+            }
+        }
+        ContextSource::Folder { path } => {
+            let p = PathBuf::from(path);
+            if !filter.is_empty() {
+                let sub_path = p.join(filter);
+                if sub_path.is_dir() {
+                    return ContextSource::Folder {
+                        path: sub_path.to_string_lossy().into_owned(),
+                    };
+                }
+            }
+            src.clone()
+        }
+        _ => src.clone(),
+    }
+}
+
 fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
     match src {
         ContextSource::File {
@@ -208,7 +241,6 @@ fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
     }
 }
 
-#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 fn file_name(path: &str) -> String {
     PathBuf::from(path)
         .file_name()

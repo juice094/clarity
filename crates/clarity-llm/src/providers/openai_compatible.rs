@@ -8,15 +8,15 @@ use crate::api::{
 };
 use crate::rate_limit;
 use crate::request::{
-    cap_tools_json, guard_request_body_size, truncate_messages_by_bytes, ApiFunctionCall,
-    ApiMessage, ApiToolCall, ChatCompletionRequest, ChatCompletionResponse, ResponseFormat,
-    MAX_MESSAGE_BODY_BYTES,
+    ApiFunctionCall, ApiMessage, ApiToolCall, ChatCompletionRequest, ChatCompletionResponse,
+    MAX_MESSAGE_BODY_BYTES, ResponseFormat, cap_tools_json, guard_request_body_size,
+    truncate_messages_by_bytes,
 };
 use crate::sse;
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use futures::StreamExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::env;
 use std::sync::Arc;
 

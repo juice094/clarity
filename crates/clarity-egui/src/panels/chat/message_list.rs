@@ -1,7 +1,7 @@
+use crate::App;
 use crate::theme::Theme;
 use crate::ui;
 use crate::ui::types::Role;
-use crate::App;
 
 /// Actions detected during the render pass that must be applied after the
 /// `session` mutable borrow is released.

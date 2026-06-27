@@ -1,5 +1,4 @@
 use crate::app::{Message, MessageType};
-use clarity_core::ui::markdown_to_lines;
 use clarity_tui::render_line::render_line_to_ratatui;
 use ratatui::{
     buffer::Buffer,
@@ -26,13 +25,13 @@ fn relative_label(created: Instant) -> String {
 
 /// 聊天区域组件
 pub struct ChatPane<'a> {
-    messages: &'a [Message],
+    messages: &'a mut [Message],
     scroll_offset: usize,
 }
 
 impl<'a> ChatPane<'a> {
     /// Create a new chat pane bound to the given message slice and scroll offset.
-    pub fn new(messages: &'a [Message], scroll_offset: usize) -> Self {
+    pub fn new(messages: &'a mut [Message], scroll_offset: usize) -> Self {
         Self {
             messages,
             scroll_offset,
@@ -57,7 +56,7 @@ impl<'a> Widget for ChatPane<'a> {
 
         let mut lines: Vec<Line> = vec![];
 
-        for msg in self.messages.iter() {
+        for msg in self.messages.iter_mut() {
             match msg.msg_type {
                 MessageType::User => {
                     lines.push(Line::from(""));
@@ -110,13 +109,12 @@ impl<'a> Widget for ChatPane<'a> {
                         time,
                     ]));
 
-                    // S7 Phase 3A: route Assistant markdown through the shared
-                    // clarity_core RenderLine pipeline instead of the local
-                    // widgets/markdown.rs parser. GUI and TUI now consume the
-                    // same intermediate representation.
-                    let render_lines = markdown_to_lines(&msg.content);
+                    // S7 Phase 3A: cached markdown parse — only re-parses
+                    // when content changes (streaming). Avoids repeated parsing
+                    // every frame for static messages.
+                    let render_lines = msg.render_lines();
                     let agent_base = Style::default().fg(Color::Rgb(210, 230, 220));
-                    for rl in &render_lines {
+                    for rl in render_lines {
                         let rata_line = render_line_to_ratatui(rl, agent_base);
                         let mut spans = vec![Span::styled(
                             "  ▎ ",

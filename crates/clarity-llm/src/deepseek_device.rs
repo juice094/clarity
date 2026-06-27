@@ -26,14 +26,14 @@
 //! Token 也支持通过环境变量 `DEEPSEEK_DEVICE_TOKEN` 传入。
 
 use async_trait::async_trait;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use clarity_contract::{
     AgentError, LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabilities, StreamDelta,
 };
 use parking_lot::RwLock;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;

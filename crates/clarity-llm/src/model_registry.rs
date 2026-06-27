@@ -46,8 +46,8 @@ use crate::{
     DeepSeekDeviceOptions, DeepSeekDeviceProvider, LlamaServerProvider, OpenAiCompatibleLlm,
 };
 use async_trait::async_trait;
-use clarity_contract::llm::{LlmProviderFactory, Pricing};
 use clarity_contract::AgentError;
+use clarity_contract::llm::{LlmProviderFactory, Pricing};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

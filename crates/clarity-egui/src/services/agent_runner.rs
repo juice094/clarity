@@ -228,6 +228,16 @@ impl App {
         }
         self.chat_store.attachments.clear();
 
+        // Inject # quick-add context items as a system prefix.
+        if !self.chat_store.context_items.is_empty() {
+            let mut ctx_prefix = String::from("[Context]\n");
+            for item in &self.chat_store.context_items {
+                ctx_prefix.push_str(&format!("{}: {}\n", item.display, item.payload));
+            }
+            full_message = format!("{}\n\n{}", ctx_prefix, full_message);
+            self.chat_store.context_items.clear();
+        }
+
         if let Some(session) = self.session_store.active_session_mut() {
             let mut msg = Message {
                 role: Role::User,
@@ -569,6 +579,16 @@ impl App {
             }
         }
         self.chat_store.attachments.clear();
+
+        // Inject # quick-add context items as a system prefix.
+        if !self.chat_store.context_items.is_empty() {
+            let mut ctx_prefix = String::from("[Context]\n");
+            for item in &self.chat_store.context_items {
+                ctx_prefix.push_str(&format!("{}: {}\n", item.display, item.payload));
+            }
+            full_message = format!("{}\n\n{}", ctx_prefix, full_message);
+            self.chat_store.context_items.clear();
+        }
 
         if let Some(session) = self.session_store.active_session_mut() {
             let mut msg = Message {

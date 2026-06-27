@@ -28,6 +28,10 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
             !s.archived
                 && s.project_id.is_none()
                 && !matches!(s.context, SessionContext::Claw { .. })
+                && (app.ui_store.history_search.is_empty()
+                    || s.title
+                        .to_lowercase()
+                        .contains(&app.ui_store.history_search.to_lowercase()))
         })
         .map(|s| SessionRow {
             id: s.id.clone(),
@@ -47,10 +51,31 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
         &mut expanded,
         &theme,
         |ui| {
+            // ── Search input ──
+            if app.session_store.sessions.len() > 5 {
+                let search_hint = app.t("Search sessions…");
+                let mut query = app.ui_store.history_search.clone();
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut query)
+                        .hint_text(search_hint)
+                        .font(theme.font(theme.text_xs))
+                        .margin(egui::vec2(4.0, 2.0)),
+                );
+                if resp.changed() {
+                    app.ui_store.history_search = query;
+                }
+                ui.add_space(theme.space_4);
+            }
+
             if sessions.is_empty() {
+                let msg = if app.ui_store.history_search.is_empty() {
+                    app.t("No sessions").to_string()
+                } else {
+                    app.t("No matching sessions").to_string()
+                };
                 ui.add(
                     egui::Label::new(
-                        egui::RichText::new(app.t("No sessions"))
+                        egui::RichText::new(msg)
                             .size(theme.text_xs)
                             .color(theme.text_muted),
                     )
@@ -78,13 +103,16 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                         // Render diff stats badge if present.
                         if let Some(ref stats) = session.diff_stats {
                             let badge = format!("+{} -{}", stats.lines_added, stats.lines_removed);
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.label(
-                                    egui::RichText::new(&badge)
-                                        .size(theme.text_xs)
-                                        .color(theme.text_dim),
-                                );
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(&badge)
+                                            .size(theme.text_xs)
+                                            .color(theme.text_dim),
+                                    );
+                                },
+                            );
                         }
                         if resp.clicked() && !session.is_active {
                             clicked_id = Some(session.id.clone());

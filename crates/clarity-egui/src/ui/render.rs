@@ -449,7 +449,11 @@ fn user_bubble(
                 egui::LayerId::new(egui::Order::Tooltip, ui.id().with("user_ts_layer")),
                 ui.id().with("user_ts"),
                 |ui| {
-                    ui.label(egui::RichText::new(ts).size(theme.text_xs).color(theme.text_dim));
+                    ui.label(
+                        egui::RichText::new(ts)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
                 },
             );
         }

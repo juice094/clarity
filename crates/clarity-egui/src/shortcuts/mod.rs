@@ -55,6 +55,12 @@ pub enum ShortcutAction {
     NavigateBottom,
     /// Line-mode: copy selected line text (`y` or `Ctrl+C`).
     CopyLine,
+    /// Toggle the Console right-rail panel (`Ctrl+Grave`).
+    ToggleConsole,
+    /// Toggle the Files right-rail panel (`Ctrl+Shift+F`).
+    ToggleFiles,
+    /// Toggle the Share right-rail panel (`Ctrl+Shift+S`).
+    ToggleShare,
 }
 
 impl ShortcutAction {
@@ -80,6 +86,9 @@ impl ShortcutAction {
             ShortcutAction::NavigateTop => ids::NAVIGATE_TOP,
             ShortcutAction::NavigateBottom => ids::NAVIGATE_BOTTOM,
             ShortcutAction::CopyLine => ids::COPY_LINE,
+            ShortcutAction::ToggleConsole => "toggle-console",
+            ShortcutAction::ToggleFiles => "toggle-files",
+            ShortcutAction::ToggleShare => "toggle-share",
         }
     }
 }
@@ -146,6 +155,17 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl && i.modifiers.shift) {
         actions.push(ShortcutAction::ToggleLayoutDebug);
+    }
+
+    // ── Right-rail panel shortcuts ──
+    if ctx.input(|i| i.key_pressed(egui::Key::Backtick) && i.modifiers.ctrl) {
+        actions.push(ShortcutAction::ToggleConsole);
+    }
+    if ctx.input(|i| i.key_pressed(egui::Key::F) && i.modifiers.ctrl && i.modifiers.shift) {
+        actions.push(ShortcutAction::ToggleFiles);
+    }
+    if ctx.input(|i| i.key_pressed(egui::Key::S) && i.modifiers.ctrl && i.modifiers.shift) {
+        actions.push(ShortcutAction::ToggleShare);
     }
 
     // Use Equals (not Plus) for zoom-in: on most layouts the `=`/`+` key is the

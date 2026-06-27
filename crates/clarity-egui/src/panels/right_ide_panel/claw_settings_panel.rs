@@ -4,8 +4,8 @@
 //! management operations: diagnostics, rename, terminal, restart,
 //! backup, update, and help.
 
-use crate::ui::types::ToastLevel;
 use crate::App;
+use crate::ui::types::ToastLevel;
 
 /// Render the Claw device settings panel.
 pub fn render(app: &mut App, ui: &mut egui::Ui) {

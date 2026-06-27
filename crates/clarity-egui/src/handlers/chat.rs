@@ -639,7 +639,8 @@ pub fn compute_session_diff_stats(session: &mut crate::ui::types::Session) {
                 truncated: _,
             } = block
             {
-                if let Some(hunks) = crate::widgets::diff_viewer::extract_diff_from_tool_result(output)
+                if let Some(hunks) =
+                    crate::widgets::diff_viewer::extract_diff_from_tool_result(output)
                 {
                     files_changed += 1;
                     for hunk in hunks {

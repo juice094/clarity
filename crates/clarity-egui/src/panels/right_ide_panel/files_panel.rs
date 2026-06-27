@@ -200,33 +200,51 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn render_context_menu(
-    _app: &mut App,
+    app: &mut App,
     ui: &mut egui::Ui,
-    _path: &Path,
+    path: &Path,
     name: &str,
     theme: &crate::theme::Theme,
 ) {
+    let path_buf = path.to_path_buf();
     ui.menu_button(
         egui::RichText::new(format!("{} {}", crate::theme::ICON_FILE, name))
             .size(theme.text_xs)
             .color(theme.text),
         |ui| {
-            if ui.button("Add to Chat").clicked() {
-                // TODO: wire through App reference to push to chat_store.attachments.
+            if ui.button(app.t("Open").to_string()).clicked() {
+                let content = std::fs::read_to_string(&path_buf).unwrap_or_default();
+                app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                    name: name.to_string(),
+                    content,
+                    path: path_buf.to_string_lossy().into_owned(),
+                });
                 ui.close_menu();
             }
-            if ui.button("Copy Path").clicked() {
-                ui.ctx().copy_text(_path.to_string_lossy().into_owned());
+            if ui.button(app.t("Add to Chat").to_string()).clicked() {
+                app.chat_store
+                    .attachments
+                    .push(crate::ui::types::Attachment {
+                        path: path_buf.clone(),
+                        name: name.to_string(),
+                    });
+                ui.close_menu();
+            }
+            if ui.button(app.t("Copy Path").to_string()).clicked() {
+                ui.ctx().copy_text(path_buf.to_string_lossy().into_owned());
                 ui.close_menu();
             }
             ui.separator();
             ui.add_enabled_ui(false, |ui| {
-                if ui.button("Create PR with changes").clicked() {
+                if ui
+                    .button(app.t("Create PR with changes").to_string())
+                    .clicked()
+                {
                     ui.close_menu();
                 }
             })
             .response
-            .on_disabled_hover_text("GitHub integration coming soon");
+            .on_disabled_hover_text(app.t("GitHub integration coming soon"));
         },
     );
 }

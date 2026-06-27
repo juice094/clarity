@@ -850,6 +850,27 @@ impl App {
                 self.decrease_font_scale();
                 true
             }
+            "toggle-console" => {
+                self.view_state
+                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
+                self.view_state
+                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Console);
+                true
+            }
+            "toggle-files" => {
+                self.view_state
+                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
+                self.view_state
+                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Files);
+                true
+            }
+            "toggle-share" => {
+                self.view_state
+                    .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
+                self.view_state
+                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Share);
+                true
+            }
             other => {
                 tracing::warn!("dispatch_command: unknown command id '{}'", other);
                 false

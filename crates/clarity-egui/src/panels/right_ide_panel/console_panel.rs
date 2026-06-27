@@ -4,8 +4,8 @@
 //! messages, and errors emitted by the agent loop.  Rendered in the
 //! right IDE rail.
 
-use crate::stores::console::{ConsoleFilter, ConsoleLevel};
 use crate::App;
+use crate::stores::console::{ConsoleFilter, ConsoleLevel};
 use std::time::Instant;
 
 /// Maximum visible entry width in characters before truncation hint.

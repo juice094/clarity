@@ -446,26 +446,23 @@ impl SubagentRunner {
 
         // 3. 创建执行上下文；如果启用了 worktree，创建隔离工作空间。
         let mut token = spec.capability_token.clone();
-        let mut worktree_guard: Option<WorktreeGuard> = if token
-            .as_ref()
-            .map(|t| t.enable_worktree)
-            .unwrap_or(false)
-        {
-            match create_worktree_for_agent(&agent_id, &self.working_dir).await {
-                Ok(path) => {
-                    if let Some(ref mut t) = token {
-                        t.sandbox_dir = Some(path.clone());
+        let mut worktree_guard: Option<WorktreeGuard> =
+            if token.as_ref().map(|t| t.enable_worktree).unwrap_or(false) {
+                match create_worktree_for_agent(&agent_id, &self.working_dir).await {
+                    Ok(path) => {
+                        if let Some(ref mut t) = token {
+                            t.sandbox_dir = Some(path.clone());
+                        }
+                        Some(WorktreeGuard::new(path))
                     }
-                    Some(WorktreeGuard::new(path))
+                    Err(e) => {
+                        warn!("Failed to create worktree for agent {}: {}", agent_id, e);
+                        None
+                    }
                 }
-                Err(e) => {
-                    warn!("Failed to create worktree for agent {}: {}", agent_id, e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
+            } else {
+                None
+            };
         let mut context = ExecutionContext::new(&self.context_dir, &agent_id);
         context.set_capability_token(token);
         context.restore().await?;
@@ -955,9 +952,7 @@ async fn create_worktree_for_agent(
     agent_id: &str,
     repo_root: &std::path::Path,
 ) -> Result<std::path::PathBuf, String> {
-    let worktree_root = repo_root
-        .join(".clarity")
-        .join("worktrees");
+    let worktree_root = repo_root.join(".clarity").join("worktrees");
     let agent_worktree = worktree_root.join(agent_id);
 
     // Create parent directory if needed.
@@ -1305,6 +1300,9 @@ mod tests {
     #[test]
     fn worktree_guard_default_is_preserve() {
         let guard = WorktreeGuard::new(PathBuf::from("/nonexistent"));
-        assert!(!guard.should_remove, "default should_remove is false (preserve)");
+        assert!(
+            !guard.should_remove,
+            "default should_remove is false (preserve)"
+        );
     }
 }

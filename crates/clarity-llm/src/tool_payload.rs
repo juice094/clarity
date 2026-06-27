@@ -218,9 +218,11 @@ mod tests {
         let (adapted, adapted_tools) = adapt_prompt_guided(&messages, &sample_tools());
 
         assert_eq!(adapted.len(), 2);
-        assert!(adapted[0]
-            .content
-            .contains("<tool_description name=\"powershell\""));
+        assert!(
+            adapted[0]
+                .content
+                .contains("<tool_description name=\"powershell\"")
+        );
         assert!(adapted[0].content.contains("<arg key=\"arg_name\">"));
         assert!(!adapted[1].content.contains("tool_description"));
         assert!(adapted_tools.as_array().unwrap().is_empty());
@@ -294,7 +296,9 @@ mod tests {
     fn adapt_prompt_guided_no_duplicate_tools() {
         // Simulate a system message that already has markdown tools from SystemPromptBuilder.
         let messages = vec![
-            Message::system("You are helpful.\n\n## Available Tools\n- read: Read a file\n\n## Approval Mode\nYOLO"),
+            Message::system(
+                "You are helpful.\n\n## Available Tools\n- read: Read a file\n\n## Approval Mode\nYOLO",
+            ),
             Message::user("Query"),
         ];
         let (adapted, _) = adapt_prompt_guided(&messages, &sample_tools());

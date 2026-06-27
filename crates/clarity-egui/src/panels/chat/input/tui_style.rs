@@ -49,6 +49,8 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             }
             if app.chat_store.input != prev_input {
                 app.ui_store.last_input_modified = std::time::Instant::now();
+                // # trigger: open context picker when user types # at end of input.
+                check_context_picker_trigger(app);
             }
             handle_tui_keys(app, ui, &response, &prev_input);
         });
@@ -181,6 +183,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         }
         if app.chat_store.input != prev_input {
             app.ui_store.last_input_modified = std::time::Instant::now();
+            check_context_picker_trigger(app);
         }
         handle_tui_keys(app, ui, &response, &prev_input);
 
@@ -281,6 +284,55 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             });
         });
     });
+
+    // ── # Context picker popup ──
+    if app.ui_store.context_picker_state.open {
+        let ws_root = app
+            .files_store
+            .workspace_root
+            .to_string_lossy()
+            .into_owned();
+        let available: Vec<crate::ui::types::ContextSource> = vec![
+            crate::ui::types::ContextSource::File {
+                path: ws_root.clone(),
+                start_line: None,
+                end_line: None,
+            },
+            crate::ui::types::ContextSource::Folder { path: ws_root },
+            crate::ui::types::ContextSource::Terminal {
+                command: String::new(),
+            },
+            crate::ui::types::ContextSource::Web { url: String::new() },
+        ];
+        let mut state = app.ui_store.context_picker_state.clone();
+        if let Some(item) =
+            crate::widgets::context_picker::render_context_picker(ui, &mut state, theme, &available)
+        {
+            app.chat_store.context_items.push(item);
+            if app.chat_store.input.ends_with('#') {
+                app.chat_store.input.pop();
+            }
+            app.ui_store.focus_input_requested = true;
+        }
+        app.ui_store.context_picker_state = state;
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.ui_store.context_picker_state.open = false;
+        }
+    }
+}
+
+/// Open the `#` context picker when the user types `#` at the end of input.
+fn check_context_picker_trigger(app: &mut App) {
+    let input = &app.chat_store.input;
+    if input.ends_with('#') && !input.ends_with("##") {
+        app.ui_store.context_picker_state.open = true;
+        // Seed the CWD from the files store so relative paths resolve.
+        app.ui_store.context_picker_state.cwd = app.files_store.workspace_root.clone();
+    }
+    // Close picker if # is removed.
+    if !input.contains('#') {
+        app.ui_store.context_picker_state.open = false;
+    }
 }
 
 fn composer_hint(app: &App) -> String {
@@ -385,6 +437,5 @@ fn recall_history(app: &mut App, delta: isize) {
             }
         }
     };
-    app.chat_store.input_history_idx = new_idx;
     app.chat_store.input = new_idx.map_or(String::new(), |i| hist[i].clone());
 }

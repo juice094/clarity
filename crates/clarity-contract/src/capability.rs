@@ -262,12 +262,16 @@ mod tests {
     fn path_exactly_at_sandbox_boundary_is_allowed() {
         let token = CapabilityToken::new(vec!["file_read".to_string()])
             .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
-        assert!(token
-            .verify("file_read", &PathBuf::from("/tmp/sandbox"))
-            .is_ok());
-        assert!(token
-            .verify("file_read", &PathBuf::from("/tmp/sandbox/"))
-            .is_ok());
+        assert!(
+            token
+                .verify("file_read", &PathBuf::from("/tmp/sandbox"))
+                .is_ok()
+        );
+        assert!(
+            token
+                .verify("file_read", &PathBuf::from("/tmp/sandbox/"))
+                .is_ok()
+        );
     }
 
     #[test]

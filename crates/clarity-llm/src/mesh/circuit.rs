@@ -1,7 +1,7 @@
 //! Simple circuit breaker for LLM provider failover.
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 /// Circuit breaker states.

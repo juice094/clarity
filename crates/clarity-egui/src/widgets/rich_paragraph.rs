@@ -6,7 +6,7 @@
 
 use crate::pretext::EguiFontMetrics;
 use crate::theme::Theme;
-use crate::ui::rich_inline::{inline_spans_to_items, layout_rich_inline, PositionedFragment};
+use crate::ui::rich_inline::{PositionedFragment, inline_spans_to_items, layout_rich_inline};
 use crate::ui::types::InlineSpan;
 use pretext_core::EngineProfile;
 

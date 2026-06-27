@@ -4,9 +4,9 @@
 //! widths actually produced by egui's font stack. This is the fastest way to
 //! validate whether pretext can safely drive egui layout decisions.
 
-use crate::{theme::Theme, App};
+use crate::{App, theme::Theme};
 use pretext_core::{
-    layout::layout_with_lines, layout::measure_natural_width, EngineProfile, Font, PrepareOptions,
+    EngineProfile, Font, PrepareOptions, layout::layout_with_lines, layout::measure_natural_width,
 };
 
 const SAMPLES: &[&str] = &[

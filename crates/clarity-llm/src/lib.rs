@@ -59,12 +59,12 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    build_provider_from_registry, build_provider_from_registry_entry,
-    build_provider_from_registry_with_key, default_secret_store, AuthType, ModelConfigFile,
-    ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
+    AuthType, ModelConfigFile, ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType,
+    ProviderConfig, build_provider_from_registry, build_provider_from_registry_entry,
+    build_provider_from_registry_with_key, default_secret_store,
 };
 pub use ollama::OllamaProvider;
-pub use policy::{select_provider, ProviderSelection};
+pub use policy::{ProviderSelection, select_provider};
 pub use providers::{AnthropicLlm, KimiCodeLlm, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
 pub use reliable::ReliableProvider;
 

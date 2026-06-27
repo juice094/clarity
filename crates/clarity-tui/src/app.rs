@@ -41,7 +41,7 @@ pub enum MessageType {
 }
 
 /// A single entry in the TUI chat history.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Message {
     /// Rendered text content.
     pub content: String,
@@ -51,6 +51,20 @@ pub struct Message {
     pub created_at: std::time::Instant,
     /// Whether the assistant message is still streaming.
     pub is_streaming: bool,
+    /// Cached markdown parse result. Invalidated when `content` changes.
+    #[allow(dead_code)] // read by chat_pane via render_lines()
+    cached_lines: Option<(u64, Vec<clarity_core::ui::RenderLine>)>,
+}
+
+/// Cheap u64 hash of content — combines length with sampled bytes.
+/// Fast enough to compute every frame; avoids the same-length-stale bug
+/// of a pure length-based cache key.
+fn content_hash(content: &str) -> u64 {
+    let mut h: u64 = content.len() as u64;
+    for (i, b) in content.bytes().enumerate().take(64) {
+        h = h.wrapping_mul(31).wrapping_add(b as u64 + i as u64);
+    }
+    h
 }
 
 impl Message {
@@ -61,7 +75,20 @@ impl Message {
             msg_type,
             created_at: std::time::Instant::now(),
             is_streaming: false,
+            cached_lines: None,
         }
+    }
+
+    /// Get or compute the render lines for this message's content.
+    ///
+    /// Caches the markdown parse result keyed by a content hash. Streaming
+    /// messages invalidate on every chunk; static messages hit the cache.
+    pub fn render_lines(&mut self) -> &[clarity_core::ui::RenderLine] {
+        let hash = content_hash(&self.content);
+        if self.cached_lines.as_ref().map_or(true, |(h, _)| *h != hash) {
+            self.cached_lines = Some((hash, clarity_core::ui::markdown_to_lines(&self.content)));
+        }
+        &self.cached_lines.as_ref().unwrap().1
     }
 
     /// Mark this message as streaming.
@@ -1136,7 +1163,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // 1. Initial render — should show welcome / system message
-        terminal.draw(|f| crate::ui::draw(f, &app)).unwrap();
+        terminal.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
         let buf = terminal.backend().buffer();
         let screen_text: String = buf.content.iter().map(|cell| cell.symbol()).collect();
         assert!(
@@ -1153,7 +1180,7 @@ mod tests {
         }
 
         // 3. Render after typing — input should appear
-        terminal.draw(|f| crate::ui::draw(f, &app)).unwrap();
+        terminal.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
         let buf = terminal.backend().buffer();
         let screen_text: String = buf.content.iter().map(|cell| cell.symbol()).collect();
         assert!(
