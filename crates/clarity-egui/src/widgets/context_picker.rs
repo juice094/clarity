@@ -43,80 +43,164 @@ pub fn render_context_picker(
         .inner_margin(egui::Margin::same(theme.space_8 as i8))
         .show(ui, |ui| {
             ui.set_min_width(200.0);
+            ui.set_max_height(320.0);
 
-            // Filter input.
-            let hint = "Filter…";
-            ui.add(
-                egui::TextEdit::singleline(&mut state.filter)
-                    .hint_text(hint)
-                    .font(theme.font_mono(theme.text_sm)),
-            );
-            ui.add_space(theme.space_4);
-
-            // Source list with inline selection.
-            for src in available_items {
-                let (label, icon, desc) = source_info(src);
-                let matches_filter = state.filter.is_empty()
-                    || label.to_lowercase().contains(&state.filter.to_lowercase());
-
-                if !matches_filter {
-                    continue;
-                }
-
-                let row = egui::Frame::new()
-                    .fill(theme.surface)
-                    .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 4))
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(icon)
-                                    .font(theme.font_icon(theme.text_sm))
-                                    .color(theme.accent),
-                            );
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .size(theme.text_sm)
-                                    .color(theme.text),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new(desc)
-                                            .size(theme.text_xs)
-                                            .color(theme.text_dim),
-                                    );
-                                },
-                            );
-                        });
-                    });
-
-                if row.response.clicked() {
-                    // File/Folder/Web/Terminal need user input; keep picker open
-                    // until the user types a filter value.
-                    let needs_filter = matches!(
-                        src,
-                        ContextSource::File { .. }
-                            | ContextSource::Folder { .. }
-                            | ContextSource::Web { .. }
-                            | ContextSource::Terminal { .. }
-                    );
-                    if needs_filter && state.filter.is_empty() {
-                        state.filter = String::new();
-                    } else {
-                        let resolved_src = resolve_source(src, &state.filter);
-                        let item = build_item(&resolved_src, &state.cwd);
-                        result = Some(item);
-                        state.open = false;
+            if let Some(ref mode) = state.browsing.clone() {
+                // ── File browser sub-view ──
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_sized(
+                            [60.0, 20.0],
+                            egui::Button::new(
+                                egui::RichText::new("\u{2190} Back")
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim),
+                            )
+                            .fill(theme.surface),
+                        )
+                        .clicked()
+                    {
+                        state.browsing = None;
                         state.filter.clear();
                     }
-                }
-            }
+                    ui.add_space(theme.space_4);
+                    ui.label(
+                        egui::RichText::new(if mode == "file" {
+                            "Select a file"
+                        } else {
+                            "Select a folder"
+                        })
+                        .size(theme.text_xs)
+                        .color(theme.text_dim),
+                    );
+                });
+                ui.add_space(theme.space_4);
 
-            if result.is_none() {
-                // Cancelled by clicking outside — handled by caller checking
-                // whether the mouse clicked outside the popup area.
+                let root = state.cwd.clone();
+                if root.exists() && root.is_dir() {
+                    egui::ScrollArea::vertical()
+                        .max_height(240.0)
+                        .id_salt("ctx_picker_file_tree")
+                        .show(ui, |ui| {
+                            crate::ui::file_browser::render_file_tree(
+                                ui,
+                                &root,
+                                theme,
+                                0,
+                                None,
+                                &mut |path: &std::path::Path| {
+                                    if path.is_file() || mode == "folder" {
+                                        let resolved = if mode == "file" {
+                                            ContextSource::File {
+                                                path: path.to_string_lossy().into_owned(),
+                                                start_line: None,
+                                                end_line: None,
+                                            }
+                                        } else {
+                                            ContextSource::Folder {
+                                                path: path.to_string_lossy().into_owned(),
+                                            }
+                                        };
+                                        let item = build_item(&resolved, &state.cwd);
+                                        result = Some(item);
+                                        state.open = false;
+                                        state.browsing = None;
+                                        state.filter.clear();
+                                    }
+                                },
+                                &mut |_path: &std::path::Path| {},
+                                true, // compact
+                            );
+                        });
+                } else {
+                    ui.label(
+                        egui::RichText::new("Directory not accessible")
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    );
+                }
+            } else {
+                // ── Source list view ──
+                let hint = "Filter…";
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.filter)
+                        .hint_text(hint)
+                        .font(theme.font_mono(theme.text_sm)),
+                );
+                ui.add_space(theme.space_4);
+
+                for src in available_items {
+                    let (label, icon, desc) = source_info(src);
+                    let matches_filter = state.filter.is_empty()
+                        || label.to_lowercase().contains(&state.filter.to_lowercase());
+
+                    if !matches_filter {
+                        continue;
+                    }
+
+                    let row = egui::Frame::new()
+                        .fill(theme.surface)
+                        .inner_margin(egui::Margin::symmetric(theme.space_8 as i8, 4))
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(icon)
+                                        .font(theme.font_icon(theme.text_sm))
+                                        .color(theme.accent),
+                                );
+                                ui.label(
+                                    egui::RichText::new(label)
+                                        .size(theme.text_sm)
+                                        .color(theme.text),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.label(
+                                            egui::RichText::new(desc)
+                                                .size(theme.text_xs)
+                                                .color(theme.text_dim),
+                                        );
+                                    },
+                                );
+                            });
+                        });
+
+                    if row.response.clicked() {
+                        match src {
+                            ContextSource::File { .. } | ContextSource::Folder { .. } => {
+                                // Open file browser sub-view.
+                                state.browsing = Some(
+                                    if matches!(src, ContextSource::File { .. }) {
+                                        "file"
+                                    } else {
+                                        "folder"
+                                    }
+                                    .to_string(),
+                                );
+                            }
+                            ContextSource::Web { .. } | ContextSource::Terminal { .. } => {
+                                if state.filter.is_empty() {
+                                    state.filter = String::new();
+                                } else {
+                                    let resolved_src = resolve_source(src, &state.filter);
+                                    let item = build_item(&resolved_src, &state.cwd);
+                                    result = Some(item);
+                                    state.open = false;
+                                    state.filter.clear();
+                                }
+                            }
+                            _ => {
+                                let resolved_src = resolve_source(src, &state.filter);
+                                let item = build_item(&resolved_src, &state.cwd);
+                                result = Some(item);
+                                state.open = false;
+                                state.filter.clear();
+                            }
+                        }
+                    }
+                }
             }
         });
 

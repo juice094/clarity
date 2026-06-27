@@ -55,27 +55,35 @@ impl<'a> Widget for ChatPane<'a> {
         }
 
         let mut lines: Vec<Line> = vec![];
+        // Track the previous message role to suppress duplicate headers for
+        // consecutive messages of the same role (visual "island" fix).
+        let mut prev_role: Option<MessageType> = None;
 
         for msg in self.messages.iter_mut() {
+            let show_header = prev_role.as_ref() != Some(&msg.msg_type);
+            prev_role = Some(msg.msg_type.clone());
+
             match msg.msg_type {
                 MessageType::User => {
-                    lines.push(Line::from(""));
-                    let time = Span::styled(
-                        format!(" {} ", relative_label(msg.created_at)),
-                        Style::default().fg(Color::Rgb(100, 100, 120)),
-                    );
-                    lines.push(Line::from(vec![
-                        Span::raw(" "),
-                        Span::styled(
-                            " You ",
-                            Style::default()
-                                .fg(Color::Rgb(220, 230, 255))
-                                .bg(Color::Rgb(50, 100, 180))
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::raw(" "),
-                        time,
-                    ]));
+                    if show_header {
+                        lines.push(Line::from(""));
+                        let time = Span::styled(
+                            format!(" {} ", relative_label(msg.created_at)),
+                            Style::default().fg(Color::Rgb(100, 100, 120)),
+                        );
+                        lines.push(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(
+                                " You ",
+                                Style::default()
+                                    .fg(Color::Rgb(220, 230, 255))
+                                    .bg(Color::Rgb(50, 100, 180))
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(" "),
+                            time,
+                        ]));
+                    }
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![
                             Span::styled("  ▎ ", Style::default().fg(Color::Rgb(80, 140, 220))),
@@ -84,30 +92,32 @@ impl<'a> Widget for ChatPane<'a> {
                     }
                 }
                 MessageType::Assistant => {
-                    lines.push(Line::from(""));
-                    let prefix = if msg.is_streaming {
-                        Span::styled(" ● ", Style::default().fg(Color::Rgb(100, 220, 150)))
-                    } else {
-                        Span::styled(" ● ", Style::default().fg(Color::Rgb(80, 180, 140)))
-                    };
-                    let name = Span::styled(
-                        " Clarity ",
-                        Style::default()
-                            .fg(Color::Rgb(220, 255, 235))
-                            .bg(Color::Rgb(40, 120, 80))
-                            .add_modifier(Modifier::BOLD),
-                    );
-                    let time = Span::styled(
-                        format!(" {} ", relative_label(msg.created_at)),
-                        Style::default().fg(Color::Rgb(100, 100, 120)),
-                    );
-                    lines.push(Line::from(vec![
-                        Span::raw(" "),
-                        prefix,
-                        name,
-                        Span::raw(" "),
-                        time,
-                    ]));
+                    if show_header {
+                        lines.push(Line::from(""));
+                        let prefix = if msg.is_streaming {
+                            Span::styled(" ● ", Style::default().fg(Color::Rgb(100, 220, 150)))
+                        } else {
+                            Span::styled(" ● ", Style::default().fg(Color::Rgb(80, 180, 140)))
+                        };
+                        let name = Span::styled(
+                            " Clarity ",
+                            Style::default()
+                                .fg(Color::Rgb(220, 255, 235))
+                                .bg(Color::Rgb(40, 120, 80))
+                                .add_modifier(Modifier::BOLD),
+                        );
+                        let time = Span::styled(
+                            format!(" {} ", relative_label(msg.created_at)),
+                            Style::default().fg(Color::Rgb(100, 100, 120)),
+                        );
+                        lines.push(Line::from(vec![
+                            Span::raw(" "),
+                            prefix,
+                            name,
+                            Span::raw(" "),
+                            time,
+                        ]));
+                    }
 
                     // S7 Phase 3A: cached markdown parse — only re-parses
                     // when content changes (streaming). Avoids repeated parsing
@@ -143,7 +153,9 @@ impl<'a> Widget for ChatPane<'a> {
                     }
                 }
                 MessageType::ToolCall => {
-                    lines.push(Line::from(""));
+                    if show_header {
+                        lines.push(Line::from(""));
+                    }
                     lines.push(Line::from(vec![
                         Span::styled("  ▶ ", Style::default().fg(Color::Rgb(220, 180, 80))),
                         Span::styled(
