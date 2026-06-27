@@ -7,11 +7,12 @@
 use std::time::Instant;
 
 /// Ring-buffered log for the Console panel (cap enforced on push).
-#[allow(dead_code)] // follow field reserved for auto-scroll toggle
 pub struct ConsoleStore {
     pub entries: Vec<ConsoleEntry>,
     pub filter: ConsoleFilter,
     pub auto_scroll: bool,
+    /// Reserved: follow-mode toggle for PTY terminal integration.
+    #[allow(dead_code)]
     pub follow: bool,
 }
 
