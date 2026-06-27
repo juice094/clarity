@@ -2,11 +2,6 @@ use crate::App;
 use crate::ui::types::ToastLevel;
 use std::time::{Duration, Instant};
 
-/// Cubic ease-out: decelerates toward the end.
-fn ease_out_cubic(t: f32) -> f32 {
-    1.0 - (1.0 - t).powi(3)
-}
-
 /// Maximum toast lifetime before auto-dismiss.
 const TOAST_TTL: Duration = Duration::from_secs(5);
 /// Toast card width.
@@ -51,7 +46,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
 
         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
         let fade_ratio = (elapsed / theme.duration_normal).min(1.0);
-        let alpha = ease_out_cubic(fade_ratio);
+        let alpha = crate::animation::ease_out_cubic(fade_ratio);
 
         let (icon, accent_color, border_color) = match toast.level {
             ToastLevel::Info => (crate::theme::ICON_INFO, theme.accent, theme.accent_subtle),
