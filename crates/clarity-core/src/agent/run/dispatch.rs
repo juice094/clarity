@@ -214,11 +214,22 @@ impl Agent {
 
             let result_content = result_value.to_string();
 
+            // Format the display string server-side via Tool::format_output().
+            let display_result = match &sanitized {
+                Ok(v) => self
+                    .registry
+                    .get(&tc.function.name)
+                    .ok()
+                    .flatten()
+                    .map(|tool| tool.format_output(v)),
+                Err(_) => None, // errors don't get formatted
+            };
+
             self.send_wire_message(WireMessage::ToolResult {
                 turn_id: String::new(),
                 id: tool_call.id.clone(),
                 result: result_content.clone(),
-                display_result: None, // TODO: call tool.format_output(&result_value)
+                display_result,
             });
 
             let scrubbed = scrub_credentials(&result_content);
