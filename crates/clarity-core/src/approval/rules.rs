@@ -103,6 +103,32 @@ impl RuleEngine {
             arg_condition: None,
             risk: RiskLevel::Low,
         });
+        // MCP tool patterns (prefixed names like "filesystem_write_file").
+        engine.add_rule(ApprovalRule {
+            tool_pattern: "*delete*".to_string(),
+            arg_condition: None,
+            risk: RiskLevel::High,
+        });
+        engine.add_rule(ApprovalRule {
+            tool_pattern: "*write*".to_string(),
+            arg_condition: None,
+            risk: RiskLevel::Medium,
+        });
+        engine.add_rule(ApprovalRule {
+            tool_pattern: "*execute*".to_string(),
+            arg_condition: None,
+            risk: RiskLevel::High,
+        });
+        engine.add_rule(ApprovalRule {
+            tool_pattern: "*create*".to_string(),
+            arg_condition: None,
+            risk: RiskLevel::Medium,
+        });
+        engine.add_rule(ApprovalRule {
+            tool_pattern: "*query*".to_string(),
+            arg_condition: None,
+            risk: RiskLevel::Low,
+        });
         engine
     }
 
