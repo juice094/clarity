@@ -7,7 +7,7 @@ tags: [status]
 
 # Clarity 项目现状报告
 
-> 版本：v0.3.4-rc | 日期：2026-06-25 | 基于实机测试与代码审计
+> 版本：v0.3.4-rc | 日期：2026-06-28 | 基于实机测试与代码审计
 > 关联文档：`ENGINEERING_PLAN.md` · [`ROADMAP.md`](ROADMAP.md) · [`FUTURE_DIRECTION.md`](FUTURE_DIRECTION.md) · [`plans/2026-05-12-pretext-ui-evolution.md`](plans/2026-05-12-pretext-ui-evolution.md)
 > Pretext UI 演进：S1 (Phase 0.5) + S2 (Phase 1) 已完成 — 详见 `plans/2026-05-12-S1-session-archive.md` · `plans/2026-05-12-S2-session-archive.md`
 
@@ -81,7 +81,22 @@ tags: [status]
 - **Header 右栏切换按钮修复**：通过 `right_to_left` 布局将右栏抽屉与上下文切换图标推至最右侧，解决了此前在居中 Ui 内部右对齐被 clip 的问题。
 - **人机协作图片标注器**：新增 `assets/ui_annotator.html`（单文件零依赖）、`assets/ui-annotator-schema.md`、`assets/render_annotations.py`；支持拖框、标签、移动/缩放、JSON 导入导出、`localStorage` 自动保存；统一红/绿/蓝/黄颜色语义，便于将用户框选直接转译为 egui 布局代码。
 
-**验证结果**：`cargo fmt --all -- --check` ✅、`cargo clippy --workspace --lib --bins --tests --exclude clarity-slint -- -D warnings` ✅、`cargo test --workspace --lib --exclude clarity-slint` ✅（1554 passed / 0 failed / 0 ignored）、`cargo test --workspace --bins --exclude clarity-slint -- --test-threads=2` ✅（275 passed / 0 failed / 2 ignored）、`cargo test --workspace --doc --exclude clarity-slint -- --test-threads=2` ✅（34 passed / 0 failed / 3 ignored）、`cargo test -p clarity-integration-tests --lib` ✅（26 passed / 0 failed）。
+**S6-D — 右 IDE 面板全面落地 + 美化系统（2026-06-28）**：
+- 4 个右 IDE 面板从占位符实现为完整功能：Console（虚拟化过滤日志 + 计数 badges + 错误注入 + 清空按钮）、Files（递归目录树 + 右键菜单含预览/编辑器打开/加入对话/复制路径 + Git 扩展点 + "Create PR" 桩）、Share（Markdown/JSON/HTML 三格式导出 + 剪贴板/文件保存 + Gateway 分享桩）、Templates（5 内建模板 + 一键注入 + Marketplace 桩）
+- **Diff 可视化**：DiffViewer widget（行号 + 着色 + hunk 折叠 + accept/reject + delta accent bars）；RenderBlock::Diff 自动检测对话中 unified diff 并内联渲染；审批弹窗已集成
+- **语法高亮**：syntect v5 + regex-fancy，18 语言 cold-path 预解析，base16-ocean.dark → egui Color32
+- **6 主题预设**：Dark/Light/OLED/Catppuccin Mocha/Tokyo Night/One Dark + WCAG AA 对比度修复 + info color token
+- **# Context Picker**：源类型列表 → 内嵌文件浏览器 → 文件名过滤 → chips 渲染 → 消息自动注入；ContextItem/ContextSource 类型；上下文 ribbon bar
+- **Session UX**：+N/-M diff stats badges、session 搜索/过滤、token 用量进度条（hover tooltip）、session 元数据栏、滚动到底部按钮、System 消息 glass pill
+- **美化**：代码块折叠（>30 lines，per-block state）、TUI风格 ─ 分隔符、shadow_card、Toast 图标 + 动画 + ×关闭、气泡 hover 时间戳、面板过渡动画 cubic ease-out、VS Code 2px accent 导航条、fuzzy 命令面板（字符顺序评分）、空状态 6 suggestion chips
+- **键盘快捷键**：Ctrl+`（Console）、Ctrl+Shift+F（Files）、Ctrl+Shift+S（Share）
+- **事件层**：ToolCallProgress e2e 贯通、StreamDelta.partial_tool_calls 6 crate 修复、display_result 全栈 pipeline
+- **Gateway Web**：tool_call_progress 事件处理 + TypeScript 类型
+- **TUI**：状态栏增加模型名称
+- **架构整合**：truncation 5→1 去重、Tool::format_output() trait 方法、DiffHunk→clarity-contract、ease_out_cubic/rgba 去重、dead code 清理（-85 lines）
+- **文档**：CLAUDE.md, AGENTS.md, CHANGELOG.md, ARCHITECTURE.md, ROADMAP.md, CONTRIBUTING.md 全部更新
+
+**验证结果**：`cargo check --workspace --lib --exclude clarity-slint` ✅、`cargo build --release -p clarity-egui` ✅（34MB, 0 warnings）、`cargo clippy -p clarity-egui --lib -- -D warnings` ✅、`cargo fmt --all -- --check` ✅、`cargo test -p clarity-egui` ✅（237 passed / 0 failed / 2 ignored）、`cargo test -p clarity-tui` ✅（75 passed）、`cargo test --workspace --lib --exclude clarity-slint` ✅（262 passed, excl. pre-existing ollama mock）
 
 ---
 
@@ -224,8 +239,14 @@ tags: [status]
 ✅ **布局几何精化（S6-C3）** — `CentralPanel` 去水平边距、`chat_header` 全宽、消息列表/输入栏居中、右栏切换按钮 far-right 定位修复
 ✅ **人机协作图片标注器** — `assets/ui_annotator.html` + schema + 批量渲染脚本，支持用户框选 UI 元素后直接转译为 egui 布局代码
 ✅ **红绿蓝黄布局诊断覆盖层** — `debug_overlay.rs` 可视化 `max_rect`/`clip_rect`/锚点/警告，快捷键 `Ctrl+Shift+L`
+✅ **右 IDE 四面板完整功能** — Console/Files/Share/Templates 从占位符实现，支持过滤日志、文件树操作、多格式导出、模板注入
+✅ **DiffViewer 组件** — 统一 diff 视图 + 审批弹窗集成 + 对话内嵌 diff 检测
+✅ **语法高亮** — syntect 18 语言，cold-path 预解析
+✅ **6 主题预设** — Dark/Light/OLED/Catppuccin/TokyoNight/OneDark
+✅ **# Context Picker** — 上下文快速注入（文件/文件夹/Web/终端）
+✅ **Session 增强** — diff stats badges + 搜索 + token 进度条 + 元数据栏 + 滚动按钮
+✅ **UI 美化** — 代码块折叠 + Toast 动画 + 气泡时间戳 + 面板动画 + VS Code nav bar + fuzzy palette
 ```
-
 ---
 
 ## 3. 前后端功能 Parity 矩阵（关键差距标注）
