@@ -96,6 +96,12 @@ impl<'a> Widget for ChatPane<'a> {
                             Span::raw(" "),
                             time,
                         ]));
+                    } else {
+                        // Light separator between consecutive same-role messages.
+                        lines.push(Line::from(Span::styled(
+                            "  ┈".to_string(),
+                            Style::default().fg(Color::Rgb(50, 50, 65)),
+                        )));
                     }
                     for line in msg.content.lines() {
                         lines.push(Line::from(vec![
@@ -130,6 +136,12 @@ impl<'a> Widget for ChatPane<'a> {
                             Span::raw(" "),
                             time,
                         ]));
+                    } else {
+                        // Light separator between consecutive same-role messages.
+                        lines.push(Line::from(Span::styled(
+                            "  ┈".to_string(),
+                            Style::default().fg(Color::Rgb(50, 50, 65)),
+                        )));
                     }
 
                     // S7 Phase 3A: cached markdown parse — only re-parses
