@@ -1520,7 +1520,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clarity-anthropic-proxy"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1538,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-channels"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aes",
  "anyhow",
@@ -1571,7 +1571,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-claw"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-contract"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-egui"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "clarity-contract",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-gateway"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1751,7 +1751,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-headless"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-integration-tests"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-llm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-mcp"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1857,7 +1857,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-memory"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1888,7 +1888,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-mobile-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1906,7 +1906,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-openclaw"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-rollout"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1951,7 +1951,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-secrets"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chacha20poly1305",
  "hex",
@@ -1963,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-slint"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clarity-contract",
@@ -1982,7 +1982,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-subagents"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2003,7 +2003,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-telemetry"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2027,7 +2027,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-thread-store"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2048,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-tools"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-tui"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2102,7 +2102,7 @@ dependencies = [
 
 [[package]]
 name = "clarity-wire"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "parking_lot",
  "serde",
