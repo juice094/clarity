@@ -130,9 +130,17 @@ impl RuleEngine {
         if pattern == name {
             return true;
         }
-        // Simple glob: "file_*" matches "file_read", "file_write", etc.
+        // Glob: "*write*" matches "filesystem_write_file", etc.
+        if let Some(inner) = pattern.strip_prefix('*').and_then(|s| s.strip_suffix('*')) {
+            return name.contains(inner);
+        }
+        // Glob: "file_*" matches "file_read", "file_write", etc.
         if let Some(prefix) = pattern.strip_suffix('*') {
             return name.starts_with(prefix);
+        }
+        // Glob: "*_file" matches "write_file", "delete_file", etc.
+        if let Some(suffix) = pattern.strip_prefix('*') {
+            return name.ends_with(suffix);
         }
         false
     }

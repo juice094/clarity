@@ -83,12 +83,17 @@ use tracing::debug;
 pub struct McpToolAdapter {
     client: Arc<tokio::sync::Mutex<McpClientInstance>>,
     tool_info: McpTool,
+    requires_approval: bool,
 }
 
 impl McpToolAdapter {
     /// Create a new `McpToolAdapter`.
     pub fn new(client: Arc<tokio::sync::Mutex<McpClientInstance>>, tool_info: McpTool) -> Self {
-        Self { client, tool_info }
+        Self {
+            client,
+            tool_info,
+            requires_approval: true, // secure by default
+        }
     }
 
     /// Return the name.
@@ -119,6 +124,10 @@ impl Tool for McpToolAdapter {
 
     fn parameters(&self) -> Value {
         self.tool_info.input_schema.clone()
+    }
+
+    fn requires_approval(&self) -> bool {
+        self.requires_approval
     }
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {

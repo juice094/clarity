@@ -19,6 +19,9 @@ pub struct McpToolWrapper {
     mcp_name: String,
     description: String,
     parameters: Value,
+    /// Whether this MCP tool requires explicit user approval.
+    /// Defaults to true for safety — operators should explicitly opt out.
+    requires_approval: bool,
 }
 
 impl McpToolWrapper {
@@ -36,6 +39,7 @@ impl McpToolWrapper {
             mcp_name: mcp_name.into(),
             description: tool.description.unwrap_or_default(),
             parameters: tool.input_schema,
+            requires_approval: true, // secure by default
         }
     }
 }
@@ -52,6 +56,10 @@ impl Tool for McpToolWrapper {
 
     fn parameters(&self) -> Value {
         self.parameters.clone()
+    }
+
+    fn requires_approval(&self) -> bool {
+        self.requires_approval
     }
 
     async fn execute(&self, args: Value, _ctx: ToolContext) -> ToolResult<Value> {
