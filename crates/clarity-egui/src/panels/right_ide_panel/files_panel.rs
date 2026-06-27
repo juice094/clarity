@@ -63,7 +63,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     );
                 });
             if badge.response.clicked() {
-                let _ = open::that(repo_url);
+                let _ = webbrowser::open(repo_url);
             }
         }
     });
@@ -121,7 +121,14 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         selected.as_deref(),
         &mut |path: &Path| {
             app.files_store.touch_recent(path.to_path_buf());
-            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::FilePath {
+            let file_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_string_lossy().into_owned());
+            let content = std::fs::read_to_string(path).unwrap_or_default();
+            app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                name: file_name,
+                content,
                 path: path.to_string_lossy().into_owned(),
             });
             app.files_store.selected_path = Some(path.to_path_buf());
@@ -156,16 +163,26 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.to_string_lossy().into_owned());
-            let row_resp = crate::widgets::interactive_row(
-                ui,
-                &theme,
-                format!("{} {}", crate::theme::ICON_FILE, name),
-                crate::theme::ICON_CARET_RIGHT,
-                false,
-            );
-            if row_resp.clicked() {
+            let is_selected = app
+                .files_store
+                .selected_path
+                .as_ref()
+                .map_or(false, |p| p == &path);
+            let row_resp = crate::widgets::interactive_row(ui, is_selected, &theme, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!("{} {}", crate::theme::ICON_FILE, name))
+                            .size(theme.text_sm)
+                            .color(theme.text),
+                    );
+                });
+            });
+            if row_resp.response.clicked() {
                 app.files_store.selected_path = Some(path.clone());
-                app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::FilePath {
+                let content = std::fs::read_to_string(&path).unwrap_or_default();
+                app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
+                    name,
+                    content,
                     path: path.to_string_lossy().into_owned(),
                 });
             }

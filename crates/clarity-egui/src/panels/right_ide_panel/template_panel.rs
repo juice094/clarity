@@ -8,7 +8,7 @@
 use crate::App;
 
 /// A built-in work template.
-struct BuiltInTemplate {
+pub(crate) struct BuiltInTemplate {
     name: &'static str,
     description: &'static str,
     icon: &'static str,
@@ -121,9 +121,10 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                                     {
                                         app.chat_store.input = tmpl.prompt.to_string();
                                         app.ui_store.focus_input_requested = true;
+                                        let toast_msg = app.t("Template injected").to_string();
                                         crate::handlers::system::push_toast(
                                             &mut app.ui_store,
-                                            &app.t("Template injected").to_string(),
+                                            &toast_msg,
                                             crate::ui::types::ToastLevel::Info,
                                         );
                                     }

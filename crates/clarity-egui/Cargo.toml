@@ -31,6 +31,7 @@ once_cell = "1"
 raw-window-handle = "0.6"
 rfd = "0.15"
 tray-icon = "0.24.1"
+webbrowser = "1"
 
 # Internal crates
 clarity-core = { path = "../clarity-core" }

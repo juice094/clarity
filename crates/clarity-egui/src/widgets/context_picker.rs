@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 /// State for the `#` context picker popup.
 #[derive(Clone, Default)]
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub struct ContextPickerState {
     /// Whether the picker is currently visible.
     pub open: bool,
@@ -25,6 +26,7 @@ pub struct ContextPickerState {
 ///
 /// Callers should invoke this immediately after the chat input widget when
 /// `state.open` is true, positioning it as an anchored popup.
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub fn render_context_picker(
     ui: &mut egui::Ui,
     state: &mut ContextPickerState,
@@ -54,9 +56,7 @@ pub fn render_context_picker(
             for src in available_items {
                 let (label, icon, desc) = source_info(src);
                 let matches_filter = state.filter.is_empty()
-                    || label
-                        .to_lowercase()
-                        .contains(&state.filter.to_lowercase());
+                    || label.to_lowercase().contains(&state.filter.to_lowercase());
 
                 if !matches_filter {
                     continue;
@@ -108,22 +108,38 @@ pub fn render_context_picker(
     result
 }
 
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 fn source_info(src: &ContextSource) -> (&'static str, &'static str, &'static str) {
     match src {
         ContextSource::File { .. } => ("File", crate::theme::ICON_FILE, "Select a file"),
-        ContextSource::Code { .. } => ("Code Symbol", crate::theme::ICON_FILE_CODE, "Function/class"),
-        ContextSource::Folder { .. } => ("Folder", crate::theme::ICON_FOLDER_OPEN, "All files in dir"),
-        ContextSource::Terminal { .. } => ("Terminal", crate::theme::ICON_TERMINAL, "Command output"),
+        ContextSource::Code { .. } => (
+            "Code Symbol",
+            crate::theme::ICON_FILE_CODE,
+            "Function/class",
+        ),
+        ContextSource::Folder { .. } => {
+            ("Folder", crate::theme::ICON_FOLDER_OPEN, "All files in dir")
+        }
+        ContextSource::Terminal { .. } => {
+            ("Terminal", crate::theme::ICON_TERMINAL, "Command output")
+        }
         ContextSource::Web { .. } => ("Web", crate::theme::ICON_GLOBE, "Fetch URL"),
         ContextSource::Documentation { .. } => ("Docs", crate::theme::ICON_BOOK, "Documentation"),
-        ContextSource::Codebase { .. } => ("Codebase", crate::theme::ICON_LAYERS, "Semantic search"),
+        ContextSource::Codebase { .. } => {
+            ("Codebase", crate::theme::ICON_LAYERS, "Semantic search")
+        }
         ContextSource::GitDiff { .. } => ("Git Diff", crate::theme::ICON_MINUS, "Branch diff"),
     }
 }
 
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
     match src {
-        ContextSource::File { path, start_line, end_line } => {
+        ContextSource::File {
+            path,
+            start_line,
+            end_line,
+        } => {
             let display = match (start_line, end_line) {
                 (Some(s), Some(e)) => format!("{}:{}-{}", file_name(path), s, e),
                 _ => file_name(path),
@@ -192,6 +208,7 @@ fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
     }
 }
 
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 fn file_name(path: &str) -> String {
     PathBuf::from(path)
         .file_name()

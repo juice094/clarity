@@ -470,18 +470,13 @@ impl SubagentRunner {
         context.set_capability_token(token);
         context.restore().await?;
 
-        // 4. 创建输出收集器
+        // 4. 创建输出收集器（ponytail: 单次构造，通过 with_progress_tx 链式配置）
         let mut collector = OutputCollector::new(context.output_path(), &agent_id);
         if let Some(ref tx) = self.progress_tx {
             collector = collector.with_progress_tx(tx.clone());
         }
         if worktree_guard.is_some() {
             collector.stage("worktree_created");
-        }
-        collector.stage("runner_started");
-        let mut collector = OutputCollector::new(context.output_path(), &agent_id);
-        if let Some(ref tx) = self.progress_tx {
-            collector = collector.with_progress_tx(tx.clone());
         }
         collector.stage("runner_started");
 
@@ -843,7 +838,7 @@ impl SubagentRunner {
                 collector.stage("agent_completed_successfully");
 
                 // 验证响应长度
-                if response.len() < 100 {
+                if response.len() < MIN_RESPONSE_CHARS {
                     // 响应太短，尝试继续
                     collector.stage("response_too_short_attempting_continuation");
 
@@ -907,6 +902,12 @@ Your previous response was too brief. Please provide a more comprehensive summar
         &self.working_dir
     }
 }
+
+/// Minimum response length in characters before the runner considers the
+/// agent output "too short" and requests an automatic continuation.
+/// Set to 100 as a heuristic: anything shorter than a typical paragraph
+/// likely means the model stopped prematurely.
+const MIN_RESPONSE_CHARS: usize = 100;
 
 // =============================================================================
 // Worktree isolation helpers
@@ -1265,5 +1266,45 @@ mod tests {
             "Second run should fail after budget exhausted: {:?}",
             result2
         );
+    }
+
+    // ── WorktreeGuard transactional tests ──
+
+    #[test]
+    fn worktree_guard_preserves_on_error() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("preserve_me");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("data.txt"), "important").unwrap();
+
+        {
+            let guard = WorktreeGuard::new(path.clone());
+            // Drop without mark_success — simulates error path.
+            drop(guard);
+        }
+
+        assert!(path.exists(), "worktree preserved when not marked success");
+    }
+
+    #[test]
+    fn worktree_guard_cleans_on_success() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("clean_me");
+        std::fs::create_dir_all(&path).unwrap();
+
+        {
+            let mut guard = WorktreeGuard::new(path.clone());
+            guard.mark_success();
+            // Drop after mark_success — simulates success path.
+            drop(guard);
+        }
+
+        assert!(!path.exists(), "worktree cleaned up on success");
+    }
+
+    #[test]
+    fn worktree_guard_default_is_preserve() {
+        let guard = WorktreeGuard::new(PathBuf::from("/nonexistent"));
+        assert!(!guard.should_remove, "default should_remove is false (preserve)");
     }
 }

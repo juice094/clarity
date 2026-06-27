@@ -8,6 +8,10 @@ use serde_json::Value;
 /// Injects tool descriptions into the system prompt and clears the tools array so
 /// the provider receives a prompt-guided representation instead of a structured
 /// tool schema.
+///
+/// NOTE: Strips any existing `## Available Tools` markdown section (injected by
+/// `SystemPromptBuilder`) before appending the XML dialect. This prevents the
+/// tools from appearing twice in the same system message.
 pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>, Value) {
     let has_tools = tools.as_array().map(|a| !a.is_empty()).unwrap_or(false);
 
@@ -17,13 +21,17 @@ pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>
 
     let tool_text = format_tools_for_prompt(tools);
 
+    // ponytail: strip existing markdown `## Available Tools` section added by
+    // SystemPromptBuilder so the XML version is the sole tool description.
+    // The section ends at either `## Approval Mode` or `## Security Notice`.
     let adapted_messages: Vec<Message> = messages
         .iter()
         .map(|m| {
             if m.role == MessageRole::System {
+                let cleaned = strip_markdown_tools_section(&m.content);
                 Message {
                     role: MessageRole::System,
-                    content: m.content.clone() + &tool_text,
+                    content: cleaned + &tool_text,
                     tool_calls: m.tool_calls.clone(),
                     tool_call_id: m.tool_call_id.clone(),
                 }
@@ -34,6 +42,34 @@ pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>
         .collect();
 
     (adapted_messages, Value::Array(vec![]))
+}
+
+/// Remove any `## Available Tools\n...` markdown section from the system message.
+///
+/// The section spans from `## Available Tools` to the next `## ` heading
+/// (typically `## Approval Mode` or `## Security Notice`).
+fn strip_markdown_tools_section(content: &str) -> String {
+    let marker = "## Available Tools\n";
+    let Some(start) = content.find(marker) else {
+        return content.to_string();
+    };
+
+    // Find the next `## ` heading after the tools section.
+    let after_marker = start + marker.len();
+    let end = content[after_marker..]
+        .find("\n## ")
+        .map(|p| after_marker + p)
+        .unwrap_or(content.len());
+
+    let mut cleaned = String::with_capacity(content.len());
+    cleaned.push_str(&content[..start]);
+    // Trim trailing newlines from the cut point to avoid blank lines.
+    let tail = content[end..].trim_start_matches('\n');
+    if !tail.is_empty() {
+        cleaned.push('\n');
+        cleaned.push_str(tail);
+    }
+    cleaned
 }
 
 // ponytail: minimal XML escaping for the tool-prompt dialect. Switch to a dedicated XML
@@ -223,5 +259,59 @@ mod tests {
         let (adapted, tools) = adapt_prompt_guided(&messages, &json!([]));
         assert_eq!(adapted[0].content, "Hi");
         assert!(tools.as_array().unwrap().is_empty());
+    }
+
+    // ── strip_markdown_tools_section tests ──
+
+    #[test]
+    fn strip_removes_tools_section_before_approval_mode() {
+        let input = "Base prompt.\n\n## Available Tools\n- plan: ...\n- read: ...\n\n## Approval Mode\nYOLO mode\n\n## Security Notice\nBe careful.";
+        let result = strip_markdown_tools_section(input);
+        assert!(!result.contains("## Available Tools"));
+        assert!(!result.contains("- plan:"));
+        assert!(result.contains("## Approval Mode"));
+        assert!(result.contains("## Security Notice"));
+        assert!(result.contains("Base prompt."));
+    }
+
+    #[test]
+    fn strip_no_tools_section_returns_unchanged() {
+        let input = "Base prompt.\n\n## Approval Mode\nYOLO";
+        let result = strip_markdown_tools_section(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn strip_tools_at_end_of_message() {
+        let input = "Base prompt.\n\n## Available Tools\n- only tool";
+        let result = strip_markdown_tools_section(input);
+        assert!(result.contains("Base prompt."));
+        assert!(!result.contains("## Available Tools"));
+        assert!(!result.contains("- only tool"));
+    }
+
+    #[test]
+    fn adapt_prompt_guided_no_duplicate_tools() {
+        // Simulate a system message that already has markdown tools from SystemPromptBuilder.
+        let messages = vec![
+            Message::system("You are helpful.\n\n## Available Tools\n- read: Read a file\n\n## Approval Mode\nYOLO"),
+            Message::user("Query"),
+        ];
+        let (adapted, _) = adapt_prompt_guided(&messages, &sample_tools());
+        let system_content = &adapted[0].content;
+        // Should NOT have the markdown tools section.
+        assert!(
+            !system_content.contains("## Available Tools\n- read"),
+            "markdown tools section should be stripped"
+        );
+        // Should have the XML tools.
+        assert!(
+            system_content.contains("<tool_description"),
+            "XML tools should be present"
+        );
+        // Should preserve other sections.
+        assert!(system_content.contains("## Approval Mode"));
+        assert!(system_content.contains("YOLO"));
+        assert!(system_content.contains("You are helpful."));
     }
 }

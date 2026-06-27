@@ -332,6 +332,8 @@ impl App {
                 status_message: None,
                 claw_in_flight_session_id: None,
                 chunks_since_save: 0,
+                context_items: Vec::new(),
+                token_usage: crate::stores::chat::TokenUsage::default(),
             },
             settings_store,
             device_state,

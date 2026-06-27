@@ -7,6 +7,7 @@ use std::time::Instant;
 
 /// Live token usage snapshot for the active session.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Extension-point fields reserved for future pricing/tracking
 pub struct TokenUsage {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,

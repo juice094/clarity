@@ -58,6 +58,7 @@ pub struct UiStore {
     /// Gateway-assigned session id when connected via the native WebSocket protocol.
     pub claw_gateway_session_id: String,
     /// `#` context picker state for quick-add context injection.
+    #[allow(dead_code)] // Widget wiring in progress; fields are populated but not yet rendered
     pub context_picker_state: crate::widgets::context_picker::ContextPickerState,
     /// Pretext PoC: whether the text-measurement probe window is open.
     pub pretext_probe_open: bool,
@@ -104,6 +105,7 @@ impl Default for UiStore {
             request_repaint: false,
             claw_history: Vec::new(),
             claw_gateway_session_id: String::new(),
+            context_picker_state: crate::widgets::context_picker::ContextPickerState::default(),
             pretext_probe_open: false,
             pretext_probe_wrap_width: 400.0,
             pretext_estimate_enabled: true,

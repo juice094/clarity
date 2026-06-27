@@ -117,6 +117,7 @@ impl CapabilityToken {
             sandbox_dir: None,
             read_only: true,
             max_iterations: None,
+            enable_worktree: false,
         }
     }
 
@@ -218,5 +219,72 @@ mod tests {
         let escaped = base.join("../etc/passwd");
         let normalized = normalize_path(&escaped);
         assert_eq!(normalized, PathBuf::from("/tmp/etc/passwd"));
+    }
+
+    #[test]
+    fn tool_not_allowed_is_rejected() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()]);
+        let err = token
+            .verify("file_write", &PathBuf::from("/tmp"))
+            .unwrap_err();
+        assert!(matches!(err, TokenError::ToolNotAllowed(ref name) if name == "file_write"));
+    }
+
+    #[test]
+    fn read_only_blocks_write_tools() {
+        // ponytail: read_only() only whitelists read tools, so add a write tool
+        // first to test the read-only block specifically (not the whitelist block).
+        let token = CapabilityToken::read_only().allow_tool("file_write");
+        let err = token
+            .verify("file_write", &PathBuf::from("/tmp"))
+            .unwrap_err();
+        assert!(matches!(err, TokenError::ReadOnlyViolation(ref name) if name == "file_write"));
+    }
+
+    #[test]
+    fn read_only_allows_read_tools() {
+        let token = CapabilityToken::read_only();
+        assert!(token.verify("file_read", &PathBuf::from("/tmp")).is_ok());
+        assert!(token.verify("glob", &PathBuf::from("/tmp")).is_ok());
+        assert!(token.verify("grep", &PathBuf::from("/tmp")).is_ok());
+    }
+
+    #[test]
+    fn empty_allowed_tools_rejects_everything() {
+        let token = CapabilityToken::new(vec![]);
+        let err = token
+            .verify("file_read", &PathBuf::from("/tmp"))
+            .unwrap_err();
+        assert!(matches!(err, TokenError::ToolNotAllowed(_)));
+    }
+
+    #[test]
+    fn path_exactly_at_sandbox_boundary_is_allowed() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()])
+            .with_sandbox_dir(PathBuf::from("/tmp/sandbox"));
+        assert!(token
+            .verify("file_read", &PathBuf::from("/tmp/sandbox"))
+            .is_ok());
+        assert!(token
+            .verify("file_read", &PathBuf::from("/tmp/sandbox/"))
+            .is_ok());
+    }
+
+    #[test]
+    fn worktree_default_is_disabled() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()]);
+        assert!(!token.enable_worktree);
+        let ro = CapabilityToken::read_only();
+        assert!(!ro.enable_worktree);
+    }
+
+    #[test]
+    fn with_worktree_enables_flag_and_preserves_other_fields() {
+        let token = CapabilityToken::new(vec!["file_read".to_string()])
+            .with_sandbox_dir(PathBuf::from("/tmp/sandbox"))
+            .with_worktree();
+        assert!(token.enable_worktree);
+        assert!(token.sandbox_dir.is_some());
+        assert_eq!(token.allowed_tools, vec!["file_read"]);
     }
 }

@@ -341,6 +341,7 @@ pub enum PlanStepStatus {
 /// Displayed as a `+N -M` badge in the session history list, matching the
 /// convention used by Claude Code Web and other AI code editors.
 #[derive(Clone, Default)]
+#[allow(dead_code)] // files_changed/computed_at reserved for future diff-stat badges
 pub struct DiffStats {
     /// Number of distinct files touched by file_write / file_edit tools.
     pub files_changed: usize,
@@ -775,6 +776,7 @@ pub struct Attachment {
 /// Displayed as a chip/tag and injected as system context before the user
 /// message is sent to the LLM.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub struct ContextItem {
     pub source: ContextSource,
     /// Short display label (e.g. "main.rs:42-58").
@@ -785,6 +787,7 @@ pub struct ContextItem {
 
 /// Origin of a context item collected via `#` quick-add.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Reserved: context picker widget wiring in progress
 pub enum ContextSource {
     /// A file (optionally with line range).
     File {

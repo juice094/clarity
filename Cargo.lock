@@ -1689,6 +1689,7 @@ dependencies = [
  "tracing",
  "tray-icon",
  "uuid",
+ "webbrowser",
  "windows 0.61.3",
 ]
 

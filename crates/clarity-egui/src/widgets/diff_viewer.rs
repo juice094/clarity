@@ -9,7 +9,6 @@
 
 use crate::theme::Theme;
 use clarity_core::diff::{DiffHunk, DiffLine};
-use std::time::Instant;
 
 // ── Configuration ────────────────────────────────────────────────────────
 
@@ -33,6 +32,7 @@ pub struct DiffViewConfig {
     pub show_actions: bool,
     // === Extension points (reserved) ===
     /// Side-by-side mode — reserved, always `false` for now.
+    #[allow(dead_code)]
     pub side_by_side: bool,
 }
 
@@ -73,6 +73,7 @@ pub struct DiffViewResponse {
     pub hovered_line: Option<usize>,
     // === Extension points (reserved) ===
     /// Future: comments left on specific lines during review.
+    #[allow(dead_code)]
     pub line_comments: Vec<(usize, String)>,
 }
 
@@ -221,9 +222,10 @@ pub fn render_diff_view(
                             egui::Color32::TRANSPARENT,
                             ln_width,
                             font_size,
-                            hunk.old_start + global_line.saturating_sub(1),
-                            hunk.new_start + global_line.saturating_sub(1),
+                            Some(hunk.old_start + global_line.saturating_sub(1)),
+                            Some(hunk.new_start + global_line.saturating_sub(1)),
                             config,
+                            theme,
                             &mut resp,
                             global_line,
                         );
@@ -240,6 +242,7 @@ pub fn render_diff_view(
                             None, // no old-line number for added lines
                             Some(hunk.new_start + global_line.saturating_sub(1)),
                             config,
+                            theme,
                             &mut resp,
                             global_line,
                         );
@@ -256,6 +259,7 @@ pub fn render_diff_view(
                             Some(hunk.old_start + global_line.saturating_sub(1)),
                             None, // no new-line number for removed lines
                             config,
+                            theme,
                             &mut resp,
                             global_line,
                         );
@@ -334,6 +338,7 @@ fn render_diff_line(
     old_ln: Option<usize>,
     new_ln: Option<usize>,
     config: &DiffViewConfig,
+    theme: &Theme,
     resp: &mut DiffViewResponse,
     global_line: usize,
 ) {

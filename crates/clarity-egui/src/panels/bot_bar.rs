@@ -4,8 +4,8 @@
 //! context-dependent Lucide buttons on the right that open the IDE-style right
 //! rail.
 
-use crate::App;
 use crate::ui::types::Session;
+use crate::App;
 use clarity_core::ui::{RightRailContext, RightRailPanel};
 
 /// A button descriptor for the Bot bar right side.
@@ -221,21 +221,28 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                 }
                 // Tooltip on hover.
                 if rect.contains(ui.input(|i| i.pointer.hover_pos()).unwrap_or_default()) {
-                    egui::show_tooltip_at_pointer(ui.ctx(), egui::Id::new("token_bar_tooltip"), |ui| {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{} / {} tokens ({:.1}%)",
-                                format_num(tu.total_tokens),
-                                format_num(tu.context_limit),
-                                pct,
-                            ))
-                            .size(theme.text_xs)
-                            .color(theme.text),
-                        );
-                    });
+                    egui::show_tooltip_at_pointer(
+                        ui.ctx(),
+                        egui::LayerId::new(
+                            egui::Order::Tooltip,
+                            egui::Id::new("token_bar_tooltip_layer"),
+                        ),
+                        egui::Id::new("token_bar_tooltip"),
+                        |ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} / {} tokens ({:.1}%)",
+                                    format_num(tu.total_tokens),
+                                    format_num(tu.context_limit),
+                                    pct,
+                                ))
+                                .size(theme.text_xs)
+                                .color(theme.text),
+                            );
+                        },
+                    );
                 }
             }
-            });
         });
 }
 

@@ -77,19 +77,8 @@ pub fn authorize(policy: &TeamPolicy, member_role: &TeamRole, tool_name: &str) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clarity_contract::{FunctionCall, PermissionPolicy};
+    use clarity_contract::PermissionPolicy;
     use std::collections::HashMap;
-
-    fn make_tool_call(name: &str) -> clarity_contract::ToolCall {
-        clarity_contract::ToolCall {
-            id: "tc-1".into(),
-            call_type: "function".into(),
-            function: FunctionCall {
-                name: name.into(),
-                arguments: "{}".into(),
-            },
-        }
-    }
 
     #[test]
     fn permissive_policy_allows_all() {

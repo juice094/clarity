@@ -7,6 +7,7 @@
 use std::time::Instant;
 
 /// Ring-buffered log for the Console panel (cap enforced on push).
+#[allow(dead_code)] // follow field reserved for auto-scroll toggle
 pub struct ConsoleStore {
     pub entries: Vec<ConsoleEntry>,
     pub filter: ConsoleFilter,
@@ -47,6 +48,7 @@ impl ConsoleStore {
 
 /// A single log line in the console.
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // Extension-point fields reserved for PTY integration
 pub struct ConsoleEntry {
     pub timestamp: Instant,
     pub level: ConsoleLevel,
@@ -107,6 +109,7 @@ impl ConsoleFilter {
 /// Reserved type for ANSI escape sequence parse results.
 /// Unused until backend PTY integration ships.
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct AnsiSpan {
     pub text: String,
     pub fg: Option<[u8; 3]>,
