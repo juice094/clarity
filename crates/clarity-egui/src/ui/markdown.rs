@@ -699,6 +699,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                     );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Copy button
                     if ui
                         .add_sized(
                             [64.0, 22.0],
@@ -713,8 +714,34 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                         .clicked()
                     {
                         ui.ctx().copy_text(code.to_string());
-                        // Show a brief "Copied" feedback.
                         ui.ctx().request_repaint();
+                    }
+                    // Run button for shell/python code
+                    let runnable = matches!(
+                        lang.to_lowercase().as_str(),
+                        "sh" | "bash" | "shell" | "py" | "python"
+                    );
+                    if runnable {
+                        ui.add_space(4.0);
+                        if ui
+                            .add_sized(
+                                [56.0, 22.0],
+                                egui::Button::new(
+                                    egui::RichText::new(format!(
+                                        "{} Run",
+                                        crate::theme::ICON_TERMINAL,
+                                    ))
+                                    .size(theme.text_xs)
+                                    .color(theme.accent),
+                                )
+                                .fill(theme.surface)
+                                .corner_radius(egui::CornerRadius::same(4)),
+                            )
+                            .clicked()
+                        {
+                            // Copy code to clipboard so user can paste into terminal.
+                            ui.ctx().copy_text(code.to_string());
+                        }
                     }
                 });
             });
