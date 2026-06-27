@@ -42,6 +42,12 @@ impl McpToolWrapper {
             requires_approval: true, // secure by default
         }
     }
+
+    /// Set whether this tool requires explicit user approval.
+    pub fn set_requires_approval(mut self, value: bool) -> Self {
+        self.requires_approval = value;
+        self
+    }
 }
 
 #[async_trait]
