@@ -12,6 +12,7 @@ pub fn ease_out_cubic(t: f32) -> f32 {
 }
 
 /// Cubic ease-in-out: smooth start and end.
+#[allow(dead_code)]
 pub fn ease_in_out_cubic(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     if t < 0.5 {

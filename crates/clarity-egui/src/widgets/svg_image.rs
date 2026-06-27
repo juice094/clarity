@@ -74,12 +74,14 @@ pub use inner::*;
 
 /// Stub that always returns `None` when the `svg` feature is disabled.
 #[cfg(not(feature = "svg"))]
+#[allow(dead_code)]
 pub fn svg_to_color_image(_svg_data: &[u8], _width: u32, _height: u32) -> Option<egui::ColorImage> {
     None
 }
 
 /// Stub that always returns `None` when the `svg` feature is disabled.
 #[cfg(not(feature = "svg"))]
+#[allow(dead_code)]
 pub fn svg_texture(
     _ctx: &egui::Context,
     _svg_data: &[u8],
@@ -91,6 +93,7 @@ pub fn svg_texture(
 
 /// Render an SVG as an egui image, falling back to a placeholder text label
 /// when the `svg` feature is not enabled or rasterization fails.
+#[allow(dead_code)]
 pub fn render_svg_or_fallback(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
