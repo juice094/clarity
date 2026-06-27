@@ -44,6 +44,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod capability;
 pub mod claw_context;
+pub mod diff;
 pub mod error;
 pub mod federation;
 pub mod identity;

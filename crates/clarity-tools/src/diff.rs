@@ -1,31 +1,14 @@
 //! Diff utilities for unified diff parsing and structured representation.
 //!
-//! Extracted from `clarity-tui/src/diff.rs` and `popups/diff_popup.rs` to serve
-//! as a shared foundation for both TUI and egui frontends.
+//! Data types (`DiffLine`, `DiffHunk`) are defined in `clarity-contract::diff`
+//! and re-exported here for backward compatibility. Computation functions
+//! (`compute_diff`, `parse_unified_diff`) live here because they depend on
+//! the `similar` crate.
 
 use similar::{Algorithm, TextDiff};
 
-/// A single line in a diff hunk.
-#[derive(Debug, Clone, PartialEq)]
-pub enum DiffLine {
-    /// Unchanged context line.
-    Context(String),
-    /// Removed line (old version).
-    Removed(String),
-    /// Added line (new version).
-    Added(String),
-}
-
-/// A hunk in a unified diff.
-#[derive(Debug, Clone, PartialEq)]
-pub struct DiffHunk {
-    /// Starting line number in the old file (1-based).
-    pub old_start: usize,
-    /// Starting line number in the new file (1-based).
-    pub new_start: usize,
-    /// Lines in this hunk.
-    pub lines: Vec<DiffLine>,
-}
+// Re-export data types from contract for backward compatibility.
+pub use clarity_contract::diff::{DiffHunk, DiffLine};
 
 /// Compute a structured diff between old and new content.
 ///

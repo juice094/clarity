@@ -97,7 +97,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                             ui.add_space(theme.space_8);
 
                             ui.vertical(|ui| {
-                                let trunc = truncate_msg(&toast.message, 60);
+                                let trunc = crate::ui::truncate::truncate(&toast.message, 60);
                                 ui.label(
                                     egui::RichText::new(trunc)
                                         .size(theme.text_sm)
@@ -138,16 +138,6 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
             app.ui_store.toasts.remove(idx);
         }
     }
-}
-
-fn truncate_msg(msg: &str, max_chars: usize) -> String {
-    let chars: Vec<char> = msg.chars().collect();
-    if chars.len() <= max_chars {
-        return msg.to_string();
-    }
-    let mut out: String = chars.into_iter().take(max_chars - 1).collect();
-    out.push('\u{2026}');
-    out
 }
 
 fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {

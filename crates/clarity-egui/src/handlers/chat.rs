@@ -350,7 +350,7 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
                     return (summary.to_string(), false);
                 }
             }
-            truncate_result(result, 2000)
+            crate::ui::truncate::truncate_str(result, crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS)
         }
         "glob" | "grep" => {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
@@ -371,16 +371,22 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
                     }
                 }
             }
-            truncate_result(result, 2000)
+            crate::ui::truncate::truncate_str(result, crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS)
         }
         "file_read" => {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
                 let path = v.get("path").and_then(|p| p.as_str()).unwrap_or("unknown");
                 let content = v.get("content").and_then(|c| c.as_str()).unwrap_or(result);
-                let (display, trunc) = truncate_result(content, 2000);
+                let (display, trunc) = crate::ui::truncate::truncate_str(
+                    content,
+                    crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS,
+                );
                 (format!("📄 {}: {}", path, display), trunc)
             } else {
-                truncate_result(result, 2000)
+                crate::ui::truncate::truncate_str(
+                    result,
+                    crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS,
+                )
             }
         }
         "file_write" | "file_edit" => {
@@ -391,19 +397,10 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
                 }
                 return (format!("✏ {} written", path), false);
             }
-            truncate_result(result, 2000)
+            crate::ui::truncate::truncate_str(result, crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS)
         }
-        _ => truncate_result(result, 2000),
+        _ => crate::ui::truncate::truncate_str(result, crate::ui::truncate::TOOL_OUTPUT_MAX_CHARS),
     }
-}
-
-fn truncate_result(s: &str, max_chars: usize) -> (String, bool) {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max_chars {
-        return (s.to_string(), false);
-    }
-    let truncated: String = chars.into_iter().take(max_chars).collect();
-    (format!("{}\n... (truncated)", truncated), true)
 }
 
 /// Handles the tool result event.

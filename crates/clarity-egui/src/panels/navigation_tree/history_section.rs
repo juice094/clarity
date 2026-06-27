@@ -155,9 +155,5 @@ fn session_icon(session: &SessionRow) -> &'static str {
 }
 
 fn truncate_title(title: &str) -> String {
-    if title.chars().count() > 24 {
-        format!("{}...", title.chars().take(22).collect::<String>())
-    } else {
-        title.to_string()
-    }
+    crate::ui::truncate::truncate(title, 24)
 }

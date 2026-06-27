@@ -218,7 +218,8 @@ fn render_console_row(
                             .size(theme.text_xs)
                             .color(theme.text_muted),
                     );
-                    let display = truncate_msg(&entry.message);
+                    let display =
+                        crate::ui::truncate::truncate(&entry.message, CONSOLE_MAX_VISIBLE_CHARS);
                     ui.label(
                         egui::RichText::new(&display)
                             .size(theme.text_xs)
@@ -250,7 +251,8 @@ fn render_console_row(
                             .size(theme.text_xs)
                             .color(theme.text_muted),
                     );
-                    let display = truncate_msg(&entry.message);
+                    let display =
+                        crate::ui::truncate::truncate(&entry.message, CONSOLE_MAX_VISIBLE_CHARS);
                     ui.label(
                         egui::RichText::new(&display)
                             .size(theme.text_xs)
@@ -281,15 +283,4 @@ fn render_console_row(
                 .italics(),
         );
     }
-}
-
-/// Truncate long messages for display in the console row.
-fn truncate_msg(msg: &str) -> String {
-    let chars: Vec<char> = msg.chars().collect();
-    if chars.len() <= CONSOLE_MAX_VISIBLE_CHARS {
-        return msg.to_string();
-    }
-    let mut out: String = chars.into_iter().take(CONSOLE_MAX_VISIBLE_CHARS).collect();
-    out.push_str("…");
-    out
 }

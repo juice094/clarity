@@ -78,7 +78,7 @@ impl AgentTurn {
                         tool_calls.push(ToolCallRow {
                             name: name.clone(),
                             status: infer_tool_status(output),
-                            result_preview: truncate(output, 120),
+                            result_preview: crate::ui::truncate::truncate(output, 120),
                             expanded: false,
                         });
                     }
@@ -157,14 +157,5 @@ fn infer_tool_status(result: &str) -> ToolCallStatus {
         ToolCallStatus::Warning
     } else {
         ToolCallStatus::Success
-    }
-}
-
-/// Truncate a string to at most `max_chars` characters, appending "…" if truncated.
-fn truncate(s: &str, max_chars: usize) -> String {
-    if s.chars().count() <= max_chars {
-        s.to_string()
-    } else {
-        format!("{}…", s.chars().take(max_chars).collect::<String>())
     }
 }

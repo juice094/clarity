@@ -162,6 +162,22 @@ pub trait Tool: Send + Sync {
     fn max_output_chars(&self) -> Option<usize> {
         None
     }
+
+    /// Format raw execution output for human display.
+    ///
+    /// Called by frontends to produce a user-friendly summary of tool
+    /// results (used in chat bubbles, console log, and notification
+    /// toasts). The default strips outer quotes and returns the raw
+    /// value as a string. Tools with structured output (e.g. glob,
+    /// grep, file_read) should override this to produce prettier
+    /// output with file paths, line counts, and preview snippets.
+    fn format_output(&self, _result: &Value) -> String {
+        // Default: strip outer JSON quotes, fall back to raw display.
+        _result
+            .as_str()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| _result.to_string())
+    }
 }
 
 /// Type-erased tool wrapper for storage in collections.
