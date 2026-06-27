@@ -1,6 +1,9 @@
 //! Unified `AgentLoop` trait and shared loop skeleton.
 
 use crate::agent::Agent;
+use crate::agent::lifecycle::{RunEvent, RunState};
+use crate::agent::tool_prompt_manager::ToolPromptManager;
+use crate::agent::yolo_guardrails::{GuardrailOutcome, GuardrailState};
 use crate::error::AgentError;
 use crate::types::ToolCall;
 use clarity_contract::{LlmProvider, Message};
@@ -70,29 +73,56 @@ pub(crate) trait AgentLoop: Send {
     ) -> DispatchOutcome;
 }
 
+/// Apply a lifecycle event to the running state and record the transition.
+fn apply_and_record(
+    agent: &Agent,
+    state: RunState,
+    event: RunEvent,
+) -> Result<RunState, AgentError> {
+    let new_state = state.apply(event.clone())?;
+    agent.record_lifecycle_event(event, new_state.clone());
+    Ok(new_state)
+}
+
 /// Generic iteration driver.  Delegates per-iteration logic to `loop_impl` and
 /// handles cancellation, max-iteration limits, and turn bookkeeping.
 pub(crate) async fn run_loop_iterations<L: AgentLoop>(
     agent: &Agent,
     loop_impl: &mut L,
     messages: &mut Vec<Message>,
-    tools: &serde_json::Value,
+    tool_prompt_manager: &mut ToolPromptManager,
     llm: Arc<dyn LlmProvider>,
     cancel_token: &CancellationToken,
 ) -> Result<LoopOutcome, AgentError> {
-    let mut final_response = String::new();
-    let mut completed = false;
     let mut tool_names = Vec::new();
     let max_iterations = agent.config.max_iterations;
     let mut tool_failure_counts: HashMap<String, u8> = HashMap::new();
-    let mut working_tools = tools.clone();
+    let mut total_tool_calls: usize = 0;
+
+    // Load the initial turn state; begin_turn() sets it to Planning.
+    let mut run_state = agent
+        .inner
+        .read()
+        .turn_context
+        .as_ref()
+        .map(|ctx| ctx.run_state.clone())
+        .unwrap_or(RunState::Planning);
 
     for iteration in 0..max_iterations {
         // Check global iteration budget before each iteration
         if let Some(ref budget) = agent.config.iteration_budget {
             let remaining = budget.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             if remaining == 0 {
-                final_response = "Global iteration budget exhausted".to_string();
+                let reason = "Global iteration budget exhausted".to_string();
+                run_state = apply_and_record(
+                    agent,
+                    run_state,
+                    RunEvent::Stopped {
+                        reason: reason.clone(),
+                    },
+                )
+                .ok()
+                .unwrap_or(RunState::Interrupted { reason });
                 break;
             }
         }
@@ -101,7 +131,17 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
 
         if cancel_token.is_cancelled() {
             tracing::warn!("Agent run cancelled");
-            return Err(AgentError::Cancelled);
+            let reason = "cancelled by user".to_string();
+            run_state = apply_and_record(
+                agent,
+                run_state,
+                RunEvent::Cancelled {
+                    reason: reason.clone(),
+                },
+            )
+            .ok()
+            .unwrap_or(RunState::Interrupted { reason });
+            break;
         }
 
         loop_impl
@@ -109,19 +149,36 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
             .await;
 
         let result = loop_impl
-            .run_iteration(agent, messages, &working_tools, llm.clone())
+            .run_iteration(
+                agent,
+                messages,
+                tool_prompt_manager.tools_value(),
+                llm.clone(),
+            )
             .await?;
-
-        final_response = result.response_content.clone();
 
         if result.tool_calls.is_empty() {
             loop_impl
                 .handle_final_response(agent, &result.response_content, iteration)
                 .await;
             tracing::info!("Agent loop completed after {} iterations", iteration + 1);
-            completed = true;
+            run_state = apply_and_record(
+                agent,
+                run_state,
+                RunEvent::FinalResponse {
+                    response: result.response_content,
+                },
+            )?;
             break;
         }
+
+        run_state = apply_and_record(
+            agent,
+            run_state,
+            RunEvent::ToolCallsRequested {
+                count: result.tool_calls.len(),
+            },
+        )?;
 
         if !result.response_content.is_empty() {
             agent.send_wire_message(clarity_wire::WireMessage::ContentPart {
@@ -141,18 +198,51 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
             .dispatch_tool_calls(agent, &result.tool_calls, messages, cancel_token)
             .await;
 
-        match &outcome {
+        match outcome {
             DispatchOutcome::Success(names) => {
                 for tc in &result.tool_calls {
                     tool_failure_counts.remove(&tc.function.name);
                 }
                 tool_names.extend(names.iter().cloned());
+                total_tool_calls += names.len();
+                run_state = apply_and_record(
+                    agent,
+                    run_state,
+                    RunEvent::ToolsSucceeded { tool_names: names },
+                )?;
+
+                // Check auto-execution convergence guardrails.
+                if let Some(detector) = agent
+                    .inner
+                    .read()
+                    .turn_context
+                    .as_ref()
+                    .map(|ctx| &ctx.loop_detector)
+                {
+                    let state = GuardrailState {
+                        total_tool_calls,
+                        detector,
+                    };
+                    match agent.config.yolo_guardrails.check(&state) {
+                        GuardrailOutcome::Ok => {}
+                        GuardrailOutcome::AskUser { question } => {
+                            run_state =
+                                apply_and_record(agent, run_state, RunEvent::AskUser { question })?;
+                            break;
+                        }
+                        GuardrailOutcome::Stop { reason } => {
+                            run_state =
+                                apply_and_record(agent, run_state, RunEvent::Stopped { reason })?;
+                            break;
+                        }
+                    }
+                }
             }
             DispatchOutcome::Break {
                 is_error: false,
                 final_response: fr,
             } => {
-                final_response = fr.clone();
+                run_state = apply_and_record(agent, run_state, RunEvent::AskUser { question: fr })?;
                 break;
             }
             DispatchOutcome::Break { is_error: true, .. } | DispatchOutcome::Fatal(_) => {
@@ -162,19 +252,25 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
                         .or_insert(0);
                     *count = count.saturating_add(1);
                     if *count >= 2 {
-                        filter_tool_from_schema(&mut working_tools, &tc.function.name);
+                        tool_prompt_manager.filter_tool(&tc.function.name);
                     }
                 }
 
-                if all_tools_filtered(&working_tools) {
+                if tool_prompt_manager
+                    .tools_value()
+                    .as_array()
+                    .map(|arr| arr.is_empty())
+                    .unwrap_or(true)
+                {
                     let mut parts = Vec::new();
                     for (name, count) in &tool_failure_counts {
                         parts.push(format!("Tool '{}' failed {} times", name, count));
                     }
-                    final_response = format!(
+                    let reason = format!(
                         "All available tools have been disabled due to repeated failures:\n{}",
                         parts.join("\n")
                     );
+                    run_state = apply_and_record(agent, run_state, RunEvent::Stopped { reason })?;
                     break;
                 }
 
@@ -182,37 +278,34 @@ pub(crate) async fn run_loop_iterations<L: AgentLoop>(
                     DispatchOutcome::Break {
                         final_response: fr, ..
                     } => {
-                        final_response = fr;
+                        run_state =
+                            apply_and_record(agent, run_state, RunEvent::Stopped { reason: fr })?;
                         break;
                     }
-                    DispatchOutcome::Fatal(e) => return Err(e),
+                    DispatchOutcome::Fatal(e) => {
+                        // Fatal errors propagate immediately; do not mask them as
+                        // an Interrupted state.
+                        return Err(e);
+                    }
                     _ => unreachable!(),
                 }
             }
         }
     }
 
+    // Persist the final turn state.
+    if let Some(ctx) = agent.inner.write().turn_context.as_mut() {
+        ctx.run_state = run_state.clone();
+    }
+
+    let final_response = run_state.response().unwrap_or("").to_string();
+    let completed = matches!(run_state, RunState::Complete { .. });
+
     Ok(LoopOutcome {
         final_response,
         completed,
         tool_names,
     })
-}
-
-fn filter_tool_from_schema(tools: &mut serde_json::Value, tool_name: &str) {
-    if let Some(arr) = tools.as_array_mut() {
-        arr.retain(|v| {
-            v.get("function")
-                .and_then(|f| f.get("name"))
-                .and_then(|n| n.as_str())
-                .map(|name| name != tool_name)
-                .unwrap_or(true)
-        });
-    }
-}
-
-fn all_tools_filtered(tools: &serde_json::Value) -> bool {
-    tools.as_array().map(|arr| arr.is_empty()).unwrap_or(true)
 }
 
 #[cfg(test)]
@@ -383,6 +476,8 @@ mod tests {
                 "name": "bad_tool"
             }
         }]);
+        let mut tool_prompt_manager =
+            crate::agent::tool_prompt_manager::ToolPromptManager::new(&tools);
         let mut messages = vec![Message::system("test")];
         let cancel = tokio_util::sync::CancellationToken::new();
 
@@ -393,7 +488,7 @@ mod tests {
             &agent,
             &mut loop_impl,
             &mut messages,
-            &tools,
+            &mut tool_prompt_manager,
             Arc::new(MockLlmCircuit),
             &cancel,
         )
@@ -425,6 +520,8 @@ mod tests {
         let agent = Agent::with_config(registry, config).with_llm(Arc::new(MockLlmCircuit));
 
         let tools = serde_json::json!([]);
+        let mut tool_prompt_manager =
+            crate::agent::tool_prompt_manager::ToolPromptManager::new(&tools);
         let mut messages = vec![Message::system("test")];
         let cancel = tokio_util::sync::CancellationToken::new();
 
@@ -435,7 +532,7 @@ mod tests {
             &agent,
             &mut loop_impl,
             &mut messages,
-            &tools,
+            &mut tool_prompt_manager,
             Arc::new(MockLlmCircuit),
             &cancel,
         )

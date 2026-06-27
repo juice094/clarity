@@ -96,6 +96,7 @@ impl Agent {
                 last_cost_date: chrono::Utc::now().date_naive(),
                 vision_llm: None,
                 turn_context: None,
+                lifecycle_events: Vec::new(),
                 last_turn_message_count: 0,
                 fallback_llms: Vec::new(),
                 static_prompt_hash: None,
@@ -737,11 +738,16 @@ impl Agent {
                     cancel_token: token.clone(),
                 };
                 let turn_id = uuid::Uuid::new_v4().to_string();
-                inner.turn_context = Some(super::turn_context::TurnContext::new(
+                let identity = self.config.identity_context();
+                let mut turn_ctx = super::turn_context::TurnContext::new(
                     turn_id,
                     inner.active_skill.clone(),
                     3,
-                ));
+                    identity,
+                );
+                turn_ctx.run_state = super::lifecycle::RunState::Planning;
+                inner.turn_context = Some(turn_ctx);
+                inner.lifecycle_events.clear();
                 Ok(token)
             }
         }
@@ -833,6 +839,9 @@ impl Agent {
                     Some(config.system_prompt.clone())
                 },
                 working_dir: Some(config.working_dir.display().to_string()),
+                user_id: config.user_id.clone(),
+                team_id: config.team_id.clone(),
+                org_id: config.org_id.clone(),
             },
             session: SuspendSession {
                 approval_mode: format!("{:?}", inner.approval_mode),
@@ -867,7 +876,7 @@ impl Agent {
             _ => crate::approval::ApprovalMode::Interactive,
         };
 
-        let config = AgentConfig::new()
+        let mut config = AgentConfig::new()
             .with_max_iterations(snapshot.config.max_iterations)
             .with_read_only(snapshot.config.read_only)
             .with_working_dir(
@@ -877,6 +886,17 @@ impl Agent {
                     .clone()
                     .unwrap_or_else(|| ".".to_string()),
             );
+
+        // Restore identity from snapshot.
+        if let Some(ref uid) = snapshot.config.user_id {
+            config = config.with_user_id(uid.clone());
+        }
+        if let Some(ref tid) = snapshot.config.team_id {
+            config = config.with_team_id(tid.clone());
+        }
+        if let Some(ref oid) = snapshot.config.org_id {
+            config = config.with_org_id(oid.clone());
+        }
 
         let agent = Self::with_config(registry, config).with_approval_mode(approval_mode);
 

@@ -52,6 +52,10 @@ impl RuleEngine {
     }
 
     /// Create an engine with sensible built-in defaults.
+    ///
+    /// ponytail: hard-coded rule table. Move to a config-driven manifest
+    /// (e.g. `approval-rules.toml`) when the rule count exceeds ~15 or when
+    /// per-project overrides are required.
     pub fn with_defaults() -> Self {
         let mut engine = Self::new();
         engine.add_rule(ApprovalRule {

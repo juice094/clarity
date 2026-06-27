@@ -17,6 +17,7 @@ hermes = ["dep:hermes-memory-core", "dep:hermes-memory-store", "dep:hermes-memor
 
 [dependencies]
 # Workspace dependencies
+clarity-contract = { path = "../clarity-contract" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

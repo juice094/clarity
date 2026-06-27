@@ -1221,6 +1221,31 @@ async fn test_budget_no_limit() {
     assert!(result.is_ok(), "No limit should allow call: {:?}", result);
 }
 
+#[tokio::test]
+async fn test_agent_run_records_lifecycle_events() {
+    use crate::agent::lifecycle::{RunEvent, RunState};
+
+    let registry = ToolRegistry::new();
+    let config = AgentConfig::new().with_system_prompt("");
+    let agent = Agent::with_config(registry, config).with_llm(Arc::new(BudgetMockLlm));
+
+    let result = agent.run("Hello").await;
+    assert!(result.is_ok());
+
+    let events = agent.take_lifecycle_events();
+    assert!(!events.is_empty());
+    assert_eq!(
+        events[0].0,
+        RunEvent::UserTurn {
+            input: "Hello".into(),
+            user_id: None,
+            team_id: None,
+            org_id: None,
+        }
+    );
+    assert_eq!(events[0].1, RunState::Planning);
+}
+
 #[test]
 fn test_tool_error_sanitize_paths() {
     // Home-directory redaction
@@ -1326,6 +1351,7 @@ async fn test_vision_provider_switching() {
         .with_vision_llm(vision_llm.clone());
 
     let tools = serde_json::json!({});
+    let mut tool_prompt_manager = crate::agent::tool_prompt_manager::ToolPromptManager::new(&tools);
     let mut messages = vec![
         Message::system("You are helpful"),
         Message::user("What is in this image? <image>https://example.com/img.jpg</image>"),
@@ -1333,7 +1359,12 @@ async fn test_vision_provider_switching() {
     let cancel_token = tokio_util::sync::CancellationToken::new();
 
     let result = agent
-        .run_sync_loop(&mut messages, &tools, default_llm.clone(), &cancel_token)
+        .run_sync_loop(
+            &mut messages,
+            &mut tool_prompt_manager,
+            default_llm.clone(),
+            &cancel_token,
+        )
         .await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().0, "response from vision");
@@ -1362,6 +1393,7 @@ async fn test_no_vision_no_switch() {
         .with_vision_llm(vision_llm.clone());
 
     let tools = serde_json::json!({});
+    let mut tool_prompt_manager = crate::agent::tool_prompt_manager::ToolPromptManager::new(&tools);
     let mut messages = vec![
         Message::system("You are helpful"),
         Message::user("Hello, how are you?"),
@@ -1369,7 +1401,12 @@ async fn test_no_vision_no_switch() {
     let cancel_token = tokio_util::sync::CancellationToken::new();
 
     let result = agent
-        .run_sync_loop(&mut messages, &tools, default_llm.clone(), &cancel_token)
+        .run_sync_loop(
+            &mut messages,
+            &mut tool_prompt_manager,
+            default_llm.clone(),
+            &cancel_token,
+        )
         .await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().0, "response from default");

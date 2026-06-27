@@ -10,6 +10,7 @@ use crate::agent::run::loop_steps::{
 use crate::agent::run::loop_trait::{
     AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
 };
+use crate::agent::tool_prompt_manager::ToolPromptManager;
 use crate::error::AgentError;
 use clarity_contract::{LlmProvider, Message};
 use std::sync::Arc;
@@ -135,7 +136,7 @@ impl Agent {
     pub(crate) async fn run_sync_loop(
         &self,
         messages: &mut Vec<Message>,
-        tools: &serde_json::Value,
+        tool_prompt_manager: &mut ToolPromptManager,
         llm: Arc<dyn LlmProvider>,
         cancel_token: &CancellationToken,
     ) -> Result<(String, bool, Vec<String>), AgentError> {
@@ -161,7 +162,15 @@ impl Agent {
             final_response,
             completed,
             tool_names,
-        } = run_loop_iterations(self, &mut SyncLoop, messages, tools, llm, cancel_token).await?;
+        } = run_loop_iterations(
+            self,
+            &mut SyncLoop,
+            messages,
+            tool_prompt_manager,
+            llm,
+            cancel_token,
+        )
+        .await?;
         Ok((final_response, completed, tool_names))
     }
 }

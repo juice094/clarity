@@ -15,7 +15,7 @@ use crate::agent::ops::Op;
 use crate::approval::ApprovalResponse;
 use crate::error::AgentError;
 use crate::thread::ThreadManager;
-use clarity_contract::{Message, MessageRole, ThreadId};
+use clarity_contract::{Message, MessageRole, RolloutEventMsg, RolloutItem, ThreadId};
 use clarity_thread_store::ThreadStore;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -229,8 +229,21 @@ impl AgentController {
 
                 op = self.rx.recv() => {
                     match op {
-                        Some(Op::UserTurn(prompt)) => {
-                            debug!("Controller: UserTurn (len={})", prompt.len());
+                        Some(Op::UserTurn { input, identity }) => {
+                            debug!("Controller: UserTurn (len={})", input.len());
+                            // Merge per-turn identity override into AgentConfig so it flows
+                            // through begin_turn → TurnContext → lifecycle events.
+                            if let Some(ref id_ctx) = identity {
+                                if let Some(ref uid) = id_ctx.user_id {
+                                    self.agent.config.user_id = Some(uid.clone());
+                                }
+                                if let Some(ref tid) = id_ctx.team_id {
+                                    self.agent.config.team_id = Some(tid.clone());
+                                }
+                                if let Some(ref oid) = id_ctx.org_id {
+                                    self.agent.config.org_id = Some(oid.clone());
+                                }
+                            }
                             self.agent.reset();
                             let agent = self.agent.clone();
                             let event_tx2 = self.event_tx.clone();
@@ -246,7 +259,7 @@ impl AgentController {
                                         }
                                     };
 
-                                    let messages = match agent.build_messages_with_cache(&prompt).await {
+                                    let messages = match agent.build_messages_with_cache(&input).await {
                                         Ok(base) => {
                                             let mut system_messages = Vec::new();
                                             let mut user_message = None;
@@ -262,14 +275,14 @@ impl AgentController {
                                             if let Some(um) = user_message {
                                                 messages.push(um);
                                             } else {
-                                                messages.push(Message::user(&prompt));
+                                                messages.push(Message::user(&input));
                                             }
                                             messages
                                         }
                                         Err(e) => return Err(e),
                                     };
 
-                                    let prompt_for_history = prompt.clone();
+                                    let prompt_for_history = input.clone();
                                     let result = agent.run_streaming_with_messages(messages).await;
 
                                     if let Some(ref tx) = event_tx2 {
@@ -289,11 +302,27 @@ impl AgentController {
                                         }
                                     }
 
+                                    let lifecycle_events = agent.take_lifecycle_events();
+                                    if !lifecycle_events.is_empty() {
+                                        let items: Vec<RolloutItem> = lifecycle_events
+                                            .into_iter()
+                                            .map(|(event, state)| {
+                                                RolloutItem::EventMsg(RolloutEventMsg::Lifecycle {
+                                                    event,
+                                                    state,
+                                                })
+                                            })
+                                            .collect();
+                                        if let Err(e) = tm.append_items(id, items).await {
+                                            warn!("Failed to append lifecycle events to thread {}: {}", id, e);
+                                        }
+                                    }
+
                                     result
                                 })
                             } else if let Some(ref driver) = self.chat_driver {
                                 let (static_prompt, dynamic_prompt) = self.agent.build_system_prompt_split_raw();
-                                let messages = driver.build_messages_split(&prompt, &static_prompt, &dynamic_prompt);
+                                let messages = driver.build_messages_split(&input, &static_prompt, &dynamic_prompt);
                                 tokio::spawn(async move {
                                     let result = agent.run_streaming_with_messages(messages).await;
 
@@ -312,7 +341,7 @@ impl AgentController {
                                 })
                             } else {
                                 tokio::spawn(async move {
-                                    let result = agent.run_streaming(&prompt).await;
+                                    let result = agent.run_streaming(&input).await;
 
                                     if let Some(ref tx) = event_tx2 {
                                         match &result {
@@ -483,9 +512,9 @@ mod tests {
         let (controller, tx) = AgentController::new_with_sender(agent);
         let handle = tokio::spawn(controller.run());
 
-        tx.send(Op::UserTurn("hello".to_string())).unwrap();
+        tx.send(Op::user_turn("hello".to_string())).unwrap();
         tx.send(Op::Interrupt).unwrap();
-        tx.send(Op::UserTurn("world".to_string())).unwrap();
+        tx.send(Op::user_turn("world".to_string())).unwrap();
         tx.send(Op::Shutdown).unwrap();
 
         let result = handle.await.unwrap();
@@ -506,7 +535,7 @@ mod tests {
         let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, None);
         let handle = tokio::spawn(controller.run());
 
-        op_tx.send(Op::UserTurn("hello".to_string())).unwrap();
+        op_tx.send(Op::user_turn("hello".to_string())).unwrap();
 
         // MockLlm streams one chunk and then completes, so we expect
         // Chunk followed by Complete.
@@ -570,10 +599,12 @@ mod tests {
             }
         }
 
-        op_tx.send(Op::UserTurn("first turn".to_string())).unwrap();
+        op_tx.send(Op::user_turn("first turn".to_string())).unwrap();
         wait_complete(&mut event_rx).await;
 
-        op_tx.send(Op::UserTurn("second turn".to_string())).unwrap();
+        op_tx
+            .send(Op::user_turn("second turn".to_string()))
+            .unwrap();
         wait_complete(&mut event_rx).await;
 
         op_tx.send(Op::Shutdown).unwrap();

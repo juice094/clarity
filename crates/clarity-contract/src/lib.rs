@@ -46,7 +46,9 @@ pub mod capability;
 pub mod claw_context;
 pub mod error;
 pub mod federation;
+pub mod identity;
 pub mod key_ref;
+pub mod lifecycle;
 pub mod llm;
 pub mod reliable_provider;
 pub mod rollout;
@@ -206,6 +208,10 @@ pub use error::{
 pub use federation::{
     Capability, Fact, FederationMessage, FederationNode, FederationResponse, NodeStatus, TaskSpec,
     ToolSpec,
+};
+pub use identity::{
+    AuthDecision, IdentityContext, OrgMember, Organization, PermissionPolicy, PermissionProfile,
+    PolicyRiskLevel, Team, TeamMember, TeamPolicy, TeamRole, User,
 };
 pub use llm::{LlmProvider, LlmProviderFactory, LlmResponse, Pricing, ProviderCapabilities};
 pub use reliable_provider::ReliableProvider;

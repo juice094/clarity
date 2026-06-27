@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use clarity_contract::{
-    CreateRolloutParams, ResumeRolloutParams, RolloutItem, RolloutLine, SessionMeta,
-    SessionMetaLine,
+    CreateRolloutParams, ResumeRolloutParams, RolloutEventMsg, RolloutItem, RolloutLine,
+    SessionMeta, SessionMetaLine,
 };
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
@@ -43,6 +43,8 @@ pub struct RolloutRecorder {
     pub rollout_path: PathBuf,
     /// Thread identifier for this rollout.
     pub thread_id: clarity_contract::ThreadId,
+    /// Device that produced this rollout; populated once identity layer is wired.
+    pub device_id: Option<String>,
 }
 
 impl RolloutRecorder {
@@ -91,6 +93,9 @@ impl RolloutRecorder {
                     },
                     memory_mode: None,
                     multi_agent_version: params.multi_agent_version,
+                    user_id: params.user_id,
+                    team_id: params.team_id,
+                    org_id: params.org_id,
                 },
                 git: None,
             };
@@ -100,7 +105,7 @@ impl RolloutRecorder {
         let (tx, rx) = mpsc::channel::<RolloutCmd>(1024);
         let thread_id = params.thread_id;
         let path = rollout_path.clone();
-        spawn_writer_task(rx, writer, initial_item, path.clone());
+        spawn_writer_task(rx, writer, initial_item, path.clone(), None);
 
         info!(
             thread_id = %thread_id,
@@ -112,6 +117,7 @@ impl RolloutRecorder {
             tx,
             rollout_path: path,
             thread_id,
+            device_id: None,
         })
     }
 
@@ -130,12 +136,13 @@ impl RolloutRecorder {
 
         let (tx, rx) = mpsc::channel::<RolloutCmd>(1024);
         let path = params.path;
-        spawn_writer_task(rx, writer, None, path.clone());
+        spawn_writer_task(rx, writer, None, path.clone(), None);
 
         Ok(Self {
             tx,
             rollout_path: path,
             thread_id,
+            device_id: None,
         })
     }
 
@@ -146,6 +153,16 @@ impl RolloutRecorder {
             .await
             .map_err(|_| std::io::Error::other("rollout writer gone"))?;
         Ok(())
+    }
+
+    /// Append a turn lifecycle event to the durable log.
+    pub async fn append_lifecycle_event(
+        &self,
+        event: clarity_contract::lifecycle::RunEvent,
+        state: clarity_contract::lifecycle::RunState,
+    ) -> std::io::Result<()> {
+        let item = RolloutItem::EventMsg(RolloutEventMsg::Lifecycle { event, state });
+        self.add_items(vec![item]).await
     }
 
     /// Ensure all prior writes are flushed to disk.
@@ -187,12 +204,16 @@ fn spawn_writer_task(
     mut writer: BufWriter<File>,
     initial_item: Option<RolloutItem>,
     path: PathBuf,
+    device_id: Option<String>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        let mut seq: u64 = 0;
+
         if let Some(item) = initial_item {
-            if let Err(e) = write_item(&mut writer, &item).await {
+            if let Err(e) = write_item(&mut writer, &item, seq, device_id.as_deref()).await {
                 error!(path = %path.display(), error = %e, "failed to write session meta");
             }
+            seq += 1;
         }
 
         while let Some(cmd) = rx.recv().await {
@@ -200,10 +221,13 @@ fn spawn_writer_task(
                 RolloutCmd::AddItems(items) => {
                     let items = persisted_rollout_items(&items);
                     for item in items {
-                        if let Err(e) = write_item(&mut writer, &item).await {
+                        if let Err(e) =
+                            write_item(&mut writer, &item, seq, device_id.as_deref()).await
+                        {
                             error!(path = %path.display(), error = %e, "failed to write rollout item");
                             break;
                         }
+                        seq += 1;
                     }
                 }
                 RolloutCmd::Persist { ack } => {
@@ -224,9 +248,17 @@ fn spawn_writer_task(
     })
 }
 
-async fn write_item(writer: &mut BufWriter<File>, item: &RolloutItem) -> std::io::Result<()> {
+async fn write_item(
+    writer: &mut BufWriter<File>,
+    item: &RolloutItem,
+    seq: u64,
+    device_id: Option<&str>,
+) -> std::io::Result<()> {
     let line = RolloutLine {
         timestamp: Utc::now().to_rfc3339(),
+        seq: Some(seq),
+        device_id: device_id.map(|s| s.to_string()),
+        origin_clock: None, // ponytail: populated once per-device clock is wired in Phase 7
         item: item.clone(),
     };
     let json = serde_json::to_vec(&line).map_err(|e| {
@@ -253,13 +285,13 @@ async fn read_thread_id_from_rollout(path: &Path) -> Option<clarity_contract::Th
     }
 }
 
-/// Load all rollout items from a file.
-pub async fn load_rollout_items(path: &Path) -> std::io::Result<Vec<RolloutItem>> {
+/// Load all rollout lines from a file.
+pub async fn load_rollout_lines(path: &Path) -> std::io::Result<Vec<RolloutLine>> {
     let file = File::open(path).await?;
     let reader = BufReader::new(file);
-    let mut items = Vec::new();
-    let mut lines = reader.lines();
-    while let Some(line) = lines.next_line().await? {
+    let mut lines = Vec::new();
+    let mut reader_lines = reader.lines();
+    while let Some(line) = reader_lines.next_line().await? {
         if line.trim().is_empty() {
             continue;
         }
@@ -269,9 +301,39 @@ pub async fn load_rollout_items(path: &Path) -> std::io::Result<Vec<RolloutItem>
                 format!("invalid rollout line in {}: {e}", path.display()),
             )
         })?;
-        items.push(rollout_line.item);
+        lines.push(rollout_line);
     }
-    Ok(items)
+    Ok(lines)
+}
+
+/// Load all rollout items from a file.
+pub async fn load_rollout_items(path: &Path) -> std::io::Result<Vec<RolloutItem>> {
+    let lines = load_rollout_lines(path).await?;
+    Ok(lines.into_iter().map(|l| l.item).collect())
+}
+
+/// Load lifecycle events from a rollout file, ordered by sequence number.
+pub async fn load_lifecycle_events(
+    path: &Path,
+) -> std::io::Result<
+    Vec<(
+        clarity_contract::lifecycle::RunEvent,
+        clarity_contract::lifecycle::RunState,
+    )>,
+> {
+    let lines = load_rollout_lines(path).await?;
+    let mut events: Vec<_> = lines
+        .into_iter()
+        .filter_map(|line| {
+            if let RolloutItem::EventMsg(RolloutEventMsg::Lifecycle { event, state }) = line.item {
+                Some((line.seq.unwrap_or(0), event, state))
+            } else {
+                None
+            }
+        })
+        .collect();
+    events.sort_by_key(|(seq, _, _)| *seq);
+    Ok(events.into_iter().map(|(_, e, s)| (e, s)).collect())
 }
 
 #[cfg(test)]
@@ -321,6 +383,9 @@ mod tests {
             dynamic_tools: Vec::new(),
             model_provider: None,
             multi_agent_version: None,
+            user_id: None,
+            team_id: None,
+            org_id: None,
             skip_initial_meta: false,
         }
     }
@@ -480,12 +545,16 @@ mod tests {
                 dynamic_tools: None,
                 memory_mode: None,
                 multi_agent_version: None,
+                user_id: None,
+                team_id: None,
+                org_id: None,
             },
             git: None,
         };
         let line = RolloutLine {
             timestamp: "2024-01-01T00:00:00Z".into(),
             item: RolloutItem::SessionMeta(meta),
+            ..Default::default()
         };
         let json = serde_json::to_string(&line).unwrap();
         tokio::fs::write(&path, format!("{}\n\nnot json\n", json))
@@ -550,5 +619,69 @@ mod tests {
         .unwrap();
 
         assert_eq!(recorder2.thread_id, thread_id);
+    }
+
+    #[tokio::test]
+    async fn lifecycle_events_roundtrip_with_sequence_numbers() {
+        use clarity_contract::lifecycle::{RunEvent, RunState};
+
+        let dir = TempDir::new().unwrap();
+        let config = TestConfig {
+            home: dir.path().to_path_buf(),
+        };
+        let thread_id = clarity_contract::ThreadId::new();
+        let recorder = RolloutRecorder::create(&config, create_params(thread_id, &dir))
+            .await
+            .unwrap();
+
+        recorder
+            .append_lifecycle_event(
+                RunEvent::UserTurn {
+                    input: "hi".into(),
+                    user_id: None,
+                    team_id: None,
+                    org_id: None,
+                },
+                RunState::Planning,
+            )
+            .await
+            .unwrap();
+        recorder
+            .append_lifecycle_event(
+                RunEvent::FinalResponse {
+                    response: "hello".into(),
+                },
+                RunState::Complete {
+                    response: "hello".into(),
+                },
+            )
+            .await
+            .unwrap();
+        recorder.flush().await.unwrap();
+        recorder.shutdown().await.unwrap();
+
+        let lines = load_rollout_lines(&recorder.rollout_path).await.unwrap();
+        let lifecycle_lines: Vec<_> = lines
+            .into_iter()
+            .filter(|line| {
+                matches!(
+                    line.item,
+                    RolloutItem::EventMsg(RolloutEventMsg::Lifecycle { .. })
+                )
+            })
+            .collect();
+        assert_eq!(lifecycle_lines.len(), 2);
+        assert_eq!(lifecycle_lines[0].seq, Some(1));
+        assert_eq!(lifecycle_lines[1].seq, Some(2));
+
+        let events = load_lifecycle_events(&recorder.rollout_path).await.unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].1, RunState::Planning);
+        assert_eq!(
+            events[1].1,
+            RunState::Complete {
+                response: "hello".into()
+            }
+        );
     }
 }

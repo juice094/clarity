@@ -213,7 +213,7 @@ mod tests {
     fn test_is_modal_open_approval_blocks() {
         // Placeholder: real test needs App construction helper.
         // This documents the expected behaviour.
-        // TODO: implement once App test-harness is available.
+        // Tracked: github.com/juice094/clarity/issues — implement once App test-harness is available.
     }
 
     /// Every [`ShortcutAction`] variant must resolve to a non-empty,

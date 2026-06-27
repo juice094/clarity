@@ -391,34 +391,6 @@ impl Agent {
         )
     }
 
-    /// Get tool descriptions from the registry for the system prompt.
-    fn get_tool_descriptions(&self) -> Vec<String> {
-        match self.registry.get_tool_schemas() {
-            Ok(schemas) => {
-                let allowed = self.active_skill_tool_whitelist();
-                schemas
-                    .as_array()
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|f| {
-                                let func = f.get("function")?;
-                                let name = func.get("name")?.as_str()?;
-                                if let Some(ref whitelist) = allowed {
-                                    if !whitelist.iter().any(|w| w == name) {
-                                        return None;
-                                    }
-                                }
-                                let description = func.get("description")?.as_str()?;
-                                Some(format!("- {}: {}", name, description))
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            }
-            Err(_) => vec![],
-        }
-    }
-
     /// Return the tool whitelist for the active skill, if any.
     fn active_skill_tool_whitelist(&self) -> Option<Vec<String>> {
         let active = self.snapshotted_active_skill()?;
@@ -431,13 +403,39 @@ impl Agent {
         }
     }
 
+    /// Check whether a tool name is allowed under the active skill whitelist.
+    pub(crate) fn is_tool_allowed(&self, name: &str) -> bool {
+        match self.active_skill_tool_whitelist() {
+            Some(whitelist) => whitelist.iter().any(|w| w == name),
+            None => true,
+        }
+    }
+
+    /// Get tool descriptions from the registry for the system prompt.
+    fn get_tool_descriptions(&self) -> Vec<String> {
+        match self.registry.get_tool_schemas() {
+            Ok(schemas) => schemas
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|f| {
+                            let func = f.get("function")?;
+                            let name = func.get("name")?.as_str()?;
+                            if !self.is_tool_allowed(name) {
+                                return None;
+                            }
+                            let description = func.get("description")?.as_str()?;
+                            Some(format!("- {}: {}", name, description))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            Err(_) => vec![],
+        }
+    }
+
     /// Filter a tools JSON value to only include tools in the active skill whitelist.
     pub(crate) fn filter_tools_value(&self, tools: &Value) -> Value {
-        let allowed = match self.active_skill_tool_whitelist() {
-            Some(w) => w,
-            None => return tools.clone(),
-        };
-        let allowed_set: std::collections::HashSet<String> = allowed.into_iter().collect();
         match tools.as_array() {
             Some(arr) => {
                 let filtered: Vec<Value> = arr
@@ -446,7 +444,7 @@ impl Agent {
                         v.get("function")
                             .and_then(|f| f.get("name"))
                             .and_then(|n| n.as_str())
-                            .map(|name| allowed_set.contains(name))
+                            .map(|name| self.is_tool_allowed(name))
                             .unwrap_or(false)
                     })
                     .cloned()

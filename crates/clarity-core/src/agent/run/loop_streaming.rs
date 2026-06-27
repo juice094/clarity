@@ -10,6 +10,7 @@ use crate::agent::run::loop_steps::{
 use crate::agent::run::loop_trait::{
     AgentLoop, DispatchOutcome, IterationResult, LoopOutcome, run_loop_iterations,
 };
+use crate::agent::tool_prompt_manager::ToolPromptManager;
 use crate::error::AgentError;
 use crate::types::ToolCall;
 use clarity_contract::{LlmProvider, LlmResponse, Message};
@@ -240,7 +241,7 @@ impl Agent {
     async fn run_streaming_loop(
         &self,
         messages: &mut Vec<Message>,
-        tools: &serde_json::Value,
+        tool_prompt_manager: &mut ToolPromptManager,
         llm: Arc<dyn LlmProvider>,
         cancel_token: &CancellationToken,
     ) -> Result<(String, bool), AgentError> {
@@ -251,7 +252,15 @@ impl Agent {
             final_response,
             completed,
             ..
-        } = run_loop_iterations(self, &mut loop_impl, messages, tools, llm, cancel_token).await?;
+        } = run_loop_iterations(
+            self,
+            &mut loop_impl,
+            messages,
+            tool_prompt_manager,
+            llm,
+            cancel_token,
+        )
+        .await?;
 
         // If the final response came from fallback (not streamed), emit it as a
         // single ContentPart so the UI still receives the text through the wire.
@@ -288,8 +297,20 @@ impl Agent {
 
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
+        let mut tool_prompt_manager = ToolPromptManager::new(&tools);
 
         info!("Starting streaming agent turn for query: {}", query_hint);
+
+        let id_ctx = self.config.identity_context();
+        self.record_lifecycle_event(
+            crate::agent::lifecycle::RunEvent::UserTurn {
+                input: query_hint.to_string(),
+                user_id: id_ctx.user_id,
+                team_id: id_ctx.team_id,
+                org_id: id_ctx.org_id,
+            },
+            crate::agent::lifecycle::RunState::Planning,
+        );
 
         self.send_wire_message(WireMessage::TurnBegin {
             turn_id: String::new(),
@@ -302,7 +323,7 @@ impl Agent {
 
         let mut messages = messages;
         let loop_result = self
-            .run_streaming_loop(&mut messages, &tools, llm, &cancel_token)
+            .run_streaming_loop(&mut messages, &mut tool_prompt_manager, llm, &cancel_token)
             .await;
 
         self.maybe_snapshot_post_turn().await;

@@ -178,6 +178,12 @@ pub struct SuspendConfig {
     pub system_prompt: Option<String>,
     /// Optional working directory.
     pub working_dir: Option<String>,
+    /// User identifier for attribution.
+    pub user_id: Option<String>,
+    /// Team identifier for team-scoped sessions.
+    pub team_id: Option<String>,
+    /// Organization identifier.
+    pub org_id: Option<String>,
 }
 
 /// Session-scoped state preserved across suspension.
@@ -330,6 +336,9 @@ mod tests {
                 max_context_tokens: 8192,
                 system_prompt: Some("test prompt".to_string()),
                 working_dir: Some("/tmp/wake".to_string()),
+                user_id: None,
+                team_id: None,
+                org_id: None,
             },
             session: SuspendSession {
                 approval_mode: "Plan".to_string(),

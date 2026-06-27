@@ -384,7 +384,7 @@ pub async fn chat_completions(
         .find(|m| m.role == "user")
         .map(|m| m.content.clone())
         .unwrap_or_default();
-    if let Err(e) = op_tx.send(Op::UserTurn(last_user_query)) {
+    if let Err(e) = op_tx.send(Op::user_turn(last_user_query)) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({

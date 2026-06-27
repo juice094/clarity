@@ -198,7 +198,7 @@ pub async fn thread_chat(
     let (controller, op_tx) = AgentController::new_with_events(agent, event_tx, Some(driver));
     tokio::spawn(controller.run());
 
-    if let Err(e) = op_tx.send(Op::UserTurn(last_user_content.clone())) {
+    if let Err(e) = op_tx.send(Op::user_turn(last_user_content.clone())) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({

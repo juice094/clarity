@@ -798,7 +798,7 @@ impl App {
             .push(Message::new("", MessageType::Assistant).streaming());
 
         if let Some(ref controller_tx) = self.controller_tx {
-            let _ = controller_tx.send(Op::UserTurn(user_input));
+            let _ = controller_tx.send(Op::user_turn(user_input));
         }
     }
 

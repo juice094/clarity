@@ -40,9 +40,12 @@ pub mod plan;
 // B3: Re-export Plan types from `types.rs` to maintain backwards compatibility.
 // New code should prefer `use clarity_core::types::{Plan, PlanResult, PlanStep}`.
 pub use crate::types::{Plan, PlanResult, PlanStep};
+pub mod lifecycle;
 mod prompt;
 mod run;
+mod tool_prompt_manager;
 mod turn_context;
+mod yolo_guardrails;
 pub use clarity_contract::subagent::AgentExecutor;
 
 #[cfg(test)]
@@ -126,6 +129,12 @@ struct AgentInner {
     hook_registry: Option<std::sync::Arc<tokio::sync::RwLock<hooks::HookRegistry>>>,
     /// Turn-level mutable state. Created by `begin_turn()` and cleared by `finish_turn()`.
     turn_context: Option<turn_context::TurnContext>,
+    /// Lifecycle events emitted during the current turn. Consumed by the caller
+    /// (e.g. AgentController) to persist into rollout/event log.
+    lifecycle_events: Vec<(
+        crate::agent::lifecycle::RunEvent,
+        crate::agent::lifecycle::RunState,
+    )>,
     /// Message count from the last completed turn (for subagent progress reporting).
     last_turn_message_count: usize,
     /// Accumulated estimated cost today (USD). Reset daily or per session.
@@ -284,6 +293,28 @@ impl Agent {
     /// Set the approval mode at runtime.
     pub fn set_approval_mode(&self, mode: ApprovalMode) {
         self.inner.write().approval_mode = mode;
+    }
+
+    /// Record a lifecycle event/state pair for the current turn.
+    pub(crate) fn record_lifecycle_event(
+        &self,
+        event: crate::agent::lifecycle::RunEvent,
+        state: crate::agent::lifecycle::RunState,
+    ) {
+        self.inner.write().lifecycle_events.push((event, state));
+    }
+
+    /// Take all recorded lifecycle events for the current turn.
+    ///
+    /// ponytail: this drains the buffer; callers should persist the events
+    /// before the next turn starts.
+    pub fn take_lifecycle_events(
+        &self,
+    ) -> Vec<(
+        crate::agent::lifecycle::RunEvent,
+        crate::agent::lifecycle::RunState,
+    )> {
+        self.inner.write().lifecycle_events.drain(..).collect()
     }
 
     /// Get the current approval mode.

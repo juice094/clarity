@@ -68,6 +68,7 @@ pub fn is_persisted_event_msg(ev: &RolloutEventMsg) -> bool {
         | RolloutEventMsg::TurnStarted { .. }
         | RolloutEventMsg::TurnComplete { .. }
         | RolloutEventMsg::TurnAborted { .. }
+        | RolloutEventMsg::Lifecycle { .. }
         | RolloutEventMsg::SubAgentActivity(_) => true,
         RolloutEventMsg::Error(_) | RolloutEventMsg::Other(_) => false,
     }

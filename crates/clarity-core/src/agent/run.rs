@@ -10,6 +10,7 @@ mod loop_trait;
 pub(crate) use loop_helpers::format_plan_results;
 
 use crate::agent::Agent;
+use crate::agent::tool_prompt_manager::ToolPromptManager;
 use crate::approval::ApprovalMode;
 use crate::error::AgentError;
 use crate::registry::ToolRegistry;
@@ -30,12 +31,24 @@ impl Agent {
         if self.config.enable_jumpy {
             return self.execute_jumpy_mode(query.as_ref()).await;
         }
-        let (mut messages, tools, llm, cancel_token) =
+        let (mut messages, mut tool_prompt_manager, llm, cancel_token) =
             self.prepare_sync_turn(query.as_ref()).await?;
 
         self.maybe_snapshot_pre_turn().await;
 
         info!("Starting agent loop for query: {}", query.as_ref());
+
+        let id_ctx = self.config.identity_context();
+        self.record_lifecycle_event(
+            crate::agent::lifecycle::RunEvent::UserTurn {
+                input: query.as_ref().to_string(),
+                user_id: id_ctx.user_id,
+                team_id: id_ctx.team_id,
+                org_id: id_ctx.org_id,
+            },
+            crate::agent::lifecycle::RunState::Planning,
+        );
+
         self.send_wire_message(WireMessage::TurnBegin {
             turn_id: String::new(),
             user_input: query.as_ref().to_string(),
@@ -45,7 +58,7 @@ impl Agent {
             turn: Some(clarity_wire::TurnState::Loading),
         });
         let (final_response, completed, tool_names) = self
-            .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
+            .run_sync_loop(&mut messages, &mut tool_prompt_manager, llm, &cancel_token)
             .await?;
 
         self.maybe_snapshot_post_turn().await;
@@ -249,10 +262,10 @@ impl Agent {
         mut messages: Vec<Message>,
     ) -> Result<String, AgentError> {
         self.ensure_initialized().await?;
-        let (tools, llm, cancel_token) = self.setup_turn().await?;
+        let (mut tool_prompt_manager, llm, cancel_token) = self.setup_turn().await?;
         self.maybe_snapshot_pre_turn().await;
         let (final_response, completed, tool_names) = self
-            .run_sync_loop(&mut messages, &tools, llm, &cancel_token)
+            .run_sync_loop(&mut messages, &mut tool_prompt_manager, llm, &cancel_token)
             .await?;
         self.maybe_snapshot_post_turn().await;
         self.finish_sync_turn(final_response, completed, &tool_names)
@@ -297,7 +310,7 @@ impl Agent {
     ) -> Result<
         (
             Vec<Message>,
-            Value,
+            ToolPromptManager,
             Arc<dyn clarity_contract::LlmProvider>,
             CancellationToken,
         ),
@@ -307,15 +320,16 @@ impl Agent {
         self.activate_skills();
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
+        let tool_prompt_manager = ToolPromptManager::new(&tools);
         let messages = self.build_messages_with_cache(query).await?;
-        Ok((messages, tools, llm, cancel_token))
+        Ok((messages, tool_prompt_manager, llm, cancel_token))
     }
 
     async fn setup_turn(
         &self,
     ) -> Result<
         (
-            Value,
+            ToolPromptManager,
             Arc<dyn clarity_contract::LlmProvider>,
             CancellationToken,
         ),
@@ -325,7 +339,8 @@ impl Agent {
         self.activate_skills();
         let llm = self.llm().ok_or(AgentError::Unconfigured)?;
         let tools = self.filter_tools_value(&self.registry.get_tool_schemas()?);
-        Ok((tools, llm, cancel_token))
+        let tool_prompt_manager = ToolPromptManager::new(&tools);
+        Ok((tool_prompt_manager, llm, cancel_token))
     }
 
     fn activate_skills(&self) {

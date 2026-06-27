@@ -157,6 +157,10 @@ pub enum AgentError {
         /// Cost of the requested operation (USD)
         requested: f64,
     },
+
+    /// Invalid state transition in the agent lifecycle.
+    #[error("Invalid state transition: {0}")]
+    InvalidStateTransition(String),
 }
 
 impl AgentError {

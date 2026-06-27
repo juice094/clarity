@@ -282,7 +282,7 @@ impl MobileRuntime {
 
     /// Switch the active thread.
     pub fn switch_thread(&self, thread_id: String) {
-        // TODO: load thread history into the agent context.
+        // Tracked: github.com/juice094/clarity/issues — load thread history into agent context.
         *self.current_thread_id.lock() = thread_id.clone();
         self.wire
             .soul_side()

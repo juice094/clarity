@@ -191,6 +191,9 @@ impl ThreadStore for LocalThreadStore {
                     dynamic_tools: params.dynamic_tools,
                     model_provider: params.model_provider,
                     multi_agent_version: params.multi_agent_version,
+                    user_id: None,
+                    team_id: None,
+                    org_id: None,
                     skip_initial_meta: false,
                 },
             )
@@ -584,6 +587,9 @@ impl ThreadStore for LocalThreadStore {
                     dynamic_tools: Vec::new(),
                     model_provider: Some(self.config.model_provider_id.clone()),
                     multi_agent_version: None,
+                    user_id: None,
+                    team_id: None,
+                    org_id: None,
                     skip_initial_meta: true,
                 },
             )

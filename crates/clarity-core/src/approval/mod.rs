@@ -3,6 +3,8 @@
 //! This module provides an asynchronous approval system for tool calls,
 //! supporting different approval modes and both foreground and background contexts.
 
+pub mod policy_engine;
+
 use crate::error::AgentError;
 use crate::types::ToolCall;
 use async_trait::async_trait;
@@ -22,6 +24,8 @@ pub enum ApprovalSource {
     ForegroundTurn {
         /// Turn identifier.
         turn_id: String,
+        /// User identifier for approval scoping.
+        user_id: Option<String>,
     },
     /// Background agent context.
     BackgroundAgent {
@@ -36,7 +40,7 @@ impl ApprovalSource {
     /// Returns a stable session key for this approval source
     fn session_key(&self) -> String {
         match self {
-            ApprovalSource::ForegroundTurn { turn_id } => format!("turn:{}", turn_id),
+            ApprovalSource::ForegroundTurn { turn_id, .. } => format!("turn:{}", turn_id),
             ApprovalSource::BackgroundAgent { task_id, agent_id } => {
                 format!("agent:{}:{}", agent_id, task_id)
             }
@@ -754,6 +758,7 @@ mod tests {
         let runtime = InMemoryApprovalRuntime::new();
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -774,6 +779,7 @@ mod tests {
         let runtime = InMemoryApprovalRuntime::new();
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -824,6 +830,7 @@ mod tests {
         let runtime = ModeAwareApprovalRuntime::new(Arc::new(inner), ApprovalMode::Yolo);
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -846,6 +853,7 @@ mod tests {
         let runtime = std::sync::Arc::new(InMemoryApprovalRuntime::new());
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -880,6 +888,7 @@ mod tests {
         let runtime = InMemoryApprovalRuntime::new();
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -902,6 +911,7 @@ mod tests {
         // Create multiple requests
         for i in 0..3 {
             let source = ApprovalSource::ForegroundTurn {
+                user_id: None,
                 turn_id: format!("turn-{}", i),
             };
             runtime
@@ -930,6 +940,7 @@ mod tests {
         let runtime = ModeAwareApprovalRuntime::new(Arc::new(inner), ApprovalMode::Interactive);
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -977,6 +988,7 @@ mod tests {
         let runtime = ModeAwareApprovalRuntime::new(Arc::new(inner), ApprovalMode::Interactive);
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-123".to_string(),
         };
 
@@ -1018,6 +1030,7 @@ mod tests {
         let runtime = ModeAwareApprovalRuntime::new(Arc::new(inner), ApprovalMode::Smart);
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-smart".to_string(),
         };
 
@@ -1062,6 +1075,7 @@ mod tests {
         let runtime = ModeAwareApprovalRuntime::new(Arc::new(inner), ApprovalMode::Smart);
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-smart-wait".to_string(),
         };
 
@@ -1100,6 +1114,7 @@ mod tests {
         let runtime = std::sync::Arc::new(InMemoryApprovalRuntime::new());
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-race".to_string(),
         };
 
@@ -1148,6 +1163,7 @@ mod tests {
         let runtime = std::sync::Arc::new(InMemoryApprovalRuntime::new());
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-timeout".to_string(),
         };
 
@@ -1181,6 +1197,7 @@ mod tests {
 
         let tool_call = create_test_tool_call();
         let source = ApprovalSource::ForegroundTurn {
+            user_id: None,
             turn_id: "turn-persist".to_string(),
         };
         let request_id = runtime

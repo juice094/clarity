@@ -78,97 +78,29 @@ impl ToolRegistry {
         }
     }
 
-    /// Create a registry with all built-in tools pre-registered
+    /// Create a registry with all built-in tools pre-registered.
     pub fn with_builtin_tools() -> Self {
-        #[cfg(not(target_os = "windows"))]
-        use crate::tools::BashTool;
-        #[cfg(target_os = "windows")]
-        use crate::tools::PowerShellTool;
-        use crate::tools::{
-            AskUserTool, CancelCronTool, ChannelSendTool, ComputerUseTool, FileEditTool,
-            FileReadTool, FileWriteTool, GlobTool, GrepTool, ListCronTool, NotifyTool, OkfLoadTool,
-            OkfReadTool, OkfSearchTool, PlanTool, ReadMediaFileTool, ScheduleCronTool,
-            TaskCreateTool, TaskListTool, TaskOutputTool, TaskStopTool, TeamCreateTool,
-            TeamDeleteTool, TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool,
-            WebSearchTool,
-        };
+        use crate::tools::ComputerUseTool;
 
         let registry = Self::new();
-
-        // Register file tools
-        let _ = registry.register(FileReadTool::new());
-        let _ = registry.register(FileWriteTool::new());
-        let _ = registry.register(FileEditTool::new());
-
-        // Register search tools
-        let _ = registry.register(GlobTool::new());
-        let _ = registry.register(GrepTool::new());
-
-        // Register shell tools — platform-specific
-        #[cfg(not(target_os = "windows"))]
-        let _ = registry.register(BashTool::new());
-        #[cfg(target_os = "windows")]
-        let _ = registry.register(PowerShellTool::new());
-
-        // Register web tools
-        let _ = registry.register(WebSearchTool::new());
-        let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(
-            WebBrowserTool::new()
-                .unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())),
-        );
-
-        // Register think tool
-        let _ = registry.register(ThinkTool::new());
-
-        // Register task tools
-        let _ = registry.register(TaskCreateTool::new());
-        let _ = registry.register(TaskListTool::new());
-        let _ = registry.register(TaskOutputTool::new());
-        let _ = registry.register(TaskStopTool::new());
-
-        // Register ask_user tool
-        let _ = registry.register(AskUserTool::new());
-
-        // Register notify tool
-        let _ = registry.register(NotifyTool::new());
-
-        // Register todo tool
-        let _ = registry.register(TodoTool::new());
-
-        // Register plan tool
-        let _ = registry.register(PlanTool::new());
-
-        // Register cron scheduling tools
-        let _ = registry.register(ScheduleCronTool::new());
-        let _ = registry.register(ListCronTool::new());
-        let _ = registry.register(CancelCronTool::new());
-
-        // Register channel tool
-        let _ = registry.register(ChannelSendTool::new());
-
-        // Register team tools
-        let _ = registry.register(TeamCreateTool::new());
-        let _ = registry.register(TeamDeleteTool::new());
-        let _ = registry.register(TeamListTool::new());
-
-        // Register computer use tool
+        registry.register_common_tools();
         let _ = registry.register(ComputerUseTool::new());
-
-        // Register media reading tool
-        let _ = registry.register(ReadMediaFileTool::new());
-
-        // Register OKF knowledge tools
-        let _ = registry.register(OkfLoadTool::new());
-        let _ = registry.register(OkfSearchTool::new());
-        let _ = registry.register(OkfReadTool::new());
-
         registry
     }
 
     /// Create a registry with only egui-safe tools (no platform-specific
     /// dark corners, no ~/-clarity dependencies, no external Python bridges).
     pub fn with_egui_safe_tools() -> Self {
+        let registry = Self::new();
+        registry.register_common_tools();
+        registry
+    }
+
+    /// Register the tools shared by `with_builtin_tools` and `with_egui_safe_tools`.
+    ///
+    /// ponytail: keeps a single imperative list until the declarative manifest
+    /// migration (registry.rs top-of-file plan) is scheduled.
+    fn register_common_tools(&self) {
         #[cfg(not(target_os = "windows"))]
         use crate::tools::BashTool;
         #[cfg(target_os = "windows")]
@@ -181,55 +113,60 @@ impl ToolRegistry {
             TeamListTool, ThinkTool, TodoTool, WebBrowserTool, WebFetchTool, WebSearchTool,
         };
 
-        let registry = Self::new();
+        // File tools
+        let _ = self.register(FileReadTool::new());
+        let _ = self.register(FileWriteTool::new());
+        let _ = self.register(FileEditTool::new());
 
-        let _ = registry.register(FileReadTool::new());
-        let _ = registry.register(FileWriteTool::new());
-        let _ = registry.register(FileEditTool::new());
-        let _ = registry.register(GlobTool::new());
-        let _ = registry.register(GrepTool::new());
+        // Search tools
+        let _ = self.register(GlobTool::new());
+        let _ = self.register(GrepTool::new());
+
+        // Shell tools — platform-specific
         #[cfg(not(target_os = "windows"))]
-        let _ = registry.register(BashTool::new());
+        let _ = self.register(BashTool::new());
         #[cfg(target_os = "windows")]
-        let _ = registry.register(PowerShellTool::new());
-        let _ = registry.register(WebSearchTool::new());
-        let _ = registry.register(WebFetchTool::new());
-        let _ = registry.register(
+        let _ = self.register(PowerShellTool::new());
+
+        // Web tools
+        let _ = self.register(WebSearchTool::new());
+        let _ = self.register(WebFetchTool::new());
+        let _ = self.register(
             WebBrowserTool::new()
                 .unwrap_or_else(|_| WebBrowserTool::with_client(reqwest::Client::new())),
         );
-        let _ = registry.register(ThinkTool::new());
-        let _ = registry.register(AskUserTool::new());
-        let _ = registry.register(ChannelSendTool::new());
-        let _ = registry.register(ReadMediaFileTool::new());
 
-        // Plan & task management — now hardened for egui
-        let _ = registry.register(PlanTool::new());
-        let _ = registry.register(TaskCreateTool::new());
-        let _ = registry.register(TaskListTool::new());
-        let _ = registry.register(TaskOutputTool::new());
-        let _ = registry.register(TaskStopTool::new());
+        // Think & ask_user
+        let _ = self.register(ThinkTool::new());
+        let _ = self.register(AskUserTool::new());
 
-        // Notifications & todos — now hardened for egui
-        let _ = registry.register(NotifyTool::new());
-        let _ = registry.register(TodoTool::new());
+        // Plan & task management
+        let _ = self.register(PlanTool::new());
+        let _ = self.register(TaskCreateTool::new());
+        let _ = self.register(TaskListTool::new());
+        let _ = self.register(TaskOutputTool::new());
+        let _ = self.register(TaskStopTool::new());
 
-        // Team collaboration — now hardened for egui
-        let _ = registry.register(TeamCreateTool::new());
-        let _ = registry.register(TeamListTool::new());
-        let _ = registry.register(TeamDeleteTool::new());
+        // Notifications & todos
+        let _ = self.register(NotifyTool::new());
+        let _ = self.register(TodoTool::new());
 
-        // Cron scheduling — scheduler now wired in egui AppState
-        let _ = registry.register(ScheduleCronTool::new());
-        let _ = registry.register(ListCronTool::new());
-        let _ = registry.register(CancelCronTool::new());
+        // Channel & team tools
+        let _ = self.register(ChannelSendTool::new());
+        let _ = self.register(TeamCreateTool::new());
+        let _ = self.register(TeamListTool::new());
+        let _ = self.register(TeamDeleteTool::new());
 
-        // Register OKF knowledge tools
-        let _ = registry.register(OkfLoadTool::new());
-        let _ = registry.register(OkfSearchTool::new());
-        let _ = registry.register(OkfReadTool::new());
+        // Cron scheduling
+        let _ = self.register(ScheduleCronTool::new());
+        let _ = self.register(ListCronTool::new());
+        let _ = self.register(CancelCronTool::new());
 
-        registry
+        // Media & OKF knowledge tools
+        let _ = self.register(ReadMediaFileTool::new());
+        let _ = self.register(OkfLoadTool::new());
+        let _ = self.register(OkfSearchTool::new());
+        let _ = self.register(OkfReadTool::new());
     }
 
     /// Register a tool in the registry

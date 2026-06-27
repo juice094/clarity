@@ -364,11 +364,510 @@ impl SessionStoreV2 {
         Ok(row)
     }
 
+    /// Register or update the on-disk rollout path for a thread.
+    ///
+    /// ponytail: assumes sessions_v2 row exists; caller should create the session
+    /// first. Upgrade to lazy session creation if this becomes a nuisance.
+    pub fn register_rollout(
+        &self,
+        thread_id: &str,
+        rollout_path: &std::path::Path,
+        last_seq: i64,
+    ) -> MemoryResult<()> {
+        let now = Utc::now().timestamp_millis();
+        self.conn.execute(
+            "INSERT INTO rollout_index (thread_id, rollout_path, last_seq, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(thread_id) DO UPDATE SET
+                 rollout_path = excluded.rollout_path,
+                 last_seq = excluded.last_seq,
+                 updated_at = excluded.updated_at",
+            rusqlite::params![
+                thread_id,
+                rollout_path.as_os_str().to_string_lossy().as_ref(),
+                last_seq,
+                now,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve the registered rollout path and last known sequence for a thread.
+    pub fn get_rollout(&self, thread_id: &str) -> MemoryResult<Option<(std::path::PathBuf, i64)>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT rollout_path, last_seq FROM rollout_index WHERE thread_id = ?1",
+                [thread_id],
+                |row| {
+                    let path: String = row.get(0)?;
+                    let last_seq: i64 = row.get(1)?;
+                    Ok((std::path::PathBuf::from(path), last_seq))
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Update only the last seen sequence number for a thread's rollout.
+    pub fn update_rollout_seq(&self, thread_id: &str, last_seq: i64) -> MemoryResult<()> {
+        let now = Utc::now().timestamp_millis();
+        self.conn.execute(
+            "UPDATE rollout_index SET last_seq = ?2, updated_at = ?3 WHERE thread_id = ?1",
+            rusqlite::params![thread_id, last_seq, now],
+        )?;
+        Ok(())
+    }
+
     /// Delete a session and all associated events / compacted contexts (cascade).
     pub fn delete_session(&self, session_id: &str) -> MemoryResult<()> {
         self.conn
             .execute("DELETE FROM sessions_v2 WHERE id = ?1", [session_id])?;
         Ok(())
+    }
+
+    // ------------------------------------------------------------------
+    // Identity CRUD (Phase 6)
+    // ------------------------------------------------------------------
+
+    /// Insert or update a user.
+    pub fn upsert_user(&self, user: &clarity_contract::User) -> MemoryResult<()> {
+        self.conn.execute(
+            "INSERT INTO users (id, display_name, avatar_url, email, provider, provider_user_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+                 display_name = excluded.display_name,
+                 avatar_url = excluded.avatar_url,
+                 email = excluded.email,
+                 provider = excluded.provider,
+                 provider_user_id = excluded.provider_user_id,
+                 updated_at = excluded.updated_at",
+            rusqlite::params![
+                user.id,
+                user.display_name,
+                user.avatar_url,
+                user.email,
+                user.provider,
+                user.provider_user_id,
+                user.created_at as i64,
+                user.updated_at as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get a user by ID.
+    pub fn get_user(&self, id: &str) -> MemoryResult<Option<clarity_contract::User>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT id, display_name, avatar_url, email, provider, provider_user_id, created_at, updated_at
+                 FROM users WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(clarity_contract::User {
+                        id: row.get(0)?,
+                        display_name: row.get(1)?,
+                        avatar_url: row.get(2)?,
+                        email: row.get(3)?,
+                        provider: row.get(4)?,
+                        provider_user_id: row.get(5)?,
+                        created_at: row.get::<_, i64>(6)? as u64,
+                        updated_at: row.get::<_, i64>(7)? as u64,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Look up a user by provider + provider_user_id.
+    pub fn get_user_by_provider(
+        &self,
+        provider: &str,
+        provider_user_id: &str,
+    ) -> MemoryResult<Option<clarity_contract::User>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT id, display_name, avatar_url, email, provider, provider_user_id, created_at, updated_at
+                 FROM users WHERE provider = ?1 AND provider_user_id = ?2",
+                rusqlite::params![provider, provider_user_id],
+                |row| {
+                    Ok(clarity_contract::User {
+                        id: row.get(0)?,
+                        display_name: row.get(1)?,
+                        avatar_url: row.get(2)?,
+                        email: row.get(3)?,
+                        provider: row.get(4)?,
+                        provider_user_id: row.get(5)?,
+                        created_at: row.get::<_, i64>(6)? as u64,
+                        updated_at: row.get::<_, i64>(7)? as u64,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Delete a user (cascades to memberships).
+    pub fn delete_user(&self, id: &str) -> MemoryResult<()> {
+        self.conn.execute("DELETE FROM users WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Insert or update a team.
+    pub fn upsert_team(&self, team: &clarity_contract::Team) -> MemoryResult<()> {
+        self.conn.execute(
+            "INSERT INTO teams (id, org_id, name, description, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                 org_id = excluded.org_id,
+                 name = excluded.name,
+                 description = excluded.description",
+            rusqlite::params![
+                team.id,
+                team.org_id,
+                team.name,
+                team.description,
+                team.created_at as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get a team by ID.
+    pub fn get_team(&self, id: &str) -> MemoryResult<Option<clarity_contract::Team>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT id, org_id, name, description, created_at FROM teams WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(clarity_contract::Team {
+                        id: row.get(0)?,
+                        org_id: row.get(1)?,
+                        name: row.get(2)?,
+                        description: row.get(3)?,
+                        created_at: row.get::<_, i64>(4)? as u64,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// List teams in an organization.
+    pub fn list_teams_for_org(&self, org_id: &str) -> MemoryResult<Vec<clarity_contract::Team>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, org_id, name, description, created_at FROM teams WHERE org_id = ?1",
+        )?;
+        let teams = stmt
+            .query_map([org_id], |row| {
+                Ok(clarity_contract::Team {
+                    id: row.get(0)?,
+                    org_id: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    created_at: row.get::<_, i64>(4)? as u64,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(teams)
+    }
+
+    /// Add a member to a team.
+    pub fn add_team_member(&self, member: &clarity_contract::TeamMember) -> MemoryResult<()> {
+        let role_str = team_role_to_str(&member.role);
+        self.conn.execute(
+            "INSERT OR REPLACE INTO team_members (user_id, team_id, role, joined_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                member.user_id,
+                member.team_id,
+                role_str,
+                member.joined_at as i64
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// List all members of a team.
+    pub fn list_team_members(
+        &self,
+        team_id: &str,
+    ) -> MemoryResult<Vec<clarity_contract::TeamMember>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT user_id, team_id, role, joined_at FROM team_members WHERE team_id = ?1",
+        )?;
+        let members = stmt
+            .query_map([team_id], |row| {
+                let role_str: String = row.get(2)?;
+                Ok(clarity_contract::TeamMember {
+                    user_id: row.get(0)?,
+                    team_id: row.get(1)?,
+                    role: str_to_team_role(&role_str),
+                    joined_at: row.get::<_, i64>(3)? as u64,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(members)
+    }
+
+    /// Get a member's role in a team.
+    pub fn get_team_member_role(
+        &self,
+        user_id: &str,
+        team_id: &str,
+    ) -> MemoryResult<Option<clarity_contract::TeamRole>> {
+        let row: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT role FROM team_members WHERE user_id = ?1 AND team_id = ?2",
+                rusqlite::params![user_id, team_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(row.map(|r| str_to_team_role(&r)))
+    }
+
+    /// Insert or update an organization.
+    pub fn upsert_org(&self, org: &clarity_contract::Organization) -> MemoryResult<()> {
+        self.conn.execute(
+            "INSERT INTO organizations (id, name, description, created_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET
+                 name = excluded.name,
+                 description = excluded.description",
+            rusqlite::params![org.id, org.name, org.description, org.created_at as i64],
+        )?;
+        Ok(())
+    }
+
+    /// Get an organization by ID.
+    pub fn get_org(&self, id: &str) -> MemoryResult<Option<clarity_contract::Organization>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT id, name, description, created_at FROM organizations WHERE id = ?1",
+                [id],
+                |row| {
+                    Ok(clarity_contract::Organization {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                        created_at: row.get::<_, i64>(3)? as u64,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Add a member to an organization.
+    pub fn add_org_member(&self, member: &clarity_contract::OrgMember) -> MemoryResult<()> {
+        let role_str = team_role_to_str(&member.role);
+        self.conn.execute(
+            "INSERT OR REPLACE INTO org_members (user_id, org_id, role, joined_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                member.user_id,
+                member.org_id,
+                role_str,
+                member.joined_at as i64
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// List all members of an organization.
+    pub fn list_org_members(&self, org_id: &str) -> MemoryResult<Vec<clarity_contract::OrgMember>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT user_id, org_id, role, joined_at FROM org_members WHERE org_id = ?1",
+        )?;
+        let members = stmt
+            .query_map([org_id], |row| {
+                let role_str: String = row.get(2)?;
+                Ok(clarity_contract::OrgMember {
+                    user_id: row.get(0)?,
+                    org_id: row.get(1)?,
+                    role: str_to_team_role(&role_str),
+                    joined_at: row.get::<_, i64>(3)? as u64,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(members)
+    }
+
+    // ------------------------------------------------------------------
+    // Team policy CRUD (Phase 8)
+    // ------------------------------------------------------------------
+
+    /// Store a team permission policy.
+    pub fn upsert_team_policy(&self, policy: &clarity_contract::TeamPolicy) -> MemoryResult<()> {
+        let json = serde_json::to_vec(policy)?;
+        let now = Utc::now().timestamp_millis();
+        self.conn.execute(
+            "INSERT OR REPLACE INTO team_policies (team_id, policy_json, updated_at)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params![policy.team_id, json, now],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve a team permission policy.
+    pub fn get_team_policy(
+        &self,
+        team_id: &str,
+    ) -> MemoryResult<Option<clarity_contract::TeamPolicy>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT policy_json FROM team_policies WHERE team_id = ?1",
+                [team_id],
+                |row| {
+                    let json: Vec<u8> = row.get(0)?;
+                    Ok(json)
+                },
+            )
+            .optional()?;
+        match row {
+            Some(json) => Ok(Some(serde_json::from_slice(&json)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Delete a team permission policy.
+    pub fn delete_team_policy(&self, team_id: &str) -> MemoryResult<()> {
+        self.conn
+            .execute("DELETE FROM team_policies WHERE team_id = ?1", [team_id])?;
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------
+    // Device identity CRUD (Phase 7)
+    // ------------------------------------------------------------------
+
+    /// Bind a device to a user.
+    pub fn upsert_device_identity(&self, rec: &DeviceIdentityRecord) -> MemoryResult<()> {
+        self.conn.execute(
+            "INSERT INTO device_identities (device_id, user_id, device_name, public_key, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(device_id) DO UPDATE SET
+                 user_id = excluded.user_id,
+                 device_name = excluded.device_name,
+                 public_key = excluded.public_key,
+                 updated_at = excluded.updated_at",
+            rusqlite::params![
+                rec.device_id,
+                rec.user_id,
+                rec.device_name,
+                rec.public_key,
+                rec.created_at,
+                rec.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get device identity by device ID.
+    pub fn get_device_identity(
+        &self,
+        device_id: &str,
+    ) -> MemoryResult<Option<DeviceIdentityRecord>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT device_id, user_id, device_name, public_key, created_at, updated_at
+                 FROM device_identities WHERE device_id = ?1",
+                [device_id],
+                |row| {
+                    Ok(DeviceIdentityRecord {
+                        device_id: row.get(0)?,
+                        user_id: row.get(1)?,
+                        device_name: row.get(2)?,
+                        public_key: row.get(3)?,
+                        created_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// List all devices bound to a user.
+    pub fn list_user_devices(&self, user_id: &str) -> MemoryResult<Vec<DeviceIdentityRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT device_id, user_id, device_name, public_key, created_at, updated_at
+             FROM device_identities WHERE user_id = ?1",
+        )?;
+        let devices = stmt
+            .query_map([user_id], |row| {
+                Ok(DeviceIdentityRecord {
+                    device_id: row.get(0)?,
+                    user_id: row.get(1)?,
+                    device_name: row.get(2)?,
+                    public_key: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(devices)
+    }
+
+    /// Delete a device identity binding.
+    pub fn delete_device_identity(&self, device_id: &str) -> MemoryResult<()> {
+        self.conn.execute(
+            "DELETE FROM device_identities WHERE device_id = ?1",
+            [device_id],
+        )?;
+        Ok(())
+    }
+}
+
+// ------------------------------------------------------------------
+// DeviceIdentityRecord (Phase 7)
+// ------------------------------------------------------------------
+
+/// A device-to-user identity binding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceIdentityRecord {
+    /// Device identifier (SHA-256 of Ed25519 public key).
+    pub device_id: String,
+    /// Bound user identifier.
+    pub user_id: String,
+    /// Human-readable device name.
+    pub device_name: String,
+    /// Optional Ed25519 public key (PEM or hex).
+    pub public_key: Option<String>,
+    /// Creation timestamp (milliseconds since epoch).
+    pub created_at: i64,
+    /// Last update timestamp (milliseconds since epoch).
+    pub updated_at: i64,
+}
+
+// ------------------------------------------------------------------
+// TeamRole ↔ string helpers (ponytail: local; avoid pulling serde into SessionStoreV2)
+// ------------------------------------------------------------------
+
+fn team_role_to_str(role: &clarity_contract::TeamRole) -> &'static str {
+    match role {
+        clarity_contract::TeamRole::Owner => "owner",
+        clarity_contract::TeamRole::Admin => "admin",
+        clarity_contract::TeamRole::Member => "member",
+        clarity_contract::TeamRole::Viewer => "viewer",
+    }
+}
+
+fn str_to_team_role(s: &str) -> clarity_contract::TeamRole {
+    match s {
+        "owner" => clarity_contract::TeamRole::Owner,
+        "admin" => clarity_contract::TeamRole::Admin,
+        "member" => clarity_contract::TeamRole::Member,
+        "viewer" => clarity_contract::TeamRole::Viewer,
+        _ => clarity_contract::TeamRole::Member,
     }
 }
 
@@ -566,6 +1065,57 @@ const TABLES_SQL: &[&str] = &[
      compression_method TEXT, \
      source_hash TEXT, \
      created_at INTEGER)",
+    "CREATE TABLE IF NOT EXISTS rollout_index (\
+     thread_id TEXT PRIMARY KEY REFERENCES sessions_v2(id) ON DELETE CASCADE, \
+     rollout_path TEXT NOT NULL, \
+     last_seq INTEGER NOT NULL DEFAULT 0, \
+     updated_at INTEGER NOT NULL)",
+    // Identity tables (Phase 6).
+    "CREATE TABLE IF NOT EXISTS users (\
+     id TEXT PRIMARY KEY, \
+     display_name TEXT NOT NULL, \
+     avatar_url TEXT, \
+     email TEXT, \
+     provider TEXT NOT NULL, \
+     provider_user_id TEXT, \
+     created_at INTEGER NOT NULL, \
+     updated_at INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS teams (\
+     id TEXT PRIMARY KEY, \
+     org_id TEXT NOT NULL, \
+     name TEXT NOT NULL, \
+     description TEXT, \
+     created_at INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS team_members (\
+     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, \
+     team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE, \
+     role TEXT NOT NULL DEFAULT 'member', \
+     joined_at INTEGER NOT NULL, \
+     PRIMARY KEY (user_id, team_id))",
+    "CREATE TABLE IF NOT EXISTS organizations (\
+     id TEXT PRIMARY KEY, \
+     name TEXT NOT NULL, \
+     description TEXT, \
+     created_at INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS org_members (\
+     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, \
+     org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, \
+     role TEXT NOT NULL DEFAULT 'member', \
+     joined_at INTEGER NOT NULL, \
+     PRIMARY KEY (user_id, org_id))",
+    // Phase 8: team permission policies.
+    "CREATE TABLE IF NOT EXISTS team_policies (\
+     team_id TEXT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE, \
+     policy_json BLOB NOT NULL, \
+     updated_at INTEGER NOT NULL)",
+    // Phase 7: device-to-user identity binding.
+    "CREATE TABLE IF NOT EXISTS device_identities (\
+     device_id TEXT PRIMARY KEY, \
+     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, \
+     device_name TEXT NOT NULL DEFAULT '', \
+     public_key TEXT, \
+     created_at INTEGER NOT NULL, \
+     updated_at INTEGER NOT NULL)",
 ];
 
 const INDEXES_SQL: &[&str] = &[
@@ -575,6 +1125,15 @@ const INDEXES_SQL: &[&str] = &[
     "CREATE INDEX IF NOT EXISTS idx_event_log_session ON event_log(session_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_log_session_turn_event ON event_log(session_id, turn_id, event_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_log_timestamp ON event_log(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_rollout_index_thread ON rollout_index(thread_id)",
+    // Identity indexes (Phase 6).
+    "CREATE INDEX IF NOT EXISTS idx_users_provider ON users(provider, provider_user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)",
+    "CREATE INDEX IF NOT EXISTS idx_org_members_org ON org_members(org_id)",
+    // Phase 8: team policy lookup.
+    "CREATE INDEX IF NOT EXISTS idx_team_policies_team ON team_policies(team_id)",
+    // Phase 7: device identity lookup by user.
+    "CREATE INDEX IF NOT EXISTS idx_device_identities_user ON device_identities(user_id)",
 ];
 
 fn home_dir() -> Option<PathBuf> {
@@ -732,5 +1291,219 @@ mod tests {
         assert!(store.get_session("sess-1").unwrap().is_none());
         assert!(store.read_events("sess-1").unwrap().is_empty());
         assert!(store.load_compacted_context("sess-1").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_rollout_index_roundtrip() {
+        let store = temp_store();
+        store.create_session("thread-1", None, None, None).unwrap();
+
+        let path = std::path::PathBuf::from("/tmp/rollouts/thread-1.jsonl");
+        store.register_rollout("thread-1", &path, 42).unwrap();
+
+        let (got_path, seq) = store.get_rollout("thread-1").unwrap().unwrap();
+        assert_eq!(got_path, path);
+        assert_eq!(seq, 42);
+
+        store.update_rollout_seq("thread-1", 99).unwrap();
+        let (_, seq) = store.get_rollout("thread-1").unwrap().unwrap();
+        assert_eq!(seq, 99);
+
+        store.delete_session("thread-1").unwrap();
+        assert!(store.get_rollout("thread-1").unwrap().is_none());
+    }
+
+    // ------------------------------------------------------------------
+    // Identity CRUD tests
+    // ------------------------------------------------------------------
+
+    fn make_user(id: &str, name: &str, provider: &str) -> clarity_contract::User {
+        clarity_contract::User {
+            id: id.into(),
+            display_name: name.into(),
+            avatar_url: None,
+            email: None,
+            provider: provider.into(),
+            provider_user_id: None,
+            created_at: 1700000000,
+            updated_at: 1700000001,
+        }
+    }
+
+    #[test]
+    fn test_user_upsert_get_delete() {
+        let store = temp_store();
+        let user = make_user("u-1", "Alice", "local");
+        store.upsert_user(&user).unwrap();
+
+        let got = store.get_user("u-1").unwrap().unwrap();
+        assert_eq!(got.id, "u-1");
+        assert_eq!(got.display_name, "Alice");
+        assert_eq!(got.provider, "local");
+
+        store.delete_user("u-1").unwrap();
+        assert!(store.get_user("u-1").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_user_by_provider_lookup() {
+        let store = temp_store();
+        let mut user = make_user("u-2", "Bob", "wechat");
+        user.provider_user_id = Some("wx-openid-123".into());
+        store.upsert_user(&user).unwrap();
+
+        let got = store
+            .get_user_by_provider("wechat", "wx-openid-123")
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.id, "u-2");
+
+        // Missing provider/user combo returns None.
+        assert!(
+            store
+                .get_user_by_provider("github", "nobody")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_team_upsert_get_list() {
+        let store = temp_store();
+        let team = clarity_contract::Team {
+            id: "t-1".into(),
+            org_id: "o-1".into(),
+            name: "Engineering".into(),
+            description: None,
+            created_at: 1700000000,
+        };
+        store.upsert_team(&team).unwrap();
+
+        let got = store.get_team("t-1").unwrap().unwrap();
+        assert_eq!(got.name, "Engineering");
+
+        let all = store.list_teams_for_org("o-1").unwrap();
+        assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn test_team_member_add_list() {
+        let store = temp_store();
+        let user = make_user("u-3", "Carol", "local");
+        store.upsert_user(&user).unwrap();
+        let team = clarity_contract::Team {
+            id: "t-2".into(),
+            org_id: "o-1".into(),
+            name: "Design".into(),
+            description: None,
+            created_at: 1700000000,
+        };
+        store.upsert_team(&team).unwrap();
+
+        let member = clarity_contract::TeamMember {
+            user_id: "u-3".into(),
+            team_id: "t-2".into(),
+            role: clarity_contract::TeamRole::Admin,
+            joined_at: 1700000000,
+        };
+        store.add_team_member(&member).unwrap();
+
+        let members = store.list_team_members("t-2").unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].user_id, "u-3");
+        assert_eq!(members[0].role, clarity_contract::TeamRole::Admin);
+
+        let role = store.get_team_member_role("u-3", "t-2").unwrap().unwrap();
+        assert_eq!(role, clarity_contract::TeamRole::Admin);
+    }
+
+    #[test]
+    fn test_org_upsert_get() {
+        let store = temp_store();
+        let org = clarity_contract::Organization {
+            id: "o-1".into(),
+            name: "Acme Corp".into(),
+            description: Some("Enterprise".into()),
+            created_at: 1700000000,
+        };
+        store.upsert_org(&org).unwrap();
+
+        let got = store.get_org("o-1").unwrap().unwrap();
+        assert_eq!(got.name, "Acme Corp");
+    }
+
+    #[test]
+    fn test_org_member_add_list() {
+        let store = temp_store();
+        let user = make_user("u-4", "Dave", "local");
+        store.upsert_user(&user).unwrap();
+        let org = clarity_contract::Organization {
+            id: "o-2".into(),
+            name: "Startup Inc".into(),
+            description: None,
+            created_at: 1700000000,
+        };
+        store.upsert_org(&org).unwrap();
+
+        let member = clarity_contract::OrgMember {
+            user_id: "u-4".into(),
+            org_id: "o-2".into(),
+            role: clarity_contract::TeamRole::Owner,
+            joined_at: 1700000000,
+        };
+        store.add_org_member(&member).unwrap();
+
+        let members = store.list_org_members("o-2").unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].user_id, "u-4");
+        assert_eq!(members[0].role, clarity_contract::TeamRole::Owner);
+    }
+
+    #[test]
+    fn test_cascade_delete_user_removes_memberships() {
+        let store = temp_store();
+        let user = make_user("u-del", "Eve", "local");
+        store.upsert_user(&user).unwrap();
+        let org = clarity_contract::Organization {
+            id: "o-del".into(),
+            name: "Temp Org".into(),
+            description: None,
+            created_at: 1700000000,
+        };
+        store.upsert_org(&org).unwrap();
+        let team = clarity_contract::Team {
+            id: "t-del".into(),
+            org_id: "o-del".into(),
+            name: "Temp Team".into(),
+            description: None,
+            created_at: 1700000000,
+        };
+        store.upsert_team(&team).unwrap();
+
+        store
+            .add_org_member(&clarity_contract::OrgMember {
+                user_id: "u-del".into(),
+                org_id: "o-del".into(),
+                role: clarity_contract::TeamRole::Member,
+                joined_at: 1700000000,
+            })
+            .unwrap();
+        store
+            .add_team_member(&clarity_contract::TeamMember {
+                user_id: "u-del".into(),
+                team_id: "t-del".into(),
+                role: clarity_contract::TeamRole::Member,
+                joined_at: 1700000000,
+            })
+            .unwrap();
+
+        // Verify memberships exist.
+        assert_eq!(store.list_org_members("o-del").unwrap().len(), 1);
+        assert_eq!(store.list_team_members("t-del").unwrap().len(), 1);
+
+        // Delete user → cascade deletes memberships.
+        store.delete_user("u-del").unwrap();
+        assert!(store.list_org_members("o-del").unwrap().is_empty());
+        assert!(store.list_team_members("t-del").unwrap().is_empty());
     }
 }

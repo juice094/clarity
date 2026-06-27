@@ -59,6 +59,9 @@ pub(crate) fn is_context_overflow_error(err: &AgentError) -> bool {
 /// Fast-trim tool results from messages to recover from context window overflow.
 /// Removes the oldest non-system messages in pairs (assistant tool_call + tool result)
 /// until under the budget or no more trimmable messages remain.
+///
+/// ponytail: heuristic "drop the oldest half" strategy. Replace with token-aware
+/// truncation once `clarity-core` exposes a message tokenizer interface.
 pub(crate) fn fast_trim_tool_results(messages: &mut Vec<Message>) {
     // Identify indices of tool-result messages (role=Tool).
     let tool_indices: Vec<usize> = messages

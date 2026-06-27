@@ -97,7 +97,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                         });
                     });
                 if chip.response.clicked() {
-                    // TODO: remove specific attachment
+                    // Tracked: github.com/juice094/clarity/issues — remove specific attachment
                 }
             }
         });
@@ -186,7 +186,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .fill(theme.bg_hover)
             .corner_radius(egui::CornerRadius::same(6));
             if ui.add(agent_btn).on_hover_text("Agent mode").clicked() {
-                // TODO: toggle agent mode
+                // Tracked: github.com/juice094/clarity/issues — toggle agent mode
             }
 
             // Right: model selector + send button

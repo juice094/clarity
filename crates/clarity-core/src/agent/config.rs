@@ -2,6 +2,7 @@
 
 use crate::agent::compaction_service::CompactionServiceConfig;
 use crate::agent::jumpy::ComposerConfig;
+use crate::agent::yolo_guardrails::YoloGuardrails;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
@@ -68,6 +69,23 @@ pub struct AgentConfig {
     pub compiled_memory_dir: Option<std::path::PathBuf>,
     /// Session ID for memory and session store
     pub session_id: Option<String>,
+    /// User identifier for attribution.
+    pub user_id: Option<String>,
+    /// Team identifier for team-scoped sessions.
+    pub team_id: Option<String>,
+    /// Organization identifier.
+    pub org_id: Option<String>,
+    /// Optional team permission policy (Phase 8).
+    pub team_policy: Option<clarity_contract::TeamPolicy>,
+    /// Member's role within the team (Phase 8).
+    pub member_role: Option<clarity_contract::TeamRole>,
+    /// Convergence guardrails for high-autonomy execution modes.
+    pub yolo_guardrails: YoloGuardrails,
+    /// Maximum characters of a single tool result injected into the LLM context.
+    /// Results exceeding this are truncated with a note. Wire-level delivery to
+    /// frontends is NOT affected — only the version the LLM sees is limited.
+    /// Default: 30_000 (matching Claude Code's tool result truncation).
+    pub max_tool_result_chars: usize,
 }
 
 impl Default for AgentConfig {
@@ -99,6 +117,13 @@ impl Default for AgentConfig {
             memory_ticker_turns: None,
             compiled_memory_dir: None,
             session_id: None,
+            user_id: None,
+            team_id: None,
+            org_id: None,
+            team_policy: None,
+            member_role: None,
+            yolo_guardrails: YoloGuardrails::default(),
+            max_tool_result_chars: 30_000,
         }
     }
 }
@@ -263,6 +288,65 @@ impl AgentConfig {
     pub fn with_session_id(mut self, id: impl Into<String>) -> Self {
         self.session_id = Some(id.into());
         self
+    }
+
+    /// Set convergence guardrails for high-autonomy execution modes.
+    pub fn with_yolo_guardrails(mut self, guardrails: YoloGuardrails) -> Self {
+        self.yolo_guardrails = guardrails;
+        self
+    }
+
+    /// Set the maximum number of characters a single tool result can contribute to
+    /// the LLM context before truncation. Wire-level delivery is unaffected.
+    pub fn with_max_tool_result_chars(mut self, max_chars: usize) -> Self {
+        self.max_tool_result_chars = max_chars;
+        self
+    }
+
+    /// Set user identifier for attribution.
+    pub fn with_user_id(mut self, id: impl Into<String>) -> Self {
+        self.user_id = Some(id.into());
+        self
+    }
+
+    /// Set team identifier for team-scoped sessions.
+    pub fn with_team_id(mut self, id: impl Into<String>) -> Self {
+        self.team_id = Some(id.into());
+        self
+    }
+
+    /// Set organization identifier.
+    pub fn with_org_id(mut self, id: impl Into<String>) -> Self {
+        self.org_id = Some(id.into());
+        self
+    }
+
+    /// Build an [`clarity_contract::IdentityContext`] from the current config.
+    pub fn identity_context(&self) -> clarity_contract::IdentityContext {
+        clarity_contract::IdentityContext {
+            user_id: self.user_id.clone(),
+            team_id: self.team_id.clone(),
+            org_id: self.org_id.clone(),
+        }
+    }
+
+    /// Set the team permission policy (Phase 8).
+    pub fn with_team_policy(mut self, policy: clarity_contract::TeamPolicy) -> Self {
+        self.team_policy = Some(policy);
+        self
+    }
+
+    /// Set the member's role within the team (Phase 8).
+    pub fn with_member_role(mut self, role: clarity_contract::TeamRole) -> Self {
+        self.member_role = Some(role);
+        self
+    }
+
+    /// Build a [`clarity_contract::PermissionProfile`] from the current team policy and role.
+    pub fn permission_profile(&self) -> Option<clarity_contract::PermissionProfile> {
+        let policy = self.team_policy.as_ref()?;
+        let role = self.member_role.clone().unwrap_or_default();
+        Some(policy.profile_for(&role))
     }
 }
 

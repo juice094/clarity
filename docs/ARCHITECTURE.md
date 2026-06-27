@@ -208,20 +208,39 @@ agent/
 | `PlanTool` | Plan | No | Internal plan generation helper |
 | `ThinkTool` / `AskUserTool` | Meta | No | |
 
-### 3.3 LLM Providers (`src/llm/`)
+### 3.3 LLM Providers (`crates/clarity-llm/src/`)
 
 ```
-llm/
-├── api.rs               # LlmProvider trait, Message, StreamDelta
-├── mod.rs               # LlmFactory, resolve_local_model_path()
-├── model_registry.rs    # ModelRegistry TOML config, ProtocolType
-├── sse.rs               # SseParser state machine
-├── ollama.rs            # Ollama HTTP API client
-├── deepseek.rs          # DeepSeek OpenAI-compatible client
-├── kalosm.rs            # Stub — returns error, redirects to LocalGgufProvider
-├── local_gguf.rs        # Candle native GGUF inference (feature-gated)
-├── llama_server.rs      # Llama.cpp HTTP server bridge
-└── openai_compatible.rs # Generic OpenAI-compatible client
+crates/clarity-llm/src/
+├── api.rs                  # LlmProvider trait re-export (defined in clarity-contract)
+├── factory.rs              # LlmFactory legacy helpers
+├── runtime.rs              # RuntimeProviderConfig / build_provider / test_connection
+├── runtime_router.rs       # alias / capability-hint routing
+├── model_registry.rs       # ModelRegistry TOML config, ProtocolType
+├── model_listing.rs        # enumerate available models
+├── catalog/                # remote model catalog fetching + caching
+├── registry_table.rs       # built-in provider family defaults
+├── request.rs              # OpenAI chat-completion types + request-body size guards
+├── providers/
+│   ├── openai_compatible.rs # Generic OpenAI-compatible client
+│   ├── anthropic.rs         # Anthropic Messages API client
+│   ├── kimi.rs              # Kimi (Moonshot) client
+│   ├── oauth.rs             # OAuth / Kimi Code client
+│   └── mod.rs               # provider re-exports
+├── deepseek.rs             # DeepSeek OpenAI-compatible client
+├── deepseek_device.rs      # DeepSeek Android app device-login flow
+├── deepseek_pow.rs         # DeepSeek device PoW challenge
+├── ollama.rs               # Ollama HTTP API client
+├── kalosm.rs               # Stub — returns error, redirects to LocalGgufProvider
+├── local_gguf.rs           # Candle native GGUF inference (feature-gated)
+├── llama_server.rs         # Llama.cpp HTTP server bridge
+├── sse.rs                  # SseParser state machine
+├── tool_payload.rs         # OpenAI/Anthropic tool payload adapter
+├── policy.rs               # offline/online adaptive provider selection
+├── reliable.rs             # ReliableProvider fallback chain re-export
+├── auth/                   # OAuth / Kimi Code token store
+├── mesh/                   # multi-provider load balancing + circuit breaker
+└── lib.rs                  # crate entry, re-exports, shared HTTP client, local model path resolution
 ```
 
 **Provider matrix**:

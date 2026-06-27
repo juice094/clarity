@@ -97,10 +97,16 @@ impl Agent {
         diff_preview: Option<String>,
     ) -> Result<(), ToolError> {
         let turn_id = uuid::Uuid::new_v4().to_string();
+        let user_id = self
+            .inner
+            .read()
+            .turn_context
+            .as_ref()
+            .and_then(|ctx| ctx.user_id.clone());
         let request_id = runtime
             .create_request(
                 tool_call,
-                ApprovalSource::ForegroundTurn { turn_id },
+                ApprovalSource::ForegroundTurn { turn_id, user_id },
                 description,
                 diff_preview,
             )
@@ -157,34 +163,55 @@ impl Agent {
         // 规则引擎风险评估
         let risk = RuleEngine::with_defaults().evaluate(name, &args);
 
-        // 如果配置了审批运行时，先请求审批
-        if let Some(ref runtime) = self.approval_runtime {
-            // O3: sensitive_path is sanitized before display in approval UI to
-            // prevent leaking absolute paths (e.g. C:\Users\name\secret.txt).
-            let mut description = sensitive_path.as_ref().map(|p| {
-                format!(
-                    "Sensitive file access: {}",
-                    crate::error::sanitize_path_str(p)
-                )
-            });
+        // Phase 8: Team permission policy enforcement.
+        // If a team policy is active and allows the tool without approval,
+        // skip the approval runtime entirely.
+        let policy_allow_direct = if let (Some(policy), Some(role)) =
+            (&self.config.team_policy, &self.config.member_role)
+        {
+            use crate::approval::policy_engine;
+            match policy_engine::authorize(policy, role, name) {
+                clarity_contract::AuthDecision::Deny(reason) => {
+                    return Err(ToolError::PermissionDenied(reason));
+                }
+                clarity_contract::AuthDecision::Allow => true,
+                clarity_contract::AuthDecision::RequireApproval => false,
+            }
+        } else {
+            false
+        };
 
-            if tool_requires_approval {
-                description = Some(description.unwrap_or_else(|| {
+        // 如果配置了审批运行时，先请求审批
+        if !policy_allow_direct {
+            if let Some(ref runtime) = self.approval_runtime {
+                // O3: sensitive_path is sanitized before display in approval UI to
+                // prevent leaking absolute paths (e.g. C:\Users\name\secret.txt).
+                let mut description = sensitive_path.as_ref().map(|p| {
+                    format!(
+                        "Sensitive file access: {}",
+                        crate::error::sanitize_path_str(p)
+                    )
+                });
+
+                if tool_requires_approval {
+                    description = Some(description.unwrap_or_else(|| {
                     "This tool directly controls the computer desktop and requires explicit approval.".to_string()
                 }));
-            }
-
-            // Augment description with risk level for UI context
-            let description = match risk {
-                RiskLevel::High => {
-                    Some(description.unwrap_or_else(|| "High-risk operation".to_string()))
                 }
-                RiskLevel::Medium => description,
-                _ => description,
-            };
 
-            let tool_call_for_approval =
-                if sensitive_path.is_some() || tool_requires_approval || risk == RiskLevel::High {
+                // Augment description with risk level for UI context
+                let description = match risk {
+                    RiskLevel::High => {
+                        Some(description.unwrap_or_else(|| "High-risk operation".to_string()))
+                    }
+                    RiskLevel::Medium => description,
+                    _ => description,
+                };
+
+                let tool_call_for_approval = if sensitive_path.is_some()
+                    || tool_requires_approval
+                    || risk == RiskLevel::High
+                {
                     let mut tc = tool_call.clone();
                     let mut approval_args = args.clone();
                     if tool_requires_approval {
@@ -204,59 +231,60 @@ impl Agent {
                     tool_call.clone()
                 };
 
-            // O2: approval_mode is read per-tool-call; caching it at the top of
-            // dispatch_tool_calls (or passing it down) would save N-1 RwLock reads
-            // when multiple tools are dispatched concurrently.
-            let mode = self.inner.read().approval_mode;
-            let needs_approval = match mode {
-                ApprovalMode::Interactive => {
-                    risk == RiskLevel::High
-                        || risk == RiskLevel::Medium
-                        || tool_requires_approval
-                        || sensitive_path.is_some()
-                }
-                ApprovalMode::Yolo => tool_requires_approval || risk == RiskLevel::High,
-                ApprovalMode::Plan => false,
-                ApprovalMode::Smart => {
-                    // Low-risk auto-approved; medium/high and sensitive always go through
-                    // the approval runtime so that batch grants can be evaluated.
-                    risk == RiskLevel::High
-                        || risk == RiskLevel::Medium
-                        || tool_requires_approval
-                        || sensitive_path.is_some()
-                }
-            };
-
-            let diff_preview = if name == "file_edit" {
-                self.preview_file_edit_diff(&args).await
-            } else {
-                None
-            };
-
-            if needs_approval {
-                self.wait_for_tool_approval(
-                    runtime,
-                    &tool_call_for_approval,
-                    description,
-                    diff_preview,
-                )
-                .await?;
-            } else {
-                match risk {
-                    RiskLevel::Medium => {
-                        tracing::info!(
-                            "Medium-risk tool '{}' auto-approved in {:?} mode",
-                            name,
-                            mode
-                        );
+                // O2: approval_mode is read per-tool-call; caching it at the top of
+                // dispatch_tool_calls (or passing it down) would save N-1 RwLock reads
+                // when multiple tools are dispatched concurrently.
+                let mode = self.inner.read().approval_mode;
+                let needs_approval = match mode {
+                    ApprovalMode::Interactive => {
+                        risk == RiskLevel::High
+                            || risk == RiskLevel::Medium
+                            || tool_requires_approval
+                            || sensitive_path.is_some()
                     }
-                    RiskLevel::Low => {
-                        tracing::debug!("Low-risk tool '{}' auto-approved", name);
+                    ApprovalMode::Yolo => tool_requires_approval || risk == RiskLevel::High,
+                    ApprovalMode::Plan => false,
+                    ApprovalMode::Smart => {
+                        // Low-risk auto-approved; medium/high and sensitive always go through
+                        // the approval runtime so that batch grants can be evaluated.
+                        risk == RiskLevel::High
+                            || risk == RiskLevel::Medium
+                            || tool_requires_approval
+                            || sensitive_path.is_some()
                     }
-                    _ => {}
+                };
+
+                let diff_preview = if name == "file_edit" {
+                    self.preview_file_edit_diff(&args).await
+                } else {
+                    None
+                };
+
+                if needs_approval {
+                    self.wait_for_tool_approval(
+                        runtime,
+                        &tool_call_for_approval,
+                        description,
+                        diff_preview,
+                    )
+                    .await?;
+                } else {
+                    match risk {
+                        RiskLevel::Medium => {
+                            tracing::info!(
+                                "Medium-risk tool '{}' auto-approved in {:?} mode",
+                                name,
+                                mode
+                            );
+                        }
+                        RiskLevel::Low => {
+                            tracing::debug!("Low-risk tool '{}' auto-approved", name);
+                        }
+                        _ => {}
+                    }
                 }
             }
-        }
+        } // Phase 8: end if !policy_allow_direct
 
         let mode = self.inner.read().approval_mode;
         let ctx = ToolContext::new()

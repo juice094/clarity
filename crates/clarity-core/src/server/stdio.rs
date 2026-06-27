@@ -220,7 +220,7 @@ impl StdioServer {
                     })?;
 
                 op_tx
-                    .send(Op::UserTurn(prompt.to_string()))
+                    .send(Op::user_turn(prompt.to_string()))
                     .map_err(|_| StdioServerError::ChannelClosed)?;
 
                 Ok(json!({"status": "started"}))

@@ -1,16 +1,52 @@
 //! Tool call dispatch and compaction orchestration.
 
 use crate::agent::Agent;
-use crate::error::AgentError;
+use crate::error::{AgentError, ToolError};
 use crate::types::ToolCall;
 use clarity_contract::{LlmProvider, Message};
 use clarity_wire::WireMessage;
-use std::pin::Pin;
+use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use super::loop_helpers::scrub_credentials;
 use crate::agent::loop_detector::LoopDetection;
 use tracing::{info, warn};
+
+/// Maximum suffix length for the truncation notice.
+const TRUNCATION_SUFFIX_MAX: usize = 200;
+
+/// Truncate a tool result for LLM context injection.
+///
+/// When the result exceeds `max_chars`, the content is truncated at a
+/// newline boundary near the limit, and a note is appended describing
+/// how much was dropped and suggesting alternative tools for retrieval.
+///
+/// Wire-level delivery to frontends is unaffected — only the LLM sees
+/// the truncation.
+fn truncate_for_context(result: &str, tool_name: &str, max_chars: usize) -> String {
+    if result.len() <= max_chars {
+        return result.to_string();
+    }
+
+    // Try to truncate at a newline boundary to avoid splitting mid-line.
+    let cutoff = max_chars - TRUNCATION_SUFFIX_MAX;
+    let truncation_point = result[..cutoff].rfind('\n').unwrap_or(cutoff);
+
+    let truncated = &result[..truncation_point];
+    let dropped_chars = result.len() - truncation_point;
+    let dropped_lines = result[truncation_point..].lines().count();
+
+    let note = format!(
+        "\n\n[Output truncated: {} characters / ~{} lines dropped. \
+         Use '{}' with offset/limit (for files) or more specific parameters to retrieve the omitted portion.]",
+        dropped_chars, dropped_lines, tool_name
+    );
+
+    let mut output = String::with_capacity(truncated.len() + note.len());
+    output.push_str(truncated);
+    output.push_str(&note);
+    output
+}
 
 /// Output of dispatching a batch of tool calls.
 pub(crate) struct DispatchOutput {
@@ -82,13 +118,18 @@ impl Agent {
     /// results to `messages`. Returns the ordered list of tool names for telemetry.
     ///
     /// If any tool fails with a **non-recoverable** error, the function returns
-    /// `AgentError::ToolExecutionFailed` immediately after all concurrent calls
-    /// complete, preventing the LLM from entering an infinite retry loop.
+    /// `AgentError::ToolExecutionFailed` immediately after the batch completes,
+    /// preventing the LLM from entering an infinite retry loop.
     ///
     /// R1: Recoverable errors (IoError/Timeout/Unavailable) are intentionally NOT
     /// fatal on first failure — the LLM may retry with a different strategy.
     /// To prevent infinite loops, a per-turn circuit breaker upgrades to fatal
     /// after the SAME tool fails recoverably 3 times in a single turn.
+    ///
+    /// ponytail: executes tool calls sequentially. Concurrent execution was
+    /// attempted but removed to avoid approval-deadlock races; revisit only if
+    /// batch latency becomes a measured bottleneck and a concurrency policy is
+    /// designed.
     pub(crate) async fn dispatch_tool_calls(
         &self,
         tool_calls: &[ToolCall],
@@ -107,39 +148,34 @@ impl Agent {
         }
         let mut tool_names = Vec::new();
         let mut ask_user_question: Option<String> = None;
-        let mut modified_tool_calls: Vec<ToolCall> = Vec::new();
-        let mut execute_flags: Vec<bool> = Vec::new();
-        #[allow(clippy::type_complexity)]
-        let mut futures: Vec<
-            Pin<
-                Box<
-                    dyn std::future::Future<
-                            Output = Result<serde_json::Value, crate::error::ToolError>,
-                        > + Send,
-                >,
-            >,
-        > = Vec::new();
 
-        // Phase 1: run before_tool_call hooks, emit begin messages, and start all tool executions concurrently.
+        // Process each tool call sequentially: hooks -> begin -> execute -> result.
+        let mut fatal: Option<(String, String)> = None;
+
         for tool_call in tool_calls {
+            if cancel_token.is_cancelled() {
+                tracing::warn!("dispatch_tool_calls cancelled while processing tool calls");
+                return Err(AgentError::Cancelled);
+            }
+
             let mut tc = tool_call.clone();
-            let hooks_opt = {
-                let inner = self.inner.read();
-                inner.hook_registry.clone()
-            };
-            let should_execute = if let Some(hooks) = hooks_opt {
-                let registry = hooks.read().await;
-                match registry.before_tool_call(&mut tc).await {
-                    crate::agent::hooks::HookResult::Cancel(e) => {
-                        let err = crate::error::ToolError::execution_failed(e.to_string());
-                        futures.push(Box::pin(async move { Err(err) }));
-                        false
+            let cancel_error: Option<ToolError> = {
+                let hooks_opt = {
+                    let inner = self.inner.read();
+                    inner.hook_registry.clone()
+                };
+                if let Some(hooks) = hooks_opt {
+                    let registry = hooks.read().await;
+                    match registry.before_tool_call(&mut tc).await {
+                        crate::agent::hooks::HookResult::Cancel(e) => {
+                            Some(ToolError::execution_failed(e.to_string()))
+                        }
+                        crate::agent::hooks::HookResult::Replace(_) => None,
+                        crate::agent::hooks::HookResult::Continue => None,
                     }
-                    crate::agent::hooks::HookResult::Replace(_) => true,
-                    crate::agent::hooks::HookResult::Continue => true,
+                } else {
+                    None
                 }
-            } else {
-                true
             };
 
             tool_names.push(tc.function.name.clone());
@@ -148,7 +184,7 @@ impl Agent {
                 tool_name: tc.function.name.clone(),
             });
 
-            let args: serde_json::Value = serde_json::from_str(&tc.function.arguments)
+            let args: Value = serde_json::from_str(&tc.function.arguments)
                 .unwrap_or_else(|_| serde_json::json!({}));
             self.send_wire_message(WireMessage::ToolCall {
                 turn_id: String::new(),
@@ -157,31 +193,10 @@ impl Agent {
                 arguments: args,
             });
 
-            modified_tool_calls.push(tc);
-            execute_flags.push(should_execute);
-        }
-
-        for (tc, flag) in modified_tool_calls.iter().zip(execute_flags.iter()) {
-            if *flag {
-                futures.push(Box::pin(self.execute_tool_call(tc)));
-            }
-        }
-
-        // Phase 2: await all results sequentially to avoid concurrent approval deadlock.
-        let mut results = Vec::new();
-        for future in futures {
-            if cancel_token.is_cancelled() {
-                tracing::warn!("dispatch_tool_calls cancelled while awaiting results");
-                return Err(AgentError::Cancelled);
-            }
-            results.push(future.await);
-        }
-
-        // Phase 3: emit results in original order, append to messages, and
-        // detect non-recoverable failures.
-        let mut fatal: Option<(String, String)> = None;
-
-        for (tool_call, result) in modified_tool_calls.iter().zip(results) {
+            let result: Result<Value, ToolError> = match cancel_error {
+                Some(err) => Err(err),
+                None => self.execute_tool_call(&tc).await,
+            };
             let sanitized = result.map_err(|e| e.sanitize_paths());
             let mut result_value = match &sanitized {
                 Ok(v) => v.clone(),
@@ -206,9 +221,16 @@ impl Agent {
             });
 
             let scrubbed = scrub_credentials(&result_content);
+            // Truncate large tool results before injecting into LLM context.
+            // Frontends receive the full result via WireMessage::ToolResult above.
+            let context_content = truncate_for_context(
+                &scrubbed,
+                tool_call.function.name.as_str(),
+                self.config.max_tool_result_chars,
+            );
             let wrapped = format!(
                 "<tool_result name=\"{}\">{}</tool_result>",
-                tool_call.function.name, scrubbed
+                tool_call.function.name, context_content
             );
             messages.push(Message::tool(&tool_call.id, wrapped));
 
@@ -290,5 +312,55 @@ impl Agent {
             tool_names,
             ask_user_question,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_for_context;
+
+    #[test]
+    fn truncate_short_result_passes_through() {
+        let result = "short output";
+        let truncated = truncate_for_context(result, "read", 30_000);
+        assert_eq!(truncated, result);
+    }
+
+    #[test]
+    fn truncate_exact_boundary_passes_through() {
+        let result = "a".repeat(200);
+        let truncated = truncate_for_context(&result, "read", 200);
+        assert_eq!(truncated, result);
+    }
+
+    #[test]
+    fn truncate_large_result_adds_note() {
+        let lines: Vec<String> = (0..5000).map(|i| format!("line {}", i)).collect();
+        let result = lines.join("\n");
+        let truncated = truncate_for_context(&result, "grep", 1000);
+        assert!(truncated.len() <= 1000 + 50); // padding for the note
+        assert!(truncated.contains("[Output truncated:"));
+        assert!(truncated.contains("grep"));
+        assert!(!truncated.contains("line 4000")); // later lines should be cut
+    }
+
+    #[test]
+    fn truncate_no_newline_boundary_falls_back_to_cutoff() {
+        let result = "x".repeat(5000); // no newlines
+        let truncated = truncate_for_context(&result, "read", 1000);
+        assert!(truncated.len() <= 1000 + 50);
+        assert!(truncated.contains("[Output truncated:"));
+    }
+
+    #[test]
+    fn truncate_newline_boundary_splits_nicely() {
+        let mut result = String::new();
+        for i in 0..100 {
+            result.push_str(&format!("Line {:03}: some content here\n", i));
+        }
+        let truncated = truncate_for_context(&result, "read", 500);
+        // Should end with a complete line + truncation note
+        assert!(truncated.ends_with("portion.]"));
+        assert!(!truncated.ends_with("mid-"));
     }
 }

@@ -94,6 +94,15 @@ pub struct SessionMeta {
     /// Multi-agent protocol version, if applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub multi_agent_version: Option<String>,
+    /// User identifier for attribution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// Team identifier for team-scoped sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
+    /// Organization identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
 }
 
 impl Default for SessionMeta {
@@ -116,6 +125,9 @@ impl Default for SessionMeta {
             dynamic_tools: None,
             memory_mode: None,
             multi_agent_version: None,
+            user_id: None,
+            team_id: None,
+            org_id: None,
         }
     }
 }
@@ -223,6 +235,13 @@ pub enum RolloutEventMsg {
         /// Abort reason.
         reason: Option<String>,
     },
+    /// Turn lifecycle event for state-machine replay.
+    Lifecycle {
+        /// Event that drove the transition.
+        event: crate::lifecycle::RunEvent,
+        /// State after applying the event.
+        state: crate::lifecycle::RunState,
+    },
     /// Sub-agent activity notice.
     SubAgentActivity(serde_json::Value),
     /// Error event.
@@ -296,9 +315,34 @@ pub struct TurnContextItem {
 pub struct RolloutLine {
     /// ISO-8601 timestamp of the line.
     pub timestamp: String,
+    /// Monotonic sequence number within the thread.
+    ///
+    /// ponytail: optional for backward compatibility with pre-Phase-5 rollout files;
+    /// new writes always populate it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<u64>,
+    /// Device that produced this line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+    /// Logical clock of the originating device.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_clock: Option<u64>,
     /// The rollout item payload.
     #[serde(flatten)]
     pub item: RolloutItem,
+}
+
+impl Default for RolloutLine {
+    fn default() -> Self {
+        Self {
+            timestamp: String::new(),
+            seq: None,
+            device_id: None,
+            origin_clock: None,
+            // ponytail: placeholder used only for struct-update syntax in tests.
+            item: RolloutItem::EventMsg(RolloutEventMsg::Other(serde_json::Value::Null)),
+        }
+    }
 }
 
 /// Parameters for creating a new thread rollout.
@@ -330,6 +374,12 @@ pub struct CreateRolloutParams {
     pub model_provider: Option<String>,
     /// Multi-agent protocol version, if applicable.
     pub multi_agent_version: Option<String>,
+    /// User identifier for attribution.
+    pub user_id: Option<String>,
+    /// Team identifier for team-scoped sessions.
+    pub team_id: Option<String>,
+    /// Organization identifier.
+    pub org_id: Option<String>,
     /// If true, do not write an initial `SessionMeta` line when creating the
     /// rollout file. Used when the caller will supply the initial items, such
     /// as during a fork.
