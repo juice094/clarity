@@ -406,6 +406,7 @@ fn build_provider(profile: &ProviderProfile) -> anyhow::Result<Arc<dyn LlmProvid
 }
 
 /// Map a raw [WireMessage] to a mobile-friendly [UiEvent].
+#[allow(unreachable_patterns)] // `_` catch-all is intentional for future variants
 fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
     Some(match msg {
         WireMessage::TurnBegin {
@@ -428,7 +429,6 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
             name,
             arguments_json: arguments.to_string(),
         },
-        WireMessage::ToolCallProgress { .. } => return None,
         WireMessage::ToolResult {
             turn_id,
             id,
@@ -466,6 +466,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
         },
         // Variants not needed for the mobile chat UI are dropped.
         WireMessage::StepBegin { .. }
+        | WireMessage::ToolCallProgress { .. }
         | WireMessage::PlanStepBegin { .. }
         | WireMessage::PlanStepEnd { .. }
         | WireMessage::PlanStepSkipped { .. }
