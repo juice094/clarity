@@ -15,7 +15,7 @@ const TOAST_W: f32 = 320.0;
 const TOAST_H: f32 = 56.0;
 
 /// Renders the toasts UI — right-aligned stack near the bottom-right corner
-/// with fade-in animation and per-level icons.
+/// with fade-in animation, per-level icons, and click-to-dismiss.
 pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
     let now = Instant::now();
     let theme = app.ui_store.theme.clone();
@@ -33,17 +33,26 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
     let max_toasts = ((screen.height() - 40.0) / TOAST_H).max(1.0) as usize;
     let toast_count = app.ui_store.toasts.len().min(max_toasts);
 
-    for (i, toast) in app.ui_store.toasts.iter().enumerate().take(max_toasts) {
+    // Snapshot visible toasts for rendering (avoid borrowing issues for dismiss).
+    let visible: Vec<_> = app
+        .ui_store
+        .toasts
+        .iter()
+        .take(max_toasts)
+        .cloned()
+        .collect();
+
+    let mut dismissed: Vec<usize> = Vec::new();
+
+    for (i, toast) in visible.iter().enumerate() {
         let count_from_bottom = toast_count - i;
         let x = screen.max.x - TOAST_W - theme.space_16;
         let y = screen.max.y - 20.0 - count_from_bottom as f32 * TOAST_H;
 
-        // Fade-in: 0 → 1 over duration_normal, cubic ease-out.
         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
         let fade_ratio = (elapsed / theme.duration_normal).min(1.0);
         let alpha = ease_out_cubic(fade_ratio);
 
-        // Per-level styling.
         let (icon, accent_color, border_color) = match toast.level {
             ToastLevel::Info => (crate::theme::ICON_INFO, theme.accent, theme.accent_subtle),
             ToastLevel::Warn => (
@@ -57,6 +66,8 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                 rgba(239, 107, 107, 0.20),
             ),
         };
+
+        let toast_id = i; // capture for closure
 
         egui::Area::new(egui::Id::new(("toast_v2", i)))
             .fixed_pos(egui::pos2(x, y))
@@ -78,7 +89,6 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                     .show(ui, |ui| {
                         ui.set_width(TOAST_W - theme.space_24);
                         ui.horizontal(|ui| {
-                            // Icon (left, colored).
                             ui.label(
                                 egui::RichText::new(icon)
                                     .font(theme.font_icon(theme.text_md))
@@ -86,7 +96,6 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                             );
                             ui.add_space(theme.space_8);
 
-                            // Message body.
                             ui.vertical(|ui| {
                                 let trunc = truncate_msg(&toast.message, 60);
                                 ui.label(
@@ -96,7 +105,6 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                                 );
                             });
 
-                            // Close button (right).
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -111,8 +119,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                                         .frame(false),
                                     );
                                     if close_btn.clicked() {
-                                        // Mark for removal by zeroing creation time.
-                                        // SAFE: the retain above will drop it next frame.
+                                        dismissed.push(toast_id);
                                     }
                                     if close_btn.hovered() {
                                         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -123,16 +130,23 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                     });
             });
     }
+
+    // Remove dismissed toasts (in reverse order to preserve indices).
+    dismissed.sort_unstable_by(|a, b| b.cmp(a));
+    for idx in dismissed {
+        if idx < app.ui_store.toasts.len() {
+            app.ui_store.toasts.remove(idx);
+        }
+    }
 }
 
-/// Truncate a message to `max_chars` visible characters (ellipsis if exceeded).
 fn truncate_msg(msg: &str, max_chars: usize) -> String {
     let chars: Vec<char> = msg.chars().collect();
     if chars.len() <= max_chars {
         return msg.to_string();
     }
     let mut out: String = chars.into_iter().take(max_chars - 1).collect();
-    out.push('…');
+    out.push('\u{2026}');
     out
 }
 

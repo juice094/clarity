@@ -164,3 +164,59 @@ impl<'a> Widget for ChatPane<'a> {
         paragraph.render(inner_area, buf);
     }
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    // ── relative_label ──
+
+    #[test]
+    fn relative_label_just_now() {
+        let now = Instant::now();
+        assert_eq!(relative_label(now), "just now");
+    }
+
+    #[test]
+    fn relative_label_seconds() {
+        let ten_sec_ago = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
+        assert_eq!(relative_label(ten_sec_ago), "10s ago");
+    }
+
+    #[test]
+    fn relative_label_minutes() {
+        let five_min_ago = Instant::now()
+            .checked_sub(Duration::from_secs(300))
+            .unwrap();
+        assert_eq!(relative_label(five_min_ago), "5m ago");
+    }
+
+    #[test]
+    fn relative_label_hours() {
+        let three_hr_ago = Instant::now()
+            .checked_sub(Duration::from_secs(10800))
+            .unwrap();
+        assert_eq!(relative_label(three_hr_ago), "3h ago");
+    }
+
+    #[test]
+    fn relative_label_days() {
+        let two_days_ago = Instant::now()
+            .checked_sub(Duration::from_secs(172800))
+            .unwrap();
+        assert_eq!(relative_label(two_days_ago), "2d ago");
+    }
+
+    #[test]
+    fn relative_label_boundary_5_to_6() {
+        let at_5 = Instant::now().checked_sub(Duration::from_secs(5)).unwrap();
+        let at_6 = Instant::now().checked_sub(Duration::from_secs(6)).unwrap();
+        assert_eq!(relative_label(at_5), "just now");
+        assert_eq!(relative_label(at_6), "6s ago");
+    }
+}

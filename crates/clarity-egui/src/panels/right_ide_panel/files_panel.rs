@@ -212,13 +212,18 @@ fn render_context_menu(
             .size(theme.text_xs)
             .color(theme.text),
         |ui| {
-            if ui.button(app.t("Open").to_string()).clicked() {
+            if ui.button(app.t("Preview").to_string()).clicked() {
                 let content = std::fs::read_to_string(&path_buf).unwrap_or_default();
                 app.ui_store.preview_item = Some(crate::ui::types::PreviewItem::File {
                     name: name.to_string(),
                     content,
                     path: path_buf.to_string_lossy().into_owned(),
                 });
+                ui.close_menu();
+            }
+            if ui.button(app.t("Open in Editor").to_string()).clicked() {
+                let file_url = format!("file:///{}", path_buf.to_string_lossy().replace('\\', "/"));
+                let _ = webbrowser::open(&file_url);
                 ui.close_menu();
             }
             if ui.button(app.t("Add to Chat").to_string()).clicked() {

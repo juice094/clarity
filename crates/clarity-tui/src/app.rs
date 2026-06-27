@@ -1200,6 +1200,40 @@ mod tests {
         let keep = app.handle_key(quit).await.unwrap();
         assert!(!keep, "app should stop after 'q' in Normal mode");
     }
+
+    // ── content_hash ──
+
+    #[test]
+    fn content_hash_same_content_same_hash() {
+        assert_eq!(content_hash("hello"), content_hash("hello"));
+    }
+
+    #[test]
+    fn content_hash_different_content_different_hash() {
+        assert_ne!(content_hash("hello"), content_hash("world"));
+    }
+
+    #[test]
+    fn content_hash_same_length_different_hash() {
+        // "fix bug" vs "fix bag" — same len, different content
+        assert_ne!(content_hash("fix bug"), content_hash("fix bag"));
+    }
+
+    #[test]
+    fn content_hash_appended_content_different_hash() {
+        let a = content_hash("streaming...");
+        let b = content_hash("streaming...done");
+        assert_ne!(a, b, "appended content must yield different hash");
+    }
+
+    #[test]
+    fn content_hash_empty_string() {
+        assert_eq!(
+            content_hash(""),
+            0,
+            "empty string hash → 0 (len=0, no bytes)"
+        );
+    }
 }
 
 impl App {

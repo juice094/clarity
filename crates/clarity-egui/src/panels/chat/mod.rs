@@ -317,26 +317,36 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(theme.space_20);
 
         // ── Active provider / model info line ──
-        let provider_name = app
-            .settings_store
-            .settings_edit
-            .active_persona_id
-            .clone()
-            .unwrap_or_else(|| "local".to_string());
+        let provider = &app.settings_store.settings_edit.provider;
+        let model = &app.settings_store.settings_edit.model;
+        let configured = !provider.is_empty();
         ui.label(
             egui::RichText::new(format!(
-                "{} {} · {} {}",
-                crate::theme::ICON_CPU,
-                app.t("Provider:"),
-                provider_name,
-                if app.state.llm_binding.lock().is_some() {
-                    "\u{2713}"
+                "{} {}: {} · {}: {}",
+                if configured {
+                    crate::theme::ICON_CHECK
                 } else {
-                    "\u{26A0}"
+                    crate::theme::ICON_WARNING
+                },
+                app.t("Provider"),
+                if configured {
+                    provider.as_str()
+                } else {
+                    app.t("not configured")
+                },
+                app.t("Model"),
+                if !model.is_empty() {
+                    model.as_str()
+                } else {
+                    "\u{2014}"
                 },
             ))
             .size(theme.text_xs)
-            .color(theme.text_dim),
+            .color(if configured {
+                theme.text_dim
+            } else {
+                theme.warn
+            }),
         );
 
         // ── Keyboard shortcuts hint ──

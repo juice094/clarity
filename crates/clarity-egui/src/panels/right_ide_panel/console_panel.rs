@@ -6,7 +6,6 @@
 
 use crate::App;
 use crate::stores::console::{ConsoleFilter, ConsoleLevel};
-use std::time::Instant;
 
 /// Maximum visible entry width in characters before truncation hint.
 const CONSOLE_MAX_VISIBLE_CHARS: usize = 2000;
@@ -67,6 +66,23 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let auto_label = app.t("Auto");
             ui.toggle_value(&mut app.console_store.auto_scroll, auto_label);
+            ui.add_space(theme.space_4);
+            let clear_label = app.t("Clear");
+            if ui
+                .add_sized(
+                    [40.0, 20.0],
+                    egui::Button::new(
+                        egui::RichText::new(clear_label)
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
+                    )
+                    .fill(theme.surface)
+                    .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8)),
+                )
+                .clicked()
+            {
+                app.console_store.entries.clear();
+            }
         });
     });
     ui.add_space(theme.space_8);
@@ -210,9 +226,7 @@ fn render_console_row(
     if clickable && row_resp.clicked() {
         // Inject error message into chat input for debugging.
         let snippet = format!(
-            "[{}] Error from {}: {}",
-            // SAFE: truncate_msg returns at most CONSOLE_MAX_VISIBLE_CHARS chars
-            chrono_simple(),
+            "[console] Error from {}: {}",
             entry.source,
             entry.message.lines().next().unwrap_or(&entry.message)
         );
@@ -239,12 +253,4 @@ fn truncate_msg(msg: &str) -> String {
     let mut out: String = chars.into_iter().take(CONSOLE_MAX_VISIBLE_CHARS).collect();
     out.push_str("…");
     out
-}
-
-/// Simple timestamp for console row injection (no chrono dep needed).
-fn chrono_simple() -> String {
-    let now = Instant::now();
-    // We use a fixed reference point since Instant doesn't give wall-clock.
-    // For inject-into-chat purposes, a relative marker suffices.
-    format!("[t+{:?}]", now)
 }

@@ -18,6 +18,9 @@ pub struct ContextPickerState {
     pub filter: String,
     /// Current working directory for file/folder resolution.
     pub cwd: PathBuf,
+    /// When set, the picker is showing a file browser sub-view instead of
+    /// the source list. `"file"` = file picker, `"folder"` = folder picker.
+    pub browsing: Option<String>,
 }
 
 /// Render the context picker popup. Returns `Some(ContextItem)` when the
@@ -90,11 +93,24 @@ pub fn render_context_picker(
                     });
 
                 if row.response.clicked() {
-                    let resolved_src = resolve_source(src, &state.filter);
-                    let item = build_item(&resolved_src, &state.cwd);
-                    result = Some(item);
-                    state.open = false;
-                    state.filter.clear();
+                    // File/Folder/Web/Terminal need user input; keep picker open
+                    // until the user types a filter value.
+                    let needs_filter = matches!(
+                        src,
+                        ContextSource::File { .. }
+                            | ContextSource::Folder { .. }
+                            | ContextSource::Web { .. }
+                            | ContextSource::Terminal { .. }
+                    );
+                    if needs_filter && state.filter.is_empty() {
+                        state.filter = String::new();
+                    } else {
+                        let resolved_src = resolve_source(src, &state.filter);
+                        let item = build_item(&resolved_src, &state.cwd);
+                        result = Some(item);
+                        state.open = false;
+                        state.filter.clear();
+                    }
                 }
             }
 
@@ -130,7 +146,7 @@ fn source_info(src: &ContextSource) -> (&'static str, &'static str, &'static str
     }
 }
 
-/// Resolve a source by using the filter text to refine paths.
+/// Resolve a source by using the filter text to refine paths or fill URL/command.
 fn resolve_source(src: &ContextSource, filter: &str) -> ContextSource {
     match src {
         ContextSource::File {
@@ -161,6 +177,24 @@ fn resolve_source(src: &ContextSource, filter: &str) -> ContextSource {
                 }
             }
             src.clone()
+        }
+        ContextSource::Web { .. } => {
+            if !filter.is_empty() {
+                ContextSource::Web {
+                    url: filter.to_string(),
+                }
+            } else {
+                src.clone()
+            }
+        }
+        ContextSource::Terminal { .. } => {
+            if !filter.is_empty() {
+                ContextSource::Terminal {
+                    command: filter.to_string(),
+                }
+            } else {
+                src.clone()
+            }
         }
         _ => src.clone(),
     }
@@ -219,8 +253,16 @@ fn build_item(src: &ContextSource, cwd: &PathBuf) -> ContextItem {
         },
         ContextSource::Web { url } => ContextItem {
             source: src.clone(),
-            display: url.clone(),
-            payload: url.clone(),
+            display: if url.is_empty() {
+                url.to_string()
+            } else {
+                format!("Web: {}", url)
+            },
+            payload: if url.is_empty() {
+                String::new()
+            } else {
+                format!("Web content from: {}", url)
+            },
         },
         // Extension points — return placeholder items.
         ContextSource::Documentation { url } => ContextItem {
