@@ -26,6 +26,62 @@ pub(crate) const MAX_TOOLS_JSON_BYTES: usize = 300_000;
 /// a small margin for JSON framing and provider metadata.
 pub(crate) const MAX_REQUEST_BODY_BYTES: usize = 2_000_000;
 
+/// Structured output / JSON mode configuration.
+///
+/// Mirrors OpenAI's `response_format` parameter. When set, the provider
+/// constrains the model to produce output matching the given format.
+/// Providers that do not support JSON mode ignore this field.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type")]
+pub enum ResponseFormat {
+    /// Standard JSON object mode (no schema enforcement).
+    #[serde(rename = "json_object")]
+    JsonObject,
+    /// Strict JSON Schema enforcement (OpenAI structured-outputs, DeepSeek, etc.).
+    #[serde(rename = "json_schema")]
+    JsonSchema {
+        /// The JSON Schema that the model output must conform to.
+        json_schema: JsonSchemaSpec,
+    },
+}
+
+/// Schema specification for structured output mode.
+#[derive(Debug, Clone, Serialize)]
+pub struct JsonSchemaSpec {
+    /// Schema name (provider-visible, max 64 chars).
+    pub name: String,
+    /// JSON Schema definition describing the expected output shape.
+    #[serde(rename = "schema")]
+    pub schema: Value,
+    /// Whether the provider should enforce strict schema adherence.
+    /// When `true`, the model must produce output that exactly matches the
+    /// schema; when `false` or `None`, the schema is advisory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strict: Option<bool>,
+    /// Human-readable description for the schema (optional, provider-dependent).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl ResponseFormat {
+    /// Create a JSON Object mode request (no schema).
+    pub fn json_object() -> Self {
+        Self::JsonObject
+    }
+
+    /// Create a strict JSON Schema mode request.
+    pub fn json_schema(name: impl Into<String>, schema: Value, strict: bool) -> Self {
+        Self::JsonSchema {
+            json_schema: JsonSchemaSpec {
+                name: name.into(),
+                schema,
+                strict: if strict { Some(true) } else { None },
+                description: None,
+            },
+        }
+    }
+}
+
 /// Truncate message history to fit within a byte budget while preserving the
 /// system prompt and the most recent user/assistant exchanges.
 ///
@@ -165,6 +221,8 @@ pub(crate) struct ChatCompletionRequest {
     pub(crate) prompt_cache_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) thinking: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) response_format: Option<Value>,
 }
 
 /// Single message in an OpenAI chat-completion request.

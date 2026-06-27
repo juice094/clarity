@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::catalog::CatalogError;
 use crate::catalog::entry::ModelCatalogEntry;
+use crate::catalog::CatalogError;
 
 /// Fetches a provider's model catalog from a remote or local source.
 ///

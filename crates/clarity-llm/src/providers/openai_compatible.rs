@@ -8,14 +8,15 @@ use crate::api::{
 };
 use crate::rate_limit;
 use crate::request::{
-    ApiFunctionCall, ApiMessage, ApiToolCall, ChatCompletionRequest, ChatCompletionResponse,
-    MAX_MESSAGE_BODY_BYTES, cap_tools_json, guard_request_body_size, truncate_messages_by_bytes,
+    cap_tools_json, guard_request_body_size, truncate_messages_by_bytes, ApiFunctionCall,
+    ApiMessage, ApiToolCall, ChatCompletionRequest, ChatCompletionResponse, ResponseFormat,
+    MAX_MESSAGE_BODY_BYTES,
 };
 use crate::sse;
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use futures::StreamExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::env;
 use std::sync::Arc;
 
@@ -29,6 +30,7 @@ pub struct OpenAiCompatibleLlm {
     model: String,
     client: reqwest::Client,
     prompt_cache_key: Arc<parking_lot::RwLock<Option<String>>>,
+    response_format: Arc<parking_lot::RwLock<Option<Value>>>,
 }
 
 impl OpenAiCompatibleLlm {
@@ -44,6 +46,7 @@ impl OpenAiCompatibleLlm {
             model: model.into(),
             client: crate::shared_http_client(),
             prompt_cache_key: Arc::new(parking_lot::RwLock::new(None)),
+            response_format: Arc::new(parking_lot::RwLock::new(None)),
         }
     }
 
@@ -68,6 +71,14 @@ impl OpenAiCompatibleLlm {
     /// Set a key used to enable prompt caching for subsequent requests.
     pub fn set_prompt_cache_key(&self, key: impl Into<String>) {
         *self.prompt_cache_key.write() = Some(key.into());
+    }
+
+    /// Enable structured output / JSON mode for subsequent requests.
+    ///
+    /// Pass `None` to disable. Providers that don't support JSON mode
+    /// (e.g. older Ollama versions) will ignore this field.
+    pub fn set_response_format(&self, format: Option<ResponseFormat>) {
+        *self.response_format.write() = format.and_then(|f| serde_json::to_value(f).ok());
     }
 }
 
@@ -136,6 +147,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             stream: false,
             prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
+            response_format: self.response_format.read().clone(),
         };
         guard_request_body_size(&mut request_body);
 
@@ -247,6 +259,7 @@ impl LlmProvider for OpenAiCompatibleLlm {
             stream: true,
             prompt_cache_key: self.prompt_cache_key.read().clone(),
             thinking: thinking_opt,
+            response_format: self.response_format.read().clone(),
         };
         guard_request_body_size(&mut request_body);
 
@@ -332,6 +345,14 @@ impl LlmProvider for OpenAiCompatibleLlm {
 
     fn set_prompt_cache_key(&self, key: &str) {
         self.set_prompt_cache_key(key);
+    }
+
+    fn set_response_format(&self, format: Option<serde_json::Value>) {
+        if let Some(f) = format {
+            *self.response_format.write() = Some(f);
+        } else {
+            *self.response_format.write() = None;
+        }
     }
 
     fn capabilities(&self) -> ProviderCapabilities {

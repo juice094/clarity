@@ -5,7 +5,9 @@
 //! explicit.
 
 pub mod chat;
+pub mod console;
 pub mod cron;
+pub mod files;
 pub mod knowledge;
 pub mod mcp;
 pub mod onboarding;
@@ -21,7 +23,9 @@ pub mod tool_call;
 pub mod ui;
 
 pub use chat::*;
+pub use console::*;
 pub use cron::*;
+pub use files::*;
 pub use knowledge::*;
 pub use mcp::*;
 pub use onboarding::*;

@@ -59,12 +59,12 @@ pub use llama_server::LlamaServerProvider;
 #[cfg(feature = "local-llm")]
 pub use local_gguf::{ChatTemplate, LocalGgufConfig, LocalGgufProvider};
 pub use model_registry::{
-    AuthType, ModelConfigFile, ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType,
-    ProviderConfig, build_provider_from_registry, build_provider_from_registry_entry,
-    build_provider_from_registry_with_key, default_secret_store,
+    build_provider_from_registry, build_provider_from_registry_entry,
+    build_provider_from_registry_with_key, default_secret_store, AuthType, ModelConfigFile,
+    ModelEntry, ModelRegistry, OAuthProviderConfig, ProtocolType, ProviderConfig,
 };
 pub use ollama::OllamaProvider;
-pub use policy::{ProviderSelection, select_provider};
+pub use policy::{select_provider, ProviderSelection};
 pub use providers::{AnthropicLlm, KimiCodeLlm, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
 pub use reliable::ReliableProvider;
 
@@ -74,6 +74,8 @@ pub use api::{LlmProvider, LlmResponse, Message, MessageRole, ProviderCapabiliti
 
 #[cfg(test)]
 pub(crate) use request::*;
+
+pub use request::{JsonSchemaSpec, ResponseFormat};
 
 use std::env;
 use std::path::PathBuf;
@@ -227,6 +229,7 @@ mod tests {
             stream: false,
             prompt_cache_key: Some("cache-key-123".into()),
             thinking: None,
+            response_format: None,
         };
         let json = serde_json::to_value(&request).unwrap();
         assert_eq!(json.get("model").unwrap(), "test-model");
@@ -256,6 +259,7 @@ mod tests {
             stream: false,
             prompt_cache_key: None,
             thinking: None,
+            response_format: None,
         };
         let json = serde_json::to_value(&request).unwrap();
         assert!(json.get("prompt_cache_key").is_none());
@@ -335,6 +339,7 @@ mod tests {
             stream: false,
             prompt_cache_key: None,
             thinking: None,
+            response_format: None,
         };
         guard_request_body_size(&mut request);
         assert!(request.tools.is_none());

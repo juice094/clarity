@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::time::Duration;
 
-use crate::catalog::CatalogError;
 use crate::catalog::entry::ModelCatalogEntry;
 use crate::catalog::fetcher::CatalogFetcher;
+use crate::catalog::CatalogError;
 
 /// Response shape returned by `GET /v1/models`.
 #[derive(Debug, Deserialize)]

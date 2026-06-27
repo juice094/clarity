@@ -32,6 +32,7 @@ const SKIP_DIRS: &[&str] = &[
 /// Render a directory tree starting at `path`.
 ///
 /// `on_file_click` is called when a file (not directory) is clicked.
+/// `on_secondary_click` is called on right-click (context menu trigger).
 /// `selected_path` highlights the matching file row with an accent indicator.
 pub fn render_file_tree(
     ui: &mut egui::Ui,
@@ -40,6 +41,7 @@ pub fn render_file_tree(
     depth: usize,
     selected_path: Option<&str>,
     on_file_click: &mut dyn FnMut(&Path),
+    on_secondary_click: &mut dyn FnMut(&Path),
     compact: bool,
 ) {
     if depth > MAX_DEPTH {
@@ -95,6 +97,7 @@ pub fn render_file_tree(
                     depth + 1,
                     selected_path,
                     on_file_click,
+                    on_secondary_click,
                     compact,
                 );
             });
@@ -157,6 +160,9 @@ pub fn render_file_tree(
             });
             if resp.response.clicked() {
                 on_file_click(&full_path);
+            }
+            if resp.response.secondary_clicked() {
+                on_secondary_click(&full_path);
             }
         }
     }

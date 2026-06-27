@@ -10,8 +10,8 @@
 //! export DEEPSEEK_MODEL="deepseek-chat"  # or "deepseek-reasoner"
 //! ```
 
-use crate::OpenAiCompatibleLlm;
 use crate::api::{LlmProvider, LlmResponse, Message};
+use crate::OpenAiCompatibleLlm;
 use async_trait::async_trait;
 use clarity_contract::AgentError;
 use serde_json::Value;

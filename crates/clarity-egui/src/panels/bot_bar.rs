@@ -192,7 +192,62 @@ pub fn render_bot_bar(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+
+            // Token usage progress bar.
+            let tu = &app.chat_store.token_usage;
+            if tu.total_tokens > 0 {
+                let ratio = (tu.total_tokens as f32) / (tu.context_limit as f32);
+                let pct = (ratio * 100.0).min(100.0);
+                let bar_color = if pct > 95.0 {
+                    theme.danger
+                } else if pct > 80.0 {
+                    theme.warn
+                } else {
+                    theme.accent
+                };
+                let bar_w = ui.available_width();
+                let bar_h = 3.0;
+                let (rect, _resp) =
+                    ui.allocate_exact_size(egui::vec2(bar_w, bar_h), egui::Sense::hover());
+                // Background track.
+                ui.painter()
+                    .rect_filled(rect, egui::CornerRadius::same(1), theme.bg_hover);
+                // Filled portion.
+                let fill_w = bar_w * ratio.min(1.0);
+                if fill_w > 0.0 {
+                    let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_w, bar_h));
+                    ui.painter()
+                        .rect_filled(fill_rect, egui::CornerRadius::same(1), bar_color);
+                }
+                // Tooltip on hover.
+                if rect.contains(ui.input(|i| i.pointer.hover_pos()).unwrap_or_default()) {
+                    egui::show_tooltip_at_pointer(ui.ctx(), egui::Id::new("token_bar_tooltip"), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} / {} tokens ({:.1}%)",
+                                format_num(tu.total_tokens),
+                                format_num(tu.context_limit),
+                                pct,
+                            ))
+                            .size(theme.text_xs)
+                            .color(theme.text),
+                        );
+                    });
+                }
+            }
+            });
         });
+}
+
+/// Format a u64 as a human-readable number (e.g. 128000 → "128K").
+fn format_num(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{}K", n / 1_000)
+    } else {
+        n.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -215,6 +270,7 @@ mod tests {
             turn_heights: vec![],
             provider_state: HashMap::new(),
             in_flight: false,
+            diff_stats: None,
         }
     }
 

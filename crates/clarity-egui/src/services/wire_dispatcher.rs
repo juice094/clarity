@@ -126,6 +126,7 @@ pub fn dispatch_wire_message(
                     turn_heights: Vec::new(),
                     provider_state: HashMap::new(),
                     in_flight: false,
+                    diff_stats: None,
                 })
                 .collect();
             Some(UiEvent::ThreadList { threads: sessions })
@@ -146,6 +147,7 @@ pub fn dispatch_wire_message(
                 turn_heights: Vec::new(),
                 provider_state: HashMap::new(),
                 in_flight: false,
+                diff_stats: None,
             },
         }),
         clarity_wire::WireMessage::ThreadUpdated {

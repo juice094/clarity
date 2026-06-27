@@ -35,6 +35,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
             category: s.category.clone(),
             context: s.context.clone(),
             is_active: s.id == app.session_store.active_session_id,
+            diff_stats: s.diff_stats.clone(),
         })
         .collect();
 
@@ -74,6 +75,17 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
 
                         let resp =
                             crate::widgets::nav_row(ui, &theme, icon, &session.title, is_active);
+                        // Render diff stats badge if present.
+                        if let Some(ref stats) = session.diff_stats {
+                            let badge = format!("+{} -{}", stats.lines_added, stats.lines_removed);
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.label(
+                                    egui::RichText::new(&badge)
+                                        .size(theme.text_xs)
+                                        .color(theme.text_dim),
+                                );
+                            });
+                        }
                         if resp.clicked() && !session.is_active {
                             clicked_id = Some(session.id.clone());
                         }
@@ -97,6 +109,7 @@ struct SessionRow {
     category: String,
     context: SessionContext,
     is_active: bool,
+    diff_stats: Option<crate::ui::types::DiffStats>,
 }
 
 /// Choose an icon that reflects the session *context* (Chat / Claw / Work)

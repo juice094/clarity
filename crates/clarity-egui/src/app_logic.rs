@@ -489,6 +489,8 @@ impl App {
             claw_pairing_client: None,
             claw_pairing_state: crate::PairingState::default(),
             knowledge_store: crate::stores::KnowledgeStore::new(),
+            console_store: crate::stores::ConsoleStore::default(),
+            files_store: crate::stores::FilesStore::default(),
         };
         mark("app_struct_init");
 

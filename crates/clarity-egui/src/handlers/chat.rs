@@ -3,7 +3,8 @@ use std::time::Instant;
 
 use crate::stores::{ChatStore, SessionStore};
 use crate::ui::types::{
-    AgentStatus, ContentBlock, DraftStatus, Message, Role, ToastLevel, ToolCallInfo, ToolCallStatus,
+    AgentStatus, ContentBlock, DiffStats, DraftStatus, Message, Role, ToastLevel, ToolCallInfo,
+    ToolCallStatus,
 };
 
 /// Returns true if `session_id` is the currently active session.
@@ -182,6 +183,9 @@ pub fn on_done(app: &mut crate::App, session_id: &str) {
             }
         }
         session.updated_at = crate::session::now_millis();
+
+        // Compute diff stats from tool results in this session.
+        compute_session_diff_stats(session);
     }
 
     save_target_session(app, session_id);
@@ -478,6 +482,13 @@ pub fn on_usage(
 ) {
     if is_active(session_store, session_id) {
         chat_store.last_usage = Some((prompt_tokens, completion_tokens, total_tokens));
+        chat_store.token_usage = crate::stores::chat::TokenUsage {
+            prompt_tokens: prompt_tokens as u64,
+            completion_tokens: completion_tokens as u64,
+            total_tokens: total_tokens as u64,
+            last_updated: std::time::Instant::now(),
+            ..chat_store.token_usage.clone()
+        };
     }
 }
 
@@ -612,6 +623,49 @@ pub fn on_web_page_fetched(
     });
 }
 
+/// Compute `DiffStats` for a session by scanning tool-result blocks for
+/// `_diff_preview` patches emitted by `FileEditTool` / `FileWriteTool`.
+pub fn compute_session_diff_stats(session: &mut crate::ui::types::Session) {
+    let mut files_changed = 0usize;
+    let mut lines_added = 0usize;
+    let mut lines_removed = 0usize;
+
+    for msg in &session.messages {
+        for block in &msg.blocks {
+            if let ContentBlock::ToolResult {
+                name: _,
+                args: _,
+                output,
+                truncated: _,
+            } = block
+            {
+                if let Some(hunks) = crate::widgets::diff_viewer::extract_diff_from_tool_result(output)
+                {
+                    files_changed += 1;
+                    for hunk in hunks {
+                        for line in &hunk.lines {
+                            match line {
+                                clarity_core::diff::DiffLine::Added(_) => lines_added += 1,
+                                clarity_core::diff::DiffLine::Removed(_) => lines_removed += 1,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if files_changed > 0 {
+        session.diff_stats = Some(DiffStats {
+            files_changed,
+            lines_added,
+            lines_removed,
+            computed_at: crate::session::now_millis(),
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -633,6 +687,7 @@ mod tests {
             turn_heights: Vec::new(),
             provider_state: HashMap::new(),
             in_flight: false,
+            diff_stats: None,
         }
     }
 

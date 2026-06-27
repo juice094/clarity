@@ -3,6 +3,36 @@
 //! input, messages, loading state, tool calls, plans
 
 use crate::ui::types::*;
+use std::time::Instant;
+
+/// Live token usage snapshot for the active session.
+#[derive(Clone, Debug)]
+pub struct TokenUsage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
+    /// Model context window size. Defaults to 128K; set from provider
+    /// config when available.
+    pub context_limit: u64,
+    /// When this snapshot was last updated.
+    pub last_updated: Instant,
+    // === Extension points ===
+    /// Estimated cost in USD. Reserved for future pricing integration.
+    pub cost_estimate: Option<f64>,
+}
+
+impl Default for TokenUsage {
+    fn default() -> Self {
+        Self {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+            context_limit: 128_000,
+            last_updated: Instant::now(),
+            cost_estimate: None,
+        }
+    }
+}
 
 /// Holds chat UI state.
 pub struct ChatStore {
@@ -15,6 +45,10 @@ pub struct ChatStore {
     pub pending_send: Option<(String, Vec<Attachment>)>,
     /// Latest token usage for the active session.
     pub last_usage: Option<(u32, u32, u32)>,
+    /// Structured token usage for the active session (richer than last_usage).
+    pub token_usage: TokenUsage,
+    /// Context items collected via # quick-add. Injected before user message on send.
+    pub context_items: Vec<crate::ui::types::ContextItem>,
     /// Pending plan for user review (Plan mode).
     pub pending_plan: Option<clarity_core::agent::Plan>,
     /// Live execution tracker for an active plan.
@@ -55,6 +89,8 @@ impl Default for ChatStore {
             tool_calls: Vec::new(),
             pending_send: None,
             last_usage: None,
+            token_usage: TokenUsage::default(),
+            context_items: Vec::new(),
             pending_plan: None,
             plan_tracker: None,
             stick_to_bottom: true,

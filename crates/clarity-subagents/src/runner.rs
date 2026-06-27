@@ -444,12 +444,41 @@ impl SubagentRunner {
         let max_iters = spec.max_iterations.unwrap_or(type_def.max_iterations);
         store.set_budget(&agent_id, max_iters);
 
-        // 3. 创建执行上下文
+        // 3. 创建执行上下文；如果启用了 worktree，创建隔离工作空间。
+        let mut token = spec.capability_token.clone();
+        let mut worktree_guard: Option<WorktreeGuard> = if token
+            .as_ref()
+            .map(|t| t.enable_worktree)
+            .unwrap_or(false)
+        {
+            match create_worktree_for_agent(&agent_id, &self.working_dir).await {
+                Ok(path) => {
+                    if let Some(ref mut t) = token {
+                        t.sandbox_dir = Some(path.clone());
+                    }
+                    Some(WorktreeGuard::new(path))
+                }
+                Err(e) => {
+                    warn!("Failed to create worktree for agent {}: {}", agent_id, e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         let mut context = ExecutionContext::new(&self.context_dir, &agent_id);
-        context.set_capability_token(spec.capability_token.clone());
+        context.set_capability_token(token);
         context.restore().await?;
 
         // 4. 创建输出收集器
+        let mut collector = OutputCollector::new(context.output_path(), &agent_id);
+        if let Some(ref tx) = self.progress_tx {
+            collector = collector.with_progress_tx(tx.clone());
+        }
+        if worktree_guard.is_some() {
+            collector.stage("worktree_created");
+        }
+        collector.stage("runner_started");
         let mut collector = OutputCollector::new(context.output_path(), &agent_id);
         if let Some(ref tx) = self.progress_tx {
             collector = collector.with_progress_tx(tx.clone());
@@ -524,6 +553,22 @@ impl SubagentRunner {
             }
         }
 
+        // 5.6 如果指定了 output_schema，配置结构化输出
+        if let Some(ref schema) = spec.output_schema {
+            if let Some(ref llm) = agent.llm() {
+                let rf = serde_json::json!({
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "subagent_output",
+                        "schema": schema,
+                        "strict": true
+                    }
+                });
+                llm.set_response_format(Some(rf));
+                collector.stage("response_format_set");
+            }
+        }
+
         // 6. 准备提示词
         let prompt = self
             .prepare_prompt(&spec, &type_def, &context, resumed)
@@ -583,6 +628,11 @@ impl SubagentRunner {
                         steps: steps_taken,
                         max_steps: max_iters,
                     });
+                }
+
+                // Mark worktree for cleanup on success.
+                if let Some(ref mut guard) = worktree_guard {
+                    guard.mark_success();
                 }
 
                 Ok(SubagentResult {
@@ -856,6 +906,99 @@ Your previous response was too brief. Please provide a more comprehensive summar
     pub fn working_dir(&self) -> &Path {
         &self.working_dir
     }
+}
+
+// =============================================================================
+// Worktree isolation helpers
+// =============================================================================
+
+/// RAII guard that cleans up a git worktree on drop.
+///
+/// Call [`WorktreeGuard::mark_success`] before dropping to remove the
+/// worktree on completion; on error (drop without marking), the worktree
+/// is preserved for debugging.
+struct WorktreeGuard {
+    path: std::path::PathBuf,
+    should_remove: bool,
+}
+
+impl WorktreeGuard {
+    fn new(path: std::path::PathBuf) -> Self {
+        Self {
+            path,
+            should_remove: false,
+        }
+    }
+
+    fn mark_success(&mut self) {
+        self.should_remove = true;
+    }
+}
+
+impl Drop for WorktreeGuard {
+    fn drop(&mut self) {
+        if self.should_remove {
+            let _ = std::fs::remove_dir_all(&self.path);
+            // Also prune the worktree from git's metadata.
+            let _ = std::process::Command::new("git")
+                .args(["worktree", "prune"])
+                .output();
+        }
+    }
+}
+
+/// Create a git worktree under `.clarity/worktrees/<agent_id>`.
+///
+/// Returns the path to the worktree root on success.
+async fn create_worktree_for_agent(
+    agent_id: &str,
+    repo_root: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    let worktree_root = repo_root
+        .join(".clarity")
+        .join("worktrees");
+    let agent_worktree = worktree_root.join(agent_id);
+
+    // Create parent directory if needed.
+    tokio::fs::create_dir_all(&worktree_root)
+        .await
+        .map_err(|e| format!("Failed to create worktree root: {}", e))?;
+
+    // Remove existing worktree if present (e.g. from a previous failed run).
+    if agent_worktree.exists() {
+        tokio::fs::remove_dir_all(&agent_worktree)
+            .await
+            .map_err(|e| format!("Failed to clean stale worktree: {}", e))?;
+    }
+
+    // Create a branch name from the agent_id.
+    let branch = format!("clarity-wt-{}", &agent_id[..agent_id.len().min(20)]);
+
+    let output = tokio::process::Command::new("git")
+        .args([
+            "worktree",
+            "add",
+            "--detach",
+            agent_worktree.to_str().ok_or("invalid worktree path")?,
+        ])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run git worktree add: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git worktree add failed: {}", stderr));
+    }
+
+    // Delete the branch reference to avoid cluttering `git branch` output.
+    let _ = tokio::process::Command::new("git")
+        .args(["branch", "-D", &branch])
+        .current_dir(repo_root)
+        .output()
+        .await;
+
+    Ok(agent_worktree)
 }
 
 // =============================================================================

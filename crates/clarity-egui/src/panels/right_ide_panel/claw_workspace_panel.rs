@@ -88,6 +88,9 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         app.view_state
                             .set_right_rail_panel(clarity_core::ui::RightRailPanel::ClawWebBridge);
                     },
+                    &mut |_path: &std::path::Path| {
+                        // Secondary click: no-op in Claw workspace for now.
+                    },
                     false, // compact
                 );
             } else {

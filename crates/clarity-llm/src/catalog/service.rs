@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use tracing;
 
-use crate::catalog::CatalogError;
 use crate::catalog::cache::CatalogCache;
 use crate::catalog::entry::ModelCatalogEntry;
 use crate::catalog::fetcher::CatalogFetcher;
 use crate::catalog::fetchers::{OllamaFetcher, OpenAiCompatibleFetcher};
+use crate::catalog::CatalogError;
 use crate::model_registry::{ModelRegistry, ProtocolType};
 use crate::registry_table;
 

@@ -57,6 +57,8 @@ pub struct UiStore {
     pub claw_history: Vec<String>,
     /// Gateway-assigned session id when connected via the native WebSocket protocol.
     pub claw_gateway_session_id: String,
+    /// `#` context picker state for quick-add context injection.
+    pub context_picker_state: crate::widgets::context_picker::ContextPickerState,
     /// Pretext PoC: whether the text-measurement probe window is open.
     pub pretext_probe_open: bool,
     /// Pretext PoC: wrap-preview max width in the probe window.

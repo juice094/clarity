@@ -20,7 +20,7 @@ use serde_json::Value;
 
 use crate::api::{LlmProvider, LlmResponse, Message, ProviderCapabilities, StreamDelta};
 use crate::{
-    ModelRegistry, ReliableProvider, build_provider_from_registry_entry, default_secret_store,
+    build_provider_from_registry_entry, default_secret_store, ModelRegistry, ReliableProvider,
 };
 use clarity_contract::AgentError;
 

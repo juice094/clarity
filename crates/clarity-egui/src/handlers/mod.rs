@@ -7,8 +7,9 @@ pub mod system;
 pub mod task;
 pub mod team;
 
-use crate::App;
+use crate::stores::console::{ConsoleEntry, ConsoleLevel};
 use crate::ui::types::UiEvent;
+use crate::App;
 
 /// Dispatches queued UI events to handlers.
 pub fn process_events(app: &mut App) {
@@ -60,21 +61,46 @@ pub fn process_events(app: &mut App) {
                     &mut app.session_store,
                     &mut app.chat_store,
                     &session_id,
-                    id,
-                    name,
-                    result,
+                    id.clone(),
+                    name.clone(),
+                    result.clone(),
                 );
+                // Push to console log.
+                let is_error = result.contains("error") || result.contains("Error");
+                app.console_store.push(ConsoleEntry {
+                    timestamp: std::time::Instant::now(),
+                    level: if is_error {
+                        ConsoleLevel::Error
+                    } else {
+                        ConsoleLevel::ToolOutput
+                    },
+                    source: name,
+                    message: result,
+                    truncated: false,
+                    source_pid: None,
+                    ansi_styled: None,
+                });
             }
             UiEvent::StepBegin {
                 session_id,
                 tool_name,
             } => {
+                let msg = format!("🔧 正在执行: {}…", tool_name);
                 chat::on_status_update(
                     &app.session_store,
                     &mut app.chat_store,
                     &session_id,
-                    format!("🔧 正在执行: {}…", tool_name),
+                    msg.clone(),
                 );
+                app.console_store.push(ConsoleEntry {
+                    timestamp: std::time::Instant::now(),
+                    level: ConsoleLevel::Status,
+                    source: tool_name,
+                    message: msg,
+                    truncated: false,
+                    source_pid: None,
+                    ansi_styled: None,
+                });
             }
             UiEvent::CompactionBegin { session_id } => {
                 chat::on_compaction_begin(&app.session_store, &mut app.view_state, &session_id);
@@ -107,14 +133,32 @@ pub fn process_events(app: &mut App) {
                     &app.session_store,
                     &mut app.chat_store,
                     &session_id,
-                    user_input,
+                    user_input.clone(),
                 );
+                app.console_store.push(ConsoleEntry {
+                    timestamp: std::time::Instant::now(),
+                    level: ConsoleLevel::Info,
+                    source: "agent".into(),
+                    message: format!("Turn started — {}", user_input),
+                    truncated: false,
+                    source_pid: None,
+                    ansi_styled: None,
+                });
             }
             UiEvent::TurnEnd { session_id } => chat::on_turn_end(app, &session_id),
             UiEvent::StatusUpdate {
                 session_id,
                 message,
             } => {
+                app.console_store.push(ConsoleEntry {
+                    timestamp: std::time::Instant::now(),
+                    level: ConsoleLevel::Status,
+                    source: "agent".into(),
+                    message: message.clone(),
+                    truncated: false,
+                    source_pid: None,
+                    ansi_styled: None,
+                });
                 chat::on_status_update(
                     &app.session_store,
                     &mut app.chat_store,

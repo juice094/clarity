@@ -212,6 +212,13 @@ pub struct RunSpec {
     pub capability_token: Option<CapabilityToken>,
     /// Goal tags for routing decisions.
     pub goal_tags: Vec<String>,
+    /// Optional JSON Schema for structured output enforcement.
+    ///
+    /// When set, the subagent's LLM provider will be configured with
+    /// `response_format: { type: "json_schema", json_schema: { ... } }`.
+    /// The subagent's final response is validated against this schema
+    /// (best-effort; unsupported providers fall back to unconstrained text).
+    pub output_schema: Option<serde_json::Value>,
 }
 
 impl RunSpec {
@@ -227,6 +234,7 @@ impl RunSpec {
             git_context: true,
             capability_token: None,
             goal_tags: Vec::new(),
+            output_schema: None,
         }
     }
 
@@ -251,6 +259,15 @@ impl RunSpec {
     /// 设置最大迭代次数
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = Some(max);
+        self
+    }
+
+    /// 设置结构化输出 JSON Schema。
+    ///
+    /// 当设置时，子代理的 LLM provider 将被配置为结构化输出模式，
+    /// 最终响应将根据此 schema 进行验证（尽力而为；不支持的 provider 退回非结构化文本）。
+    pub fn with_output_schema(mut self, schema: serde_json::Value) -> Self {
+        self.output_schema = Some(schema);
         self
     }
 

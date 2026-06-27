@@ -1,6 +1,8 @@
 pub mod avatar;
 pub mod collapsible_section;
 pub mod command_palette;
+pub mod context_picker;
+pub mod diff_viewer;
 pub mod draft_indicator;
 pub mod icon_button;
 pub mod interactive_row;

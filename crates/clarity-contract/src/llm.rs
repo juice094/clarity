@@ -98,6 +98,16 @@ pub trait LlmProvider: Send + Sync {
     /// Set a prompt cache key for provider-side cache routing.
     fn set_prompt_cache_key(&self, key: &str);
 
+    /// Enable JSON structured output mode for subsequent requests.
+    ///
+    /// `format` should be the serialized `response_format` JSON value:
+    /// - `{"type": "json_object"}` for free-form JSON
+    /// - `{"type": "json_schema", "json_schema": {...}}` for schema-constrained output
+    ///
+    /// Pass `None` to disable. Default is a no-op; providers that support
+    /// structured output should override.
+    fn set_response_format(&self, _format: Option<serde_json::Value>) {}
+
     /// Clear any provider-side cache (e.g., local KV cache).
     /// Default is a no-op; providers with local state should override.
     fn clear_cache(&self) {}

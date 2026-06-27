@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use crate::catalog::CatalogError;
 use crate::catalog::entry::ModelCatalogEntry;
+use crate::catalog::CatalogError;
 
 /// Persists fetched catalogs as JSON files under a directory.
 ///

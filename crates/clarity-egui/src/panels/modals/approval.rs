@@ -117,7 +117,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     );
                 });
 
-            // Diff preview (for file_edit etc.)
+            // Diff preview using the unified diff viewer widget.
             if let Some(ref patch) = request.diff_preview {
                 ui.add_space(app.ui_store.theme.space_8);
                 ui.label(
@@ -125,28 +125,14 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         .strong()
                         .color(app.ui_store.theme.text),
                 );
-                egui::Frame::new()
-                    .fill(app.ui_store.theme.code_block_bg)
-                    .corner_radius(egui::CornerRadius::same(app.ui_store.theme.radius_sm as u8))
-                    .inner_margin(egui::Margin::same(10))
-                    .show(ui, |ui| {
-                        ui.set_max_width(560.0);
-                        egui::ScrollArea::vertical()
-                            .max_height(200.0)
-                            .show(ui, |ui| {
-                                let hunks = clarity_core::diff::parse_unified_diff(patch);
-                                let lines = clarity_core::diff::flatten_hunks(&hunks);
-                                for (tag, text) in lines {
-                                    let color = match tag {
-                                        "header" => app.ui_store.theme.accent,
-                                        "-" => app.ui_store.theme.danger,
-                                        "+" => app.ui_store.theme.ok,
-                                        _ => app.ui_store.theme.text,
-                                    };
-                                    ui.monospace(egui::RichText::new(text).color(color).size(11.0));
-                                }
-                            });
-                    });
+                let hunks = clarity_core::diff::parse_unified_diff(patch);
+                let cfg = crate::widgets::diff_viewer::approval_diff_config();
+                let _diff_resp = crate::widgets::diff_viewer::render_diff_view(
+                    ui,
+                    &hunks,
+                    &app.ui_store.theme,
+                    &cfg,
+                );
             }
 
             // Risk / sensitivity description
@@ -205,15 +191,27 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                         });
                     }
 
-                    // Approve
+                    // Approve (with optional file count)
+                    let approve_label = if let Some(ref patch) = request.diff_preview {
+                        let file_count = patch.lines().filter(|l| l.starts_with("--- ")).count();
+                        if file_count > 0 {
+                            format!(
+                                "{} Approve ({} file{}) (Enter)",
+                                crate::theme::ICON_CHECK,
+                                file_count,
+                                if file_count > 1 { "s" } else { "" },
+                            )
+                        } else {
+                            format!("{} Approve (Enter)", crate::theme::ICON_CHECK)
+                        }
+                    } else {
+                        format!("{} Approve (Enter)", crate::theme::ICON_CHECK)
+                    };
                     if ui
                         .button(
-                            egui::RichText::new(format!(
-                                "{} Approve (Enter)",
-                                crate::theme::ICON_CHECK
-                            ))
-                            .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
-                            .color(app.ui_store.theme.ok),
+                            egui::RichText::new(approve_label)
+                                .font(app.ui_store.theme.font_icon(app.ui_store.theme.text_sm))
+                                .color(app.ui_store.theme.ok),
                         )
                         .clicked()
                     {

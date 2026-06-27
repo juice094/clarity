@@ -87,6 +87,10 @@ pub struct CapabilityToken {
     pub read_only: bool,
     /// Optional maximum iteration limit.
     pub max_iterations: Option<usize>,
+    /// Whether to create a git worktree for filesystem isolation.
+    /// When enabled, the subagent operates in `.clarity/worktrees/<agent_id>/`
+    /// and its sandbox_dir is automatically set to the worktree root.
+    pub enable_worktree: bool,
 }
 
 impl CapabilityToken {
@@ -97,6 +101,7 @@ impl CapabilityToken {
             sandbox_dir: None,
             read_only: false,
             max_iterations: None,
+            enable_worktree: false,
         }
     }
 
@@ -130,6 +135,17 @@ impl CapabilityToken {
     /// Set maximum iterations limit.
     pub fn with_max_iterations(mut self, max: usize) -> Self {
         self.max_iterations = Some(max);
+        self
+    }
+
+    /// Enable git worktree isolation for filesystem safety.
+    ///
+    /// When enabled, the subagent runner creates a git worktree under
+    /// `.clarity/worktrees/<agent_id>/` and sets `sandbox_dir` to the
+    /// worktree root. Cleanup is performed on successful completion;
+    /// the worktree is preserved on error for debugging.
+    pub fn with_worktree(mut self) -> Self {
+        self.enable_worktree = true;
         self
     }
 

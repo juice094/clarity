@@ -118,6 +118,10 @@ pub(crate) struct App {
     pub(crate) claw_pairing_state: PairingState,
     /// OKF knowledge bundle browser state.
     pub(crate) knowledge_store: crate::stores::KnowledgeStore,
+    /// Console output ring-buffer for the right-rail Console panel.
+    pub(crate) console_store: crate::stores::ConsoleStore,
+    /// Local file browser state for the right-rail Files panel.
+    pub(crate) files_store: crate::stores::FilesStore,
 }
 
 mod app_logic;

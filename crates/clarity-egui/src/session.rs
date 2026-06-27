@@ -74,6 +74,7 @@ pub fn load_sessions() -> Vec<Session> {
                             turn_heights: vec![],
                             provider_state: data.provider_state,
                             in_flight: false,
+                            diff_stats: None,
                         });
                     }
                 }
@@ -161,6 +162,7 @@ pub fn new_session(index: usize, context: SessionContext) -> Session {
         turn_heights: vec![],
         provider_state: HashMap::new(),
         in_flight: false,
+        diff_stats: None,
     }
 }
 

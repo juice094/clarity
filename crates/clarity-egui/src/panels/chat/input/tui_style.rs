@@ -58,6 +58,39 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     // Outer padding around the floating composer card.
     ui.add_space(theme.space_8);
 
+    // ── Context items (from # quick-add) ──
+    if !app.chat_store.context_items.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let mut remove_idx: Option<usize> = None;
+            for (i, item) in app.chat_store.context_items.iter().enumerate() {
+                let chip = egui::Frame::new()
+                    .fill(theme.accent_subtle)
+                    .corner_radius(egui::CornerRadius::same(6))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("#").size(theme.text_xs).color(theme.accent),
+                            );
+                            ui.label(
+                                egui::RichText::new(&item.display)
+                                    .size(theme.text_xs)
+                                    .color(theme.text),
+                            );
+                        });
+                    });
+                if chip.response.clicked() {
+                    remove_idx = Some(i);
+                }
+            }
+            if let Some(i) = remove_idx {
+                app.chat_store.context_items.remove(i);
+            }
+        });
+        ui.add_space(theme.space_4);
+    }
+
     // ── Attachment chips (above the composer) ──
     if !app.chat_store.attachments.is_empty() || app.chat_store.last_snapshot.is_some() {
         ui.horizontal_wrapped(|ui| {

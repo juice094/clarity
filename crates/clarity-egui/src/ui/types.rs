@@ -335,6 +335,24 @@ pub enum PlanStepStatus {
     Skipped,
 }
 
+/// Code-change statistics for a completed session.
+///
+/// Computed after the agent finishes executing tools that modify files.
+/// Displayed as a `+N -M` badge in the session history list, matching the
+/// convention used by Claude Code Web and other AI code editors.
+#[derive(Clone, Default)]
+pub struct DiffStats {
+    /// Number of distinct files touched by file_write / file_edit tools.
+    pub files_changed: usize,
+    /// Total lines added across all patches in this session.
+    pub lines_added: usize,
+    /// Total lines removed across all patches in this session.
+    pub lines_removed: usize,
+    /// Timestamp (ms) when these stats were last computed.  Used to detect
+    /// whether a re-computation is needed after a session is updated.
+    pub computed_at: u64,
+}
+
 /// Holds session state.
 #[derive(Clone)]
 pub struct Session {
@@ -360,6 +378,8 @@ pub struct Session {
     /// Runtime-only flag: true while this session is waiting for a streamed
     /// response. Never persisted; used to keep per-session turn state.
     pub in_flight: bool,
+    /// Diff stats computed after the last completed turn.
+    pub diff_stats: Option<DiffStats>,
 }
 
 impl std::fmt::Debug for Session {
@@ -749,6 +769,44 @@ impl ToolCallInfo {
 pub struct Attachment {
     pub path: std::path::PathBuf,
     pub name: String,
+}
+
+/// A context item collected via `#` quick-add in the input field.
+/// Displayed as a chip/tag and injected as system context before the user
+/// message is sent to the LLM.
+#[derive(Clone, Debug)]
+pub struct ContextItem {
+    pub source: ContextSource,
+    /// Short display label (e.g. "main.rs:42-58").
+    pub display: String,
+    /// Actual content injected into the prompt.
+    pub payload: String,
+}
+
+/// Origin of a context item collected via `#` quick-add.
+#[derive(Clone, Debug)]
+pub enum ContextSource {
+    /// A file (optionally with line range).
+    File {
+        path: String,
+        start_line: Option<usize>,
+        end_line: Option<usize>,
+    },
+    /// A code symbol (function, class, etc.) identified by LSP.
+    Code { symbol: String, file: String },
+    /// All content from a directory.
+    Folder { path: String },
+    /// Terminal command output.
+    Terminal { command: String },
+    /// Web page content.
+    Web { url: String },
+    // === Extension points (reserved for future backend features) ===
+    /// Documentation reference. Reserved.
+    Documentation { url: String },
+    /// Semantic codebase search result. Reserved.
+    Codebase { query: String },
+    /// Git diff against a base branch. Reserved for GitHub integration.
+    GitDiff { base_branch: String },
 }
 
 /// Holds toast state.

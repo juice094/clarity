@@ -11,16 +11,16 @@
 //! Provider-specific helpers (`anthropic`, `deepseek`, `kimi`, `openai`)
 //! are deprecated; prefer registry aliases or `create_with_key()`.
 
-use crate::LOCAL_MODEL_HELP;
 use crate::api::LlmProvider;
 use crate::auth::OAuthTokenManager;
 use crate::deepseek::DeepSeekProvider;
 use crate::deepseek_device::{DeepSeekDeviceOptions, DeepSeekDeviceProvider};
 use crate::model_registry::{
-    ModelRegistry, build_provider_from_registry_entry, default_secret_store,
+    build_provider_from_registry_entry, default_secret_store, ModelRegistry,
 };
 use crate::providers::{AnthropicLlm, KimiCodeLlm, KimiLlm, OAuthLlm, OpenAiCompatibleLlm};
 use crate::resolve_local_model_path;
+use crate::LOCAL_MODEL_HELP;
 use clarity_contract::AgentError;
 use std::env;
 use std::sync::Arc;

@@ -104,6 +104,7 @@ mod tests {
             turn_heights: Vec::new(),
             provider_state: HashMap::new(),
             in_flight: false,
+            diff_stats: None,
         }
     }
 

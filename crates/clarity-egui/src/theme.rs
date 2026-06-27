@@ -89,6 +89,16 @@ pub struct Theme {
     pub warn: egui::Color32,
     pub danger: egui::Color32,
 
+    // --- Diff view ---
+    /// Added-line background in unified diff view.
+    pub diff_added_bg: egui::Color32,
+    /// Added-line text color.
+    pub diff_added_text: egui::Color32,
+    /// Removed-line background in unified diff view.
+    pub diff_removed_bg: egui::Color32,
+    /// Removed-line text color.
+    pub diff_removed_text: egui::Color32,
+
     // --- Borders & Inputs ---
     pub border: egui::Color32,
     pub border_strong: egui::Color32,
@@ -298,6 +308,12 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
+            // Diff
+            diff_added_bg: rgba(70, 180, 100, 0.12),
+            diff_added_text: hex("#6BCB8A"),
+            diff_removed_bg: rgba(239, 91, 91, 0.12),
+            diff_removed_text: hex("#EF8A8A"),
+
             // Borders: Kimi uses very subtle separators
             border: rgba(255, 255, 255, 0.06),
             border_strong: rgba(255, 255, 255, 0.10),
@@ -486,6 +502,12 @@ impl Theme {
             warn: hex("#D4A050"),
             danger: hex("#EF6B6B"),
 
+            // Diff
+            diff_added_bg: rgba(70, 180, 100, 0.12),
+            diff_added_text: hex("#6BCB8A"),
+            diff_removed_bg: rgba(239, 91, 91, 0.12),
+            diff_removed_text: hex("#EF8A8A"),
+
             // Borders: slate-blue tint for subtle boundary visibility on pure-black backgrounds
             border: rgba(110, 135, 175, 0.04),
             border_strong: rgba(110, 135, 175, 0.08),
@@ -668,6 +690,12 @@ impl Theme {
             ok: hex("#6bb87a"),
             warn: hex("#d4a050"),
             danger: hex("#c97060"),
+
+            // Diff
+            diff_added_bg: rgba(70, 140, 80, 0.10),
+            diff_added_text: hex("#2d6a3a"),
+            diff_removed_bg: rgba(200, 70, 70, 0.10),
+            diff_removed_text: hex("#a04040"),
 
             // Borders: warm-tinted — strengthened for boundary visibility
             border: hex("#c8cad4"),
