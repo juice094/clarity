@@ -1439,7 +1439,7 @@ fn hex_alpha(s: &str, alpha: f32) -> egui::Color32 {
     egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a)
 }
 
-fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
+pub(crate) fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
     let a = (a * 255.0).clamp(0.0, 255.0) as u8;
     egui::Color32::from_rgba_premultiplied(r, g, b, a)
 }

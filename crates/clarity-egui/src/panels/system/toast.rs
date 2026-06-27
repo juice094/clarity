@@ -53,12 +53,12 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
             ToastLevel::Warn => (
                 crate::theme::ICON_WARNING,
                 theme.warn,
-                rgba(212, 160, 80, 0.20),
+                crate::theme::rgba(212, 160, 80, 0.20),
             ),
             ToastLevel::Error => (
                 crate::theme::ICON_X,
                 theme.danger,
-                rgba(239, 107, 107, 0.20),
+                crate::theme::rgba(239, 107, 107, 0.20),
             ),
         };
 
@@ -133,9 +133,4 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
             app.ui_store.toasts.remove(idx);
         }
     }
-}
-
-fn rgba(r: u8, g: u8, b: u8, a: f32) -> egui::Color32 {
-    let a = (a * 255.0).clamp(0.0, 255.0) as u8;
-    egui::Color32::from_rgba_premultiplied(r, g, b, a)
 }
