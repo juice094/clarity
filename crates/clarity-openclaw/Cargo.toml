@@ -45,6 +45,9 @@ dirs = "5.0"
 # Observability
 tracing = { workspace = true }
 
+# HTTP client for MeshClient gateway sync
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 # Sync primitives
 parking_lot = "0.12"
 

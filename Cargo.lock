@@ -1905,6 +1905,7 @@ dependencies = [
  "hex",
  "parking_lot",
  "rand 0.8.6",
+ "reqwest",
  "ring",
  "serde",
  "serde_json",

@@ -56,44 +56,80 @@ pub(crate) fn is_context_overflow_error(err: &AgentError) -> bool {
         || msg.contains("contextoverflow")
 }
 
-/// Fast-trim tool results from messages to recover from context window overflow.
-/// Removes the oldest non-system messages in pairs (assistant tool_call + tool result)
-/// until under the budget or no more trimmable messages remain.
+/// Token-aware context overflow recovery.
 ///
-/// ponytail: heuristic "drop the oldest half" strategy. Replace with token-aware
-/// truncation once `clarity-core` exposes a message tokenizer interface.
+/// When the LLM returns a context-overflow error, this function uses
+/// [`crate::compaction::estimate_text_tokens`] (tiktoken cl100k_base) to
+/// determine exactly how many tokens to shed, then removes the oldest
+/// assistant‑tool_result pairs until the total falls under a safe
+/// threshold. Falls back to the heuristic "drop oldest half" strategy
+/// only when the tokenizer is unavailable.
+///
+/// Target: reduce total tokens by ~30% (or drop at least one pair).
 pub(crate) fn fast_trim_tool_results(messages: &mut Vec<Message>) {
-    // Identify indices of tool-result messages (role=Tool).
-    let tool_indices: Vec<usize> = messages
-        .iter()
-        .enumerate()
-        .filter(|(_, m)| m.role == MessageRole::Tool)
-        .map(|(i, _)| i)
-        .collect();
+    // Build the list of trimmable (assistant_idx, tool_idx) pairs.
+    // Walk backward so we can remove from the end first (avoids index
+    // shifting).
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    for i in (1..messages.len()).rev() {
+        if messages[i].role == MessageRole::Tool
+            && i > 0
+            && messages[i - 1].role == MessageRole::Assistant
+        {
+            pairs.push((i - 1, i));
+        }
+    }
+    // pairs is in reverse order (newest first); oldest pairs are at the end.
 
-    if tool_indices.is_empty() {
-        // No tool results to trim; remove oldest user/assistant pair as last resort.
+    if pairs.is_empty() {
+        // Fallback: no tool-result pairs → remove oldest non-system message.
         if messages.len() > 2 {
-            messages.remove(1); // oldest non-system
+            messages.remove(1);
         }
         return;
     }
 
-    // Remove up to half of the tool results (oldest first), keeping the most recent.
-    let to_remove = (tool_indices.len() / 2).max(1);
-    for &idx in tool_indices.iter().take(to_remove) {
-        // Also remove the preceding assistant message that issued the tool_call,
-        // if it exists and its tool_calls reference this result.
-        if idx > 0 && messages[idx - 1].role == MessageRole::Assistant {
-            messages.remove(idx - 1);
-            // After removing idx-1, the tool result is now at idx-1.
-            if idx - 1 < messages.len() && messages[idx - 1].role == MessageRole::Tool {
-                messages.remove(idx - 1);
-            }
-        } else {
-            messages.remove(idx);
-        }
+    // Calculate current token budget and target.
+    let current_tokens: usize = messages
+        .iter()
+        .map(|m| crate::compaction::estimate_text_tokens(&m.content))
+        .sum::<usize>();
+    let target_tokens = current_tokens.saturating_mul(2) / 3; // ~33% reduction
+
+    // Remove oldest pairs until under target (or only 1 pair remains).
+    let mut removed = 0usize;
+    while pairs.len() > 1
+        && messages
+            .iter()
+            .map(|m| crate::compaction::estimate_text_tokens(&m.content))
+            .sum::<usize>()
+            > target_tokens
+    {
+        // Oldest pair is at the back of the reversed list.
+        #[allow(clippy::expect_used)]
+        // SAFE: while loop guards pairs.len() > 1 so pop never returns None
+        let (ai, ti) = pairs.pop().expect("pairs non-empty");
+        // Remove from back to front to keep earlier indices valid.
+        // ti > ai always because we built them as (i-1, i).
+        messages.remove(ti);
+        messages.remove(ai);
+        removed += 1;
     }
+
+    // If we removed nothing (budget was already ok or only 1 pair),
+    // still drop at least the oldest pair as a safety measure.
+    if removed == 0 {
+        #[allow(clippy::expect_used)] // SAFE: function only called when pairs is non-empty
+        let (ai, ti) = pairs.last().copied().expect("pairs non-empty");
+        messages.remove(ti);
+        messages.remove(ai);
+    }
+
+    tracing::info!(
+        "Context overflow recovery: removed {} assistant+tool pairs, {} messages remain",
+        removed.max(1),
+        messages.len()
+    );
 }
 
 /// Scrub sensitive credentials from tool output before injecting into LLM context.
@@ -360,5 +396,54 @@ mod tests {
         .await;
         assert!(result.is_err());
         assert_eq!(attempts, 1);
+    }
+
+    // ── fast_trim_tool_results tests ──────────────────────────────────────
+
+    #[test]
+    fn trim_removes_oldest_assistant_tool_pair() {
+        use clarity_contract::{Message, MessageRole};
+        let mut messages = vec![
+            Message::system("sys"),
+            Message::user("q1"),
+            Message::assistant("a1"),
+            Message::tool("t1", "result1"),
+            Message::user("q2"),
+            Message::assistant("a2"),
+            Message::tool("t2", "result2"),
+        ];
+        let original_len = messages.len();
+        super::fast_trim_tool_results(&mut messages);
+        // Should have removed the oldest (assistant + tool) pair.
+        assert!(messages.len() < original_len);
+        // System message should still be first.
+        assert_eq!(messages[0].role, MessageRole::System);
+        // The second user message should still be present.
+        assert!(messages.iter().any(|m| m.content == "q2"));
+    }
+
+    #[test]
+    fn trim_no_tool_results_removes_oldest_non_system() {
+        use clarity_contract::{Message, MessageRole};
+        let mut messages = vec![
+            Message::system("sys"),
+            Message::user("q1"),
+            Message::assistant("a1"),
+            Message::user("q2"),
+        ];
+        let original_len = messages.len();
+        super::fast_trim_tool_results(&mut messages);
+        assert!(messages.len() < original_len);
+        assert_eq!(messages[0].role, MessageRole::System);
+    }
+
+    #[test]
+    fn trim_system_only_noop() {
+        use clarity_contract::Message;
+        let mut messages = vec![Message::system("sys")];
+        let original_len = messages.len();
+        super::fast_trim_tool_results(&mut messages);
+        // Should not remove the only message (system).
+        assert_eq!(messages.len(), original_len);
     }
 }

@@ -412,6 +412,10 @@ pub fn create_api_router(state: Arc<AppState>) -> Router {
             get(handlers::claw::list_devices).post(handlers::claw::register_device),
         )
         .route(
+            "/api/v1/claw/sync",
+            post(handlers::claw_sync::sync_role_context),
+        )
+        .route(
             "/api/v2/threads",
             post(handlers::threads::create_thread).get(handlers::threads::list_threads),
         )

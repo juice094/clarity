@@ -5,8 +5,7 @@
 //! incrementally updated when the circuit breaker disables a failing tool.
 
 use serde_json::Value;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use sha2::{Digest, Sha256};
 
 /// Stable snapshot of the working tool set for the current turn.
 #[derive(Debug, Clone)]
@@ -63,10 +62,9 @@ impl ToolPromptManager {
 }
 
 fn hash_value(value: &Value) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    // Normalized form: deterministic JSON string.
-    value.to_string().hash(&mut hasher);
-    hasher.finish()
+    // Normalized form: deterministic JSON string hashed with SHA-256.
+    let digest = Sha256::digest(value.to_string().as_bytes());
+    u64::from_le_bytes(digest[..8].try_into().unwrap_or([0; 8]))
 }
 
 #[cfg(test)]

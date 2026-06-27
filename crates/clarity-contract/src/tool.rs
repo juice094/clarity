@@ -150,6 +150,18 @@ pub trait Tool: Send + Sync {
     fn check_readiness(&self) -> Option<String> {
         None
     }
+
+    /// Maximum characters of output to inject into the LLM context.
+    ///
+    /// Returns `None` to use the global [`AgentConfig::max_tool_result_chars`]
+    /// default (30,000). Tools that produce known-large outputs (e.g. `file_read`
+    /// on large files) should return a tighter limit.
+    ///
+    /// Wire-level delivery to frontends is **never** affected — only the
+    /// version the LLM sees is limited.
+    fn max_output_chars(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Type-erased tool wrapper for storage in collections.

@@ -7,6 +7,8 @@ pub mod allowlist;
 pub mod channel;
 #[doc(hidden)]
 pub mod i18n;
+pub mod identity;
+pub mod lifecycle;
 pub mod log;
 pub mod pairing;
 #[doc(hidden)]

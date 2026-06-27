@@ -223,11 +223,16 @@ impl Agent {
             let scrubbed = scrub_credentials(&result_content);
             // Truncate large tool results before injecting into LLM context.
             // Frontends receive the full result via WireMessage::ToolResult above.
-            let context_content = truncate_for_context(
-                &scrubbed,
-                tool_call.function.name.as_str(),
-                self.config.max_tool_result_chars,
-            );
+            // Per-tool limit takes precedence over the global AgentConfig default.
+            let max_chars = self
+                .registry
+                .get(&tc.function.name)
+                .ok()
+                .flatten()
+                .and_then(|tool| tool.max_output_chars())
+                .unwrap_or(self.config.max_tool_result_chars);
+            let context_content =
+                truncate_for_context(&scrubbed, tool_call.function.name.as_str(), max_chars);
             let wrapped = format!(
                 "<tool_result name=\"{}\">{}</tool_result>",
                 tool_call.function.name, context_content

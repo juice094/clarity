@@ -1,7 +1,6 @@
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 /// Metadata captured for a single tool invocation.
 #[derive(Debug, Clone)]
@@ -18,15 +17,23 @@ pub struct ToolInvocation {
 
 impl ToolInvocation {
     fn new(tool_name: &str, args: &str, output: &str) -> Self {
-        let mut hasher = DefaultHasher::new();
-        output.hash(&mut hasher);
         Self {
             tool_name: tool_name.to_string(),
             args: args.to_string(),
             output: output.to_string(),
-            output_hash: hasher.finish(),
+            output_hash: hash_u64(output),
         }
     }
+}
+
+/// Compute a 64-bit hash from SHA-256 (first 8 bytes).
+///
+/// Uses SHA-256 for collision resistance, truncated to u64 for storage
+/// compactness. Birthday bound at ~2³² invocations — well above any
+/// practical per-turn tool call volume.
+fn hash_u64(data: &str) -> u64 {
+    let digest = Sha256::digest(data.as_bytes());
+    u64::from_le_bytes(digest[..8].try_into().unwrap_or([0; 8]))
 }
 
 /// Result of a loop detection check.
@@ -121,13 +128,8 @@ impl LoopDetector {
     ///   or 2 identical tool+args patterns).
     /// - `LoopDetection::Break` if the tool has produced the same output `max_repetitions` times.
     pub fn record(&mut self, tool_name: &str, args: &str, output: &str) -> LoopDetection {
-        let mut hasher = DefaultHasher::new();
-        output.hash(&mut hasher);
-        let output_hash = hasher.finish();
-
-        let mut hasher = DefaultHasher::new();
-        args.hash(&mut hasher);
-        let args_hash = hasher.finish();
+        let output_hash = hash_u64(output);
+        let args_hash = hash_u64(args);
 
         // Record the invocation before any early returns so stagnation analysis
         // sees the full history.

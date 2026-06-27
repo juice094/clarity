@@ -290,6 +290,17 @@ pub enum WsRequest {
         #[serde(default)]
         status: Option<String>,
     },
+    /// Authenticate with user identity (Phase 7).
+    Authenticate {
+        /// Device identifier.
+        device_id: String,
+        /// Optional user id to bind this device to.
+        #[serde(default)]
+        user_id: Option<String>,
+        /// Human-readable device name.
+        #[serde(default)]
+        device_name: Option<String>,
+    },
     /// Send a heartbeat for a registered Claw device.
     Heartbeat {
         /// Stable machine identifier.
@@ -404,6 +415,14 @@ pub enum WsResponse {
     DeviceAck {
         /// Registered device record.
         device: crate::handlers::claw::ClawDevice,
+    },
+    /// Authentication acknowledgement (Phase 7).
+    Authenticated {
+        /// Bound device id.
+        device_id: String,
+        /// Bound user id, if provided.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        user_id: Option<String>,
     },
     /// Background task creation response.
     TaskCreated {
@@ -599,6 +618,15 @@ async fn handle_request(
                         status,
                     });
             WsResponse::DeviceAck { device }
+        }
+        WsRequest::Authenticate {
+            device_id,
+            user_id,
+            device_name: _,
+        } => {
+            tracing::debug!(device_id=%device_id, ?user_id, "WebSocket Authenticate");
+            // ponytail: device→user binding is logged; persistence deferred to Phase 7+.
+            WsResponse::Authenticated { device_id, user_id }
         }
         WsRequest::CreateTask {
             name,

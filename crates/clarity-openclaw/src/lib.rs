@@ -12,6 +12,7 @@ pub mod device;
 pub mod discovery;
 pub mod gateway_client;
 pub mod mesh;
+pub mod mesh_client;
 pub mod protocol;
 pub mod types;
 

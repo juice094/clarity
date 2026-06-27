@@ -8,6 +8,8 @@ pub mod admin;
 pub mod chat;
 /// Claw device registry handlers.
 pub mod claw;
+/// Claw Mesh sync handlers (Phase 7).
+pub mod claw_sync;
 /// Provider and alias configuration handlers.
 pub mod config;
 /// Scheduled cron task handlers.

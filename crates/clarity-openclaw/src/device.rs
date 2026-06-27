@@ -28,8 +28,8 @@ pub struct DeviceIdentity {
 
 impl DeviceIdentity {
     /// Generate a new in-memory identity without persisting it.
-    #[cfg(test)]
-    fn generate_unpersisted() -> Self {
+    #[allow(dead_code)] // used by mesh_client tests and Phase 7 sync
+    pub(crate) fn generate_unpersisted() -> Self {
         let mut csprng = rand::rngs::OsRng;
         Self {
             signing_key: SigningKey::generate(&mut csprng),
