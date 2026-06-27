@@ -906,6 +906,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
                                                     content: c,
                                                     reasoning_content: r,
                                                     tool_calls: vec![],
+                                                    partial_tool_calls: vec![],
                                                 }))
                                                 .await
                                                 .is_err()

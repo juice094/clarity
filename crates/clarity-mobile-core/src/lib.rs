@@ -428,6 +428,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
             name,
             arguments_json: arguments.to_string(),
         },
+        WireMessage::ToolCallProgress { .. } => return None,
         WireMessage::ToolResult {
             turn_id,
             id,
@@ -473,6 +474,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
         | WireMessage::ThreadCreated { .. }
         | WireMessage::ThreadUpdated { .. }
         | WireMessage::ViewStateUpdate { .. } => return None,
+        _ => return None,
     })
 }
 

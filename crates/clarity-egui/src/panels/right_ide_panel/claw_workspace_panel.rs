@@ -92,6 +92,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         // Secondary click: no-op in Claw workspace for now.
                     },
                     false, // compact
+                    None,  // name_filter
                 );
             } else {
                 ui.add_space(theme.space_16);

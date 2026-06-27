@@ -308,6 +308,7 @@ impl LlmProvider for OllamaProvider {
                                                         content: Some(event.message.content),
                                                         reasoning_content: None,
                                                         tool_calls: vec![],
+                                                        partial_tool_calls: vec![],
                                                     }))
                                                     .await
                                                     .is_err()
@@ -334,6 +335,7 @@ impl LlmProvider for OllamaProvider {
                                                             content: None,
                                                             reasoning_content: None,
                                                             tool_calls,
+                                                            partial_tool_calls: vec![],
                                                         }))
                                                         .await
                                                         .is_err()

@@ -326,4 +326,22 @@ mod tests {
         let buttons = bot_bar_buttons(&crate::ui::types::SessionContext::Chat);
         assert_eq!(buttons.len(), 3);
     }
+
+    #[test]
+    fn format_num_small_values() {
+        assert_eq!(super::format_num(0), "0");
+        assert_eq!(super::format_num(999), "999");
+    }
+
+    #[test]
+    fn format_num_k_values() {
+        assert_eq!(super::format_num(1_000), "1K");
+        assert_eq!(super::format_num(128_000), "128K");
+    }
+
+    #[test]
+    fn format_num_m_values() {
+        assert_eq!(super::format_num(1_000_000), "1.0M");
+        assert_eq!(super::format_num(2_500_000), "2.5M");
+    }
 }

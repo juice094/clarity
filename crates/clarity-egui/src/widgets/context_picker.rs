@@ -91,7 +91,14 @@ pub fn render_context_picker(
                         .max_height(200.0)
                         .id_salt("ctx_picker_file_tree")
                         .show(ui, |ui| {
-                            let filter_lower = state.filter.to_lowercase();
+                            // ponytail: clone the filter so the closure below
+                            // can mutably borrow state.filter.clear().
+                            let filter_str = if state.filter.is_empty() {
+                                None
+                            } else {
+                                Some(state.filter.clone())
+                            };
+                            let name_filter: Option<&str> = filter_str.as_deref();
                             crate::ui::file_browser::render_file_tree(
                                 ui,
                                 &root,
@@ -99,16 +106,6 @@ pub fn render_context_picker(
                                 0,
                                 None,
                                 &mut |path: &std::path::Path| {
-                                    // Filter by filename if filter text is present.
-                                    let matches_filter = filter_lower.is_empty()
-                                        || path
-                                            .file_name()
-                                            .and_then(|n| n.to_str())
-                                            .map(|n| n.to_lowercase().contains(&filter_lower))
-                                            .unwrap_or(true);
-                                    if !matches_filter {
-                                        return;
-                                    }
                                     if path.is_file() || mode == "folder" {
                                         let resolved = if mode == "file" {
                                             ContextSource::File {
@@ -129,7 +126,8 @@ pub fn render_context_picker(
                                     }
                                 },
                                 &mut |_path: &std::path::Path| {},
-                                true, // compact
+                                true,        // compact
+                                name_filter, // name_filter
                             );
                         });
                 } else {
@@ -392,4 +390,54 @@ fn file_name(path: &str) -> String {
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_source_file_with_filter() {
+        let src = ContextSource::File {
+            path: "/tmp".into(),
+            start_line: None,
+            end_line: None,
+        };
+        let resolved = resolve_source(&src, "test.txt");
+        assert!(matches!(resolved, ContextSource::File { .. }));
+        if let ContextSource::File { path, .. } = resolved {
+            assert!(path.ends_with("test.txt"));
+        }
+    }
+
+    #[test]
+    fn resolve_source_web_fills_url() {
+        let src = ContextSource::Web { url: String::new() };
+        let resolved = resolve_source(&src, "https://example.com");
+        assert!(matches!(resolved, ContextSource::Web { .. }));
+        if let ContextSource::Web { url } = resolved {
+            assert_eq!(url, "https://example.com");
+        }
+    }
+
+    #[test]
+    fn resolve_source_terminal_fills_command() {
+        let src = ContextSource::Terminal {
+            command: String::new(),
+        };
+        let resolved = resolve_source(&src, "cargo test");
+        assert!(matches!(resolved, ContextSource::Terminal { .. }));
+    }
+
+    #[test]
+    fn file_name_extracts_correctly() {
+        assert_eq!(file_name("/home/user/main.rs"), "main.rs");
+        assert_eq!(file_name("C:\\Users\\test.txt"), "test.txt");
+    }
+
+    #[test]
+    fn file_name_falls_back_to_path() {
+        assert_eq!(file_name(""), "");
+        assert_eq!(file_name("nofile"), "nofile");
+    }
 }

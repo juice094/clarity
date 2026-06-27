@@ -257,6 +257,7 @@ impl LlmProvider for AnthropicLlm {
                                                             content: Some(text.to_string()),
                                                             reasoning_content: None,
                                                             tool_calls: vec![],
+                                                            partial_tool_calls: vec![],
                                                         }))
                                                         .await
                                                         .is_err()

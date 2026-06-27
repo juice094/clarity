@@ -1,7 +1,7 @@
 //! SSE (Server-Sent Events) parser for OpenAI-compatible streaming responses.
 
 use crate::api::StreamDelta;
-use clarity_contract::ToolCall;
+use clarity_contract::{PartialToolCallInfo, ToolCall};
 
 /// Accumulates partial tool-call fragments from streaming deltas.
 #[derive(Default)]
@@ -33,6 +33,20 @@ impl SseParser {
         }
     }
 
+    /// Build the current partial tool calls snapshot for incremental emission.
+    fn partial_snapshot(&self) -> Vec<PartialToolCallInfo> {
+        self.partial_calls
+            .iter()
+            .enumerate()
+            .filter(|(_, ptc)| !ptc.name.is_empty())
+            .map(|(i, ptc)| PartialToolCallInfo {
+                index: i,
+                name: ptc.name.clone(),
+                arguments_so_far: ptc.arguments.clone(),
+            })
+            .collect()
+    }
+
     /// Parse one SSE `data:` line and return any deltas it produces.
     pub fn process_line(&mut self, data: &str) -> Vec<StreamDelta> {
         let mut out = Vec::new();
@@ -43,6 +57,7 @@ impl SseParser {
                     content: None,
                     reasoning_content: None,
                     tool_calls: vec![call],
+                    ..Default::default()
                 });
             }
             return out;
@@ -64,22 +79,28 @@ impl SseParser {
             // Content delta
             if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
                 if !content.is_empty() {
-                    out.push(StreamDelta {
+                    let mut d = StreamDelta {
                         content: Some(content.to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
-                    });
+                        ..Default::default()
+                    };
+                    d.partial_tool_calls = self.partial_snapshot();
+                    out.push(d);
                 }
             }
 
             // Reasoning content delta (Kimi Code API)
             if let Some(reasoning) = delta.get("reasoning_content").and_then(|c| c.as_str()) {
                 if !reasoning.is_empty() {
-                    out.push(StreamDelta {
+                    let mut d = StreamDelta {
                         content: Some(reasoning.to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
-                    });
+                        ..Default::default()
+                    };
+                    d.partial_tool_calls = self.partial_snapshot();
+                    out.push(d);
                 }
             }
 
@@ -98,11 +119,14 @@ impl SseParser {
                     if let Some(last) = self.last_seen_index {
                         if index > last {
                             if let Some(call) = self.flush_last() {
-                                out.push(StreamDelta {
+                                let mut d = StreamDelta {
                                     content: None,
                                     reasoning_content: None,
                                     tool_calls: vec![call],
-                                });
+                                    ..Default::default()
+                                };
+                                d.partial_tool_calls = self.partial_snapshot();
+                                out.push(d);
                             }
                         }
                     }
@@ -132,6 +156,11 @@ impl SseParser {
             }
         }
 
+        // Attach partial state to the last output delta.
+        if let Some(last) = out.last_mut() {
+            last.partial_tool_calls = self.partial_snapshot();
+        }
+
         out
     }
 
@@ -141,6 +170,7 @@ impl SseParser {
             content: None,
             reasoning_content: None,
             tool_calls: vec![call],
+            ..Default::default()
         })
     }
 

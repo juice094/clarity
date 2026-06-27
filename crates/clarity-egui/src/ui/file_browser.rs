@@ -34,6 +34,7 @@ const SKIP_DIRS: &[&str] = &[
 /// `on_file_click` is called when a file (not directory) is clicked.
 /// `on_secondary_click` is called on right-click (context menu trigger).
 /// `selected_path` highlights the matching file row with an accent indicator.
+/// `name_filter` (case-insensitive substring match) hides non-matching entries.
 pub fn render_file_tree(
     ui: &mut egui::Ui,
     path: &Path,
@@ -43,6 +44,7 @@ pub fn render_file_tree(
     on_file_click: &mut dyn FnMut(&Path),
     on_secondary_click: &mut dyn FnMut(&Path),
     compact: bool,
+    name_filter: Option<&str>,
 ) {
     if depth > MAX_DEPTH {
         return;
@@ -69,6 +71,13 @@ pub fn render_file_tree(
         // Skip hidden files/dirs (dot-prefix) and known large / irrelevant directories
         if name.starts_with('.') || (is_dir && SKIP_DIRS.contains(&name.as_str())) {
             continue;
+        }
+
+        // Apply optional name filter (case-insensitive substring match).
+        if let Some(filter) = name_filter {
+            if !filter.is_empty() && !name.to_lowercase().contains(&filter.to_lowercase()) {
+                continue;
+            }
         }
 
         let full_path = entry.path();
@@ -99,6 +108,7 @@ pub fn render_file_tree(
                     on_file_click,
                     on_secondary_click,
                     compact,
+                    name_filter,
                 );
             });
             // Allow clicking the directory header itself to select it

@@ -499,6 +499,7 @@ impl LocalGgufProvider {
                         content: Some(text.clone()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             }
@@ -543,6 +544,7 @@ impl LocalGgufProvider {
                             content: Some(text.clone()),
                             reasoning_content: None,
                             tool_calls: vec![],
+                            partial_tool_calls: vec![],
                         }))
                         .await;
                 }
@@ -561,6 +563,7 @@ impl LocalGgufProvider {
                         content: Some(rest.clone()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             }
@@ -804,6 +807,7 @@ async fn generate_with_state(
                     content: Some(text.clone()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         }
@@ -846,6 +850,7 @@ async fn generate_with_state(
                         content: Some(text.clone()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             }
@@ -864,6 +869,7 @@ async fn generate_with_state(
                     content: Some(rest.clone()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         }

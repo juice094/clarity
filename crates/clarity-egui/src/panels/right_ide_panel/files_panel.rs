@@ -138,6 +138,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             secondary_click = Some(path.to_path_buf());
         },
         false,
+        None, // name_filter
     );
 
     // --- recent files ---

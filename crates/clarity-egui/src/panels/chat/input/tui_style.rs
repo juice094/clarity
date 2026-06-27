@@ -316,7 +316,13 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         }
         app.ui_store.context_picker_state = state;
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.ui_store.context_picker_state.open = false;
+            if app.ui_store.context_picker_state.browsing.is_some() {
+                // Go back to source list instead of closing.
+                app.ui_store.context_picker_state.browsing = None;
+                app.ui_store.context_picker_state.filter.clear();
+            } else {
+                app.ui_store.context_picker_state.open = false;
+            }
         }
     }
 }

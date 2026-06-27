@@ -877,3 +877,33 @@ pub fn truncate(s: &str, max_chars: usize) -> String {
         format!("{}…", s.chars().take(max_chars).collect::<String>())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_elapsed_seconds() {
+        assert_eq!(format_elapsed(Duration::from_secs(0)), "0s ago");
+        assert_eq!(format_elapsed(Duration::from_secs(42)), "42s ago");
+        assert_eq!(format_elapsed(Duration::from_secs(59)), "59s ago");
+    }
+
+    #[test]
+    fn format_elapsed_minutes() {
+        assert_eq!(format_elapsed(Duration::from_secs(60)), "1m ago");
+        assert_eq!(format_elapsed(Duration::from_secs(3599)), "59m ago");
+    }
+
+    #[test]
+    fn format_elapsed_hours() {
+        assert_eq!(format_elapsed(Duration::from_secs(3600)), "1h ago");
+        assert_eq!(format_elapsed(Duration::from_secs(86399)), "23h ago");
+    }
+
+    #[test]
+    fn format_elapsed_days() {
+        assert_eq!(format_elapsed(Duration::from_secs(86400)), "1d ago");
+        assert_eq!(format_elapsed(Duration::from_secs(172800)), "2d ago");
+    }
+}

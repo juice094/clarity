@@ -163,16 +163,30 @@ impl Message {
     }
 }
 
+/// In-progress tool call exposed during streaming.
+#[derive(Debug, Clone, Default)]
+pub struct PartialToolCallInfo {
+    /// Index of this tool call in the response (0-based).
+    pub index: usize,
+    /// Tool name (may be empty if not yet received).
+    pub name: String,
+    /// Partial arguments accumulated so far.
+    pub arguments_so_far: String,
+}
+
 /// Delta emitted by a streaming LLM response.
 #[derive(Debug, Clone, Default)]
 pub struct StreamDelta {
     /// Text chunk emitted by the model, if any.
     pub content: Option<String>,
     /// Reasoning / thinking chunk emitted by the model, if any.
-    /// Providers that do not expose reasoning (e.g. OpenAI gpt-4o) leave this as `None`.
     pub reasoning_content: Option<String>,
     /// Tool calls parsed from the stream so far.
     pub tool_calls: Vec<ToolCall>,
+    /// In-progress tool calls (name + partial arguments), for incremental UI
+    /// display during streaming. Empty when no tool calls are being assembled.
+    #[allow(dead_code)]
+    pub partial_tool_calls: Vec<PartialToolCallInfo>,
 }
 
 impl StreamDelta {

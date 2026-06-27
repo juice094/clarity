@@ -146,6 +146,21 @@ pub enum WireMessage {
         arguments: Value,
     },
 
+    /// Incremental progress on a tool call being assembled during streaming.
+    /// Emitted as the LLM streams partial tool call fragments, before the
+    /// complete ToolCall event.
+    ToolCallProgress {
+        /// Identifier for the turn this message belongs to.
+        #[serde(default)]
+        turn_id: String,
+        /// Index of this tool call in the response (0-based).
+        index: usize,
+        /// Tool name (empty string if not yet known).
+        name: String,
+        /// Partial arguments accumulated so far.
+        arguments_so_far: String,
+    },
+
     /// Result returned from a tool execution.
     ToolResult {
         /// Identifier for the turn this message belongs to.
@@ -293,6 +308,7 @@ impl WireMessage {
             WireMessage::ReasoningPart { turn_id: t, .. } => *t = turn_id,
             WireMessage::DraftEvent { turn_id: t, .. } => *t = turn_id,
             WireMessage::ToolCall { turn_id: t, .. } => *t = turn_id,
+            WireMessage::ToolCallProgress { turn_id: t, .. } => *t = turn_id,
             WireMessage::ToolResult { turn_id: t, .. } => *t = turn_id,
             WireMessage::TurnEnd { turn_id: t } => *t = turn_id,
             WireMessage::Usage { turn_id: t, .. } => *t = turn_id,

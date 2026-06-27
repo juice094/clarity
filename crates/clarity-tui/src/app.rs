@@ -88,6 +88,7 @@ impl Message {
         if self.cached_lines.as_ref().map_or(true, |(h, _)| *h != hash) {
             self.cached_lines = Some((hash, clarity_core::ui::markdown_to_lines(&self.content)));
         }
+        // SAFE: if-branch above guarantees cached_lines is Some.
         &self.cached_lines.as_ref().unwrap().1
     }
 

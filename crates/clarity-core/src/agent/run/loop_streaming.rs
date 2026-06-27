@@ -110,6 +110,15 @@ impl AgentLoop for StreamingLoop {
                             for call in delta.tool_calls {
                                 tool_calls.push(call);
                             }
+                            // Emit incremental tool-call progress while arguments stream in.
+                            for partial in &delta.partial_tool_calls {
+                                agent.send_wire_message(WireMessage::ToolCallProgress {
+                                    turn_id: String::new(),
+                                    index: partial.index,
+                                    name: partial.name.clone(),
+                                    arguments_so_far: partial.arguments_so_far.clone(),
+                                });
+                            }
                         }
                         Err(e) => {
                             warn!("Stream error: {}, falling back to complete()", e);
