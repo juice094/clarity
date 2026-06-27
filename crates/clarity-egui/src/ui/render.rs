@@ -56,6 +56,8 @@ pub fn message_bubble(
 ) -> f32 {
     if msg.is_error {
         error_bubble(ui, msg, theme, msg_idx, retry_idx, switch_model)
+    } else if msg.role == Role::System {
+        system_message(ui, msg, theme)
     } else {
         #[cfg(feature = "line-mode")]
         {
@@ -63,6 +65,7 @@ pub fn message_bubble(
             match msg.role {
                 Role::User => line_mode_user(ui, msg, theme, selected_idx),
                 Role::Agent => line_mode_agent(ui, msg, theme, show_header, selected_idx),
+                Role::System => system_message(ui, msg, theme),
             }
         }
         #[cfg(not(feature = "line-mode"))]
@@ -70,11 +73,34 @@ pub fn message_bubble(
             let _ = selected_idx;
             match msg.role {
                 Role::User => user_bubble(ui, msg, theme, metrics),
-                // AI messages are left-aligned in the same content column.
                 Role::Agent => agent_message(ui, msg, theme, show_header, metrics),
+                Role::System => system_message(ui, msg, theme),
             }
         }
     }
+}
+
+// ── System ──
+
+/// Render a system message as a subtle center-aligned pill.
+fn system_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
+    let start_y = ui.cursor().min.y;
+    ui.add_space(theme.space_4);
+    ui.vertical_centered(|ui| {
+        egui::Frame::new()
+            .fill(theme.glass)
+            .corner_radius(egui::CornerRadius::same(theme.radius_full as u8))
+            .inner_margin(egui::Margin::symmetric(16, 4))
+            .show(ui, |ui| {
+                ui.label(
+                    egui::RichText::new(&msg.content)
+                        .size(theme.text_xs)
+                        .color(theme.text_dim),
+                );
+            });
+    });
+    ui.add_space(theme.space_4);
+    ui.cursor().min.y - start_y
 }
 
 // ── Agent ──
@@ -796,6 +822,7 @@ fn estimate_height_pretext(
     // - agent card (blocks / structured): inner_margin vertical 12*2 + trailing space_16 = 40
     let base_padding = match msg.role {
         Role::User => 44.0,
+        Role::System => 12.0,
         Role::Agent => {
             let has_visible_blocks = !msg.blocks.is_empty()
                 && msg.blocks.iter().any(|b| {
@@ -827,6 +854,7 @@ fn estimate_height_pretext(
     let text_width = match msg.role {
         Role::User => ((content_max_width * 0.72).max(280.0) - 36.0).max(120.0),
         Role::Agent => content_max_width.max(120.0),
+        Role::System => content_max_width.min(360.0).max(120.0),
     };
 
     for block in &msg.parsed {
@@ -851,6 +879,11 @@ fn estimate_height_pretext(
                 height += line_height + theme.space_8;
                 height += rows.len() as f32 * (line_height + theme.space_4);
                 height += theme.space_8;
+            }
+            RenderBlock::Diff { hunks, .. } => {
+                // Rough estimate: each hunk is ~8 lines + header.
+                let hunk_lines: usize = hunks.iter().map(|h| h.lines.len()).sum();
+                height += hunk_lines as f32 * line_height + theme.space_16;
             }
         }
         height += theme.space_4; // inter-block spacing

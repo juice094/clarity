@@ -178,9 +178,44 @@ impl CommandPalette {
         if q.is_empty() {
             return commands.iter().collect();
         }
-        commands
+        let mut scored: Vec<(i32, &CommandItem)> = commands
             .iter()
-            .filter(|cmd| cmd.name.to_lowercase().contains(&q))
-            .collect()
+            .filter_map(|cmd| {
+                let s = fuzzy_score(&cmd.name.to_lowercase(), &q);
+                if s >= 0 { Some((s, cmd)) } else { None }
+            })
+            .collect();
+        scored.sort_by_key(|(s, _)| -s);
+        scored.into_iter().map(|(_, cmd)| cmd).collect()
     }
+}
+
+/// Simple fuzzy scorer: returns higher score for better matches,
+/// -1 if query chars don't appear in order.
+fn fuzzy_score(target: &str, query: &str) -> i32 {
+    let mut score = 0i32;
+    let mut prev = -1i32;
+    let mut t_iter = target.chars().enumerate();
+    for qc in query.chars() {
+        let mut found = false;
+        for (ti, tc) in &mut t_iter {
+            if tc == qc {
+                let consec = if ti as i32 == prev + 1 { 5 } else { 0 };
+                let start = if ti == 0 || target.as_bytes().get(ti.saturating_sub(1)) == Some(&b' ')
+                {
+                    10
+                } else {
+                    0
+                };
+                score += 1 + consec + start;
+                prev = ti as i32;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return -1;
+        }
+    }
+    score
 }

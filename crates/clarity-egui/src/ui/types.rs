@@ -34,6 +34,14 @@ pub enum UiEvent {
         id: String,
         result: String,
     },
+    /// Incremental tool call progress (name and argument stream).
+    ToolCallProgress {
+        #[allow(dead_code)]
+        session_id: String,
+        index: usize,
+        name: String,
+        arguments_so_far: String,
+    },
     StepBegin {
         session_id: String,
         tool_name: String,
@@ -516,6 +524,10 @@ impl Message {
 pub enum Role {
     User,
     Agent,
+    /// Runtime notices, status updates, and compaction events.
+    /// Rendered as subtle center-aligned pills distinct from both
+    /// user and agent messages.
+    System,
 }
 
 /// Lifecycle status variants for agent.
@@ -859,6 +871,11 @@ pub enum RenderBlock {
     Table {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
+    },
+    /// Unified diff block (detected in markdown, rendered via diff_viewer).
+    Diff {
+        hunks: Vec<clarity_core::diff::DiffHunk>,
+        file_path: Option<String>,
     },
 }
 

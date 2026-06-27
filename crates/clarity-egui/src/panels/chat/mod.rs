@@ -153,6 +153,115 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
             // content_max_width.
             crate::panels::bot_bar::render_bot_bar(app, ui);
 
+            // ── Context ribbon bar ──
+            if !app.chat_store.context_items.is_empty() || !app.chat_store.attachments.is_empty() {
+                let theme_ctx = app.ui_store.theme.clone();
+                let bar = egui::Frame::new()
+                    .fill(theme_ctx.bg_hover)
+                    .inner_margin(egui::Margin::symmetric(12, 4))
+                    .show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} {}:",
+                                    crate::theme::ICON_LAYERS,
+                                    app.t("Context")
+                                ))
+                                .size(theme_ctx.text_xs)
+                                .color(theme_ctx.text_dim),
+                            );
+                            for item in &app.chat_store.context_items {
+                                let chip = egui::Frame::new()
+                                    .fill(theme_ctx.accent_subtle)
+                                    .corner_radius(egui::CornerRadius::same(4))
+                                    .inner_margin(egui::Margin::symmetric(8, 2))
+                                    .show(ui, |ui| {
+                                        ui.label(
+                                            egui::RichText::new(&item.display)
+                                                .size(theme_ctx.text_xs)
+                                                .color(theme_ctx.accent),
+                                        );
+                                    });
+                                let _ = chip;
+                            }
+                            for att in &app.chat_store.attachments {
+                                let chip = egui::Frame::new()
+                                    .fill(theme_ctx.glass)
+                                    .corner_radius(egui::CornerRadius::same(4))
+                                    .inner_margin(egui::Margin::symmetric(8, 2))
+                                    .show(ui, |ui| {
+                                        ui.label(
+                                            egui::RichText::new(&att.name)
+                                                .size(theme_ctx.text_xs)
+                                                .color(theme_ctx.text_muted),
+                                        );
+                                    });
+                                let _ = chip;
+                            }
+                        });
+                    });
+                let _ = bar;
+                ui.add_space(app.ui_store.theme.space_4);
+            }
+
+            // ── Session metadata bar (when conversation has content) ──
+            let active = app.session_store.active_session();
+            let msg_count = active.map(|s| s.messages.len()).unwrap_or(0);
+            if msg_count > 0 && !is_empty_state(app) {
+                let t = app.ui_store.theme.clone();
+                let title = active.map(|s| s.title.as_str()).unwrap_or("");
+                let model = &app.settings_store.settings_edit.model;
+                let provider = &app.settings_store.settings_edit.provider;
+                let tu = &app.chat_store.token_usage;
+                let meta = egui::Frame::new()
+                    .inner_margin(egui::Margin::symmetric(12, 2))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = t.space_12;
+                            ui.label(
+                                egui::RichText::new(title)
+                                    .size(t.text_xs)
+                                    .strong()
+                                    .color(t.text_strong),
+                            );
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} {}/{}",
+                                    crate::theme::ICON_CPU,
+                                    provider,
+                                    model
+                                ))
+                                .size(t.text_xs)
+                                .color(t.text_dim),
+                            );
+                            if tu.total_tokens > 0 {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} {}/{}K tokens",
+                                        crate::theme::ICON_LAYERS,
+                                        tu.total_tokens / 1000,
+                                        tu.context_limit / 1000
+                                    ))
+                                    .size(t.text_xs)
+                                    .color(t.text_dim),
+                                );
+                            }
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} {} msgs",
+                                    crate::theme::ICON_CHAT,
+                                    msg_count
+                                ))
+                                .size(t.text_xs)
+                                .color(t.text_muted),
+                            );
+                        });
+                    });
+                let _ = meta;
+                ui.add_space(t.space_4);
+            }
+
             if !is_empty_state(app) {
                 // The input bar is rendered by `render_input_panel` in a separate
                 // bottom panel. The remaining central area is used for the message
@@ -192,6 +301,30 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                             render_message_list_centered(app, ui, max_w);
                         });
                     app.ui_store.last_scroll_offset = output.state.offset.y;
+
+                    // Scroll-to-bottom button during streaming.
+                    let is_streaming = app.view_state.turn == clarity_core::ui::TurnState::Loading;
+                    let scrolled_up = app.ui_store.last_scroll_offset < max_scroll - 40.0;
+                    if is_streaming && scrolled_up && max_scroll > 0.0 {
+                        let btn_rect = egui::Rect::from_min_size(
+                            ui.max_rect().center_bottom() - egui::vec2(80.0, 36.0),
+                            egui::vec2(160.0, 28.0),
+                        );
+                        let resp = ui.put(
+                            btn_rect,
+                            egui::Button::new(
+                                egui::RichText::new(format!("\u{2193} {}", app.t("New messages")))
+                                    .size(theme.text_xs)
+                                    .color(theme.text_strong),
+                            )
+                            .fill(theme.accent)
+                            .corner_radius(egui::CornerRadius::same(theme.radius_full as u8)),
+                        );
+                        if resp.clicked() {
+                            app.chat_store.stick_to_bottom = true;
+                            app.ui_store.last_scroll_offset = max_scroll;
+                        }
+                    }
                 } else {
                     // Short conversation: top-aligned inside a horizontally centered
                     // content column, no scrollable empty space below.

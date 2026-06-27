@@ -130,6 +130,22 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
             continue;
         }
 
+        // Unified diff detection: --- path +++ path then @@ hunk headers.
+        if trimmed.starts_with("--- ") {
+            flush_paragraph(&mut paragraph_lines, &mut blocks);
+            let file_path = trimmed
+                .strip_prefix("--- a/")
+                .or_else(|| trimmed.strip_prefix("--- b/"))
+                .or_else(|| trimmed.strip_prefix("--- "))
+                .map(|s| s.to_string())
+                .filter(|s| s != "/dev/null");
+            if let Some((hunks, consumed)) = try_parse_unified_diff(&lines, i) {
+                blocks.push(RenderBlock::Diff { hunks, file_path });
+                i += consumed;
+                continue;
+            }
+        }
+
         // Regular paragraph line
         paragraph_lines.push(line);
         i += 1;
@@ -306,6 +322,48 @@ fn parse_inline(text: &str) -> Vec<InlineSpan> {
     spans
 }
 
+/// Try to parse a unified diff starting at `lines[i]`.
+/// Returns parsed hunks and number of lines consumed if valid.
+fn try_parse_unified_diff(
+    lines: &[&str],
+    start: usize,
+) -> Option<(Vec<clarity_core::diff::DiffHunk>, usize)> {
+    if start + 2 >= lines.len() {
+        return None;
+    }
+    let first = lines[start].trim();
+    let second = lines.get(start + 1)?.trim();
+    // Must start with --- (a/ or /dev/null or bare path after space)
+    if !first.starts_with("--- ") {
+        return None;
+    }
+    // Followed by +++ (b/ or /dev/null or bare path after space)
+    if !second.starts_with("+++ ") {
+        return None;
+    }
+    let mut end = start + 2;
+    while end < lines.len() {
+        let line = lines[end].trim();
+        if line.starts_with("@@")
+            || line.starts_with('+')
+            || line.starts_with('-')
+            || line.starts_with(' ')
+            || line.is_empty()
+        {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    let consumed = end - start;
+    let patch: String = lines[start..end].join("\n");
+    let hunks = clarity_core::diff::parse_unified_diff(&patch);
+    if hunks.is_empty() {
+        return None;
+    }
+    Some((hunks, consumed))
+}
+
 // ============================================================================
 // Layout — Hot path (called every frame, only iterates pre-parsed blocks)
 // ============================================================================
@@ -358,11 +416,50 @@ pub fn render_blocks(
             }
             RenderBlock::HorizontalRule => {
                 ui.add_space(theme.space_4);
-                ui.separator();
+                // TUI-style separator with box-drawing characters.
+                let w = ui.available_width();
+                let dash = "\u{2500}";
+                let count = (w / 10.0) as usize;
+                ui.add(egui::Label::new(
+                    egui::RichText::new(dash.repeat(count.max(1)))
+                        .size(theme.text_xs)
+                        .color(theme.border)
+                        .monospace(),
+                ));
                 ui.add_space(theme.space_4);
             }
             RenderBlock::Table { headers, rows } => {
                 render_table(ui, i, headers, rows, theme, text_color);
+            }
+            RenderBlock::Diff { hunks, file_path } => {
+                ui.add_space(theme.space_4);
+                if let Some(path) = file_path {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} {}",
+                                crate::theme::ICON_FILE_CODE,
+                                path
+                            ))
+                            .size(theme.text_xs)
+                            .color(theme.accent)
+                            .monospace(),
+                        );
+                    });
+                    ui.add_space(theme.space_4);
+                }
+                let config = crate::widgets::diff_viewer::DiffViewConfig {
+                    show_file_header: true,
+                    show_line_numbers: true,
+                    collapse_unchanged: true,
+                    collapse_threshold: 6,
+                    compact: false,
+                    max_height: None,
+                    show_actions: false,
+                    side_by_side: false,
+                };
+                crate::widgets::diff_viewer::render_diff_view(ui, hunks, theme, &config);
+                ui.add_space(theme.space_4);
             }
         }
     }
@@ -454,11 +551,38 @@ fn render_span(
 ) {
     match span {
         InlineSpan::Text(text) => {
-            let mut rt = egui::RichText::new(text).color(base_color).size(size);
-            if strong {
-                rt = rt.strong();
+            // Detect file paths and render as clickable links.
+            if looks_like_file_path(text) {
+                let label = format!("{} {}", crate::theme::ICON_FILE_CODE, text);
+                let resp = ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(label)
+                            .color(theme.accent)
+                            .size(size)
+                            .monospace(),
+                    )
+                    .sense(egui::Sense::click()),
+                );
+                if resp.clicked() {
+                    // Open in system editor on primary click, copy path on secondary.
+                    let path_str = text.trim().to_string();
+                    let file_url = format!("file:///{}", path_str.replace('\\', "/"));
+                    let _ = webbrowser::open(&file_url);
+                }
+                if resp.secondary_clicked() {
+                    ui.ctx().copy_text(text.to_string());
+                }
+                if resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                resp.on_hover_text(format!("Open {} — Right-click to copy path", text));
+            } else {
+                let mut rt = egui::RichText::new(text).color(base_color).size(size);
+                if strong {
+                    rt = rt.strong();
+                }
+                ui.label(rt);
             }
-            ui.label(rt);
         }
         InlineSpan::Bold(text) => {
             ui.label(
@@ -486,13 +610,54 @@ fn render_span(
     }
 }
 
+/// Detect strings that look like file paths with optional line numbers.
+fn looks_like_file_path(text: &str) -> bool {
+    let s = text.trim();
+    if s.len() < 4 || s.len() > 200 {
+        return false;
+    }
+    // Path separators, common extensions, or line-number suffix.
+    let has_separator = s.contains('/') || s.contains('\\');
+    let has_ext = s.contains(".rs")
+        || s.contains(".py")
+        || s.contains(".js")
+        || s.contains(".ts")
+        || s.contains(".go")
+        || s.contains(".java")
+        || s.contains(".c")
+        || s.contains(".cpp")
+        || s.contains(".h")
+        || s.contains(".json")
+        || s.contains(".yaml")
+        || s.contains(".toml")
+        || s.contains(".md")
+        || s.contains(".txt")
+        || s.contains(".css")
+        || s.contains(".html");
+    let has_lineno = s.contains(':')
+        && s.split(':')
+            .last()
+            .map_or(false, |p| p.parse::<usize>().is_ok());
+    has_separator || has_ext || has_lineno
+}
+
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
 
     // Split into lines for line-number rendering.
     let lines: Vec<&str> = code.lines().collect();
     let line_count = lines.len();
-    let ln_width = if line_count > 1 {
+    let collapse_threshold: usize = 30;
+    // Unique key per code block (hash of content prevents cross-block state sharing).
+    let collapse_key = ui.id().with(("code_collapse", code));
+    let collapsed: bool = line_count > collapse_threshold
+        && ui.ctx().data(|d| d.get_temp(collapse_key).unwrap_or(true));
+    let visible_lines: usize = if collapsed {
+        collapse_threshold.min(lines.len())
+    } else {
+        lines.len()
+    };
+    let ln_width = if visible_lines > 1 {
         // Right-aligned line number gutter.
         let digits = line_count.to_string().len().max(1);
         (digits as f32) * 9.0 + theme.space_12
@@ -503,6 +668,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     egui::Frame::new()
         .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+        .shadow(theme.shadow_card)
         .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
@@ -554,9 +720,16 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
             });
             ui.add_space(theme.space_4);
 
-            // ── Code lines with optional line numbers ──
-            if line_count > 1 {
-                for (idx, line) in lines.iter().enumerate() {
+            // ── Code lines with syntax highlighting ──
+            let highlighted = crate::ui::syntax_highlight::try_highlight(lang, code);
+            let digits = line_count.to_string().len().max(1);
+            let show_collapse = line_count > collapse_threshold;
+
+            if visible_lines > 1 {
+                for (idx, styled_tokens) in highlighted.iter().enumerate() {
+                    if collapsed && idx >= collapse_threshold {
+                        break;
+                    }
                     let ln = idx + 1;
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = theme.space_8;
@@ -564,37 +737,105 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                         ui.add_sized(
                             [ln_width, theme.text_base],
                             egui::Label::new(
-                                egui::RichText::new(format!(
-                                    "{:>width$}",
-                                    ln,
-                                    width = line_count.to_string().len().max(1)
-                                ))
-                                .size(theme.text_xs)
-                                .color(theme.text_dim)
-                                .monospace(),
+                                egui::RichText::new(format!("{:>width$}", ln, width = digits))
+                                    .size(theme.text_xs)
+                                    .color(theme.text_dim)
+                                    .monospace(),
                             ),
                         );
-                        // Code line content.
-                        let display = if line.is_empty() { " " } else { line };
-                        ui.label(
-                            egui::RichText::new(display)
-                                .monospace()
-                                .color(theme.text)
-                                .size(theme.text_base)
-                                .line_height(Some(22.0)),
-                        );
+                        // Code line content with per-token syntax colors.
+                        if styled_tokens.is_empty() || styled_tokens[0].1.is_empty() {
+                            ui.label(
+                                egui::RichText::new(" ")
+                                    .monospace()
+                                    .color(theme.text)
+                                    .size(theme.text_base)
+                                    .line_height(Some(22.0)),
+                            );
+                        } else {
+                            for (color, text) in styled_tokens {
+                                ui.label(
+                                    egui::RichText::new(text.as_str())
+                                        .monospace()
+                                        .color(*color)
+                                        .size(theme.text_base)
+                                        .line_height(Some(22.0)),
+                                );
+                            }
+                        }
                     });
                 }
+                // Show expand button for collapsed large blocks.
+                if show_collapse && collapsed {
+                    ui.add_space(theme.space_4);
+                    let remaining = line_count - collapse_threshold;
+                    if ui
+                        .add_sized(
+                            [ui.available_width(), 24.0],
+                            egui::Button::new(
+                                egui::RichText::new(format!(
+                                    "{} Show all {} lines  {}",
+                                    crate::theme::ICON_CARET_DOWN,
+                                    line_count,
+                                    crate::theme::ICON_CARET_DOWN,
+                                ))
+                                .size(theme.text_xs)
+                                .color(theme.text_dim),
+                            )
+                            .fill(theme.bg_hover),
+                        )
+                        .clicked()
+                    {
+                        ui.ctx().data_mut(|d| d.insert_temp(collapse_key, false));
+                        ui.ctx().request_repaint();
+                    }
+                    // prevent unused variable warning
+                    let _ = remaining;
+                }
             } else {
-                // Single line or empty — no line numbers needed.
-                ui.label(
-                    egui::RichText::new(code)
-                        .monospace()
-                        .color(theme.text)
-                        .size(theme.text_base)
-                        .line_height(Some(22.0)),
-                );
+                // Single line with syntax highlighting.
+                if let Some(tokens) = highlighted.first() {
+                    ui.horizontal(|ui| {
+                        for (color, text) in tokens {
+                            ui.label(
+                                egui::RichText::new(text.as_str())
+                                    .monospace()
+                                    .color(*color)
+                                    .size(theme.text_base)
+                                    .line_height(Some(22.0)),
+                            );
+                        }
+                    });
+                } else {
+                    ui.label(
+                        egui::RichText::new(code)
+                            .monospace()
+                            .color(theme.text)
+                            .size(theme.text_base)
+                            .line_height(Some(22.0)),
+                    );
+                }
             }
         });
     ui.add_space(theme.space_4);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_diff_in_markdown() {
+        let md = "--- a/src/main.rs\n+++ b/src/main.rs\n@@ -1,2 +1,2 @@\n-old\n+new\n";
+        let blocks = parse_markdown(md);
+        let has_diff = blocks.iter().any(|b| matches!(b, RenderBlock::Diff { .. }));
+        assert!(has_diff, "Should detect unified diff in markdown");
+    }
+
+    #[test]
+    fn looks_like_path_detection() {
+        assert!(looks_like_file_path("src/main.rs"));
+        assert!(looks_like_file_path("/absolute/path/file.py"));
+        assert!(!looks_like_file_path("hello world"));
+    }
 }

@@ -370,16 +370,17 @@ See `docs/visions/AGENT_OS_VISION.md` for the long-term direction.
 
 ```
 clarity-egui App ──→ clarity-core Agent (same process)
-    ├── Chat Panel (virtual list + streaming)
-    ├── Session Sidebar (category tree + web tabs + thinking log)
-    ├── Workspace Panel (file tree + preview drawer)
-    ├── Right Panel (Tab D: Team / Task / Dashboard)
-    ├── Settings Panel (provider + local model + approval)
-    ├── Command Palette (Ctrl+Shift+P)
+    ├── Chat Panel (virtual list + streaming + scroll-to-bottom)
+    ├── Left Navigation Tree (sessions + projects + Claw devices)
+    ├── Right IDE Rail (Console / Files / Share / Templates / Knowledge)
+    ├── Bot Bar (persona avatar + panel buttons + token bar)
+    ├── Context Ribbon (active context items + attachments)
+    ├── Settings Panel (provider + model + theme + font scale + layout)
+    ├── Command Palette (Ctrl+Shift+P, fuzzy-search with character-order scoring)
     └── Modal stack (Approval / Snapshot / Skill / MCP / ...)
 ```
 
-State is managed through `ViewState` (see §9) with a forward-sync bridge to legacy store booleans during the S3 transition.
+State is managed through `ViewState` (see §9) with Zustand-style store slices (`ChatStore`, `SessionStore`, `ConsoleStore`, `FilesStore`, `UiStore`, etc.).
 
 ### 5.2 Frontend Panels
 
@@ -387,21 +388,26 @@ State is managed through `ViewState` (see §9) with a forward-sync bridge to leg
 |-----------|--------|-------------|
 | Chat Area | ✅ | `ChatStore` + `SessionStore` |
 | Session Sidebar | ✅ | `SessionStore` |
-| Workspace (file tree) | ✅ | `UiStore` + fs |
-| Right Panel (Tab D) | ✅ | `ViewState.right: Option<SidePanel>` |
+| Console Panel (right IDE) | ✅ | `ConsoleStore` |
+| Files Panel (right IDE) | ✅ | `FilesStore` |
+| Share Panel (right IDE) | ✅ | `SessionStore` |
+| Templates Panel (right IDE) | ✅ | built-in templates |
+| Knowledge Panel (right IDE) | ✅ | `KnowledgeStore` |
+| Claw Workspace/Terminal | ✅ | `UiStore` + Claw state |
 | Settings | ✅ | `SettingsStore` + `GuiSettings` |
-| Skill Modal | ✅ | `ViewState.modal: Option<ModalType::Skill>` |
-| MCP Modal | ✅ | `ViewState.modal: Option<ModalType::Mcp>` |
-| Approval Modal | ✅ | `ViewState.modal: Option<ModalType::Approval>` |
-| Plan Timeline | ✅ | `UiStore` |
-| Command Palette | ✅ | `CommandPalette` widget |
+| Skill Modal | ✅ | `ViewState.modal` |
+| MCP Modal | ✅ | `ViewState.modal` |
+| Approval Modal | ✅ | `ViewState.modal` (integrated diff preview) |
+| Command Palette | ✅ | `CommandPalette` widget (fuzzy) |
+| Context Picker (#) | ✅ | `ContextPicker` widget + `ContextPickerState` |
 
 ### 5.3 Theme System
 
-- Rust-native `Theme` struct with 40+ tokens (color / spacing / typography / radius / shadow)
-- Dark / Light / Auto (follows OS via `window.theme()`)
-- Icon font: `lucide-icons` crate (ADR-010); all icons are glyphs, not image assets
-- Glassmorphism surfaces via `Frame::new().fill(Color32::from_white_alpha(...))`
+- Rust-native `Theme` struct with 100+ design tokens (color / spacing / typography / radius / shadow / animation)
+- 6 presets: Dark (#121212 Kimi), Light (#f0f1f6 copper), OLED (#000000), Catppuccin Mocha (#1E1E2E lavender), Tokyo Night (#1A1B26 blue), One Dark (#282C34 Atom)
+- All colors via design tokens in `theme.rs`; no hardcoded hex values in UI code
+- Fonts: Inter (body), JetBrains Mono (code), Lucide (icons), Noto Sans SC (CJK)
+- Syntax highlighting: `syntect` v5 (18 languages, cold-path pre-parsed, base16-ocean.dark theme)
 
 ### 5.4 RenderLine Pipeline (S4-S7)
 

@@ -51,6 +51,18 @@ pub fn interactive_row<R>(
     };
     let stroke = egui::Stroke::NONE;
 
+    // VS Code-style accent indicator bar (2px left edge when selected).
+    if is_selected {
+        let bar_w = 2.0;
+        let bar_h = (rect.height() - 8.0).max(4.0);
+        let bar_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.left(), rect.center().y - bar_h / 2.0),
+            egui::vec2(bar_w, bar_h),
+        );
+        ui.painter()
+            .rect_filled(bar_rect, egui::CornerRadius::same(1), theme.accent);
+    }
+
     let inner = ui
         .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), move |ui| {
             ui.set_style(style);

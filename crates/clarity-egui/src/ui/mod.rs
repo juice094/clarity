@@ -6,4 +6,5 @@ pub mod markdown;
 pub mod mcp_panel;
 pub mod render;
 pub mod rich_inline;
+pub mod syntax_highlight;
 pub mod types;

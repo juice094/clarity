@@ -294,6 +294,7 @@ async fn test_tui_wire_to_gateway_websocket() {
             WireMessage::TurnEnd { .. } => "turn_end",
             WireMessage::StepBegin { .. } => "step_begin",
             WireMessage::ToolCall { .. } => "tool_call",
+            WireMessage::ToolCallProgress { .. } => "tool_call_progress",
             WireMessage::ToolResult { .. } => "tool_result",
             WireMessage::StatusUpdate { .. } => "status_update",
             WireMessage::Usage { .. } => "usage",

@@ -23,8 +23,42 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             ConsoleFilter::ToolOutput,
             ConsoleFilter::Status,
         ];
+        // Pre-compute per-level counts.
+        let total = app.console_store.entries.len();
+        let errs = app
+            .console_store
+            .entries
+            .iter()
+            .filter(|e| e.level == ConsoleLevel::Error)
+            .count();
+        let warns = app
+            .console_store
+            .entries
+            .iter()
+            .filter(|e| e.level == ConsoleLevel::Warn)
+            .count();
+        let tools = app
+            .console_store
+            .entries
+            .iter()
+            .filter(|e| e.level == ConsoleLevel::ToolOutput)
+            .count();
+        let stats = app
+            .console_store
+            .entries
+            .iter()
+            .filter(|e| e.level == ConsoleLevel::Status)
+            .count();
+
         for f in filters {
-            let label = app.t(f.label());
+            let count = match f {
+                ConsoleFilter::All => total,
+                ConsoleFilter::Errors => errs,
+                ConsoleFilter::Warnings => warns,
+                ConsoleFilter::ToolOutput => tools,
+                ConsoleFilter::Status => stats,
+            };
+            let label = format!("{} ({})", app.t(f.label()), count);
             let is_active = app.console_store.filter == f;
             let chip =
                 egui::Frame::new()
@@ -113,8 +147,13 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             }
 
             if app.console_store.filtered().count() == 0 {
+                let msg = if app.console_store.entries.is_empty() {
+                    app.t("Waiting for agent output…").to_string()
+                } else {
+                    app.t("No entries matching filter").to_string()
+                };
                 ui.label(
-                    egui::RichText::new(app.t("Waiting for agent output…"))
+                    egui::RichText::new(msg)
                         .size(theme.text_sm)
                         .color(theme.text_dim),
                 );

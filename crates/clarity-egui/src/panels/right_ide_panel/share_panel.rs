@@ -262,6 +262,7 @@ fn generate_export_inner(app: &App, fmt: ExportFormat) -> String {
                 let role = match msg.role {
                     crate::ui::types::Role::User => "**You**",
                     crate::ui::types::Role::Agent => "**Clarity**",
+                    crate::ui::types::Role::System => "**System**",
                 };
                 out.push_str(&format!("### {}\n\n{}\n\n", role, msg.content));
             }
@@ -276,6 +277,7 @@ fn generate_export_inner(app: &App, fmt: ExportFormat) -> String {
                         "role": match m.role {
                             crate::ui::types::Role::User => "user",
                             crate::ui::types::Role::Agent => "assistant",
+                            crate::ui::types::Role::System => "system",
                         },
                         "content": m.content,
                     })

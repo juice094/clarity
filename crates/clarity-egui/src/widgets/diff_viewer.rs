@@ -349,6 +349,18 @@ fn render_diff_line(
         _ => String::new(),
     };
 
+    // Delta-style accent bar: 3px left edge indicator for added/removed lines.
+    if bg_color != egui::Color32::TRANSPARENT {
+        let bar_w = 3.0;
+        let bar_rect = egui::Rect::from_min_size(
+            egui::pos2(ui.cursor().min.x, ui.cursor().min.y),
+            egui::vec2(bar_w, font_size + 4.0),
+        );
+        ui.painter()
+            .rect_filled(bar_rect, egui::CornerRadius::same(1), text_color);
+        ui.add_space(bar_w + 4.0);
+    }
+
     let line_rect = egui::Frame::new()
         .fill(bg_color)
         .inner_margin(egui::Margin::symmetric(2, 0))

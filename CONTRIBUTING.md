@@ -33,6 +33,19 @@ crates/
 └── clarity-tauri      # Archived frontend (excluded from workspace).
 ```
 
+### clarity-egui Module Map
+
+Key directories for contributors working on the desktop GUI:
+
+| Directory | Purpose |
+|-----------|---------|
+| `stores/` | Zustand-style state (ConsoleStore, FilesStore, ChatStore, SessionStore, UiStore) |
+| `panels/right_ide_panel/` | Console (filtered log), Files (dir tree+context menu), Share (export), Templates (prompts) |
+| `widgets/` | diff_viewer, context_picker (# picker), svg_image, command_palette, interactive_row |
+| `ui/` | markdown parser/renderer, syntax_highlight (syntect 18-lang), message renderer |
+| `handlers/` | UiEvent dispatch (chat, session, settings, task, cron, subagent, team) |
+| `theme.rs` | 100+ design tokens, 6 presets (Dark/Light/OLED/Catppuccin/TokyoNight/OneDark) |
+
 **Dependency direction**
 
 ```

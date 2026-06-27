@@ -93,6 +93,7 @@ export type WireMessagePayload =
     | ContentPartWireMessage
     | DraftEventWireMessage
     | ToolCallWireMessage
+    | ToolCallProgressWireMessage
     | ToolResultWireMessage
     | TurnEndWireMessage
     | UsageWireMessage
@@ -143,6 +144,13 @@ export interface ToolCallWireMessage extends BaseWireMessage {
     id: string;
     name: string;
     arguments: unknown;
+}
+
+export interface ToolCallProgressWireMessage extends BaseWireMessage {
+    type: 'tool_call_progress';
+    index: number;
+    name: string;
+    arguments_so_far: string;
 }
 
 export interface ToolResultWireMessage extends BaseWireMessage {

@@ -37,7 +37,7 @@ tags: [roadmap, planning]
 |--------|--------|--------|
 | 本地 LLM 深度集成 | ✅ Candle 原生 GGUF 支持（Qwen2/DeepSeek-R1-Distill） | **P0** |
 | 零依赖发行 | 单二进制 + 嵌入式模型（用户无需安装 Rust/Ollama/Python） | **P0** |
-| 三栏工作台 UI | 左侧角色栏 / 顶部实例标签 / 右侧通用工具栏 | **P0** |
+| 三栏工作台 UI | ✅ 左侧导航树 / 顶部 Bot Bar + Context Ribbon / 右侧 IDE Rail (Console/Files/Share/Templates) | **P0** |
 | 集群语义验证 | Hub-Worker 调度器 + Wire 消息扩展 + 多窗口协作 | **P1** |
 | Claw 持续化存储 | 跨会话 Agent 状态快照、子 Agent 上下文持久化 | **P1** |
 | 协议草案 | 开源 Agent 通信协议（供其他 Runtime 参考实现） | **P2** |

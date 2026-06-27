@@ -146,6 +146,7 @@ async fn test_compaction_triggered_in_agent() {
                         content: Some("This is a mock response".to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             });
@@ -261,6 +262,7 @@ async fn test_tool_call_approval_flow() {
                         content: Some("Mock response".to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             });
@@ -347,6 +349,7 @@ async fn test_tool_call_yolo_mode() {
                         content: Some("Mock response".to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             });
@@ -972,6 +975,7 @@ impl LlmProvider for MockLlmFailingTool {
                     content: Some("Mock".to_string()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         });
@@ -1072,6 +1076,7 @@ impl LlmProvider for MockLlmRecoverableLoop {
                     content: Some("Mock".to_string()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         });
@@ -1143,6 +1148,7 @@ impl LlmProvider for BudgetMockLlm {
                     content: Some("This is a mock response".to_string()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         });
@@ -1314,6 +1320,7 @@ impl LlmProvider for VisionTrackingMockLlm {
                     content: Some("mock".to_string()),
                     reasoning_content: None,
                     tool_calls: vec![],
+                    partial_tool_calls: vec![],
                 }))
                 .await;
         });

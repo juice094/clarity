@@ -47,6 +47,9 @@ clarity-wire = { path = "../clarity-wire" }
 pretext-core = { git = "https://github.com/juice094/pretext-rust.git", rev = "d90e6085383aa170a70c70e153222a95cae9e545" }
 pretext-fontdb = { git = "https://github.com/juice094/pretext-rust.git", rev = "d90e6085383aa170a70c70e153222a95cae9e545" }
 
+# Syntax highlighting for code blocks (cold-path pre-parsing).
+syntect = { version = "5", default-features = false, features = ["parsing", "default-syntaxes", "default-themes", "regex-fancy"] }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 

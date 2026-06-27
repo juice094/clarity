@@ -11,6 +11,16 @@ use crate::App;
 use crate::stores::console::{ConsoleEntry, ConsoleLevel};
 use crate::ui::types::UiEvent;
 
+fn truncate(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max_chars {
+        return s.to_string();
+    }
+    let mut out: String = chars.into_iter().take(max_chars - 1).collect();
+    out.push('\u{2026}');
+    out
+}
+
 /// Dispatches queued UI events to handlers.
 pub fn process_events(app: &mut App) {
     while let Ok(event) = app.ui_rx.try_recv() {
@@ -76,6 +86,36 @@ pub fn process_events(app: &mut App) {
                     },
                     source: name,
                     message: result,
+                    truncated: false,
+                    source_pid: None,
+                    ansi_styled: None,
+                });
+            }
+            UiEvent::ToolCallProgress {
+                session_id: _,
+                index,
+                name,
+                arguments_so_far,
+            } => {
+                let label = if name.is_empty() {
+                    format!("tool #{} assembling…", index)
+                } else {
+                    format!(
+                        "⚙ {} #{} ({})",
+                        name,
+                        index,
+                        truncate(&arguments_so_far, 80)
+                    )
+                };
+                app.console_store.push(ConsoleEntry {
+                    timestamp: std::time::Instant::now(),
+                    level: ConsoleLevel::Status,
+                    source: if name.is_empty() {
+                        "tool".into()
+                    } else {
+                        name.clone()
+                    },
+                    message: label,
                     truncated: false,
                     source_pid: None,
                     ansi_styled: None,

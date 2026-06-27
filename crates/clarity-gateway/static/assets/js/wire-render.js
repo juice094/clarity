@@ -68,6 +68,9 @@ export function renderWireMessage(payload) {
         case 'tool_call':
             handleToolCall(payload);
             break;
+        case 'tool_call_progress':
+            handleToolCallProgress(payload);
+            break;
         case 'tool_result':
             handleToolResult(payload);
             break;
@@ -148,6 +151,13 @@ function handleToolCall(payload) {
     const args = payload.arguments || '{}';
     const card = createToolCard(currentAssistant?.bubble?.parentElement || document.getElementById('chat-messages'), id, name, args);
     toolCards.set(id, card);
+}
+
+function handleToolCallProgress(payload) {
+    const name = payload.name || 'tool';
+    const idx = payload.index || 0;
+    const label = name ? `⚙ ${name} #${idx} assembling…` : `tool #${idx} assembling…`;
+    showTransientStatus(label);
 }
 
 function handleToolResult(payload) {

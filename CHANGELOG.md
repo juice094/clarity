@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **S6-D 右 IDE 面板全面落地 + 美化系统（2026-06-28）**
+  - 四个右 IDE 面板从占位符实现为完整功能：Console（虚拟化过滤日志 + 计数 badges + 错误点击注入 + 清空按钮）、Files（递归目录树 + 右键菜单含预览/编辑器打开/加入对话/复制路径 + Git 扩展点）、Share（Markdown/JSON/HTML 三格式导出 + 剪贴板/文件保存 + Gateway 分享桩）、Templates（5 内建模板 + 一键注入 + Marketplace 桩）
+  - 新增 `DiffViewer` widget：统一 diff 视图（行号 + 着色 + hunk 折叠 + accept/reject + delta-style 3px accent bar）；`RenderBlock::Diff` 自动检测对话中 unified diff 并内联渲染；审批弹窗已集成
+  - 新增 `#` 上下文快速注入系统：`ContextPicker` widget（源类型列表 → 内嵌文件浏览器 → 文件名过滤 → chips 渲染 → 消息注入）+ 上下文 ribbon bar
+  - 语法高亮：`syntect` 18 语言支持（Rust/Python/JS/TS/Go/Java/JSON/YAML/Bash 等），cold-path 预解析，base16-ocean.dark 映射到 egui Color32
+  - 6 主题预设：Dark/Light/OLED/Catppuccin Mocha/Tokyo Night/One Dark + WCAG AA 对比度修复 + `info` color token
+  - Session 统计：`+N/-M` diff stats badge、session 搜索/过滤、token 用量进度条（hover tooltip）、session 元数据栏
+  - 键盘快捷键：Ctrl+`（Console）、Ctrl+Shift+F（Files）、Ctrl+Shift+S（Share）、Ctrl+Shift+P（fuzzy 命令面板含字符顺序评分）
+  - SVG 渲染：`resvg` + `tiny-skia` feature-gated（`svg`）
+  - `ContextItem` + `ContextSource` 类型、`ConsoleStore` + `FilesStore` 状态管理
+  - Gateway Web：`tool_call_progress` 事件处理 + TypeScript 类型定义
+  - TUI：状态栏增加模型名称显示
+
+### Changed
+
+- 统一 shadow 层级：代码块使用 `shadow_card`
+- 分隔线使用 TUI 风格 `─` Unicode 字符
+- Toast 系统：图标 + 边框 + 阴影 + 淡入动画 + × 关闭 + 消息截断
+- 气泡 hover 时间戳、文件路径可点击（主击打开/右键复制路径）
+- 面板过渡动画（cubic ease-out width 插值）
+- VS Code 2px accent 导航选中条
+- `format_tool_output` 重构：增加 `file_read`/`file_write`/`file_edit` 工具格式化 + 提取 `truncate_result` 辅助函数
+- 代码块 >30 行自动折叠（content-hashed key 防止跨块状态共享）
+- 空状态增强：6 suggestion chips + provider/model 信息行 + 快捷键提示
+
+### Fixed
+
+- `StreamDelta.partial_tool_calls` 编译修复覆盖 6 个 crate
+- `ToolCallProgress` WireMessage → UiEvent → Console 全栈贯通
+- `WireMessage::ToolCallProgress` 在 8 个消费者 crate 中正确匹配
+- `text_dim` 对比度 WCAG AA 修复（#666→#777）
+
 - **S6-C3 Pretext 布局几何精化与人机协作标注器（2026-06-13）**
   - 新增 `assets/ui_annotator.html`：单文件零依赖浏览器图片标注器，支持拖拽图片、拖框创建/移动/缩放标注、属性编辑（label / role / priority / color / note）、JSON 导入导出、`localStorage` 自动保存；颜色语义与 `EGUI_LAYOUT_DEBUG.md` 对齐（绿=content、蓝=rail、红=chrome、黄=floating）。
   - 新增 `assets/ui-annotator-schema.md` 与 `assets/render_annotations.py`：定义标注 JSON schema 并提供批量渲染脚本，支持中文系统字体回退，实现“用户框选 → 结构化 JSON → AI 转译 egui 代码”的协作闭环。

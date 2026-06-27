@@ -59,10 +59,17 @@ pub fn dispatch_wire_message(
             name,
             arguments,
         }),
-        clarity_wire::WireMessage::ToolCallProgress { .. } => {
-            // Tool call progress events are informational; no UI event needed yet.
-            None
-        }
+        clarity_wire::WireMessage::ToolCallProgress {
+            index,
+            name,
+            arguments_so_far,
+            ..
+        } => Some(UiEvent::ToolCallProgress {
+            session_id: sid,
+            index,
+            name,
+            arguments_so_far,
+        }),
         clarity_wire::WireMessage::ToolResult { id, result, .. } => Some(UiEvent::ToolResult {
             session_id: sid,
             id,

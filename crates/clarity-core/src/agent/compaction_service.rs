@@ -429,6 +429,7 @@ mod tests {
                         content: Some("chunk".to_string()),
                         reasoning_content: None,
                         tool_calls: vec![],
+                        partial_tool_calls: vec![],
                     }))
                     .await;
             });
@@ -849,6 +850,7 @@ mod tests {
                             content: Some("chunk".to_string()),
                             reasoning_content: None,
                             tool_calls: vec![],
+                            partial_tool_calls: vec![],
                         }))
                         .await;
                 });

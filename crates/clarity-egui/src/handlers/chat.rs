@@ -350,18 +350,7 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
                     return (summary.to_string(), false);
                 }
             }
-            let truncated = result.chars().count() > 2000;
-            let out = if truncated {
-                let t: String = result.chars().take(2000).collect();
-                format!(
-                    "{}\n... (truncated, {} chars total)",
-                    t,
-                    result.chars().count()
-                )
-            } else {
-                result.to_string()
-            };
-            (out, truncated)
+            truncate_result(result, 2000)
         }
         "glob" | "grep" => {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
@@ -382,34 +371,39 @@ fn format_tool_output(name: &str, result: &str) -> (String, bool) {
                     }
                 }
             }
-            let truncated = result.chars().count() > 2000;
-            let out = if truncated {
-                let t: String = result.chars().take(2000).collect();
-                format!(
-                    "{}\n... (truncated, {} chars total)",
-                    t,
-                    result.chars().count()
-                )
-            } else {
-                result.to_string()
-            };
-            (out, truncated)
+            truncate_result(result, 2000)
         }
-        _ => {
-            let truncated = result.chars().count() > 2000;
-            let out = if truncated {
-                let t: String = result.chars().take(2000).collect();
-                format!(
-                    "{}\n... (truncated, {} chars total)",
-                    t,
-                    result.chars().count()
-                )
+        "file_read" => {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
+                let path = v.get("path").and_then(|p| p.as_str()).unwrap_or("unknown");
+                let content = v.get("content").and_then(|c| c.as_str()).unwrap_or(result);
+                let (display, trunc) = truncate_result(content, 2000);
+                (format!("📄 {}: {}", path, display), trunc)
             } else {
-                result.to_string()
-            };
-            (out, truncated)
+                truncate_result(result, 2000)
+            }
         }
+        "file_write" | "file_edit" => {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(result) {
+                let path = v.get("path").and_then(|p| p.as_str()).unwrap_or("unknown");
+                if let Some(_diff) = v.get("_diff_preview").and_then(|d| d.as_str()) {
+                    return (format!("✏ {} (diff preview available)", path), false);
+                }
+                return (format!("✏ {} written", path), false);
+            }
+            truncate_result(result, 2000)
+        }
+        _ => truncate_result(result, 2000),
     }
+}
+
+fn truncate_result(s: &str, max_chars: usize) -> (String, bool) {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max_chars {
+        return (s.to_string(), false);
+    }
+    let truncated: String = chars.into_iter().take(max_chars).collect();
+    (format!("{}\n... (truncated)", truncated), true)
 }
 
 /// Handles the tool result event.

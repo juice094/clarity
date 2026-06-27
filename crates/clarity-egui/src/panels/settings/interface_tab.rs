@@ -69,6 +69,100 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             set_theme(app, "light");
         }
     });
+
+    ui.add_space(theme.space_8);
+    // Row 2: Catppuccin + Tokyo Night
+    let is_catppuccin = app.settings_store.settings_edit.theme == "catppuccin";
+    let is_tokyo = app.settings_store.settings_edit.theme == "tokyo_night";
+    ui.horizontal(|ui| {
+        ui.set_min_width(ui.available_width());
+        let card_w = (ui.available_width() - theme.space_8) / 2.0;
+        let card_h = 64.0;
+
+        let c_bg = Theme::catppuccin_mocha().bg;
+        let c_text = Theme::catppuccin_mocha().text;
+        if crate::widgets::theme_card(
+            ui,
+            card_w,
+            card_h,
+            c_bg,
+            c_text,
+            "Catppuccin",
+            "Warm pastel lavender",
+            is_catppuccin,
+            &theme,
+        )
+        .clicked()
+        {
+            set_theme(app, "catppuccin");
+        }
+        ui.add_space(theme.space_8);
+
+        let t_bg = Theme::tokyo_night().bg;
+        let t_text = Theme::tokyo_night().text;
+        if crate::widgets::theme_card(
+            ui,
+            card_w,
+            card_h,
+            t_bg,
+            t_text,
+            "Tokyo Night",
+            "Deep blue-black",
+            is_tokyo,
+            &theme,
+        )
+        .clicked()
+        {
+            set_theme(app, "tokyo_night");
+        }
+    });
+
+    ui.add_space(theme.space_8);
+    // Row 3: One Dark + OLED
+    let is_one_dark = app.settings_store.settings_edit.theme == "one_dark";
+    let is_oled = app.settings_store.settings_edit.theme == "oled";
+    ui.horizontal(|ui| {
+        ui.set_min_width(ui.available_width());
+        let card_w = (ui.available_width() - theme.space_8) / 2.0;
+        let card_h = 64.0;
+
+        let o_bg = Theme::one_dark().bg;
+        let o_text = Theme::one_dark().text;
+        if crate::widgets::theme_card(
+            ui,
+            card_w,
+            card_h,
+            o_bg,
+            o_text,
+            "One Dark",
+            "Atom classic blue",
+            is_one_dark,
+            &theme,
+        )
+        .clicked()
+        {
+            set_theme(app, "one_dark");
+        }
+        ui.add_space(theme.space_8);
+
+        let ol_bg = Theme::oled_black().bg;
+        let ol_text = Theme::oled_black().text;
+        if crate::widgets::theme_card(
+            ui,
+            card_w,
+            card_h,
+            ol_bg,
+            ol_text,
+            "OLED",
+            "Pure black pixels-off",
+            is_oled,
+            &theme,
+        )
+        .clicked()
+        {
+            set_theme(app, "oled");
+        }
+    });
     ui.add_space(theme.space_20);
 
     // ── Font Size ──
@@ -278,10 +372,13 @@ fn set_theme(app: &mut App, name: &str) {
         .settings_edit
         .font_scale
         .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
-    app.ui_store.theme = if name == "light" {
-        Theme::light().with_font_scale(scale)
-    } else {
-        Theme::dark().with_font_scale(scale)
+    app.ui_store.theme = match name {
+        "light" => Theme::light().with_font_scale(scale),
+        "catppuccin" => Theme::catppuccin_mocha().with_font_scale(scale),
+        "tokyo_night" => Theme::tokyo_night().with_font_scale(scale),
+        "one_dark" => Theme::one_dark().with_font_scale(scale),
+        "oled" => Theme::oled_black().with_font_scale(scale),
+        _ => Theme::dark().with_font_scale(scale),
     };
     app.auto_save_settings();
 }

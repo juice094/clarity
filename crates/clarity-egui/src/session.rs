@@ -116,6 +116,7 @@ pub fn save_session_internal(session: &Session) -> Result<(), String> {
                 role: match m.role {
                     Role::User => "user".into(),
                     Role::Agent => "agent".into(),
+                    Role::System => "system".into(),
                 },
                 content: m.content.clone(),
                 blocks: if m.blocks.is_empty() {

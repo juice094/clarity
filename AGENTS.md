@@ -481,6 +481,15 @@ Provider 配置、models.toml、加密 key 详见 [`docs/development/provider-co
 - **移动端 FFI 核心**：新增 `clarity-mobile-core`，通过 UniFFI 向 Kotlin / Swift 暴露 Runtime / 事件 / 配置 / 记忆接口；默认禁用 `local-llm` 以规避移动 ABI fullfp16 问题。
 - **Claw 协议统一**：Gateway WebSocket 为 Clarity 内部唯一协议；OpenClaw JSON-RPC 仅作为外部 KimiClaw / OpenClaw Gateway 互通的 fallback；`clarity-claw` 只做 Gateway WebSocket 客户端 / 系统托盘节点，不兼任外部 OpenClaw 适配器。详见 [`docs/architecture/claw-protocol.md`](docs/architecture/claw-protocol.md)。
 - **OKF 前端接入**：新增 `KnowledgeStore`；右 rail `Knowledge` 面板支持加载 OKF bundle、搜索概念、浏览概念列表并查看详情（frontmatter + Markdown 正文）。
+- **右 IDE 面板全面落地**：Console（虚拟化过滤日志 + 错误点击注入）、Files（递归目录树 + 右键菜单 + Git 扩展点）、Share（Markdown/JSON/HTML 导出）、Templates（内建模板 + 一键注入）均已从占位符实现为完整功能面板。
+- **Diff 可视化**：`DiffViewer` widget 提供统一 diff 视图（行号 + 着色 + hunk 折叠 + accept/reject + delta accent bars）；`RenderBlock::Diff` 自动检测对话中的 unified diff 并内联渲染；审批弹窗已集成 diff 预览。
+- **Session 统计**：`+N/-M` diff stats badge、session 搜索/过滤、token 用量进度条（hover tooltip）。
+- **# Context Picker**：`#` 快速注入系统（源码类型列表 → 内嵌文件浏览器 → 文件名过滤 → chips 渲染 → 消息注入）。
+- **语法高亮**：`syntect` 18 语言支持（cold-path 预解析），主题 `base16-ocean.dark` 映射到 egui Color32。
+- **主题系统扩展**：6 个主题预设（Dark/Light/OLED/Catppuccin Mocha/Tokyo Night/One Dark）+ `info` token + WCAG AA 对比度修复。
+- **前端美化**：System 消息 glass pill、代码块行号 + shadow + >30 行折叠、文件路径可点击（主击打开/右键复制）、TUI 风格 `─` 分隔符、Toast 图标 + 动画 + ×关闭、气泡 hover 时间戳、面板过渡动画、滚动到底部按钮、VS Code 2px accent 导航条、delta diff 左边 accent 条、fuzzy 命令面板。
+- **事件层下沉**：`ToolCallProgress` WireMessage → UiEvent → Console 显示 已全栈贯通；`StreamDelta.partial_tool_calls` 编译修复覆盖 5 个 crate。
+- **配套更新**：TUI 状态栏增加模型名称、Gateway Web 增加 `tool_call_progress` handler + TypeScript 类型、CLAUDE.md 全面反映新架构。
 
 ### 11.2 实验性 / 未完成方向
 
