@@ -47,8 +47,8 @@ pub struct Message {
     pub content: String,
     /// Visual role of the message.
     pub msg_type: MessageType,
-    /// Timestamp shown in the header.
-    pub timestamp: String,
+    /// Instant the message was created (for relative time display).
+    pub created_at: std::time::Instant,
     /// Whether the assistant message is still streaming.
     pub is_streaming: bool,
 }
@@ -59,7 +59,7 @@ impl Message {
         Self {
             content: content.into(),
             msg_type,
-            timestamp: Local::now().format("%H:%M:%S").to_string(),
+            created_at: std::time::Instant::now(),
             is_streaming: false,
         }
     }

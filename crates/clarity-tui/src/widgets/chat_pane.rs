@@ -8,6 +8,21 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Widget, Wrap},
 };
+use std::time::Instant;
+
+/// Format an elapsed duration as a short relative time label.
+///
+/// ponytail: use simple threshold buckets — no chrono, no i18n.
+fn relative_label(created: Instant) -> String {
+    let secs = created.elapsed().as_secs();
+    match secs {
+        0..=5 => "just now".into(),
+        6..=59 => format!("{}s ago", secs),
+        60..=3599 => format!("{}m ago", secs / 60),
+        3600..=86399 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86400),
+    }
+}
 
 /// 聊天区域组件
 pub struct ChatPane<'a> {
@@ -47,7 +62,7 @@ impl<'a> Widget for ChatPane<'a> {
                 MessageType::User => {
                     lines.push(Line::from(""));
                     let time = Span::styled(
-                        format!(" {} ", msg.timestamp),
+                        format!(" {} ", relative_label(msg.created_at)),
                         Style::default().fg(Color::Rgb(100, 100, 120)),
                     );
                     lines.push(Line::from(vec![
@@ -84,7 +99,7 @@ impl<'a> Widget for ChatPane<'a> {
                             .add_modifier(Modifier::BOLD),
                     );
                     let time = Span::styled(
-                        format!(" {} ", msg.timestamp),
+                        format!(" {} ", relative_label(msg.created_at)),
                         Style::default().fg(Color::Rgb(100, 100, 120)),
                     );
                     lines.push(Line::from(vec![
