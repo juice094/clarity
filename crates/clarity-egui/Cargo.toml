@@ -50,10 +50,15 @@ pretext-fontdb = { git = "https://github.com/juice094/pretext-rust.git", rev = "
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
 
+# Optional SVG rendering support via resvg + tiny-skia (Mermaid diagrams, icons).
+resvg = { version = "0.44", optional = true }
+tiny-skia = { version = "0.11", optional = true }
+
 [features]
 default = []
 line-mode = []
 hermes = ["clarity-core/hermes", "clarity-memory/hermes"]
+svg = ["resvg", "tiny-skia"]
 
 [[bin]]
 name = "clarity-egui"

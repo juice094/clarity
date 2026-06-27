@@ -1,0 +1,134 @@
+//! SVG image widget — renders SVG data as an egui texture.
+//!
+//! Uses `resvg` + `tiny-skia` to rasterize SVG content into an RGBA pixel
+//! buffer, then uploads it as an `egui::TextureHandle`.  Gated behind the
+//! `svg` feature flag since `resvg` adds ~2 MB to the binary.
+//!
+//! Primary use: Mermaid diagram rendering in Plan visualization, SVG icon
+//! display in the Claw WebBridge panel, and file preview overlays.
+
+#[cfg(feature = "svg")]
+mod inner {
+    use egui::{ColorImage, TextureHandle, TextureOptions};
+
+    /// Rasterize raw SVG data to an `egui::ColorImage` at the given pixel size.
+    ///
+    /// Returns `None` if the SVG is malformed or empty.
+    pub fn svg_to_color_image(svg_data: &[u8], width: u32, height: u32) -> Option<ColorImage> {
+        let tree = resvg::usvg::Tree::from_data(svg_data, &resvg::usvg::Options::default()).ok()?;
+        let size = tree.size();
+        if size.width() <= 0.0 || size.height() <= 0.0 {
+            return None;
+        }
+
+        // Scale to fit while preserving aspect ratio.
+        let scale_x = width as f32 / size.width();
+        let scale_y = height as f32 / size.height();
+        let scale = scale_x.min(scale_y);
+
+        let pixmap_size = tiny_skia::IntSize::from_wh(
+            (size.width() * scale).ceil() as u32,
+            (size.height() * scale).ceil() as u32,
+        )?;
+
+        let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height())?;
+        let transform = tiny_skia::Transform::from_scale(scale, scale);
+        resvg::render(&tree, transform, &mut pixmap);
+
+        // Convert tiny-skia RGBA → egui ColorImage RGBA.
+        let pixels: Vec<egui::Color32> = pixmap
+            .data()
+            .chunks_exact(4)
+            .map(|c| egui::Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3]))
+            .collect();
+
+        Some(ColorImage {
+            size: [pixmap.width() as usize, pixmap.height() as usize],
+            pixels,
+        })
+    }
+
+    /// Rasterize an SVG and upload it as a texture, returning the handle.
+    pub fn svg_texture(
+        ctx: &egui::Context,
+        svg_data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Option<TextureHandle> {
+        let image = svg_to_color_image(svg_data, width, height)?;
+        let handle = ctx.load_texture(
+            format!("svg_{}", svg_data.len()),
+            image,
+            TextureOptions {
+                magnification: egui::TextureFilter::Linear,
+                minification: egui::TextureFilter::Linear,
+                ..Default::default()
+            },
+        );
+        Some(handle)
+    }
+}
+
+#[cfg(feature = "svg")]
+pub use inner::*;
+
+/// Stub that always returns `None` when the `svg` feature is disabled.
+#[cfg(not(feature = "svg"))]
+pub fn svg_to_color_image(_svg_data: &[u8], _width: u32, _height: u32) -> Option<egui::ColorImage> {
+    None
+}
+
+/// Stub that always returns `None` when the `svg` feature is disabled.
+#[cfg(not(feature = "svg"))]
+pub fn svg_texture(
+    _ctx: &egui::Context,
+    _svg_data: &[u8],
+    _width: u32,
+    _height: u32,
+) -> Option<egui::TextureHandle> {
+    None
+}
+
+/// Render an SVG as an egui image, falling back to a placeholder text label
+/// when the `svg` feature is not enabled or rasterization fails.
+pub fn render_svg_or_fallback(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    svg_data: &[u8],
+    max_width: f32,
+    max_height: f32,
+    fallback_label: &str,
+) {
+    let handle = svg_texture(ctx, svg_data, max_width as u32, max_height as u32);
+
+    if let Some(tex) = handle {
+        let tex_size = tex.size_vec2();
+        let scale = (max_width / tex_size.x)
+            .min(max_height / tex_size.y)
+            .min(1.0);
+        let display_size = tex_size * scale;
+        let img = egui::Image::from_texture(egui::load::SizedTexture::new(tex.id(), tex_size))
+            .fit_to_exact_size(display_size)
+            .sense(egui::Sense::hover());
+        ui.add(img);
+    } else {
+        // Fallback: centered text label in a subtle frame.
+        let frame = egui::Frame::new()
+            .fill(ui.style().visuals.extreme_bg_color)
+            .corner_radius(egui::CornerRadius::same(8))
+            .inner_margin(egui::Margin::symmetric(16, 12))
+            .show(ui, |ui| {
+                ui.set_min_size(egui::vec2(max_width.min(200.0), max_height.min(100.0)));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(20.0);
+                    ui.label(
+                        egui::RichText::new(fallback_label)
+                            .size(12.0)
+                            .color(egui::Color32::from_gray(150)),
+                    );
+                    ui.add_space(20.0);
+                });
+            });
+        let _ = frame;
+    }
+}

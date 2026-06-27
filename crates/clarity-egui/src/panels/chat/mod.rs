@@ -204,7 +204,7 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
         });
 }
 
-/// Centered empty state: large logo and short subtitle.
+/// Centered empty state: logo, prompt suggestions, and model info.
 ///
 /// The composer is now rendered by `render_input_panel` at the bottom of the
 /// window so its top edge always aligns with the bottom of the chat area.
@@ -215,29 +215,140 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
         .ui_store
         .content_max_width
         .min(full_w - 2.0 * theme.space_24)
-        .clamp(320.0, 560.0);
+        .clamp(360.0, 600.0);
 
     ui.vertical_centered(|ui| {
         ui.set_max_width(content_w);
-
         let full_h = ui.available_height();
-        // Center the Clarity title + subtitle block vertically, then shift it
-        // slightly upward because the screen is typically viewed at a tilt.
-        let block_h = 48.0 + theme.space_12 + 16.0;
-        ui.add_space((((full_h - block_h) / 2.0) - 32.0).max(40.0));
+        // Center block vertically with slight upward shift.
+        let block_h = 280.0;
+        ui.add_space(((full_h - block_h) / 2.0 - 32.0).max(24.0));
 
+        // ── Logo area ──
         ui.label(
             egui::RichText::new("Clarity")
-                .size(48.0)
+                .size(42.0)
                 .strong()
                 .color(theme.text_strong),
         );
-        ui.add_space(theme.space_12);
+        ui.add_space(theme.space_8);
 
         ui.label(
-            egui::RichText::new(app.t("Start conversation below"))
+            egui::RichText::new(app.t("Your personal AI coding assistant"))
                 .size(theme.text_sm)
-                .color(theme.text_dim),
+                .color(theme.text_muted),
+        );
+        ui.add_space(theme.space_24);
+
+        // ── Quick-start suggestion chips ──
+        let suggestions: &[(
+            /* icon */ &str,
+            /* label */ &str,
+            /* prompt */ &str,
+        )] = &[
+            (
+                crate::theme::ICON_WRENCH,
+                "Fix a bug",
+                "Help me debug an issue in my code.",
+            ),
+            (
+                crate::theme::ICON_PLUS,
+                "New feature",
+                "Implement a new feature based on the spec.",
+            ),
+            (
+                crate::theme::ICON_CHECK,
+                "Code review",
+                "Review my code for bugs and improvements.",
+            ),
+            (
+                crate::theme::ICON_FILE_CODE,
+                "Refactor",
+                "Refactor this code for clarity and performance.",
+            ),
+            (
+                crate::theme::ICON_BOOK,
+                "Explain code",
+                "Explain how this code works in detail.",
+            ),
+            (
+                crate::theme::ICON_TERMINAL,
+                "Run command",
+                "Analyze the output of this terminal command.",
+            ),
+        ];
+
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(theme.space_8, theme.space_8);
+            for (icon, label, prompt) in suggestions {
+                let chip = egui::Frame::new()
+                    .fill(theme.surface)
+                    .stroke(egui::Stroke::new(1.0, theme.border))
+                    .corner_radius(egui::CornerRadius::same(theme.radius_md as u8))
+                    .inner_margin(egui::Margin::symmetric(
+                        theme.space_12 as i8,
+                        theme.space_8 as i8,
+                    ))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(*icon)
+                                    .font(theme.font_icon(theme.text_sm))
+                                    .color(theme.accent),
+                            );
+                            ui.add_space(theme.space_8);
+                            ui.label(
+                                egui::RichText::new(app.t(label))
+                                    .size(theme.text_sm)
+                                    .color(theme.text),
+                            );
+                        });
+                    });
+                if chip.response.clicked() {
+                    app.chat_store.input = prompt.to_string();
+                    app.ui_store.focus_input_requested = true;
+                }
+                if chip.response.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+            }
+        });
+
+        ui.add_space(theme.space_20);
+
+        // ── Active provider / model info line ──
+        let provider_name = app
+            .settings_store
+            .settings_edit
+            .active_persona_id
+            .clone()
+            .unwrap_or_else(|| "local".to_string());
+        ui.label(
+            egui::RichText::new(format!(
+                "{} {} · {} {}",
+                crate::theme::ICON_CPU,
+                app.t("Provider:"),
+                provider_name,
+                if app.state.llm_binding.lock().is_some() {
+                    "\u{2713}"
+                } else {
+                    "\u{26A0}"
+                },
+            ))
+            .size(theme.text_xs)
+            .color(theme.text_dim),
+        );
+
+        // ── Keyboard shortcuts hint ──
+        ui.add_space(theme.space_8);
+        ui.label(
+            egui::RichText::new(format!(
+                "{} Ctrl+Shift+P  {} Ctrl+B",
+                app.t("Commands"),
+                app.t("Sidebar"),
+            ))
+            .size(theme.text_xs)
+            .color(theme.text_muted),
         );
     });
 }

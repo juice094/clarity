@@ -71,7 +71,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(
-                                egui::RichText::new("#").size(theme.text_xs).color(theme.accent),
+                                egui::RichText::new("#")
+                                    .size(theme.text_xs)
+                                    .color(theme.accent),
                             );
                             ui.label(
                                 egui::RichText::new(&item.display)

@@ -122,8 +122,11 @@ pub(crate) struct App {
     pub(crate) console_store: crate::stores::ConsoleStore,
     /// Local file browser state for the right-rail Files panel.
     pub(crate) files_store: crate::stores::FilesStore,
+    /// Panel transition animation state.
+    pub(crate) panel_animation: crate::animation::PanelAnimationState,
 }
 
+mod animation;
 mod app_logic;
 mod onboarding;
 

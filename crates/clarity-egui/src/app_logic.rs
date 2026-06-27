@@ -493,6 +493,7 @@ impl App {
             knowledge_store: crate::stores::KnowledgeStore::new(),
             console_store: crate::stores::ConsoleStore::default(),
             files_store: crate::stores::FilesStore::default(),
+            panel_animation: crate::animation::PanelAnimationState::default(),
         };
         mark("app_struct_init");
 

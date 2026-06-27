@@ -30,17 +30,42 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
         bottom: inset,
     };
 
+    // ── Animation: detect panel state transitions ──
+    let current_panel = Some(app.view_state.right_rail_panel);
+    let visible = app.view_state.right_rail_visible;
+    let prev = app.panel_animation.prev_panel;
+    if current_panel != prev
+        && (current_panel.is_some() && current_panel != Some(RightRailPanel::None))
+    {
+        // Panel switched — animate width from 0 to target.
+        let target_w = theme.size_panel_right;
+        app.panel_animation.right_panel_width =
+            crate::animation::FloatAnimation::start(0.0, target_w, theme.duration_normal);
+    } else if !visible && prev.is_some() && prev != Some(RightRailPanel::None) {
+        // Panel collapsed — animate to 0 then hide.
+        let current_w = app.panel_animation.right_panel_width.current();
+        app.panel_animation.right_panel_width =
+            crate::animation::FloatAnimation::start(current_w, 0.0, theme.duration_normal);
+        app.panel_animation.right_panel_width.finish(); // snap-close for now
+    }
+    app.panel_animation.prev_panel = current_panel;
+
+    // Animated width: interpolate during transition, latch at target otherwise.
+    let anim_w = app.panel_animation.right_panel_width.current();
+    let effective_w = if app.panel_animation.right_panel_width.done && !visible {
+        return; // Panel is fully collapsed, don't render.
+    } else {
+        anim_w.max(0.0)
+    };
+
     let response = egui::SidePanel::right("right_ide_panel")
-        .default_width(theme.size_panel_right.ceil())
+        .default_width(effective_w.ceil().max(180.0))
         .min_width(180.0)
         .max_width(400.0)
         .resizable(true)
         .show_separator_line(false)
         .frame(
             egui::Frame::side_top_panel(&ctx.style())
-                // The background is painted by the unified main-stage painter so
-                // the rail shares the same surface as the chat stage. Keep the
-                // panel frame transparent here.
                 .fill(egui::Color32::TRANSPARENT)
                 .stroke(egui::Stroke::NONE)
                 .shadow(egui::Shadow::NONE)

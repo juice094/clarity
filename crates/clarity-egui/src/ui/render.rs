@@ -15,10 +15,25 @@ use crate::ui::rich_inline::text_to_spans;
 use crate::ui::types::{
     ContentBlock, InlineSpan, Message, RenderBlock, Role, ToolCallInfo, ToolCallStatus,
 };
+use std::time::Duration;
 
 // ============================================================================
 // Render — Message bubbles, tool calls, typing indicator
 // ============================================================================
+
+/// Format a `Duration` as a human-readable elapsed time string.
+fn format_elapsed(d: Duration) -> String {
+    let secs = d.as_secs();
+    if secs < 60 {
+        format!("{}s ago", secs)
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h ago", secs / 3600)
+    } else {
+        format!("{}d ago", secs / 86400)
+    }
+}
 
 /// Render a user or AI message using pre-parsed markdown blocks.
 /// Returns the actual rendered height (including trailing space).
@@ -74,12 +89,18 @@ fn agent_message(
     let start_y = ui.cursor().min.y;
 
     if show_header {
-        // Header: avatar + label (outside the card)
+        // Header: avatar + label + elapsed time (outside the card)
         ui.horizontal(|ui| {
             crate::components::chat::avatar::avatar(ui, "A", theme);
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new("Agent")
+                    .size(theme.text_xs)
+                    .color(theme.text_dim),
+            );
+            ui.add_space(theme.space_4);
+            ui.label(
+                egui::RichText::new(format_elapsed(msg.timestamp.elapsed()))
                     .size(theme.text_xs)
                     .color(theme.text_dim),
             );
@@ -385,7 +406,7 @@ fn user_bubble(
     ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
         ui.add_space(theme.space_8);
         ui.set_max_width(max_width);
-        egui::Frame::new()
+        let bubble_resp = egui::Frame::new()
             .fill(theme.user_bubble)
             .corner_radius(egui::CornerRadius::same(theme.radius_lg as u8))
             .stroke(egui::Stroke::NONE)
@@ -420,6 +441,18 @@ fn user_bubble(
                     }
                 });
             });
+        // Hover timestamp.
+        if bubble_resp.response.hovered() {
+            let ts = format_elapsed(msg.timestamp.elapsed());
+            egui::show_tooltip_at_pointer(
+                ui.ctx(),
+                egui::LayerId::new(egui::Order::Tooltip, ui.id().with("user_ts_layer")),
+                ui.id().with("user_ts"),
+                |ui| {
+                    ui.label(egui::RichText::new(ts).size(theme.text_xs).color(theme.text_dim));
+                },
+            );
+        }
         ui.add_space(theme.space_8);
     });
     ui.add_space(theme.space_16);

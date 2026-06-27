@@ -488,46 +488,113 @@ fn render_span(
 
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
+
+    // Split into lines for line-number rendering.
+    let lines: Vec<&str> = code.lines().collect();
+    let line_count = lines.len();
+    let ln_width = if line_count > 1 {
+        // Right-aligned line number gutter.
+        let digits = line_count.to_string().len().max(1);
+        (digits as f32) * 9.0 + theme.space_12
+    } else {
+        0.0
+    };
+
     egui::Frame::new()
         .fill(theme.code_block_bg)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
         .inner_margin(egui::Margin::symmetric(14, 12))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
+
+            // ── Header: lang badge + copy button ──
             ui.horizontal(|ui| {
                 if !lang.is_empty() {
+                    let badge = egui::Frame::new()
+                        .fill(theme.bg_hover)
+                        .corner_radius(egui::CornerRadius::same(4))
+                        .inner_margin(egui::Margin::symmetric(8, 2))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(lang)
+                                    .size(theme.text_xs)
+                                    .color(theme.accent)
+                                    .monospace(),
+                            );
+                        });
+                    let _ = badge; // Frame response consumed.
+                }
+                ui.add_space(theme.space_4);
+                if !lang.is_empty() {
                     ui.label(
-                        egui::RichText::new(lang)
-                            .size(theme.text_sm)
-                            .color(theme.text_dim)
-                            .monospace(),
+                        egui::RichText::new(format!("{} lines", line_count))
+                            .size(theme.text_xs)
+                            .color(theme.text_dim),
                     );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
-                        .add(
+                        .add_sized(
+                            [64.0, 22.0],
                             egui::Button::new(
-                                egui::RichText::new("Copy")
+                                egui::RichText::new(format!("{} Copy", crate::theme::ICON_COPY,))
                                     .size(theme.text_xs)
                                     .color(theme.text_dim),
                             )
-                            .frame(false),
+                            .fill(theme.surface)
+                            .corner_radius(egui::CornerRadius::same(4)),
                         )
                         .clicked()
                     {
                         ui.ctx().copy_text(code.to_string());
+                        // Show a brief "Copied" feedback.
+                        ui.ctx().request_repaint();
                     }
                 });
             });
-            ui.add_space(2.0);
-            // Immutable monospace label — no per-frame String allocation
-            ui.label(
-                egui::RichText::new(code)
-                    .monospace()
-                    .color(theme.text)
-                    .size(theme.text_base)
-                    .line_height(Some(22.0)),
-            );
+            ui.add_space(theme.space_4);
+
+            // ── Code lines with optional line numbers ──
+            if line_count > 1 {
+                for (idx, line) in lines.iter().enumerate() {
+                    let ln = idx + 1;
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = theme.space_8;
+                        // Line number gutter.
+                        ui.add_sized(
+                            [ln_width, theme.text_base],
+                            egui::Label::new(
+                                egui::RichText::new(format!(
+                                    "{:>width$}",
+                                    ln,
+                                    width = line_count.to_string().len().max(1)
+                                ))
+                                .size(theme.text_xs)
+                                .color(theme.text_dim)
+                                .monospace(),
+                            ),
+                        );
+                        // Code line content.
+                        let display = if line.is_empty() { " " } else { line };
+                        ui.label(
+                            egui::RichText::new(display)
+                                .monospace()
+                                .color(theme.text)
+                                .size(theme.text_base)
+                                .line_height(Some(22.0)),
+                        );
+                    });
+                }
+            } else {
+                // Single line or empty — no line numbers needed.
+                ui.label(
+                    egui::RichText::new(code)
+                        .monospace()
+                        .color(theme.text)
+                        .size(theme.text_base)
+                        .line_height(Some(22.0)),
+                );
+            }
         });
     ui.add_space(theme.space_4);
 }

@@ -57,7 +57,7 @@ impl BudgetRoles {
 }
 
 /// Configuration for the compaction service
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CompactionServiceConfig {
     /// Token threshold that triggers compaction
     pub token_limit: usize,
@@ -65,6 +65,16 @@ pub struct CompactionServiceConfig {
     pub compaction_model: String,
     /// Number of tokens worth of recent messages to keep intact
     pub history_retention_tokens: usize,
+    /// Max characters to retain per old assistant message during Tier-1
+    /// truncation. Messages exceeding this are truncated with a marker.
+    /// Default: 200 (~50 tokens for English, more for CJK).
+    pub tier1_max_chars: usize,
+    /// Token margin for proactive compaction triggering.
+    ///
+    /// When non-zero, `needs_compaction` returns `true` when the estimated
+    /// token count is within this many tokens of the limit, rather than
+    /// waiting for the exact breach. Default: 500 (~2 messages headroom).
+    pub proactive_margin: usize,
     /// Optional role-based budget allocation. When set, budget compaction
     /// runs before tier1/tier2 to enforce per-role quotas (semantic drop).
     pub budget: Option<BudgetRoles>,
@@ -72,6 +82,21 @@ pub struct CompactionServiceConfig {
     pub session_store_path: Option<std::path::PathBuf>,
     /// Optional session ID for the session store
     pub session_id: Option<String>,
+}
+
+impl Default for CompactionServiceConfig {
+    fn default() -> Self {
+        Self {
+            token_limit: 0,
+            compaction_model: String::new(),
+            history_retention_tokens: 0,
+            tier1_max_chars: 200,
+            proactive_margin: 500,
+            budget: None,
+            session_store_path: None,
+            session_id: None,
+        }
+    }
 }
 
 /// Service that compacts conversation history by summarizing old messages
@@ -193,10 +218,10 @@ impl CompactionService {
         for msg in messages[..split_index].iter_mut() {
             if msg.role == MessageRole::Assistant
                 && msg.tool_calls.is_none()
-                && msg.content.len() > 120
+                && msg.content.len() > self.config.tier1_max_chars
             {
                 let orig_len = msg.content.len();
-                msg.content.truncate(120);
+                msg.content.truncate(self.config.tier1_max_chars);
                 msg.content
                     .push_str(&format!(" [...truncated, {} total chars]", orig_len));
             }
@@ -210,8 +235,17 @@ impl CompactionService {
     }
 
     /// Returns `true` when the total estimated tokens exceed `token_limit`
+    /// Check whether compaction should run, including a proactive margin.
+    ///
+    /// When `proactive_margin > 0`, compaction triggers before the token
+    /// limit is breached, giving the LLM headroom to finish its current
+    /// reasoning step rather than hitting a mid-turn context overflow.
     pub fn needs_compaction(&self, messages: &[Message]) -> bool {
-        Self::estimate_tokens(messages) >= self.config.token_limit
+        let threshold = self
+            .config
+            .token_limit
+            .saturating_sub(self.config.proactive_margin);
+        Self::estimate_tokens(messages) >= threshold
     }
 
     /// Compact `messages` in-place if they exceed the token limit.
@@ -484,6 +518,7 @@ mod tests {
             token_limit: 100,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 20,
+            proactive_margin: 0,
             budget: None,
             ..Default::default()
         };
@@ -673,6 +708,7 @@ mod tests {
             token_limit: 10,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
+            tier1_max_chars: 120,
             budget: None,
             ..Default::default()
         };
@@ -900,6 +936,7 @@ mod tests {
             token_limit: 8,
             compaction_model: "kimi-latest".to_string(),
             history_retention_tokens: 4,
+            proactive_margin: 0,
             budget: Some(BudgetRoles::new()),
             ..Default::default()
         };
