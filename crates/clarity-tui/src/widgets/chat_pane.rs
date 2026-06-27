@@ -256,4 +256,111 @@ mod tests {
         assert_eq!(relative_label(at_5), "just now");
         assert_eq!(relative_label(at_6), "6s ago");
     }
+
+    // ── Layout integration tests ──
+
+    /// Extract plain text from rendered ratatui Lines.
+    fn collect_text(lines: &[Line]) -> String {
+        lines
+            .iter()
+            .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn consecutive_same_role_has_separator() {
+        let mut msgs = vec![
+            Message::new("first message", MessageType::Assistant),
+            Message::new("second message", MessageType::Assistant),
+        ];
+        let pane = ChatPane::new(&mut msgs, 0);
+        let lines = render_to_lines(pane);
+        let text = collect_text(&lines);
+        // Second message should have separator (no header).
+        assert!(
+            text.contains("┈"),
+            "expected separator between same-role msgs"
+        );
+        // Only one Clarity header.
+        assert_eq!(
+            text.matches("Clarity").count(),
+            1,
+            "only first msg should have header"
+        );
+    }
+
+    #[test]
+    fn role_switch_has_header() {
+        let mut msgs = vec![
+            Message::new("user says hi", MessageType::User),
+            Message::new("assistant replies", MessageType::Assistant),
+        ];
+        let pane = ChatPane::new(&mut msgs, 0);
+        let lines = render_to_lines(pane);
+        let text = collect_text(&lines);
+        assert!(text.contains("You"), "user header missing");
+        assert!(text.contains("Clarity"), "assistant header missing");
+    }
+
+    #[test]
+    fn streaming_message_shows_cursor() {
+        let mut msgs = vec![Message::new("thinking...", MessageType::Assistant).streaming()];
+        let pane = ChatPane::new(&mut msgs, 0);
+        let lines = render_to_lines(pane);
+        let text = collect_text(&lines);
+        assert!(text.contains('▌'), "streaming cursor missing");
+    }
+
+    #[test]
+    fn markdown_paragraph_renders() {
+        let mut msgs = vec![Message::new(
+            "**bold** and `code` and *italic*",
+            MessageType::Assistant,
+        )];
+        let pane = ChatPane::new(&mut msgs, 0);
+        let lines = render_to_lines(pane);
+        let text = collect_text(&lines);
+        assert!(text.contains("bold"), "bold text present");
+        assert!(text.contains("code"), "code text present");
+    }
+
+    #[test]
+    fn system_message_no_role_header() {
+        let mut msgs = vec![Message::new("system info", MessageType::System)];
+        let pane = ChatPane::new(&mut msgs, 0);
+        let lines = render_to_lines(pane);
+        let text = collect_text(&lines);
+        assert!(
+            !text.contains("Clarity"),
+            "system msg should not have Clarity header"
+        );
+        assert!(
+            !text.contains("You"),
+            "system msg should not have You header"
+        );
+        assert!(text.contains("system info"), "content present");
+    }
+}
+
+/// Helper: render a ChatPane and collect the output Lines.
+fn render_to_lines(pane: ChatPane<'_>) -> Vec<Line<'static>> {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    let area = Rect::new(0, 0, 80, 40);
+    let mut buf = Buffer::empty(area);
+    pane.render(area, &mut buf);
+    // Reconstruct Lines from the buffer's cell content.
+    let mut lines: Vec<Line> = Vec::new();
+    for y in 0..area.height {
+        let row: String = (0..area.width)
+            .map(|x| buf.cell((x, y)).map(|c| c.symbol()).unwrap_or(" "))
+            .collect::<String>()
+            .trim_end()
+            .to_string();
+        if !row.is_empty() {
+            lines.push(Line::from(row));
+        }
+    }
+    lines
 }
