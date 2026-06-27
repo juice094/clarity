@@ -33,6 +33,9 @@ pub enum UiEvent {
         session_id: String,
         id: String,
         result: String,
+        /// Pre-formatted display text from the tool (Optional — falls back to
+        /// frontend formatting heuristics when None).
+        display_result: Option<String>,
     },
     /// Incremental tool call progress (name and argument stream).
     ToolCallProgress {

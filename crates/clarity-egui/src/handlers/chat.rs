@@ -411,6 +411,7 @@ pub fn on_tool_result(
     id: String,
     name: String,
     result: String,
+    display_result: Option<String>,
 ) {
     if is_active(session_store, session_id) {
         if let Some(tc) = chat_store.tool_calls.iter_mut().find(|t| t.id == id) {
@@ -420,14 +421,18 @@ pub fn on_tool_result(
     }
 
     if let Some(session) = session_store.session_mut(session_id) {
-        let (display_result, truncated) = format_tool_output(&name, &result);
+        let (display, truncated) = if let Some(ref pre_formatted) = display_result {
+            (pre_formatted.clone(), false)
+        } else {
+            format_tool_output(&name, &result)
+        };
         let msg = Message {
             role: Role::Agent,
-            content: format!("🔧 **{}**\n```json\n{}\n```", name, display_result),
+            content: format!("🔧 **{}**\n```json\n{}\n```", name, display),
             blocks: vec![ContentBlock::ToolResult {
                 name,
                 args: None,
-                output: display_result,
+                output: display,
                 truncated,
             }],
             timestamp: Instant::now(),

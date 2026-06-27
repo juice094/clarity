@@ -170,6 +170,11 @@ pub enum WireMessage {
         id: String,
         /// The result content (usually JSON string).
         result: String,
+        /// Pre-formatted display text from Tool::format_output().
+        /// When present, frontends use this directly instead of
+        /// applying their own formatting heuristics.
+        #[serde(default)]
+        display_result: Option<String>,
     },
 
     /// End of the current conversation turn.
@@ -1062,6 +1067,7 @@ mod tests {
             turn_id: String::new(),
             id: "call_123".to_string(),
             result: "File contents here".to_string(),
+            display_result: None,
         };
 
         let _ = soul.send(tool_call.clone());

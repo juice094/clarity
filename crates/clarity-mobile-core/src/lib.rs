@@ -433,6 +433,7 @@ fn map_wire_message(msg: WireMessage) -> Option<UiEvent> {
             turn_id,
             id,
             result,
+            ..
         } => UiEvent::ToolResult {
             turn_id,
             id,

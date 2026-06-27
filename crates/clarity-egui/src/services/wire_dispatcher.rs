@@ -70,10 +70,16 @@ pub fn dispatch_wire_message(
             name,
             arguments_so_far,
         }),
-        clarity_wire::WireMessage::ToolResult { id, result, .. } => Some(UiEvent::ToolResult {
+        clarity_wire::WireMessage::ToolResult {
+            id,
+            result,
+            display_result,
+            ..
+        } => Some(UiEvent::ToolResult {
             session_id: sid,
             id,
             result,
+            display_result,
         }),
         clarity_wire::WireMessage::StepBegin { tool_name, .. } => Some(UiEvent::StepBegin {
             session_id: sid,

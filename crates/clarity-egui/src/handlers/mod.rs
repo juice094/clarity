@@ -49,6 +49,7 @@ pub fn process_events(app: &mut App) {
                 session_id,
                 id,
                 result,
+                display_result,
             } => {
                 let name = app
                     .chat_store
@@ -64,6 +65,7 @@ pub fn process_events(app: &mut App) {
                     id.clone(),
                     name.clone(),
                     result.clone(),
+                    display_result.clone(),
                 );
                 // Push to console log.
                 let is_error = result.contains("error") || result.contains("Error");

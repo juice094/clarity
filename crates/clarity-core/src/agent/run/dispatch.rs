@@ -218,6 +218,7 @@ impl Agent {
                 turn_id: String::new(),
                 id: tool_call.id.clone(),
                 result: result_content.clone(),
+                display_result: None, // TODO: call tool.format_output(&result_value)
             });
 
             let scrubbed = scrub_credentials(&result_content);
