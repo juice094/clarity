@@ -699,14 +699,29 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                     );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Copy button
+                    // Copy button with "Copied!" feedback
+                    let copy_key = ui.id().with(("copy_feedback", code));
+                    let copied_at: Option<f64> = ui.ctx().data(|d| d.get_temp(copy_key));
+                    let just_copied = copied_at
+                        .map(|t| ui.ctx().input(|i| i.time) - t < 1.5)
+                        .unwrap_or(false);
+                    let copy_label = if just_copied {
+                        format!("{} Copied!", crate::theme::ICON_CHECK)
+                    } else {
+                        format!("{} Copy", crate::theme::ICON_COPY)
+                    };
+                    let copy_color = if just_copied {
+                        theme.ok
+                    } else {
+                        theme.text_dim
+                    };
                     if ui
                         .add_sized(
-                            [64.0, 22.0],
+                            [if just_copied { 72.0 } else { 64.0 }, 22.0],
                             egui::Button::new(
-                                egui::RichText::new(format!("{} Copy", crate::theme::ICON_COPY,))
+                                egui::RichText::new(copy_label)
                                     .size(theme.text_xs)
-                                    .color(theme.text_dim),
+                                    .color(copy_color),
                             )
                             .fill(theme.surface)
                             .corner_radius(egui::CornerRadius::same(4)),
@@ -714,6 +729,8 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                         .clicked()
                     {
                         ui.ctx().copy_text(code.to_string());
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(copy_key, ui.ctx().input(|i| i.time)));
                         ui.ctx().request_repaint();
                     }
                     // Run button for shell/python code
