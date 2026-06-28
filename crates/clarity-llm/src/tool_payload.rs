@@ -106,9 +106,10 @@ fn format_tools_for_prompt(tools: &Value) -> String {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 text.push_str(&format!(
-                    "<tool_description name=\"{}\" description=\"{}\">\n",
+                    "<{tag} name=\"{}\" description=\"{}\">\n",
                     xml_escape(name),
-                    xml_escape(desc)
+                    xml_escape(desc),
+                    tag = clarity_contract::tool_format::XML_TOOL_DESC_TAG,
                 ));
 
                 let mut first_required_arg: Option<String> = None;
@@ -130,12 +131,14 @@ fn format_tools_for_prompt(tools: &Value) -> String {
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
                             let is_required = required.contains(&param_name.as_str());
+                            let ptag = clarity_contract::tool_format::XML_PARAM_TAG;
                             text.push_str(&format!(
-                                "  <parameter name=\"{}\" type=\"{}\" required=\"{}\">{}</parameter>\n",
+                                "  <{param} name=\"{}\" type=\"{}\" required=\"{}\">{}</{param}>\n",
                                 xml_escape(param_name),
                                 xml_escape(ptype),
                                 is_required,
-                                xml_escape(pdesc)
+                                xml_escape(pdesc),
+                                param = ptag,
                             ));
                             if is_required && first_required_arg.is_none() {
                                 first_required_arg = Some(param_name.clone());
@@ -144,7 +147,10 @@ fn format_tools_for_prompt(tools: &Value) -> String {
                     }
                 }
 
-                text.push_str("</tool_description>\n");
+                text.push_str(&format!(
+                    "</{tag}>\n",
+                    tag = clarity_contract::tool_format::XML_TOOL_DESC_TAG,
+                ));
 
                 if first_example.is_none() {
                     if let Some(arg) = first_required_arg {
@@ -156,14 +162,22 @@ fn format_tools_for_prompt(tools: &Value) -> String {
     }
 
     if let Some((name, arg)) = first_example {
+        let tool_tag = clarity_contract::tool_format::XML_TOOL_TAG;
+        let arg_tag = clarity_contract::tool_format::XML_ARG_TAG;
+        let key_attr = clarity_contract::tool_format::XML_ARG_KEY_ATTR;
+        let name_attr = clarity_contract::tool_format::XML_TOOL_NAME_ATTR;
         text.push_str(&format!(
             "\n\
              Example call for {name}:\n\
-             <tool name=\"{name}\">\n\
-               <arg key=\"{arg}\">value</arg>\n\
-             </tool>\n",
+             <{tool_tag} {name_attr}=\"{name}\">\n\
+               <{arg_tag} {key_attr}=\"{arg}\">value</{arg_tag}>\n\
+             </{tool_tag}>\n",
             name = xml_escape(&name),
-            arg = xml_escape(&arg)
+            arg = xml_escape(&arg),
+            tool_tag = tool_tag,
+            name_attr = name_attr,
+            arg_tag = arg_tag,
+            key_attr = key_attr,
         ));
     }
 
