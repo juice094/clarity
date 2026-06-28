@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 
 // Module-level lazy regexes (avoid regex_creation_in_loops false positives).
 // The patterns are compile-time literals; expect is safe because they are valid regexes.
+// Tag names mirror clarity_contract::tool_format constants (XML_TOOL_TAG, XML_ARG_TAG, etc.).
 #[allow(clippy::expect_used)]
 static RE_TOOL: LazyLock<Regex> = LazyLock::new(|| {
     // Matches both self-closing <tool name="..." arg="..."/> and

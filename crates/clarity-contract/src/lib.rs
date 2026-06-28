@@ -56,6 +56,7 @@ pub mod rollout;
 pub mod subagent;
 pub mod thread;
 pub mod tool;
+pub mod tool_format;
 
 pub use key_ref::resolve_key_ref;
 

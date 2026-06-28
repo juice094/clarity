@@ -89,16 +89,8 @@ fn xml_escape(s: &str) -> String {
 /// which is the same fallback parser used by the agent loop when a provider returns
 /// tool calls as plain text instead of native `tool_calls`.
 fn format_tools_for_prompt(tools: &Value) -> String {
-    let mut text = String::from(
-        "\n\nYou have access to the following tools. \
-         When you need to use a tool, output exactly one XML block on its own line \
-         and then stop. Wait for the tool result before continuing.\n\n\
-         Output format (you MUST use <arg key=...> tags for every parameter):\n\
-         <tool name=\"tool_name\">\n\
-           <arg key=\"arg_name\">arg_value</arg>\n\
-         </tool>\n\n\
-         Available tools:\n",
-    );
+    let mut text = String::from(clarity_contract::tool_format::TOOL_FORMAT_XML_INSTRUCTION);
+    text.push_str("\n\nAvailable tools:\n");
 
     let mut first_example: Option<(String, String)> = None;
 
