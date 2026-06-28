@@ -58,10 +58,13 @@ pub enum SidePanel {
     /// File / workspace tab (right-anchored, primary tab in the D form factor).
     Workspace,
     /// Team collaboration panel.
+    #[deprecated(note = "Use `RightRailPanel::Team` instead")]
     Team,
     /// Task details panel.
+    #[deprecated(note = "Use `RightRailPanel::Task` instead")]
     Task,
     /// Dashboard aggregate view (P1.5.4 addition; was previously `dashboard_panel_open` boolean).
+    #[deprecated(note = "Use `RightRailPanel::Dashboard` instead")]
     Dashboard,
     /// File preview drawer (P1.5.1 addition).
     PreviewDrawer,
