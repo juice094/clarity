@@ -735,6 +735,7 @@ impl ViewState {
 // ============================================================================
 
 #[cfg(test)]
+#[allow(deprecated)] // SidePanel variants deprecated during migration; tests validate API still works
 mod tests {
     use super::*;
 
