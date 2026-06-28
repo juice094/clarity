@@ -5,7 +5,7 @@ use crate::error::{AgentError, ToolError};
 use crate::types::ToolCall;
 use clarity_contract::{LlmProvider, Message};
 use clarity_wire::WireMessage;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use super::loop_helpers::scrub_credentials;
@@ -114,6 +114,150 @@ impl Agent {
         }
     }
 
+    /// Execute a batch of tool calls concurrently when safe (YOLO mode,
+    /// no hooks, no approval-required tools, >1 tools).
+    ///
+    /// Wire events (StepBegin + ToolCall) are sent before execution.
+    /// Results — including `ToolResult` wire events and context messages —
+    /// are collected and emitted in the original tool order.
+    async fn dispatch_tool_calls_parallel(
+        &self,
+        tool_calls: &[clarity_contract::ToolCall],
+        messages: &mut Vec<Message>,
+        cancel_token: &tokio_util::sync::CancellationToken,
+        ask_user: &mut Option<String>,
+    ) -> Result<DispatchOutput, AgentError> {
+        let mut tool_names = Vec::new();
+
+        // Phase 1: send StepBegin + ToolCall for all tools, record names.
+        for tc in tool_calls {
+            if cancel_token.is_cancelled() {
+                return Err(AgentError::Cancelled);
+            }
+            tool_names.push(tc.function.name.clone());
+            self.send_wire_message(WireMessage::StepBegin {
+                turn_id: String::new(),
+                tool_name: tc.function.name.clone(),
+            });
+            let args: Value =
+                serde_json::from_str(&tc.function.arguments).unwrap_or_else(|_| json!({}));
+            self.send_wire_message(WireMessage::ToolCall {
+                turn_id: String::new(),
+                id: tc.id.clone(),
+                name: tc.function.name.clone(),
+                arguments: args,
+            });
+        }
+
+        // Phase 2: execute all tools in parallel via tokio::spawn.
+        let mut handles = Vec::new();
+        for tc in tool_calls.iter().cloned() {
+            let this = self.clone(); // Agent::clone is lightweight (Arc-based)
+            handles.push(tokio::spawn(async move {
+                let name = tc.function.name.clone();
+                let result: Result<Value, ToolError> = this.execute_tool_call(&tc).await;
+                let display = match &result {
+                    Ok(v) => this
+                        .registry
+                        .get(&name)
+                        .ok()
+                        .flatten()
+                        .map(|t| t.format_output(v)),
+                    Err(_) => None,
+                };
+                (tc.id.clone(), name, result, display)
+            }));
+        }
+        let mut raw_results = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(r) => raw_results.push(r),
+                Err(e) => {
+                    warn!("Parallel tool task panicked: {}", e);
+                }
+            }
+        }
+        // Sort results back to original tool order for wire events.
+        raw_results.sort_by(|a, b| {
+            tool_calls
+                .iter()
+                .position(|tc| tc.id == a.0)
+                .cmp(&tool_calls.iter().position(|tc| tc.id == b.0))
+        });
+
+        // Phase 3: process results in original order, send ToolResult, build messages.
+        let mut fatal: Option<(String, String)> = None;
+        for tc in tool_calls.iter() {
+            let (_id, name, result, display_result) = raw_results
+                .iter()
+                .find(|(id, _, _, _)| id == &tc.id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    (
+                        tc.id.clone(),
+                        tc.function.name.clone(),
+                        Err(ToolError::execution_failed("task panicked")),
+                        None,
+                    )
+                });
+            let (result_value, display_result) = match result {
+                Ok(v) => (v, display_result),
+                Err(e) => {
+                    let val = json!({"error": e.to_string()});
+                    if !e.is_recoverable() {
+                        fatal = Some((name.clone(), e.to_string()));
+                    }
+                    (val, display_result)
+                }
+            };
+
+            let result_content = result_value.to_string();
+            self.send_wire_message(WireMessage::ToolResult {
+                turn_id: String::new(),
+                id: tc.id.clone(),
+                result: result_content.clone(),
+                display_result,
+            });
+
+            let scrubbed = scrub_credentials(&result_content);
+            let max_chars = self
+                .registry
+                .get(&tc.function.name)
+                .ok()
+                .flatten()
+                .and_then(|tool| tool.max_output_chars())
+                .unwrap_or(self.config.max_tool_result_chars);
+            let context_content =
+                truncate_for_context(&scrubbed, tc.function.name.as_str(), max_chars);
+
+            if tc.function.name == "ask_user" {
+                if let Some(q) = serde_json::from_str::<Value>(&context_content)
+                    .ok()
+                    .and_then(|v| v.get("question").cloned())
+                    .and_then(|q| q.as_str().map(|s| s.to_string()))
+                {
+                    *ask_user = Some(q);
+                }
+            }
+
+            messages.push(Message::tool(
+                &tc.id,
+                &format!(
+                    "<tool_result name=\"{}\">{}</tool_result>",
+                    tc.function.name, context_content
+                ),
+            ));
+        }
+
+        if let Some((tool_name, err_msg)) = fatal {
+            return Err(AgentError::ToolExecutionFailed(tool_name, err_msg));
+        }
+        Ok(DispatchOutput {
+            tool_names,
+            ask_user_question: ask_user.clone(),
+        })
+    }
+
     /// Execute a batch of tool calls, sending wire lifecycle events and appending
     /// results to `messages`. Returns the ordered list of tool names for telemetry.
     ///
@@ -126,10 +270,10 @@ impl Agent {
     /// To prevent infinite loops, a per-turn circuit breaker upgrades to fatal
     /// after the SAME tool fails recoverably 3 times in a single turn.
     ///
-    /// ponytail: executes tool calls sequentially. Concurrent execution was
-    /// attempted but removed to avoid approval-deadlock races; revisit only if
-    /// batch latency becomes a measured bottleneck and a concurrency policy is
-    /// designed.
+    /// Executes tool calls.  When safe (YOLO mode, no hooks, no tools that
+    /// require explicit approval), tools run concurrently via
+    /// `ParallelToolExecutor`.  Otherwise falls back to sequential execution
+    /// to preserve approval-flow ordering and hook semantics.
     pub(crate) async fn dispatch_tool_calls(
         &self,
         tool_calls: &[ToolCall],
@@ -148,6 +292,39 @@ impl Agent {
         }
         let mut tool_names = Vec::new();
         let mut ask_user_question: Option<String> = None;
+
+        // ── Decide execution strategy ──
+        let hooks_active = {
+            let inner = self.inner.read();
+            inner.hook_registry.is_some()
+        };
+        let any_requires_approval = tool_calls.iter().any(|tc| {
+            self.registry
+                .get(&tc.function.name)
+                .ok()
+                .flatten()
+                .map(|t| t.requires_approval())
+                .unwrap_or(false)
+        });
+        let yolo_mode = self
+            .config
+            .approval_mode
+            .as_deref()
+            .map(|m| m == "yolo")
+            .unwrap_or(true); // default is YOLO
+        let can_parallel =
+            yolo_mode && !hooks_active && !any_requires_approval && tool_calls.len() > 1;
+
+        if can_parallel {
+            return self
+                .dispatch_tool_calls_parallel(
+                    tool_calls,
+                    messages,
+                    cancel_token,
+                    &mut ask_user_question,
+                )
+                .await;
+        }
 
         // Process each tool call sequentially: hooks -> begin -> execute -> result.
         let mut fatal: Option<(String, String)> = None;
