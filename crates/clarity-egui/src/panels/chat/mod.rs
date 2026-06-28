@@ -173,32 +173,15 @@ pub fn render_chat_area(app: &mut App, ctx: &egui::Context) {
                                 .color(theme_ctx.text_dim),
                             );
                             for item in &app.chat_store.context_items {
-                                let chip = egui::Frame::new()
-                                    .fill(theme_ctx.accent_subtle)
-                                    .corner_radius(egui::CornerRadius::same(4))
-                                    .inner_margin(egui::Margin::symmetric(8, 2))
-                                    .show(ui, |ui| {
-                                        ui.label(
-                                            egui::RichText::new(&item.display)
-                                                .size(theme_ctx.text_xs)
-                                                .color(theme_ctx.accent),
-                                        );
-                                    });
-                                let _ = chip;
+                                crate::design_system::chip(ui, &item.display, None, false);
                             }
                             for att in &app.chat_store.attachments {
-                                let chip = egui::Frame::new()
-                                    .fill(theme_ctx.glass)
-                                    .corner_radius(egui::CornerRadius::same(4))
-                                    .inner_margin(egui::Margin::symmetric(8, 2))
-                                    .show(ui, |ui| {
-                                        ui.label(
-                                            egui::RichText::new(&att.name)
-                                                .size(theme_ctx.text_xs)
-                                                .color(theme_ctx.text_muted),
-                                        );
-                                    });
-                                let _ = chip;
+                                crate::design_system::chip(
+                                    ui,
+                                    &att.name,
+                                    Some(crate::theme::ICON_FILE),
+                                    false,
+                                );
                             }
                         });
                     });
