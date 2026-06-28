@@ -743,18 +743,23 @@ impl DeepSeekDeviceProvider {
 
         if let Some(cached) = cache_hit {
             // Use cached tool text, strip any existing markdown section.
-            return messages
+            let system_content = messages
                 .iter()
+                .find(|m| m.role == MessageRole::System)
                 .map(|m| {
-                    if m.role == MessageRole::System {
-                        let cleaned = crate::tool_payload::strip_markdown_tools_section(&m.content);
-                        cleaned + &cached
-                    } else {
-                        m.content.clone()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n");
+                    let cleaned = crate::tool_payload::strip_markdown_tools_section(&m.content);
+                    cleaned + &cached
+                });
+            let user_content = messages
+                .last()
+                .filter(|m| m.role == MessageRole::User)
+                .map(|m| m.content.clone());
+            return match (system_content, user_content) {
+                (Some(s), Some(u)) => format!("{}\n\n{}", s, u),
+                (Some(s), None) => s,
+                (None, Some(u)) => u,
+                (None, None) => String::new(),
+            };
         }
 
         // Cold path: compute and cache the tool prompt.
