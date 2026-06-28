@@ -937,6 +937,9 @@ impl App {
                     self.view_state.close_modal();
                 } else if self.view_state.main == clarity_core::ui::AppView::Settings {
                     self.view_state.main = clarity_core::ui::AppView::Chat;
+                } else if self.view_state.right_rail_visible {
+                    self.view_state.right_rail_visible = false;
+                    self.view_state.right_rail_panel = clarity_core::ui::RightRailPanel::None;
                 } else if matches!(
                     self.view_state.right,
                     Some(clarity_core::ui::SidePanel::Team)
@@ -977,7 +980,7 @@ impl App {
             }
             ids::TOGGLE_TEAM_PANEL => {
                 self.view_state
-                    .toggle_right(clarity_core::ui::SidePanel::Team);
+                    .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Team);
                 true
             }
             ids::FOCUS_INPUT => {
