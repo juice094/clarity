@@ -34,7 +34,7 @@ pub struct PluginItem {
     /// Display name.
     pub name: String,
     /// Semantic icon key.  The UI maps this key to an actual egui icon/font
-    /// glyph (currently Phosphor; may be swapped for Lucide later).
+    /// glyph (rendered via Lucide icon font; see ADR-010).
     pub icon: String,
     /// Where this plugin came from.
     pub source: PluginSource,

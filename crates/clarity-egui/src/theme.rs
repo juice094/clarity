@@ -801,11 +801,15 @@ impl Theme {
     /// - True black (#000000) background for OLED pixel-off immersion.
     /// - Glass surfaces use the same translucent palette as dark theme,
     ///   but appear more dramatic against the pure-black void.
+    /// OLED true-black variant — uses alpha-blended surfaces over pure black.
+    ///
+    /// This preset remains hand-written because its visual identity depends on
+    /// semi-transparent `rgba()` backgrounds that create a depth effect over
+    /// `#000000`. The Palette derivation uses opaque hex colours and cannot
+    /// model this transparency. All other 5 presets use Palette.
     pub fn oled_black() -> Self {
         Self {
             // Backgrounds: OLED pure black with glass elevations
-            // NOTE: this is the "true black" variant for OLED pixel-off;
-            // the default dark() theme now uses midnight slate for better depth.
             bg: hex("#000000"),
             bg_accent: rgba(20, 20, 28, 0.35),
             bg_elevated: rgba(35, 35, 48, 0.80),
