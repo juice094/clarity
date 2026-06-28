@@ -48,7 +48,7 @@ pub fn adapt_prompt_guided(messages: &[Message], tools: &Value) -> (Vec<Message>
 ///
 /// The section spans from `## Available Tools` to the next `## ` heading
 /// (typically `## Approval Mode` or `## Security Notice`).
-fn strip_markdown_tools_section(content: &str) -> String {
+pub(crate) fn strip_markdown_tools_section(content: &str) -> String {
     let marker = "## Available Tools\n";
     let Some(start) = content.find(marker) else {
         return content.to_string();

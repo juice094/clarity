@@ -180,6 +180,8 @@ pub struct DeepSeekDeviceProvider {
     /// Provider 实例本身按 clarity 的 active session 生命周期复用；当用户切换
     /// session 时，上游应调用 `reset_session_state()` 清空状态，避免上下文串扰。
     session_state: Arc<RwLock<Option<ChatSessionState>>>,
+    /// Cached tool prompt to avoid ~1500 token rebuild per turn.
+    tool_prompt_cache: Arc<RwLock<Option<(u64, String)>>>,
 }
 
 impl DeepSeekDeviceProvider {
@@ -194,6 +196,7 @@ impl DeepSeekDeviceProvider {
                 .unwrap_or_else(|_| reqwest::Client::new()),
             token: Arc::new(RwLock::new(None)),
             session_state: Arc::new(RwLock::new(None)),
+            tool_prompt_cache: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -722,8 +725,52 @@ impl DeepSeekDeviceProvider {
     /// we inject tool descriptions into the prompt itself so the model can
     /// emit XML/JSON tool tags that `clarity_core::agent::tool_parser` will
     /// parse on the way back.
-    fn build_prompt_with_tools(messages: &[Message], tools: &Value) -> String {
+    fn build_prompt_with_tools(&self, messages: &[Message], tools: &Value) -> String {
+        // Cache the tool prompt to avoid ~8K token rebuild per turn.
+        let tool_hash = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut h = DefaultHasher::new();
+            tools.to_string().hash(&mut h);
+            h.finish()
+        };
+        let cache_hit = self
+            .tool_prompt_cache
+            .read()
+            .as_ref()
+            .filter(|(h, _)| *h == tool_hash)
+            .map(|(_, text)| text.clone());
+
+        if let Some(cached) = cache_hit {
+            // Use cached tool text, strip any existing markdown section.
+            return messages
+                .iter()
+                .map(|m| {
+                    if m.role == MessageRole::System {
+                        let cleaned = crate::tool_payload::strip_markdown_tools_section(&m.content);
+                        cleaned + &cached
+                    } else {
+                        m.content.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n");
+        }
+
+        // Cold path: compute and cache the tool prompt.
         let (adapted_messages, _) = crate::tool_payload::adapt_prompt_guided(messages, tools);
+        // Extract and cache just the tool text for next time.
+        if let Some(cached) = adapted_messages
+            .iter()
+            .find(|m| m.role == MessageRole::System)
+            .and_then(|m| {
+                // Extract the XML tool section from the adapted system message.
+                let idx = m.content.find("<tool_description")?;
+                Some(m.content[idx..].to_string())
+            })
+        {
+            *self.tool_prompt_cache.write() = Some((tool_hash, cached));
+        }
 
         let system_content = adapted_messages
             .iter()
@@ -803,7 +850,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
         messages: &[Message],
         tools: &Value,
     ) -> Result<LlmResponse, AgentError> {
-        let prompt = Self::build_prompt_with_tools(messages, tools);
+        let prompt = self.build_prompt_with_tools(messages, tools);
         self.run_completion_with_retry(&prompt, move |response| async move {
             let bytes = response
                 .bytes()
@@ -847,7 +894,7 @@ impl LlmProvider for DeepSeekDeviceProvider {
         messages: &[Message],
         tools: &Value,
     ) -> Result<mpsc::Receiver<Result<StreamDelta, AgentError>>, AgentError> {
-        let prompt = Self::build_prompt_with_tools(messages, tools);
+        let prompt = self.build_prompt_with_tools(messages, tools);
         if prompt.is_empty() {
             return Err(AgentError::Llm("empty user prompt".to_string()));
         }
@@ -1085,7 +1132,8 @@ mod tests {
             Message::system("You are a helpful assistant."),
             Message::user("List files."),
         ];
-        let prompt = DeepSeekDeviceProvider::build_prompt_with_tools(&messages, &tools);
+        let provider = DeepSeekDeviceProvider::with_token("test");
+        let prompt = provider.build_prompt_with_tools(&messages, &tools);
         assert!(prompt.contains("<tool_description name=\"powershell\""));
         assert!(prompt.contains("<arg key=\"arg_name\">"));
         assert!(prompt.contains("List files."));
