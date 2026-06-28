@@ -308,3 +308,22 @@ fn set_theme(app: &mut App, name: &str) {
     };
     app.auto_save_settings();
 }
+
+// ── Panel trait implementation ──
+
+/// Unit struct implementing the [`Panel`] contract for the Interface settings tab.
+///
+/// This is the reference implementation demonstrating the pattern:
+/// stateless panels use a unit struct and delegate to the existing
+/// free function in `render()`.
+pub struct InterfacePanel;
+
+impl crate::design_system::Panel for InterfacePanel {
+    fn title(&self) -> &str {
+        "Interface"
+    }
+
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render_interface(app, ui);
+    }
+}
