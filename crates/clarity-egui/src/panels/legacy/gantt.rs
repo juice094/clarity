@@ -45,7 +45,7 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(theme.space_12);
+            crate::design_system::gap(ui, crate::design_system::Space::S2);
 
             let has_plan =
                 app.chat_store.pending_plan.is_some() || app.chat_store.plan_tracker.is_some();
@@ -78,7 +78,7 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                         .strong()
                         .color(theme.text),
                 );
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
             }
 
             // Use tracker steps if available; otherwise fall back to pending plan steps.
@@ -151,9 +151,9 @@ pub fn render_gantt_panel(app: &mut App, ctx: &egui::Context) {
                     },
                 );
             });
-            ui.add_space(theme.space_4);
+            crate::design_system::gap(ui, crate::design_system::Space::S0);
             ui.separator();
-            ui.add_space(theme.space_4);
+            crate::design_system::gap(ui, crate::design_system::Space::S0);
 
             // ── Scrollable Gantt rows ──
             egui::ScrollArea::vertical()

@@ -239,7 +239,7 @@ pub fn thinking_block(
                 );
             });
             if i < steps.len() - 1 {
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
             }
         }
     });
@@ -322,7 +322,7 @@ fn render_tool_row(ui: &mut egui::Ui, theme: &Theme, tool: &ToolCallInfo, is_las
         });
     });
     if !is_last {
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
     }
 }
 
@@ -478,7 +478,7 @@ pub fn approval_dock(
             }
         });
 
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
 
         egui::ScrollArea::vertical()
             .id_salt(ui.id().with("approval_detail"))
@@ -491,7 +491,7 @@ pub fn approval_dock(
                 );
             });
 
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let allow_btn = egui::Button::new(

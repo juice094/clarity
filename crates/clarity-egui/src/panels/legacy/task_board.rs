@@ -37,7 +37,7 @@ pub fn render_task_board(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(theme.space_16);
+            crate::design_system::gap(ui, crate::design_system::Space::S3);
 
             if app.task_store.tasks.is_empty() {
                 ui.vertical_centered(|ui| {
@@ -47,7 +47,7 @@ pub fn render_task_board(app: &mut App, ctx: &egui::Context) {
                             .size(theme.text_lg)
                             .color(theme.text_dim),
                     );
-                    ui.add_space(theme.space_8);
+                    crate::design_system::gap(ui, crate::design_system::Space::S1);
                     ui.label(
                         egui::RichText::new("Create a task from the sidebar or press + New Task.")
                             .size(theme.text_sm)
@@ -62,7 +62,7 @@ pub fn render_task_board(app: &mut App, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     for task in &app.task_store.tasks {
                         task_card(ui, &theme, task);
-                        ui.add_space(theme.space_8);
+                        crate::design_system::gap(ui, crate::design_system::Space::S1);
                     }
                 });
         });
@@ -103,7 +103,7 @@ fn task_card(
             });
 
             if !task.spec.description.is_empty() {
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
                 ui.label(
                     egui::RichText::new(&task.spec.description)
                         .size(theme.text_sm)
@@ -111,7 +111,7 @@ fn task_card(
                 );
             }
 
-            ui.add_space(theme.space_4);
+            crate::design_system::gap(ui, crate::design_system::Space::S0);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!("Priority: {}", task.spec.priority.value()))

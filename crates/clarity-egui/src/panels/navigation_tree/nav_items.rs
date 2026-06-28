@@ -15,7 +15,7 @@ pub fn render_nav_items(app: &mut App, ui: &mut egui::Ui) {
 
     // ── Work / Chat mode toggle ──
     render_mode_toggle(app, ui);
-    ui.add_space(theme.space_4);
+    crate::design_system::gap(ui, crate::design_system::Space::S0);
 
     // ── New Session / New Task ──
     // Label follows the toggle: Work mode creates tasks, Chat mode creates
@@ -48,7 +48,7 @@ pub fn render_nav_items(app: &mut App, ui: &mut egui::Ui) {
         app.new_session();
     }
 
-    ui.add_space(theme.space_4);
+    crate::design_system::gap(ui, crate::design_system::Space::S0);
 
     // ── Skills ──
     let is_skills_open = matches!(

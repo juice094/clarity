@@ -127,13 +127,13 @@ pub fn render_svg_or_fallback(
             .show(ui, |ui| {
                 ui.set_min_size(egui::vec2(max_width.min(200.0), max_height.min(100.0)));
                 ui.vertical_centered(|ui| {
-                    ui.add_space(theme.space_20);
+                    crate::design_system::gap(ui, crate::design_system::Space::S4);
                     ui.label(
                         egui::RichText::new(fallback_label)
                             .size(theme.text_sm)
                             .color(theme.text_dim),
                     );
-                    ui.add_space(theme.space_20);
+                    crate::design_system::gap(ui, crate::design_system::Space::S4);
                 });
             });
         let _ = frame;

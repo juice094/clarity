@@ -332,7 +332,7 @@ impl App {
                             ),
                         ];
                         for (group, items) in actions {
-                            ui.add_space(theme.space_8);
+                            crate::design_system::gap(ui, crate::design_system::Space::S1);
                             ui.label(
                                 egui::RichText::new(*group)
                                     .size(theme.text_sm)

@@ -40,7 +40,7 @@ pub fn render_web_section(app: &mut App, ui: &mut egui::Ui, section_stable_id: &
                 }
             }
 
-            ui.add_space(theme.space_4);
+            crate::design_system::gap(ui, crate::design_system::Space::S0);
             let add_resp =
                 crate::widgets::nav_row(ui, &theme, crate::theme::ICON_PLUS, app.t("Add"), false);
             if add_resp.on_hover_text(app.t("Manage bookmarks")).clicked() {

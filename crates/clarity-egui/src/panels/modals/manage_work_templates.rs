@@ -67,7 +67,7 @@ pub fn render_manage_work_templates_modal(app: &mut App, ctx: &egui::Context) {
                     }
                 });
 
-            ui.add_space(theme.space_8);
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
 
             ui.horizontal(|ui| {
                 if ui

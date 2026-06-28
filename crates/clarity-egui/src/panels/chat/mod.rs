@@ -365,14 +365,14 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
                 .strong()
                 .color(theme.text_strong),
         );
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
 
         ui.label(
             egui::RichText::new(app.t("Your personal AI coding assistant"))
                 .size(theme.text_sm)
                 .color(theme.text_muted),
         );
-        ui.add_space(theme.space_24);
+        crate::design_system::gap(ui, crate::design_system::Space::S5);
 
         // ── Quick-start suggestion chips ──
         let suggestions: &[(
@@ -430,7 +430,7 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
                                     .font(theme.font_icon(theme.text_sm))
                                     .color(theme.accent),
                             );
-                            ui.add_space(theme.space_8);
+                            crate::design_system::gap(ui, crate::design_system::Space::S1);
                             ui.label(
                                 egui::RichText::new(app.t(label))
                                     .size(theme.text_sm)
@@ -448,7 +448,7 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
             }
         });
 
-        ui.add_space(theme.space_20);
+        crate::design_system::gap(ui, crate::design_system::Space::S4);
 
         // ── Active provider / model info line ──
         let provider = &app.settings_store.settings_edit.provider;
@@ -484,7 +484,7 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
         );
 
         // ── Keyboard shortcuts hint ──
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
         ui.label(
             egui::RichText::new(format!(
                 "{} Ctrl+Shift+P  {} Ctrl+B",

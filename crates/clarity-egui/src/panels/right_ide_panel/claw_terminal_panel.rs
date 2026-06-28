@@ -42,7 +42,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text_strong),
         );
     });
-    ui.add_space(theme.space_4);
+    crate::design_system::gap(ui, crate::design_system::Space::S0);
 
     // OpenClaw Gateway connection status.
     // Per-device gateway connection status.
@@ -89,7 +89,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             }),
     );
 
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // Terminal output area — scrollable log.
     let history_count = app.ui_store.claw_history.len();
@@ -113,7 +113,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     .size(theme.text_xs)
                     .color(theme.text_muted),
                 );
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
                 for line in &app.ui_store.claw_history {
                     // Parse role-based coloring.
                     let (color, prefix) = if line.starts_with("[user]") {
@@ -144,7 +144,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             }
         });
 
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // Command input bar.
     ui.horizontal(|ui| {

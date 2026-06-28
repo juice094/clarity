@@ -34,7 +34,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // Content area.
     let content_height = (ui.available_height() - 40.0).max(200.0);
@@ -53,7 +53,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         .size(theme.text_xs)
                         .color(theme.text_muted),
                 );
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
 
                 // Placeholder: show a styled preview area.
                 let preview_text = format!(
@@ -73,20 +73,20 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         );
                     });
             } else {
-                ui.add_space(theme.space_16);
+                crate::design_system::gap(ui, crate::design_system::Space::S3);
                 ui.vertical_centered(|ui| {
                     ui.label(
                         egui::RichText::new(crate::theme::ICON_GLOBE)
                             .size(theme.text_xl)
                             .color(theme.text_dim),
                     );
-                    ui.add_space(theme.space_8);
+                    crate::design_system::gap(ui, crate::design_system::Space::S1);
                     ui.label(
                         egui::RichText::new(app.t("Enter a URL or file path to preview"))
                             .size(theme.text_sm)
                             .color(theme.text_muted),
                     );
-                    ui.add_space(theme.space_4);
+                    crate::design_system::gap(ui, crate::design_system::Space::S0);
                     ui.label(
                         egui::RichText::new(app.t(
                             "WebBridge lets you view web pages and code side-by-side with your chat",

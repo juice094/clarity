@@ -89,7 +89,7 @@ pub fn render_toasts(app: &mut App, ctx: &egui::Context) {
                                     .font(theme.font_icon(theme.text_md))
                                     .color(accent_color.linear_multiply(alpha)),
                             );
-                            ui.add_space(theme.space_8);
+                            crate::design_system::gap(ui, crate::design_system::Space::S1);
 
                             ui.vertical(|ui| {
                                 let trunc = crate::ui::truncate::truncate(&toast.message, 60);

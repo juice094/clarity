@@ -120,7 +120,10 @@ impl CommandPalette {
                                                     theme.text_dim
                                                 }),
                                         );
-                                        ui.add_space(theme.space_8);
+                                        crate::design_system::gap(
+                                            ui,
+                                            crate::design_system::Space::S1,
+                                        );
                                         ui.label(
                                             egui::RichText::new(cmd.name.as_str())
                                                 .color(theme.text)

@@ -64,7 +64,7 @@ pub fn render_history_section(app: &mut App, ui: &mut egui::Ui) {
                 if resp.changed() {
                     app.ui_store.history_search = query;
                 }
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
             }
 
             if sessions.is_empty() {

@@ -101,7 +101,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let auto_label = app.t("Auto");
             ui.toggle_value(&mut app.console_store.auto_scroll, auto_label);
-            ui.add_space(theme.space_4);
+            crate::design_system::gap(ui, crate::design_system::Space::S0);
             let clear_label = app.t("Clear");
             if ui
                 .add_sized(
@@ -120,7 +120,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             }
         });
     });
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // --- log area ---
     let scroll = egui::ScrollArea::vertical()

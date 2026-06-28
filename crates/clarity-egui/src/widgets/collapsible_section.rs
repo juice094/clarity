@@ -56,7 +56,7 @@ pub fn collapsible_section<R>(
                     },
                 );
 
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
 
                 ui.label(
                     egui::RichText::new(title)

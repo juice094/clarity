@@ -260,7 +260,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_space(theme.space_8);
+                            crate::design_system::gap(ui, crate::design_system::Space::S1);
                             let edit_btn = egui::Button::new(
                                 egui::RichText::new(crate::theme::ICON_EDIT)
                                     .font(theme.font_icon(theme.text_sm))
@@ -287,7 +287,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                             }
                         });
                     });
-                    ui.add_space(theme.space_8);
+                    crate::design_system::gap(ui, crate::design_system::Space::S1);
                 }
             } else {
                 let mut turn = crate::components::agent_turn::AgentTurn::from_messages(
@@ -308,7 +308,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(theme.space_8);
+                        crate::design_system::gap(ui, crate::design_system::Space::S1);
                         let regen_btn = egui::Button::new(
                             egui::RichText::new(crate::theme::ICON_REFRESH)
                                 .font(theme.font_icon(theme.text_sm))
@@ -338,7 +338,7 @@ pub fn render_message_list(app: &mut App, ui: &mut egui::Ui) {
                         }
                     });
                 });
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
             }
         }
 
@@ -542,7 +542,7 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
                 });
             });
     });
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     let mut save_clicked = false;
     let mut cancel_clicked = false;
@@ -554,7 +554,7 @@ fn render_edit_bubble(ui: &mut egui::Ui, buffer: &mut String, theme: &Theme) -> 
             cancel_clicked = true;
         }
     });
-    ui.add_space(theme.space_16);
+    crate::design_system::gap(ui, crate::design_system::Space::S3);
 
     (ui.cursor().min.y - start_y, save_clicked, cancel_clicked)
 }

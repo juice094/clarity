@@ -78,7 +78,7 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 });
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
 
                 // Output lines
                 egui::Frame::new()
@@ -115,7 +115,7 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
                 });
             }
 
-            ui.add_space(theme.space_12);
+            crate::design_system::gap(ui, crate::design_system::Space::S2);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui

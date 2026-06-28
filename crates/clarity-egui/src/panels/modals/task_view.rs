@@ -65,7 +65,7 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 });
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
 
                 // Output text
                 egui::Frame::new()
@@ -95,12 +95,12 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
                             .size(theme.text_base)
                             .color(theme.text_dim),
                     );
-                    ui.add_space(theme.space_8);
+                    crate::design_system::gap(ui, crate::design_system::Space::S1);
                     ui.spinner();
                 });
             }
 
-            ui.add_space(theme.space_12);
+            crate::design_system::gap(ui, crate::design_system::Space::S2);
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui

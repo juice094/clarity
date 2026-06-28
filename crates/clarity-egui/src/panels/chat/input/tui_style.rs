@@ -59,7 +59,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
     }
 
     // Outer padding around the floating composer card.
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     // ── Context items (from # quick-add) ──
     if !app.chat_store.context_items.is_empty() {
@@ -93,7 +93,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 app.chat_store.context_items.remove(i);
             }
         });
-        ui.add_space(theme.space_4);
+        crate::design_system::gap(ui, crate::design_system::Space::S0);
     }
 
     // ── Attachment chips (above the composer) ──
@@ -139,7 +139,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
     }
 
     // ── Composer card ──
@@ -188,7 +188,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
         }
         handle_tui_keys(app, ui, &response, &prev_input);
 
-        ui.add_space(theme.space_4);
+        crate::design_system::gap(ui, crate::design_system::Space::S0);
 
         // ── Bottom toolbar ──
         ui.horizontal(|ui| {

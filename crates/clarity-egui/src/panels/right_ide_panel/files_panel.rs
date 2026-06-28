@@ -44,7 +44,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
         // GitHub URL badge — extension point.
         if let Some(ref repo_url) = app.files_store.repo_url.clone() {
-            ui.add_space(theme.space_8);
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
             let badge = egui::Frame::new()
                 .fill(theme.accent_subtle)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -70,7 +70,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     // --- git status bar (extension point) ---
     if let Some(ref git) = app.files_store.git_status {
-        ui.add_space(theme.space_4);
+        crate::design_system::gap(ui, crate::design_system::Space::S0);
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new(format!("⎇ {}", git.branch))
@@ -101,7 +101,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         });
     }
 
-    ui.add_space(theme.space_4);
+    crate::design_system::gap(ui, crate::design_system::Space::S0);
 
     // --- dir tree ---
     let selected = app
@@ -143,14 +143,14 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
     // --- recent files ---
     if !app.files_store.recent_files.is_empty() {
-        ui.add_space(theme.space_12);
+        crate::design_system::gap(ui, crate::design_system::Space::S2);
         ui.label(
             egui::RichText::new(app.t("Recent"))
                 .size(theme.text_xs)
                 .strong()
                 .color(theme.text_dim),
         );
-        ui.add_space(theme.space_4);
+        crate::design_system::gap(ui, crate::design_system::Space::S0);
 
         let recent: Vec<_> = app
             .files_store

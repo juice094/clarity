@@ -102,7 +102,7 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(theme.space_12);
+            crate::design_system::gap(ui, crate::design_system::Space::S2);
 
             // Surface the empty-session quick-start hints only inside the Console
             // panel; the central empty stage keeps just the Clarity title/subtitle.
@@ -110,7 +110,7 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
                 && crate::panels::chat::is_empty_state(app)
             {
                 render_quick_start_hints(app, ui);
-                ui.add_space(theme.space_16);
+                crate::design_system::gap(ui, crate::design_system::Space::S3);
             }
 
             // Panel content.
@@ -179,7 +179,7 @@ fn render_quick_start_hints(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text),
     );
-    ui.add_space(theme.space_8);
+    crate::design_system::gap(ui, crate::design_system::Space::S1);
 
     let hints = [
         ("/coder", app.t("Code assistant")),
@@ -206,7 +206,7 @@ fn render_quick_start_hints(app: &mut App, ui: &mut egui::Ui) {
                                 .monospace()
                                 .color(theme.accent),
                         );
-                        ui.add_space(theme.space_8);
+                        crate::design_system::gap(ui, crate::design_system::Space::S1);
                         ui.label(
                             egui::RichText::new(desc)
                                 .size(theme.text_xs)

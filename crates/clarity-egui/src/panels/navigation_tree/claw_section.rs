@@ -84,7 +84,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                             .color(theme.text_dim),
                     );
                 });
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
 
                 for session_key in session_keys {
                     let group = groups
@@ -160,7 +160,7 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
 
                         let header_resp = ui
                             .horizontal(|ui| {
-                                ui.add_space(theme.space_16);
+                                crate::design_system::gap(ui, crate::design_system::Space::S3);
                                 ui.label(
                                     egui::RichText::new(chevron)
                                         .font(theme.font_icon(theme.text_xs))
@@ -207,7 +207,10 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                                     &theme,
                                     |ui| {
                                         ui.horizontal(|ui| {
-                                            ui.add_space(theme.space_16);
+                                            crate::design_system::gap(
+                                                ui,
+                                                crate::design_system::Space::S3,
+                                            );
                                             ui.spacing_mut().item_spacing.x = theme.space_8;
                                             crate::widgets::nav_status_dot(ui, &theme, dot_color);
                                             ui.label(
@@ -235,10 +238,10 @@ pub fn render_claw_section(app: &mut App, ui: &mut egui::Ui) {
                     }
                 }
 
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
             }
 
-            ui.add_space(theme.space_8);
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
         },
     );
 

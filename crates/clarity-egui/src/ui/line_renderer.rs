@@ -388,7 +388,7 @@ fn render_approval_prompt(ui: &mut egui::Ui, options: &[ApprovalOption], theme: 
                 ApprovalOption::Custom(s) => format!("[{}] {}", i + 1, s),
             };
             if i > 0 {
-                ui.add_space(theme.space_12);
+                crate::design_system::gap(ui, crate::design_system::Space::S2);
             }
             ui.label(
                 egui::RichText::new(label)

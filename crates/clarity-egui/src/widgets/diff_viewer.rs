@@ -283,13 +283,13 @@ pub fn render_diff_view(
 
             // Separator between hunks.
             if hunk_idx + 1 < hunks.len() {
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
             }
         }
 
         // Accept / Reject bar at the bottom (only when configured).
         if config.show_actions {
-            ui.add_space(theme.space_12);
+            crate::design_system::gap(ui, crate::design_system::Space::S2);
             ui.horizontal(|ui| {
                 if ui
                     .add_sized(

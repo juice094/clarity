@@ -84,7 +84,7 @@ fn render_left_column(app: &mut App, ui: &mut egui::Ui) {
             }
         });
 
-    ui.add_space(theme.space_12);
+    crate::design_system::gap(ui, crate::design_system::Space::S2);
 
     if ui.add(theme.primary_button("+ Add Custom")).clicked() {
         app.settings_store.show_add_provider = !app.settings_store.show_add_provider;
@@ -119,7 +119,7 @@ fn render_empty_state(app: &mut App, ui: &mut egui::Ui) {
                 .font(theme.font(theme.text_md))
                 .color(theme.text_dim),
         );
-        ui.add_space(theme.space_4);
+        crate::design_system::gap(ui, crate::design_system::Space::S0);
         ui.label(
             egui::RichText::new("Choose from the list or add a custom provider")
                 .font(theme.font(theme.text_sm))

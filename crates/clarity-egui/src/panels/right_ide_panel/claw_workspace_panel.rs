@@ -59,7 +59,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         .color(theme.text_strong),
                 );
                 if !conn_type.is_empty() {
-                    ui.add_space(theme.space_4);
+                    crate::design_system::gap(ui, crate::design_system::Space::S0);
                     ui.label(
                         egui::RichText::new(conn_type)
                             .size(theme.text_xs)
@@ -74,7 +74,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     .color(theme.text_muted),
             );
 
-            ui.add_space(theme.space_8);
+            crate::design_system::gap(ui, crate::design_system::Space::S1);
 
             if workspace_root.exists() && workspace_root.is_dir() {
                 crate::ui::file_browser::render_file_tree(
@@ -95,13 +95,13 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     None,  // name_filter
                 );
             } else {
-                ui.add_space(theme.space_16);
+                crate::design_system::gap(ui, crate::design_system::Space::S3);
                 ui.label(
                     egui::RichText::new(app.t("Workspace directory not accessible"))
                         .size(theme.text_sm)
                         .color(theme.text_muted),
                 );
-                ui.add_space(theme.space_8);
+                crate::design_system::gap(ui, crate::design_system::Space::S1);
                 ui.label(
                     egui::RichText::new(format!(
                         "{}: {}",

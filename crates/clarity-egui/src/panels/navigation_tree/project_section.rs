@@ -106,7 +106,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
         }
 
         ui.horizontal(|ui| {
-            ui.add_space(theme.space_16);
+            crate::design_system::gap(ui, crate::design_system::Space::S3);
             ui.vertical(|ui| {
                 for session in sessions {
                     render_session_row(app, ui, &session, theme);
@@ -117,7 +117,7 @@ fn render_project_body(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::T
 
     // Archived entries.
     if !archived_sessions.is_empty() || !archived_projects_empty {
-        ui.add_space(theme.space_8);
+        crate::design_system::gap(ui, crate::design_system::Space::S1);
         ui.label(
             egui::RichText::new(app.t("Archived"))
                 .size(theme.text_xs)

@@ -63,7 +63,7 @@ pub fn render_context_picker(
                         state.browsing = None;
                         state.filter.clear();
                     }
-                    ui.add_space(theme.space_4);
+                    crate::design_system::gap(ui, crate::design_system::Space::S0);
                     ui.label(
                         egui::RichText::new(if mode == "file" {
                             "Select a file"
@@ -74,7 +74,7 @@ pub fn render_context_picker(
                         .color(theme.text_dim),
                     );
                 });
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
 
                 // Filter input for narrowing by filename.
                 let filter_hint = "Filter files…";
@@ -83,7 +83,7 @@ pub fn render_context_picker(
                         .hint_text(filter_hint)
                         .font(theme.font_mono(theme.text_xs)),
                 );
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
 
                 let root = state.cwd.clone();
                 if root.exists() && root.is_dir() {
@@ -145,7 +145,7 @@ pub fn render_context_picker(
                         .hint_text(hint)
                         .font(theme.font_mono(theme.text_sm)),
                 );
-                ui.add_space(theme.space_4);
+                crate::design_system::gap(ui, crate::design_system::Space::S0);
 
                 for src in available_items {
                     let (label, icon, desc) = source_info(src);

@@ -166,9 +166,9 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
 
                         // ── URL label for web pages ──
                         if let Some(ref url) = url {
-                            ui.add_space(theme.space_8);
+                            crate::design_system::gap(ui, crate::design_system::Space::S1);
                             ui.horizontal(|ui| {
-                                ui.add_space(theme.space_16);
+                                crate::design_system::gap(ui, crate::design_system::Space::S3);
                                 ui.label(
                                     egui::RichText::new(url)
                                         .size(theme.text_xs)
@@ -178,9 +178,9 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                         }
 
                         // ── Content area ──
-                        ui.add_space(theme.space_12);
+                        crate::design_system::gap(ui, crate::design_system::Space::S2);
                         ui.horizontal(|ui| {
-                            ui.add_space(theme.space_16);
+                            crate::design_system::gap(ui, crate::design_system::Space::S3);
                             ui.vertical(|ui| {
                                 egui::ScrollArea::vertical()
                                     .id_salt("preview_scroll_overlay")
@@ -195,7 +195,7 @@ pub fn render_file_preview_overlay(app: &mut App, ctx: &egui::Context) {
                                     });
                             });
                         });
-                        ui.add_space(theme.space_12);
+                        crate::design_system::gap(ui, crate::design_system::Space::S2);
                     });
                 });
         });
