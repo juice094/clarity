@@ -427,6 +427,12 @@ pub enum RightRailPanel {
     KnowledgeBase,
     /// Template / preset injection panel.
     Templates,
+    /// Team collaboration panel (migrated from legacy [`SidePanel::Team`]).
+    Team,
+    /// Task details panel (migrated from legacy [`SidePanel::Task`]).
+    Task,
+    /// Dashboard aggregate view (migrated from legacy [`SidePanel::Dashboard`]).
+    Dashboard,
 }
 
 /// Physical panel identifier — used by [`FocusScope::Panel`] to discriminate

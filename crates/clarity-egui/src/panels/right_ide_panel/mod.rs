@@ -124,6 +124,17 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
                 RightRailPanel::ClawWebBridge => claw_webbridge_panel::render(app, ui),
                 RightRailPanel::KnowledgeBase => knowledge_panel::render(app, ui),
                 RightRailPanel::Templates => template_panel::render(app, ui),
+                // Migrated from legacy SidePanel — currently stub;
+                // legacy render path in main.rs still active during migration.
+                RightRailPanel::Team => {
+                    ui.label("Team panel — migrating from legacy SidePanel");
+                }
+                RightRailPanel::Task => {
+                    ui.label("Task panel — migrating from legacy SidePanel");
+                }
+                RightRailPanel::Dashboard => {
+                    ui.label("Dashboard — migrating from legacy SidePanel");
+                }
                 RightRailPanel::None => {
                     ui.label(
                         egui::RichText::new(app.t("Select a panel from the Bot bar"))
@@ -245,5 +256,8 @@ fn panel_title(panel: RightRailPanel, app: &crate::App) -> &'static str {
         RightRailPanel::ClawWebBridge => app.t("WebBridge"),
         RightRailPanel::KnowledgeBase => app.t("Knowledge"),
         RightRailPanel::Templates => app.t("Templates"),
+        RightRailPanel::Team => app.t("Team"),
+        RightRailPanel::Task => app.t("Task"),
+        RightRailPanel::Dashboard => app.t("Dashboard"),
     }
 }
