@@ -679,6 +679,19 @@ pub fn toggle(ui: &mut egui::Ui, checked: &mut bool) -> bool {
     }
 }
 
+/// Render a form field label with consistent typography.
+///
+/// Uses `text_sm` size and `text_muted` colour — the standard
+/// treatment for input labels in settings panels.
+pub fn field_label(ui: &mut egui::Ui, label: impl Into<String>) {
+    let t = theme(ui.ctx());
+    ui.label(
+        egui::RichText::new(label)
+            .size(t.text_sm)
+            .color(t.text_muted),
+    );
+}
+
 /// Theme-styled context menu separator.
 ///
 /// Use inside `ui.menu_button(|ui| { ... })` closures to visually

@@ -119,11 +119,7 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
     let is_deepseek_device = prov.api_format == ApiFormat::DeepSeekDevice;
     let mut is_password_mode = prov.auth_mode.is_password();
     if is_deepseek_device {
-        ui.label(
-            egui::RichText::new("Auth Mode")
-                .font(theme.font(theme.text_sm))
-                .color(theme.text_muted),
-        );
+        design_system::field_label(ui, "Auth Mode");
         let modes = [(false, "Token"), (true, "Password")];
         let cur = if is_password_mode { 1 } else { 0 };
         let mut sel = cur;
@@ -162,11 +158,7 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
         let show_key_id = ui.id().with(&prov.id).with("show_key");
         let mut show_key = ui.data(|d| d.get_temp::<bool>(show_key_id).unwrap_or(false));
 
-        ui.label(
-            egui::RichText::new("API Key")
-                .font(theme.font(theme.text_sm))
-                .color(theme.text_muted),
-        );
+        design_system::field_label(ui, "API Key");
         let key_edit_id = ui.id().with(&prov.id).with("api_key_edit");
         let resolved_key = if prov.api_key_ref.starts_with("${env:") {
             prov.resolve_api_key().unwrap_or_default()
@@ -208,11 +200,7 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
         design_system::gap(ui, Space::S1);
     } else {
         // ── Mobile + Password login ──
-        ui.label(
-            egui::RichText::new("Mobile")
-                .font(theme.font(theme.text_sm))
-                .color(theme.text_muted),
-        );
+        design_system::field_label(ui, "Mobile");
         let mobile_edit_id = ui.id().with(&prov.id).with("mobile_edit");
         let mut mobile_buffer = ui.data(|d| {
             d.get_temp::<String>(mobile_edit_id)
@@ -236,11 +224,7 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
         }
         design_system::gap(ui, Space::S1);
 
-        ui.label(
-            egui::RichText::new("Password")
-                .font(theme.font(theme.text_sm))
-                .color(theme.text_muted),
-        );
+        design_system::field_label(ui, "Password");
         let password_edit_id = ui.id().with(&prov.id).with("password_edit");
         let mut password_buffer =
             ui.data(|d| d.get_temp::<String>(password_edit_id).unwrap_or_default());
@@ -278,11 +262,7 @@ pub(super) fn render_provider_detail(app: &mut App, ui: &mut egui::Ui, prov: Pro
     }
 
     // ── Base URL (editable) ──
-    ui.label(
-        egui::RichText::new("Base URL")
-            .font(theme.font(theme.text_sm))
-            .color(theme.text_muted),
-    );
+    design_system::field_label(ui, "Base URL");
     let url_edit_id = ui.id().with(&prov.id).with("base_url_edit");
     let mut url_buffer = ui.data(|d| {
         d.get_temp::<String>(url_edit_id)
