@@ -7,6 +7,7 @@
 //!
 //! See `crates/clarity-egui/ARCHITECTURE.md` §1.1, §2.2.
 
+use crate::design_system::{self, Space};
 use crate::theme::Theme;
 use crate::ui::types::{InlineSpan, RenderBlock};
 
@@ -389,7 +390,7 @@ pub fn render_blocks(
 ) {
     for (i, block) in blocks.iter().enumerate() {
         if i > 0 {
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
         }
         match block {
             RenderBlock::Paragraph(spans) => {
@@ -426,12 +427,12 @@ pub fn render_blocks(
                         ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
                     ui.painter()
                         .rect_filled(rect, egui::CornerRadius::same(2), theme.accent);
-                    ui.add_space(theme.space_8);
+                    design_system::gap(ui, Space::S1);
                     render_spans(ui, spans, theme, theme.text_muted, theme.text_base, false);
                 });
             }
             RenderBlock::HorizontalRule => {
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
                 // TUI-style separator with box-drawing characters.
                 let w = ui.available_width();
                 let dash = "\u{2500}";
@@ -442,13 +443,13 @@ pub fn render_blocks(
                         .color(theme.border)
                         .monospace(),
                 ));
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
             }
             RenderBlock::Table { headers, rows } => {
                 render_table(ui, i, headers, rows, theme, text_color);
             }
             RenderBlock::Diff { hunks, file_path } => {
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
                 if let Some(path) = file_path {
                     ui.horizontal(|ui| {
                         ui.label(
@@ -462,7 +463,7 @@ pub fn render_blocks(
                             .monospace(),
                         );
                     });
-                    ui.add_space(theme.space_4);
+                    design_system::gap(ui, Space::S0);
                 }
                 let config = crate::widgets::diff_viewer::DiffViewConfig {
                     show_file_header: true,
@@ -475,7 +476,7 @@ pub fn render_blocks(
                     side_by_side: false,
                 };
                 crate::widgets::diff_viewer::render_diff_view(ui, hunks, theme, &config);
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
             }
         }
     }
@@ -492,7 +493,7 @@ fn render_table(
     if headers.is_empty() {
         return;
     }
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
     egui::Frame::new()
         .fill(theme.surface)
         .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -539,7 +540,7 @@ fn render_table(
                     }
                 });
         });
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 }
 
 fn render_spans(
@@ -658,7 +659,7 @@ fn looks_like_file_path(text: &str) -> bool {
 }
 
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
     // Calibrate line height from the monospace font metrics so inter-line
     // spacing tracks font scale, DPI, and font family changes.
     let code_line_h = theme.line_height_mono_at(ui.ctx(), theme.text_base);
@@ -709,7 +710,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                         });
                     let _ = badge; // Frame response consumed.
                 }
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
                 if !lang.is_empty() {
                     ui.label(
                         egui::RichText::new(format!("{} lines", line_count))
@@ -781,7 +782,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                     }
                 });
             });
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
 
             // ── Code lines with syntax highlighting ──
             let highlighted = crate::ui::syntax_highlight::try_highlight(lang, code);
@@ -830,7 +831,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                 }
                 // Show expand button for collapsed large blocks.
                 if show_collapse && collapsed {
-                    ui.add_space(theme.space_4);
+                    design_system::gap(ui, Space::S0);
                     let remaining = line_count - collapse_threshold;
                     if ui
                         .add_sized(
@@ -880,7 +881,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                 }
             }
         });
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 }
 
 #[cfg(test)]
