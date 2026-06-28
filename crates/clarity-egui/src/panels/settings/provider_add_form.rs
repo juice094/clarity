@@ -1,7 +1,7 @@
 //! Add custom provider form.
 use crate::App;
-use crate::design_system::{self, Space, TextStyle};
-use crate::provider::{ApiFormat, AuthMode, ProviderDefinition, ProviderRegistry};
+use crate::design_system::{self, TextStyle};
+use crate::provider::{ApiFormat, ProviderDefinition, ProviderRegistry};
 use crate::ui::types::ToastLevel;
 
 pub(super) fn render_add_form(app: &mut App, ui: &mut egui::Ui) {

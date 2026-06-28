@@ -63,6 +63,7 @@ impl FloatAnimation {
     }
 
     /// Mark the animation as complete (latch to target).
+    #[allow(dead_code)]
     pub fn finish(&mut self) {
         self.done = true;
     }

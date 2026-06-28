@@ -85,7 +85,7 @@ fn render_top_actions(app: &mut App, ui: &mut egui::Ui) {
 
 /// Scrollable sections: work templates, collapsible web bookmarks, projects,
 /// claw devices, and session history.
-fn render_sections(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
+fn render_sections(app: &mut App, ui: &mut egui::Ui, _theme: &crate::theme::Theme) {
     // 1. Work templates (quick-launch rows)
     work_templates::render_work_templates(app, ui);
     design_system::gap(ui, Space::S2);

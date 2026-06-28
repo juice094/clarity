@@ -7,7 +7,7 @@
 //! true cancellation via CancellationToken.
 
 use crate::App;
-use crate::design_system::{self, Space, TextStyle};
+use crate::design_system::{self, Space};
 use crate::settings::GuiSettings;
 
 /// State machine for the onboarding flow.
