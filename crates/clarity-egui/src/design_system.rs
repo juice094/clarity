@@ -679,6 +679,17 @@ pub fn toggle(ui: &mut egui::Ui, checked: &mut bool) -> bool {
     }
 }
 
+/// Theme-styled context menu separator.
+///
+/// Use inside `ui.menu_button(|ui| { ... })` closures to visually
+/// separate groups of menu items.
+pub fn menu_separator(ui: &mut egui::Ui) {
+    let t = theme(ui.ctx());
+    ui.add_space(t.space_4);
+    ui.add(egui::Separator::default().horizontal().grow(2.0));
+    ui.add_space(t.space_4);
+}
+
 /// Skeleton loading placeholder — a pulsing rounded rect.
 ///
 /// Useful for indicating content is loading (e.g. message list, memory
