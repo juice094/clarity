@@ -774,6 +774,46 @@ pub fn search_box(ui: &mut egui::Ui, query: &mut String, hint: &str) -> bool {
     changed
 }
 
+/// Context chip — a small labelled tag with an optional remove button.
+///
+/// Used for displaying context items (files, URLs, terminal commands)
+/// above the chat composer. Returns `true` if the remove button was clicked.
+pub fn chip(
+    ui: &mut egui::Ui,
+    label: impl Into<String>,
+    icon: Option<&str>,
+    show_remove: bool,
+) -> (egui::Response, bool) {
+    let t = theme(ui.ctx());
+    let mut removed = false;
+    let response = chip_frame(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = t.space_4;
+            if let Some(ic) = icon {
+                ui.label(egui::RichText::new(ic).size(t.text_xs).color(t.accent));
+            }
+            ui.label(egui::RichText::new(label).size(t.text_xs).color(t.text));
+            if show_remove {
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(crate::theme::ICON_X)
+                                .size(10.0)
+                                .color(t.text_dim),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(egui::CornerRadius::same(4)),
+                    )
+                    .clicked()
+                {
+                    removed = true;
+                }
+            }
+        })
+    });
+    (response.response, removed)
+}
+
 /// Simple linear interpolation between two `Color32` values.
 fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
     let t = t.clamp(0.0, 1.0);
