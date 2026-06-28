@@ -88,6 +88,7 @@ impl SidePanel {
     /// After ADR-014, multi-true input is a transitional state during
     /// migration only; once `view_state.right` becomes the authoritative
     /// writer (P1.5.2 bridge reversal), at most one boolean will ever be true.
+    #[allow(deprecated)]
     pub fn from_legacy_right_panel(dashboard: bool, team: bool, task: bool) -> Option<Self> {
         if task {
             Some(Self::Task)
