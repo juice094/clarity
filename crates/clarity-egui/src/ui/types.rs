@@ -1053,3 +1053,6 @@ mod tests {
         assert_eq!(ctx, restored);
     }
 }
+
+// Re-export FocusTarget so consumers of `use crate::ui::types::*` get it.
+pub use crate::stores::FocusTarget;

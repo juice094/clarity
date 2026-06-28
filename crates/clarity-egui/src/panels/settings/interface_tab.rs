@@ -1,26 +1,17 @@
 use crate::App;
+use crate::design_system::{self, Space, TextStyle};
 use crate::theme::Theme;
 
 /// Renders the interface UI.
 pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
 
-    ui.label(
-        egui::RichText::new(app.t("Interface"))
-            .color(theme.text)
-            .size(theme.text_lg)
-            .strong(),
-    );
-    ui.add_space(theme.space_16);
+    design_system::text(ui, app.t("Interface"), TextStyle::Subheading);
+    design_system::gap(ui, Space::S3);
 
     // ── Theme cards ──
-    ui.label(
-        egui::RichText::new(app.t("Theme"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_8);
+    design_system::text(ui, app.t("Theme"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S1);
 
     let is_dark = app.settings_store.settings_edit.theme == "dark";
     let is_light = app.settings_store.settings_edit.theme == "light";
@@ -48,7 +39,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         {
             set_theme(app, "dark");
         }
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
 
         // Light card
         let light_bg = Theme::light().bg;
@@ -70,7 +61,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
     // Row 2: Catppuccin + Tokyo Night
     let is_catppuccin = app.settings_store.settings_edit.theme == "catppuccin";
     let is_tokyo = app.settings_store.settings_edit.theme == "tokyo_night";
@@ -96,7 +87,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         {
             set_theme(app, "catppuccin");
         }
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
 
         let t_bg = Theme::tokyo_night().bg;
         let t_text = Theme::tokyo_night().text;
@@ -117,7 +108,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
     // Row 3: One Dark + OLED
     let is_one_dark = app.settings_store.settings_edit.theme == "one_dark";
     let is_oled = app.settings_store.settings_edit.theme == "oled";
@@ -143,7 +134,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         {
             set_theme(app, "one_dark");
         }
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
 
         let ol_bg = Theme::oled_black().bg;
         let ol_text = Theme::oled_black().text;
@@ -163,95 +154,64 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             set_theme(app, "oled");
         }
     });
-    ui.add_space(theme.space_20);
+    design_system::gap(ui, Space::S4);
 
     // ── Font Size ──
-    ui.label(
-        egui::RichText::new(app.t("Font Size"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
-    let scales = [
-        (0.775, "Compact"),
-        (0.85, "Small"),
-        (1.0, "Medium"),
-        (1.15, "Large"),
-    ];
+    design_system::text(ui, app.t("Font Size"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S0);
     let current_scale = app
         .settings_store
         .settings_edit
         .font_scale
         .unwrap_or(crate::theme::Theme::DEFAULT_FONT_SCALE);
-    ui.horizontal(|ui| {
-        for (val, label) in &scales {
-            let active = (current_scale - val).abs() < 0.01;
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
-                        .fill(if active { theme.accent } else { theme.surface })
-                        .stroke(if active {
-                            egui::Stroke::NONE
-                        } else {
-                            egui::Stroke::new(1.0_f32, theme.border)
-                        })
-                        .corner_radius(theme.radius_sm as u8),
-                )
-                .clicked()
-            {
-                app.set_font_scale(*val);
-            }
-        }
-    });
-    ui.add_space(theme.space_16);
+    // Snap to the nearest labelled step so toggle_group highlights correctly.
+    let steps = [0.775_f32, 0.85, 1.0, 1.15];
+    let nearest = steps
+        .iter()
+        .min_by(|a, b| {
+            (current_scale - **a)
+                .abs()
+                .partial_cmp(&(current_scale - **b).abs())
+                .unwrap()
+        })
+        .copied()
+        .unwrap_or(0.85);
+    if let Some(scale) = design_system::toggle_group(
+        ui,
+        &[
+            ("Compact", 0.775),
+            ("Small", 0.85),
+            ("Medium", 1.0),
+            ("Large", 1.15),
+        ],
+        nearest,
+    ) {
+        app.set_font_scale(scale);
+    }
+    design_system::gap(ui, Space::S3);
 
     // ── Content Width ──
-    ui.label(
-        egui::RichText::new(app.t("Content Width"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
-    let widths = [(520.0, "Narrow"), (600.0, "Medium"), (760.0, "Wide")];
+    design_system::text(ui, app.t("Content Width"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S0);
     let current_width = app
         .settings_store
         .settings_edit
         .content_width
         .unwrap_or(600.0);
-    ui.horizontal(|ui| {
-        for (val, label) in &widths {
-            let active = (current_width - val).abs() < 1.0;
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new(*label).size(theme.text_sm))
-                        .fill(if active { theme.accent } else { theme.surface })
-                        .stroke(if active {
-                            egui::Stroke::NONE
-                        } else {
-                            egui::Stroke::new(1.0_f32, theme.border)
-                        })
-                        .corner_radius(theme.radius_sm as u8),
-                )
-                .clicked()
-            {
-                app.settings_store.settings_edit.content_width = Some(*val);
-                app.ui_store.content_max_width = *val;
-                app.auto_save_settings();
-            }
-        }
-    });
-    ui.add_space(theme.space_16);
+    if let Some(width) = design_system::toggle_group(
+        ui,
+        &[("Narrow", 520.0), ("Medium", 600.0), ("Wide", 760.0)],
+        current_width,
+    ) {
+        app.settings_store.settings_edit.content_width = Some(width);
+        app.ui_store.content_max_width = width;
+        app.auto_save_settings();
+    }
+    design_system::gap(ui, Space::S3);
 
     // ── Layout Debug Overlay ──
-    ui.label(
-        egui::RichText::new(app.t("Layout Debug"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
+    design_system::text(ui, app.t("Layout Debug"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S0);
     let mut debug_overlay = app.view_state.debug_layout_overlay;
     if ui
         .checkbox(
@@ -264,16 +224,11 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         app.persist_layout_settings();
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // ── Pretext PoC Probe ──
-    ui.label(
-        egui::RichText::new(app.t("Pretext Probe"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
+    design_system::text(ui, app.t("Pretext Probe"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S0);
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(app.t("Zoom"))
@@ -293,7 +248,7 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
             app.increase_font_scale();
         }
     });
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
     if ui
         .button(egui::RichText::new("Open Pretext Measurement Probe").size(theme.text_sm))
         .clicked()
@@ -311,58 +266,29 @@ pub fn render_interface(app: &mut App, ui: &mut egui::Ui) {
         app.ui_store.pretext_estimate_enabled = pretext_estimate;
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // ── Language ──
-    ui.label(
-        egui::RichText::new(app.t("Language"))
-            .size(theme.text_sm)
-            .color(theme.text)
-            .strong(),
-    );
-    ui.add_space(theme.space_4);
+    design_system::text(ui, app.t("Language"), TextStyle::CaptionStrong);
+    design_system::gap(ui, Space::S0);
     // ── Zoom shortcuts hint ──
-    ui.label(
-        egui::RichText::new(app.t("Use Ctrl + +/- to adjust zoom anytime"))
-            .size(theme.text_xs)
-            .color(theme.text_dim),
+    design_system::text(
+        ui,
+        app.t("Use Ctrl + +/- to adjust zoom anytime"),
+        TextStyle::Small,
     );
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
-    ui.horizontal(|ui| {
-        let en = matches!(app.ui_store.locale, crate::i18n::Locale::EnUS);
-        let zh = matches!(app.ui_store.locale, crate::i18n::Locale::ZhCN);
-        if ui
-            .add(
-                egui::Button::new(egui::RichText::new("English").size(theme.text_sm))
-                    .fill(if en { theme.accent } else { theme.surface })
-                    .stroke(if en {
-                        egui::Stroke::NONE
-                    } else {
-                        egui::Stroke::new(1.0_f32, theme.border)
-                    })
-                    .corner_radius(theme.radius_sm as u8),
-            )
-            .clicked()
-        {
-            app.ui_store.locale = crate::i18n::Locale::EnUS;
-        }
-        if ui
-            .add(
-                egui::Button::new(egui::RichText::new("Simplified Chinese").size(theme.text_sm))
-                    .fill(if zh { theme.accent } else { theme.surface })
-                    .stroke(if zh {
-                        egui::Stroke::NONE
-                    } else {
-                        egui::Stroke::new(1.0_f32, theme.border)
-                    })
-                    .corner_radius(theme.radius_sm as u8),
-            )
-            .clicked()
-        {
-            app.ui_store.locale = crate::i18n::Locale::ZhCN;
-        }
-    });
+    if let Some(locale) = design_system::toggle_group(
+        ui,
+        &[
+            ("English", crate::i18n::Locale::EnUS),
+            ("中文", crate::i18n::Locale::ZhCN),
+        ],
+        app.ui_store.locale,
+    ) {
+        app.ui_store.locale = locale;
+    }
 }
 
 fn set_theme(app: &mut App, name: &str) {

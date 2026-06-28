@@ -4,6 +4,8 @@ pub mod about_tab;
 pub mod claw_tab;
 pub mod interface_tab;
 pub mod ops_tab;
+pub mod provider_add_form;
+pub mod provider_detail;
 pub mod provider_tab;
 
 /// settings tab variants.

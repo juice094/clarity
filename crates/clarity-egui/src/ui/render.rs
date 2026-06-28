@@ -9,6 +9,7 @@
 
 #![allow(dead_code)] // line-mode feature toggles which functions are active
 
+use crate::design_system::{self, Space};
 use crate::pretext::EguiFontMetrics;
 use crate::theme::Theme;
 use crate::ui::rich_inline::text_to_spans;
@@ -85,7 +86,7 @@ pub fn message_bubble(
 /// Render a system message as a subtle center-aligned pill.
 fn system_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
     let start_y = ui.cursor().min.y;
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
     ui.vertical_centered(|ui| {
         egui::Frame::new()
             .fill(theme.glass)
@@ -99,7 +100,7 @@ fn system_message(ui: &mut egui::Ui, msg: &Message, theme: &Theme) -> f32 {
                 );
             });
     });
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
     ui.cursor().min.y - start_y
 }
 
@@ -124,14 +125,14 @@ fn agent_message(
                     .size(theme.text_xs)
                     .color(theme.text_dim),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             ui.label(
                 egui::RichText::new(format_elapsed(msg.timestamp.elapsed()))
                     .size(theme.text_xs)
                     .color(theme.text_dim),
             );
         });
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
     if msg.parsed.is_empty() {
@@ -165,7 +166,7 @@ fn agent_message(
                         render_content_block(ui, block, theme, idx, metrics);
                     }
                 });
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
         }
     }
 
@@ -206,7 +207,7 @@ fn agent_text_plain_inner(
     });
 
     // Bottom spacing — Swiss Style: whitespace instead of lines
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 }
 
 /// Agent structured content — Glassmorphism card for code blocks, tools, etc.
@@ -224,7 +225,7 @@ fn agent_structured_card_inner(ui: &mut egui::Ui, msg: &Message, theme: &Theme) 
             crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
         });
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 }
 
 /// Check if message contains structured blocks (code blocks, etc.) that need a card container.
@@ -286,7 +287,7 @@ fn render_content_block(
                 let parsed = crate::ui::markdown::parse_markdown(text);
                 crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
             }
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
         }
         ContentBlock::Code { language, code } => {
             ui.horizontal(|ui| {
@@ -323,7 +324,7 @@ fn render_content_block(
                         );
                     });
                 });
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
         }
         ContentBlock::ToolResult {
             name,
@@ -352,7 +353,7 @@ fn render_content_block(
                     );
                 }
             });
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
         }
         ContentBlock::ToolCall { .. } => {
             // Intentionally not rendered in the main chat area.
@@ -375,7 +376,7 @@ fn render_content_block(
                     );
                 }
             });
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
         }
         ContentBlock::Plan { title, steps } => {
             ui.label(
@@ -392,7 +393,7 @@ fn render_content_block(
                         .color(theme.chat_text),
                 );
             }
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
         }
         ContentBlock::FilePreview { path, content } => {
             ui.horizontal(|ui| {
@@ -411,7 +412,7 @@ fn render_content_block(
             ui.add_space(2.0);
             let parsed = crate::ui::markdown::parse_markdown(content);
             crate::ui::markdown::render_blocks(ui, &parsed, theme, theme.chat_text);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
         }
     }
 }
@@ -430,7 +431,7 @@ fn user_bubble(
     // User messages: right-aligned within the content column, with a small
     // inset from the right edge so the bubble clearly reads as "sent".
     ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
         ui.set_max_width(max_width);
         let bubble_resp = egui::Frame::new()
             .fill(theme.user_bubble)
@@ -483,9 +484,9 @@ fn user_bubble(
                 },
             );
         }
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
     });
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
     ui.cursor().min.y - start_y
 }
 
@@ -598,7 +599,7 @@ fn error_bubble(
                     });
                 });
 
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
 
                 if folded && is_long {
                     // Collapsed: show first line truncated to ~80 chars
@@ -616,7 +617,7 @@ fn error_bubble(
                 }
             });
     });
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
     ui.cursor().min.y - start_y
 }
 
@@ -644,7 +645,7 @@ fn line_mode_agent(
                     .color(theme.text_dim),
             );
         });
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
     let max_width = (ui.available_width() - 32.0).max(120.0);
@@ -665,7 +666,7 @@ fn line_mode_agent(
                 selected_idx,
             );
         });
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
     ui.cursor().min.y - start_y
 }
 
@@ -701,7 +702,7 @@ fn line_mode_user(
                 });
             });
     });
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
     ui.cursor().min.y - start_y
 }
 
@@ -747,7 +748,7 @@ pub fn tool_call_bubble(ui: &mut egui::Ui, tc: &ToolCallInfo, theme: &Theme) {
                 }
             });
     });
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 }
 
 // ============================================================================
@@ -772,7 +773,7 @@ pub fn typing_indicator(ui: &mut egui::Ui, theme: &Theme) {
                 );
             });
     });
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 }
 
 // ============================================================================
@@ -793,8 +794,7 @@ pub fn estimate_height(
     #[cfg(feature = "line-mode")]
     {
         let _ = content_max_width;
-        let _ = metrics;
-        let line_h = crate::ui::line_renderer::LINE_HEIGHT;
+        let line_h = metrics.line_height(theme);
         let lines_h = msg.lines.len() as f32 * line_h;
         // Padding for bubble frame + trailing space.
         return lines_h + theme.space_16 + theme.space_8;

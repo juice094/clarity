@@ -4,6 +4,7 @@
 //! titlebar icon. Does not consume permanent panel space.
 
 use crate::App;
+use crate::design_system::{self, Space};
 use std::time::{Duration, Instant};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
@@ -84,12 +85,12 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            ui.add_space(theme.space_12);
+            design_system::gap(ui, Space::S2);
 
             let snapshots = app.snapshot_store.snapshots.clone();
             if snapshots.is_empty() {
                 ui.vertical_centered(|ui| {
-                    ui.add_space(theme.space_24);
+                    design_system::gap(ui, Space::S5);
                     ui.label(
                         egui::RichText::new("No snapshots available")
                             .size(theme.text_sm)
@@ -103,7 +104,7 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
                         .size(theme.text_xs)
                         .color(theme.text_dim),
                     );
-                    ui.add_space(theme.space_24);
+                    design_system::gap(ui, Space::S5);
                 });
             } else {
                 // Snapshot list
@@ -117,7 +118,7 @@ pub fn render_snapshot_modal(app: &mut App, ctx: &egui::Context) {
             }
 
             // Footer hint
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("? Restoring creates a backup of current state first")
@@ -191,7 +192,7 @@ fn render_snapshot_row(
                 .color(theme.text_dim),
         );
 
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
 
         // Action buttons
         ui.horizontal(|ui| {
@@ -264,7 +265,7 @@ fn render_snapshot_row(
 
         // Confirmation row
         if is_confirming {
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             egui::Frame::new()
                 .fill(theme.danger.linear_multiply(0.08))
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -283,7 +284,7 @@ fn render_snapshot_row(
 
         // Diff preview (inline)
         if is_selected && app.snapshot_store.preview.is_some() {
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             egui::Frame::new()
                 .fill(theme.code_block_bg)
                 .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -310,7 +311,7 @@ fn render_snapshot_row(
         }
     });
 
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 }
 
 /// Format an RFC3339 timestamp as a relative string ("2m ago", "1h ago").

@@ -116,20 +116,24 @@ pub fn render_svg_or_fallback(
         ui.add(img);
     } else {
         // Fallback: centered text label in a subtle frame.
+        let theme = crate::design_system::theme(ui.ctx());
         let frame = egui::Frame::new()
-            .fill(ui.style().visuals.extreme_bg_color)
-            .corner_radius(egui::CornerRadius::same(8))
-            .inner_margin(egui::Margin::symmetric(16, 12))
+            .fill(theme.surface)
+            .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
+            .inner_margin(egui::Margin::symmetric(
+                theme.space_16 as i8,
+                theme.space_12 as i8,
+            ))
             .show(ui, |ui| {
                 ui.set_min_size(egui::vec2(max_width.min(200.0), max_height.min(100.0)));
                 ui.vertical_centered(|ui| {
-                    ui.add_space(20.0);
+                    ui.add_space(theme.space_20);
                     ui.label(
                         egui::RichText::new(fallback_label)
-                            .size(12.0)
-                            .color(egui::Color32::from_gray(150)),
+                            .size(theme.text_sm)
+                            .color(theme.text_dim),
                     );
-                    ui.add_space(20.0);
+                    ui.add_space(theme.space_20);
                 });
             });
         let _ = frame;

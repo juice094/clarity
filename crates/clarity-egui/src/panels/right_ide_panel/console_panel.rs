@@ -5,6 +5,7 @@
 //! right IDE rail.
 
 use crate::App;
+use crate::stores::FocusTarget;
 use crate::stores::console::{ConsoleFilter, ConsoleLevel};
 
 /// Maximum visible entry width in characters before truncation hint.
@@ -272,7 +273,7 @@ fn render_console_row(
             entry.message.lines().next().unwrap_or(&entry.message)
         );
         app.chat_store.input = snippet;
-        app.ui_store.focus_input_requested = true;
+        app.ui_store.focus_target = Some(FocusTarget::ChatInput);
     }
 
     if entry.truncated {

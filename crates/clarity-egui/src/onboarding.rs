@@ -7,6 +7,7 @@
 //! true cancellation via CancellationToken.
 
 use crate::App;
+use crate::design_system::{self, Space, TextStyle};
 use crate::settings::GuiSettings;
 
 /// State machine for the onboarding flow.
@@ -105,15 +106,15 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Welcome to Clarity");
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
                 ui.label(
                     egui::RichText::new("Local-first AI agent runtime")
                         .color(app.ui_store.theme.text_dim)
                         .size(app.ui_store.theme.text_base),
                 );
-                ui.add_space(app.ui_store.theme.space_24);
+                design_system::gap(ui, Space::S5);
                 ui.label("Get started by choosing how you'd like to run Clarity:");
-                ui.add_space(app.ui_store.theme.space_16);
+                design_system::gap(ui, Space::S3);
 
                 if ui
                     .add_sized(
@@ -126,7 +127,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
 
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
 
                 if ui
                     .add_sized(
@@ -138,7 +139,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     start_model_download(app);
                 }
 
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
 
                 if ui
                     .add_sized([280.0, 36.0], egui::Button::new("Skip for Now"))
@@ -147,7 +148,7 @@ fn render_choose_provider(app: &mut App, ctx: &egui::Context) {
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
 
-                ui.add_space(app.ui_store.theme.space_16);
+                design_system::gap(ui, Space::S3);
                 ui.label(
                     egui::RichText::new(
                         "Note: Local models use the Qwen2 architecture. \
@@ -237,7 +238,7 @@ fn render_downloading(
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Preparing Local Model");
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
 
                 let (fraction, label) = if let Some(total) = total_bytes {
                     let pct = if total > 0 {
@@ -257,13 +258,13 @@ fn render_downloading(
                 };
 
                 ui.label(&label);
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
                 ui.add(
                     egui::ProgressBar::new(fraction.min(1.0))
                         .show_percentage()
                         .desired_width(280.0),
                 );
-                ui.add_space(app.ui_store.theme.space_16);
+                design_system::gap(ui, Space::S3);
 
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Cancel and Skip"))
@@ -297,9 +298,9 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
         .show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("Download Failed");
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
                 ui.label(egui::RichText::new(err).color(egui::Color32::LIGHT_RED));
-                ui.add_space(app.ui_store.theme.space_16);
+                design_system::gap(ui, Space::S3);
 
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Try Again"))
@@ -307,7 +308,7 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
                 {
                     start_model_download(app);
                 }
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Enter API Key Instead"))
                     .clicked()
@@ -315,7 +316,7 @@ fn render_download_failed(app: &mut App, ctx: &egui::Context, err: &str) {
                     app.view_state.main = clarity_core::ui::AppView::Settings;
                     app.onboarding_store.onboarding_state = OnboardingState::Hidden;
                 }
-                ui.add_space(app.ui_store.theme.space_8);
+                design_system::gap(ui, Space::S1);
                 if ui
                     .add_sized([140.0, 28.0], egui::Button::new("Skip"))
                     .clicked()

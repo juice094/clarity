@@ -31,6 +31,15 @@ impl EguiFontMetrics {
         Self { ctx }
     }
 
+    /// Calibrated line height for the theme's body font.
+    ///
+    /// Queries font metrics from the same egui context used for text
+    /// measurement, ensuring height estimates match rendered output.
+    pub fn line_height(&self, theme: &crate::theme::Theme) -> f32 {
+        let font_id = theme.font(theme.text_base);
+        self.ctx.fonts(|f| f.row_height(&font_id))
+    }
+
     pub(crate) fn to_egui_font_id(&self, font: &Font) -> egui::FontId {
         let size = font.size_px;
         let family_lower = font.family.to_lowercase();

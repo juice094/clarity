@@ -6,6 +6,7 @@
 //! `panels::right_rail` as a content source during migration.
 
 use crate::App;
+use crate::stores::FocusTarget;
 use clarity_core::ui::RightRailPanel;
 
 pub mod claw_settings_panel;
@@ -42,11 +43,10 @@ pub fn render_right_ide_panel(app: &mut App, ctx: &egui::Context) {
         app.panel_animation.right_panel_width =
             crate::animation::FloatAnimation::start(0.0, target_w, theme.duration_normal);
     } else if !visible && prev.is_some() && prev != Some(RightRailPanel::None) {
-        // Panel collapsed — animate to 0 then hide.
+        // Panel collapsed — cubic-ease-out close animation.
         let current_w = app.panel_animation.right_panel_width.current();
         app.panel_animation.right_panel_width =
             crate::animation::FloatAnimation::start(current_w, 0.0, theme.duration_normal);
-        app.panel_animation.right_panel_width.finish(); // snap-close for now
     }
     app.panel_animation.prev_panel = current_panel;
 
@@ -227,7 +227,7 @@ fn render_quick_start_hints(app: &mut App, ui: &mut egui::Ui) {
                 .on_hover_text(format!("{} {}", cmd, desc));
             if chip_response.clicked() {
                 app.chat_store.input = format!("{} ", cmd);
-                app.ui_store.focus_input_requested = true;
+                app.ui_store.focus_target = Some(FocusTarget::ChatInput);
             }
         }
     });

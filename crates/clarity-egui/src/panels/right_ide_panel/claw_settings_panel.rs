@@ -5,6 +5,7 @@
 //! backup, update, and help.
 
 use crate::App;
+use crate::design_system::{self, Space};
 use crate::ui::types::ToastLevel;
 
 /// Render the Claw device settings panel.
@@ -41,7 +42,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 
             // ── Device Identity ────────────────────────────────────────
             section_header(ui, &theme, app.t("Settings"), crate::theme::ICON_SETTINGS);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new(&bot_name)
                     .size(theme.text_md)
@@ -53,16 +54,16 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                     .color(theme.text_muted),
             );
 
-            ui.add_space(theme.space_12);
+            design_system::gap(ui, Space::S2);
 
             // ── Chat Channel ───────────────────────────────────────────
             section_header(ui, &theme, app.t("Chat channel"), crate::theme::ICON_CHAT);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             if action_button(ui, &theme, app.t("Connect chat channel")).clicked() {
                 app.push_toast(app.t("Connecting to chat channel…"), ToastLevel::Info);
             }
 
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
 
             // ── Role Passphrase (E2EE) ─────────────────────────────────
             section_header(
@@ -71,13 +72,13 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 app.t("Role passphrase"),
                 crate::theme::ICON_LOCK,
             );
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new(app.t("Encrypts role-context events stored by Syncthing"))
                     .size(theme.text_xs)
                     .color(theme.text_muted),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
 
             if role_for_passphrase.is_empty() {
                 ui.label(
@@ -91,14 +92,14 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         .size(theme.text_sm)
                         .color(theme.text_dim),
                 );
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
                 ui.add_sized(
                     egui::vec2(ui.available_width(), 28.0),
                     egui::TextEdit::singleline(&mut app.ui_store.claw_role_passphrase_input)
                         .password(true)
                         .hint_text(hint_enter_passphrase),
                 );
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
                 ui.horizontal(|ui| {
                     let has_connection = app.claw_ws.is_some();
                     ui.add_enabled_ui(has_connection, |ui| {
@@ -110,7 +111,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                             }
                         }
                     });
-                    ui.add_space(theme.space_8);
+                    design_system::gap(ui, Space::S1);
                     if small_button(ui, &theme, app.t("Clear")).clicked() {
                         app.ui_store.claw_role_passphrase_input.clear();
                         if let Some(ref claw) = app.claw_ws {
@@ -121,11 +122,11 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 });
             }
 
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
 
             // ── Actions ────────────────────────────────────────────────
             section_header(ui, &theme, app.t("Actions"), crate::theme::ICON_CPU);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             let actions: &[(&str, &str, bool)] = &[
                 ("AI Diagnostics", "AI diagnosis running…", false),
@@ -163,64 +164,64 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                         app.push_toast(app.t(toast), level);
                     }
                 }
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
             }
 
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
 
             // ── Version ────────────────────────────────────────────────
             section_header(ui, &theme, app.t("Version"), crate::theme::ICON_INFO);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new(format!("{} {}", app.t("Current version"), bot_version))
                     .size(theme.text_sm)
                     .color(theme.text),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             if small_button(ui, &theme, app.t("Check for updates")).clicked() {
                 app.push_toast(app.t("Already up to date"), ToastLevel::Info);
             }
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             if small_button(ui, &theme, app.t("Release notes")).clicked() {
                 app.view_state
                     .set_right_rail_panel(clarity_core::ui::RightRailPanel::ClawWebBridge);
             }
 
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
 
             // ── Data Backup ────────────────────────────────────────────
             section_header(ui, &theme, app.t("Data backup"), crate::theme::ICON_ARCHIVE);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new(format!("{} {}", app.t("Last backup"), bot_last_backup))
                     .size(theme.text_sm)
                     .color(theme.text),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             ui.horizontal(|ui| {
                 if small_button(ui, &theme, app.t("Backup now")).clicked() {
                     app.push_toast(app.t("Backup started…"), ToastLevel::Info);
                 }
-                ui.add_space(theme.space_8);
+                design_system::gap(ui, Space::S1);
                 if small_button(ui, &theme, app.t("Restore")).clicked() {
                     app.push_toast(app.t("Restore started…"), ToastLevel::Info);
                 }
             });
 
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
 
             // ── Help ───────────────────────────────────────────────────
             section_header(ui, &theme, app.t("Help"), crate::theme::ICON_BOOK_OPEN);
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             if action_button(ui, &theme, app.t("User manual")).clicked() {
                 app.view_state
                     .set_right_rail_panel(clarity_core::ui::RightRailPanel::ClawWebBridge);
             }
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             if action_button(ui, &theme, app.t("Report issue")).clicked() {
                 app.push_toast(app.t("Opening feedback form…"), ToastLevel::Info);
             }
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
         });
 }
 

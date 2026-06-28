@@ -14,6 +14,7 @@
 //! rows, egui may expose unpainted/overflow areas.
 
 use crate::App;
+use crate::design_system::{self, Space};
 use egui_extras::{Size, StripBuilder};
 
 pub mod claw_section;
@@ -62,7 +63,7 @@ pub fn render_left_navigation_tree(app: &mut App, ctx: &egui::Context) {
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 render_top_actions(app, ui);
-                                ui.add_space(theme.space_12);
+                                design_system::gap(ui, Space::S2);
                                 render_sections(app, ui, &theme);
                             });
                     });
@@ -87,19 +88,19 @@ fn render_top_actions(app: &mut App, ui: &mut egui::Ui) {
 fn render_sections(app: &mut App, ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     // 1. Work templates (quick-launch rows)
     work_templates::render_work_templates(app, ui);
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     // 2. Collapsible web bookmarks
     web_section::render_web_section(app, ui, "nav_web");
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     // 3. Projects
     project_section::render_project_section(app, ui);
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     // 4. Claw devices
     claw_section::render_claw_section(app, ui);
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     // 5. History / sessions
     history_section::render_history_section(app, ui);
@@ -114,7 +115,7 @@ fn footer_separator(ui: &mut egui::Ui, theme: &crate::theme::Theme) {
     let y = ui.cursor().min.y + 0.5;
     ui.painter()
         .line_segment([egui::pos2(left, y), egui::pos2(right, y)], stroke);
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 }
 
 /// Bottom user avatar row showing the active user and current model.

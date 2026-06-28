@@ -61,9 +61,64 @@ pub enum ShortcutAction {
     ToggleFiles,
     /// Toggle the Share right-rail panel (`Ctrl+Shift+S`).
     ToggleShare,
+    /// Show the keyboard shortcuts reference.
+    ShowShortcuts,
 }
 
 impl ShortcutAction {
+    /// Human-readable keybinding string (e.g. "Ctrl+N").
+    pub fn keybinding(&self) -> &'static str {
+        match self {
+            ShortcutAction::NewSession => "Ctrl+N",
+            ShortcutAction::StopGeneration => "Ctrl+C",
+            ShortcutAction::SendMessage => "Ctrl+Enter",
+            ShortcutAction::CloseModal => "Escape",
+            ShortcutAction::ToggleSkillPanel => "Ctrl+.",
+            ShortcutAction::ToggleTeamPanel => "Ctrl+Shift+T",
+            ShortcutAction::FocusInput => "Ctrl+K",
+            ShortcutAction::ToggleCommandPalette => "Ctrl+Shift+P",
+            ShortcutAction::ToggleDashboardPanel => "Ctrl+Shift+D",
+            ShortcutAction::ToggleLayoutDebug => "Ctrl+Shift+L",
+            ShortcutAction::IncreaseFontScale => "Ctrl+=",
+            ShortcutAction::DecreaseFontScale => "Ctrl+-",
+            ShortcutAction::NavigateDown => "j",
+            ShortcutAction::NavigateUp => "k",
+            ShortcutAction::NavigateTop => "g",
+            ShortcutAction::NavigateBottom => "G",
+            ShortcutAction::CopyLine => "y",
+            ShortcutAction::ToggleConsole => "Ctrl+`",
+            ShortcutAction::ToggleFiles => "Ctrl+Shift+F",
+            ShortcutAction::ToggleShare => "Ctrl+Shift+S",
+            ShortcutAction::ShowShortcuts => "Ctrl+/",
+        }
+    }
+
+    /// One-line description of what this shortcut does.
+    pub fn description(&self) -> &'static str {
+        match self {
+            ShortcutAction::NewSession => "New chat session",
+            ShortcutAction::StopGeneration => "Stop agent generation",
+            ShortcutAction::SendMessage => "Send message",
+            ShortcutAction::CloseModal => "Close current modal / panel",
+            ShortcutAction::ToggleSkillPanel => "Toggle skill panel",
+            ShortcutAction::ToggleTeamPanel => "Toggle team panel",
+            ShortcutAction::FocusInput => "Focus chat input",
+            ShortcutAction::ToggleCommandPalette => "Open command palette",
+            ShortcutAction::ToggleDashboardPanel => "Toggle dashboard",
+            ShortcutAction::ToggleLayoutDebug => "Toggle layout debug overlay",
+            ShortcutAction::IncreaseFontScale => "Increase font size",
+            ShortcutAction::DecreaseFontScale => "Decrease font size",
+            ShortcutAction::NavigateDown => "Line down (line-mode)",
+            ShortcutAction::NavigateUp => "Line up (line-mode)",
+            ShortcutAction::NavigateTop => "Jump to top (line-mode)",
+            ShortcutAction::NavigateBottom => "Jump to bottom (line-mode)",
+            ShortcutAction::CopyLine => "Copy selected line",
+            ShortcutAction::ToggleConsole => "Toggle console panel",
+            ShortcutAction::ToggleFiles => "Toggle files panel",
+            ShortcutAction::ToggleShare => "Toggle share panel",
+            ShortcutAction::ShowShortcuts => "Show this reference",
+        }
+    }
     /// Stable kebab-case identifier shared with the CommandPalette.
     ///
     /// All values resolve to constants in [`clarity_core::ui::ids`].
@@ -89,6 +144,7 @@ impl ShortcutAction {
             ShortcutAction::ToggleConsole => "toggle-console",
             ShortcutAction::ToggleFiles => "toggle-files",
             ShortcutAction::ToggleShare => "toggle-share",
+            ShortcutAction::ShowShortcuts => "show-shortcuts",
         }
     }
 }
@@ -177,6 +233,11 @@ pub fn collect_actions(ctx: &egui::Context, app: &App) -> Vec<ShortcutAction> {
 
     if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Minus)) {
         actions.push(ShortcutAction::DecreaseFontScale);
+    }
+
+    // Keyboard shortcuts reference
+    if ctx.input(|i| i.key_pressed(egui::Key::Slash) && i.modifiers.ctrl) {
+        actions.push(ShortcutAction::ShowShortcuts);
     }
 
     // ── Line-mode navigation (S7 Phase 2D) ──

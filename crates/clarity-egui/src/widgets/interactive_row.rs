@@ -79,13 +79,12 @@ pub fn interactive_row<R>(
         })
         .inner;
 
-    // Focus ring (P0.5.E.1).
+    // Focus ring (shared helper).
     if response.has_focus() {
-        ui.painter().rect_stroke(
+        crate::design_system::paint_focus_ring(
+            ui,
             rect,
             egui::CornerRadius::same(theme.radius_sm as u8),
-            egui::Stroke::new(2.0, theme.focus_ring),
-            egui::StrokeKind::Inside,
         );
     }
 

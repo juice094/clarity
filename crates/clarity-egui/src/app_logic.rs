@@ -371,7 +371,7 @@ impl App {
                 last_input_modified: now,
                 pending_approvals: Vec::new(),
                 toasts: vec![],
-                focus_input_requested: false,
+                focus_target: None,
                 kimi_conversation_style: true,
                 line_cursor_selected: None,
                 line_cursor_total_lines: 0,
@@ -451,6 +451,7 @@ impl App {
             last_tray_status: None,
             last_frame_width: None,
             command_palette: crate::widgets::command_palette::CommandPalette::new(),
+            shortcuts_help_open: false,
             view_state: {
                 let mut vs = clarity_core::ui::ViewState::new();
                 vs.left_rail = clarity_core::ui::LeftRailSection::Sessions;
@@ -662,7 +663,7 @@ impl App {
         self.chat_store.tool_calls.clear();
         self.chat_store.stick_to_bottom = true;
         self.chat_store.last_usage = None;
-        self.ui_store.focus_input_requested = true;
+        self.ui_store.focus_target = Some(FocusTarget::ChatInput);
     }
 
     /// Creates a new plain chat session.
@@ -1145,11 +1146,15 @@ impl App {
     pub(crate) fn set_font_scale(&mut self, scale: f32) {
         self.settings_store.settings_edit.font_scale = Some(scale);
         let theme_name = self.settings_store.settings_edit.theme.clone();
-        self.ui_store.theme = if theme_name == "light" {
-            crate::theme::Theme::light().with_font_scale(scale)
-        } else {
-            crate::theme::Theme::dark().with_font_scale(scale)
-        };
+        self.ui_store.theme = match theme_name.as_str() {
+            "light" => crate::theme::Theme::light(),
+            "catppuccin" => crate::theme::Theme::catppuccin_mocha(),
+            "tokyo_night" => crate::theme::Theme::tokyo_night(),
+            "one_dark" => crate::theme::Theme::one_dark(),
+            "oled" => crate::theme::Theme::oled_black(),
+            _ => crate::theme::Theme::dark(),
+        }
+        .with_font_scale(scale);
         self.auto_save_settings();
     }
 

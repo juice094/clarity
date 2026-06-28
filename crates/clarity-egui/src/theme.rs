@@ -133,6 +133,7 @@ pub struct Theme {
     pub text_lg: f32,
     pub text_xl: f32,
     pub text_2xl: f32,
+    pub text_3xl: f32,
 
     // --- Font scale ---
     pub font_scale: f32,
@@ -260,6 +261,494 @@ impl Default for Theme {
     }
 }
 
+// ============================================================================
+// Palette — 16-color derivation source (Base16-inspired)
+// ============================================================================
+// Each theme variant defines exactly one Palette. All ~40 Theme color fields
+// are derived from the palette via lighten/darken/alpha/saturate helpers,
+// reducing per-preset code from ~200 lines to ~20 lines.
+//
+// Adding a new theme now requires defining 16 hex values + 2 font names,
+// not hand-writing 87 struct fields.
+
+/// 16-color palette following Base16 conventions.
+///
+/// `overlay_base` is used as the base for transparency layers:
+/// `Color32::WHITE` for light themes, `Color32::BLACK` for dark.
+#[derive(Clone, Debug)]
+struct Palette {
+    // Background scale (darkest → lightest surface)
+    bg0: egui::Color32,
+    bg1: egui::Color32,
+    bg2: egui::Color32,
+    bg3: egui::Color32,
+    // Text scale (primary → dim)
+    fg0: egui::Color32,
+    fg1: egui::Color32,
+    fg2: egui::Color32,
+    fg3: egui::Color32,
+    // Accent
+    accent: egui::Color32,
+    accent_hover: egui::Color32,
+    // Semantic colours
+    red: egui::Color32,
+    green: egui::Color32,
+    yellow: egui::Color32,
+    blue: egui::Color32,
+    // Overlay base: WHITE for light themes, BLACK for dark.
+    overlay_base: egui::Color32,
+}
+
+impl Palette {
+    /// Derive the full set of ~40 Theme colour fields from this palette.
+    fn into_theme_colors(self) -> ThemeColorFields {
+        let p = &self;
+        ThemeColorFields {
+            // Backgrounds — direct palette mapping
+            bg: p.bg0,
+            bg_accent: p.bg1,
+            bg_elevated: p.bg1,
+            bg_hover: p.bg2,
+            surface: p.bg1,
+            surface_strong: p.bg2,
+            // Glass: use the opposite of overlay_base so transparent
+            // "glass" layers feel correct (white pass-through on dark bg,
+            // dark pass-through on light bg).
+            glass: alpha(invert(p.overlay_base), 0.04),
+            glass_strong: alpha(invert(p.overlay_base), 0.08),
+
+            // Text hierarchy
+            text: p.fg0,
+            text_strong: p.fg0, // fg0 already the brightest/primary
+            text_muted: p.fg1,
+            text_dim: p.fg2,
+
+            // Accent
+            accent: p.accent,
+            accent_hover: p.accent_hover,
+            accent_subtle: alpha(p.accent, 0.12),
+
+            // Chat bubbles
+            user_bubble: p.bg2,
+            ai_bubble: p.bg1,
+            chat_text: p.fg0,
+            error_bubble: alpha(p.red, 0.18),
+            error_text: lighten(p.red, 0.2),
+
+            // Status
+            status_online: p.green,
+            status_busy: p.yellow,
+            status_offline: p.red,
+            ok: p.green,
+            warn: p.yellow,
+            danger: p.red,
+            info: p.blue,
+
+            // Diff
+            diff_added_bg: alpha(p.green, 0.12),
+            diff_added_text: p.green,
+            diff_removed_bg: alpha(p.red, 0.12),
+            diff_removed_text: lighten(p.red, 0.2),
+
+            // Borders
+            border: alpha(p.overlay_base, 0.06),
+            border_strong: alpha(p.overlay_base, 0.10),
+            border_hover: alpha(p.overlay_base, 0.16),
+            input_bg: p.bg1,
+
+            // Focus
+            focus_ring: alpha(p.accent, 0.50),
+            focus_glow: alpha(p.accent, 0.15),
+            selection: alpha(p.accent, 0.25),
+
+            // Overlays
+            overlay: hex_alpha("#000000", 0.60),
+            overlay_subtle: alpha(p.overlay_base, 0.02),
+            overlay_light: alpha(p.overlay_base, 0.04),
+            overlay_medium: alpha(p.overlay_base, 0.08),
+            overlay_strong: alpha(p.overlay_base, 0.14),
+
+            // Navigation
+            nav_cta_text: p.fg0,
+            nav_row_hover: alpha(p.overlay_base, 0.04),
+            nav_row_selected: alpha(p.overlay_base, 0.08),
+            toggle_active_text: p.fg0,
+
+            // Semantic surfaces
+            tool_call_bg: alpha(p.accent, 0.08),
+            code_block_bg: p.bg0, // darkest surface for code blocks
+            mood_bg: alpha(p.accent, 0.05),
+        }
+    }
+}
+
+/// Collected colour fields — destructured into Theme by `from_palette`.
+struct ThemeColorFields {
+    bg: egui::Color32,
+    bg_accent: egui::Color32,
+    bg_elevated: egui::Color32,
+    bg_hover: egui::Color32,
+    surface: egui::Color32,
+    surface_strong: egui::Color32,
+    glass: egui::Color32,
+    glass_strong: egui::Color32,
+    text: egui::Color32,
+    text_strong: egui::Color32,
+    text_muted: egui::Color32,
+    text_dim: egui::Color32,
+    accent: egui::Color32,
+    accent_hover: egui::Color32,
+    accent_subtle: egui::Color32,
+    user_bubble: egui::Color32,
+    ai_bubble: egui::Color32,
+    chat_text: egui::Color32,
+    error_bubble: egui::Color32,
+    error_text: egui::Color32,
+    status_online: egui::Color32,
+    status_busy: egui::Color32,
+    status_offline: egui::Color32,
+    ok: egui::Color32,
+    warn: egui::Color32,
+    danger: egui::Color32,
+    info: egui::Color32,
+    diff_added_bg: egui::Color32,
+    diff_added_text: egui::Color32,
+    diff_removed_bg: egui::Color32,
+    diff_removed_text: egui::Color32,
+    border: egui::Color32,
+    border_strong: egui::Color32,
+    border_hover: egui::Color32,
+    input_bg: egui::Color32,
+    focus_ring: egui::Color32,
+    focus_glow: egui::Color32,
+    selection: egui::Color32,
+    overlay: egui::Color32,
+    overlay_subtle: egui::Color32,
+    overlay_light: egui::Color32,
+    overlay_medium: egui::Color32,
+    overlay_strong: egui::Color32,
+    nav_cta_text: egui::Color32,
+    nav_row_hover: egui::Color32,
+    nav_row_selected: egui::Color32,
+    toggle_active_text: egui::Color32,
+    tool_call_bg: egui::Color32,
+    code_block_bg: egui::Color32,
+    mood_bg: egui::Color32,
+}
+
+// Shared invariant tokens — identical across all presets.
+fn shared_tokens() -> SharedTokens {
+    SharedTokens {
+        font_scale: 1.0,
+        text_xs: 10.0,
+        text_sm: 12.0,
+        text_base: 14.0,
+        text_md: 15.0,
+        text_lg: 18.0,
+        text_xl: 22.0,
+        text_2xl: 36.0,
+        text_3xl: 42.0,
+        space_4: 4.0,
+        space_8: 8.0,
+        space_12: 12.0,
+        space_16: 16.0,
+        space_20: 20.0,
+        space_24: 24.0,
+        space_40: 40.0,
+        radius_sm: 8.0,
+        radius_md: 16.0,
+        radius_lg: 28.0,
+        radius_xl: 36.0,
+        radius_full: 999.0,
+        size_nav_icon_rail: 24.0,
+        size_nav_row_h: 32.0,
+        shadow_card: egui::Shadow {
+            offset: [0, 2],
+            blur: 12,
+            spread: 0,
+            color: rgba(0, 0, 0, 0.40),
+        },
+        shadow_panel: egui::Shadow {
+            offset: [0, 4],
+            blur: 20,
+            spread: 0,
+            color: rgba(0, 0, 0, 0.50),
+        },
+        shadow_modal: egui::Shadow {
+            offset: [0, 8],
+            blur: 32,
+            spread: 0,
+            color: rgba(0, 0, 0, 0.60),
+        },
+        shadow_toast: egui::Shadow {
+            offset: [0, 4],
+            blur: 16,
+            spread: 0,
+            color: rgba(0, 0, 0, 0.50),
+        },
+        duration_fast: 0.10,
+        duration_normal: 0.18,
+        duration_slow: 0.30,
+        size_titlebar: 32.0,
+        size_sidebar: 14.0 * 15.0,
+        size_workspace: 280.0,
+        size_panel_right: 240.0,
+        size_statusbar: 24.0,
+        size_input: 88.0,
+        size_bot_bar: 44.0,
+        content_min_width: 480.0,
+        window_default_w: 1280.0,
+        window_default_h: 800.0,
+        window_min_w: 900.0,
+        window_min_h: 600.0,
+        window_edge_zone: 10.0,
+        size_sidebar_collapsed: 36.0,
+        size_tab_h: 28.0,
+        modal_offset_y: 40.0,
+        palette_w: 520.0,
+        palette_max_h: 320.0,
+        titlebar_left_w: 130.0,
+        size_tree_indent: 16.0,
+        size_tree_indent_compact: 4.0,
+        size_file_icon: 14.0,
+        size_file_icon_compact: 10.0,
+        size_mcp_btn_w: 36.0,
+        size_mcp_btn_w_compact: 20.0,
+        size_new_tab_btn_w: 28.0,
+        size_tab_min_w: 48.0,
+        size_tab_max_w: 180.0,
+        size_close_btn_w: 18.0,
+        size_accent_line_h: 1.0,
+        breakpoint_compact: 768.0,
+        breakpoint_medium: 1100.0,
+        breakpoint_wide: 1400.0,
+    }
+}
+
+struct SharedTokens {
+    font_scale: f32,
+    text_xs: f32,
+    text_sm: f32,
+    text_base: f32,
+    text_md: f32,
+    text_lg: f32,
+    text_xl: f32,
+    text_2xl: f32,
+    text_3xl: f32,
+    space_4: f32,
+    space_8: f32,
+    space_12: f32,
+    space_16: f32,
+    space_20: f32,
+    space_24: f32,
+    space_40: f32,
+    radius_sm: f32,
+    radius_md: f32,
+    radius_lg: f32,
+    radius_xl: f32,
+    radius_full: f32,
+    size_nav_icon_rail: f32,
+    size_nav_row_h: f32,
+    shadow_card: egui::Shadow,
+    shadow_panel: egui::Shadow,
+    shadow_modal: egui::Shadow,
+    shadow_toast: egui::Shadow,
+    duration_fast: f32,
+    duration_normal: f32,
+    duration_slow: f32,
+    size_titlebar: f32,
+    size_sidebar: f32,
+    size_workspace: f32,
+    size_panel_right: f32,
+    size_statusbar: f32,
+    size_input: f32,
+    size_bot_bar: f32,
+    content_min_width: f32,
+    window_default_w: f32,
+    window_default_h: f32,
+    window_min_w: f32,
+    window_min_h: f32,
+    window_edge_zone: f32,
+    size_sidebar_collapsed: f32,
+    size_tab_h: f32,
+    modal_offset_y: f32,
+    palette_w: f32,
+    palette_max_h: f32,
+    titlebar_left_w: f32,
+    size_tree_indent: f32,
+    size_tree_indent_compact: f32,
+    size_file_icon: f32,
+    size_file_icon_compact: f32,
+    size_mcp_btn_w: f32,
+    size_mcp_btn_w_compact: f32,
+    size_new_tab_btn_w: f32,
+    size_tab_min_w: f32,
+    size_tab_max_w: f32,
+    size_close_btn_w: f32,
+    size_accent_line_h: f32,
+    breakpoint_compact: f32,
+    breakpoint_medium: f32,
+    breakpoint_wide: f32,
+}
+
+impl Theme {
+    /// Build a Theme from a palette + font family names.
+    ///
+    /// All color fields are derived from the palette; layout/typography/spacing
+    /// tokens use the shared invariant defaults.
+    fn from_palette(palette: Palette, font_body: &str, font_mono: &str) -> Self {
+        let c = palette.into_theme_colors();
+        let t = shared_tokens();
+        Self {
+            bg: c.bg,
+            bg_accent: c.bg_accent,
+            bg_elevated: c.bg_elevated,
+            bg_hover: c.bg_hover,
+            surface: c.surface,
+            surface_strong: c.surface_strong,
+            glass: c.glass,
+            glass_strong: c.glass_strong,
+            text: c.text,
+            text_strong: c.text_strong,
+            text_muted: c.text_muted,
+            text_dim: c.text_dim,
+            accent: c.accent,
+            accent_hover: c.accent_hover,
+            accent_subtle: c.accent_subtle,
+            user_bubble: c.user_bubble,
+            ai_bubble: c.ai_bubble,
+            chat_text: c.chat_text,
+            error_bubble: c.error_bubble,
+            error_text: c.error_text,
+            status_online: c.status_online,
+            status_busy: c.status_busy,
+            status_offline: c.status_offline,
+            ok: c.ok,
+            warn: c.warn,
+            danger: c.danger,
+            info: c.info,
+            diff_added_bg: c.diff_added_bg,
+            diff_added_text: c.diff_added_text,
+            diff_removed_bg: c.diff_removed_bg,
+            diff_removed_text: c.diff_removed_text,
+            border: c.border,
+            border_strong: c.border_strong,
+            border_hover: c.border_hover,
+            input_bg: c.input_bg,
+            focus_ring: c.focus_ring,
+            focus_glow: c.focus_glow,
+            selection: c.selection,
+            overlay: c.overlay,
+            overlay_subtle: c.overlay_subtle,
+            overlay_light: c.overlay_light,
+            overlay_medium: c.overlay_medium,
+            overlay_strong: c.overlay_strong,
+            nav_cta_text: c.nav_cta_text,
+            nav_row_hover: c.nav_row_hover,
+            nav_row_selected: c.nav_row_selected,
+            toggle_active_text: c.toggle_active_text,
+            tool_call_bg: c.tool_call_bg,
+            code_block_bg: c.code_block_bg,
+            mood_bg: c.mood_bg,
+            font_body: font_body.into(),
+            font_mono: font_mono.into(),
+            font_scale: t.font_scale,
+            text_xs: t.text_xs,
+            text_sm: t.text_sm,
+            text_base: t.text_base,
+            text_md: t.text_md,
+            text_lg: t.text_lg,
+            text_xl: t.text_xl,
+            text_2xl: t.text_2xl,
+            text_3xl: t.text_3xl,
+            space_4: t.space_4,
+            space_8: t.space_8,
+            space_12: t.space_12,
+            space_16: t.space_16,
+            space_20: t.space_20,
+            space_24: t.space_24,
+            space_40: t.space_40,
+            radius_sm: t.radius_sm,
+            radius_md: t.radius_md,
+            radius_lg: t.radius_lg,
+            radius_xl: t.radius_xl,
+            radius_full: t.radius_full,
+            size_nav_icon_rail: t.size_nav_icon_rail,
+            size_nav_row_h: t.size_nav_row_h,
+            shadow_card: t.shadow_card,
+            shadow_panel: t.shadow_panel,
+            shadow_modal: t.shadow_modal,
+            shadow_toast: t.shadow_toast,
+            duration_fast: t.duration_fast,
+            duration_normal: t.duration_normal,
+            duration_slow: t.duration_slow,
+            size_titlebar: t.size_titlebar,
+            size_sidebar: t.size_sidebar,
+            size_workspace: t.size_workspace,
+            size_panel_right: t.size_panel_right,
+            size_statusbar: t.size_statusbar,
+            size_input: t.size_input,
+            size_bot_bar: t.size_bot_bar,
+            content_min_width: t.content_min_width,
+            window_default_w: t.window_default_w,
+            window_default_h: t.window_default_h,
+            window_min_w: t.window_min_w,
+            window_min_h: t.window_min_h,
+            window_edge_zone: t.window_edge_zone,
+            size_sidebar_collapsed: t.size_sidebar_collapsed,
+            size_tab_h: t.size_tab_h,
+            modal_offset_y: t.modal_offset_y,
+            palette_w: t.palette_w,
+            palette_max_h: t.palette_max_h,
+            titlebar_left_w: t.titlebar_left_w,
+            size_tree_indent: t.size_tree_indent,
+            size_tree_indent_compact: t.size_tree_indent_compact,
+            size_file_icon: t.size_file_icon,
+            size_file_icon_compact: t.size_file_icon_compact,
+            size_mcp_btn_w: t.size_mcp_btn_w,
+            size_mcp_btn_w_compact: t.size_mcp_btn_w_compact,
+            size_new_tab_btn_w: t.size_new_tab_btn_w,
+            size_tab_min_w: t.size_tab_min_w,
+            size_tab_max_w: t.size_tab_max_w,
+            size_close_btn_w: t.size_close_btn_w,
+            size_accent_line_h: t.size_accent_line_h,
+            breakpoint_compact: t.breakpoint_compact,
+            breakpoint_medium: t.breakpoint_medium,
+            breakpoint_wide: t.breakpoint_wide,
+        }
+    }
+}
+
+fn is_dark(c: &egui::Color32) -> bool {
+    // Perceived brightness (BT.601 luma)
+    (c.r() as f32 * 0.299 + c.g() as f32 * 0.587 + c.b() as f32 * 0.114) < 128.0
+}
+
+/// Return BLACK for light inputs, WHITE for dark inputs.
+fn invert(c: egui::Color32) -> egui::Color32 {
+    if is_dark(&c) {
+        egui::Color32::WHITE
+    } else {
+        egui::Color32::BLACK
+    }
+}
+
+/// Build a `Color32` from a base colour with an alpha multiplier (0.0–1.0).
+fn alpha(color: egui::Color32, a: f32) -> egui::Color32 {
+    let a = (a * 255.0).clamp(0.0, 255.0) as u8;
+    egui::Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), a)
+}
+
+/// Lighten a colour by blending it toward white.
+fn lighten(color: egui::Color32, t: f32) -> egui::Color32 {
+    let t = t.clamp(0.0, 1.0);
+    egui::Color32::from_rgb(
+        (color.r() as f32 + (255.0 - color.r() as f32) * t) as u8,
+        (color.g() as f32 + (255.0 - color.g() as f32) * t) as u8,
+        (color.b() as f32 + (255.0 - color.b() as f32) * t) as u8,
+    )
+}
+
 #[allow(dead_code)]
 impl Theme {
     /// Dark theme — Glassmorphism (dark glass) with ice-blue accent.
@@ -273,190 +762,37 @@ impl Theme {
     ///
     /// Kimi-style dark theme — mimics Kimi Desktop v3.0.15 dark palette.
     pub fn dark() -> Self {
-        Self {
-            // Backgrounds: pure dark (Kimi Bg-Primary #121212)
-            bg: hex("#121212"),
-            bg_accent: hex("#1a1a1a"),
-            bg_elevated: hex("#1f1f1f"),
-            bg_hover: hex("#2a2a2a"),
-            surface: hex("#1f1f1f"),
-            surface_strong: hex("#2a2a2a"),
-            glass: rgba(255, 255, 255, 0.04),
-            glass_strong: rgba(255, 255, 255, 0.08),
-
-            // Text: Kimi Labels-Primary #d6d6d6 hierarchy
-            text: hex("#d6d6d6"),
-            text_strong: hex("#ffffff"),
-            text_muted: hex("#999999"),
-            text_dim: hex("#777777"),
-
-            // Accent: Kimi KMBlue #1a88ff
-            accent: hex("#1a88ff"),
-            accent_hover: hex("#4a9eff"),
-            accent_subtle: rgba(26, 136, 255, 0.12),
-
-            // Chat bubbles: Kimi user bubble is dark gray, not blue
-            user_bubble: hex("#2a2a2a"),
-            ai_bubble: hex("#1a1a1a"),
-            chat_text: hex("#d6d6d6"),
-            error_bubble: rgba(239, 91, 91, 0.50),
-            error_text: hex("#EF8A8A"),
-
-            // Status: semantic palette
-            status_online: hex("#6BCB8A"),
-            status_busy: hex("#D4A050"),
-            status_offline: hex("#EF6B6B"),
-            ok: hex("#6BCB8A"),
-            warn: hex("#D4A050"),
-            danger: hex("#EF6B6B"),
-            info: hex("#89B4FA"),
-
-            // Diff
-            diff_added_bg: rgba(70, 180, 100, 0.12),
-            diff_added_text: hex("#6BCB8A"),
-            diff_removed_bg: rgba(239, 91, 91, 0.12),
-            diff_removed_text: hex("#EF8A8A"),
-
-            // Borders: Kimi uses very subtle separators
-            border: rgba(255, 255, 255, 0.06),
-            border_strong: rgba(255, 255, 255, 0.10),
-            border_hover: rgba(255, 255, 255, 0.16),
-            input_bg: hex("#1f1f1f"),
-
-            // Focus: Kimi blue glow
-            focus_ring: rgba(26, 136, 255, 0.50),
-            focus_glow: rgba(26, 136, 255, 0.15),
-            selection: rgba(26, 136, 255, 0.25),
-
-            // Overlay: scrim + depth layers
-            overlay: hex_alpha("#000000", 0.60),
-            overlay_subtle: rgba(255, 255, 255, 0.02),
-            overlay_light: rgba(255, 255, 255, 0.04),
-            overlay_medium: rgba(255, 255, 255, 0.08),
-            overlay_strong: rgba(255, 255, 255, 0.14),
-
-            // Fonts
-            font_body: "Inter".into(),
-            font_mono: "JetBrains Mono".into(),
-
-            font_scale: 1.0,
-
-            // Typography tokens — Kimi scale (larger than prior compact scale)
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_md: 15.0,
-            text_lg: 18.0,
-            text_xl: 22.0,
-            text_2xl: 36.0,
-
-            // Spacing: 8px baseline grid
-            space_4: 4.0,
-            space_8: 8.0,
-            space_12: 12.0,
-            space_16: 16.0,
-            space_20: 20.0,
-            space_24: 24.0,
-            space_40: 40.0,
-
-            // Radius: modern glassmorphism scale
-            radius_sm: 8.0,
-            radius_md: 16.0,
-            radius_lg: 28.0,
-            radius_xl: 36.0,
-            radius_full: 999.0,
-
-            // Navigation (component-level)
-            nav_cta_text: hex("#ffffff"),
-            nav_row_hover: rgba(255, 255, 255, 0.04),
-            nav_row_selected: rgba(255, 255, 255, 0.08),
-            toggle_active_text: hex("#ffffff"),
-
-            // Sidebar micro-layout
-            size_nav_icon_rail: 24.0,
-            size_nav_row_h: 32.0,
-
-            // Semantic surfaces
-            tool_call_bg: rgba(26, 136, 255, 0.08),
-            code_block_bg: hex("#0d0d0d"),
-            mood_bg: rgba(26, 136, 255, 0.05),
-
-            // Shadow: Kimi-style softer shadows (electron can do better blur)
-            shadow_card: egui::Shadow {
-                offset: [0, 2],
-                blur: 12,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.40),
+        let mut t = Self::from_palette(
+            Palette {
+                bg0: hex("#121212"),
+                bg1: hex("#1f1f1f"),
+                bg2: hex("#2a2a2a"),
+                bg3: hex("#333333"),
+                fg0: hex("#d6d6d6"),
+                fg1: hex("#999999"),
+                fg2: hex("#777777"),
+                fg3: hex("#555555"),
+                accent: hex("#1a88ff"),
+                accent_hover: hex("#4a9eff"),
+                red: hex("#EF6B6B"),
+                green: hex("#6BCB8A"),
+                yellow: hex("#D4A050"),
+                blue: hex("#89B4FA"),
+                overlay_base: egui::Color32::BLACK,
             },
-            shadow_panel: egui::Shadow {
-                offset: [0, 4],
-                blur: 20,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.50),
-            },
-            shadow_modal: egui::Shadow {
-                offset: [0, 8],
-                blur: 32,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.60),
-            },
-            shadow_toast: egui::Shadow {
-                offset: [0, 4],
-                blur: 16,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.50),
-            },
-
-            // Animation
-            duration_fast: 0.10,
-            duration_normal: 0.18,
-            duration_slow: 0.30,
-
-            // Layout dimensions
-            size_titlebar: 32.0,
-            // S6 layout: sidebar width tracks text_base so it stays proportional
-            // under font scaling (see `with_font_scale`). The effective width must
-            // also accommodate the widest content row inside the left navigation
-            // tree (multi-button bars, device rows, chat items).
-            size_sidebar: 14.0 * 15.0,
-            size_workspace: 280.0,
-            size_panel_right: 240.0,
-            size_statusbar: 24.0,
-            size_input: 88.0,
-            size_bot_bar: 44.0,
-            content_min_width: 480.0,
-
-            // Chrome dimensions (P0.5.F.1)
-            window_default_w: 1280.0,
-            window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
-            window_edge_zone: 10.0,
-            size_sidebar_collapsed: 36.0,
-            size_tab_h: 28.0,
-            modal_offset_y: 40.0,
-            palette_w: 520.0,
-            palette_max_h: 320.0,
-            titlebar_left_w: 130.0,
-
-            // Widget micro-dimensions (P0.5.F.2)
-            size_tree_indent: 16.0,
-            size_tree_indent_compact: 4.0,
-            size_file_icon: 14.0,
-            size_file_icon_compact: 10.0,
-            size_mcp_btn_w: 36.0,
-            size_mcp_btn_w_compact: 20.0,
-            size_new_tab_btn_w: 28.0,
-            size_tab_min_w: 48.0,
-            size_tab_max_w: 180.0,
-            size_close_btn_w: 18.0,
-            size_accent_line_h: 1.0,
-
-            // Responsive breakpoints
-            breakpoint_compact: 768.0,
-            breakpoint_medium: 1100.0,
-            breakpoint_wide: 1400.0,
-        }
+            "Inter",
+            "JetBrains Mono",
+        );
+        // Bespoke overrides — values the derivation gets close but not exact.
+        // Keep these minimal; prefer improving the derivation formulas instead.
+        t.text_strong = hex("#ffffff"); // pure white for maximum contrast
+        t.bg_accent = hex("#1a1a1a"); // subtle bg variant
+        t.ai_bubble = hex("#1a1a1a"); // matches bg_accent
+        t.code_block_bg = hex("#0d0d0d"); // darker-than-bg0 for inset feel
+        t.error_bubble = rgba(239, 91, 91, 0.50); // stronger error tint
+        t.error_text = hex("#EF8A8A"); // specific error text tone
+        t.user_bubble = hex("#2a2a2a"); // matches bg2
+        t
     }
 
     /// OLED Black theme — pure black base + Glassmorphism glass layers.
@@ -546,6 +882,7 @@ impl Theme {
             text_lg: 18.0,
             text_xl: 22.0,
             text_2xl: 36.0,
+            text_3xl: 42.0,
 
             // Spacing: 8px baseline grid
             space_4: 4.0,
@@ -658,186 +995,58 @@ impl Theme {
 
     /// Light theme — cool off-white with copper accent.
     pub fn light() -> Self {
-        Self {
-            // Backgrounds: cool off-white with warm-tinted mid-tones
-            bg: hex("#f0f1f6"),
-            bg_accent: hex("#e6e8f0"),
-            bg_elevated: hex("#dde0ea"),
-            bg_hover: hex("#d0d4e0"),
-            surface: hex("#e6e8f0"),
-            surface_strong: hex("#dde0ea"),
-            glass: rgba(0, 0, 0, 0.04),
-            glass_strong: rgba(0, 0, 0, 0.10),
-
-            // Text: near-black for WCAG AA contrast
-            text: hex("#18181b"),
-            text_strong: hex("#09090b"),
-            text_muted: hex("#52525b"),
-            text_dim: hex("#757575"),
-
-            // Accent: same warm copper as dark theme
-            accent: hex("#c98a5e"),
-            accent_hover: hex("#b87a4e"),
-            accent_subtle: hex_alpha("#c98a5e", 0.08),
-
-            // Chat bubbles
-            user_bubble: hex("#c98a5e"),
-            ai_bubble: hex("#e8eaf0"),
-            chat_text: hex("#1e1d24"),
-            error_bubble: rgba(239, 91, 91, 0.50),
-            error_text: hex("#1e1d24"),
-
-            // Status: same palette as dark, works on light bg
-            status_online: hex("#6bb87a"),
-            status_busy: hex("#d4a050"),
-            status_offline: hex("#c97060"),
-            ok: hex("#6bb87a"),
-            warn: hex("#d4a050"),
-            danger: hex("#c97060"),
-            info: hex("#2969C4"),
-
-            // Diff
-            diff_added_bg: rgba(70, 140, 80, 0.10),
-            diff_added_text: hex("#2d6a3a"),
-            diff_removed_bg: rgba(200, 70, 70, 0.10),
-            diff_removed_text: hex("#a04040"),
-
-            // Borders: warm-tinted — strengthened for boundary visibility
-            border: hex("#c8cad4"),
-            border_strong: hex("#a1a3b0"),
-            border_hover: hex("#8a8c9a"),
-            input_bg: hex("#e6e8f0"),
-
-            // Focus: accent-matched
-            focus_ring: hex_alpha("#c98a5e", 0.20),
-            focus_glow: hex_alpha("#c98a5e", 0.10),
-            selection: hex_alpha("#c98a5e", 0.35),
-
-            // Overlay: scrim + depth layers (black-on-white in light theme)
-            overlay: hex_alpha("#000000", 0.35),
-            overlay_subtle: hex_alpha("#000000", 0.03),
-            overlay_light: hex_alpha("#000000", 0.06),
-            overlay_medium: hex_alpha("#000000", 0.10),
-            overlay_strong: hex_alpha("#000000", 0.18),
-
-            font_body: "Inter".into(),
-            font_mono: "JetBrains Mono".into(),
-
-            font_scale: 1.0,
-
-            // Typography tokens — Kimi scale (larger than prior compact scale)
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_md: 15.0,
-            text_lg: 18.0,
-            text_xl: 22.0,
-            text_2xl: 36.0,
-
-            space_4: 4.0,
-            space_8: 8.0,
-            space_12: 12.0,
-            space_16: 16.0,
-            space_20: 20.0,
-            space_24: 24.0,
-            space_40: 40.0,
-
-            radius_sm: 6.0,
-            radius_md: 10.0,
-            radius_lg: 12.0,
-            radius_xl: 36.0,
-            radius_full: 9999.0,
-
-            // Navigation (component-level)
-            nav_cta_text: hex("#ffffff"),
-            nav_row_hover: rgba(0, 0, 0, 0.04),
-            nav_row_selected: rgba(0, 0, 0, 0.08),
-            toggle_active_text: hex("#ffffff"),
-
-            // Sidebar micro-layout
-            size_nav_icon_rail: 24.0,
-            size_nav_row_h: 32.0,
-
-            // Semantic surfaces
-            tool_call_bg: hex_alpha("#c98a5e", 0.06),
-            code_block_bg: hex("#e0e2ea"),
-            mood_bg: hex_alpha("#c98a5e", 0.04),
-
-            // Shadow: z-depth hierarchy
-            shadow_card: egui::Shadow {
-                offset: [0, 1],
-                blur: 3,
-                spread: 0,
-                color: hex_alpha("#000000", 0.08),
+        let mut t = Self::from_palette(
+            Palette {
+                bg0: hex("#f0f1f6"),
+                bg1: hex("#dde0ea"),
+                bg2: hex("#d0d4e0"),
+                bg3: hex("#c4c8d2"),
+                fg0: hex("#18181b"),
+                fg1: hex("#52525b"),
+                fg2: hex("#757575"),
+                fg3: hex("#999999"),
+                accent: hex("#c98a5e"),
+                accent_hover: hex("#b87a4e"),
+                red: hex("#c97060"),
+                green: hex("#6bb87a"),
+                yellow: hex("#d4a050"),
+                blue: hex("#2969C4"),
+                overlay_base: egui::Color32::WHITE,
             },
-            shadow_panel: egui::Shadow {
-                offset: [0, 2],
-                blur: 8,
-                spread: 0,
-                color: hex_alpha("#000000", 0.10),
-            },
-            shadow_modal: egui::Shadow {
-                offset: [0, 8],
-                blur: 24,
-                spread: 0,
-                color: hex_alpha("#000000", 0.15),
-            },
-            shadow_toast: egui::Shadow {
-                offset: [0, 4],
-                blur: 12,
-                spread: 0,
-                color: hex_alpha("#000000", 0.12),
-            },
-
-            duration_fast: 0.10,
-            duration_normal: 0.18,
-            duration_slow: 0.30,
-
-            // Layout dimensions (shared)
-            size_titlebar: 32.0,
-            // S6 layout: sidebar width tracks text_base so it stays proportional
-            // under font scaling (see `with_font_scale`). The effective width must
-            // also accommodate the widest content row inside the left navigation
-            // tree (multi-button bars, device rows, chat items).
-            size_sidebar: 14.0 * 15.0,
-            size_workspace: 280.0,
-            size_panel_right: 240.0,
-            size_statusbar: 24.0,
-            size_input: 88.0,
-            size_bot_bar: 44.0,
-            content_min_width: 480.0,
-
-            // Chrome dimensions (P0.5.F.1, shared)
-            window_default_w: 1280.0,
-            window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
-            window_edge_zone: 10.0,
-            size_sidebar_collapsed: 36.0,
-            size_tab_h: 28.0,
-            modal_offset_y: 40.0,
-            palette_w: 520.0,
-            palette_max_h: 320.0,
-            titlebar_left_w: 130.0,
-
-            // Widget micro-dimensions (P0.5.F.2, shared)
-            size_tree_indent: 16.0,
-            size_tree_indent_compact: 4.0,
-            size_file_icon: 14.0,
-            size_file_icon_compact: 10.0,
-            size_mcp_btn_w: 36.0,
-            size_mcp_btn_w_compact: 20.0,
-            size_new_tab_btn_w: 28.0,
-            size_tab_min_w: 48.0,
-            size_tab_max_w: 180.0,
-            size_close_btn_w: 18.0,
-            size_accent_line_h: 1.0,
-
-            // Responsive breakpoints (shared)
-            breakpoint_compact: 768.0,
-            breakpoint_medium: 1100.0,
-            breakpoint_wide: 1400.0,
-        }
+            "Inter",
+            "JetBrains Mono",
+        );
+        // Light theme overrides — many values need light-specific tuning.
+        t.text_strong = hex("#09090b");
+        t.bg_accent = hex("#e6e8f0");
+        t.surface = hex("#e6e8f0");
+        t.glass_strong = rgba(0, 0, 0, 0.10);
+        t.user_bubble = hex("#c98a5e");
+        t.ai_bubble = hex("#e8eaf0");
+        t.chat_text = hex("#1e1d24");
+        t.error_text = hex("#1e1d24");
+        t.accent_subtle = hex_alpha("#c98a5e", 0.08);
+        t.code_block_bg = rgba(0, 0, 0, 0.40);
+        t.tool_call_bg = rgba(91, 141, 239, 0.08);
+        t.mood_bg = rgba(91, 141, 239, 0.06);
+        t.border = hex("#c8cad4");
+        t.border_strong = hex("#a1a3b0");
+        t.border_hover = hex("#8a8c9a");
+        t.input_bg = hex("#e6e8f0");
+        t.focus_ring = hex_alpha("#c98a5e", 0.20);
+        t.focus_glow = hex_alpha("#c98a5e", 0.10);
+        t.selection = hex_alpha("#c98a5e", 0.35);
+        t.overlay = hex_alpha("#000000", 0.35);
+        t.overlay_subtle = hex_alpha("#000000", 0.03);
+        t.overlay_light = hex_alpha("#000000", 0.06);
+        t.overlay_medium = hex_alpha("#000000", 0.10);
+        t.overlay_strong = hex_alpha("#000000", 0.18);
+        t.diff_added_text = hex("#2d6a3a");
+        t.diff_removed_text = hex("#a04040");
+        t.diff_added_bg = rgba(70, 140, 80, 0.10);
+        t.diff_removed_bg = rgba(200, 70, 70, 0.10);
+        t.error_bubble = rgba(239, 91, 91, 0.50);
+        t
     }
 
     /// Apply theme to egui context visuals.
@@ -957,7 +1166,12 @@ impl Theme {
         egui::FontId::new(size, egui::FontFamily::Name("bold".into()))
     }
 
-    /// Italic font — falls back to proportional since no italic face is embedded.
+    /// Italic font — falls back to proportional.
+    ///
+    /// NOTE: No italic face is embedded. To add italic support, bundle an
+    /// italic font file (e.g. Inter-Italic.ttf) and register it under
+    /// `FontFamily::Name("italic")`. egui's FontTweak does not support
+    /// synthetic italic in v0.31.
     pub fn font_italic(&self, size: f32) -> egui::FontId {
         egui::FontId::new(size, egui::FontFamily::Proportional)
     }
@@ -998,428 +1212,111 @@ impl Theme {
         egui::FontId::new(size, egui::FontFamily::Name("icons".into()))
     }
 
+    /// Calibrated line height for the proportional body font at current scale.
+    ///
+    /// Queries `egui::Fonts::row_height()` so the value tracks font family,
+    /// font scale, and DPI changes — no hardcoded constant.
+    pub fn line_height(&self, ctx: &egui::Context) -> f32 {
+        let font_id = self.font(self.text_base);
+        ctx.fonts(|f| f.row_height(&font_id))
+    }
+
+    /// Calibrated line height for the monospace font at current scale.
+    pub fn line_height_code(&self, ctx: &egui::Context) -> f32 {
+        self.line_height_mono_at(ctx, self.text_sm)
+    }
+
+    /// Calibrated line height for the monospace font at a specific size.
+    pub fn line_height_mono_at(&self, ctx: &egui::Context, size: f32) -> f32 {
+        let font_id = self.font_mono(size);
+        ctx.fonts(|f| f.row_height(&font_id))
+    }
+
     // ── Third-party theme presets ─────────────────────────────────────────
 
     /// Catppuccin Mocha — warm pastel dark theme with lavender accent.
     /// Palette: https://github.com/catppuccin/catppuccin
     pub fn catppuccin_mocha() -> Self {
-        Self {
-            bg: hex("#1E1E2E"),
-            bg_accent: hex("#181825"),
-            bg_elevated: hex("#313244"),
-            bg_hover: hex("#45475A"),
-            surface: hex("#313244"),
-            surface_strong: hex("#45475A"),
-            glass: rgba(205, 214, 244, 0.04),
-            glass_strong: rgba(205, 214, 244, 0.08),
-            text: hex("#CDD6F4"),
-            text_strong: hex("#FFFFFF"),
-            text_muted: hex("#A6ADC8"),
-            text_dim: hex("#6C7086"),
-            accent: hex("#CBA6F7"),
-            accent_hover: hex("#DDB6FA"),
-            accent_subtle: rgba(203, 166, 247, 0.12),
-            user_bubble: hex("#45475A"),
-            ai_bubble: hex("#313244"),
-            chat_text: hex("#CDD6F4"),
-            error_bubble: rgba(243, 139, 168, 0.50),
-            error_text: hex("#F38BA8"),
-            status_online: hex("#A6E3A1"),
-            status_busy: hex("#F9E2AF"),
-            status_offline: hex("#F38BA8"),
-            ok: hex("#A6E3A1"),
-            warn: hex("#FAB387"),
-            danger: hex("#F38BA8"),
-            info: hex("#89B4FA"),
-            diff_added_bg: rgba(166, 227, 161, 0.12),
-            diff_added_text: hex("#A6E3A1"),
-            diff_removed_bg: rgba(243, 139, 168, 0.12),
-            diff_removed_text: hex("#F38BA8"),
-            border: rgba(205, 214, 244, 0.06),
-            border_strong: rgba(205, 214, 244, 0.10),
-            border_hover: rgba(205, 214, 244, 0.16),
-            input_bg: hex("#313244"),
-            focus_ring: rgba(137, 180, 250, 0.50),
-            focus_glow: rgba(137, 180, 250, 0.15),
-            selection: rgba(137, 180, 250, 0.25),
-            overlay: hex_alpha("#000000", 0.60),
-            overlay_subtle: rgba(255, 255, 255, 0.03),
-            overlay_light: rgba(255, 255, 255, 0.06),
-            overlay_medium: rgba(255, 255, 255, 0.10),
-            overlay_strong: rgba(255, 255, 255, 0.18),
-            font_body: "Inter".into(),
-            font_mono: "JetBrains Mono".into(),
-            font_scale: 1.0,
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_md: 15.0,
-            text_lg: 18.0,
-            text_xl: 22.0,
-            text_2xl: 36.0,
-            space_4: 4.0,
-            space_8: 8.0,
-            space_12: 12.0,
-            space_16: 16.0,
-            space_20: 20.0,
-            space_24: 24.0,
-            space_40: 40.0,
-            radius_sm: 8.0,
-            radius_md: 16.0,
-            radius_lg: 28.0,
-            radius_xl: 36.0,
-            radius_full: 999.0,
-            nav_cta_text: hex("#FFFFFF"),
-            nav_row_hover: rgba(255, 255, 255, 0.04),
-            nav_row_selected: rgba(255, 255, 255, 0.08),
-            toggle_active_text: hex("#FFFFFF"),
-            size_nav_icon_rail: 24.0,
-            size_nav_row_h: 32.0,
-            tool_call_bg: rgba(137, 180, 250, 0.08),
-            code_block_bg: hex("#11111B"),
-            mood_bg: rgba(137, 180, 250, 0.06),
-            shadow_card: egui::Shadow {
-                offset: [0, 1],
-                blur: 8,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.31),
+        let mut t = Self::from_palette(
+            Palette {
+                bg0: hex("#1E1E2E"),
+                bg1: hex("#313244"),
+                bg2: hex("#45475A"),
+                bg3: hex("#585B70"),
+                fg0: hex("#CDD6F4"),
+                fg1: hex("#A6ADC8"),
+                fg2: hex("#6C7086"),
+                fg3: hex("#585B70"),
+                accent: hex("#CBA6F7"),
+                accent_hover: hex("#DDB6FA"),
+                red: hex("#F38BA8"),
+                green: hex("#A6E3A1"),
+                yellow: hex("#F9E2AF"),
+                blue: hex("#89B4FA"),
+                overlay_base: egui::Color32::BLACK,
             },
-            shadow_panel: egui::Shadow {
-                offset: [0, 2],
-                blur: 16,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            shadow_modal: egui::Shadow {
-                offset: [0, 8],
-                blur: 32,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.47),
-            },
-            shadow_toast: egui::Shadow {
-                offset: [0, 4],
-                blur: 16,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            duration_fast: 0.10,
-            duration_normal: 0.18,
-            duration_slow: 0.30,
-            size_titlebar: 32.0,
-            size_sidebar: 14.0 * 15.0,
-            size_workspace: 280.0,
-            size_panel_right: 240.0,
-            size_statusbar: 24.0,
-            size_input: 88.0,
-            size_bot_bar: 44.0,
-            content_min_width: 480.0,
-            window_default_w: 1280.0,
-            window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
-            window_edge_zone: 10.0,
-            size_sidebar_collapsed: 36.0,
-            size_tab_h: 28.0,
-            modal_offset_y: 40.0,
-            palette_w: 520.0,
-            palette_max_h: 320.0,
-            titlebar_left_w: 130.0,
-            size_tree_indent: 16.0,
-            size_tree_indent_compact: 4.0,
-            size_file_icon: 14.0,
-            size_file_icon_compact: 10.0,
-            size_mcp_btn_w: 36.0,
-            size_mcp_btn_w_compact: 20.0,
-            size_new_tab_btn_w: 28.0,
-            size_tab_min_w: 48.0,
-            size_tab_max_w: 180.0,
-            size_close_btn_w: 18.0,
-            size_accent_line_h: 1.0,
-            breakpoint_compact: 768.0,
-            breakpoint_medium: 1100.0,
-            breakpoint_wide: 1400.0,
-        }
+            "Inter",
+            "JetBrains Mono",
+        );
+        t.code_block_bg = hex("#11111B");
+        t.warn = hex("#FAB387");
+        t.user_bubble = hex("#45475A");
+        t
     }
 
     /// Tokyo Night — deep blue-black with vibrant syntax colors.
     /// Inspired by the Tokyo Night VS Code theme.
     pub fn tokyo_night() -> Self {
-        Self {
-            bg: hex("#1A1B26"),
-            bg_accent: hex("#16161E"),
-            bg_elevated: hex("#24283B"),
-            bg_hover: hex("#3B4261"),
-            surface: hex("#24283B"),
-            surface_strong: hex("#3B4261"),
-            glass: rgba(192, 202, 245, 0.04),
-            glass_strong: rgba(192, 202, 245, 0.08),
-            text: hex("#C0CAF5"),
-            text_strong: hex("#FFFFFF"),
-            text_muted: hex("#9AA5CE"),
-            text_dim: hex("#565F89"),
-            accent: hex("#7AA2F7"),
-            accent_hover: hex("#89B4FA"),
-            accent_subtle: rgba(122, 162, 247, 0.12),
-            user_bubble: hex("#3B4261"),
-            ai_bubble: hex("#24283B"),
-            chat_text: hex("#C0CAF5"),
-            error_bubble: rgba(247, 118, 142, 0.50),
-            error_text: hex("#F7768E"),
-            status_online: hex("#9ECE6A"),
-            status_busy: hex("#E0AF68"),
-            status_offline: hex("#F7768E"),
-            ok: hex("#9ECE6A"),
-            warn: hex("#E0AF68"),
-            danger: hex("#F7768E"),
-            info: hex("#7AA2F7"),
-            diff_added_bg: rgba(158, 206, 106, 0.12),
-            diff_added_text: hex("#9ECE6A"),
-            diff_removed_bg: rgba(247, 118, 142, 0.12),
-            diff_removed_text: hex("#F7768E"),
-            border: rgba(192, 202, 245, 0.06),
-            border_strong: rgba(192, 202, 245, 0.10),
-            border_hover: rgba(192, 202, 245, 0.16),
-            input_bg: hex("#24283B"),
-            focus_ring: rgba(122, 162, 247, 0.50),
-            focus_glow: rgba(122, 162, 247, 0.15),
-            selection: rgba(122, 162, 247, 0.25),
-            overlay: hex_alpha("#000000", 0.60),
-            overlay_subtle: rgba(255, 255, 255, 0.03),
-            overlay_light: rgba(255, 255, 255, 0.06),
-            overlay_medium: rgba(255, 255, 255, 0.10),
-            overlay_strong: rgba(255, 255, 255, 0.18),
-            font_body: "Inter".into(),
-            font_mono: "JetBrains Mono".into(),
-            font_scale: 1.0,
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_md: 15.0,
-            text_lg: 18.0,
-            text_xl: 22.0,
-            text_2xl: 36.0,
-            space_4: 4.0,
-            space_8: 8.0,
-            space_12: 12.0,
-            space_16: 16.0,
-            space_20: 20.0,
-            space_24: 24.0,
-            space_40: 40.0,
-            radius_sm: 6.0,
-            radius_md: 10.0,
-            radius_lg: 14.0,
-            radius_xl: 20.0,
-            radius_full: 999.0,
-            nav_cta_text: hex("#FFFFFF"),
-            nav_row_hover: rgba(255, 255, 255, 0.04),
-            nav_row_selected: rgba(255, 255, 255, 0.08),
-            toggle_active_text: hex("#FFFFFF"),
-            size_nav_icon_rail: 24.0,
-            size_nav_row_h: 32.0,
-            tool_call_bg: rgba(122, 162, 247, 0.08),
-            code_block_bg: hex("#111118"),
-            mood_bg: rgba(122, 162, 247, 0.06),
-            shadow_card: egui::Shadow {
-                offset: [0, 1],
-                blur: 8,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.31),
+        let mut t = Self::from_palette(
+            Palette {
+                bg0: hex("#1A1B26"),
+                bg1: hex("#24283B"),
+                bg2: hex("#3B4261"),
+                bg3: hex("#565F89"),
+                fg0: hex("#C0CAF5"),
+                fg1: hex("#9AA5CE"),
+                fg2: hex("#565F89"),
+                fg3: hex("#414868"),
+                accent: hex("#7AA2F7"),
+                accent_hover: hex("#89B4FA"),
+                red: hex("#F7768E"),
+                green: hex("#9ECE6A"),
+                yellow: hex("#E0AF68"),
+                blue: hex("#7DCFFF"),
+                overlay_base: egui::Color32::BLACK,
             },
-            shadow_panel: egui::Shadow {
-                offset: [0, 2],
-                blur: 16,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            shadow_modal: egui::Shadow {
-                offset: [0, 8],
-                blur: 32,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.47),
-            },
-            shadow_toast: egui::Shadow {
-                offset: [0, 4],
-                blur: 16,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            duration_fast: 0.10,
-            duration_normal: 0.18,
-            duration_slow: 0.30,
-            size_titlebar: 32.0,
-            size_sidebar: 14.0 * 15.0,
-            size_workspace: 280.0,
-            size_panel_right: 240.0,
-            size_statusbar: 24.0,
-            size_input: 88.0,
-            size_bot_bar: 44.0,
-            content_min_width: 480.0,
-            window_default_w: 1280.0,
-            window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
-            window_edge_zone: 10.0,
-            size_sidebar_collapsed: 36.0,
-            size_tab_h: 28.0,
-            modal_offset_y: 40.0,
-            palette_w: 520.0,
-            palette_max_h: 320.0,
-            titlebar_left_w: 130.0,
-            size_tree_indent: 16.0,
-            size_tree_indent_compact: 4.0,
-            size_file_icon: 14.0,
-            size_file_icon_compact: 10.0,
-            size_mcp_btn_w: 36.0,
-            size_mcp_btn_w_compact: 20.0,
-            size_new_tab_btn_w: 28.0,
-            size_tab_min_w: 48.0,
-            size_tab_max_w: 180.0,
-            size_close_btn_w: 18.0,
-            size_accent_line_h: 1.0,
-            breakpoint_compact: 768.0,
-            breakpoint_medium: 1100.0,
-            breakpoint_wide: 1400.0,
-        }
+            "Inter",
+            "JetBrains Mono",
+        );
+        t.code_block_bg = hex("#16161E");
+        t
     }
 
     /// One Dark — Atom's iconic dark theme with blue accent.
     pub fn one_dark() -> Self {
-        Self {
-            bg: hex("#282C34"),
-            bg_accent: hex("#21252B"),
-            bg_elevated: hex("#2C313A"),
-            bg_hover: hex("#3A3F4B"),
-            surface: hex("#2C313A"),
-            surface_strong: hex("#3A3F4B"),
-            glass: rgba(171, 178, 191, 0.04),
-            glass_strong: rgba(171, 178, 191, 0.08),
-            text: hex("#ABB2BF"),
-            text_strong: hex("#FFFFFF"),
-            text_muted: hex("#828997"),
-            text_dim: hex("#5C6370"),
-            accent: hex("#61AFEF"),
-            accent_hover: hex("#7EC8F6"),
-            accent_subtle: rgba(97, 175, 239, 0.12),
-            user_bubble: hex("#3A3F4B"),
-            ai_bubble: hex("#2C313A"),
-            chat_text: hex("#ABB2BF"),
-            error_bubble: rgba(224, 108, 117, 0.50),
-            error_text: hex("#E06C75"),
-            status_online: hex("#98C379"),
-            status_busy: hex("#E5C07B"),
-            status_offline: hex("#E06C75"),
-            ok: hex("#98C379"),
-            warn: hex("#E5C07B"),
-            danger: hex("#E06C75"),
-            info: hex("#61AFEF"),
-            diff_added_bg: rgba(152, 195, 121, 0.12),
-            diff_added_text: hex("#98C379"),
-            diff_removed_bg: rgba(224, 108, 117, 0.12),
-            diff_removed_text: hex("#E06C75"),
-            border: rgba(171, 178, 191, 0.06),
-            border_strong: rgba(171, 178, 191, 0.10),
-            border_hover: rgba(171, 178, 191, 0.16),
-            input_bg: hex("#2C313A"),
-            focus_ring: rgba(97, 175, 239, 0.50),
-            focus_glow: rgba(97, 175, 239, 0.15),
-            selection: rgba(97, 175, 239, 0.25),
-            overlay: hex_alpha("#000000", 0.60),
-            overlay_subtle: rgba(255, 255, 255, 0.03),
-            overlay_light: rgba(255, 255, 255, 0.06),
-            overlay_medium: rgba(255, 255, 255, 0.10),
-            overlay_strong: rgba(255, 255, 255, 0.18),
-            font_body: "Inter".into(),
-            font_mono: "JetBrains Mono".into(),
-            font_scale: 1.0,
-            text_xs: 10.0,
-            text_sm: 12.0,
-            text_base: 14.0,
-            text_md: 15.0,
-            text_lg: 18.0,
-            text_xl: 22.0,
-            text_2xl: 36.0,
-            space_4: 4.0,
-            space_8: 8.0,
-            space_12: 12.0,
-            space_16: 16.0,
-            space_20: 20.0,
-            space_24: 24.0,
-            space_40: 40.0,
-            radius_sm: 4.0,
-            radius_md: 8.0,
-            radius_lg: 12.0,
-            radius_xl: 16.0,
-            radius_full: 999.0,
-            nav_cta_text: hex("#FFFFFF"),
-            nav_row_hover: rgba(255, 255, 255, 0.04),
-            nav_row_selected: rgba(255, 255, 255, 0.08),
-            toggle_active_text: hex("#FFFFFF"),
-            size_nav_icon_rail: 24.0,
-            size_nav_row_h: 32.0,
-            tool_call_bg: rgba(97, 175, 239, 0.08),
-            code_block_bg: hex("#1E2229"),
-            mood_bg: rgba(97, 175, 239, 0.06),
-            shadow_card: egui::Shadow {
-                offset: [0, 1],
-                blur: 6,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.31),
+        let mut t = Self::from_palette(
+            Palette {
+                bg0: hex("#282C34"),
+                bg1: hex("#2C313A"),
+                bg2: hex("#3A3F4B"),
+                bg3: hex("#4B5362"),
+                fg0: hex("#ABB2BF"),
+                fg1: hex("#828997"),
+                fg2: hex("#5C6370"),
+                fg3: hex("#4B5362"),
+                accent: hex("#61AFEF"),
+                accent_hover: hex("#7EC8FF"),
+                red: hex("#E06C75"),
+                green: hex("#98C379"),
+                yellow: hex("#E5C07B"),
+                blue: hex("#56B6C2"),
+                overlay_base: egui::Color32::BLACK,
             },
-            shadow_panel: egui::Shadow {
-                offset: [0, 2],
-                blur: 12,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            shadow_modal: egui::Shadow {
-                offset: [0, 8],
-                blur: 24,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.47),
-            },
-            shadow_toast: egui::Shadow {
-                offset: [0, 4],
-                blur: 12,
-                spread: 0,
-                color: rgba(0, 0, 0, 0.39),
-            },
-            duration_fast: 0.10,
-            duration_normal: 0.18,
-            duration_slow: 0.30,
-            size_titlebar: 32.0,
-            size_sidebar: 14.0 * 15.0,
-            size_workspace: 280.0,
-            size_panel_right: 240.0,
-            size_statusbar: 24.0,
-            size_input: 88.0,
-            size_bot_bar: 44.0,
-            content_min_width: 480.0,
-            window_default_w: 1280.0,
-            window_default_h: 800.0,
-            window_min_w: 900.0,
-            window_min_h: 600.0,
-            window_edge_zone: 10.0,
-            size_sidebar_collapsed: 36.0,
-            size_tab_h: 28.0,
-            modal_offset_y: 40.0,
-            palette_w: 520.0,
-            palette_max_h: 320.0,
-            titlebar_left_w: 130.0,
-            size_tree_indent: 16.0,
-            size_tree_indent_compact: 4.0,
-            size_file_icon: 14.0,
-            size_file_icon_compact: 10.0,
-            size_mcp_btn_w: 36.0,
-            size_mcp_btn_w_compact: 20.0,
-            size_new_tab_btn_w: 28.0,
-            size_tab_min_w: 48.0,
-            size_tab_max_w: 180.0,
-            size_close_btn_w: 18.0,
-            size_accent_line_h: 1.0,
-            breakpoint_compact: 768.0,
-            breakpoint_medium: 1100.0,
-            breakpoint_wide: 1400.0,
-        }
+            "Inter",
+            "JetBrains Mono",
+        );
+        t.code_block_bg = hex("#1E2229");
+        t
     }
 }
 

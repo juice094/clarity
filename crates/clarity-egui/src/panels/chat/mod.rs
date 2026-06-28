@@ -1,4 +1,5 @@
 use crate::App;
+use crate::stores::FocusTarget;
 
 pub mod input;
 pub mod message_list;
@@ -360,7 +361,7 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
         // ── Logo area ──
         ui.label(
             egui::RichText::new("Clarity")
-                .size(42.0)
+                .size(theme.text_3xl)
                 .strong()
                 .color(theme.text_strong),
         );
@@ -439,7 +440,7 @@ fn render_empty_stage(app: &mut App, ui: &mut egui::Ui) {
                     });
                 if chip.response.clicked() {
                     app.chat_store.input = prompt.to_string();
-                    app.ui_store.focus_input_requested = true;
+                    app.ui_store.focus_target = Some(FocusTarget::ChatInput);
                 }
                 if chip.response.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

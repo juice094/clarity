@@ -75,7 +75,19 @@ pub fn parse_markdown(text: &str) -> Vec<RenderBlock> {
             // Not a valid table → fall through to paragraph
         }
 
-        // Headings
+        // Headings — match longest prefix first to avoid false matches.
+        if let Some(rest) = trimmed.strip_prefix("##### ") {
+            flush_paragraph(&mut paragraph_lines, &mut blocks);
+            blocks.push(RenderBlock::Heading(5, parse_inline(rest)));
+            i += 1;
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("#### ") {
+            flush_paragraph(&mut paragraph_lines, &mut blocks);
+            blocks.push(RenderBlock::Heading(4, parse_inline(rest)));
+            i += 1;
+            continue;
+        }
         if let Some(rest) = trimmed.strip_prefix("### ") {
             flush_paragraph(&mut paragraph_lines, &mut blocks);
             blocks.push(RenderBlock::Heading(3, parse_inline(rest)));
@@ -384,9 +396,13 @@ pub fn render_blocks(
                 render_spans(ui, spans, theme, text_color, theme.text_base, false);
             }
             RenderBlock::Heading(level, spans) => {
+                // Map heading levels to the theme typography scale.
+                // H1=2xl(36px), H2=xl(22px), H3=lg(18px), H4=md(15px), H5=base(14px)
                 let size = match level {
-                    1 => theme.text_lg,
-                    2 => theme.text_md,
+                    1 => theme.text_2xl,
+                    2 => theme.text_xl,
+                    3 => theme.text_lg,
+                    4 => theme.text_md,
                     _ => theme.text_base,
                 };
                 render_spans(ui, spans, theme, text_color, size, true);
@@ -643,6 +659,9 @@ fn looks_like_file_path(text: &str) -> bool {
 
 fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
     ui.add_space(theme.space_4);
+    // Calibrate line height from the monospace font metrics so inter-line
+    // spacing tracks font scale, DPI, and font family changes.
+    let code_line_h = theme.line_height_mono_at(ui.ctx(), theme.text_base);
 
     // Split into lines for line-number rendering.
     let lines: Vec<&str> = code.lines().collect();
@@ -794,7 +813,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                                     .monospace()
                                     .color(theme.text)
                                     .size(theme.text_base)
-                                    .line_height(Some(22.0)),
+                                    .line_height(Some(code_line_h)),
                             );
                         } else {
                             for (color, text) in styled_tokens {
@@ -803,7 +822,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                                         .monospace()
                                         .color(*color)
                                         .size(theme.text_base)
-                                        .line_height(Some(22.0)),
+                                        .line_height(Some(code_line_h)),
                                 );
                             }
                         }
@@ -846,7 +865,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                                     .monospace()
                                     .color(*color)
                                     .size(theme.text_base)
-                                    .line_height(Some(22.0)),
+                                    .line_height(Some(code_line_h)),
                             );
                         }
                     });
@@ -856,7 +875,7 @@ fn render_code_block(ui: &mut egui::Ui, lang: &str, code: &str, theme: &Theme) {
                             .monospace()
                             .color(theme.text)
                             .size(theme.text_base)
-                            .line_height(Some(22.0)),
+                            .line_height(Some(code_line_h)),
                     );
                 }
             }

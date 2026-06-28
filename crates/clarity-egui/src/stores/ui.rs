@@ -3,6 +3,15 @@
 //! toasts, sidebar, theme, scroll, preview, approvals
 
 use crate::ui::types::*;
+
+/// Requested keyboard-focus target for the next frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FocusTarget {
+    /// Focus the main chat input text area.
+    ChatInput,
+    /// Focus the command palette search field.
+    CommandPalette,
+}
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -31,9 +40,9 @@ pub struct UiStore {
     /// Pending approval requests from the agent runtime.
     pub pending_approvals: Vec<clarity_core::approval::ApprovalRequest>,
     pub toasts: Vec<Toast>,
-    /// Set to `true` when a shortcut requests focus on the chat input.
-    /// Cleared by `render_input` after requesting focus.
-    pub focus_input_requested: bool,
+    /// Set to `Some(target)` when a shortcut or action requests keyboard
+    /// focus on a specific UI element. Consumed and cleared by the renderer.
+    pub focus_target: Option<FocusTarget>,
     /// Toggle Kimi Desktop v3-style conversation rendering.
     pub kimi_conversation_style: bool,
     /// S7 Phase 2D: global selected line index in the flat line stream (line-mode only).
@@ -94,7 +103,7 @@ impl Default for UiStore {
             last_input_modified: now,
             pending_approvals: Vec::new(),
             toasts: Vec::new(),
-            focus_input_requested: false,
+            focus_target: None,
             kimi_conversation_style: false,
             line_cursor_selected: None,
             line_cursor_total_lines: 0,

@@ -1,3 +1,4 @@
+use crate::design_system::{self, Space};
 use crate::App;
 use clarity_core::background::cron::CronTask;
 
@@ -42,7 +43,7 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
                 app.view_state
                     .open_modal(clarity_core::ui::ModalType::CronCreate);
             }
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
 
             let arrow = if expanded {
                 crate::theme::ICON_CARET_DOWN
@@ -65,7 +66,7 @@ pub fn render_cron_section(app: &mut App, ui: &mut egui::Ui) {
     });
 
     if expanded {
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
         let action = render_cron_task_list(ui, &app.cron_store.tasks, theme);
         match action {
             CronSectionAction::Delete(task_id) => {
@@ -104,7 +105,7 @@ fn render_cron_task_list(
 ) -> CronSectionAction {
     if tasks.is_empty() {
         ui.vertical_centered(|ui| {
-            ui.add_space(theme.space_20);
+            design_system::gap(ui, Space::S4);
             ui.label(
                 egui::RichText::new("No cron jobs yet")
                     .size(theme.text_base)
@@ -159,7 +160,7 @@ fn render_cron_task_list(
                                     {
                                         action = CronSectionAction::Delete(task.task_id.clone());
                                     }
-                                    ui.add_space(theme.space_4);
+                                    design_system::gap(ui, Space::S0);
 
                                     // Enable/disable toggle
                                     let enabled = task.enabled;
@@ -189,7 +190,7 @@ fn render_cron_task_list(
                                             !enabled,
                                         );
                                     }
-                                    ui.add_space(theme.space_4);
+                                    design_system::gap(ui, Space::S0);
 
                                     ui.label(
                                         egui::RichText::new(status_label)
@@ -229,7 +230,7 @@ fn render_cron_task_list(
                             );
                         }
                     });
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
             }
         });
 

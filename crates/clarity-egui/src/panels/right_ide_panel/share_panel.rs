@@ -5,6 +5,7 @@
 //! reserved as extension points for future backend features.
 
 use crate::App;
+use crate::design_system::{self, Space};
 
 /// Export format options.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -36,7 +37,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text_strong),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     for fmt in &[
         ExportFormat::Markdown,
@@ -79,10 +80,10 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         if frame.response.clicked() {
             set_format_choice(app, *fmt);
         }
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // --- preview ---
     ui.label(
@@ -91,7 +92,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text_strong),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     let preview = generate_preview(app);
     egui::ScrollArea::vertical()
@@ -114,7 +115,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 });
         });
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // --- actions ---
     ui.horizontal(|ui| {
@@ -135,7 +136,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             );
         }
     });
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
     ui.horizontal(|ui| {
         if ui
             .add_sized(
@@ -164,7 +165,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // --- share section (extension point) ---
     ui.label(
@@ -173,7 +174,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text_strong),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     ui.add_enabled_ui(false, |ui| {
         ui.set_min_width(ui.available_width());
@@ -184,7 +185,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         {}
     });
 
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 
     // Visibility control stubs.
     for target in &["Team", "Public"] {

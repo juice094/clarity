@@ -1,6 +1,7 @@
 //! Turn-level rendering — CLI style for AgentTurn.
 
 use crate::components::agent_turn::{AgentTurn, ToolCallRow};
+use crate::design_system::{self, Space};
 use crate::theme::Theme;
 use crate::ui::types::ToolCallStatus;
 
@@ -34,7 +35,7 @@ pub fn render_agent_turn(
             );
         }
     });
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     // ── Thinking (collapsed by default) ──
     if let Some(ref thinking) = turn.thinking {
@@ -55,7 +56,7 @@ pub fn render_agent_turn(
                 );
             }
         });
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
     // ── Tool calls (folded into single summary line) ──
@@ -73,7 +74,7 @@ pub fn render_agent_turn(
                 render_tool_call_row_cli(ui, tc, theme);
             }
         });
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
     // ── Final response (plain, no card wrapper) ──
@@ -90,10 +91,10 @@ pub fn render_agent_turn(
                 crate::ui::markdown::render_blocks(ui, &msg.parsed, theme, theme.chat_text);
             }
         });
-        ui.add_space(theme.space_12);
+        design_system::gap(ui, Space::S2);
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
     let height = ui.cursor().min.y - start_y;
     turn.cached_height = Some(height);
     height
@@ -139,7 +140,7 @@ fn render_tool_call_row_cli(ui: &mut egui::Ui, tc: &ToolCallRow, theme: &Theme) 
                 .color(theme.text_dim),
         );
     });
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 }
 
 fn status_color(status: ToolCallStatus, theme: &Theme) -> egui::Color32 {

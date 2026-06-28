@@ -6,6 +6,7 @@
 //! backend features.
 
 use crate::App;
+use crate::stores::FocusTarget;
 
 /// A built-in work template.
 pub(crate) struct BuiltInTemplate {
@@ -120,7 +121,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                                         .clicked()
                                     {
                                         app.chat_store.input = tmpl.prompt.to_string();
-                                        app.ui_store.focus_input_requested = true;
+                                        app.ui_store.focus_target = Some(FocusTarget::ChatInput);
                                         let toast_msg = app.t("Template injected").to_string();
                                         crate::handlers::system::push_toast(
                                             &mut app.ui_store,

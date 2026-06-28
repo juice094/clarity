@@ -1,4 +1,5 @@
 use crate::App;
+use crate::design_system::{self, Space};
 use crate::ui::types::{AgentStatus, GatewayStatus};
 
 /// Render the Agent execution metrics dashboard as a right-side panel.
@@ -17,7 +18,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 .inner_margin(egui::Margin::symmetric(12, 16)),
         )
         .show(ctx, |ui| {
-            ui.add_space(theme.space_12);
+            design_system::gap(ui, Space::S2);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("Dashboard")
@@ -26,7 +27,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                         .color(theme.text),
                 );
             });
-            ui.add_space(theme.space_12);
+            design_system::gap(ui, Space::S2);
 
             // ── Session Stats ──
             let msg_count = app
@@ -49,7 +50,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 &token_str,
             );
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Agent Status ──
             let (status_label, status_color) = match app.chat_store.agent_status {
@@ -60,7 +61,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
             };
             status_card(ui, &theme, "Agent Status", status_label, status_color);
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Tool Calls ──
             let tool_count = app.chat_store.tool_calls.len();
@@ -71,7 +72,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 &format!("{}", tool_count),
             );
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Subagents ──
             let running = app.subagent_store.running_agents.len();
@@ -85,7 +86,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 &format!("{}", batches),
             );
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Teams ──
             metric_card(
@@ -95,7 +96,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 &format!("{}", app.team_store.teams.len()),
             );
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Background Tasks ──
             metric_card(
@@ -105,7 +106,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
                 &format!("{}", app.task_store.tasks.len()),
             );
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── Gateway Status ──
             let (gw_label, gw_color) = match app.chat_store.gateway_status {
@@ -115,7 +116,7 @@ pub fn render_dashboard_panel(app: &mut App, ctx: &egui::Context) {
             };
             status_card(ui, &theme, "Gateway Status", gw_label, gw_color);
 
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
 
             // ── FPS ──
             metric_card(ui, &theme, "FPS", &format!("{:.1}", app.ui_store.fps));
@@ -139,7 +140,7 @@ fn metric_card(ui: &mut egui::Ui, theme: &crate::theme::Theme, title: &str, valu
                     .size(theme.text_xs)
                     .color(theme.text_muted),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             ui.label(
                 egui::RichText::new(value)
                     .size(theme.text_2xl)
@@ -165,7 +166,7 @@ fn metric_card_pair(
                 metric_card(ui, theme, title_a, value_a);
             },
         );
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width(), 0.0),
             egui::Layout::top_down(egui::Align::Min),
@@ -195,7 +196,7 @@ fn status_card(
                     .size(theme.text_xs)
                     .color(theme.text_muted),
             );
-            ui.add_space(theme.space_4);
+            design_system::gap(ui, Space::S0);
             ui.horizontal(|ui| {
                 let (rect, _response) =
                     ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());

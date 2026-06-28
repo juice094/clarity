@@ -1,3 +1,4 @@
+use crate::design_system::{self, Space};
 use crate::theme::Theme;
 use clarity_core::mcp::config::{McpConfig, McpServerEntry};
 
@@ -12,7 +13,7 @@ pub fn render_mcp_panel(
     theme: &Theme,
     changed: &mut bool,
 ) {
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     if config.servers.is_empty() {
         ui.vertical_centered(|ui| {
@@ -22,7 +23,7 @@ pub fn render_mcp_panel(
                     .size(theme.text_base)
                     .color(theme.text_dim),
             );
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new("Add servers to ~/.config/clarity/mcp.json")
                     .size(theme.text_sm)
@@ -66,7 +67,7 @@ pub fn render_mcp_panel(
                     });
                 });
 
-                ui.add_space(theme.space_4);
+                design_system::gap(ui, Space::S0);
 
                 // Command
                 if !entry.command.is_empty() {
@@ -145,7 +146,7 @@ pub fn render_mcp_panel(
                     );
                     for (k, v) in &entry.env {
                         ui.horizontal(|ui| {
-                            ui.add_space(theme.space_8);
+                            design_system::gap(ui, Space::S1);
                             ui.label(
                                 egui::RichText::new(format!("{}={}", k, v))
                                     .size(theme.text_xs)
@@ -156,7 +157,7 @@ pub fn render_mcp_panel(
                     }
                 }
             });
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
     }
 
     // Write back modified entries

@@ -9,14 +9,13 @@ use clarity_core::ui::render_line::{
     ApprovalOption, DiffKind, LineRole, RenderLine, Span, StatusKind, ToolStatus,
 };
 
+use crate::design_system;
 use crate::theme::Theme;
 
-/// Height of a single text line in pixels (theme token).
-///
-/// Must match the font metrics used by `theme.font(theme.text_base)`.
-pub const LINE_HEIGHT: f32 = 18.0;
-
 /// Render a batch of lines with virtual-scroll culling.
+///
+/// Line height is calibrated from the current theme's body font via
+/// `Theme::line_height(ctx)` so it tracks font scale and DPI changes.
 ///
 /// `scroll_offset` and `viewport_height` are used to compute which lines are
 /// visible; invisible lines are skipped to maintain 60 fps at 10K lines.
@@ -35,20 +34,21 @@ pub fn render_lines(
         return;
     }
 
+    let line_height = theme.line_height(ui.ctx());
     let start_y = ui.cursor().min.y;
     let (start_idx, end_idx) =
-        compute_visible_range(lines.len(), scroll_offset, viewport_height, LINE_HEIGHT);
+        compute_visible_range(lines.len(), scroll_offset, viewport_height, line_height);
 
     for (idx, line) in lines.iter().enumerate().take(end_idx).skip(start_idx) {
         let is_selected = selected_idx == Some(idx);
-        let line_y = start_y + (idx as f32 * LINE_HEIGHT) - scroll_offset;
+        let line_y = start_y + (idx as f32 * line_height) - scroll_offset;
 
         // Skip if completely above or below the current clip rect.
         let clip_min = ui.clip_rect().min.y;
         let clip_max = ui.clip_rect().max.y;
-        if line_y + LINE_HEIGHT < clip_min || line_y > clip_max {
+        if line_y + line_height < clip_min || line_y > clip_max {
             // Still advance the cursor so egui's layout remains consistent.
-            ui.add_space(LINE_HEIGHT);
+            ui.add_space(line_height);
             continue;
         }
 
@@ -56,7 +56,7 @@ pub fn render_lines(
         if is_selected {
             let rect = egui::Rect::from_min_size(
                 egui::pos2(ui.min_rect().min.x, line_y),
-                egui::vec2(ui.available_width(), LINE_HEIGHT),
+                egui::vec2(ui.available_width(), line_height),
             );
             ui.painter().rect_filled(rect, 0, theme.bg_hover);
         }
@@ -72,8 +72,8 @@ pub fn render_lines(
     }
 
     // Reserve total height so the scroll area knows the full extent.
-    let total_height = lines.len() as f32 * LINE_HEIGHT;
-    let consumed = (end_idx - start_idx) as f32 * LINE_HEIGHT;
+    let total_height = lines.len() as f32 * line_height;
+    let consumed = (end_idx - start_idx) as f32 * line_height;
     if total_height > consumed {
         ui.add_space(total_height - consumed);
     }
@@ -224,11 +224,11 @@ fn render_line(ui: &mut egui::Ui, line: &RenderLine, theme: &Theme, is_selected:
             );
         }
         RenderLine::Divider => {
-            ui.add(egui::Separator::default().horizontal());
+            design_system::divider(ui, None);
         }
         RenderLine::Empty => {
-            // Preserve vertical spacing.
-            ui.add_space(LINE_HEIGHT);
+            // Preserve vertical spacing, calibrated to the current font.
+            ui.add_space(theme.line_height(ui.ctx()));
         }
         RenderLine::BlockSlot {
             block_id,
@@ -314,9 +314,9 @@ fn render_code_line(
     theme: &Theme,
 ) {
     let bg = match diff {
-        DiffKind::Added => egui::Color32::from_rgb(20, 60, 20),
-        DiffKind::Removed => egui::Color32::from_rgb(60, 20, 20),
-        DiffKind::Context => egui::Color32::from_rgb(40, 40, 40),
+        DiffKind::Added => theme.diff_added_bg,
+        DiffKind::Removed => theme.diff_removed_bg,
+        DiffKind::Context => theme.code_block_bg,
         DiffKind::Normal => theme.bg_elevated,
     };
 

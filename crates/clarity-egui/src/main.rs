@@ -96,6 +96,8 @@ pub(crate) struct App {
     pub(crate) last_tray_status: Option<crate::services::tray::TrayIconStatus>,
     /// Last frame's screen width for responsive breakpoint detection.
     last_frame_width: Option<f32>,
+    /// Keyboard shortcuts reference modal (Ctrl+/).
+    pub(crate) shortcuts_help_open: bool,
     /// Pretext UI command palette (Ctrl+Shift+P).
     pub(crate) command_palette: crate::widgets::command_palette::CommandPalette,
     /// Pretext UI unified view state (replaces boolean flag hell).
@@ -170,6 +172,197 @@ fn is_localhost_host(url: &str) -> bool {
 }
 
 impl App {
+    // ── Per-frame service methods (extracted from update() in Phase 2) ──
+
+    /// Advance the frame counter and compute instantaneous FPS.
+    fn tick_frame_counter(&mut self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        self.ui_store.frame_count += 1;
+        if now - self.ui_store.last_fps_time >= 1.0 {
+            self.ui_store.fps =
+                self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
+            self.ui_store.frame_count = 0;
+            self.ui_store.last_fps_time = now;
+        }
+    }
+
+    /// Mirror agent runtime state into the UI status indicator.
+    fn sync_agent_status(&mut self) {
+        use clarity_core::agent::AgentState;
+        self.chat_store.agent_status = match self.state.agent.state() {
+            AgentState::Unconfigured => AgentStatus::Unconfigured,
+            AgentState::Idle => {
+                if self.is_loading() {
+                    AgentStatus::Busy
+                } else {
+                    AgentStatus::Online
+                }
+            }
+            AgentState::Running { .. } => AgentStatus::Busy,
+            AgentState::Stalled => AgentStatus::Offline,
+        };
+    }
+
+    /// Sync the system-tray icon colour with the current runtime state.
+    fn sync_tray_status(&mut self) {
+        if let Some(ref mut tray) = self.tray_manager {
+            let new_status = if !self.ui_store.pending_approvals.is_empty() {
+                crate::services::tray::TrayIconStatus::Message
+            } else {
+                match self.chat_store.agent_status {
+                    AgentStatus::Online | AgentStatus::Unconfigured => {
+                        crate::services::tray::TrayIconStatus::Idle
+                    }
+                    AgentStatus::Busy => crate::services::tray::TrayIconStatus::Active,
+                    AgentStatus::Offline => crate::services::tray::TrayIconStatus::Error,
+                }
+            };
+            if self.last_tray_status != Some(new_status) {
+                tray.set_status(new_status);
+                self.last_tray_status = Some(new_status);
+            }
+        }
+    }
+
+    /// Handle OS-level file drops into the window.
+    fn handle_file_drops(&mut self, ctx: &egui::Context) {
+        let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
+        if dropped_files.is_empty() {
+            return;
+        }
+        for file in dropped_files {
+            if let Some(path) = file.path {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                self.chat_store.attachments.push(Attachment { path, name });
+            }
+        }
+    }
+
+    /// Periodic poll: tasks, parallel-batch status, Gateway health.
+    fn poll_periodic_checks(&mut self) {
+        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
+            && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3)
+        {
+            self.refresh_tasks();
+        }
+        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
+            && !self.subagent_store.parallel_batches.is_empty()
+            && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
+        {
+            self.poll_parallel_batches();
+        }
+        if self.subagent_store.last_gateway_health_poll.elapsed() > Duration::from_secs(5) {
+            self.subagent_store.last_gateway_health_poll = Instant::now();
+            self.poll_gateway_health();
+        }
+    }
+
+    /// Apply responsive layout, theme, and approval modal state.
+    fn apply_frame_state(&mut self, ctx: &egui::Context) {
+        let _metrics = crate::layout::update_and_measure(self, ctx);
+        ctx.style_mut(|style| {
+            self.ui_store.theme.apply(style);
+        });
+        crate::design_system::install_theme(ctx, self.ui_store.theme.clone());
+        // Mirror pending approvals into the modal state machine.
+        if !self.ui_store.pending_approvals.is_empty() && !self.ui_store.kimi_conversation_style {
+            if self.view_state.modal.is_none()
+                || self.view_state.modal == Some(clarity_core::ui::ModalType::Approval)
+            {
+                self.view_state
+                    .open_modal(clarity_core::ui::ModalType::Approval);
+            }
+        } else if self.view_state.modal == Some(clarity_core::ui::ModalType::Approval) {
+            self.view_state.close_modal();
+        }
+    }
+
+    /// Render the keyboard shortcuts reference modal.
+    fn render_shortcuts_help(&mut self, ctx: &egui::Context) {
+        if !self.shortcuts_help_open {
+            return;
+        }
+        let theme = self.ui_store.theme.clone();
+        let mut open = self.shortcuts_help_open;
+        egui::Window::new("Keyboard Shortcuts")
+            .id(egui::Id::new("shortcuts_help"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .default_width(520.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(480.0)
+                    .show(ui, |ui| {
+                        let actions: &[(&str, &[crate::shortcuts::ShortcutAction])] = &[
+                            (
+                                "General",
+                                &[
+                                    crate::shortcuts::ShortcutAction::NewSession,
+                                    crate::shortcuts::ShortcutAction::SendMessage,
+                                    crate::shortcuts::ShortcutAction::StopGeneration,
+                                    crate::shortcuts::ShortcutAction::CloseModal,
+                                    crate::shortcuts::ShortcutAction::ShowShortcuts,
+                                ],
+                            ),
+                            (
+                                "Panels",
+                                &[
+                                    crate::shortcuts::ShortcutAction::ToggleCommandPalette,
+                                    crate::shortcuts::ShortcutAction::FocusInput,
+                                    crate::shortcuts::ShortcutAction::ToggleConsole,
+                                    crate::shortcuts::ShortcutAction::ToggleFiles,
+                                    crate::shortcuts::ShortcutAction::ToggleShare,
+                                    crate::shortcuts::ShortcutAction::ToggleSkillPanel,
+                                    crate::shortcuts::ShortcutAction::ToggleTeamPanel,
+                                    crate::shortcuts::ShortcutAction::ToggleDashboardPanel,
+                                ],
+                            ),
+                            (
+                                "View",
+                                &[
+                                    crate::shortcuts::ShortcutAction::IncreaseFontScale,
+                                    crate::shortcuts::ShortcutAction::DecreaseFontScale,
+                                    crate::shortcuts::ShortcutAction::ToggleLayoutDebug,
+                                ],
+                            ),
+                        ];
+                        for (group, items) in actions {
+                            ui.add_space(theme.space_8);
+                            ui.label(
+                                egui::RichText::new(*group)
+                                    .size(theme.text_sm)
+                                    .color(theme.text_muted)
+                                    .strong(),
+                            );
+                            for action in items.iter() {
+                                ui.horizontal(|ui| {
+                                    ui.add_sized(
+                                        [140.0, theme.text_base],
+                                        egui::Label::new(
+                                            egui::RichText::new(action.keybinding())
+                                                .size(theme.text_sm)
+                                                .monospace()
+                                                .color(theme.accent),
+                                        ),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(action.description())
+                                            .size(theme.text_sm)
+                                            .color(theme.text),
+                                    );
+                                });
+                            }
+                        }
+                    });
+            });
+        self.shortcuts_help_open = open;
+    }
+
     /// Render a custom titlebar with window drag and control buttons.
     ///
     /// LAYOUT (two independent sub-layouts at the same vertical origin):
@@ -788,7 +981,7 @@ impl App {
                 true
             }
             ids::FOCUS_INPUT => {
-                self.ui_store.focus_input_requested = true;
+                self.ui_store.focus_target = Some(FocusTarget::ChatInput);
                 true
             }
             ids::TOGGLE_COMMAND_PALETTE => {
@@ -862,6 +1055,10 @@ impl App {
                     .set_right_rail_context(clarity_core::ui::RightRailContext::Session);
                 self.view_state
                     .toggle_right_rail_panel(clarity_core::ui::RightRailPanel::Files);
+                true
+            }
+            "show-shortcuts" => {
+                self.shortcuts_help_open = true;
                 true
             }
             "toggle-share" => {
@@ -1130,14 +1327,7 @@ impl eframe::App for App {
         // ── Poll system tray events ──
         self.handle_tray_events(ctx);
 
-        let now = ctx.input(|i| i.time);
-        self.ui_store.frame_count += 1;
-        if now - self.ui_store.last_fps_time >= 1.0 {
-            self.ui_store.fps =
-                self.ui_store.frame_count as f64 / (now - self.ui_store.last_fps_time);
-            self.ui_store.frame_count = 0;
-            self.ui_store.last_fps_time = now;
-        }
+        self.tick_frame_counter(ctx);
 
         // Sync live Claw device list (~2 Hz — cheap snapshot of pre-fetched data).
         if self.ui_store.frame_count % 30 == 0 {
@@ -1787,7 +1977,7 @@ impl eframe::App for App {
             self.chat_store.stick_to_bottom = true;
             self.chat_store.editing_message_idx = None;
             self.chat_store.edit_buffer.clear();
-            self.ui_store.focus_input_requested = true;
+            self.ui_store.focus_target = Some(FocusTarget::ChatInput);
             // Stateful providers (e.g. deepseek-device) must not carry
             // conversation context across clarity sessions.
             if let Some(ref llm) = self.state.agent.llm() {
@@ -1819,19 +2009,7 @@ impl eframe::App for App {
             ctx.request_repaint_after(Duration::from_millis(16));
         }
 
-        // File drag-and-drop
-        let dropped_files = ctx.input(|i| i.raw.dropped_files.clone());
-        if !dropped_files.is_empty() {
-            for file in dropped_files {
-                if let Some(path) = file.path {
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    self.chat_store.attachments.push(Attachment { path, name });
-                }
-            }
-        }
+        self.handle_file_drops(ctx);
 
         // ── Global keyboard shortcuts (P0.5.C.1: unified dispatch) ──
         // All shortcut actions and CommandPalette entries route through
@@ -1847,82 +2025,10 @@ impl eframe::App for App {
             }
         }
 
-        // Refresh task list periodically when panel is open
-        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
-            && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3)
-        {
-            self.refresh_tasks();
-        }
-
-        // Poll parallel batch status when panel is open
-        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
-            && !self.subagent_store.parallel_batches.is_empty()
-            && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
-        {
-            self.poll_parallel_batches();
-        }
-
-        // Poll Gateway health every 5 seconds
-        if self.subagent_store.last_gateway_health_poll.elapsed() > Duration::from_secs(5) {
-            self.subagent_store.last_gateway_health_poll = Instant::now();
-            self.poll_gateway_health();
-        }
-
-        use clarity_core::agent::AgentState;
-        self.chat_store.agent_status = match self.state.agent.state() {
-            AgentState::Unconfigured => AgentStatus::Unconfigured,
-            AgentState::Idle => {
-                if self.is_loading() {
-                    AgentStatus::Busy
-                } else {
-                    AgentStatus::Online
-                }
-            }
-            AgentState::Running { .. } => AgentStatus::Busy,
-            AgentState::Stalled => AgentStatus::Offline,
-        };
-
-        // ── Sync tray icon colour with runtime state ──
-        if let Some(ref mut tray) = self.tray_manager {
-            let new_status = if !self.ui_store.pending_approvals.is_empty() {
-                crate::services::tray::TrayIconStatus::Message
-            } else {
-                match self.chat_store.agent_status {
-                    AgentStatus::Online | AgentStatus::Unconfigured => {
-                        crate::services::tray::TrayIconStatus::Idle
-                    }
-                    AgentStatus::Busy => crate::services::tray::TrayIconStatus::Active,
-                    AgentStatus::Offline => crate::services::tray::TrayIconStatus::Error,
-                }
-            };
-            if self.last_tray_status != Some(new_status) {
-                tray.set_status(new_status);
-                self.last_tray_status = Some(new_status);
-            }
-        }
-
-        // ── Layout shell: responsive geometry + collapse policy ──
-        let _metrics = crate::layout::update_and_measure(self, ctx);
-
-        ctx.style_mut(|style| {
-            self.ui_store.theme.apply(style);
-        });
-        // Install theme into egui Context data so design_system helpers can
-        // retrieve it automatically without threading `&Theme` everywhere.
-        crate::design_system::install_theme(ctx, self.ui_store.theme.clone());
-
-        // Mirror pending approvals into the modal state machine. Approval takes
-        // precedence only when no other modal is currently open.
-        if !self.ui_store.pending_approvals.is_empty() && !self.ui_store.kimi_conversation_style {
-            if self.view_state.modal.is_none()
-                || self.view_state.modal == Some(clarity_core::ui::ModalType::Approval)
-            {
-                self.view_state
-                    .open_modal(clarity_core::ui::ModalType::Approval);
-            }
-        } else if self.view_state.modal == Some(clarity_core::ui::ModalType::Approval) {
-            self.view_state.close_modal();
-        }
+        self.poll_periodic_checks();
+        self.sync_agent_status();
+        self.sync_tray_status();
+        self.apply_frame_state(ctx);
 
         // ── Layout shell: chrome + main view + overlays + modals ──
         self.render_layout_shell(ctx);
@@ -1931,6 +2037,9 @@ impl eframe::App for App {
         if self.ui_store.pretext_probe_open {
             crate::widgets::pretext_probe::render_pretext_probe(self, ctx);
         }
+
+        // Keyboard shortcuts reference (Ctrl+/)
+        self.render_shortcuts_help(ctx);
 
         // Command Palette (top-most layer)
         if self.command_palette.open {

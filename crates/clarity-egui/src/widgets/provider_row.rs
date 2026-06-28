@@ -21,7 +21,7 @@
 //! the canonical "custom widget in widgets/" exemption per `EGUI_LAYOUT.md` §RULE 4.
 //! Callers only see the idiomatic `Response` return.
 
-use crate::design_system::{self, Space, Status, Text};
+use crate::design_system::{self, Space, Status, TextStyle};
 use crate::theme::Theme;
 
 /// Render a single provider list row.
@@ -92,24 +92,27 @@ pub fn provider_row(
                     design_system::text(
                         ui,
                         label,
-                        if is_active { Text::Accent } else { Text::Body },
+                        if is_active {
+                            TextStyle::Accent
+                        } else {
+                            TextStyle::Body
+                        },
                     );
                     if model_count > 0 {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            design_system::text(ui, format!("{}", model_count), Text::Small);
+                            design_system::text(ui, format!("{}", model_count), TextStyle::Small);
                         });
                     }
                 });
             });
     });
 
-    // Focus ring (P0.5.E.1).
+    // Focus ring (shared helper).
     if response.has_focus() {
-        ui.painter().rect_stroke(
+        crate::design_system::paint_focus_ring(
+            ui,
             rect,
             egui::CornerRadius::same(theme.radius_sm as u8),
-            egui::Stroke::new(2.0, theme.focus_ring),
-            egui::StrokeKind::Inside,
         );
     }
 

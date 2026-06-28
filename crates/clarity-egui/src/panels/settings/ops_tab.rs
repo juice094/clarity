@@ -1,4 +1,5 @@
 use crate::App;
+use crate::design_system::{self, Space};
 
 /// OpenClaw operations tab — aligned to Kimi Desktop "设置" panel.
 ///
@@ -7,7 +8,7 @@ use crate::App;
 pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
     let theme = app.ui_store.theme.clone();
 
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     // ── Active bot info ──
     let active_bot = app
@@ -38,7 +39,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
                         5.0,
                         dot_color,
                     );
-                    ui.add_space(theme.space_8);
+                    design_system::gap(ui, Space::S1);
                     ui.vertical(|ui| {
                         ui.label(
                             egui::RichText::new(&bot.name)
@@ -58,7 +59,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
                     });
                 });
             });
-        ui.add_space(theme.space_16);
+        design_system::gap(ui, Space::S3);
     }
 
     // ── Action buttons (Kimi-style grid) ──
@@ -68,7 +69,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text_dim),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     let actions = [
         ("🩺", "AI 问题诊断", "运行自诊断检查"),
@@ -122,10 +123,10 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
         if resp.hovered() {
             resp.on_hover_text(desc);
         }
-        ui.add_space(theme.space_4);
+        design_system::gap(ui, Space::S0);
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // ── Version & backup info ──
     ui.label(
@@ -134,7 +135,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
             .strong()
             .color(theme.text_dim),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     let version_rows = [
         ("Clarity", env!("CARGO_PKG_VERSION")),
@@ -162,7 +163,7 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
     }
 
     if let Some(ref bot) = active_bot {
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new("上次备份")

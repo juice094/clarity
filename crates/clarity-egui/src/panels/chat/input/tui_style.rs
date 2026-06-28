@@ -1,4 +1,5 @@
 use crate::App;
+use crate::stores::FocusTarget;
 
 /// Kimi-style rounded composer input.
 ///
@@ -43,9 +44,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
                 .margin(egui::vec2(0.0, 0.0))
                 .frame(false);
             let response = ui.add_sized(egui::vec2(ui.available_width(), 28.0), text_edit);
-            if app.ui_store.focus_input_requested {
+            if app.ui_store.focus_target.is_some() {
                 response.request_focus();
-                app.ui_store.focus_input_requested = false;
+                app.ui_store.focus_target = None;
             }
             if app.chat_store.input != prev_input {
                 app.ui_store.last_input_modified = std::time::Instant::now();
@@ -177,9 +178,9 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             .frame(false);
         let response = ui.add_sized(egui::vec2(ui.available_width(), input_height), text_edit);
 
-        if app.ui_store.focus_input_requested {
+        if app.ui_store.focus_target.is_some() {
             response.request_focus();
-            app.ui_store.focus_input_requested = false;
+            app.ui_store.focus_target = None;
         }
         if app.chat_store.input != prev_input {
             app.ui_store.last_input_modified = std::time::Instant::now();
@@ -312,7 +313,7 @@ pub fn render_tui_input(app: &mut App, ui: &mut egui::Ui) {
             if app.chat_store.input.ends_with('#') {
                 app.chat_store.input.pop();
             }
-            app.ui_store.focus_input_requested = true;
+            app.ui_store.focus_target = Some(FocusTarget::ChatInput);
         }
         app.ui_store.context_picker_state = state;
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {

@@ -113,7 +113,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     ui.monospace(
                         egui::RichText::new(display_args)
                             .color(app.ui_store.theme.text)
-                            .size(12.0),
+                            .size(app.ui_store.theme.text_sm),
                     );
                 });
 
@@ -146,7 +146,7 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
                     ui.label(
                         egui::RichText::new(desc)
                             .color(app.ui_store.theme.danger)
-                            .size(13.0),
+                            .size(app.ui_store.theme.text_sm),
                     );
                 });
             }

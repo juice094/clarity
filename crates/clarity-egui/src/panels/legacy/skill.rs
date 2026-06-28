@@ -17,7 +17,7 @@ pub fn render_skill_panel(app: &mut App, ctx: &egui::Context) {
     let screen = ctx.screen_rect();
 
     // Dimmer + outside-click-to-close
-    let scrim = egui::Color32::from_rgba_premultiplied(0, 0, 0, 180);
+    let scrim = crate::design_system::theme(ctx).overlay;
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         screen,
         egui::CornerRadius::same(0),

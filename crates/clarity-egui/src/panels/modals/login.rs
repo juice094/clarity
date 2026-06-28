@@ -1,6 +1,7 @@
 //! Kimi Code OAuth Device Flow login modal.
 
 use crate::App;
+use crate::design_system::{self, Space};
 use crate::stores::KimiCodeLoginState;
 use crate::ui::types::UiEvent;
 
@@ -55,14 +56,14 @@ pub fn render_oauth_login_modal(
             match state {
                 KimiCodeLoginState::Idle => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         ui.label(
                             egui::RichText::new("Connect to Kimi Code")
                                 .size(theme.text_lg)
                                 .strong()
                                 .color(theme.text),
                         );
-                        ui.add_space(theme.space_8);
+                        design_system::gap(ui, Space::S1);
                         ui.label(
                             egui::RichText::new(
                                 "Click below to start OAuth Device Flow.\nA browser window will open for authorization.",
@@ -70,7 +71,7 @@ pub fn render_oauth_login_modal(
                             .size(theme.text_sm)
                             .color(theme.text_dim),
                         );
-                        ui.add_space(theme.space_16);
+                        design_system::gap(ui, Space::S3);
                         if ui.add(theme.primary_button("Start Login")).clicked() {
                             start_login(app, config.clone());
                         }
@@ -78,13 +79,13 @@ pub fn render_oauth_login_modal(
                 }
                 KimiCodeLoginState::Requesting => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_24);
+                        design_system::gap(ui, Space::S5);
                         ui.label(
                             egui::RichText::new("Requesting device code...")
                                 .size(theme.text_base)
                                 .color(theme.text),
                         );
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         ui.spinner();
                     });
                 }
@@ -94,20 +95,20 @@ pub fn render_oauth_login_modal(
                     ..
                 } => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_8);
+                        design_system::gap(ui, Space::S1);
                         ui.label(
                             egui::RichText::new("Authorize this device")
                                 .size(theme.text_lg)
                                 .strong()
                                 .color(theme.text),
                         );
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         ui.label(
                             egui::RichText::new("Enter this code in your browser:")
                                 .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
-                        ui.add_space(theme.space_4);
+                        design_system::gap(ui, Space::S0);
                         egui::Frame::new()
                             .fill(theme.bg_accent)
                             .corner_radius(egui::CornerRadius::same(theme.radius_sm as u8))
@@ -120,7 +121,7 @@ pub fn render_oauth_login_modal(
                                         .monospace(),
                                 );
                             });
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         let url = verification_uri_complete.clone();
                         if ui
                             .hyperlink_to("Open verification page →", &url)
@@ -128,7 +129,7 @@ pub fn render_oauth_login_modal(
                         {
                             open_browser(&url);
                         }
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         ui.label(
                             egui::RichText::new("Waiting for authorization...")
                                 .size(theme.text_sm)
@@ -139,32 +140,32 @@ pub fn render_oauth_login_modal(
                 }
                 KimiCodeLoginState::Polling => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_24);
+                        design_system::gap(ui, Space::S5);
                         ui.label(
                             egui::RichText::new("Completing login...")
                                 .size(theme.text_base)
                                 .color(theme.text),
                         );
-                        ui.add_space(theme.space_12);
+                        design_system::gap(ui, Space::S2);
                         ui.spinner();
                     });
                 }
                 KimiCodeLoginState::Success => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_24);
+                        design_system::gap(ui, Space::S5);
                         ui.label(
                             egui::RichText::new("✓ Login successful")
                                 .size(theme.text_lg)
                                 .strong()
                                 .color(theme.ok),
                         );
-                        ui.add_space(theme.space_8);
+                        design_system::gap(ui, Space::S1);
                         ui.label(
                             egui::RichText::new("You can now use Kimi Code.")
                                 .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
-                        ui.add_space(theme.space_16);
+                        design_system::gap(ui, Space::S3);
                         if ui.add(theme.primary_button("Close")).clicked() {
                             close_requested = true;
                         }
@@ -172,20 +173,20 @@ pub fn render_oauth_login_modal(
                 }
                 KimiCodeLoginState::Error(e) => {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(theme.space_24);
+                        design_system::gap(ui, Space::S5);
                         ui.label(
                             egui::RichText::new("Login failed")
                                 .size(theme.text_lg)
                                 .strong()
                                 .color(theme.danger),
                         );
-                        ui.add_space(theme.space_8);
+                        design_system::gap(ui, Space::S1);
                         ui.label(
                             egui::RichText::new(e)
                                 .size(theme.text_sm)
                                 .color(theme.text_dim),
                         );
-                        ui.add_space(theme.space_16);
+                        design_system::gap(ui, Space::S3);
                         if ui.add(theme.primary_button("Retry")).clicked() {
                             start_login(app, config.clone());
                         }

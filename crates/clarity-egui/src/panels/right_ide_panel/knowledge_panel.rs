@@ -1,6 +1,7 @@
 //! OKF Knowledge base browser for the right IDE rail.
 
 use crate::App;
+use crate::design_system::{self, Space};
 use clarity_core::okf::{OkfBundleCache, OkfConcept};
 
 /// Render the knowledge base panel.
@@ -15,7 +16,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .color(theme.text_dim),
         );
     });
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 
     ui.horizontal(|ui| {
         let path_edit = ui.add_sized(
@@ -27,7 +28,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             app.knowledge_store.error = None;
         }
     });
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     ui.horizontal(|ui| {
         let can_load = !app.knowledge_store.bundle_path.is_empty() && !app.knowledge_store.loading;
@@ -49,7 +50,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             invalidate_and_reload(app);
         }
     });
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     if app.knowledge_store.loading {
         ui.label(
@@ -66,7 +67,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .size(theme.text_sm)
                 .color(theme.error_text),
         );
-        ui.add_space(theme.space_12);
+        design_system::gap(ui, Space::S2);
     }
 
     let search_hint = app.t("Search concepts");
@@ -88,7 +89,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         && app.knowledge_store.error.is_none()
         && !app.knowledge_store.loading
     {
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
         ui.label(
             egui::RichText::new(app.t("Enter a bundle path and click Load bundle"))
                 .size(theme.text_sm)
@@ -96,7 +97,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         );
     }
 
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     egui::ScrollArea::vertical()
         .id_salt("knowledge_concept_list")
@@ -128,7 +129,7 @@ fn render_concept_list(app: &mut App, ui: &mut egui::Ui) {
             .size(theme.text_xs)
             .color(theme.text_dim),
     );
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 
     let selected_id = app.knowledge_store.selected_id.clone();
     for concept in results {
@@ -167,7 +168,7 @@ fn render_concept_list(app: &mut App, ui: &mut egui::Ui) {
             .and_then(|b| b.get(&id))
             .cloned()
         {
-            ui.add_space(theme.space_16);
+            design_system::gap(ui, Space::S3);
             render_concept_detail(app, ui, &concept);
         }
     }
@@ -182,7 +183,7 @@ fn render_concept_detail(app: &mut App, ui: &mut egui::Ui, concept: &OkfConcept)
             .strong()
             .color(theme.text_strong),
     );
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
 
     ui.horizontal_wrapped(|ui| {
         ui.label(
@@ -191,7 +192,7 @@ fn render_concept_detail(app: &mut App, ui: &mut egui::Ui, concept: &OkfConcept)
                 .color(theme.text_dim),
         );
         if !concept.frontmatter.tags.is_empty() {
-            ui.add_space(theme.space_8);
+            design_system::gap(ui, Space::S1);
             ui.label(
                 egui::RichText::new(format!(
                     "{}: {}",
@@ -203,7 +204,7 @@ fn render_concept_detail(app: &mut App, ui: &mut egui::Ui, concept: &OkfConcept)
             );
         }
     });
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     if let Some(resource) = &concept.frontmatter.resource {
         if ui
@@ -217,7 +218,7 @@ fn render_concept_detail(app: &mut App, ui: &mut egui::Ui, concept: &OkfConcept)
         {
             ui.ctx().copy_text(resource.clone());
         }
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
     }
 
     if let Some(description) = &concept.frontmatter.description {
@@ -227,7 +228,7 @@ fn render_concept_detail(app: &mut App, ui: &mut egui::Ui, concept: &OkfConcept)
                 .color(theme.text_muted)
                 .italics(),
         );
-        ui.add_space(theme.space_8);
+        design_system::gap(ui, Space::S1);
     }
 
     if !concept.body.is_empty() {

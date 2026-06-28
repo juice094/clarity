@@ -2,6 +2,7 @@
 
 use crate::App;
 use crate::claw::{normalize_gateway_url, to_ws_url};
+use crate::design_system::{self, Space};
 use crate::settings::OpenClawAuthMode;
 
 /// Renders the OpenClaw connections tab.
@@ -14,13 +15,13 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
             .size(theme.text_lg)
             .strong(),
     );
-    ui.add_space(theme.space_4);
+    design_system::gap(ui, Space::S0);
     ui.label(
         egui::RichText::new(app.t("Manage OpenClaw Gateway connections"))
             .size(theme.text_sm)
             .color(theme.text_dim),
     );
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
 
     let pairing_url: Option<String> = match &app.claw_pairing_state {
         crate::PairingState::Waiting { gateway_url, .. } => Some(gateway_url.clone()),
@@ -115,7 +116,7 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
                                     },
                                 );
                             });
-                            ui.add_space(theme.space_4);
+                            design_system::gap(ui, Space::S0);
                         }
                     }
                 });
@@ -156,7 +157,7 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
         });
     }
 
-    ui.add_space(theme.space_16);
+    design_system::gap(ui, Space::S3);
 
     // ── Add / edit form ──
     ui.label(
@@ -165,7 +166,7 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
             .color(theme.text)
             .strong(),
     );
-    ui.add_space(theme.space_8);
+    design_system::gap(ui, Space::S1);
 
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(app.t("Name")).size(theme.text_sm));
@@ -232,7 +233,7 @@ pub fn render_claw(app: &mut App, ui: &mut egui::Ui) {
         }
     });
 
-    ui.add_space(theme.space_12);
+    design_system::gap(ui, Space::S2);
     ui.horizontal(|ui| {
         let is_editing = app.settings_store.claw_editing_index.is_some();
         let label = if is_editing {
