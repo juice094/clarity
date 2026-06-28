@@ -785,6 +785,39 @@ fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
 }
 
 // =============================================================================
+// Panel trait — shared contract for all UI sections
+// =============================================================================
+
+/// A renderable UI panel.
+///
+/// Panels are the primary unit of UI organisation in clarity-egui.
+/// Implementing this trait provides a consistent signature and enables
+/// future panel-registry features (discovery, ordering, keyboard
+/// shortcut auto-binding).
+///
+/// # Implementation notes
+///
+/// Most panels are stateless and render from `App` state directly.
+/// Use a unit struct for stateless panels, or hold transient UI state
+/// (e.g. scroll position, text buffer) in the struct for stateful ones.
+///
+/// ```ignore
+/// struct SettingsPanel;
+/// impl Panel for SettingsPanel {
+///     fn title(&self) -> &str { "Settings" }
+///     fn render(&mut self, app: &mut App, ui: &mut egui::Ui) {
+///         // render using app state
+///     }
+/// }
+/// ```
+pub trait Panel {
+    /// Human-readable panel name (used for shortcuts reference, debug).
+    fn title(&self) -> &str;
+    /// Render the panel into the given ui.
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
