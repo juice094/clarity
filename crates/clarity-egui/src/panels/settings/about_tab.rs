@@ -147,3 +147,16 @@ furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software."#;
+
+// ── Panel trait implementation ──
+
+pub struct AboutPanel;
+
+impl crate::design_system::Panel for AboutPanel {
+    fn title(&self) -> &str {
+        "About"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render_about(app, ui);
+    }
+}
