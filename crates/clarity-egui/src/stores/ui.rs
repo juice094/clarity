@@ -10,6 +10,7 @@ pub enum FocusTarget {
     /// Focus the main chat input text area.
     ChatInput,
     /// Focus the command palette search field.
+    #[allow(dead_code)] // reserved for future use
     CommandPalette,
 }
 use std::collections::HashMap;

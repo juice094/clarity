@@ -281,11 +281,13 @@ struct Palette {
     bg0: egui::Color32,
     bg1: egui::Color32,
     bg2: egui::Color32,
+    #[allow(dead_code)]
     bg3: egui::Color32,
     // Text scale (primary → dim)
     fg0: egui::Color32,
     fg1: egui::Color32,
     fg2: egui::Color32,
+    #[allow(dead_code)]
     fg3: egui::Color32,
     // Accent
     accent: egui::Color32,

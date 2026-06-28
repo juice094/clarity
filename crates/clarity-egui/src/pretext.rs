@@ -35,6 +35,7 @@ impl EguiFontMetrics {
     ///
     /// Queries font metrics from the same egui context used for text
     /// measurement, ensuring height estimates match rendered output.
+    #[allow(dead_code)] // gated behind cfg(feature = "line-mode")
     pub fn line_height(&self, theme: &crate::theme::Theme) -> f32 {
         let font_id = theme.font(theme.text_base);
         self.ctx.fonts(|f| f.row_height(&font_id))
