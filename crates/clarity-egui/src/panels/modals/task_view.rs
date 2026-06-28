@@ -127,3 +127,17 @@ pub fn render_task_view_modal(app: &mut App, ctx: &egui::Context) {
         app.task_store.viewing_task_result = None;
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct TaskViewModal;
+
+impl crate::design_system::Panel for TaskViewModal {
+    fn title(&self) -> &str {
+        "TaskView"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_task_view_modal(app, &ctx);
+    }
+}

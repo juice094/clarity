@@ -336,3 +336,17 @@ fn format_time_ago(timestamp: &str) -> String {
         None => timestamp.to_string(),
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct SnapshotModal;
+
+impl crate::design_system::Panel for SnapshotModal {
+    fn title(&self) -> &str {
+        "Snapshot"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_snapshot_modal(app, &ctx);
+    }
+}

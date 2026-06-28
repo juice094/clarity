@@ -270,3 +270,17 @@ pub fn render_team_create_modal(app: &mut App, ctx: &egui::Context) {
         app.view_state.close_modal();
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct TeamCreateModal;
+
+impl crate::design_system::Panel for TeamCreateModal {
+    fn title(&self) -> &str {
+        "TeamCreate"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_team_create_modal(app, &ctx);
+    }
+}

@@ -174,3 +174,17 @@ pub fn render_cron_create_modal(app: &mut App, ctx: &egui::Context) {
         app.view_state.close_modal();
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct CronCreateModal;
+
+impl crate::design_system::Panel for CronCreateModal {
+    fn title(&self) -> &str {
+        "CronCreate"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_cron_create_modal(app, &ctx);
+    }
+}

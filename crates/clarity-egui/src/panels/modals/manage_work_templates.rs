@@ -108,3 +108,17 @@ pub fn render_manage_work_templates_modal(app: &mut App, ctx: &egui::Context) {
         app.auto_save_settings();
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct ManageWorkTemplatesModal;
+
+impl crate::design_system::Panel for ManageWorkTemplatesModal {
+    fn title(&self) -> &str {
+        "ManageWorkTemplates"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_manage_work_templates_modal(app, &ctx);
+    }
+}

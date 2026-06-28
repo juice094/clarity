@@ -141,3 +141,17 @@ pub fn render_subagent_view_modal(app: &mut App, ctx: &egui::Context) {
         app.subagent_store.viewing_subagent_id = None;
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct SubagentViewModal;
+
+impl crate::design_system::Panel for SubagentViewModal {
+    fn title(&self) -> &str {
+        "SubagentView"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_subagent_view_modal(app, &ctx);
+    }
+}

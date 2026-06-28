@@ -225,3 +225,17 @@ pub fn render_approval_modal(app: &mut App, ctx: &egui::Context) {
             });
         });
 }
+
+// ── Panel trait implementation ──
+
+pub struct ApprovalModal;
+
+impl crate::design_system::Panel for ApprovalModal {
+    fn title(&self) -> &str {
+        "Approval"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_approval_modal(app, &ctx);
+    }
+}

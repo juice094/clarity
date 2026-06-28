@@ -108,3 +108,17 @@ pub fn render_manage_web_links_modal(app: &mut App, ctx: &egui::Context) {
         app.auto_save_settings();
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct ManageWebLinksModal;
+
+impl crate::design_system::Panel for ManageWebLinksModal {
+    fn title(&self) -> &str {
+        "ManageWebLinks"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_manage_web_links_modal(app, &ctx);
+    }
+}
