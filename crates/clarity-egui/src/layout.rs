@@ -52,12 +52,6 @@ pub fn update_and_measure(app: &mut App, ctx: &egui::Context) -> LayoutMetrics {
     let mut metrics = compute_metrics(app, ctx);
     if metrics.content_too_narrow(app.ui_store.theme.content_min_width) {
         app.view_state.right_rail_visible = false;
-        if matches!(
-            app.view_state.right,
-            Some(SidePanel::Team) | Some(SidePanel::Task)
-        ) {
-            app.view_state.right = None;
-        }
         metrics = compute_metrics(app, ctx);
     }
     metrics
@@ -125,13 +119,11 @@ fn compute_metrics_raw(
     } else {
         0.0
     };
-    // Dashboard as a main view still occupies the center stage; legacy right
-    // panels are layered on top and measured separately so the content guard
-    // can collapse them independently.
+    // Legacy right panels (Team/Task migrated to RightRailPanel, Dashboard
+    // to main stage). The content guard can still collapse remaining legacy
+    // panels independently.
     let legacy_right_w = match right {
-        Some(SidePanel::Team) | Some(SidePanel::Task) | Some(SidePanel::Dashboard) => {
-            size_panel_right
-        }
+        Some(SidePanel::PreviewDrawer) | Some(SidePanel::SubAgentProgress) => size_panel_right,
         _ => 0.0,
     };
     let content_w = current_width - left_rail_w - left_panel_w - right_rail_w - legacy_right_w;
@@ -179,7 +171,14 @@ mod tests {
 
     #[test]
     fn right_rail_and_legacy_right_are_counted_separately() {
-        let m = compute_metrics_raw(1200.0, 144.0, 240.0, true, true, Some(SidePanel::Team));
+        let m = compute_metrics_raw(
+            1200.0,
+            144.0,
+            240.0,
+            true,
+            true,
+            Some(SidePanel::SubAgentProgress),
+        );
         assert_eq!(m.left_rail_w, 144.0);
         assert_eq!(m.right_rail_w, 240.0);
         // legacy right panel occupies additional width on top of right rail
