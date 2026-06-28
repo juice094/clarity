@@ -317,3 +317,16 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
 }
+
+// ── Panel trait implementation ──
+
+pub struct SharePanel;
+
+impl crate::design_system::Panel for SharePanel {
+    fn title(&self) -> &str {
+        "Share"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        (app, ui);
+    }
+}

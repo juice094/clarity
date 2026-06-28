@@ -285,3 +285,16 @@ fn render_console_row(
         );
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct ConsolePanel;
+
+impl crate::design_system::Panel for ConsolePanel {
+    fn title(&self) -> &str {
+        "Console"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        (app, ui);
+    }
+}

@@ -181,3 +181,16 @@ pub fn render_ops(app: &mut App, ui: &mut egui::Ui) {
         });
     }
 }
+
+// ── Panel trait implementation ──
+
+pub struct OpsPanel;
+
+impl crate::design_system::Panel for OpsPanel {
+    fn title(&self) -> &str {
+        "Ops"
+    }
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render_ops(app, ui);
+    }
+}
