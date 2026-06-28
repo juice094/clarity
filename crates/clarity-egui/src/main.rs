@@ -243,12 +243,13 @@ impl App {
 
     /// Periodic poll: tasks, parallel-batch status, Gateway health.
     fn poll_periodic_checks(&mut self) {
-        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
-            && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3)
-        {
+        let task_visible = self.view_state.right_rail_panel
+            == clarity_core::ui::RightRailPanel::Task
+            && self.view_state.right_rail_visible;
+        if task_visible && self.task_store.last_task_refresh.elapsed() > Duration::from_secs(3) {
             self.refresh_tasks();
         }
-        if self.view_state.right == Some(clarity_core::ui::SidePanel::Task)
+        if task_visible
             && !self.subagent_store.parallel_batches.is_empty()
             && self.subagent_store.last_parallel_poll.elapsed() > Duration::from_secs(2)
         {
@@ -940,12 +941,6 @@ impl App {
                 } else if self.view_state.right_rail_visible {
                     self.view_state.right_rail_visible = false;
                     self.view_state.right_rail_panel = clarity_core::ui::RightRailPanel::None;
-                } else if matches!(
-                    self.view_state.right,
-                    Some(clarity_core::ui::SidePanel::Team)
-                        | Some(clarity_core::ui::SidePanel::Task)
-                ) {
-                    self.view_state.right = None;
                 }
                 true
             }
