@@ -725,6 +725,55 @@ pub fn skeleton(ui: &mut egui::Ui, size: egui::Vec2) -> egui::Response {
     response
 }
 
+/// Search box — text input with magnifying glass icon and clear button.
+///
+/// Returns `true` when the text changed this frame. The caller owns
+/// `query` and reads the updated value after the call.
+pub fn search_box(ui: &mut egui::Ui, query: &mut String, hint: &str) -> bool {
+    let t = theme(ui.ctx());
+    let mut changed = false;
+    egui::Frame::new()
+        .fill(t.input_bg)
+        .stroke(egui::Stroke::new(1.0, t.border))
+        .corner_radius(egui::CornerRadius::same(t.radius_sm as u8))
+        .inner_margin(egui::Margin::symmetric(t.space_8 as i8, t.space_4 as i8))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(crate::theme::ICON_LIST) // magnifying glass via ICON_LIST for now
+                        .size(t.text_sm)
+                        .color(t.text_muted),
+                );
+                let resp = ui.add(
+                    egui::TextEdit::singleline(query)
+                        .hint_text(hint)
+                        .desired_width(ui.available_width() - 24.0)
+                        .font(t.font(t.text_sm))
+                        .frame(false),
+                );
+                changed = resp.changed();
+                if !query.is_empty() {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new(crate::theme::ICON_X)
+                                    .size(t.text_xs)
+                                    .color(t.text_dim),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(egui::CornerRadius::same(4)),
+                        )
+                        .clicked()
+                    {
+                        query.clear();
+                        changed = true;
+                    }
+                }
+            });
+        });
+    changed
+}
+
 /// Simple linear interpolation between two `Color32` values.
 fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
     let t = t.clamp(0.0, 1.0);
