@@ -128,5 +128,16 @@ fn render_empty_state(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
-// ---------------------------------------------------------------------------
-// Add custom provider form
+// ── Panel trait implementation ──
+
+pub struct ProviderPanel;
+
+impl crate::design_system::Panel for ProviderPanel {
+    fn title(&self) -> &str {
+        "Provider"
+    }
+
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        render_provider(app, ui);
+    }
+}

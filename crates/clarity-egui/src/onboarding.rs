@@ -396,3 +396,18 @@ fn start_model_download(app: &mut App) {
         }
     });
 }
+
+// ── Panel trait implementation ──
+
+pub struct OnboardingPanel;
+
+impl crate::design_system::Panel for OnboardingPanel {
+    fn title(&self) -> &str {
+        "Onboarding"
+    }
+
+    fn render(&mut self, app: &mut crate::App, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
+        render_onboarding(app, &ctx);
+    }
+}
